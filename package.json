@@ -2,6 +2,15 @@
   "name": "ploykit",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haozing/ploykit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/haozing/ploykit/issues"
+  },
+  "homepage": "https://github.com/haozing/ploykit#readme",
   "engines": {
     "node": ">=20.11 <23",
     "npm": ">=10"

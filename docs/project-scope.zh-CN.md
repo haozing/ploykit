@@ -9,7 +9,7 @@ PloyKit 已经可作为本地插件 SaaS 与公开工具站宿主使用，但它
 - AI 是宿主能力接口。运行时会执行权限、metering 和 credits 边界，但生产模型 provider 需要部署方接入。
 - 密码重置投递当前支持 `log` 或 `disabled`；生产邮件投递需要另行实现。
 - 文件存储支持 local 与 S3/R2-compatible adapter。真实云 bucket 在对外宣称生产可用前应在目标环境验收。
-- `package.json` 当前仍是 `"private": true`，仓库也还没有 `LICENSE` 文件。正式开源前需要选择 license 并更新 package metadata。
+- 仓库基于 MIT License 发布。`package.json` 当前仍保留 `"private": true`，因为 PloyKit 目前作为应用仓库分发，而不是作为 npm package 发布。
 
 ## 生产假设
 

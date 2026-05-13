@@ -233,3 +233,7 @@ npm run db:migrate
 ```
 
 生产部署需要提供数据库凭据、应用 URL、认证密钥、插件密钥、启用文件存储时的存储配置，以及启用计费时的 Stripe 配置。
+
+## 许可证
+
+PloyKit 基于 [MIT License](LICENSE) 发布。

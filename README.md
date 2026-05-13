@@ -263,3 +263,7 @@ npm run db:migrate
 Production deployments need database credentials, app URLs, auth secrets, plugin
 secret keys, file storage settings when enabled, and Stripe settings when billing
 is enabled.
+
+## License
+
+PloyKit is released under the [MIT License](LICENSE).

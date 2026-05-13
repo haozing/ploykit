@@ -19,9 +19,9 @@ that are important for open-source users and deployers.
 - File storage supports local and S3/R2-compatible adapters. Real cloud buckets
   should be validated in the target environment before being advertised as
   production-ready.
-- `package.json` currently has `"private": true`, and this repository currently
-  has no `LICENSE` file. Before a formal open-source release, choose a license
-  and update package metadata.
+- The repository is released under the MIT License. `package.json` still has
+  `"private": true` because PloyKit is currently distributed as an application
+  repository, not as an npm package.
 
 ## Production Assumptions
 
