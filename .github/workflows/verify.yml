@@ -1,0 +1,71 @@
+name: Verify
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  checks:
+    name: Static Checks And Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify
+        run: npm run verify
+
+  runtime:
+    name: Runtime With Postgres
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: ploykit
+          POSTGRES_USER: ploykit
+          POSTGRES_PASSWORD: ploykit
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U ploykit -d ploykit"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_PROVIDER: postgres
+      DATABASE_URL: postgresql://ploykit:ploykit@localhost:55432/ploykit
+      FILE_STORAGE_ENABLED: 'true'
+      FILE_STORAGE_DRIVER: local
+      FILE_STORAGE_LOCAL_ROOT: .data/blobs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Runtime
+        run: npm run db:docker:verify

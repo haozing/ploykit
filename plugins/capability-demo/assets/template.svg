@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-label="Capability demo template">
+  <rect width="240" height="160" rx="8" fill="#0f172a"/>
+  <rect x="18" y="20" width="204" height="120" rx="6" fill="#f8fafc"/>
+  <circle cx="54" cy="62" r="18" fill="#22c55e"/>
+  <path d="M92 52h92M92 78h68M36 110h168" stroke="#334155" stroke-width="10" stroke-linecap="round"/>
+</svg>

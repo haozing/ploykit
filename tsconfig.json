@@ -1,0 +1,45 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "types": ["vitest/globals"],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@ploykit/plugin-sdk": ["./src/plugin-sdk/index.ts"],
+      "@ploykit/plugin-sdk/react": ["./src/plugin-sdk/react.ts"],
+      "@ploykit/plugin-sdk/testing": ["./src/plugin-sdk/testing.ts"],
+      "@/*": ["./src/*"],
+      "@/plugins/*": ["./plugins/*"],
+      "@/site.config": ["./site.config.ts"],
+      "@/theme.config": ["./theme.config.ts"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/app-route-handlers.d.ts",
+    ".next/types/global.d.ts",
+    ".next/types/link.d.ts",
+    "next-env.d.ts",
+    "plugins/**/*.ts",
+    "plugins/**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next/types/**/*.ts", ".ploykit-build", "plugins/runlynk/web"]
+}

@@ -1,0 +1,123 @@
+import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { notFound, redirect } from 'next/navigation';
+import { PluginError } from '@ploykit/plugin-sdk';
+import {
+  createPluginCommercialRedirectPath,
+  createPluginPublicAliasMetadata,
+  createPluginPublicAliasStructuredDataScripts,
+  isPluginCommercialError,
+  resolvePluginPageRuntime,
+  resolvePluginPublicRouteAlias,
+} from '@/lib/plugin-runtime';
+import { PluginRuntimePageRenderer } from '@/components/plugins/plugin-runtime-page-renderer';
+import { ShellLayout } from '@/components/layouts/ShellLayout';
+
+export const revalidate = 300;
+
+interface Props {
+  params: Promise<{
+    lang: string;
+    slug?: string[];
+  }>;
+}
+
+function publicPath(slug: readonly string[]): string {
+  return ['/', ...slug].join('/').replace(/\/+/g, '/');
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { lang, slug = [] } = await params;
+  const path = publicPath(slug);
+  const match = await resolvePluginPublicRouteAlias(path);
+
+  if (!match) {
+    return {};
+  }
+
+  const alias = match.route.publicAliases.find((candidate) => candidate.path === match.aliasPath);
+  return alias
+    ? createPluginPublicAliasMetadata(alias, {
+        locale: lang,
+        pathname: `/${lang}${path === '/' ? '' : path}`,
+      })
+    : {};
+}
+
+export default async function PluginPublicAliasPage({ params }: Props) {
+  const { lang, slug = [] } = await params;
+  const match = await resolvePluginPublicRouteAlias(publicPath(slug));
+
+  if (!match) {
+    notFound();
+  }
+
+  const requestHeaders =
+    match.route.auth === 'public' && !match.route.commercial ? new Headers() : await headers();
+  const runtimeResult = await resolveAliasRuntimePageOrNotFound(match, requestHeaders, lang);
+  const alias = match.route.publicAliases.find((candidate) => candidate.path === match.aliasPath);
+  const structuredDataScripts = alias
+    ? createPluginPublicAliasStructuredDataScripts(alias, { locale: lang })
+    : [];
+
+  return (
+    <ShellLayout pathname={match.requestPath}>
+      {structuredDataScripts.map((script) => (
+        <script
+          key={script.id}
+          id={script.id}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: script.json }}
+        />
+      ))}
+      <PluginRuntimePageRenderer result={runtimeResult} />
+    </ShellLayout>
+  );
+}
+
+async function resolveAliasRuntimePageOrNotFound(
+  match: NonNullable<Awaited<ReturnType<typeof resolvePluginPublicRouteAlias>>>,
+  requestHeaders: Headers,
+  lang: string
+) {
+  try {
+    return await resolvePluginPageRuntime(match.pluginId, match.slug, requestHeaders, {
+      entry: match.entry ?? undefined,
+      matchedRoute: match.route,
+      requestPathOverride: match.requestPath,
+    });
+  } catch (error) {
+    handleRuntimePageResolutionError(error, lang, match.pluginId, match.requestPath);
+  }
+}
+
+function handleRuntimePageResolutionError(
+  error: unknown,
+  lang: string,
+  pluginId: string,
+  requestPath: string
+): never {
+  if (
+    error instanceof PluginError &&
+    ['PLUGIN_DISABLED', 'PLUGIN_RUNTIME_NOT_FOUND', 'PLUGIN_PAGE_ROUTE_NOT_FOUND'].includes(
+      error.code
+    )
+  ) {
+    notFound();
+  }
+
+  if (error instanceof PluginError && error.code === 'PLUGIN_AUTH_REQUIRED') {
+    const callbackUrl = encodeURIComponent(`/${lang}${requestPath}`);
+    redirect(`/${lang}/login?callbackUrl=${callbackUrl}`);
+  }
+
+  if (error instanceof PluginError && error.code === 'PLUGIN_ADMIN_REQUIRED') {
+    redirect(`/${lang}/profile`);
+  }
+
+  if (isPluginCommercialError(error)) {
+    redirect(createPluginCommercialRedirectPath(lang, pluginId, requestPath, error));
+  }
+
+  throw error;
+}

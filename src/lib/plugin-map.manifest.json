@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "capability-demo",
+      "rootDir": "plugins/capability-demo",
+      "components": [],
+      "pages": [
+        "DevAssetsTool",
+        "ImageCutoutTool",
+        "JsonFormatTool",
+        "PdfOcrTool",
+        "SelfTestTool",
+        "SelfTestToolClient"
+      ],
+      "apiModules": [
+        "api/api-key-echo",
+        "api/csv-convert",
+        "api/run",
+        "api/self-test",
+        "api/seo-check"
+      ],
+      "lifecycleModules": [],
+      "jobModules": [
+        "jobs/selftest"
+      ],
+      "webhookModules": [
+        "webhooks/self-test"
+      ],
+      "eventModules": [
+        "events/selftest"
+      ],
+      "hookModules": [],
+      "slotModules": [
+        "slots/JsonAliasBanner"
+      ]
+    },
+    {
+      "id": "sample-internal",
+      "rootDir": "plugins/sample-internal",
+      "components": [],
+      "pages": [
+        "SamplePage"
+      ],
+      "apiModules": [
+        "api/notes"
+      ],
+      "lifecycleModules": [],
+      "jobModules": [],
+      "webhookModules": [],
+      "eventModules": [],
+      "hookModules": [],
+      "slotModules": []
+    }
+  ]
+}

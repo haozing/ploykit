@@ -1,0 +1,2568 @@
+{
+  "common": {
+    "siteName": "PloyKit",
+    "tagline": "Pluggable SaaS Platform",
+    "nav": {
+      "home": "Home",
+      "about": "About",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "contact": "Contact",
+      "pricing": "Pricing"
+    },
+    "footer": {
+      "about": "About",
+      "privacy": "Privacy",
+      "terms": "Terms"
+    }
+  },
+  "home": {
+    "title": "Welcome to {siteName}",
+    "description": "Pluggable SaaS platform",
+    "exploreTools": "Explore Tools",
+    "learnMore": "Learn More",
+    "features": {
+      "plugins": {
+        "title": "Plugin Architecture",
+        "description": "Flexible plugin system with dynamic functionality extension"
+      },
+      "theme": {
+        "title": "Theme Customization",
+        "description": "Fully customizable design system and theme configuration"
+      },
+      "developer": {
+        "title": "Developer Friendly",
+        "description": "Type-safe, well-documented, developer experience first"
+      }
+    }
+  },
+  "about": {
+    "title": "About Us",
+    "description": "Learn about our mission and vision",
+    "hero": {
+      "title": "Who We Are",
+      "subtitle": "Committed to building the most flexible plugin-based tool platform"
+    },
+    "mission": {
+      "title": "Our Mission",
+      "content": "Through a powerful plugin system, enable every developer to easily build and extend their own tool platform."
+    },
+    "values": {
+      "title": "Core Values",
+      "openness": {
+        "title": "Openness",
+        "description": "Open architecture, open community"
+      },
+      "innovation": {
+        "title": "Innovation",
+        "description": "Continuously explore new technologies for better developer experience"
+      },
+      "quality": {
+        "title": "Quality",
+        "description": "Pursuing the perfect balance of code quality and product quality"
+      }
+    }
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "lastUpdated": "Last Updated",
+    "intro": "PloyKit ('we') values your privacy as an enterprise-grade SaaS platform. This privacy policy explains how we collect, use, store, and protect your personal information.",
+    "sections": {
+      "collection": {
+        "title": "1. Information Collection",
+        "content": "We collect the following types of information: account information (email, name), usage data (plugin installations, feature usage), technical data (device information, IP address)."
+      },
+      "usage": {
+        "title": "2. Information Usage",
+        "content": "We use collected information to provide and improve services, process subscriptions and billing, ensure platform security, and send important notifications."
+      },
+      "isolation": {
+        "title": "3. Data Isolation",
+        "content": "We implement user-level data isolation based on Row-Level Security (RLS) to ensure your data is only accessible by authorized parties."
+      },
+      "thirdparty": {
+        "title": "4. Third-Party Services",
+        "content": "We use third-party services such as Supabase (database and authentication) and Stripe (payment processing). These services comply with strict privacy standards."
+      },
+      "cookies": {
+        "title": "5. Cookie Usage",
+        "content": "We use cookies to maintain your login status, remember preferences, and analyze platform usage. You can manage cookies through your browser settings."
+      },
+      "security": {
+        "title": "6. Data Security",
+        "content": "We employ industry-standard encryption, access controls, and security audits to protect your data."
+      },
+      "rights": {
+        "title": "7. Your Rights",
+        "content": "You have the right to access, modify, delete your personal data, export data, or withdraw consent. Please submit requests through our contact page."
+      }
+    }
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "effectiveDate": "Effective Date",
+    "intro": "Welcome to PloyKit! Please read these terms of service carefully. By using our services, you agree to these terms.",
+    "sections": {
+      "service": {
+        "title": "1. Service Overview",
+        "content": "PloyKit is an enterprise-grade SaaS application platform providing complete infrastructure including plugin systems, permission management, and data isolation."
+      },
+      "account": {
+        "title": "2. Account Management",
+        "content": "You must provide accurate registration information and are responsible for account security. Sharing accounts or engaging in illegal activities is prohibited."
+      },
+      "usage": {
+        "title": "3. Usage Rules",
+        "content": "You may use platform features, install plugins, and develop applications. However, resource abuse, system attacks, and uploading malicious code are prohibited."
+      },
+      "plugins": {
+        "title": "4. Plugin Developer Terms",
+        "content": "Plugin developers must ensure code security and comply with review rules. Ownership of uploaded plugin code remains with developers, but necessary usage rights must be granted to the platform."
+      },
+      "billing": {
+        "title": "5. Subscription and Billing",
+        "content": "We offer various subscription plans. Fees are charged monthly or annually. Upon cancellation, service terminates at the end of the current billing cycle."
+      },
+      "ip": {
+        "title": "6. Intellectual Property",
+        "content": "Platform code and trademarks belong to PloyKit. Your data and uploaded content belong to you."
+      },
+      "liability": {
+        "title": "7. Disclaimer",
+        "content": "Services are provided 'as is'. We are not liable for indirect losses such as service interruptions or data loss."
+      },
+      "changes": {
+        "title": "8. Terms Changes",
+        "content": "We reserve the right to modify these terms. Significant changes will be notified 30 days in advance. Continued use constitutes acceptance of new terms."
+      }
+    }
+  },
+  "contact": {
+    "title": "Contact Us",
+    "subtitle": "Whether it's product questions, partnership inquiries, or technical support, we're here to listen",
+    "methods": {
+      "support": {
+        "title": "Technical Support",
+        "value": "support@slothook.com",
+        "description": "Having technical issues? We're here to help"
+      },
+      "business": {
+        "title": "Business Partnership",
+        "value": "business@slothook.com",
+        "description": "Explore partnership opportunities and grow together"
+      },
+      "github": {
+        "title": "Bug Reports",
+        "value": "GitHub Issues",
+        "description": "Report bugs or suggest features on GitHub"
+      }
+    },
+    "form": {
+      "title": "Send Message",
+      "name": "Name",
+      "namePlaceholder": "Enter your name",
+      "email": "Email",
+      "emailPlaceholder": "your@email.com",
+      "subject": "Subject",
+      "subjectPlaceholder": "Select a subject",
+      "subjects": {
+        "support": "Technical Support",
+        "business": "Business Partnership",
+        "bug": "Bug Report",
+        "feature": "Feature Request",
+        "other": "Other"
+      },
+      "message": "Message",
+      "messagePlaceholder": "Please describe your question or suggestion in detail...",
+      "send": "Send Message",
+      "sending": "Sending...",
+      "success": "Message sent successfully! We'll get back to you soon.",
+      "error": "Failed to send. Please try again later",
+      "validation": {
+        "nameRequired": "Please enter your name",
+        "emailRequired": "Please enter your email",
+        "emailInvalid": "Please enter a valid email address",
+        "subjectRequired": "Please select a subject",
+        "messageRequired": "Please enter your message",
+        "messageMin": "Message must be at least 10 characters"
+      }
+    }
+  },
+  "errors": {
+    "404": {
+      "title": "Page Not Found",
+      "description": "Sorry, the page you are looking for does not exist",
+      "backHome": "Back to Home"
+    },
+    "500": {
+      "title": "Server Error",
+      "description": "Sorry, the server encountered a problem",
+      "retry": "Retry",
+      "backHome": "Back to Home"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "description": "Enter your email and password to log in to your account",
+      "fields": {
+        "email": {
+          "label": "Email",
+          "placeholder": "your@email.com"
+        },
+        "password": {
+          "label": "Password",
+          "placeholder": "••••••••"
+        }
+      },
+      "forgotPassword": "Forgot Password?",
+      "submit": "Login",
+      "submitting": "Logging in...",
+      "noAccount": "Don't have an account?",
+      "registerNow": "Register Now",
+      "errors": {
+        "loginFailed": "Login failed. Please check your email and password."
+      }
+    },
+    "register": {
+      "title": "Register",
+      "description": "Create a new account to start using PloyKit",
+      "fields": {
+        "name": {
+          "label": "Name",
+          "placeholder": "John Doe"
+        },
+        "email": {
+          "label": "Email",
+          "placeholder": "your@email.com"
+        },
+        "password": {
+          "label": "Password",
+          "placeholder": "At least 8 characters",
+          "hint": "Password must be at least 8 characters long"
+        },
+        "confirmPassword": {
+          "label": "Confirm Password",
+          "placeholder": "Enter password again"
+        }
+      },
+      "submit": "Register",
+      "submitting": "Registering...",
+      "hasAccount": "Already have an account?",
+      "loginNow": "Login Now",
+      "success": {
+        "title": "Registration Successful!",
+        "description": "Your account has been created successfully, redirecting to dashboard..."
+      },
+      "errors": {
+        "registerFailed": "Registration failed. This email may already be registered.",
+        "passwordMismatch": "Passwords do not match",
+        "passwordTooShort": "Password must be at least 8 characters long"
+      }
+    },
+    "forgotPassword": {
+      "title": "Forgot Password",
+      "description": "Enter your email address and we'll send you a password reset link",
+      "fields": {
+        "email": {
+          "label": "Email",
+          "placeholder": "your@email.com"
+        }
+      },
+      "submit": "Send Reset Link",
+      "submitting": "Sending...",
+      "backToLogin": "Back to Login",
+      "success": {
+        "title": "Email Sent",
+        "description": "We've sent a password reset link to your email. Please check your inbox."
+      },
+      "errors": {
+        "sendFailed": "Failed to send reset email. Please try again later."
+      }
+    },
+    "resetPassword": {
+      "title": "Reset Password",
+      "description": "Enter a new password to regain access to your account",
+      "fields": {
+        "newPassword": {
+          "label": "New Password",
+          "placeholder": "At least 8 characters"
+        },
+        "confirmPassword": {
+          "label": "Confirm Password",
+          "placeholder": "Enter the new password again"
+        }
+      },
+      "submit": "Reset Password",
+      "submitting": "Resetting...",
+      "backToLogin": "Back to Login",
+      "requestNewLink": "Request a New Link",
+      "success": {
+        "title": "Password Reset",
+        "description": "Your password has been updated. You can now sign in with the new password."
+      },
+      "errors": {
+        "invalidToken": "This reset link is invalid or has expired. Please request a new link.",
+        "passwordMismatch": "Passwords do not match",
+        "passwordTooShort": "Password must be at least 8 characters long",
+        "resetFailed": "Failed to reset password. Please request a new link and try again."
+      }
+    }
+  },
+  "components": {
+    "usage": {
+      "upgradePrompt": {
+        "title": "Upgrade to unlock this feature",
+        "featureNotAvailable": "{feature} is not available in your current plan.",
+        "upgradeToUnlock": "Upgrade your plan to unlock more features.",
+        "currentPlan": "Current plan",
+        "perMonth": "/mo",
+        "plans": {
+          "free": "Free",
+          "pro": "Pro",
+          "enterprise": "Enterprise",
+          "features": {
+            "fiveUsers": "5 users",
+            "fiftyUsers": "50 users",
+            "unlimitedUsers": "Unlimited users",
+            "oneHundredMBStorage": "100 MB storage",
+            "oneGBStorage": "1 GB storage",
+            "tenGBStorage": "10 GB storage",
+            "threePlugins": "3 plugins",
+            "twentyPlugins": "20 plugins",
+            "unlimitedPlugins": "Unlimited plugins",
+            "tenKApiCalls": "10K API calls",
+            "oneMApiCalls": "1M API calls",
+            "tenMApiCalls": "10M API calls",
+            "prioritySupport": "Priority support",
+            "ssoSaml": "SSO/SAML",
+            "whiteLabel": "White label"
+          }
+        },
+        "badges": {
+          "popular": "Popular",
+          "current": "Current"
+        },
+        "actions": {
+          "viewPlans": "View Plans",
+          "manageSubscription": "Manage Subscription",
+          "upgradeToPro": "Upgrade to Pro",
+          "upgrade": "Upgrade",
+          "maybeLater": "Maybe Later",
+          "viewAllPlans": "View All Plans"
+        },
+        "dialog": {
+          "title": "Upgrade Your Plan",
+          "featureRequiresUpgrade": "To use {feature}, you'll need to upgrade your plan.",
+          "upgradeToUnlockFeatures": "Upgrade your plan to unlock more features and higher limits.",
+          "currentPlan": "Current Plan",
+          "perMonth": "/mo",
+          "recommended": "RECOMMENDED",
+          "plans": {
+            "free": "Free",
+            "pro": "Pro",
+            "enterprise": "Enterprise",
+            "features": {
+              "fiveUsers": "5 users",
+              "fiftyUsers": "50 users",
+              "unlimitedUsers": "Unlimited users",
+              "oneHundredMBStorage": "100 MB storage",
+              "oneGBStorage": "1 GB storage",
+              "tenGBStorage": "10 GB storage",
+              "threePlugins": "3 plugins",
+              "twentyPlugins": "20 plugins",
+              "unlimitedPlugins": "Unlimited plugins",
+              "tenKApiCalls": "10K API calls",
+              "oneMApiCalls": "1M API calls",
+              "tenMApiCalls": "10M API calls",
+              "prioritySupport": "Priority support",
+              "ssoSaml": "SSO/SAML",
+              "whiteLabel": "White label"
+            }
+          },
+          "actions": {
+            "upgradeToPro": "Upgrade to Pro",
+            "upgrade": "Upgrade",
+            "maybeLater": "Maybe Later",
+            "viewAllPlans": "View All Plans"
+          }
+        }
+      },
+      "usageAlerts": {
+        "upgradePlan": "Upgrade Plan",
+        "moreAlerts": "More Alerts",
+        "moreAlertsDescription": "{count} more usage alert available. Click to view all.",
+        "moreAlertsDescriptionPlural": "{count} more usage alerts available. Click to view all.",
+        "noAlerts": "No Alerts",
+        "noAlertsDescription": "All your usage metrics are within healthy limits",
+        "usageAlerts": "Usage Alerts",
+        "activeAlerts": "{count} active alert",
+        "activeAlertsPlural": "{count} active alerts",
+        "dismissAll": "Dismiss All",
+        "limitExceeded": "Limit Exceeded ({count})",
+        "critical": "Critical ({count})",
+        "warning": "Warning ({count})",
+        "information": "Information ({count})",
+        "exceeded": "You have exceeded your {metric} limit.",
+        "approaching": "You are approaching your {metric} limit.",
+        "increasing": "Your {metric} usage is increasing.",
+        "projectedLimit": "Projected Limit Reached",
+        "projectedLimitDescription": "Based on current usage trends ({trend}% growth), you will reach your {metric} limit in approximately {days} days.",
+        "projectedLimitDescriptionUrgent": "Based on current usage trends ({trend}% growth), you will reach your {metric} limit in approximately {days} days. Consider upgrading your plan soon.",
+        "metrics": {
+          "users": "Users",
+          "plugins": "Plugins",
+          "storage": "Storage",
+          "apiCalls": "API Calls"
+        }
+      },
+      "usageCard": {
+        "users": "Users",
+        "storage": "Storage",
+        "apiCalls": "API Calls",
+        "plugins": "Plugins",
+        "descriptions": {
+          "users": "Team members and collaborators",
+          "storage": "File and data storage usage",
+          "apiCalls": "Monthly API request count",
+          "plugins": "Installed plugins"
+        },
+        "of": "of",
+        "used": "{percentage}% used",
+        "overLimit": "Over limit!",
+        "criticallyHigh": "Critically high",
+        "approachingLimit": "Approaching limit",
+        "unlimited": "Unlimited",
+        "upgradePlan": "Upgrade Plan"
+      },
+      "usageCharts": {
+        "noData": "No data available",
+        "limit": "Limit: {limit}",
+        "usageOverview": "Usage Overview",
+        "visualComparison": "Visual comparison of your current usage against plan limits",
+        "thirtyDayTrends": "30-Day Usage Trends",
+        "trendDescription": "Track how your usage has changed over the past month",
+        "trendDataComingSoon": "Trend data coming soon"
+      },
+      "usageOverview": {
+        "errorLoading": "Error loading usage data",
+        "failedToLoad": "Failed to load usage information"
+      }
+    },
+    "files": {
+      "fileManager": {
+        "storageUsage": "Storage Usage",
+        "filesCount": "{count} file",
+        "filesCountPlural": "{count} files",
+        "mbUsed": "{used} MB used",
+        "mbUsedOf": "{used} MB used of {limit} MB",
+        "percentUsed": "{percent}% used",
+        "storageAlmostFull": "Storage almost full",
+        "approachingLimit": "Approaching limit",
+        "good": "Good",
+        "unlimitedStorage": "Unlimited storage",
+        "uploadFile": "Upload File",
+        "selectFile": "Select a file to upload to your storage",
+        "upload": "Upload",
+        "uploading": "Uploading...",
+        "percentUploaded": "{percent}% uploaded",
+        "selected": "Selected: {name} ({size} MB)",
+        "files": "Files",
+        "manageFiles": "Manage your uploaded files",
+        "searchFiles": "Search files...",
+        "noFilesYet": "No Files Yet",
+        "uploadFirstFile": "Upload your first file to get started",
+        "name": "Name",
+        "size": "Size",
+        "uploaded": "Uploaded",
+        "actions": "Actions",
+        "by": "by {email}",
+        "download": "Download",
+        "delete": "Delete",
+        "confirmDelete": "Are you sure you want to delete \"{name}\"?",
+        "failedToUpload": "Failed to upload file",
+        "failedToDownload": "Failed to download file",
+        "failedToDelete": "Failed to delete file"
+      }
+    },
+    "notifications": {
+      "notificationBell": {
+        "notifications": "Notifications",
+        "new": "{count} new",
+        "loading": "Loading notifications...",
+        "noNotifications": "No new notifications",
+        "viewAll": "View all notifications"
+      },
+      "notificationHistory": {
+        "title": "Notification History",
+        "description": "View all notifications sent to your account ({count} total)",
+        "noNotifications": "No notifications sent yet",
+        "type": "Type",
+        "channel": "Channel",
+        "recipient": "Recipient",
+        "subject": "Subject",
+        "status": "Status",
+        "sent": "Sent",
+        "details": "Notification Details",
+        "close": "Close",
+        "body": "Body",
+        "error": "Error",
+        "created": "Created",
+        "statuses": {
+          "sent": "Sent",
+          "failed": "Failed",
+          "pending": "Pending"
+        },
+        "channels": {
+          "email": "Email",
+          "webhook": "Webhook",
+          "in_app": "In App"
+        }
+      }
+    },
+    "shared": {
+      "userDropdown": {
+        "loading": "Loading...",
+        "unknownUser": "Unknown User",
+        "myAccount": "My Account",
+        "menu": {
+          "profile": "Profile",
+          "settings": "Settings",
+          "billing": "Billing",
+          "logout": "Logout"
+        },
+        "loggingOut": "Logging out..."
+      }
+    }
+  },
+  "dashboard": {
+    "appName": "PloyKit",
+    "nav": {
+      "myAccount": "My Account",
+      "overview": "Overview",
+      "management": "Management",
+      "operations": "Operations",
+      "system": "System",
+      "profile": "Profile",
+      "billing": "Billing & Subscription",
+      "notificationPreferences": "Notification Preferences",
+      "pluginTasks": "Task Center",
+      "settings": "Account Settings",
+      "dashboard": "Dashboard",
+      "users": "Users",
+      "plans": "Subscription Plans",
+      "analytics": "Analytics",
+      "plugins": "Plugins",
+      "pluginDevConsole": "Plugin Dev Console",
+      "pluginOperations": "Plugin Operations",
+      "revenue": "Revenue",
+      "operationsCenter": "Operations Center",
+      "systemSettings": "System Settings",
+      "adminConsole": "Admin Console"
+    },
+    "header": {
+      "searchPlaceholder": "Search users, roles, plugins...",
+      "notifications": "Notifications",
+      "notificationExample1": "New user registration",
+      "notificationExample2": "Plugin installed",
+      "notificationExample3": "High usage alert",
+      "viewAllNotifications": "View all notifications",
+      "myAccount": "My Account",
+      "profile": "Profile",
+      "settings": "Settings",
+      "billing": "Billing",
+      "logout": "Logout",
+      "loggingOut": "Logging out...",
+      "loading": "Loading...",
+      "unknownUser": "Unknown User"
+    },
+    "admin": {
+      "title": "Dashboard",
+      "description": "Welcome back! Here's an overview of your platform.",
+      "stats": {
+        "totalUsers": "Total Users",
+        "activeRoles": "Active Roles",
+        "apiRequests": "Usage Events",
+        "fromLastMonth": "from last month",
+        "fromYesterday": "from yesterday"
+      },
+      "recentUsers": {
+        "title": "Recent Users",
+        "description": "New user registrations",
+        "noData": "No recent users found"
+      },
+      "systemStatus": {
+        "title": "System Status",
+        "description": "Current health of platform services",
+        "noData": "No system status data available"
+      }
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Manage your account information and preference settings",
+      "unknownUser": "Unknown User",
+      "loading": "Loading...",
+      "noData": "No data",
+      "buttons": {
+        "edit": "Edit",
+        "save": "Save",
+        "saving": "Saving...",
+        "cancel": "Cancel",
+        "updating": "Updating..."
+      },
+      "toast": {
+        "profileUpdateSuccess": "Profile updated successfully",
+        "profileUpdateError": "Failed to update profile",
+        "passwordChangeSuccess": "Password changed successfully",
+        "passwordChangeError": "Failed to change password",
+        "preferencesUpdateSuccess": "Preferences saved",
+        "preferencesUpdateError": "Failed to save preferences",
+        "loadError": "Failed to load profile"
+      },
+      "tabs": {
+        "basicInfo": "Basic Info",
+        "security": "Security Settings",
+        "preferences": "Preferences"
+      },
+      "basicInfo": {
+        "title": "Basic Information",
+        "description": "Your personal basic information",
+        "name": "Name",
+        "email": "Email",
+        "avatar": "Avatar",
+        "role": "Role",
+        "joinDate": "Join Date",
+        "lastLogin": "Last Login"
+      },
+      "security": {
+        "title": "Security Settings",
+        "description": "Manage your password and security options",
+        "changePassword": "Change Password",
+        "setPassword": "Set Password",
+        "currentPassword": "Current Password",
+        "currentPasswordPlaceholder": "Enter current password",
+        "newPassword": "New Password",
+        "newPasswordPlaceholder": "Enter new password",
+        "confirmPassword": "Confirm New Password",
+        "confirmPasswordPlaceholder": "Re-enter new password",
+        "updatePassword": "Update Password",
+        "createPassword": "Create Password",
+        "twoFactor": {
+          "title": "Two-Factor Authentication",
+          "description": "Enhance account security",
+          "label": "Two-Factor Authentication",
+          "hint": "Use authentication codes to protect your account",
+          "enable": "Enable"
+        }
+      },
+      "preferences": {
+        "interface": {
+          "title": "Interface Preferences",
+          "description": "Customize your user experience",
+          "theme": "Theme",
+          "themeHint": "Choose light or dark theme",
+          "themeOptions": {
+            "light": "Light",
+            "dark": "Dark",
+            "system": "System"
+          },
+          "language": "Language",
+          "languageHint": "Select interface language",
+          "languageOptions": {
+            "zh": "简体中文",
+            "en": "English"
+          },
+          "timezone": "Timezone",
+          "timezoneHint": "Set your timezone"
+        },
+        "notifications": {
+          "title": "Notification Preferences",
+          "description": "Manage how you receive notifications",
+          "email": "Email Notifications",
+          "emailHint": "Receive important update emails",
+          "inApp": "In-App Notifications",
+          "inAppHint": "Show in-app notifications",
+          "enabled": "Enabled"
+        }
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Manage application settings and preferences",
+      "systemSettings": "System Settings",
+      "manageConfiguration": "Platform-level settings are not backed by a system settings store yet.",
+      "notificationSettings": "Notification Settings",
+      "configureSystemNotifications": "Configure system notifications and alerts",
+      "systemNotifications": "System Notifications",
+      "systemNotificationsDescription": "Platform-wide notification defaults, provider policy, and templates need a dedicated system settings API.",
+      "securitySettings": "Security Settings",
+      "manageSecurityPolicies": "Manage security policies and controls",
+      "emailSettings": "Email Settings",
+      "configureEmailTemplates": "Configure email templates and delivery",
+      "generalSettings": "General Settings",
+      "platformTimezoneAndGeneral": "Platform timezone and general preferences",
+      "settingsStorage": "Settings Storage",
+      "settingsStorageDescription": "No system-level settings table or service is currently present; existing notification preferences are per-user.",
+      "comingSoon": "Coming soon",
+      "notImplemented": "Not wired",
+      "missingSystemSettingsApi": "API missing",
+      "configureButton": "Configure",
+      "sections": {
+        "notifications": {
+          "title": "Notification Settings",
+          "description": "Manage notification preferences and reminder methods"
+        },
+        "security": {
+          "title": "Security Settings",
+          "description": "Password, two-factor authentication and security options"
+        },
+        "appearance": {
+          "title": "Appearance Settings",
+          "description": "Theme, colors and interface customization"
+        },
+        "locale": {
+          "title": "Language and Region",
+          "description": "Language, timezone and date format"
+        }
+      },
+      "quickActions": {
+        "title": "Quick Actions",
+        "description": "Common settings and management options",
+        "export": {
+          "title": "Data Export",
+          "description": "Export all your data",
+          "button": "Export"
+        },
+        "clearCache": {
+          "title": "Clear Cache",
+          "description": "Clear local cached data",
+          "button": "Clear"
+        },
+        "deleteAccount": {
+          "title": "Delete Account",
+          "description": "Permanently delete your account and all data",
+          "button": "Delete"
+        }
+      },
+      "notifications": {
+        "title": "Notification Preferences",
+        "description": "Manage how notifications are delivered to your account",
+        "toast": {
+          "loadError": "Failed to load notification settings",
+          "updateSuccess": "Notification settings updated",
+          "updateError": "Failed to update notification settings"
+        },
+        "email": {
+          "title": "Email Notifications",
+          "description": "Configure the types of notifications you receive via email",
+          "all": {
+            "label": "Receive Email Notifications",
+            "hint": "Allow us to send you notifications via email"
+          },
+          "marketing": {
+            "label": "Marketing Emails",
+            "hint": "Receive promotions and special offers"
+          },
+          "security": {
+            "label": "Security Alerts",
+            "hint": "Login anomalies, password changes and other security notifications"
+          },
+          "product": {
+            "label": "Product Updates",
+            "hint": "New features, product improvements and update notifications"
+          },
+          "billing": {
+            "label": "Billing Alerts",
+            "hint": "Subscription renewals, payment confirmations and billing notifications"
+          },
+          "subtitle": "Configure email delivery for operational alerts",
+          "enable": "Enable email notifications",
+          "address": "Email address",
+          "addressPlaceholder": "you@example.com"
+        },
+        "inApp": {
+          "title": "In-App Notifications",
+          "description": "Configure the types of notifications displayed within the app",
+          "all": {
+            "label": "Enable In-App Notifications",
+            "hint": "Show notification alerts within the app"
+          },
+          "subtitle": "Show alerts inside the dashboard",
+          "enable": "Enable in-app notifications"
+        },
+        "info": {
+          "title": "About Notifications",
+          "description": "Important security-related notifications (such as password change confirmations) cannot be disabled to ensure your account security."
+        },
+        "success": {
+          "saved": "Notification settings saved."
+        },
+        "errors": {
+          "loadFailed": "Failed to load notification settings.",
+          "saveFailed": "Failed to save notification settings."
+        },
+        "webhook": {
+          "title": "Webhook Notifications",
+          "subtitle": "Send notifications to an external webhook endpoint",
+          "enable": "Enable webhook notifications",
+          "description": "Deliver important events to your configured webhook URL.",
+          "url": "Webhook URL",
+          "urlPlaceholder": "https://example.com/webhook",
+          "secret": "Signing secret",
+          "secretPlaceholder": "Optional shared secret",
+          "secretHelp": "Used by receivers to verify notification payloads."
+        },
+        "types": {
+          "title": "Notification Types",
+          "description": "Choose which events should trigger notifications",
+          "usage": {
+            "title": "Usage Alerts",
+            "warning": "Usage warning",
+            "warningDesc": "Notify when usage approaches a plan limit.",
+            "critical": "Critical usage",
+            "criticalDesc": "Notify when usage is critically high.",
+            "exceeded": "Limit exceeded",
+            "exceededDesc": "Notify when usage exceeds a plan limit."
+          },
+          "trial": {
+            "title": "Trial events",
+            "description": "Notify about trial start, ending soon, and expiration events."
+          },
+          "subscription": {
+            "title": "Subscription events",
+            "description": "Notify about plan changes, renewals, and cancellations."
+          },
+          "payment": {
+            "title": "Payment events",
+            "description": "Notify about successful payments and payment failures."
+          }
+        },
+        "reports": {
+          "title": "Reports",
+          "description": "Configure summary notification frequency",
+          "daily": "Daily digest",
+          "dailyDesc": "Send a daily summary of key account activity.",
+          "weekly": "Weekly report",
+          "weeklyDesc": "Send a weekly overview of usage and billing events."
+        },
+        "test": {
+          "title": "Test Notification",
+          "description": "Send a test notification using the current settings.",
+          "button": "Send Test Notification",
+          "sending": "Sending...",
+          "sent": "Test notification sent.",
+          "failed": "Failed to send test notification."
+        },
+        "actions": {
+          "reset": "Reset",
+          "save": "Save Settings",
+          "saving": "Saving..."
+        }
+      }
+    },
+    "billing": {
+      "title": "Billing & Subscription",
+      "notSet": "Not set",
+      "actions": {
+        "manageSubscription": "Manage subscription",
+        "changePlan": "Change plan",
+        "viewOrders": "Orders",
+        "viewAllOrders": "View all orders",
+        "viewCreditHistory": "Credit history",
+        "portalErrorTitle": "Failed to open portal",
+        "portalErrorDescription": "Please try again later."
+      },
+      "error": {
+        "title": "Loading Failed",
+        "reload": "Reload"
+      },
+      "noSubscription": {
+        "title": "You don't have a subscription yet",
+        "description": "Subscribe to our platform to unlock all tool plugins and premium features",
+        "button": "View Subscription Plans"
+      },
+      "status": {
+        "active": "Active",
+        "trial": "Trial",
+        "cancelled": "Cancelled",
+        "expired": "Expired"
+      },
+      "currentPlan": {
+        "title": "Current Plan",
+        "description": "Details of your current subscription plan",
+        "planName": "Plan Name",
+        "status": "Status",
+        "price": "Price",
+        "month": "month",
+        "nextRenewal": "Expires At",
+        "lifetime": "Lifetime",
+        "expiryUnknown": "Unknown"
+      },
+      "records": {
+        "title": "Billing Records",
+        "description": "Recent billing and renewals",
+        "empty": "No orders yet"
+      },
+      "usage": {
+        "title": "Quota Usage",
+        "description": "Your resource quotas and usage statistics",
+        "noData": "No usage data",
+        "used": "Used",
+        "remaining": "Remaining",
+        "unlimited": "Unlimited",
+        "totalQuota": "Total quota",
+        "upgradeHint": "Your usage has reached {percentage}%, consider upgrading to a higher tier plan?",
+        "viewUpgrade": "View Upgrade Options →"
+      },
+      "quotas": {
+        "callsPerMonth": "Calls per month",
+        "jobExecutionsPerMonth": "Job executions per month",
+        "apiCallsPerDay": "API calls per day"
+      },
+      "features": {
+        "title": "Subscription Features",
+        "description": "Your subscription includes the following features and permissions"
+      },
+      "ordersTable": {
+        "columns": {
+          "order": "Order",
+          "user": "User",
+          "sku": "SKU",
+          "amount": "Amount",
+          "status": "Status",
+          "date": "Date"
+        },
+        "empty": "No orders found",
+        "notAvailable": "N/A",
+        "quantity": "{qty} items",
+        "status": {
+          "completed": "Completed",
+          "pending": "Pending",
+          "failed": "Failed",
+          "cancelled": "Cancelled"
+        }
+      },
+      "productsTable": {
+        "columns": {
+          "product": "Product",
+          "category": "Category",
+          "sortOrder": "Sort Order",
+          "status": "Status"
+        },
+        "empty": "No products found",
+        "uncategorized": "Uncategorized",
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "actions": {
+          "title": "Actions",
+          "edit": "Edit",
+          "delete": "Delete"
+        },
+        "deleteDialog": {
+          "title": "Delete Product",
+          "description": "Are you sure you want to delete <strong>{name}</strong>? This action cannot be undone.",
+          "cancel": "Cancel",
+          "delete": "Delete",
+          "deleting": "Deleting..."
+        },
+        "toast": {
+          "deleteSuccess": {
+            "title": "Product deleted",
+            "description": "{name} has been deleted successfully."
+          },
+          "error": "Error",
+          "deleteFailed": "Failed to delete product"
+        }
+      },
+      "subscriptionsTable": {
+        "columns": {
+          "subscription": "Subscription",
+          "user": "User",
+          "sku": "SKU",
+          "interval": "Interval",
+          "currentPeriod": "Current Period",
+          "status": "Status"
+        },
+        "empty": "No subscriptions found",
+        "notAvailable": "N/A",
+        "to": "to",
+        "cancelAtPeriodEnd": "Cancels at period end",
+        "interval": {
+          "monthly": "Monthly",
+          "yearly": "Yearly",
+          "month": "Monthly",
+          "year": "Yearly",
+          "week": "Weekly",
+          "day": "Daily"
+        },
+        "status": {
+          "active": "Active",
+          "cancelled": "Cancelled",
+          "pending": "Pending",
+          "expired": "Expired"
+        }
+      },
+      "skusTable": {
+        "columns": {
+          "sku": "SKU",
+          "product": "Product",
+          "plan": "Plan",
+          "price": "Price",
+          "stripe": "Stripe",
+          "status": "Status"
+        },
+        "empty": "No SKUs found",
+        "notAvailable": "N/A",
+        "intervals": {
+          "monthly": "mo",
+          "yearly": "yr",
+          "month": "mo",
+          "year": "yr",
+          "week": "wk",
+          "day": "day",
+          "yr": "yr"
+        },
+        "stripe": {
+          "synced": "Synced",
+          "notSynced": "Not synced"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "actions": {
+          "title": "Actions",
+          "edit": "Edit",
+          "syncToStripe": "Sync to Stripe",
+          "syncing": "Syncing..."
+        },
+        "toast": {
+          "syncSuccess": {
+            "title": "SKU synced",
+            "description": "{name} has been synced to Stripe successfully."
+          },
+          "error": "Error",
+          "syncFailed": "Failed to sync SKU"
+        }
+      }
+    },
+    "revenue": {
+      "title": "Revenue",
+      "description": "Manage products, pricing, orders and subscriptions in one place",
+      "buttons": {
+        "createProduct": "New Product",
+        "createSKU": "New SKU"
+      },
+      "stats": {
+        "products": "Products",
+        "skus": "SKUs",
+        "orders": "Orders",
+        "subscriptions": "Subscriptions",
+        "active": "active",
+        "completed": "completed",
+        "totalRevenue": "Total Revenue",
+        "fromCompletedOrders": "From completed orders"
+      },
+      "tabs": {
+        "products": "Products",
+        "skus": "SKUs",
+        "orders": "Orders",
+        "subscriptions": "Subscriptions"
+      },
+      "cards": {
+        "products": {
+          "title": "Products",
+          "description": "Create and organize your product catalog"
+        },
+        "skus": {
+          "title": "SKUs & Pricing",
+          "description": "Set pricing and availability for each product"
+        },
+        "orders": {
+          "title": "Orders",
+          "description": "Review and track customer orders"
+        },
+        "subscriptions": {
+          "title": "Subscriptions",
+          "description": "Monitor active and trial subscriptions"
+        }
+      },
+      "productDialog": {
+        "titleCreate": "Create Product",
+        "titleEdit": "Edit Product",
+        "descriptionCreate": "Add a new product to your catalog.",
+        "descriptionEdit": "Update product information.",
+        "fields": {
+          "name": {
+            "label": "Name *",
+            "placeholder": "PloyKit Platform"
+          },
+          "slug": {
+            "label": "Slug *",
+            "placeholder": "ploykit-platform",
+            "help": "Unique identifier (lowercase, hyphens only)"
+          },
+          "description": {
+            "label": "Description",
+            "placeholder": "Product description..."
+          },
+          "category": {
+            "label": "Category",
+            "placeholder": "Select category",
+            "options": {
+              "saas": "SaaS",
+              "addon": "Add-on",
+              "service": "Service",
+              "other": "Other"
+            }
+          },
+          "sortOrder": {
+            "label": "Sort Order"
+          },
+          "isActive": {
+            "label": "Active",
+            "hint": "Product is available for sale"
+          }
+        },
+        "actions": {
+          "cancel": "Cancel",
+          "create": "Create Product",
+          "update": "Update Product"
+        },
+        "toast": {
+          "createTitle": "Product created",
+          "updateTitle": "Product updated",
+          "createDescription": "{name} has been created successfully.",
+          "updateDescription": "{name} has been updated successfully.",
+          "error": "Error"
+        },
+        "errors": {
+          "nameRequired": "Name is required",
+          "slugRequired": "Slug is required",
+          "slugFormat": "Slug must be lowercase alphanumeric with hyphens",
+          "max100": "Maximum 100 characters",
+          "max500": "Maximum 500 characters",
+          "sortOrderNonNegative": "Sort order must be 0 or greater",
+          "saveFailed": "Failed to save product",
+          "generic": "Something went wrong"
+        }
+      },
+      "skuDialog": {
+        "titleCreate": "Create SKU",
+        "titleEdit": "Edit SKU",
+        "description": "SKUs define pricing and billing intervals for products.",
+        "fields": {
+          "name": {
+            "label": "Name *",
+            "placeholder": "Pro Plan - Monthly"
+          },
+          "slug": {
+            "label": "Slug *",
+            "placeholder": "pro-monthly"
+          },
+          "product": {
+            "label": "Product *",
+            "placeholder": "Select product"
+          },
+          "plan": {
+            "label": "Plan *",
+            "placeholder": "Select plan",
+            "loading": "Loading...",
+            "help": "Links SKU to entitlement plan"
+          },
+          "price": {
+            "label": "Price *",
+            "placeholder": "29.99"
+          },
+          "currency": {
+            "label": "Currency"
+          },
+          "interval": {
+            "label": "Interval",
+            "options": {
+              "monthly": "Monthly",
+              "yearly": "Yearly",
+              "lifetime": "Lifetime"
+            }
+          },
+          "isActive": {
+            "label": "Active",
+            "hint": "SKU is available for purchase"
+          }
+        },
+        "actions": {
+          "cancel": "Cancel",
+          "create": "Create SKU",
+          "update": "Update SKU"
+        },
+        "toast": {
+          "createTitle": "SKU created",
+          "updateTitle": "SKU updated",
+          "createDescription": "{name} has been created successfully.",
+          "updateDescription": "{name} has been updated successfully.",
+          "error": "Error"
+        },
+        "errors": {
+          "nameRequired": "Name is required",
+          "slugRequired": "Slug is required",
+          "productRequired": "Product is required",
+          "planRequired": "Plan is required",
+          "priceRequired": "Price is required",
+          "max100": "Maximum 100 characters",
+          "saveFailed": "Failed to save SKU",
+          "generic": "Something went wrong"
+        }
+      }
+    },
+    "users": {
+      "page": {
+        "title": "Users & Roles",
+        "description": "Manage users and their access permissions",
+        "tabs": {
+          "users": "Users",
+          "rbac": "Roles & Permissions"
+        }
+      },
+      "table": {
+        "columns": {
+          "user": "User",
+          "email": "Email",
+          "role": "Role",
+          "plan": "Plan",
+          "subscriptionEnd": "Subscription End",
+          "created": "Created",
+          "actions": "Actions"
+        },
+        "subscription": {
+          "permanent": "Permanent"
+        },
+        "roles": {
+          "admin": "Admin",
+          "user": "User"
+        },
+        "notAvailable": "N/A",
+        "status": {
+          "active": "Active",
+          "pending": "Pending",
+          "suspended": "Suspended",
+          "deleted": "Deleted"
+        },
+        "noUsers": "No users found",
+        "noRole": "No role",
+        "never": "Never",
+        "actions": {
+          "title": "Actions",
+          "openMenu": "Open menu",
+          "viewDetails": "View Details",
+          "editUser": "Edit User",
+          "manageRoles": "Manage Roles",
+          "deleteUser": "Delete User"
+        },
+        "deleteConfirm": "Are you sure you want to delete user \"{userName}\"? This action cannot be undone.",
+        "deleteSuccess": "User \"{userName}\" deleted successfully",
+        "deleteFailed": "Failed to delete user",
+        "deleteError": "An error occurred while deleting the user",
+        "pagination": {
+          "showing": "Showing <strong>{from}</strong> to <strong>{to}</strong> of <strong>{total}</strong> users",
+          "previous": "Previous",
+          "next": "Next",
+          "page": "Page {current} of {total}"
+        }
+      },
+      "tab": {
+        "stats": {
+          "totalUsers": "Total Users",
+          "active": "Active",
+          "pending": "Pending",
+          "suspended": "Suspended"
+        },
+        "allUsers": "All Users",
+        "searchAndFilter": "Search and filter users",
+        "addUser": "Add User",
+        "searchPlaceholder": "Search by name, email, or ID...",
+        "statusFilter": {
+          "placeholder": "Status",
+          "all": "All Status",
+          "active": "Active",
+          "pending": "Pending",
+          "suspended": "Suspended",
+          "deleted": "Deleted"
+        }
+      }
+    },
+    "rbac": {
+      "redirect": {
+        "redirecting": "Redirecting to Users & Roles..."
+      },
+      "rolesTable": {
+        "columns": {
+          "role": "Role",
+          "type": "Type",
+          "permissions": "Permissions",
+          "users": "Users",
+          "created": "Created"
+        },
+        "badges": {
+          "default": "Default",
+          "custom": "Custom"
+        },
+        "noRoles": "No roles found.",
+        "noPermissions": "No permissions",
+        "morePermissions": "+{count} more",
+        "usersCount": "users",
+        "actions": {
+          "title": "Actions",
+          "openMenu": "Open menu",
+          "viewDetails": "View Details",
+          "editRole": "Edit Role",
+          "duplicateRole": "Duplicate Role",
+          "duplicating": "Duplicating...",
+          "viewAssignments": "View Assignments",
+          "deleteRole": "Delete Role",
+          "deleting": "Deleting..."
+        },
+        "deleteConfirm": "Are you sure you want to delete the role \"{roleName}\"? This action cannot be undone.",
+        "deleteSuccess": "Role \"{roleName}\" deleted successfully",
+        "deleteFailed": "Failed to delete role",
+        "deleteError": "An unexpected error occurred",
+        "duplicateConfirm": "Duplicate \"{roleName}\"? This will create a copy with \"-copy\" suffix.",
+        "duplicateSuccess": "Role \"{roleName}\" duplicated successfully",
+        "duplicateFailed": "Failed to duplicate role",
+        "duplicateError": "An unexpected error occurred",
+        "pagination": {
+          "showing": "Showing <strong>{from}</strong> to <strong>{to}</strong> of <strong>{total}</strong> roles",
+          "previous": "Previous",
+          "next": "Next",
+          "page": "Page {current} of {total}"
+        }
+      },
+      "tab": {
+        "title": "Role Management",
+        "description": "Manage user role assignments (Admin/User)",
+        "searchPlaceholder": "Search roles by name or slug...",
+        "createRole": "Create Role"
+      },
+      "roleDialog": {
+        "title": {
+          "create": "Create New Role",
+          "edit": "Edit Role"
+        },
+        "description": {
+          "create": "Create a new role with custom permissions",
+          "edit": "Update role information and settings"
+        },
+        "fields": {
+          "name": {
+            "label": "Role Name *",
+            "placeholder": "e.g., Editor, Viewer, Admin"
+          },
+          "slug": {
+            "label": "Slug *",
+            "placeholder": "e.g., editor, viewer, admin",
+            "hint": "Used as a unique identifier (lowercase, no spaces)"
+          },
+          "description": {
+            "label": "Description",
+            "placeholder": "Describe what this role can do..."
+          },
+          "isDefault": {
+            "label": "Set as default role for new members"
+          }
+        },
+        "errors": {
+          "required": "Name and slug are required",
+          "operationFailed": "Operation failed"
+        },
+        "success": {
+          "created": "Role created successfully!",
+          "updated": "Role updated successfully!"
+        },
+        "buttons": {
+          "cancel": "Cancel",
+          "create": "Create Role",
+          "update": "Update Role",
+          "saved": "Saved!"
+        }
+      },
+      "detail": {
+        "loading": "Loading role details...",
+        "backToRoles": "Back to Roles",
+        "roleNotFound": "Role not found",
+        "returnToRoles": "Return to Roles",
+        "editRole": "Edit Role",
+        "tabs": {
+          "permissions": "Permissions",
+          "permissionsWithCount": "Permissions ({count})",
+          "settings": "Settings"
+        },
+        "permissions": {
+          "title": "Permissions",
+          "description": "All permissions granted to this role",
+          "noPermissions": "This role has no permissions."
+        },
+        "settings": {
+          "title": "Role Settings",
+          "description": "Role metadata and system settings",
+          "roleType": {
+            "label": "Role Type",
+            "default": "System default role",
+            "custom": "Custom role"
+          },
+          "isDefault": {
+            "true": "This role is assigned by default.",
+            "false": "This role is not assigned by default."
+          },
+          "created": "Created",
+          "lastUpdated": "Last Updated"
+        }
+      }
+    },
+    "plans": {
+      "page": {
+        "title": "Plan Management",
+        "description": "Create and manage subscription plans for your platform",
+        "allPlansTitle": "All Plans",
+        "plansCount": "{count, plural, =0 {no plans} =1 {1 plan} other {# plans}} total",
+        "emptyState": {
+          "title": "No Plans Yet",
+          "description": "Get started by creating your first subscription plan"
+        },
+        "table": {
+          "plan": "Plan",
+          "pricing": "Pricing",
+          "features": "Features",
+          "limits": "Limits",
+          "status": "Status",
+          "actions": "Actions",
+          "more": "more"
+        },
+        "badges": {
+          "default": "Default"
+        },
+        "pricing": {
+          "free": "Free"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "actions": {
+          "refresh": "Refresh",
+          "createPlan": "Create Plan",
+          "viewDetails": "View Details",
+          "editPlan": "Edit Plan",
+          "duplicate": "Duplicate",
+          "activate": "Activate",
+          "deactivate": "Deactivate",
+          "setAsDefault": "Set as Default",
+          "delete": "Delete"
+        },
+        "deleteConfirm": "Are you sure you want to delete this plan? This cannot be undone.",
+        "errors": {
+          "deleteFailed": "Failed to delete plan",
+          "updateFailed": "Failed to update plan",
+          "setDefaultFailed": "Failed to set default plan"
+        },
+        "dialog": {
+          "createTitle": "Create New Plan",
+          "editTitle": "Edit Plan",
+          "createDescription": "Define features, limits, and pricing for your new subscription plan",
+          "editDescription": "Update plan details, features, and pricing"
+        }
+      }
+    },
+    "entitlements": {
+      "page": {
+        "title": "Subscription Plans",
+        "description": "Manage subscription plans and user subscriptions",
+        "actions": {
+          "createPlan": "Create Plan"
+        },
+        "stats": {
+          "totalPlans": "Total Plans",
+          "activeSubscriptions": "Active Subscriptions",
+          "trialSubscriptions": "Trial Subscriptions",
+          "monthlyRevenue": "Monthly Revenue"
+        },
+        "tabs": {
+          "plans": "Subscription Plans",
+          "entitlements": "User Subscriptions",
+          "usage": "Usage Analytics"
+        },
+        "filters": {
+          "searchPlans": "Search plans...",
+          "searchUsers": "Search users...",
+          "allPlans": "All Plans",
+          "allStatus": "All Status",
+          "active": "Active",
+          "inactive": "Inactive",
+          "trial": "Trial",
+          "expired": "Expired",
+          "cancelled": "Cancelled"
+        },
+        "planCard": {
+          "title": "Subscription Plans",
+          "description": "Configure plans with features and limits"
+        },
+        "userCard": {
+          "title": "User Subscriptions",
+          "description": "View and manage user subscriptions"
+        }
+      },
+      "planDialogV2": {
+        "title": {
+          "create": "Create Plan",
+          "edit": "Edit Plan"
+        },
+        "description": "Plans contain multi-language display features and machine-enforced capabilities + per-month quotas.",
+        "tabs": {
+          "basic": "Basic",
+          "display": "Display",
+          "pricing": "Pricing",
+          "limits": "Limits",
+          "capabilities": "Capabilities",
+          "stripe": "Stripe"
+        },
+        "fields": {
+          "name": {
+            "label": "Name",
+            "placeholder": "Pro"
+          },
+          "slug": {
+            "label": "Slug",
+            "placeholder": "pro"
+          },
+          "description": {
+            "label": "Description",
+            "placeholder": "Plan description..."
+          },
+          "sortOrder": {
+            "label": "Sort Order",
+            "placeholder": "0"
+          },
+          "isActive": {
+            "label": "Active"
+          },
+          "isDefault": {
+            "label": "Default"
+          }
+        },
+        "display": {
+          "help": "Display-only bullet list shown on pricing pages. Enforcement MUST use quotas/capabilities.",
+          "featuresListZh": {
+            "label": "Features List (ZH) — one per line",
+            "placeholder": "每行一个功能点..."
+          },
+          "featuresListEn": {
+            "label": "Features List (EN) — one per line",
+            "placeholder": "One bullet per line..."
+          }
+        },
+        "pricing": {
+          "currency": {
+            "label": "Currency",
+            "placeholder": "USD"
+          },
+          "trialDays": {
+            "label": "Trial Days",
+            "placeholder": "0"
+          },
+          "monthlyPrice": {
+            "label": "Monthly Price",
+            "placeholder": "9.99"
+          },
+          "yearlyPrice": {
+            "label": "Yearly Price",
+            "placeholder": "99"
+          }
+        },
+        "limits": {
+          "title": "Quotas (per month)",
+          "help": "Keys must use a namespace prefix, for example `runlynk.calls`. Empty value means deny (treated as 0).",
+          "add": "Add",
+          "empty": "No quotas configured. Missing keys are treated as 0 (deny).",
+          "headers": {
+            "key": "Key",
+            "keyPlaceholder": "runlynk.calls",
+            "monthly": "Monthly",
+            "yearly": "Yearly",
+            "valuePlaceholder": "0"
+          }
+        },
+        "capabilities": {
+          "outputResolution": {
+            "label": "RunLynk Output Resolution (enforced)",
+            "placeholder": "Select..."
+          },
+          "json": {
+            "label": "Capabilities (JSON)"
+          }
+        },
+        "stripe": {
+          "productId": {
+            "label": "Stripe Product ID (optional)",
+            "placeholder": "prod_..."
+          },
+          "sync": {
+            "label": "Sync To Stripe",
+            "help": "Creates/updates Stripe Product and Prices; updates local price mapping."
+          }
+        },
+        "actions": {
+          "cancel": "Cancel",
+          "create": "Create",
+          "update": "Update"
+        },
+        "toast": {
+          "createdTitle": "Plan created",
+          "updatedTitle": "Plan updated",
+          "saved": "Saved",
+          "savedAndSynced": "Saved and synced to Stripe",
+          "errorTitle": "Error",
+          "saveFailed": "Save failed"
+        }
+      },
+      "planForm": {
+        "errorAlert": "Error",
+        "tabs": {
+          "basic": "Basic Info",
+          "pricing": "Pricing",
+          "features": "Features",
+          "limits": "Limits"
+        },
+        "basicInfo": {
+          "title": "Basic Information",
+          "description": "Description",
+          "planName": "Plan Name",
+          "planNameRequired": "required",
+          "planNamePlaceholder": "e.g., Pro, Enterprise",
+          "planNameError": "Plan name is required",
+          "descriptionPlaceholder": "Brief description of the plan",
+          "displayOrder": "Display Order",
+          "displayOrderPlaceholder": "0",
+          "displayOrderHint": "Lower numbers appear first when displaying plans",
+          "active": "Active",
+          "activeHint": "Only active plans can be assigned to users",
+          "defaultPlan": "Default Plan",
+          "defaultPlanHint": "Automatically assigned to new users"
+        },
+        "pricing": {
+          "title": "Pricing",
+          "description": "Set monthly and yearly pricing (leave empty for free)",
+          "currency": "Currency",
+          "monthlyPrice": "Monthly Price",
+          "monthlyPricePlaceholder": "0.00",
+          "perMonth": "/ month",
+          "yearlyPrice": "Yearly Price",
+          "yearlyPricePlaceholder": "0.00",
+          "perYear": "/ year",
+          "yearlySavings": "Yearly savings:",
+          "discount": "% discount",
+          "priceError": "Price cannot be negative"
+        },
+        "features": {
+          "title": "Features",
+          "description": "Select which features are included in this plan",
+          "customBranding": "Custom Branding",
+          "customBrandingDesc": "Use custom colors and logos",
+          "advancedAnalytics": "Advanced Analytics",
+          "advancedAnalyticsDesc": "Detailed usage insights and reports",
+          "prioritySupport": "Priority Support",
+          "prioritySupportDesc": "24/7 priority customer support",
+          "apiAccess": "API Access",
+          "apiAccessDesc": "Full API access for integrations",
+          "ssoIntegration": "SSO Integration",
+          "ssoIntegrationDesc": "Single sign-on with SAML/OAuth",
+          "customDomain": "Custom Domain",
+          "customDomainDesc": "Use your own domain name",
+          "exportData": "Export Data",
+          "exportDataDesc": "Export all data in CSV/JSON",
+          "webhooks": "Webhooks",
+          "webhooksDesc": "Real-time event notifications",
+          "advancedPermissions": "Advanced Permissions",
+          "advancedPermissionsDesc": "Granular role-based access control",
+          "auditLogs": "Audit Logs",
+          "auditLogsDesc": "Complete activity audit trail"
+        },
+        "limits": {
+          "title": "Usage Limits",
+          "description": "Set resource usage limits for this plan (use -1 for unlimited)",
+          "users": "Users",
+          "usersDesc": "Maximum number of users",
+          "usersUnit": "users",
+          "plugins": "Plugins",
+          "pluginsDesc": "Maximum number of plugins",
+          "pluginsUnit": "plugins",
+          "roles": "Roles",
+          "rolesDesc": "Maximum number of custom roles",
+          "rolesUnit": "roles",
+          "storage": "Storage",
+          "storageDesc": "Storage space limit",
+          "storageUnit": "MB",
+          "apiCalls": "API Calls",
+          "apiCallsDesc": "Monthly API call limit",
+          "apiCallsUnit": "calls/month",
+          "notSet": "Not set",
+          "unlimited": "Unlimited",
+          "limit": "Limit:"
+        },
+        "actions": {
+          "cancel": "Cancel",
+          "create": "Create Plan",
+          "save": "Save Changes",
+          "saving": "Saving..."
+        }
+      },
+      "planDialog": {
+        "title": {
+          "create": "Create Plan",
+          "edit": "Edit Plan"
+        },
+        "description": {
+          "create": "Create a new subscription plan with features and limits.",
+          "edit": "Update the subscription plan details, features, and limits."
+        },
+        "tabs": {
+          "basicInfo": "Basic Info",
+          "limits": "Limits",
+          "features": "Features"
+        },
+        "fields": {
+          "name": {
+            "label": "Name *",
+            "placeholder": "Pro Plan"
+          },
+          "slug": {
+            "label": "Slug *",
+            "placeholder": "pro-plan",
+            "description": "Unique identifier (lowercase, hyphens only)"
+          },
+          "description": {
+            "label": "Description",
+            "placeholder": "For growing teams..."
+          },
+          "price": {
+            "label": "Price",
+            "placeholder": "29.99"
+          },
+          "currency": {
+            "label": "Currency",
+            "placeholder": "Select currency"
+          },
+          "interval": {
+            "label": "Interval",
+            "placeholder": "Select interval",
+            "options": {
+              "monthly": "Monthly",
+              "yearly": "Yearly",
+              "weekly": "Weekly",
+              "daily": "Daily",
+              "lifetime": "Lifetime"
+            }
+          },
+          "isActive": {
+            "label": "Active",
+            "description": "Plan is available for subscription"
+          },
+          "isDefault": {
+            "label": "Default",
+            "description": "Default plan for new users"
+          }
+        },
+        "limits": {
+          "maxUsers": {
+            "label": "Max Users",
+            "placeholder": "-1 for unlimited",
+            "description": "Maximum number of users (-1 = unlimited)"
+          },
+          "maxStorage": {
+            "label": "Max Storage (MB)",
+            "placeholder": "-1 for unlimited",
+            "description": "Maximum storage in MB (-1 = unlimited)"
+          },
+          "maxApiCalls": {
+            "label": "Max API Calls",
+            "placeholder": "-1 for unlimited",
+            "description": "Maximum API calls per month (-1 = unlimited)"
+          },
+          "maxProjects": {
+            "label": "Max Projects",
+            "placeholder": "-1 for unlimited",
+            "description": "Maximum number of projects (-1 = unlimited)"
+          }
+        },
+        "features": {
+          "customDomain": {
+            "label": "Custom Domain",
+            "description": "Allow custom domain configuration"
+          },
+          "prioritySupport": {
+            "label": "Priority Support",
+            "description": "24/7 priority customer support"
+          },
+          "advancedAnalytics": {
+            "label": "Advanced Analytics",
+            "description": "Access to advanced analytics dashboard"
+          },
+          "apiAccess": {
+            "label": "API Access",
+            "description": "Access to REST API"
+          },
+          "ssoEnabled": {
+            "label": "SSO",
+            "description": "Single Sign-On support"
+          },
+          "whitelabel": {
+            "label": "Whitelabel",
+            "description": "Remove branding and add custom logo"
+          }
+        },
+        "buttons": {
+          "cancel": "Cancel",
+          "create": "Create Plan",
+          "update": "Update Plan"
+        },
+        "toast": {
+          "createSuccess": {
+            "title": "Plan created",
+            "description": "{name} has been created successfully."
+          },
+          "updateSuccess": {
+            "title": "Plan updated",
+            "description": "{name} has been updated successfully."
+          },
+          "error": "Error",
+          "saveFailed": "Failed to save plan"
+        }
+      },
+      "planDetails": {
+        "title": "Plan Details",
+        "default": "Default",
+        "active": "Active",
+        "inactive": "Inactive",
+        "sections": {
+          "pricing": "Pricing",
+          "features": "Features",
+          "limits": "Usage Limits",
+          "metadata": "Additional Information"
+        },
+        "pricing": {
+          "monthly": "Monthly",
+          "yearly": "Yearly",
+          "lifetime": "Lifetime",
+          "free": "Free",
+          "perMonth": "per month",
+          "perYear": "per year",
+          "oneTime": "one-time"
+        },
+        "features": {
+          "included": "Included ({count})",
+          "notIncluded": "Not Included ({count})",
+          "noFeatures": "No features configured"
+        },
+        "limits": {
+          "notSet": "Not set",
+          "unlimited": "Unlimited",
+          "noLimits": "No limits configured",
+          "users": "Users",
+          "plugins": "Plugins",
+          "roles": "Roles",
+          "storage": "Storage",
+          "apiCalls": "API Calls",
+          "units": {
+            "users": "users",
+            "plugins": "plugins",
+            "roles": "roles",
+            "mb": "MB",
+            "calls": "calls/mo"
+          }
+        },
+        "metadata": {
+          "sortOrder": "Sort Order:",
+          "status": "Status:",
+          "defaultPlan": "Default Plan:",
+          "currency": "Currency:",
+          "created": "Created:",
+          "updated": "Updated:",
+          "yes": "Yes",
+          "no": "No"
+        },
+        "actions": {
+          "close": "Close",
+          "edit": "Edit Plan"
+        }
+      },
+      "planComparison": {
+        "title": "Plan Comparison",
+        "description": "Compare features and limits across all plans",
+        "loading": "Loading plans...",
+        "empty": {
+          "title": "No Plans Available",
+          "description": "Create your first plan to see the comparison view"
+        },
+        "table": {
+          "default": "Default",
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "sections": {
+          "pricing": "Pricing",
+          "features": "Features",
+          "limits": "Usage Limits"
+        },
+        "pricing": {
+          "price": "Price",
+          "free": "Free"
+        },
+        "limits": {
+          "notSet": "Not set",
+          "unlimited": "Unlimited"
+        },
+        "summary": {
+          "totalPlans": "Total Plans",
+          "activePlans": "Active Plans",
+          "defaultPlan": "Default Plan"
+        }
+      },
+      "changePlan": {
+        "title": "Change Subscription Plan",
+        "description": "Change the subscription plan for {userName}",
+        "currentPlan": "Current Plan",
+        "newPlan": "New Plan",
+        "newPlanPlaceholder": "Select a plan",
+        "planDetails": "New Plan Details",
+        "price": "Price:",
+        "notes": "Notes (Optional)",
+        "notesPlaceholder": "Reason for plan change...",
+        "errors": {
+          "selectDifferent": "Please select a different plan",
+          "changeFailed": "Failed to change plan"
+        },
+        "success": "Plan changed successfully!",
+        "actions": {
+          "cancel": "Cancel",
+          "change": "Change Plan",
+          "changed": "Changed!"
+        }
+      },
+      "plansTable": {
+        "columns": {
+          "plan": "Plan",
+          "pricing": "Pricing",
+          "limits": "Limits",
+          "features": "Features",
+          "subscribers": "Subscribers",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "pricing": {
+          "free": "Free",
+          "perMonth": "/mo",
+          "perYear": "/yr"
+        },
+        "limits": {
+          "none": "No limits configured",
+          "monthly": "monthly",
+          "yearly": "yearly",
+          "more": "+{count} more",
+          "notSet": "Not set",
+          "unlimited": "Unlimited",
+          "users": "users",
+          "apiCalls": "API calls"
+        },
+        "badges": {
+          "default": "Default"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive"
+        },
+        "actions": {
+          "viewDetails": "View Details",
+          "edit": "Edit Plan",
+          "viewSubscribers": "View Subscribers",
+          "delete": "Delete Plan"
+        },
+        "deleteDialog": {
+          "title": "Delete Plan",
+          "description": "Are you sure you want to delete {planName}? This action cannot be undone and will affect {count} users.",
+          "cancel": "Cancel",
+          "delete": "Delete",
+          "deleting": "Deleting..."
+        },
+        "toast": {
+          "deleted": "Plan deleted",
+          "deletedDescription": "{planName} has been deleted successfully."
+        },
+        "pagination": {
+          "showing": "Showing",
+          "of": "of",
+          "plans": "plans",
+          "totalPlans": "Total {count} plans"
+        },
+        "emptyState": "No plans found",
+        "units": {
+          "orgs": "orgs",
+          "users": "users"
+        }
+      },
+      "userTable": {
+        "columns": {
+          "user": "User",
+          "plan": "Plan",
+          "status": "Status",
+          "duration": "Duration",
+          "usage": "Usage",
+          "actions": "Actions"
+        },
+        "plan": {
+          "free": "Free"
+        },
+        "status": {
+          "active": "Active",
+          "trial": "Trial",
+          "expired": "Expired",
+          "cancelled": "Cancelled"
+        },
+        "duration": {
+          "started": "Started:"
+        },
+        "usage": {
+          "unlimited": "Unlimited",
+          "noLimits": "No limits",
+          "users": "users",
+          "apiCalls": "API calls"
+        },
+        "actions": {
+          "viewUser": "View User",
+          "changePlan": "Change Plan",
+          "viewUsage": "View Usage",
+          "reactivateSubscription": "Reactivate Subscription",
+          "cancelSubscription": "Cancel Subscription"
+        },
+        "cancelDialog": {
+          "title": "Cancel Subscription",
+          "description": "Are you sure you want to cancel the subscription for {userName}? This action cannot be undone.",
+          "cancel": "Cancel",
+          "yes": "Yes, Cancel Subscription",
+          "cancelling": "Cancelling..."
+        },
+        "toast": {
+          "cancelled": "Subscription Cancelled",
+          "cancelledDescription": "Successfully cancelled subscription for {userName}",
+          "reactivated": "Subscription Reactivated",
+          "reactivatedDescription": "Successfully reactivated subscription for {userName}",
+          "error": "Error"
+        },
+        "pagination": {
+          "showing": "Showing",
+          "of": "of",
+          "subscriptions": "subscriptions",
+          "previous": "Previous",
+          "next": "Next"
+        },
+        "emptyState": "No user subscriptions found"
+      },
+      "analytics": {
+        "resources": {
+          "users": "Users",
+          "storage": "Storage",
+          "apiCalls": "API Calls",
+          "plugins": "Plugins"
+        },
+        "utilized": "% utilized",
+        "sections": {
+          "usageByPlan": {
+            "title": "Usage by Plan",
+            "description": "Resource consumption across subscription tiers",
+            "users": "users",
+            "storage": "storage",
+            "apiCalls": "API calls"
+          },
+          "topConsumers": {
+            "title": "Top Resource Consumers",
+            "description": "Users with highest resource utilization"
+          },
+          "subscribersByPlan": {
+            "title": "Subscribers by Plan",
+            "description": "Active subscriptions per plan"
+          },
+          "topMetrics": {
+            "title": "Top Usage Metrics",
+            "loading": "Loading usage...",
+            "description": "Aggregated totals in the last {days} days"
+          },
+          "topUsers": {
+            "title": "Top Users"
+          }
+        },
+        "emptyState": {
+          "noUsageData": "No usage data available",
+          "noConsumerData": "No consumer data available",
+          "noPlans": "No plans available",
+          "noUsage": "No usage recorded yet"
+        },
+        "units": {
+          "users": "users",
+          "MB": "MB",
+          "GB": "GB",
+          "calls": "calls"
+        }
+      }
+    },
+    "plugins": {
+      "page": {
+        "title": "Plugin Management",
+        "description": "Manage and configure platform plugins"
+      },
+      "list": {
+        "loading": "Loading plugins...",
+        "retry": "Retry",
+        "empty": {
+          "title": "No plugins found",
+          "description": "Install plugins to extend platform functionality"
+        },
+        "errors": {
+          "fetchFailed": "Failed to fetch plugins",
+          "unknown": "An unknown error occurred",
+          "enableFailed": "Failed to enable plugin",
+          "disableFailed": "Failed to disable plugin",
+          "uninstallFailed": "Failed to uninstall plugin",
+          "installFailed": "Failed to install plugin"
+        }
+      },
+      "card": {
+        "installing": "Installing...",
+        "install": "Install",
+        "processing": "Processing...",
+        "disable": "Disable",
+        "enable": "Enable",
+        "uninstall": "Uninstall",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "confirmInstall": "Confirm Install",
+        "confirmUninstall": "Confirm Uninstall",
+        "installDialog": {
+          "title": "Install Plugin",
+          "description": "Installing {name} will:",
+          "steps": {
+            "createTables": "Create necessary database tables",
+            "initConfig": "Initialize plugin configuration",
+            "runScript": "Run installation scripts"
+          },
+          "afterInstall": "After installation, you can enable the plugin to start using it."
+        },
+        "enableDialog": {
+          "title": "Enable Plugin",
+          "description": "Are you sure you want to enable {name}?"
+        },
+        "disableDialog": {
+          "title": "Disable Plugin",
+          "description": "Are you sure you want to disable {name}?"
+        },
+        "uninstallDialog": {
+          "title": "Uninstall Plugin",
+          "pluginName": "Plugin: {name}",
+          "warning": "This will remove all plugin data and configuration.",
+          "irreversible": "This action cannot be undone."
+        }
+      }
+    },
+    "notifications": {
+      "title": "Notification Center",
+      "description": "View and manage system notifications",
+      "actions": {
+        "markAllRead": "Mark All as Read",
+        "filter": "Filter"
+      },
+      "filters": {
+        "all": "All Notifications",
+        "unread": "Unread",
+        "read": "Read",
+        "user": "User Related",
+        "system": "System Related"
+      },
+      "stats": {
+        "all": "All Notifications",
+        "unread": "Unread Notifications",
+        "today": "Today's Notifications",
+        "important": "Important Notifications"
+      },
+      "tabs": {
+        "all": "All ({count})",
+        "unread": "Unread ({count})",
+        "read": "Read ({count})"
+      },
+      "badge": {
+        "new": "New"
+      },
+      "items": {
+        "newUser": {
+          "title": "New User Registered",
+          "message": "john.doe@example.com registered an account",
+          "time": "2 minutes ago"
+        },
+        "pluginInstalled": {
+          "title": "Plugin Installed",
+          "message": "runtime-seo was installed by jane@example.com",
+          "time": "1 hour ago"
+        },
+        "usageWarning": {
+          "title": "Usage Warning",
+          "message": "user_demo has exceeded 80% of API quota",
+          "time": "3 hours ago"
+        },
+        "maintenance": {
+          "title": "System Maintenance Notification",
+          "message": "System will be under maintenance tonight from 22:00-23:00",
+          "time": "5 hours ago"
+        },
+        "securityAlert": {
+          "title": "Security Alert",
+          "message": "Detected abnormal login attempts",
+          "time": "Yesterday"
+        }
+      }
+    },
+    "analytics": {
+      "page": {
+        "title": "Analytics",
+        "description": "Comprehensive analytics and insights for your platform",
+        "timeframes": {
+          "7days": "Last 7 days",
+          "30days": "Last 30 days",
+          "90days": "Last 90 days",
+          "12months": "Last 12 months"
+        },
+        "actions": {
+          "refresh": "Refresh",
+          "export": "Export"
+        },
+        "tabs": {
+          "overview": "Overview",
+          "revenue": "Revenue",
+          "growth": "Growth",
+          "churn": "Churn",
+          "usage": "Usage",
+          "cohorts": "Cohorts"
+        },
+        "overview": {
+          "metrics": {
+            "mrr": {
+              "title": "MRR",
+              "fromLastPeriod": "{percentage} from last period"
+            },
+            "arr": {
+              "title": "ARR",
+              "description": "Annualized revenue"
+            },
+            "arpu": {
+              "title": "ARPU",
+              "description": "Per user per month"
+            },
+            "ltv": {
+              "title": "LTV",
+              "description": "Customer lifetime value"
+            },
+            "newUsers": {
+              "title": "New Users",
+              "growthRate": "{percentage} growth rate"
+            },
+            "trialConversion": {
+              "title": "Trial Conversion",
+              "description": "{conversions} of {trials} trials"
+            },
+            "churnRate": {
+              "title": "Churn Rate",
+              "description": "{count} churned users"
+            },
+            "retentionRate": {
+              "title": "Retention Rate",
+              "description": "Customer retention"
+            }
+          },
+          "revenueByPlan": {
+            "title": "Revenue by Plan",
+            "description": "MRR distribution across plans"
+          }
+        },
+        "revenue": {
+          "metrics": {
+            "mrr": {
+              "title": "MRR",
+              "description": "Monthly recurring revenue",
+              "fromLastPeriod": "{percentage} from last period"
+            },
+            "arr": {
+              "title": "ARR",
+              "description": "Annual recurring revenue",
+              "perMonth": "{amount} per month"
+            },
+            "arpu": {
+              "title": "ARPU",
+              "description": "Average revenue per user",
+              "perUserPerMonth": "Per user per month"
+            }
+          },
+          "breakdown": {
+            "title": "Revenue Breakdown",
+            "description": "MRR by plan",
+            "table": {
+              "plan": "Plan",
+              "mrr": "MRR",
+              "percentage": "Percentage"
+            }
+          }
+        },
+        "growth": {
+          "metrics": {
+            "newUsers": {
+              "title": "New Users"
+            },
+            "netGrowth": {
+              "title": "Net Growth",
+              "description": "New - Churned"
+            },
+            "upgrades": {
+              "title": "Upgrades",
+              "description": "Plan upgrades"
+            },
+            "downgrades": {
+              "title": "Downgrades",
+              "description": "Plan downgrades"
+            }
+          },
+          "trial": {
+            "title": "Trial Performance",
+            "description": "Trial starts and conversions",
+            "newTrials": "New Trials",
+            "conversions": "Conversions",
+            "conversionRate": "Conversion Rate"
+          }
+        },
+        "churn": {
+          "metrics": {
+            "rate": {
+              "title": "Churn Rate",
+              "users": "{count} users"
+            },
+            "retention": {
+              "title": "Retention Rate",
+              "description": "Active customers"
+            },
+            "revenue": {
+              "title": "Churned Revenue",
+              "description": "Lost MRR"
+            },
+            "users": {
+              "title": "Churned Users",
+              "description": "In this period"
+            }
+          },
+          "trend": {
+            "title": "Churn Trend",
+            "description": "Monthly churn rate over time",
+            "table": {
+              "month": "Month",
+              "churned": "Churned",
+              "churnRate": "Churn Rate"
+            }
+          },
+          "reasons": {
+            "title": "Churn Reasons",
+            "description": "Why customers cancelled"
+          }
+        },
+        "usage": {
+          "metrics": {
+            "average": "Average",
+            "peak": "Peak",
+            "utilization": "Utilization",
+            "trend": {
+              "increasing": "increasing",
+              "decreasing": "decreasing",
+              "stable": "stable"
+            }
+          }
+        },
+        "cohorts": {
+          "title": "Cohort Analysis",
+          "description": "Retention and revenue by signup month (last 12 months)",
+          "table": {
+            "cohort": "Cohort",
+            "size": "Size",
+            "retained": "Retained",
+            "retentionRate": "Retention %",
+            "revenue": "Revenue",
+            "avgLifetime": "Avg Lifetime (days)"
+          }
+        }
+      }
+    },
+    "search": {
+      "title": "Search",
+      "description": "Search users, plugins, roles and other resources",
+      "placeholder": "Enter search keywords...",
+      "tabs": {
+        "all": "All",
+        "users": "Users",
+        "plugins": "Plugins",
+        "roles": "Roles"
+      },
+      "enterKeywords": "Enter search keywords",
+      "resultsFor": "Results for \"{query}\"",
+      "developingSoon": "Feature in development, coming soon",
+      "noResults": "No results",
+      "userResultsTitle": "User Search Results",
+      "userResultsCount": "Found {count} matching users",
+      "pluginResultsTitle": "Plugin Search Results",
+      "pluginResultsCount": "Found {count} matching plugins",
+      "roleResultsTitle": "Role Search Results",
+      "roleResultsCount": "Found {count} matching roles"
+    },
+    "auditLogs": {
+      "page": {
+        "title": "Audit Logs",
+        "description": "Review platform activity, security events, and admin operations",
+        "exportCsv": "Export CSV",
+        "exportJson": "Export JSON",
+        "tabs": {
+          "logs": "Logs",
+          "statistics": "Statistics"
+        },
+        "filters": {
+          "title": "Filters",
+          "description": "Search and filter audit events",
+          "search": {
+            "label": "Search",
+            "placeholder": "Search user, resource, or details..."
+          },
+          "action": {
+            "label": "Action",
+            "allActions": "All Actions"
+          },
+          "resource": {
+            "label": "Resource",
+            "allResources": "All Resources"
+          },
+          "status": {
+            "label": "Status",
+            "allStatuses": "All Statuses",
+            "success": "Success",
+            "failure": "Failure"
+          }
+        },
+        "actions": {
+          "userCreate": "User Created",
+          "userUpdate": "User Updated",
+          "userDelete": "User Deleted",
+          "roleAssign": "Role Assigned",
+          "roleRevoke": "Role Revoked",
+          "pluginInstall": "Plugin Installed"
+        },
+        "resources": {
+          "user": "User",
+          "role": "Role",
+          "plugin": "Plugin",
+          "entitlement": "Entitlement"
+        },
+        "pagination": {
+          "showing": "Showing {from}-{to} of {total}",
+          "previous": "Previous",
+          "next": "Next",
+          "page": "Page {current} of {total}"
+        },
+        "stats": {
+          "totalLogs": "Total Logs",
+          "success": "Success",
+          "failures": "Failures",
+          "successRate": "Success Rate",
+          "topActions": "Top Actions",
+          "topActionsDescription": "Most frequent audit actions",
+          "topResources": "Top Resources",
+          "topResourcesDescription": "Most frequently changed resources"
+        },
+        "detail": {
+          "title": "Audit Log Details",
+          "userInfo": "User Info",
+          "userId": "User ID",
+          "name": "Name",
+          "email": "Email",
+          "actionResource": "Action & Resource",
+          "action": "Action",
+          "resource": "Resource",
+          "resourceId": "Resource ID",
+          "resourceName": "Resource Name",
+          "status": "Status",
+          "requestInfo": "Request Info",
+          "ipAddress": "IP Address",
+          "userAgent": "User Agent",
+          "errorDetails": "Error Details",
+          "metadata": "Metadata"
+        }
+      },
+      "table": {
+        "empty": {
+          "title": "No audit logs found",
+          "description": "No events match the current filters."
+        },
+        "columns": {
+          "time": "Time",
+          "user": "User",
+          "action": "Action",
+          "resource": "Resource",
+          "status": "Status",
+          "ipAddress": "IP Address",
+          "actions": "Actions"
+        },
+        "viewDetails": "Details"
+      }
+    }
+  },
+  "pricing": {
+    "hero": {
+      "title": "Choose the plan that fits you",
+      "subtitle": "Unlock every plugin and advanced capability after subscribing",
+      "loginTip": "Tip: please log in before subscribing"
+    },
+    "price": {
+      "free": "Free"
+    },
+    "billingPeriod": {
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "yearlySave": "(save more)"
+    },
+    "cta": {
+      "processing": "Processing...",
+      "free": "Start for free",
+      "current": "Current plan",
+      "subscribe": "Subscribe now"
+    },
+    "badges": {
+      "popular": "Most popular"
+    },
+    "unit": {
+      "month": "month",
+      "year": "year"
+    },
+    "plans": {
+      "callsPerMonth": "{count} calls/month across all plugins",
+      "noLimits": "No usage limits listed",
+      "noFeatureDetails": "No feature details available"
+    },
+    "footer": {
+      "coreFeatures": "Every paid plan includes the platform core features",
+      "questions": "Questions?",
+      "contact": "Contact us"
+    },
+    "errors": {
+      "fetchPlans": "Failed to fetch plans",
+      "checkout": "Failed to create checkout session",
+      "subscribeFailed": "Subscribe failed",
+      "unknown": "Unknown error"
+    }
+  }
+}

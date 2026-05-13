@@ -1,0 +1,21 @@
+services:
+  db:
+    image: ${PLOYKIT_POSTGRES_IMAGE:-postgres:15-alpine}
+    container_name: ploykit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ploykit
+      POSTGRES_USER: ploykit
+      POSTGRES_PASSWORD: ploykit
+    ports:
+      - '55432:5432'
+    volumes:
+      - ploykit_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ploykit -d ploykit']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  ploykit_postgres_data:

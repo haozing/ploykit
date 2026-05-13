@@ -1,0 +1,2568 @@
+{
+  "common": {
+    "siteName": "PloyKit",
+    "tagline": "插件化 SaaS 应用平台",
+    "nav": {
+      "home": "首页",
+      "about": "关于",
+      "privacy": "隐私",
+      "terms": "服务条款",
+      "contact": "联系",
+      "pricing": "价格"
+    },
+    "footer": {
+      "about": "关于",
+      "privacy": "隐私政策",
+      "terms": "服务条款"
+    }
+  },
+  "home": {
+    "title": "欢迎来到 {siteName}",
+    "description": "插件化 SaaS 应用平台",
+    "exploreTools": "探索工具",
+    "learnMore": "了解更多",
+    "features": {
+      "plugins": {
+        "title": "插件化架构",
+        "description": "灵活的插件系统，支持动态扩展功能"
+      },
+      "theme": {
+        "title": "主题定制",
+        "description": "完全可定制的设计系统和主题配置"
+      },
+      "developer": {
+        "title": "开发者友好",
+        "description": "类型安全，文档完善，开发体验优先"
+      }
+    }
+  },
+  "about": {
+    "title": "关于我们",
+    "description": "了解我们的使命和愿景",
+    "hero": {
+      "title": "我们是谁",
+      "subtitle": "致力于打造最灵活的插件化工具平台"
+    },
+    "mission": {
+      "title": "我们的使命",
+      "content": "通过强大的插件系统，让每个开发者都能轻松构建和扩展自己的工具站。"
+    },
+    "values": {
+      "title": "核心价值",
+      "openness": {
+        "title": "开放",
+        "description": "开放的架构，开放的社区"
+      },
+      "innovation": {
+        "title": "创新",
+        "description": "不断探索新技术，提供更好的开发体验"
+      },
+      "quality": {
+        "title": "质量",
+        "description": "追求代码质量和产品质量的完美平衡"
+      }
+    }
+  },
+  "privacy": {
+    "title": "隐私政策",
+    "lastUpdated": "最后更新",
+    "intro": "PloyKit（以下简称'我们'）作为企业级 SaaS 应用平台，非常重视您的隐私。本隐私政策说明我们如何收集、使用、存储和保护您的个人信息。",
+    "sections": {
+      "collection": {
+        "title": "1. 信息收集",
+        "content": "我们收集以下类型的信息：账户信息（邮箱、姓名）、使用数据（插件安装、功能使用）、技术数据（设备信息、IP地址）。"
+      },
+      "usage": {
+        "title": "2. 信息使用",
+        "content": "我们使用收集的信息来提供和改进服务、处理订阅和计费、确保平台安全、发送重要通知。"
+      },
+      "isolation": {
+        "title": "3. 数据隔离",
+        "content": "我们采用基于行级安全（RLS）的用户级数据隔离机制，确保您的数据只能被授权访问。"
+      },
+      "thirdparty": {
+        "title": "4. 第三方服务",
+        "content": "我们使用 Supabase（数据库和认证）、Stripe（支付处理）等第三方服务。这些服务都遵循严格的隐私标准。"
+      },
+      "cookies": {
+        "title": "5. Cookie 使用",
+        "content": "我们使用 Cookie 来维护您的登录状态、记住偏好设置、分析平台使用情况。您可以通过浏览器设置管理 Cookie。"
+      },
+      "security": {
+        "title": "6. 数据安全",
+        "content": "我们采用行业标准的加密措施、访问控制和安全审计来保护您的数据。"
+      },
+      "rights": {
+        "title": "7. 您的权利",
+        "content": "您有权访问、修改、删除您的个人数据，也可以导出数据或撤销同意。请通过联系我们页面提交请求。"
+      }
+    }
+  },
+  "terms": {
+    "title": "服务条款",
+    "effectiveDate": "生效日期",
+    "intro": "欢迎使用 PloyKit！请仔细阅读以下服务条款。使用我们的服务即表示您同意这些条款。",
+    "sections": {
+      "service": {
+        "title": "1. 服务概述",
+        "content": "PloyKit 是一个企业级 SaaS 应用平台，提供插件系统、权限管理、数据隔离等完整基础设施。"
+      },
+      "account": {
+        "title": "2. 账户管理",
+        "content": "您需要提供准确的注册信息，并对账户安全负责。禁止与他人共享账户或从事非法活动。"
+      },
+      "usage": {
+        "title": "3. 使用规则",
+        "content": "您可以使用平台功能、安装插件、开发应用。但禁止滥用资源、攻击系统、上传恶意代码等行为。"
+      },
+      "plugins": {
+        "title": "4. 插件开发者条款",
+        "content": "插件开发者需确保代码安全、遵守审核规则。上传的插件代码所有权归开发者，但需授予平台必要的使用权限。"
+      },
+      "billing": {
+        "title": "5. 订阅和计费",
+        "content": "我们提供多种订阅计划。费用按月或年度收取。取消订阅后，服务在当前计费周期结束时终止。"
+      },
+      "ip": {
+        "title": "6. 知识产权",
+        "content": "平台代码和商标归 PloyKit 所有。您的数据和上传的内容归您所有。"
+      },
+      "liability": {
+        "title": "7. 免责声明",
+        "content": "服务按'现状'提供。我们不对服务中断、数据丢失等间接损失承担责任。"
+      },
+      "changes": {
+        "title": "8. 条款变更",
+        "content": "我们保留修改这些条款的权利。重大变更将提前30天通知。继续使用服务即表示接受新条款。"
+      }
+    }
+  },
+  "contact": {
+    "title": "联系我们",
+    "subtitle": "无论是产品问题、合作咨询还是技术支持，我们都愿意倾听",
+    "methods": {
+      "support": {
+        "title": "技术支持",
+        "value": "support@slothook.com",
+        "description": "遇到技术问题？我们随时为您解答"
+      },
+      "business": {
+        "title": "商务合作",
+        "value": "business@slothook.com",
+        "description": "探讨合作机会，共同成长"
+      },
+      "github": {
+        "title": "Bug 反馈",
+        "value": "GitHub Issues",
+        "description": "在 GitHub 上报告 Bug 或提出功能建议"
+      }
+    },
+    "form": {
+      "title": "发送消息",
+      "name": "姓名",
+      "namePlaceholder": "请输入您的姓名",
+      "email": "邮箱",
+      "emailPlaceholder": "your@email.com",
+      "subject": "主题",
+      "subjectPlaceholder": "请选择主题",
+      "subjects": {
+        "support": "技术支持",
+        "business": "商务合作",
+        "bug": "Bug 反馈",
+        "feature": "功能建议",
+        "other": "其他"
+      },
+      "message": "消息内容",
+      "messagePlaceholder": "请详细描述您的问题或建议...",
+      "send": "发送消息",
+      "sending": "发送中...",
+      "success": "消息已成功发送！我们会尽快回复您。",
+      "error": "发送失败，请稍后重试",
+      "validation": {
+        "nameRequired": "请输入姓名",
+        "emailRequired": "请输入邮箱",
+        "emailInvalid": "请输入有效的邮箱地址",
+        "subjectRequired": "请选择主题",
+        "messageRequired": "请输入消息内容",
+        "messageMin": "消息内容至少需要10个字符"
+      }
+    }
+  },
+  "errors": {
+    "404": {
+      "title": "页面未找到",
+      "description": "抱歉，您访问的页面不存在",
+      "backHome": "返回首页"
+    },
+    "500": {
+      "title": "服务器错误",
+      "description": "抱歉，服务器遇到了问题",
+      "retry": "重试",
+      "backHome": "返回首页"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "登录",
+      "description": "输入您的邮箱和密码以登录您的账户",
+      "fields": {
+        "email": {
+          "label": "邮箱",
+          "placeholder": "your@email.com"
+        },
+        "password": {
+          "label": "密码",
+          "placeholder": "••••••••"
+        }
+      },
+      "forgotPassword": "忘记密码？",
+      "submit": "登录",
+      "submitting": "登录中...",
+      "noAccount": "还没有账户？",
+      "registerNow": "立即注册",
+      "errors": {
+        "loginFailed": "登录失败，请检查您的邮箱和密码。"
+      }
+    },
+    "register": {
+      "title": "注册",
+      "description": "创建新账户开始使用插件平台",
+      "fields": {
+        "name": {
+          "label": "姓名",
+          "placeholder": "张三"
+        },
+        "email": {
+          "label": "邮箱",
+          "placeholder": "your@email.com"
+        },
+        "password": {
+          "label": "密码",
+          "placeholder": "至少 8 个字符",
+          "hint": "密码长度至少为 8 个字符"
+        },
+        "confirmPassword": {
+          "label": "确认密码",
+          "placeholder": "再次输入密码"
+        }
+      },
+      "submit": "注册",
+      "submitting": "注册中...",
+      "hasAccount": "已有账户？",
+      "loginNow": "立即登录",
+      "success": {
+        "title": "注册成功！",
+        "description": "您的账户已创建成功，正在跳转到控制台..."
+      },
+      "errors": {
+        "registerFailed": "注册失败，该邮箱可能已被注册。",
+        "passwordMismatch": "两次输入的密码不匹配",
+        "passwordTooShort": "密码长度至少为 8 个字符"
+      }
+    },
+    "forgotPassword": {
+      "title": "忘记密码",
+      "description": "输入您的邮箱地址，我们将向您发送密码重置链接",
+      "fields": {
+        "email": {
+          "label": "邮箱",
+          "placeholder": "your@email.com"
+        }
+      },
+      "submit": "发送重置链接",
+      "submitting": "发送中...",
+      "backToLogin": "返回登录",
+      "success": {
+        "title": "邮件已发送",
+        "description": "我们已向您的邮箱发送了密码重置链接，请检查您的收件箱。"
+      },
+      "errors": {
+        "sendFailed": "发送重置邮件失败，请稍后重试。"
+      }
+    },
+    "resetPassword": {
+      "title": "重置密码",
+      "description": "输入新密码以重新访问您的账户",
+      "fields": {
+        "newPassword": {
+          "label": "新密码",
+          "placeholder": "至少 8 个字符"
+        },
+        "confirmPassword": {
+          "label": "确认密码",
+          "placeholder": "再次输入新密码"
+        }
+      },
+      "submit": "重置密码",
+      "submitting": "重置中...",
+      "backToLogin": "返回登录",
+      "requestNewLink": "重新获取链接",
+      "success": {
+        "title": "密码已重置",
+        "description": "您的密码已更新，现在可以使用新密码登录。"
+      },
+      "errors": {
+        "invalidToken": "此重置链接无效或已过期，请重新获取链接。",
+        "passwordMismatch": "两次输入的密码不匹配",
+        "passwordTooShort": "密码长度至少为 8 个字符",
+        "resetFailed": "重置密码失败，请重新获取链接后再试。"
+      }
+    }
+  },
+  "components": {
+    "usage": {
+      "upgradePrompt": {
+        "title": "升级以解锁此功能",
+        "featureNotAvailable": "{feature} 在您当前的套餐中不可用。",
+        "upgradeToUnlock": "升级套餐以解锁更多功能。",
+        "currentPlan": "当前套餐",
+        "perMonth": "/月",
+        "plans": {
+          "free": "免费版",
+          "pro": "专业版",
+          "enterprise": "企业版",
+          "features": {
+            "fiveUsers": "5 个用户",
+            "fiftyUsers": "50 个用户",
+            "unlimitedUsers": "无限用户",
+            "oneHundredMBStorage": "100 MB 存储",
+            "oneGBStorage": "1 GB 存储",
+            "tenGBStorage": "10 GB 存储",
+            "threePlugins": "3 个插件",
+            "twentyPlugins": "20 个插件",
+            "unlimitedPlugins": "无限插件",
+            "tenKApiCalls": "1万次 API 调用",
+            "oneMApiCalls": "100万次 API 调用",
+            "tenMApiCalls": "1000万次 API 调用",
+            "prioritySupport": "优先支持",
+            "ssoSaml": "SSO/SAML",
+            "whiteLabel": "白标"
+          }
+        },
+        "badges": {
+          "popular": "热门",
+          "current": "当前"
+        },
+        "actions": {
+          "viewPlans": "查看套餐",
+          "manageSubscription": "管理订阅",
+          "upgradeToPro": "升级到专业版",
+          "upgrade": "升级",
+          "maybeLater": "稍后再说",
+          "viewAllPlans": "查看所有套餐"
+        },
+        "dialog": {
+          "title": "升级您的套餐",
+          "featureRequiresUpgrade": "要使用 {feature}，您需要升级套餐。",
+          "upgradeToUnlockFeatures": "升级您的套餐以解锁更多功能和更高的限制。",
+          "currentPlan": "当前套餐",
+          "perMonth": "/月",
+          "recommended": "推荐",
+          "plans": {
+            "free": "免费版",
+            "pro": "专业版",
+            "enterprise": "企业版",
+            "features": {
+              "fiveUsers": "5 个用户",
+              "fiftyUsers": "50 个用户",
+              "unlimitedUsers": "无限用户",
+              "oneHundredMBStorage": "100 MB 存储",
+              "oneGBStorage": "1 GB 存储",
+              "tenGBStorage": "10 GB 存储",
+              "threePlugins": "3 个插件",
+              "twentyPlugins": "20 个插件",
+              "unlimitedPlugins": "无限插件",
+              "tenKApiCalls": "1万次 API 调用",
+              "oneMApiCalls": "100万次 API 调用",
+              "tenMApiCalls": "1000万次 API 调用",
+              "prioritySupport": "优先支持",
+              "ssoSaml": "SSO/SAML",
+              "whiteLabel": "白标"
+            }
+          },
+          "actions": {
+            "upgradeToPro": "升级到专业版",
+            "upgrade": "升级",
+            "maybeLater": "稍后再说",
+            "viewAllPlans": "查看所有套餐"
+          }
+        }
+      },
+      "usageAlerts": {
+        "upgradePlan": "升级套餐",
+        "moreAlerts": "更多提醒",
+        "moreAlertsDescription": "还有 {count} 个使用提醒。点击查看全部。",
+        "moreAlertsDescriptionPlural": "还有 {count} 个使用提醒。点击查看全部。",
+        "noAlerts": "无提醒",
+        "noAlertsDescription": "您的所有使用指标均在健康范围内",
+        "usageAlerts": "使用提醒",
+        "activeAlerts": "{count} 个活动提醒",
+        "activeAlertsPlural": "{count} 个活动提醒",
+        "dismissAll": "全部关闭",
+        "limitExceeded": "已超限 ({count})",
+        "critical": "严重 ({count})",
+        "warning": "警告 ({count})",
+        "information": "信息 ({count})",
+        "exceeded": "您已超出 {metric} 限制。",
+        "approaching": "您即将达到 {metric} 限制。",
+        "increasing": "您的 {metric} 使用量正在增加。",
+        "projectedLimit": "预计达到限制",
+        "projectedLimitDescription": "根据当前使用趋势（增长 {trend}%），您将在大约 {days} 天内达到 {metric} 限制。",
+        "projectedLimitDescriptionUrgent": "根据当前使用趋势（增长 {trend}%），您将在大约 {days} 天内达到 {metric} 限制。请考虑尽快升级套餐。",
+        "metrics": {
+          "users": "用户",
+          "plugins": "插件",
+          "storage": "存储",
+          "apiCalls": "API 调用"
+        }
+      },
+      "usageCard": {
+        "users": "用户",
+        "storage": "存储",
+        "apiCalls": "API 调用",
+        "plugins": "插件",
+        "descriptions": {
+          "users": "团队成员和协作者",
+          "storage": "文件和数据存储使用",
+          "apiCalls": "每月 API 请求数",
+          "plugins": "已安装插件"
+        },
+        "of": "/",
+        "used": "已使用 {percentage}%",
+        "overLimit": "已超限！",
+        "criticallyHigh": "严重偏高",
+        "approachingLimit": "接近限制",
+        "unlimited": "无限",
+        "upgradePlan": "升级套餐"
+      },
+      "usageCharts": {
+        "noData": "无可用数据",
+        "limit": "限制：{limit}",
+        "usageOverview": "使用概览",
+        "visualComparison": "当前使用量与套餐限制的可视化对比",
+        "thirtyDayTrends": "30 天使用趋势",
+        "trendDescription": "跟踪过去一个月使用量的变化",
+        "trendDataComingSoon": "趋势数据即将推出"
+      },
+      "usageOverview": {
+        "errorLoading": "加载使用数据时出错",
+        "failedToLoad": "无法加载使用信息"
+      }
+    },
+    "files": {
+      "fileManager": {
+        "storageUsage": "存储使用",
+        "filesCount": "{count} 个文件",
+        "filesCountPlural": "{count} 个文件",
+        "mbUsed": "已使用 {used} MB",
+        "mbUsedOf": "已使用 {used} MB / {limit} MB",
+        "percentUsed": "已使用 {percent}%",
+        "storageAlmostFull": "存储空间即将用尽",
+        "approachingLimit": "接近限制",
+        "good": "良好",
+        "unlimitedStorage": "无限存储",
+        "uploadFile": "上传文件",
+        "selectFile": "选择要上传到存储的文件",
+        "upload": "上传",
+        "uploading": "上传中...",
+        "percentUploaded": "已上传 {percent}%",
+        "selected": "已选择：{name} ({size} MB)",
+        "files": "文件",
+        "manageFiles": "管理您上传的文件",
+        "searchFiles": "搜索文件...",
+        "noFilesYet": "暂无文件",
+        "uploadFirstFile": "上传您的第一个文件开始使用",
+        "name": "名称",
+        "size": "大小",
+        "uploaded": "上传时间",
+        "actions": "操作",
+        "by": "由 {email} 上传",
+        "download": "下载",
+        "delete": "删除",
+        "confirmDelete": "您确定要删除 \"{name}\" 吗？",
+        "failedToUpload": "文件上传失败",
+        "failedToDownload": "文件下载失败",
+        "failedToDelete": "文件删除失败"
+      }
+    },
+    "notifications": {
+      "notificationBell": {
+        "notifications": "通知",
+        "new": "{count} 条新通知",
+        "loading": "加载通知中...",
+        "noNotifications": "没有新通知",
+        "viewAll": "查看所有通知"
+      },
+      "notificationHistory": {
+        "title": "通知历史",
+        "description": "查看发送到您账户的所有通知（共 {count} 条）",
+        "noNotifications": "尚未发送任何通知",
+        "type": "类型",
+        "channel": "渠道",
+        "recipient": "接收者",
+        "subject": "主题",
+        "status": "状态",
+        "sent": "发送时间",
+        "details": "通知详情",
+        "close": "关闭",
+        "body": "内容",
+        "error": "错误",
+        "created": "创建时间",
+        "statuses": {
+          "sent": "已发送",
+          "failed": "失败",
+          "pending": "待发送"
+        },
+        "channels": {
+          "email": "邮件",
+          "webhook": "Webhook",
+          "in_app": "应用内"
+        }
+      }
+    },
+    "shared": {
+      "userDropdown": {
+        "loading": "加载中...",
+        "unknownUser": "未知用户",
+        "myAccount": "我的账户",
+        "menu": {
+          "profile": "个人资料",
+          "settings": "设置",
+          "billing": "账单",
+          "logout": "退出登录"
+        },
+        "loggingOut": "正在退出..."
+      }
+    }
+  },
+  "dashboard": {
+    "appName": "PloyKit",
+    "nav": {
+      "myAccount": "我的账户",
+      "overview": "总览",
+      "management": "管理",
+      "operations": "运营",
+      "system": "系统",
+      "profile": "个人资料",
+      "billing": "账单订阅",
+      "notificationPreferences": "通知偏好",
+      "pluginTasks": "任务中心",
+      "settings": "账户设置",
+      "dashboard": "控制台",
+      "users": "用户管理",
+      "plans": "订阅计划",
+      "analytics": "数据分析",
+      "plugins": "插件管理",
+      "pluginDevConsole": "开发控制台",
+      "pluginOperations": "插件运营",
+      "revenue": "收入管理",
+      "operationsCenter": "运维中心",
+      "systemSettings": "系统设置",
+      "adminConsole": "管理后台"
+    },
+    "header": {
+      "searchPlaceholder": "搜索用户、角色、插件...",
+      "notifications": "通知",
+      "notificationExample1": "新用户注册",
+      "notificationExample2": "插件已安装",
+      "notificationExample3": "高使用量警报",
+      "viewAllNotifications": "查看全部通知",
+      "myAccount": "我的账户",
+      "profile": "个人资料",
+      "settings": "设置",
+      "billing": "账单",
+      "logout": "退出登录",
+      "loggingOut": "退出中...",
+      "loading": "加载中...",
+      "unknownUser": "未知用户"
+    },
+    "admin": {
+      "title": "仪表板",
+      "description": "欢迎回来!这是您的平台概览。",
+      "stats": {
+        "totalUsers": "总用户数",
+        "activeRoles": "活跃角色",
+        "apiRequests": "用量事件",
+        "fromLastMonth": "较上月",
+        "fromYesterday": "较昨日"
+      },
+      "recentUsers": {
+        "title": "最近用户",
+        "description": "新用户注册",
+        "noData": "暂无最近用户"
+      },
+      "systemStatus": {
+        "title": "系统状态",
+        "description": "平台服务的当前健康状况",
+        "noData": "暂无系统状态数据"
+      }
+    },
+    "profile": {
+      "title": "个人资料",
+      "description": "管理您的账户信息和偏好设置",
+      "unknownUser": "未知用户",
+      "loading": "加载中...",
+      "noData": "暂无数据",
+      "buttons": {
+        "edit": "编辑",
+        "save": "保存",
+        "saving": "保存中...",
+        "cancel": "取消",
+        "updating": "更新中..."
+      },
+      "toast": {
+        "profileUpdateSuccess": "个人资料已更新",
+        "profileUpdateError": "更新失败，请重试",
+        "passwordChangeSuccess": "密码已更改",
+        "passwordChangeError": "密码更改失败",
+        "preferencesUpdateSuccess": "偏好设置已保存",
+        "preferencesUpdateError": "偏好设置保存失败",
+        "loadError": "加载资料失败"
+      },
+      "tabs": {
+        "basicInfo": "基本信息",
+        "security": "安全设置",
+        "preferences": "偏好设置"
+      },
+      "basicInfo": {
+        "title": "基本信息",
+        "description": "您的个人基本信息",
+        "name": "姓名",
+        "email": "邮箱",
+        "avatar": "头像",
+        "role": "角色",
+        "joinDate": "加入日期",
+        "lastLogin": "上次登录"
+      },
+      "security": {
+        "title": "安全设置",
+        "description": "管理您的密码和安全选项",
+        "changePassword": "修改密码",
+        "setPassword": "设置密码",
+        "currentPassword": "当前密码",
+        "currentPasswordPlaceholder": "输入当前密码",
+        "newPassword": "新密码",
+        "newPasswordPlaceholder": "输入新密码",
+        "confirmPassword": "确认新密码",
+        "confirmPasswordPlaceholder": "再次输入新密码",
+        "updatePassword": "更新密码",
+        "createPassword": "创建密码",
+        "twoFactor": {
+          "title": "双因素认证",
+          "description": "增强账户安全性",
+          "label": "双因素认证",
+          "hint": "使用认证码保护您的账户",
+          "enable": "启用"
+        }
+      },
+      "preferences": {
+        "interface": {
+          "title": "界面偏好",
+          "description": "自定义您的用户体验",
+          "theme": "主题",
+          "themeHint": "选择浅色或深色主题",
+          "themeOptions": {
+            "light": "浅色",
+            "dark": "深色",
+            "system": "跟随系统"
+          },
+          "language": "语言",
+          "languageHint": "选择界面语言",
+          "languageOptions": {
+            "zh": "简体中文",
+            "en": "English"
+          },
+          "timezone": "时区",
+          "timezoneHint": "设置您的时区"
+        },
+        "notifications": {
+          "title": "通知偏好",
+          "description": "管理您接收通知的方式",
+          "email": "邮件通知",
+          "emailHint": "接收重要更新邮件",
+          "inApp": "应用内通知",
+          "inAppHint": "显示应用内通知",
+          "enabled": "已启用"
+        }
+      }
+    },
+    "settings": {
+      "title": "设置",
+      "description": "管理应用程序设置和偏好",
+      "systemSettings": "系统设置",
+      "manageConfiguration": "平台级设置目前还没有系统设置存储和服务层。",
+      "notificationSettings": "通知设置",
+      "configureSystemNotifications": "配置系统通知和提醒",
+      "systemNotifications": "系统通知",
+      "systemNotificationsDescription": "平台级通知默认值、发送策略和模板需要独立的系统设置 API。",
+      "securitySettings": "安全设置",
+      "manageSecurityPolicies": "管理安全策略和管控",
+      "emailSettings": "邮件设置",
+      "configureEmailTemplates": "配置邮件模板和发送",
+      "generalSettings": "通用设置",
+      "platformTimezoneAndGeneral": "平台时区和通用偏好",
+      "settingsStorage": "设置存储",
+      "settingsStorageDescription": "当前没有系统级 settings 表或服务；现有通知设置属于用户个人偏好。",
+      "comingSoon": "敬请期待",
+      "notImplemented": "未接入",
+      "missingSystemSettingsApi": "缺少 API",
+      "configureButton": "前往配置",
+      "sections": {
+        "notifications": {
+          "title": "通知设置",
+          "description": "管理通知偏好和提醒方式"
+        },
+        "security": {
+          "title": "安全设置",
+          "description": "密码、双因素认证和安全选项"
+        },
+        "appearance": {
+          "title": "外观设置",
+          "description": "主题、颜色和界面自定义"
+        },
+        "locale": {
+          "title": "语言和地区",
+          "description": "语言、时区和日期格式"
+        }
+      },
+      "quickActions": {
+        "title": "快捷操作",
+        "description": "常用设置和管理选项",
+        "export": {
+          "title": "数据导出",
+          "description": "导出您的所有数据",
+          "button": "导出"
+        },
+        "clearCache": {
+          "title": "清除缓存",
+          "description": "清除本地缓存数据",
+          "button": "清除"
+        },
+        "deleteAccount": {
+          "title": "删除账户",
+          "description": "永久删除您的账户和所有数据",
+          "button": "删除"
+        }
+      },
+      "notifications": {
+        "title": "通知偏好",
+        "description": "管理通知投递到您账户的方式",
+        "toast": {
+          "loadError": "加载通知设置失败",
+          "updateSuccess": "通知设置已更新",
+          "updateError": "更新通知设置失败"
+        },
+        "email": {
+          "title": "邮件通知",
+          "description": "配置通过邮件接收的通知类型",
+          "all": {
+            "label": "接收邮件通知",
+            "hint": "允许我们通过邮件向您发送通知"
+          },
+          "marketing": {
+            "label": "营销推广邮件",
+            "hint": "接收产品推广和优惠信息"
+          },
+          "security": {
+            "label": "安全提醒",
+            "hint": "登录异常、密码修改等安全相关通知"
+          },
+          "product": {
+            "label": "产品更新",
+            "hint": "新功能发布、产品改进等更新通知"
+          },
+          "billing": {
+            "label": "账单提醒",
+            "hint": "订阅续费、支付确认等账单相关通知"
+          },
+          "subtitle": "配置运营提醒的邮件发送方式",
+          "enable": "启用邮件通知",
+          "address": "邮箱地址",
+          "addressPlaceholder": "you@example.com"
+        },
+        "inApp": {
+          "title": "应用内通知",
+          "description": "配置应用内显示的通知类型",
+          "all": {
+            "label": "启用应用内通知",
+            "hint": "在应用内显示通知提醒"
+          },
+          "subtitle": "在后台内显示提醒",
+          "enable": "启用应用内通知"
+        },
+        "info": {
+          "title": "关于通知",
+          "description": "安全相关的重要通知（如密码修改确认）无法关闭，以确保您的账户安全。"
+        },
+        "success": {
+          "saved": "通知设置已保存。"
+        },
+        "errors": {
+          "loadFailed": "加载通知设置失败。",
+          "saveFailed": "保存通知设置失败。"
+        },
+        "webhook": {
+          "title": "Webhook 通知",
+          "subtitle": "将通知发送到外部 Webhook 地址",
+          "enable": "启用 Webhook 通知",
+          "description": "把重要事件投递到您配置的 Webhook URL。",
+          "url": "Webhook URL",
+          "urlPlaceholder": "https://example.com/webhook",
+          "secret": "签名密钥",
+          "secretPlaceholder": "可选共享密钥",
+          "secretHelp": "接收方可用它校验通知载荷。"
+        },
+        "types": {
+          "title": "通知类型",
+          "description": "选择哪些事件会触发通知",
+          "usage": {
+            "title": "用量提醒",
+            "warning": "用量预警",
+            "warningDesc": "当用量接近计划限制时通知。",
+            "critical": "严重用量",
+            "criticalDesc": "当用量达到高风险水平时通知。",
+            "exceeded": "超过限制",
+            "exceededDesc": "当用量超过计划限制时通知。"
+          },
+          "trial": {
+            "title": "试用事件",
+            "description": "通知试用开始、即将结束和过期事件。"
+          },
+          "subscription": {
+            "title": "订阅事件",
+            "description": "通知计划变更、续订和取消事件。"
+          },
+          "payment": {
+            "title": "支付事件",
+            "description": "通知支付成功和支付失败事件。"
+          }
+        },
+        "reports": {
+          "title": "报告",
+          "description": "配置摘要通知频率",
+          "daily": "每日摘要",
+          "dailyDesc": "每天发送账户关键活动摘要。",
+          "weekly": "每周报告",
+          "weeklyDesc": "每周发送用量和账单事件概览。"
+        },
+        "test": {
+          "title": "测试通知",
+          "description": "使用当前设置发送一条测试通知。",
+          "button": "发送测试通知",
+          "sending": "发送中...",
+          "sent": "测试通知已发送。",
+          "failed": "发送测试通知失败。"
+        },
+        "actions": {
+          "reset": "重置",
+          "save": "保存设置",
+          "saving": "保存中..."
+        }
+      }
+    },
+    "billing": {
+      "title": "账单与订阅",
+      "notSet": "未设置",
+      "actions": {
+        "manageSubscription": "管理订阅",
+        "changePlan": "更换计划",
+        "viewOrders": "订单",
+        "viewAllOrders": "查看全部订单",
+        "viewCreditHistory": "额度记录",
+        "portalErrorTitle": "无法打开 Stripe",
+        "portalErrorDescription": "请稍后重试。"
+      },
+      "error": {
+        "title": "加载失败",
+        "reload": "重新加载"
+      },
+      "noSubscription": {
+        "title": "您还没有订阅",
+        "description": "订阅我们的平台以解锁所有工具插件和高级功能",
+        "button": "查看订阅计划"
+      },
+      "status": {
+        "active": "活跃",
+        "trial": "试用",
+        "cancelled": "已取消",
+        "expired": "已过期"
+      },
+      "currentPlan": {
+        "title": "当前计划",
+        "description": "您当前订阅计划的详细信息",
+        "planName": "计划名称",
+        "status": "状态",
+        "price": "价格",
+        "month": "月",
+        "nextRenewal": "到期时间",
+        "lifetime": "永久",
+        "expiryUnknown": "未知"
+      },
+      "records": {
+        "title": "账单记录",
+        "description": "最近的账单与续费记录",
+        "empty": "暂无订单记录"
+      },
+      "usage": {
+        "title": "配额使用",
+        "description": "您的资源配额和使用情况统计",
+        "noData": "暂无使用数据",
+        "used": "已使用",
+        "remaining": "剩余",
+        "unlimited": "无限制",
+        "totalQuota": "总配额",
+        "upgradeHint": "您的使用量已达到 {percentage}%，考虑升级到更高级别的计划?",
+        "viewUpgrade": "查看升级选项 →"
+      },
+      "quotas": {
+        "callsPerMonth": "每月调用次数",
+        "jobExecutionsPerMonth": "每月任务执行次数",
+        "apiCallsPerDay": "每日 API 调用次数"
+      },
+      "features": {
+        "title": "订阅功能",
+        "description": "您的订阅包括以下功能和权限"
+      },
+      "ordersTable": {
+        "columns": {
+          "order": "订单",
+          "user": "用户",
+          "sku": "SKU",
+          "amount": "金额",
+          "status": "状态",
+          "date": "日期"
+        },
+        "empty": "未找到订单",
+        "notAvailable": "不可用",
+        "quantity": "{qty} 项",
+        "status": {
+          "completed": "已完成",
+          "pending": "待处理",
+          "failed": "失败",
+          "cancelled": "已取消"
+        }
+      },
+      "productsTable": {
+        "columns": {
+          "product": "产品",
+          "category": "类别",
+          "sortOrder": "排序",
+          "status": "状态"
+        },
+        "empty": "未找到产品",
+        "uncategorized": "未分类",
+        "status": {
+          "active": "活跃",
+          "inactive": "停用"
+        },
+        "actions": {
+          "title": "操作",
+          "edit": "编辑",
+          "delete": "删除"
+        },
+        "deleteDialog": {
+          "title": "删除产品",
+          "description": "确定要删除 <strong>{name}</strong> 吗？此操作无法撤销。",
+          "cancel": "取消",
+          "delete": "删除",
+          "deleting": "删除中..."
+        },
+        "toast": {
+          "deleteSuccess": {
+            "title": "产品已删除",
+            "description": "{name} 已成功删除。"
+          },
+          "error": "错误",
+          "deleteFailed": "删除产品失败"
+        }
+      },
+      "subscriptionsTable": {
+        "columns": {
+          "subscription": "订阅",
+          "user": "用户",
+          "sku": "SKU",
+          "interval": "周期",
+          "currentPeriod": "当前周期",
+          "status": "状态"
+        },
+        "empty": "未找到订阅",
+        "notAvailable": "不可用",
+        "to": "至",
+        "cancelAtPeriodEnd": "周期结束时取消",
+        "interval": {
+          "monthly": "月付",
+          "yearly": "年付",
+          "day": "日付",
+          "month": "月付",
+          "week": "周付",
+          "year": "年付"
+        },
+        "status": {
+          "active": "活跃",
+          "cancelled": "已取消",
+          "pending": "待处理",
+          "expired": "已过期"
+        }
+      },
+      "skusTable": {
+        "columns": {
+          "sku": "SKU",
+          "product": "产品",
+          "plan": "计划",
+          "price": "价格",
+          "stripe": "Stripe",
+          "status": "状态"
+        },
+        "empty": "未找到 SKU",
+        "notAvailable": "不可用",
+        "intervals": {
+          "monthly": "月",
+          "yearly": "年",
+          "month": "月",
+          "year": "年",
+          "week": "周",
+          "day": "日",
+          "yr": "年"
+        },
+        "stripe": {
+          "synced": "已同步",
+          "notSynced": "未同步"
+        },
+        "status": {
+          "active": "活跃",
+          "inactive": "停用"
+        },
+        "actions": {
+          "title": "操作",
+          "edit": "编辑",
+          "syncToStripe": "同步到 Stripe",
+          "syncing": "同步中..."
+        },
+        "toast": {
+          "syncSuccess": {
+            "title": "SKU 已同步",
+            "description": "{name} 已成功同步到 Stripe。"
+          },
+          "error": "错误",
+          "syncFailed": "同步 SKU 失败"
+        }
+      }
+    },
+    "revenue": {
+      "title": "收入管理",
+      "description": "在一个界面管理商品、定价、订单和订阅",
+      "buttons": {
+        "createProduct": "新建商品",
+        "createSKU": "新建SKU"
+      },
+      "stats": {
+        "products": "商品",
+        "skus": "SKU",
+        "orders": "订单",
+        "subscriptions": "订阅",
+        "active": "启用",
+        "completed": "已完成",
+        "totalRevenue": "总收入",
+        "fromCompletedOrders": "来自已完成订单"
+      },
+      "tabs": {
+        "products": "商品",
+        "skus": "SKU",
+        "orders": "订单",
+        "subscriptions": "订阅"
+      },
+      "cards": {
+        "products": {
+          "title": "商品管理",
+          "description": "创建并管理产品目录"
+        },
+        "skus": {
+          "title": "SKU / 定价",
+          "description": "设置每个商品的价格与可售状态"
+        },
+        "orders": {
+          "title": "订单",
+          "description": "查看并跟踪客户订单"
+        },
+        "subscriptions": {
+          "title": "订阅",
+          "description": "监控活跃与试用订阅"
+        }
+      },
+      "productDialog": {
+        "titleCreate": "新建商品",
+        "titleEdit": "编辑商品",
+        "descriptionCreate": "在目录中添加新商品。",
+        "descriptionEdit": "更新商品信息。",
+        "fields": {
+          "name": {
+            "label": "名称 *",
+            "placeholder": "PloyKit 平台"
+          },
+          "slug": {
+            "label": "Slug *",
+            "placeholder": "ploykit-platform",
+            "help": "唯一标识（小写字母、数字、短横线）"
+          },
+          "description": {
+            "label": "描述",
+            "placeholder": "商品描述..."
+          },
+          "category": {
+            "label": "类别",
+            "placeholder": "选择类别",
+            "options": {
+              "saas": "SaaS",
+              "addon": "增值服务",
+              "service": "服务",
+              "other": "其他"
+            }
+          },
+          "sortOrder": {
+            "label": "排序值"
+          },
+          "isActive": {
+            "label": "启用",
+            "hint": "商品可供售卖"
+          }
+        },
+        "actions": {
+          "cancel": "取消",
+          "create": "新建商品",
+          "update": "更新商品"
+        },
+        "toast": {
+          "createTitle": "商品已创建",
+          "updateTitle": "商品已更新",
+          "createDescription": "{name} 创建成功。",
+          "updateDescription": "{name} 更新成功。",
+          "error": "错误"
+        },
+        "errors": {
+          "nameRequired": "名称必填",
+          "slugRequired": "Slug 必填",
+          "slugFormat": "Slug 需为小写字母、数字或短横线",
+          "max100": "最多 100 个字符",
+          "max500": "最多 500 个字符",
+          "sortOrderNonNegative": "排序值需大于或等于 0",
+          "saveFailed": "保存商品失败",
+          "generic": "出现错误，请稍后重试"
+        }
+      },
+      "skuDialog": {
+        "titleCreate": "新建 SKU",
+        "titleEdit": "编辑 SKU",
+        "description": "SKU 定义商品的定价和计费周期。",
+        "fields": {
+          "name": {
+            "label": "名称 *",
+            "placeholder": "专业版 - 月付"
+          },
+          "slug": {
+            "label": "Slug *",
+            "placeholder": "pro-monthly"
+          },
+          "product": {
+            "label": "商品 *",
+            "placeholder": "选择商品"
+          },
+          "plan": {
+            "label": "计划 *",
+            "placeholder": "选择计划",
+            "loading": "加载中...",
+            "help": "关联到权益计划"
+          },
+          "price": {
+            "label": "价格 *",
+            "placeholder": "29.99"
+          },
+          "currency": {
+            "label": "货币"
+          },
+          "interval": {
+            "label": "计费周期",
+            "options": {
+              "monthly": "月付",
+              "yearly": "年付",
+              "lifetime": "买断"
+            }
+          },
+          "isActive": {
+            "label": "启用",
+            "hint": "SKU 可购买"
+          }
+        },
+        "actions": {
+          "cancel": "取消",
+          "create": "新建 SKU",
+          "update": "更新 SKU"
+        },
+        "toast": {
+          "createTitle": "SKU 已创建",
+          "updateTitle": "SKU 已更新",
+          "createDescription": "{name} 创建成功。",
+          "updateDescription": "{name} 更新成功。",
+          "error": "错误"
+        },
+        "errors": {
+          "nameRequired": "名称必填",
+          "slugRequired": "Slug 必填",
+          "productRequired": "商品必选",
+          "planRequired": "计划必选",
+          "priceRequired": "价格必填",
+          "max100": "最多 100 个字符",
+          "saveFailed": "保存 SKU 失败",
+          "generic": "出现错误，请稍后重试"
+        }
+      }
+    },
+    "users": {
+      "page": {
+        "title": "用户与角色",
+        "description": "管理用户及其访问权限",
+        "tabs": {
+          "users": "用户",
+          "rbac": "角色与权限"
+        }
+      },
+      "table": {
+        "columns": {
+          "user": "用户",
+          "email": "邮箱",
+          "role": "角色",
+          "plan": "订阅计划",
+          "subscriptionEnd": "订阅到期时间",
+          "created": "创建时间",
+          "actions": "操作"
+        },
+        "subscription": {
+          "permanent": "永久"
+        },
+        "roles": {
+          "admin": "管理员",
+          "user": "用户"
+        },
+        "notAvailable": "不可用",
+        "status": {
+          "active": "活跃",
+          "pending": "待处理",
+          "suspended": "已暂停",
+          "deleted": "已删除"
+        },
+        "noUsers": "未找到用户",
+        "noRole": "无角色",
+        "never": "从未",
+        "actions": {
+          "title": "操作",
+          "openMenu": "打开菜单",
+          "viewDetails": "查看详情",
+          "editUser": "编辑用户",
+          "manageRoles": "管理角色",
+          "deleteUser": "删除用户"
+        },
+        "deleteConfirm": "确定要删除用户 \"{userName}\" 吗？此操作无法撤销。",
+        "deleteSuccess": "用户 \"{userName}\" 删除成功",
+        "deleteFailed": "删除用户失败",
+        "deleteError": "删除用户时发生错误",
+        "pagination": {
+          "showing": "显示 <strong>{from}</strong> 到 <strong>{to}</strong>，共 <strong>{total}</strong> 个用户",
+          "previous": "上一页",
+          "next": "下一页",
+          "page": "第 {current} 页，共 {total} 页"
+        }
+      },
+      "tab": {
+        "stats": {
+          "totalUsers": "总用户数",
+          "active": "活跃",
+          "pending": "待处理",
+          "suspended": "已暂停"
+        },
+        "allUsers": "所有用户",
+        "searchAndFilter": "搜索和筛选用户",
+        "addUser": "添加用户",
+        "searchPlaceholder": "按姓名、邮箱或 ID 搜索...",
+        "statusFilter": {
+          "placeholder": "状态",
+          "all": "所有状态",
+          "active": "活跃",
+          "pending": "待处理",
+          "suspended": "已暂停",
+          "deleted": "已删除"
+        }
+      }
+    },
+    "rbac": {
+      "redirect": {
+        "redirecting": "正在跳转到用户与角色..."
+      },
+      "rolesTable": {
+        "columns": {
+          "role": "角色",
+          "type": "类型",
+          "permissions": "权限",
+          "users": "用户",
+          "created": "创建时间"
+        },
+        "badges": {
+          "default": "默认",
+          "custom": "自定义"
+        },
+        "noRoles": "未找到角色。",
+        "noPermissions": "无权限",
+        "morePermissions": "+{count} 个更多",
+        "usersCount": "个用户",
+        "actions": {
+          "title": "操作",
+          "openMenu": "打开菜单",
+          "viewDetails": "查看详情",
+          "editRole": "编辑角色",
+          "duplicateRole": "复制角色",
+          "duplicating": "复制中...",
+          "viewAssignments": "查看分配",
+          "deleteRole": "删除角色",
+          "deleting": "删除中..."
+        },
+        "deleteConfirm": "确定要删除角色 \"{roleName}\" 吗？此操作无法撤销。",
+        "deleteSuccess": "角色 \"{roleName}\" 删除成功",
+        "deleteFailed": "删除角色失败",
+        "deleteError": "发生了意外错误",
+        "duplicateConfirm": "复制 \"{roleName}\"？这将创建一个带有 \"-copy\" 后缀的副本。",
+        "duplicateSuccess": "角色 \"{roleName}\" 复制成功",
+        "duplicateFailed": "复制角色失败",
+        "duplicateError": "发生了意外错误",
+        "pagination": {
+          "showing": "显示 <strong>{from}</strong> 到 <strong>{to}</strong>，共 <strong>{total}</strong> 个角色",
+          "previous": "上一页",
+          "next": "下一页",
+          "page": "第 {current} 页，共 {total} 页"
+        }
+      },
+      "tab": {
+        "title": "角色管理",
+        "description": "管理用户角色分配（管理员/用户）",
+        "searchPlaceholder": "按角色名称或标识符搜索...",
+        "createRole": "创建角色"
+      },
+      "roleDialog": {
+        "title": {
+          "create": "创建新角色",
+          "edit": "编辑角色"
+        },
+        "description": {
+          "create": "创建具有自定义权限的新角色",
+          "edit": "更新角色信息和设置"
+        },
+        "fields": {
+          "name": {
+            "label": "角色名称 *",
+            "placeholder": "例如：编辑者、查看者、管理员"
+          },
+          "slug": {
+            "label": "标识符 *",
+            "placeholder": "例如：editor、viewer、admin",
+            "hint": "用作唯一标识符（小写，无空格）"
+          },
+          "description": {
+            "label": "描述",
+            "placeholder": "描述此角色可以做什么..."
+          },
+          "isDefault": {
+            "label": "设为新成员的默认角色"
+          }
+        },
+        "errors": {
+          "required": "名称和标识符为必填项",
+          "operationFailed": "操作失败"
+        },
+        "success": {
+          "created": "角色创建成功！",
+          "updated": "角色更新成功！"
+        },
+        "buttons": {
+          "cancel": "取消",
+          "create": "创建角色",
+          "update": "更新角色",
+          "saved": "已保存！"
+        }
+      },
+      "detail": {
+        "loading": "正在加载角色详情...",
+        "backToRoles": "返回角色列表",
+        "roleNotFound": "未找到角色",
+        "returnToRoles": "返回角色列表",
+        "editRole": "编辑角色",
+        "tabs": {
+          "permissions": "权限",
+          "permissionsWithCount": "权限（{count}）",
+          "settings": "设置"
+        },
+        "permissions": {
+          "title": "权限",
+          "description": "此角色拥有的所有权限",
+          "noPermissions": "此角色暂无权限。"
+        },
+        "settings": {
+          "title": "角色设置",
+          "description": "角色元数据和系统设置",
+          "roleType": {
+            "label": "角色类型",
+            "default": "系统默认角色",
+            "custom": "自定义角色"
+          },
+          "isDefault": {
+            "true": "此角色会作为默认角色分配。",
+            "false": "此角色不会作为默认角色分配。"
+          },
+          "created": "创建时间",
+          "lastUpdated": "最后更新"
+        }
+      }
+    },
+    "plans": {
+      "page": {
+        "title": "计划管理",
+        "description": "创建和管理平台的订阅计划",
+        "allPlansTitle": "所有计划",
+        "plansCount": "共 {count} 个计划",
+        "emptyState": {
+          "title": "暂无计划",
+          "description": "开始创建您的第一个订阅计划"
+        },
+        "table": {
+          "plan": "计划",
+          "pricing": "价格",
+          "features": "功能",
+          "limits": "限制",
+          "status": "状态",
+          "actions": "操作",
+          "more": "更多"
+        },
+        "badges": {
+          "default": "默认"
+        },
+        "pricing": {
+          "free": "免费"
+        },
+        "status": {
+          "active": "启用",
+          "inactive": "禁用"
+        },
+        "actions": {
+          "refresh": "刷新",
+          "createPlan": "创建计划",
+          "viewDetails": "查看详情",
+          "editPlan": "编辑计划",
+          "duplicate": "复制",
+          "activate": "启用",
+          "deactivate": "停用",
+          "setAsDefault": "设为默认",
+          "delete": "删除"
+        },
+        "deleteConfirm": "确定要删除此计划吗?此操作无法撤销。",
+        "errors": {
+          "deleteFailed": "删除计划失败",
+          "updateFailed": "更新计划失败",
+          "setDefaultFailed": "设置默认计划失败"
+        },
+        "dialog": {
+          "createTitle": "创建新计划",
+          "editTitle": "编辑计划",
+          "createDescription": "定义新订阅计划的功能、限制和价格",
+          "editDescription": "更新计划详情、功能和价格"
+        }
+      }
+    },
+    "entitlements": {
+      "page": {
+        "title": "订阅计划",
+        "description": "管理订阅计划和用户订阅",
+        "actions": {
+          "createPlan": "创建计划"
+        },
+        "stats": {
+          "totalPlans": "总计划数",
+          "activeSubscriptions": "活跃订阅",
+          "trialSubscriptions": "试用订阅",
+          "monthlyRevenue": "月收入"
+        },
+        "tabs": {
+          "plans": "订阅计划",
+          "entitlements": "用户订阅",
+          "usage": "使用分析"
+        },
+        "filters": {
+          "searchPlans": "搜索计划...",
+          "searchUsers": "搜索用户...",
+          "allPlans": "所有计划",
+          "allStatus": "所有状态",
+          "active": "活跃",
+          "inactive": "停用",
+          "trial": "试用",
+          "expired": "已过期",
+          "cancelled": "已取消"
+        },
+        "planCard": {
+          "title": "订阅计划",
+          "description": "配置计划的功能和限制"
+        },
+        "userCard": {
+          "title": "用户订阅",
+          "description": "查看和管理用户订阅"
+        }
+      },
+      "planDialogV2": {
+        "title": {
+          "create": "创建计划",
+          "edit": "编辑计划"
+        },
+        "description": "计划包含用于展示的多语言功能列表，以及用于强制控制的能力字段与每月配额。",
+        "tabs": {
+          "basic": "基础",
+          "display": "展示",
+          "pricing": "价格",
+          "limits": "限制",
+          "capabilities": "能力",
+          "stripe": "Stripe"
+        },
+        "fields": {
+          "name": {
+            "label": "名称",
+            "placeholder": "Pro"
+          },
+          "slug": {
+            "label": "Slug",
+            "placeholder": "pro"
+          },
+          "description": {
+            "label": "描述",
+            "placeholder": "计划说明..."
+          },
+          "sortOrder": {
+            "label": "排序",
+            "placeholder": "0"
+          },
+          "isActive": {
+            "label": "启用"
+          },
+          "isDefault": {
+            "label": "默认"
+          }
+        },
+        "display": {
+          "help": "仅用于在定价页展示的功能点列表。真正的强制控制必须使用配额/能力字段。",
+          "featuresListZh": {
+            "label": "功能列表（中文）— 每行一个",
+            "placeholder": "每行一个功能点..."
+          },
+          "featuresListEn": {
+            "label": "功能列表（英文）— 每行一个",
+            "placeholder": "One bullet per line..."
+          }
+        },
+        "pricing": {
+          "currency": {
+            "label": "币种",
+            "placeholder": "USD"
+          },
+          "trialDays": {
+            "label": "试用天数",
+            "placeholder": "0"
+          },
+          "monthlyPrice": {
+            "label": "月付价格",
+            "placeholder": "9.99"
+          },
+          "yearlyPrice": {
+            "label": "年付价格",
+            "placeholder": "99"
+          }
+        },
+        "limits": {
+          "title": "配额（按月）",
+          "help": "Key 必须带命名空间前缀，例如 `runlynk.calls`。留空表示不允许（按 0 处理）。",
+          "add": "新增",
+          "empty": "未配置配额。未配置的 key 按 0 处理（不允许）。",
+          "headers": {
+            "key": "Key",
+            "keyPlaceholder": "runlynk.calls",
+            "monthly": "月度",
+            "yearly": "年度",
+            "valuePlaceholder": "0"
+          }
+        },
+        "capabilities": {
+          "outputResolution": {
+            "label": "RunLynk 输出分辨率（强制）",
+            "placeholder": "请选择..."
+          },
+          "json": {
+            "label": "能力（JSON）"
+          }
+        },
+        "stripe": {
+          "productId": {
+            "label": "Stripe Product ID（可选）",
+            "placeholder": "prod_..."
+          },
+          "sync": {
+            "label": "同步到 Stripe",
+            "help": "创建/更新 Stripe Product 与 Prices，并更新本地价格映射。"
+          }
+        },
+        "actions": {
+          "cancel": "取消",
+          "create": "创建",
+          "update": "更新"
+        },
+        "toast": {
+          "createdTitle": "计划已创建",
+          "updatedTitle": "计划已更新",
+          "saved": "已保存",
+          "savedAndSynced": "已保存并同步到 Stripe",
+          "errorTitle": "错误",
+          "saveFailed": "保存失败"
+        }
+      },
+      "planForm": {
+        "errorAlert": "错误",
+        "tabs": {
+          "basic": "基本信息",
+          "pricing": "价格设置",
+          "features": "功能特性",
+          "limits": "使用限制"
+        },
+        "basicInfo": {
+          "title": "基本信息",
+          "description": "描述",
+          "planName": "计划名称",
+          "planNameRequired": "必填",
+          "planNamePlaceholder": "例如:专业版、企业版",
+          "planNameError": "计划名称为必填项",
+          "descriptionPlaceholder": "计划的简要描述",
+          "displayOrder": "显示顺序",
+          "displayOrderPlaceholder": "0",
+          "displayOrderHint": "数字越小,显示时越靠前",
+          "active": "启用",
+          "activeHint": "只有启用的计划才能分配给用户",
+          "defaultPlan": "默认计划",
+          "defaultPlanHint": "自动分配给新用户"
+        },
+        "pricing": {
+          "title": "价格设置",
+          "description": "设置月付和年付价格(留空表示免费)",
+          "currency": "货币",
+          "monthlyPrice": "月付价格",
+          "monthlyPricePlaceholder": "0.00",
+          "perMonth": "/ 月",
+          "yearlyPrice": "年付价格",
+          "yearlyPricePlaceholder": "0.00",
+          "perYear": "/ 年",
+          "yearlySavings": "年付节省:",
+          "discount": "% 折扣",
+          "priceError": "价格不能为负数"
+        },
+        "features": {
+          "title": "功能特性",
+          "description": "选择此计划包含的功能",
+          "customBranding": "自定义品牌",
+          "customBrandingDesc": "使用自定义颜色和标志",
+          "advancedAnalytics": "高级分析",
+          "advancedAnalyticsDesc": "详细的使用洞察和报告",
+          "prioritySupport": "优先支持",
+          "prioritySupportDesc": "24/7优先客户支持",
+          "apiAccess": "API访问",
+          "apiAccessDesc": "完整的集成API访问",
+          "ssoIntegration": "SSO集成",
+          "ssoIntegrationDesc": "使用SAML/OAuth单点登录",
+          "customDomain": "自定义域名",
+          "customDomainDesc": "使用您自己的域名",
+          "exportData": "导出数据",
+          "exportDataDesc": "以CSV/JSON格式导出所有数据",
+          "webhooks": "Webhooks",
+          "webhooksDesc": "实时事件通知",
+          "advancedPermissions": "高级权限",
+          "advancedPermissionsDesc": "细粒度的基于角色的访问控制",
+          "auditLogs": "审计日志",
+          "auditLogsDesc": "完整的活动审计跟踪"
+        },
+        "limits": {
+          "title": "使用限制",
+          "description": "设置此计划的资源使用限制(使用-1表示无限制)",
+          "users": "用户数",
+          "usersDesc": "最大用户数",
+          "usersUnit": "用户",
+          "plugins": "插件数",
+          "pluginsDesc": "最大插件数",
+          "pluginsUnit": "插件",
+          "roles": "角色数",
+          "rolesDesc": "最大自定义角色数",
+          "rolesUnit": "角色",
+          "storage": "存储空间",
+          "storageDesc": "存储空间限制",
+          "storageUnit": "MB",
+          "apiCalls": "API调用",
+          "apiCallsDesc": "每月API调用限制",
+          "apiCallsUnit": "次/月",
+          "notSet": "未设置",
+          "unlimited": "无限制",
+          "limit": "限制:"
+        },
+        "actions": {
+          "cancel": "取消",
+          "create": "创建计划",
+          "save": "保存更改",
+          "saving": "保存中..."
+        }
+      },
+      "planDialog": {
+        "title": {
+          "create": "创建计划",
+          "edit": "编辑计划"
+        },
+        "description": {
+          "create": "创建带有功能和限制的新订阅计划。",
+          "edit": "更新订阅计划的详情、功能和限制。"
+        },
+        "tabs": {
+          "basicInfo": "基本信息",
+          "limits": "使用限制",
+          "features": "功能特性"
+        },
+        "fields": {
+          "name": {
+            "label": "名称 *",
+            "placeholder": "专业版计划"
+          },
+          "slug": {
+            "label": "标识符 *",
+            "placeholder": "pro-plan",
+            "description": "唯一标识符(仅小写字母和连字符)"
+          },
+          "description": {
+            "label": "描述",
+            "placeholder": "适合成长型团队..."
+          },
+          "price": {
+            "label": "价格",
+            "placeholder": "29.99"
+          },
+          "currency": {
+            "label": "货币",
+            "placeholder": "选择货币"
+          },
+          "interval": {
+            "label": "周期",
+            "placeholder": "选择周期",
+            "options": {
+              "monthly": "月付",
+              "yearly": "年付",
+              "weekly": "周付",
+              "daily": "日付",
+              "lifetime": "终身"
+            }
+          },
+          "isActive": {
+            "label": "启用",
+            "description": "计划可供订阅"
+          },
+          "isDefault": {
+            "label": "默认",
+            "description": "新用户的默认计划"
+          }
+        },
+        "limits": {
+          "maxUsers": {
+            "label": "最大用户数",
+            "placeholder": "-1表示无限制",
+            "description": "最大用户数(-1 = 无限制)"
+          },
+          "maxStorage": {
+            "label": "最大存储空间(MB)",
+            "placeholder": "-1表示无限制",
+            "description": "最大存储空间(MB)(-1 = 无限制)"
+          },
+          "maxApiCalls": {
+            "label": "最大API调用次数",
+            "placeholder": "-1表示无限制",
+            "description": "每月最大API调用次数(-1 = 无限制)"
+          },
+          "maxProjects": {
+            "label": "最大项目数",
+            "placeholder": "-1表示无限制",
+            "description": "最大项目数(-1 = 无限制)"
+          }
+        },
+        "features": {
+          "customDomain": {
+            "label": "自定义域名",
+            "description": "允许自定义域名配置"
+          },
+          "prioritySupport": {
+            "label": "优先支持",
+            "description": "24/7优先客户支持"
+          },
+          "advancedAnalytics": {
+            "label": "高级分析",
+            "description": "访问高级分析仪表板"
+          },
+          "apiAccess": {
+            "label": "API访问",
+            "description": "访问REST API"
+          },
+          "ssoEnabled": {
+            "label": "SSO",
+            "description": "单点登录支持"
+          },
+          "whitelabel": {
+            "label": "白标",
+            "description": "移除品牌并添加自定义标志"
+          }
+        },
+        "buttons": {
+          "cancel": "取消",
+          "create": "创建计划",
+          "update": "更新计划"
+        },
+        "toast": {
+          "createSuccess": {
+            "title": "计划已创建",
+            "description": "{name} 已成功创建。"
+          },
+          "updateSuccess": {
+            "title": "计划已更新",
+            "description": "{name} 已成功更新。"
+          },
+          "error": "错误",
+          "saveFailed": "保存计划失败"
+        }
+      },
+      "planDetails": {
+        "title": "计划详情",
+        "default": "默认",
+        "active": "启用",
+        "inactive": "停用",
+        "sections": {
+          "pricing": "价格",
+          "features": "功能",
+          "limits": "使用限制",
+          "metadata": "附加信息"
+        },
+        "pricing": {
+          "monthly": "月付",
+          "yearly": "年付",
+          "lifetime": "终身",
+          "free": "免费",
+          "perMonth": "每月",
+          "perYear": "每年",
+          "oneTime": "一次性"
+        },
+        "features": {
+          "included": "已包含({count})",
+          "notIncluded": "未包含({count})",
+          "noFeatures": "未配置功能"
+        },
+        "limits": {
+          "notSet": "未设置",
+          "unlimited": "无限制",
+          "noLimits": "未配置限制",
+          "users": "用户",
+          "plugins": "插件",
+          "roles": "角色",
+          "storage": "存储",
+          "apiCalls": "API调用",
+          "units": {
+            "users": "用户",
+            "plugins": "插件",
+            "roles": "角色",
+            "mb": "MB",
+            "calls": "次/月"
+          }
+        },
+        "metadata": {
+          "sortOrder": "排序顺序:",
+          "status": "状态:",
+          "defaultPlan": "默认计划:",
+          "currency": "货币:",
+          "created": "创建时间:",
+          "updated": "更新时间:",
+          "yes": "是",
+          "no": "否"
+        },
+        "actions": {
+          "close": "关闭",
+          "edit": "编辑计划"
+        }
+      },
+      "planComparison": {
+        "title": "计划对比",
+        "description": "对比所有计划的功能和限制",
+        "loading": "加载计划中...",
+        "empty": {
+          "title": "暂无可用计划",
+          "description": "创建您的第一个计划以查看对比视图"
+        },
+        "table": {
+          "default": "默认",
+          "active": "启用",
+          "inactive": "停用"
+        },
+        "sections": {
+          "pricing": "价格",
+          "features": "功能",
+          "limits": "使用限制"
+        },
+        "pricing": {
+          "price": "价格",
+          "free": "免费"
+        },
+        "limits": {
+          "notSet": "未设置",
+          "unlimited": "无限制"
+        },
+        "summary": {
+          "totalPlans": "总计划数",
+          "activePlans": "活跃计划",
+          "defaultPlan": "默认计划"
+        }
+      },
+      "changePlan": {
+        "title": "更改订阅计划",
+        "description": "为{userName}更改订阅计划",
+        "currentPlan": "当前计划",
+        "newPlan": "新计划",
+        "newPlanPlaceholder": "选择一个计划",
+        "planDetails": "新计划详情",
+        "price": "价格:",
+        "notes": "备注(可选)",
+        "notesPlaceholder": "更改计划的原因...",
+        "errors": {
+          "selectDifferent": "请选择不同的计划",
+          "changeFailed": "更改计划失败"
+        },
+        "success": "计划更改成功!",
+        "actions": {
+          "cancel": "取消",
+          "change": "更改计划",
+          "changed": "已更改!"
+        }
+      },
+      "plansTable": {
+        "columns": {
+          "plan": "计划",
+          "pricing": "价格",
+          "limits": "限制",
+          "features": "功能",
+          "subscribers": "订阅者",
+          "status": "状态",
+          "actions": "操作"
+        },
+        "pricing": {
+          "free": "免费",
+          "perMonth": "/月",
+          "perYear": "/年"
+        },
+        "limits": {
+          "none": "未配置限制",
+          "monthly": "月",
+          "yearly": "年",
+          "more": "还有 {count} 项",
+          "notSet": "未设置",
+          "unlimited": "无限制",
+          "users": "用户",
+          "apiCalls": "API 调用"
+        },
+        "badges": {
+          "default": "默认"
+        },
+        "status": {
+          "active": "启用",
+          "inactive": "停用"
+        },
+        "actions": {
+          "viewDetails": "查看详情",
+          "edit": "编辑计划",
+          "viewSubscribers": "查看订阅者",
+          "delete": "删除计划"
+        },
+        "deleteDialog": {
+          "title": "删除计划",
+          "description": "确定要删除 {planName} 吗?此操作无法撤销,将影响 {count} 个用户。",
+          "cancel": "取消",
+          "delete": "删除",
+          "deleting": "删除中..."
+        },
+        "toast": {
+          "deleted": "计划已删除",
+          "deletedDescription": "{planName} 已成功删除。"
+        },
+        "pagination": {
+          "showing": "显示",
+          "of": "共",
+          "plans": "个计划",
+          "totalPlans": "共 {count} 个计划"
+        },
+        "emptyState": "未找到计划",
+        "units": {
+          "orgs": "个组织",
+          "users": "人"
+        }
+      },
+      "userTable": {
+        "columns": {
+          "user": "用户",
+          "plan": "计划",
+          "status": "状态",
+          "duration": "期限",
+          "usage": "使用情况",
+          "actions": "操作"
+        },
+        "plan": {
+          "free": "免费"
+        },
+        "status": {
+          "active": "活跃",
+          "trial": "试用",
+          "expired": "已过期",
+          "cancelled": "已取消"
+        },
+        "duration": {
+          "started": "开始于:"
+        },
+        "usage": {
+          "unlimited": "无限制",
+          "noLimits": "无限制",
+          "users": "用户",
+          "apiCalls": "API 调用"
+        },
+        "actions": {
+          "viewUser": "查看用户",
+          "changePlan": "更改计划",
+          "viewUsage": "查看使用",
+          "reactivateSubscription": "重新激活订阅",
+          "cancelSubscription": "取消订阅"
+        },
+        "cancelDialog": {
+          "title": "取消订阅",
+          "description": "确定要取消 {userName} 的订阅吗?此操作无法撤销。",
+          "cancel": "取消",
+          "yes": "是的,取消订阅",
+          "cancelling": "取消中..."
+        },
+        "toast": {
+          "cancelled": "订阅已取消",
+          "cancelledDescription": "已成功取消 {userName} 的订阅",
+          "reactivated": "订阅已重新激活",
+          "reactivatedDescription": "已成功重新激活 {userName} 的订阅",
+          "error": "错误"
+        },
+        "pagination": {
+          "showing": "显示",
+          "of": "共",
+          "subscriptions": "个订阅",
+          "previous": "上一页",
+          "next": "下一页"
+        },
+        "emptyState": "未找到用户订阅"
+      },
+      "analytics": {
+        "resources": {
+          "users": "用户",
+          "storage": "存储",
+          "apiCalls": "API 调用",
+          "plugins": "插件"
+        },
+        "utilized": "% 已使用",
+        "sections": {
+          "usageByPlan": {
+            "title": "按计划使用情况",
+            "description": "各订阅层级的资源消耗",
+            "users": "用户",
+            "storage": "存储",
+            "apiCalls": "API 调用"
+          },
+          "topConsumers": {
+            "title": "资源消耗排行",
+            "description": "资源利用率最高的用户"
+          },
+          "subscribersByPlan": {
+            "title": "各计划订阅者",
+            "description": "按计划统计订阅人数"
+          },
+          "topMetrics": {
+            "title": "使用指标排行",
+            "loading": "加载中...",
+            "description": "近 {days} 天的汇总"
+          },
+          "topUsers": {
+            "title": "用户排行"
+          }
+        },
+        "emptyState": {
+          "noUsageData": "暂无使用数据",
+          "noConsumerData": "暂无消费者数据",
+          "noPlans": "暂无计划",
+          "noUsage": "暂无使用记录"
+        },
+        "units": {
+          "users": "用户",
+          "MB": "MB",
+          "GB": "GB",
+          "calls": "次调用"
+        }
+      }
+    },
+    "plugins": {
+      "page": {
+        "title": "插件管理",
+        "description": "管理和配置平台插件"
+      },
+      "list": {
+        "loading": "加载插件中...",
+        "retry": "重试",
+        "empty": {
+          "title": "未找到插件",
+          "description": "安装插件以扩展平台功能"
+        },
+        "errors": {
+          "fetchFailed": "获取插件失败",
+          "unknown": "发生未知错误",
+          "enableFailed": "启用插件失败",
+          "disableFailed": "禁用插件失败",
+          "uninstallFailed": "卸载插件失败",
+          "installFailed": "安装插件失败"
+        }
+      },
+      "card": {
+        "installing": "安装中...",
+        "install": "安装",
+        "processing": "处理中...",
+        "disable": "禁用",
+        "enable": "启用",
+        "uninstall": "卸载",
+        "cancel": "取消",
+        "confirm": "确认",
+        "confirmInstall": "确认安装",
+        "confirmUninstall": "确认卸载",
+        "installDialog": {
+          "title": "安装插件",
+          "description": "安装 {name} 将:",
+          "steps": {
+            "createTables": "创建必要的数据库表",
+            "initConfig": "初始化插件配置",
+            "runScript": "运行安装脚本"
+          },
+          "afterInstall": "安装后，您可以启用插件开始使用。"
+        },
+        "enableDialog": {
+          "title": "启用插件",
+          "description": "确定要启用 {name} 吗？"
+        },
+        "disableDialog": {
+          "title": "禁用插件",
+          "description": "确定要禁用 {name} 吗？"
+        },
+        "uninstallDialog": {
+          "title": "卸载插件",
+          "pluginName": "插件：{name}",
+          "warning": "这将删除所有插件数据和配置。",
+          "irreversible": "此操作无法撤销。"
+        }
+      }
+    },
+    "notifications": {
+      "title": "通知中心",
+      "description": "查看和管理系统通知",
+      "actions": {
+        "markAllRead": "全部标记为已读",
+        "filter": "筛选"
+      },
+      "filters": {
+        "all": "所有通知",
+        "unread": "未读",
+        "read": "已读",
+        "user": "用户相关",
+        "system": "系统相关"
+      },
+      "stats": {
+        "all": "全部通知",
+        "unread": "未读通知",
+        "today": "今日通知",
+        "important": "重要通知"
+      },
+      "tabs": {
+        "all": "全部 ({count})",
+        "unread": "未读 ({count})",
+        "read": "已读 ({count})"
+      },
+      "badge": {
+        "new": "新"
+      },
+      "items": {
+        "newUser": {
+          "title": "新用户注册",
+          "message": "john.doe@example.com 注册了账户",
+          "time": "2 分钟前"
+        },
+        "pluginInstalled": {
+          "title": "插件已安装",
+          "message": "runtime-seo 由 jane@example.com 安装",
+          "time": "1 小时前"
+        },
+        "usageWarning": {
+          "title": "使用量警告",
+          "message": "user_demo 已超过 80% 的 API 配额",
+          "time": "3 小时前"
+        },
+        "maintenance": {
+          "title": "系统维护通知",
+          "message": "系统将于今晚 22:00-23:00 进行维护",
+          "time": "5 小时前"
+        },
+        "securityAlert": {
+          "title": "安全警报",
+          "message": "检测到异常登录尝试",
+          "time": "昨天"
+        }
+      }
+    },
+    "analytics": {
+      "page": {
+        "title": "数据分析",
+        "description": "平台的全面分析和洞察",
+        "timeframes": {
+          "7days": "过去7天",
+          "30days": "过去30天",
+          "90days": "过去90天",
+          "12months": "过去12个月"
+        },
+        "actions": {
+          "refresh": "刷新",
+          "export": "导出"
+        },
+        "tabs": {
+          "overview": "概览",
+          "revenue": "收入",
+          "growth": "增长",
+          "churn": "流失",
+          "usage": "使用情况",
+          "cohorts": "队列分析"
+        },
+        "overview": {
+          "metrics": {
+            "mrr": {
+              "title": "月度经常性收入",
+              "fromLastPeriod": "较上期 {percentage}"
+            },
+            "arr": {
+              "title": "年度经常性收入",
+              "description": "年化收入"
+            },
+            "arpu": {
+              "title": "人均收入",
+              "description": "每用户每月"
+            },
+            "ltv": {
+              "title": "生命周期价值",
+              "description": "客户生命周期价值"
+            },
+            "newUsers": {
+              "title": "新用户",
+              "growthRate": "{percentage} 增长率"
+            },
+            "trialConversion": {
+              "title": "试用转化",
+              "description": "{trials} 次试用中有 {conversions} 次转化"
+            },
+            "churnRate": {
+              "title": "流失率",
+              "description": "{count} 个流失用户"
+            },
+            "retentionRate": {
+              "title": "留存率",
+              "description": "客户留存率"
+            }
+          },
+          "revenueByPlan": {
+            "title": "按计划划分的收入",
+            "description": "各计划的月度经常性收入分布"
+          }
+        },
+        "revenue": {
+          "metrics": {
+            "mrr": {
+              "title": "月度经常性收入",
+              "description": "月度经常性收入",
+              "fromLastPeriod": "较上期 {percentage}"
+            },
+            "arr": {
+              "title": "年度经常性收入",
+              "description": "年度经常性收入",
+              "perMonth": "每月 {amount}"
+            },
+            "arpu": {
+              "title": "人均收入",
+              "description": "每用户平均收入",
+              "perUserPerMonth": "每用户每月"
+            }
+          },
+          "breakdown": {
+            "title": "收入明细",
+            "description": "按计划划分的月度经常性收入",
+            "table": {
+              "plan": "计划",
+              "mrr": "月度经常性收入",
+              "percentage": "百分比"
+            }
+          }
+        },
+        "growth": {
+          "metrics": {
+            "newUsers": {
+              "title": "新用户"
+            },
+            "netGrowth": {
+              "title": "净增长",
+              "description": "新增 - 流失"
+            },
+            "upgrades": {
+              "title": "升级",
+              "description": "计划升级"
+            },
+            "downgrades": {
+              "title": "降级",
+              "description": "计划降级"
+            }
+          },
+          "trial": {
+            "title": "试用表现",
+            "description": "试用开始和转化情况",
+            "newTrials": "新试用",
+            "conversions": "转化数",
+            "conversionRate": "转化率"
+          }
+        },
+        "churn": {
+          "metrics": {
+            "rate": {
+              "title": "流失率",
+              "users": "{count} 个用户"
+            },
+            "retention": {
+              "title": "留存率",
+              "description": "活跃客户"
+            },
+            "revenue": {
+              "title": "流失收入",
+              "description": "损失的月度经常性收入"
+            },
+            "users": {
+              "title": "流失用户",
+              "description": "本期内"
+            }
+          },
+          "trend": {
+            "title": "流失趋势",
+            "description": "月度流失率随时间变化",
+            "table": {
+              "month": "月份",
+              "churned": "流失数",
+              "churnRate": "流失率"
+            }
+          },
+          "reasons": {
+            "title": "流失原因",
+            "description": "客户取消的原因"
+          }
+        },
+        "usage": {
+          "metrics": {
+            "average": "平均",
+            "peak": "峰值",
+            "utilization": "使用率",
+            "trend": {
+              "increasing": "上升",
+              "decreasing": "下降",
+              "stable": "稳定"
+            }
+          }
+        },
+        "cohorts": {
+          "title": "队列分析",
+          "description": "按注册月份分析留存和收入（过去12个月）",
+          "table": {
+            "cohort": "队列",
+            "size": "规模",
+            "retained": "留存",
+            "retentionRate": "留存率",
+            "revenue": "收入",
+            "avgLifetime": "平均生命周期（天）"
+          }
+        }
+      }
+    },
+    "search": {
+      "title": "搜索",
+      "description": "搜索用户、插件、角色和其他资源",
+      "placeholder": "输入搜索关键词...",
+      "tabs": {
+        "all": "全部",
+        "users": "用户",
+        "plugins": "插件",
+        "roles": "角色"
+      },
+      "enterKeywords": "输入搜索关键词",
+      "resultsFor": "\"{query}\" 的搜索结果",
+      "developingSoon": "功能开发中，即将推出",
+      "noResults": "未找到结果",
+      "userResultsTitle": "用户搜索结果",
+      "userResultsCount": "找到 {count} 个匹配的用户",
+      "pluginResultsTitle": "插件搜索结果",
+      "pluginResultsCount": "找到 {count} 个匹配的插件",
+      "roleResultsTitle": "角色搜索结果",
+      "roleResultsCount": "找到 {count} 个匹配的角色"
+    },
+    "auditLogs": {
+      "page": {
+        "title": "审计日志",
+        "description": "查看平台活动、安全事件和管理员操作",
+        "exportCsv": "导出 CSV",
+        "exportJson": "导出 JSON",
+        "tabs": {
+          "logs": "日志",
+          "statistics": "统计"
+        },
+        "filters": {
+          "title": "筛选",
+          "description": "搜索和筛选审计事件",
+          "search": {
+            "label": "搜索",
+            "placeholder": "搜索用户、资源或详情..."
+          },
+          "action": {
+            "label": "操作",
+            "allActions": "所有操作"
+          },
+          "resource": {
+            "label": "资源",
+            "allResources": "所有资源"
+          },
+          "status": {
+            "label": "状态",
+            "allStatuses": "所有状态",
+            "success": "成功",
+            "failure": "失败"
+          }
+        },
+        "actions": {
+          "userCreate": "创建用户",
+          "userUpdate": "更新用户",
+          "userDelete": "删除用户",
+          "roleAssign": "分配角色",
+          "roleRevoke": "撤销角色",
+          "pluginInstall": "安装插件"
+        },
+        "resources": {
+          "user": "用户",
+          "role": "角色",
+          "plugin": "插件",
+          "entitlement": "订阅权益"
+        },
+        "pagination": {
+          "showing": "显示 {from}-{to}，共 {total} 条",
+          "previous": "上一页",
+          "next": "下一页",
+          "page": "第 {current} 页，共 {total} 页"
+        },
+        "stats": {
+          "totalLogs": "日志总数",
+          "success": "成功",
+          "failures": "失败",
+          "successRate": "成功率",
+          "topActions": "高频操作",
+          "topActionsDescription": "出现最多的审计操作",
+          "topResources": "高频资源",
+          "topResourcesDescription": "变更最频繁的资源"
+        },
+        "detail": {
+          "title": "审计日志详情",
+          "userInfo": "用户信息",
+          "userId": "用户 ID",
+          "name": "姓名",
+          "email": "邮箱",
+          "actionResource": "操作与资源",
+          "action": "操作",
+          "resource": "资源",
+          "resourceId": "资源 ID",
+          "resourceName": "资源名称",
+          "status": "状态",
+          "requestInfo": "请求信息",
+          "ipAddress": "IP 地址",
+          "userAgent": "User Agent",
+          "errorDetails": "错误详情",
+          "metadata": "元数据"
+        }
+      },
+      "table": {
+        "empty": {
+          "title": "暂无审计日志",
+          "description": "当前筛选条件下没有匹配事件。"
+        },
+        "columns": {
+          "time": "时间",
+          "user": "用户",
+          "action": "操作",
+          "resource": "资源",
+          "status": "状态",
+          "ipAddress": "IP 地址",
+          "actions": "操作"
+        },
+        "viewDetails": "详情"
+      }
+    }
+  },
+  "pricing": {
+    "hero": {
+      "title": "选择适合你的订阅方案",
+      "subtitle": "订阅后即可使用平台全部插件与高级能力",
+      "loginTip": "提示：订阅前请先登录账号"
+    },
+    "price": {
+      "free": "免费"
+    },
+    "billingPeriod": {
+      "monthly": "月付",
+      "yearly": "年付",
+      "yearlySave": "(更优惠)"
+    },
+    "cta": {
+      "processing": "处理中...",
+      "free": "立即使用",
+      "current": "当前订阅",
+      "subscribe": "立即订阅"
+    },
+    "badges": {
+      "popular": "最受欢迎"
+    },
+    "unit": {
+      "month": "月",
+      "year": "年"
+    },
+    "plans": {
+      "callsPerMonth": "{count} 次/月调用额度（全站插件共享）",
+      "noLimits": "暂无调用额度限制信息",
+      "noFeatureDetails": "暂无可用功能描述"
+    },
+    "footer": {
+      "coreFeatures": "所有付费方案均包含平台核心能力",
+      "questions": "有问题？",
+      "contact": "联系我们"
+    },
+    "errors": {
+      "fetchPlans": "获取订阅方案失败",
+      "checkout": "创建结算会话失败",
+      "subscribeFailed": "订阅失败",
+      "unknown": "未知错误"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next
+out
+build
+dist
+coverage
+.cache
+
+# Minified files
+*.min.js
+*.min.css
+
+# Lock files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Drizzle migrations (auto-generated)
+drizzle/migrations/schema.ts
+drizzle/migrations/relations.ts
+
+# Auto-generated files
+.next/types/**
+src/lib/plugin-map.ts
+src/lib/plugin-map.manifest.json
+
+# Logs
+*.log
+
+# Local browser test artifacts
+.playwright-mcp
+
+# OS files
+.DS_Store
+Thumbs.db

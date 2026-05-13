@@ -1,0 +1,281 @@
+@import 'tailwindcss';
+
+/**
+ * ════════════════════════════════════════════════════════════
+ * Tailwind v4 主题配置 - 完整设计系统
+ * ════════════════════════════════════════════════════════════
+ */
+@theme {
+  /* ═══════════════════════════════════════════════════════ */
+  /* 主色阶梯 - 基于靛蓝（260°）自动生成 */
+  /* ═══════════════════════════════════════════════════════ */
+
+  /* 🆕 Dynamic theme colors - injected from layout.tsx based on user configuration */
+  /* Fallback values are the default Indigo colors */
+  --color-primary-50: var(--dynamic-primary-50, #eef2ff); /* Indigo 50 - 极浅蓝紫 */
+  --color-primary-100: var(--dynamic-primary-100, #e0e7ff); /* Indigo 100 - 浅蓝紫 */
+  --color-primary-200: var(--dynamic-primary-200, #c7d2fe); /* Indigo 200 - 中浅蓝紫 */
+  --color-primary-300: var(--dynamic-primary-300, #a5b4fc); /* Indigo 300 */
+  --color-primary-400: var(--dynamic-primary-400, #818cf8); /* Indigo 400 */
+  --color-primary-500: var(--dynamic-primary-500, #6366f1); /* Indigo 500 - 主色 ⭐ */
+  --color-primary-600: var(--dynamic-primary-600, #4f46e5); /* Indigo 600 - 悬停 */
+  --color-primary-700: var(--dynamic-primary-700, #4338ca); /* Indigo 700 */
+  --color-primary-800: var(--dynamic-primary-800, #3730a3); /* Indigo 800 */
+  --color-primary-900: var(--dynamic-primary-900, #312e81); /* Indigo 900 */
+
+  /* 主色映射 */
+  --color-primary: var(--color-primary-500);
+  --color-primary-foreground: oklch(98% 0 0);
+  --color-primary-hover: var(--color-primary-600);
+  --color-primary-active: var(--color-primary-700);
+
+  /* ═══════════════════════════════════════════════════════ */
+  /* 基础颜色 */
+  /* ═══════════════════════════════════════════════════════ */
+
+  --color-background: oklch(98.5% 0 0); /* 更浅的背景 */
+  --color-foreground: oklch(20% 0.02 260); /* 带主色调的文字 */
+
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(20% 0.02 260);
+
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(20% 0.02 260);
+
+  /* 次要颜色 - 直接使用主色 100 阶（保证色域安全）*/
+  --color-secondary: var(--color-primary-100); /* #E0E7FF - 浅蓝紫色 */
+  --color-secondary-foreground: oklch(30% 0.08 260);
+
+  /* 柔和色 - 直接使用主色 50 阶（保证色域安全）*/
+  --color-muted: var(--color-primary-50); /* #EEF2FF - 极浅蓝紫色 */
+  --color-muted-foreground: oklch(46% 0.12 260);
+
+  /* 强调色 - 直接使用主色 200 阶（保证色域安全）*/
+  --color-accent: var(--color-primary-200); /* #C7D2FE - 中等浅蓝紫色 */
+  --color-accent-foreground: oklch(28% 0.08 260);
+
+  /* ═══════════════════════════════════════════════════════ */
+  /* 功能性颜色（独立色相）*/
+  /* ═══════════════════════════════════════════════════════ */
+
+  /* 成功 - 绿色 */
+  --color-success-50: oklch(96% 0.042 145);
+  --color-success-100: oklch(92% 0.073 145);
+  --color-success: #166534;
+  --color-success-foreground: oklch(98% 0 0);
+
+  /* 警告 - 橙色 */
+  --color-warning-50: oklch(96% 0.038 70);
+  --color-warning-100: oklch(94% 0.066 70);
+  --color-warning: oklch(76% 0.2 70);
+  --color-warning-foreground: oklch(20% 0.01 70);
+
+  /* 错误 - 红色 */
+  --color-destructive-50: oklch(96% 0.046 25);
+  --color-destructive-100: oklch(93% 0.079 25);
+  --color-destructive: oklch(60% 0.24 25);
+  --color-destructive-foreground: oklch(98% 0 0);
+
+  /* 信息 - 使用主色 */
+  --color-info: var(--color-primary-500);
+  --color-info-foreground: oklch(98% 0 0);
+
+  /* ═══════════════════════════════════════════════════════ */
+  /* 边框和输入 */
+  /* ═══════════════════════════════════════════════════════ */
+
+  --color-border: oklch(91% 0.005 260);
+  --color-input: oklch(92% 0.005 260);
+  --color-ring: var(--color-primary-500);
+
+  /* ═══════════════════════════════════════════════════════ */
+  /* 圆角系统 */
+  /* ═══════════════════════════════════════════════════════ */
+
+  --radius-xs: 0.25rem; /* 4px */
+  --radius-sm: 0.375rem; /* 6px */
+  --radius-md: 0.5rem; /* 8px */
+  --radius-lg: 0.75rem; /* 12px - 默认 ⭐ */
+  --radius-xl: 1rem; /* 16px */
+  --radius-2xl: 1.25rem; /* 20px */
+  --radius-3xl: 1.5rem; /* 24px */
+  --radius-full: 9999px;
+
+  --radius: var(--radius-lg); /* 全局默认圆角 */
+
+  /* ═══════════════════════════════════════════════════════ */
+  /* 阴影系统 */
+  /* ═══════════════════════════════════════════════════════ */
+
+  --shadow-xs: 0 1px 2px 0 oklch(0% 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 oklch(0% 0 0 / 0.1), 0 1px 2px -1px oklch(0% 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.1), 0 4px 6px -4px oklch(0% 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px oklch(0% 0 0 / 0.1), 0 8px 10px -6px oklch(0% 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px oklch(0% 0 0 / 0.25);
+  --shadow-inner: inset 0 2px 4px 0 oklch(0% 0 0 / 0.05);
+
+  /* 带主色的阴影（用于悬停效果）*/
+  --shadow-primary-color: oklch(66% 0.21 260 / 0.3);
+  --shadow-primary: 0 10px 15px -3px var(--shadow-primary-color);
+  --shadow-primary-lg: 0 20px 25px -5px var(--shadow-primary-color);
+
+  /* Sidebar 专用阴影（右侧边缘）*/
+  --shadow-sidebar: 1px 0 3px 0 oklch(0% 0 0 / 0.05);
+
+  /* ═══════════════════════════════════════════════════════ */
+  /* 毛玻璃效果 */
+  /* ═══════════════════════════════════════════════════════ */
+
+  --glass-bg: oklch(100% 0 0 / 0.7);
+  --glass-border: oklch(66% 0.21 260 / 0.2);
+  --glass-blur: 12px;
+}
+
+/**
+ * ════════════════════════════════════════════════════════════
+ * 深色模式
+ * ════════════════════════════════════════════════════════════
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 基础颜色 */
+    --color-background: oklch(14% 0.015 260); /* 深靛蓝底 */
+    --color-foreground: oklch(98% 0 0);
+
+    --color-card: oklch(18% 0.02 260);
+    --color-card-foreground: oklch(98% 0 0);
+
+    --color-popover: oklch(16% 0.02 260);
+    --color-popover-foreground: oklch(98% 0 0);
+
+    /* 主色 - 深色模式用更亮的色阶 */
+    --color-primary: var(--color-primary-400); /* #818CF8 */
+    --color-primary-hover: var(--color-primary-300);
+    --color-primary-active: var(--color-primary-500);
+
+    /* 次要颜色 - 深色模式用深色阶 */
+    --color-secondary: var(--color-primary-800);
+    --color-secondary-foreground: oklch(98% 0 0);
+
+    --color-muted: var(--color-primary-900);
+    --color-muted-foreground: oklch(65% 0.14 260);
+
+    --color-accent: var(--color-primary-700);
+    --color-accent-foreground: oklch(98% 0 0);
+
+    /* 功能性颜色 */
+    --color-destructive: oklch(62% 0.22 25);
+    --color-success: #86efac;
+    --color-success-foreground: oklch(18% 0.02 145);
+    --color-warning: oklch(78% 0.16 70);
+    --color-info: var(--color-primary-400);
+
+    /* 边框 */
+    --color-border: oklch(28% 0.03 260);
+    --color-input: oklch(26% 0.03 260);
+    --color-ring: var(--color-primary-400);
+
+    /* 毛玻璃 */
+    --glass-bg: oklch(15% 0.01 260 / 0.7);
+    --glass-border: oklch(100% 0 0 / 0.1);
+
+    /* 阴影 */
+    --shadow-primary-color: oklch(73% 0.19 260 / 0.5);
+    --shadow-sidebar: 1px 0 3px 0 oklch(0% 0 0 / 0.25);
+  }
+}
+
+/* Dark mode - 手动类切换 */
+.dark {
+  --color-background: oklch(14% 0.015 260);
+  --color-foreground: oklch(98% 0 0);
+
+  --color-card: oklch(18% 0.02 260);
+  --color-card-foreground: oklch(98% 0 0);
+
+  --color-popover: oklch(16% 0.02 260);
+  --color-popover-foreground: oklch(98% 0 0);
+
+  --color-primary: var(--color-primary-400);
+  --color-primary-hover: var(--color-primary-300);
+  --color-primary-active: var(--color-primary-500);
+
+  --color-secondary: var(--color-primary-800); /* 深色模式用 800 阶 */
+  --color-secondary-foreground: oklch(98% 0 0);
+
+  --color-muted: var(--color-primary-900); /* 深色模式用 900 阶 */
+  --color-muted-foreground: oklch(65% 0.14 260);
+
+  --color-accent: var(--color-primary-700); /* 深色模式用 700 阶 */
+  --color-accent-foreground: oklch(98% 0 0);
+
+  --color-destructive: oklch(62% 0.22 25);
+  --color-success: #86efac;
+  --color-success-foreground: oklch(18% 0.02 145);
+  --color-warning: oklch(78% 0.16 70);
+  --color-info: var(--color-primary-400);
+
+  --color-border: oklch(28% 0.03 260);
+  --color-input: oklch(26% 0.03 260);
+  --color-ring: var(--color-primary-400);
+
+  --glass-bg: oklch(15% 0.01 260 / 0.7);
+  --glass-border: oklch(100% 0 0 / 0.1);
+
+  --shadow-primary-color: oklch(73% 0.19 260 / 0.5);
+  --shadow-sidebar: 1px 0 3px 0 oklch(0% 0 0 / 0.25);
+}
+
+/**
+ * ════════════════════════════════════════════════════════════
+ * 平滑过渡动画
+ * ════════════════════════════════════════════════════════════
+ */
+* {
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    box-shadow 150ms ease-out;
+  /* 移除 transform - 避免影响定位元素（如 Dropdown Menu）的 transform 定位 */
+}
+
+/* 快速交互元素 - 保留 transform transition 用于 hover 效果（scale/rotate 等）*/
+button,
+a,
+[role='button'] {
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out,
+    color 100ms ease-out,
+    box-shadow 100ms ease-out,
+    transform 100ms ease-out;
+}
+
+/* 禁用某些元素的过渡 */
+[data-no-transition],
+[data-no-transition] * {
+  transition: none !important;
+}
+
+/**
+ * ════════════════════════════════════════════════════════════
+ * 隐藏滚动条但保留滚动功能
+ * ════════════════════════════════════════════════════════════
+ */
+
+/* 针对 Webkit 浏览器（Chrome, Safari, Edge） */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* 针对 Firefox */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+/* 针对 IE 和 Edge (旧版) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+}

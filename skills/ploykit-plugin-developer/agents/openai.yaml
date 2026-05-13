@@ -1,0 +1,4 @@
+interface:
+  display_name: 'PloyKit Plugin Developer'
+  short_description: 'Build PloyKit plugins with AI-safe workflows'
+  default_prompt: 'Use $ploykit-plugin-developer to build or modify a PloyKit plugin.'
