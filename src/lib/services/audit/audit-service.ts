@@ -374,7 +374,16 @@ export async function getAuditLogById(id: string) {
 /**
  * Get audit log statistics
  */
-export async function getAuditLogStats(filters: { startDate?: Date; endDate?: Date } = {}) {
+export async function getAuditLogStats(
+  filters: {
+    startDate?: Date;
+    endDate?: Date;
+    userId?: string;
+    action?: string;
+    resource?: string;
+    status?: 'success' | 'failure';
+  } = {}
+) {
   const conditions = [];
 
   if (filters.startDate) {
@@ -383,6 +392,22 @@ export async function getAuditLogStats(filters: { startDate?: Date; endDate?: Da
 
   if (filters.endDate) {
     conditions.push(lte(auditLogs.createdAt, filters.endDate));
+  }
+
+  if (filters.userId) {
+    conditions.push(eq(auditLogs.userId, filters.userId));
+  }
+
+  if (filters.action) {
+    conditions.push(eq(auditLogs.action, filters.action));
+  }
+
+  if (filters.resource) {
+    conditions.push(eq(auditLogs.resource, filters.resource));
+  }
+
+  if (filters.status) {
+    conditions.push(eq(auditLogs.status, filters.status));
   }
 
   // Build where clause

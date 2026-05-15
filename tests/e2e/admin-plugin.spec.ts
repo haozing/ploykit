@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { ensureSamplePluginEnabled, loginAsAdmin } from './fixtures/auth';
 import { collectPageIssues } from './fixtures/page-issues';
 
+const SAMPLE_PLUGIN_NOTES_API = '/api/plugins/sample-internal/notes/playwright-project';
+
 async function readSamplePluginState(page: Page) {
   return page.evaluate(async () => {
     const response = await fetch('/api/admin/plugins');
@@ -35,9 +37,9 @@ test('admin can reach plugin management and use the sample plugin runtime', asyn
   await expect(page.getByRole('heading', { name: 'Sample Internal' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Notes' })).toBeVisible();
 
-  const roundTrip = await page.evaluate(async () => {
+  const roundTrip = await page.evaluate(async (notesApi) => {
     const stamp = new Date().toISOString();
-    const create = await fetch('/api/plugins/sample-internal/notes', {
+    const create = await fetch(notesApi, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -47,7 +49,7 @@ test('admin can reach plugin management and use the sample plugin runtime', asyn
       }),
     });
     const created = await create.json();
-    const list = await fetch('/api/plugins/sample-internal/notes');
+    const list = await fetch(notesApi);
     const listed = await list.json();
 
     return {
@@ -58,7 +60,7 @@ test('admin can reach plugin management and use the sample plugin runtime', asyn
         ? listed.notes.some((note: { id?: string }) => note.id === created.note?.id)
         : false,
     };
-  });
+  }, SAMPLE_PLUGIN_NOTES_API);
 
   expect(roundTrip.createStatus).toBe(201);
   expect(roundTrip.listStatus).toBe(200);

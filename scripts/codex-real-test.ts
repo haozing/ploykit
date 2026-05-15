@@ -294,6 +294,7 @@ const RESULT_DIR = resolve(process.cwd(), 'test-results', 'codex-real');
 const SUMMARY_PATH = resolve(RESULT_DIR, 'summary.json');
 const TEST_FILE_ROOT = resolve(process.cwd(), '.data', 'test-blobs');
 const SAMPLE_PLUGIN_ID = 'sample-internal';
+const SAMPLE_PLUGIN_PROJECT_ID = 'codex-real-project';
 const CAPABILITY_DEMO_PLUGIN_ID = 'capability-demo';
 const ADMIN_EMAIL = 'admin@example.com';
 const ADMIN_PASSWORD = 'Admin@123456';
@@ -309,6 +310,46 @@ function resetResultDir(): void {
 
   rmSync(RESULT_DIR, { recursive: true, force: true });
   mkdirSync(RESULT_DIR, { recursive: true });
+}
+
+function samplePluginNotesUrl(appUrl: string): string {
+  return `${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes/${SAMPLE_PLUGIN_PROJECT_ID}`;
+}
+
+async function ensureSampleInternalServiceBinding(
+  appUrl: string,
+  cookie: string
+): Promise<Response> {
+  return fetch(`${appUrl}/api/admin/plugin-internal-services`, {
+    method: 'POST',
+    headers: jsonHeaders(appUrl, cookie),
+    body: JSON.stringify({
+      action: 'upsert',
+      pluginId: SAMPLE_PLUGIN_ID,
+      serviceName: 'core-api',
+      scopeType: 'global',
+      scopeId: null,
+      environment: process.env.NODE_ENV || 'production',
+      baseUrl: appUrl,
+      authType: 'none',
+      actorClaimsEnabled: false,
+      actorClaimsType: 'hmac',
+      actorClaimsAudience: null,
+      actorClaimsSecretRef: null,
+      actorClaimsTtlSeconds: 60,
+      timeoutMs: 30000,
+      retryAttempts: 0,
+      retryBackoffMs: 250,
+      maxResponseBytes: 10485760,
+      healthPath: '/api/plans',
+      healthMethod: 'GET',
+      healthExpectedStatus: 200,
+      status: 'active',
+      metadata: {
+        source: 'codex-real-test',
+      },
+    }),
+  });
 }
 
 function parseOptions(): RealTestOptions {
@@ -354,6 +395,7 @@ function createTestEnv(appUrl: string): NodeJS.ProcessEnv {
     FILE_STORAGE_LOCAL_ROOT: TEST_FILE_ROOT,
     STRIPE_SECRET_KEY: 'sk_test_codex_real_fake_key',
     STRIPE_WEBHOOK_SECRET,
+    PLOYKIT_API_RATE_LIMIT_MULTIPLIER: process.env.PLOYKIT_API_RATE_LIMIT_MULTIPLIER || '20',
   });
 }
 
@@ -960,6 +1002,12 @@ async function ensureSamplePluginEnabled(appUrl: string, cookie: string): Promis
   }
 
   if (!sample?.enabled) {
+    const bindingResponse = await ensureSampleInternalServiceBinding(appUrl, cookie);
+    if (!bindingResponse.ok) {
+      throw new Error(
+        `Sample internal service binding failed with status ${bindingResponse.status}: ${await bindingResponse.text()}`
+      );
+    }
     await postAdminAction(appUrl, cookie, 'enable');
     plugins = await fetchPluginList(appUrl, cookie);
     sample = plugins.find((plugin) => plugin.id === SAMPLE_PLUGIN_ID);
@@ -1005,7 +1053,7 @@ async function createPluginNote(
     body?: string;
   }
 ): Promise<{ response: Response; note: NoteRecord | undefined }> {
-  const response = await fetch(`${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes`, {
+  const response = await fetch(samplePluginNotesUrl(appUrl), {
     method: 'POST',
     headers: jsonHeaders(appUrl, cookie),
     body: JSON.stringify({
@@ -1028,7 +1076,7 @@ async function listPluginNotes(
   response: Response;
   notes: NoteRecord[];
 }> {
-  const response = await fetch(`${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes`, {
+  const response = await fetch(samplePluginNotesUrl(appUrl), {
     headers: authHeaders(cookie),
     cache: 'no-store',
   });
@@ -2559,7 +2607,7 @@ async function runPublicAndAuthSmoke(summary: TestSummary, appUrl: string): Prom
     status: filesGuestResponse.status,
   });
 
-  const pluginApiGuestResponse = await fetch(`${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes`, {
+  const pluginApiGuestResponse = await fetch(samplePluginNotesUrl(appUrl), {
     cache: 'no-store',
   });
   const pluginApiGuestBody = await readJsonSafely<{
@@ -2642,7 +2690,7 @@ async function runPluginRuntimeSmoke(
   const sample = await ensureSamplePluginEnabled(appUrl, admin.cookie);
   recordSmoke(summary, 'sample plugin installed and enabled', true, { plugin: sample });
 
-  const enabledGuestApiResponse = await fetch(`${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes`, {
+  const enabledGuestApiResponse = await fetch(samplePluginNotesUrl(appUrl), {
     cache: 'no-store',
   });
   recordSmoke(
@@ -2805,10 +2853,10 @@ async function runCapabilityDemoHostSurfaceSmoke(
   recordSmoke(
     summary,
     'trusted plugin theme tokens reach rendered shell',
-    aliasHtml.includes('--color-primary: #0ea5e9') &&
+    aliasHtml.includes('--color-primary: #0369a1') &&
       aliasHtml.includes('--header-border-bottom: 1px solid #bae6fd'),
     {
-      hasPrimaryToken: aliasHtml.includes('--color-primary: #0ea5e9'),
+      hasPrimaryToken: aliasHtml.includes('--color-primary: #0369a1'),
       hasHeaderBorderToken: aliasHtml.includes('--header-border-bottom: 1px solid #bae6fd'),
     }
   );
@@ -2928,7 +2976,11 @@ async function writeCapabilityDemoRuntimeReport(input: {
   webhookBody?: Record<string, unknown> | null;
   dbEvidence?: Record<string, unknown>;
 }): Promise<void> {
-  const reportPath = resolve(process.cwd(), 'docs', 'capability-demo宿主能力真实运行测试报告.md');
+  const reportPath = resolve(
+    process.cwd(),
+    'docs',
+    'capability-demo宿主能力真实运行测试报告.zh-CN.md'
+  );
   const checks = input.response.checks ?? [];
   const rows = checks
     .map((check) => {
@@ -4932,7 +4984,7 @@ async function runPluginLifecycleSmoke(
     plugin: disabled,
   });
 
-  const disabledApiResponse = await fetch(`${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes`, {
+  const disabledApiResponse = await fetch(samplePluginNotesUrl(appUrl), {
     headers: authHeaders(admin.cookie),
     cache: 'no-store',
   });
@@ -4984,6 +5036,16 @@ async function runPluginLifecycleSmoke(
     { plugin: installed }
   );
 
+  const bindingResponse = await ensureSampleInternalServiceBinding(appUrl, admin.cookie);
+  recordSmoke(
+    summary,
+    'plugin reinstall recreates required internal service binding',
+    bindingResponse.ok,
+    {
+      status: bindingResponse.status,
+    }
+  );
+
   await postAdminAction(appUrl, admin.cookie, 'enable');
   const reenabled = await getSamplePluginState(appUrl, admin.cookie);
   recordSmoke(
@@ -4993,7 +5055,7 @@ async function runPluginLifecycleSmoke(
     { plugin: reenabled }
   );
 
-  const reenabledApiResponse = await fetch(`${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes`, {
+  const reenabledApiResponse = await fetch(samplePluginNotesUrl(appUrl), {
     headers: authHeaders(admin.cookie),
     cache: 'no-store',
   });

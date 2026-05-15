@@ -10,6 +10,10 @@ import { withAdminGuard, withErrorHandling } from '@/lib/middleware';
  * Query params:
  * - startDate: ISO date string
  * - endDate: ISO date string
+ * - userId: string
+ * - action: string
+ * - resource: string
+ * - status: success | failure
  *
  * ACCESS CONTROL:
  * - Requires admin role
@@ -21,6 +25,10 @@ export const GET = withAdminGuard(
     const filters: {
       startDate?: Date;
       endDate?: Date;
+      userId?: string;
+      action?: string;
+      resource?: string;
+      status?: 'success' | 'failure';
     } = {};
 
     // Parse dates
@@ -33,6 +41,27 @@ export const GET = withAdminGuard(
 
     if (endDateStr) {
       filters.endDate = new Date(endDateStr);
+    }
+
+    const userId = searchParams.get('userId')?.trim();
+    const action = searchParams.get('action')?.trim();
+    const resource = searchParams.get('resource')?.trim();
+    const status = searchParams.get('status')?.trim();
+
+    if (userId) {
+      filters.userId = userId;
+    }
+
+    if (action) {
+      filters.action = action;
+    }
+
+    if (resource) {
+      filters.resource = resource;
+    }
+
+    if (status === 'success' || status === 'failure') {
+      filters.status = status;
     }
 
     // Get statistics

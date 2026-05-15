@@ -57,7 +57,7 @@ interface AdminActionSpecSummary {
 const SURFACE_DIR = path.join(process.cwd(), 'test-results', 'admin-surface');
 const RESULT_DIR = path.join(process.cwd(), 'test-results', 'admin-action-spec');
 const SUMMARY_PATH = path.join(RESULT_DIR, 'summary.json');
-const REPORT_PATH = path.join(process.cwd(), 'docs', '后台ActionSpec矩阵测试报告.md');
+const REPORT_PATH = path.join(process.cwd(), 'docs', '后台ActionSpec矩阵测试报告.zh-CN.md');
 
 function normalizeName(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ');

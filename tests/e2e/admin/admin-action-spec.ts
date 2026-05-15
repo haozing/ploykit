@@ -95,6 +95,7 @@ export const COMMON_ADMIN_ACTIONS: readonly AdminActionDefinition[] = [
     exact('link', 'Operations Center'),
     exact('link', 'Plugin Dev Console'),
     exact('link', 'Plugin Operations'),
+    exact('link', 'Internal Services'),
     exact('link', 'Plugins'),
     exact('link', 'Revenue'),
     exact('link', 'Subscription Plans'),
@@ -154,8 +155,11 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
         exact('button', 'Previous'),
       ]),
       filters(
+        exact('combobox', 'Action'),
         exact('combobox', 'All Actions'),
+        exact('combobox', 'Resource'),
         exact('combobox', 'All Resources'),
+        exact('combobox', 'Status'),
         exact('combobox', 'All Statuses'),
         exact('textbox', '')
       ),
@@ -245,8 +249,18 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
         exact('button', 'Retry Webhooks'),
       ]),
       action('operations.outbox-row', 'Inspect or retry dead-lettered work.', [
+        exact('button', 'Archive'),
         exact('button', 'Detail'),
+        exact('button', 'Ignore'),
+        exact('button', 'Replay'),
         exact('button', 'Retry'),
+      ]),
+      action('operations.outbox-selection', 'Select and bulk-handle dead-lettered work.', [
+        exact('button', 'Archive Selected'),
+        exact('button', 'Ignore Selected'),
+        exact('button', 'Replay Selected'),
+        exact('checkbox', 'Select all dead letters'),
+        pattern('checkbox', '^Select dead letter .+'),
       ]),
       tabs('Outbox', 'Webhooks'),
     ],
@@ -258,6 +272,9 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
   {
     pageId: 'admin.plugins',
     actions: [
+      action('plugins.lifecycle-entry', 'Open plugin lifecycle actions.', [
+        exact('button', 'Disable'),
+      ]),
       action('plugins.disable-dialog', 'Confirm or cancel plugin lifecycle changes.', [
         pattern('alertdialog', '^Disable Plugin'),
         exact('button', 'Cancel'),
@@ -288,6 +305,43 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
     apiRoutes: [
       api('plugin-operations.list', 'GET', '/api/admin/plugin-operations'),
       api('plugin-operations.connectors', 'GET', '/api/admin/plugin-operations/connectors'),
+    ],
+  },
+  {
+    pageId: 'admin.plugin-internal-services',
+    actions: [
+      action('plugin-internal-services.refresh', 'Refresh internal service requirements.', [
+        exact('button', 'Refresh'),
+      ]),
+      action('plugin-internal-services.requirements', 'Bind missing service requirements.', [
+        exact('button', 'Bind'),
+      ]),
+      action('plugin-internal-services.bindings', 'Operate existing internal service bindings.', [
+        exact('button', 'Disable'),
+        exact('button', 'Edit'),
+        exact('button', 'Test'),
+      ]),
+      action('plugin-internal-services.editor', 'Edit and save a service binding.', [
+        exact('button', 'Save Binding'),
+        exact('combobox', 'global'),
+        exact('combobox', 'none'),
+        exact('switch', ''),
+        exact('textbox', ''),
+      ]),
+      action('plugin-internal-services.logs', 'Apply call log retention settings.', [
+        exact('button', 'Apply Retention'),
+      ]),
+      tabs('Requirements', 'Bindings', 'Editor', 'Logs', 'Resources'),
+    ],
+    apiRoutes: [
+      api(
+        'plugin-internal-services.requirements',
+        'GET',
+        '/api/admin/plugin-internal-services/requirements'
+      ),
+      api('plugin-internal-services.bindings', 'GET', '/api/admin/plugin-internal-services'),
+      api('plugin-internal-services.logs', 'GET', '/api/admin/plugin-internal-services/logs'),
+      api('plugin-internal-services.resources', 'GET', '/api/admin/plugin-resource-bindings'),
     ],
   },
   {
@@ -365,8 +419,12 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
     actions: [
       action('settings.save', 'Save global system settings.', [exact('button', 'Save')]),
       filters(
+        exact('combobox', 'Default Locale'),
         exact('combobox', 'English'),
+        exact('combobox', 'Provider'),
         exact('combobox', 'Log'),
+        exact('combobox', 'Password Reset Delivery'),
+        exact('combobox', 'Digest Frequency'),
         exact('combobox', 'Weekly'),
         exact('option', 'Chinese'),
         exact('option', 'English'),

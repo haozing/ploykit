@@ -305,7 +305,7 @@ for (const entry of ADMIN_PAGES) {
     }
 
     for (const text of entry.smoke?.expectedText ?? []) {
-      await expect(page.getByText(text).first()).toBeVisible();
+      await expect(page.getByRole('main').getByText(text).first()).toBeVisible();
     }
 
     const interactives = await collectAdminInteractives(page);

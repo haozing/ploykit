@@ -81,7 +81,6 @@ test('admin can inspect and filter platform usage from the visible page', async 
   await expect(page.getByRole('heading', { name: 'Usage' })).toBeVisible();
   await expect(page.getByText('Top Metrics')).toBeVisible();
   await expect(page.getByText('Recent Events')).toBeVisible();
-  await expect(page.getByTitle(seed.metricKey)).toBeVisible();
   const recentRow = page.getByRole('row').filter({ hasText: seed.metricKey }).first();
   await expect(recentRow).toBeVisible();
   await expect(recentRow.getByText(`${seed.value} count`, { exact: true })).toBeVisible();

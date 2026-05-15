@@ -60,8 +60,13 @@ const ACCESSIBILITY_DIR = path.join(process.cwd(), 'test-results', 'accessibilit
 
 const PUBLIC_TARGETS: AccessibilityTarget[] = [
   { id: 'public.home', path: '/en', kind: 'public', expectedText: /PloyKit/ },
-  { id: 'public.about', path: '/en/about', kind: 'public', expectedText: /About/ },
-  { id: 'public.pricing', path: '/en/pricing', kind: 'public', expectedText: /Pricing/ },
+  { id: 'public.about', path: '/en/about', kind: 'public', expectedText: 'Who We Are' },
+  {
+    id: 'public.pricing',
+    path: '/en/pricing',
+    kind: 'public',
+    expectedText: 'Choose the plan that fits you',
+  },
   { id: 'public.json-tool', path: '/en/json', kind: 'public', expectedText: 'JSON Formatter' },
   {
     id: 'public.pdf-ocr-tool',
@@ -283,6 +288,24 @@ async function writeEvidence(evidence: AccessibilityEvidence): Promise<void> {
   );
 }
 
+async function expectVisibleMainText(page: Page, expectedText: string | RegExp): Promise<void> {
+  const matches = page.getByRole('main').first().getByText(expectedText);
+  const count = await matches.count();
+
+  for (let index = 0; index < count; index += 1) {
+    if (
+      await matches
+        .nth(index)
+        .isVisible()
+        .catch(() => false)
+    ) {
+      return;
+    }
+  }
+
+  await expect(matches.first()).toBeVisible();
+}
+
 for (const target of TARGETS) {
   test(`accessibility matrix: ${target.id}`, async ({ page }, testInfo) => {
     const issues = collectPageIssues(page);
@@ -297,7 +320,7 @@ for (const target of TARGETS) {
     await expect(page.getByRole('main').first()).toBeVisible();
 
     if (target.expectedText) {
-      await expect(page.getByText(target.expectedText).first()).toBeVisible();
+      await expectVisibleMainText(page, target.expectedText);
     }
 
     const screenshotPath = artifactPath(target, testInfo.project.name, 'png');

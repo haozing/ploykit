@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getRateLimitMultiplier } from './rate-limit-runtime-config';
 
 interface ApiRateLimitPolicy {
   id: string;
@@ -166,10 +167,19 @@ function getPolicy(request: NextRequest): ApiRateLimitPolicy | null {
   return null;
 }
 
-function buildHeaders(policy: ApiRateLimitPolicy, remaining: number, resetTime: number) {
+function getEffectiveMaxRequests(policy: ApiRateLimitPolicy): number {
+  return policy.maxRequests * getRateLimitMultiplier();
+}
+
+function buildHeaders(
+  maxRequests: number,
+  policy: ApiRateLimitPolicy,
+  remaining: number,
+  resetTime: number
+) {
   return {
     'X-RateLimit-Policy': policy.id,
-    'X-RateLimit-Limit': policy.maxRequests.toString(),
+    'X-RateLimit-Limit': maxRequests.toString(),
     'X-RateLimit-Remaining': Math.max(0, remaining).toString(),
     'X-RateLimit-Reset': new Date(resetTime).toISOString(),
   };
@@ -185,6 +195,7 @@ export function getApiRateLimitDecision(
     return { action: 'allow' };
   }
 
+  const maxRequests = getEffectiveMaxRequests(policy);
   const key = policy.key(request);
   const record = store.get(key);
 
@@ -195,17 +206,17 @@ export function getApiRateLimitDecision(
     return {
       action: 'allow',
       policyId: policy.id,
-      headers: buildHeaders(policy, policy.maxRequests - 1, resetTime),
+      headers: buildHeaders(maxRequests, policy, maxRequests - 1, resetTime),
     };
   }
 
-  if (record.count < policy.maxRequests) {
+  if (record.count < maxRequests) {
     record.count += 1;
 
     return {
       action: 'allow',
       policyId: policy.id,
-      headers: buildHeaders(policy, policy.maxRequests - record.count, record.resetTime),
+      headers: buildHeaders(maxRequests, policy, maxRequests - record.count, record.resetTime),
     };
   }
 
@@ -218,7 +229,7 @@ export function getApiRateLimitDecision(
     message: policy.message,
     retryAfter,
     headers: {
-      ...buildHeaders(policy, 0, record.resetTime),
+      ...buildHeaders(maxRequests, policy, 0, record.resetTime),
       'Retry-After': retryAfter.toString(),
     },
   };

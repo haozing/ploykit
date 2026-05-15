@@ -26,6 +26,7 @@ describe('API rate limit middleware', () => {
 
   afterEach(() => {
     clearApiRateLimitStore();
+    delete process.env.PLOYKIT_API_RATE_LIMIT_MULTIPLIER;
   });
 
   it('does not rate limit routes outside the critical API set', () => {
@@ -64,6 +65,18 @@ describe('API rate limit middleware', () => {
     expect(getDecision.action).toBe('allow');
     expect(postDecision.headers?.['X-RateLimit-Remaining']).toBe('119');
     expect(getDecision.headers?.['X-RateLimit-Remaining']).toBe('119');
+  });
+
+  it('can raise policy limits for high-volume local browser tests', () => {
+    process.env.PLOYKIT_API_RATE_LIMIT_MULTIPLIER = '2';
+
+    const now = new Date('2026-05-07T00:00:00Z').getTime();
+    const request = createRequest('/api/auth/get-session');
+    const decision = getApiRateLimitDecision(request, now);
+
+    expect(decision.action).toBe('allow');
+    expect(decision.headers?.['X-RateLimit-Limit']).toBe('240');
+    expect(decision.headers?.['X-RateLimit-Remaining']).toBe('239');
   });
 
   it('uses a high signed webhook limit and a stricter unsigned limit', () => {

@@ -73,7 +73,7 @@
   /* 错误 - 红色 */
   --color-destructive-50: oklch(96% 0.046 25);
   --color-destructive-100: oklch(93% 0.079 25);
-  --color-destructive: oklch(60% 0.24 25);
+  --color-destructive: oklch(58% 0.24 25);
   --color-destructive-foreground: oklch(98% 0 0);
 
   /* 信息 - 使用主色 */

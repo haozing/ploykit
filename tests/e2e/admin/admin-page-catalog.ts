@@ -100,6 +100,15 @@ export const ADMIN_PAGES: readonly AdminPageCatalogEntry[] = [
     title: 'Plugin Operations',
   },
   {
+    id: 'admin.plugin-internal-services',
+    sourcePath: 'src/app/[lang]/admin/plugin-internal-services/page.tsx',
+    routePattern: '/admin/plugin-internal-services',
+    path: '/en/admin/plugin-internal-services',
+    tier: 'P0',
+    title: 'Internal Services',
+    smoke: { expectedText: ['Internal Services'] },
+  },
+  {
     id: 'admin.plugins.runtime',
     sourcePath: 'src/app/[lang]/admin/plugins/[pluginId]/[[...slug]]/page.tsx',
     routePattern: '/admin/plugins/[pluginId]/[[...slug]]',

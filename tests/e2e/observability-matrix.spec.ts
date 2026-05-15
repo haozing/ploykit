@@ -327,7 +327,7 @@ test('admin observability matrix exposes production duty signals', async ({ page
     page,
     `/api/admin/audit-logs/stats?startDate=${encodeURIComponent(
       new Date(Date.now() - 5 * 60_000).toISOString()
-    )}`
+    )}&resource=${encodeURIComponent(seed.auditResource)}`
   );
   expect(auditStats.ok, JSON.stringify(auditStats.body)).toBe(true);
   expect(auditStats.body.total).toBeGreaterThanOrEqual(1);

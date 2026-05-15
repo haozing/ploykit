@@ -94,6 +94,8 @@ interface ScenarioResult {
   samples: RequestResult[];
 }
 
+const SAMPLE_PLUGIN_PROJECT_ID = 'capacity-project';
+
 interface CapacityMatrixSummary {
   status: Status;
   startedAt: string;
@@ -753,7 +755,7 @@ function createScenarios(
         if (index % 3 === 0) {
           return {
             label: 'GET sample-internal notes',
-            url: `${appUrl}/api/plugins/${PLUGIN_ID}/notes`,
+            url: `${appUrl}/api/plugins/${PLUGIN_ID}/notes/${SAMPLE_PLUGIN_PROJECT_ID}`,
             init: { headers: authHeaders(cookie) },
             validate: (result) => {
               const payload = parseJson(result.body);
@@ -767,7 +769,7 @@ function createScenarios(
 
         return {
           label: 'POST sample-internal note',
-          url: `${appUrl}/api/plugins/${PLUGIN_ID}/notes`,
+          url: `${appUrl}/api/plugins/${PLUGIN_ID}/notes/${SAMPLE_PLUGIN_PROJECT_ID}`,
           init: {
             method: 'POST',
             headers: jsonHeaders(appUrl, cookie),

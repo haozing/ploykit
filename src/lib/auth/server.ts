@@ -15,6 +15,7 @@ import { db } from '@/lib/db/client.server';
 import { logger } from '@/lib/_core/logger';
 import { env } from '@/lib/_core/env';
 import { user, session, account } from '@/lib/db/schema';
+import { getRateLimitMultiplier } from '@/lib/security/rate-limit-runtime-config';
 import { eq } from 'drizzle-orm';
 import { ensureUserInitialized, type UserInitializationSource } from './user-initialization.server';
 
@@ -193,6 +194,15 @@ export const auth = betterAuth({
       clientId: env.GITHUB_CLIENT_ID || '',
       clientSecret: env.GITHUB_CLIENT_SECRET || '',
       enabled: !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
+    },
+  },
+
+  rateLimit: {
+    customRules: {
+      '/get-session': {
+        window: 10,
+        max: 100 * getRateLimitMultiplier(),
+      },
     },
   },
 

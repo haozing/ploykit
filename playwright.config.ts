@@ -27,6 +27,7 @@ function webServerEnv(): Record<string, string> {
     FILE_STORAGE_ENABLED: 'true',
     FILE_STORAGE_DRIVER: 'local',
     FILE_STORAGE_LOCAL_ROOT: testBlobRoot,
+    PLOYKIT_API_RATE_LIMIT_MULTIPLIER: process.env.PLOYKIT_API_RATE_LIMIT_MULTIPLIER || '20',
   };
 }
 
