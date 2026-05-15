@@ -26,8 +26,10 @@ import {
   createPluginNotificationsCapability,
   createPluginRagCapability,
   createPluginRateLimitCapability,
+  createPluginResourceBindingsCapability,
   createPluginRunsCapability,
   createPluginSecretsCapability,
+  createPluginServicesCapability,
   createPluginUsageCapability,
   createPluginWebhooksCapability,
   createPluginWorkspaceCapability,
@@ -47,8 +49,10 @@ import {
   type CreatePluginNotificationsOptions,
   type CreatePluginRagOptions,
   type CreatePluginRateLimitOptions,
+  type CreatePluginResourceBindingsOptions,
   type CreatePluginRunsOptions,
   type CreatePluginSecretsOptions,
+  type CreatePluginServicesOptions,
   type CreatePluginUsageOptions,
   type CreatePluginWebhooksOptions,
   type CreatePluginWorkspaceOptions,
@@ -64,6 +68,7 @@ export interface CreatePluginContextOptions {
   user: PluginUser | null;
   apiKey?: PluginRuntimeApiKeyContext;
   requestId?: string;
+  routeParams?: Record<string, string>;
   system?: boolean;
   anonymousPolicyState?: AnonymousRuntimePolicyState;
   capabilities?: PluginCapabilityFactoryOptions;
@@ -88,8 +93,10 @@ export interface PluginCapabilityFactoryOptions {
   connectors?: CreatePluginConnectorsOptions;
   apiKeys?: CreatePluginApiKeysOptions;
   rateLimit?: CreatePluginRateLimitOptions;
+  resourceBindings?: CreatePluginResourceBindingsOptions;
   config?: CreatePluginConfigOptions;
   secrets?: CreatePluginSecretsOptions;
+  services?: CreatePluginServicesOptions;
   webhooks?: CreatePluginWebhooksOptions;
 }
 
@@ -107,11 +114,14 @@ function createResponseFactory(): PluginResponseFactory {
   };
 }
 
-function createPluginRequest(request: Request): PluginRequest {
+function createPluginRequest(request: Request, params: Record<string, string> = {}): PluginRequest {
+  const url = new URL(request.url);
   return {
     method: request.method,
     url: request.url,
     headers: request.headers,
+    params,
+    query: url.searchParams,
     async json<TSchema extends z.ZodTypeAny>(schema: TSchema): Promise<z.infer<TSchema>> {
       return schema.parse(await request.json()) as z.infer<TSchema>;
     },
@@ -174,7 +184,7 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
           },
         }
       : undefined,
-    request: createPluginRequest(options.request),
+    request: createPluginRequest(options.request, options.routeParams),
     response,
     storage,
     workspace: createPluginWorkspaceCapability(capabilityScope, options.capabilities?.workspace),
@@ -215,6 +225,10 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
     },
     secrets: createPluginSecretsCapability(capabilityScope, options.capabilities?.secrets),
     config: createPluginConfigCapability(capabilityScope, options.capabilities?.config),
+    resourceBindings: createPluginResourceBindingsCapability(
+      capabilityScope,
+      options.capabilities?.resourceBindings
+    ),
     audit: createPluginAuditCapability(capabilityScope, options.capabilities?.audit),
     usage: createPluginUsageCapability(capabilityScope, options.capabilities?.usage),
     credits: createPluginCreditsCapability(capabilityScope, options.capabilities?.credits),
@@ -243,6 +257,7 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
     rag: createPluginRagCapability(capabilityScope, options.capabilities?.rag),
     webhooks: createPluginWebhooksCapability(capabilityScope, options.capabilities?.webhooks),
     http: createPluginHttpCapability(capabilityScope, options.capabilities?.http),
+    services: createPluginServicesCapability(capabilityScope, options.capabilities?.services),
     json: response.json,
   };
 }

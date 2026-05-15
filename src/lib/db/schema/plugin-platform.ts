@@ -272,6 +272,71 @@ export const pluginConnectorCallLogs = pgTable(
   })
 );
 
+export const pluginResourceBindings = pgTable(
+  'plugin_resource_bindings',
+  {
+    id: text('id').primaryKey(),
+    pluginId: text('plugin_id').notNull(),
+    scopeType: text('scope_type').notNull(),
+    scopeId: text('scope_id').notNull(),
+    resourceType: text('resource_type').notNull(),
+    resourceId: text('resource_id').notNull(),
+    displayName: text('display_name'),
+    status: text('status').notNull().default('active'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    createdByUserId: text('created_by_user_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+  },
+  (table) => ({
+    uniqueResourceIdx: uniqueIndex('plugin_resource_bindings_unique_resource').on(
+      table.pluginId,
+      table.scopeType,
+      table.scopeId,
+      table.resourceType,
+      table.resourceId
+    ),
+    scopeIdx: index('plugin_resource_bindings_scope_idx').on(
+      table.pluginId,
+      table.scopeType,
+      table.scopeId,
+      table.resourceType,
+      table.status
+    ),
+    statusIdx: index('plugin_resource_bindings_status_idx').on(table.pluginId, table.status),
+  })
+);
+
+export const pluginServiceCallLogs = pgTable(
+  'plugin_service_call_logs',
+  {
+    id: text('id').primaryKey(),
+    pluginId: text('plugin_id').notNull(),
+    serviceName: text('service_name').notNull(),
+    userId: text('user_id'),
+    workspaceId: text('workspace_id'),
+    method: text('method').notNull(),
+    path: text('path').notNull(),
+    pathTemplate: text('path_template'),
+    status: integer('status'),
+    ok: text('ok').notNull().default('false'),
+    durationMs: integer('duration_ms'),
+    requestId: text('request_id'),
+    errorCode: text('error_code'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pluginServiceIdx: index('plugin_service_call_logs_plugin_service_idx').on(
+      table.pluginId,
+      table.serviceName,
+      table.createdAt
+    ),
+    requestIdx: index('plugin_service_call_logs_request_idx').on(table.requestId),
+  })
+);
+
 export const pluginApiKeys = pgTable(
   'plugin_api_keys',
   {
@@ -342,6 +407,10 @@ export type PluginConnector = typeof pluginConnectors.$inferSelect;
 export type NewPluginConnector = typeof pluginConnectors.$inferInsert;
 export type PluginConnectorCallLog = typeof pluginConnectorCallLogs.$inferSelect;
 export type NewPluginConnectorCallLog = typeof pluginConnectorCallLogs.$inferInsert;
+export type PluginResourceBinding = typeof pluginResourceBindings.$inferSelect;
+export type NewPluginResourceBinding = typeof pluginResourceBindings.$inferInsert;
+export type PluginServiceCallLog = typeof pluginServiceCallLogs.$inferSelect;
+export type NewPluginServiceCallLog = typeof pluginServiceCallLogs.$inferInsert;
 export type PluginApiKey = typeof pluginApiKeys.$inferSelect;
 export type NewPluginApiKey = typeof pluginApiKeys.$inferInsert;
 export type PluginRateLimitBucket = typeof pluginRateLimitBuckets.$inferSelect;

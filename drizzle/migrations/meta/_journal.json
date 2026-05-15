@@ -169,6 +169,13 @@
       "when": 1778561400000,
       "tag": "0023_workspace_scope_consistency",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778820840000,
+      "tag": "0024_plugin_host_service_capabilities",
+      "breakpoints": true
     }
   ]
 }

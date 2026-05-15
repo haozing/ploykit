@@ -20,6 +20,7 @@ interface Props {
     lang: string;
     slug?: string[];
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function publicPath(slug: readonly string[]): string {
@@ -44,8 +45,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     : {};
 }
 
-export default async function PluginPublicAliasPage({ params }: Props) {
+export default async function PluginPublicAliasPage({ params, searchParams }: Props) {
   const { lang, slug = [] } = await params;
+  const query = await searchParams;
   const match = await resolvePluginPublicRouteAlias(publicPath(slug));
 
   if (!match) {
@@ -54,7 +56,7 @@ export default async function PluginPublicAliasPage({ params }: Props) {
 
   const requestHeaders =
     match.route.auth === 'public' && !match.route.commercial ? new Headers() : await headers();
-  const runtimeResult = await resolveAliasRuntimePageOrNotFound(match, requestHeaders, lang);
+  const runtimeResult = await resolveAliasRuntimePageOrNotFound(match, requestHeaders, lang, query);
   const alias = match.route.publicAliases.find((candidate) => candidate.path === match.aliasPath);
   const structuredDataScripts = alias
     ? createPluginPublicAliasStructuredDataScripts(alias, { locale: lang })
@@ -78,12 +80,14 @@ export default async function PluginPublicAliasPage({ params }: Props) {
 async function resolveAliasRuntimePageOrNotFound(
   match: NonNullable<Awaited<ReturnType<typeof resolvePluginPublicRouteAlias>>>,
   requestHeaders: Headers,
-  lang: string
+  lang: string,
+  query?: Record<string, string | string[] | undefined>
 ) {
   try {
     return await resolvePluginPageRuntime(match.pluginId, match.slug, requestHeaders, {
       entry: match.entry ?? undefined,
-      matchedRoute: match.route,
+      routeMatch: { route: match.route, params: match.params },
+      query,
       requestPathOverride: match.requestPath,
     });
   } catch (error) {

@@ -8,12 +8,19 @@ const createNoteSchema = z.object({
 
 export default defineApi({
   async get(ctx) {
+    const projectId = ctx.request.params.projectId;
+    const preview = ctx.request.query.get('preview') === 'true';
+    const includeProject = ctx.request.query.get('includeProject') === 'true';
     const notes = await ctx.storage.collection('sample_internal_notes').findMany({
       orderBy: { title: 'asc' },
       limit: 25,
     });
+    const project =
+      includeProject && projectId
+        ? await ctx.services.json('core-api', `/v1/projects/${projectId}`)
+        : null;
 
-    return ctx.json({ notes });
+    return ctx.json({ notes, projectId, preview, project });
   },
 
   async post(ctx) {

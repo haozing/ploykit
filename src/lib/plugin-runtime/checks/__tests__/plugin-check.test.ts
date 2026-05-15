@@ -24,7 +24,11 @@ function writePluginFile(pluginRoot: string, relativePath: string, content: stri
 function createContract(
   pluginRoot: string,
   permissions: readonly PermissionValue[],
-  options: { egress?: readonly string[] } = {}
+  options: {
+    egress?: readonly string[];
+    services?: Parameters<typeof definePlugin>[0]['services'];
+    resourceBindings?: Parameters<typeof definePlugin>[0]['resourceBindings'];
+  } = {}
 ) {
   return definePlugin({
     id: path.basename(pluginRoot),
@@ -32,6 +36,8 @@ function createContract(
     version: '1.0.0',
     permissions,
     egress: options.egress,
+    services: options.services,
+    resourceBindings: options.resourceBindings,
   });
 }
 
@@ -596,6 +602,8 @@ export async function ping(ctx) {
             Permission.EventsSubscribe,
             Permission.JobsRegister,
             Permission.WebhookReceive,
+            Permission.ResourceBindingsRead,
+            Permission.ResourceBindingsWrite,
           ],
           routes: {
             pages: [
@@ -631,6 +639,13 @@ export async function ping(ctx) {
               handler: './webhooks/ingest',
             },
           },
+          resourceBindings: [
+            {
+              type: 'project',
+              scope: 'workspace',
+              cardinality: 'one',
+            },
+          ],
         }),
     });
 
@@ -1144,6 +1159,71 @@ export async function sync(ctx) {
         }),
       ])
     );
+  });
+
+  it('checks internal service declarations against static ctx.services calls', async () => {
+    const pluginRoot = createPluginRoot('service-check');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'api/project.ts',
+      `
+export async function project(ctx) {
+  return ctx.services.json('core-api', '/v1/projects/project-1', { method: 'POST' });
+}
+`
+    );
+
+    const failed = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        createContract(root, [Permission.ServicesInvoke], {
+          services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] }],
+        }),
+    });
+
+    expect(failed.success).toBe(false);
+    expect(failed.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PLUGIN_SERVICE_METHOD_FORBIDDEN',
+          severity: 'error',
+        }),
+      ])
+    );
+
+    const passed = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        createContract(root, [Permission.ServicesInvoke], {
+          services: [{ name: 'core-api', methods: ['POST'], paths: ['/v1/projects/:projectId'] }],
+        }),
+    });
+
+    expect(passed.success).toBe(true);
+  });
+
+  it('checks templated ctx.services paths against service declarations', async () => {
+    const pluginRoot = createPluginRoot('service-template-check');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'api/project.ts',
+      `
+export async function project(ctx) {
+  const projectId = ctx.request.params.projectId;
+  return ctx.services.json('core-api', \`/v1/projects/\${projectId}\`);
+}
+`
+    );
+
+    const report = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        createContract(root, [Permission.ServicesInvoke], {
+          services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] }],
+        }),
+    });
+
+    expect(report.success).toBe(true);
+    expect(report.diagnostics).toEqual([]);
   });
 
   it('infers static origins from URL objects with static absolute URLs', async () => {

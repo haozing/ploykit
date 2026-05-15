@@ -77,6 +77,8 @@ export interface PluginRequest {
   method: string;
   url: string;
   headers: Headers;
+  params: Record<string, string>;
+  query: URLSearchParams;
   json<TSchema extends z.ZodTypeAny>(schema: TSchema): Promise<z.infer<TSchema>>;
   text(): Promise<string>;
   formData(): Promise<FormData>;
@@ -944,6 +946,72 @@ export interface PluginHttp {
   fetch(url: string | URL, init?: RequestInit): Promise<Response>;
 }
 
+export type PluginResourceBindingStatus = 'active' | 'archived' | 'disabled';
+
+export interface PluginResourceBindingRecord {
+  id: string;
+  scope: PluginResourceScope;
+  resourceType: string;
+  resourceId: string;
+  displayName?: string;
+  status: PluginResourceBindingStatus;
+  metadata: Record<string, unknown>;
+  createdByUserId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  archivedAt?: Date;
+}
+
+export interface PluginResourceBindingLookupInput {
+  scope: PluginResourceScope;
+  resourceType: string;
+  resourceId?: string;
+  status?: PluginResourceBindingStatus;
+}
+
+export interface PluginResourceBindingListInput {
+  scope: PluginResourceScope;
+  resourceType?: string;
+  status?: PluginResourceBindingStatus;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PluginResourceBindingUpsertInput {
+  scope: PluginResourceScope;
+  resourceType: string;
+  resourceId: string;
+  displayName?: string;
+  metadata?: Record<string, unknown>;
+  status?: Extract<PluginResourceBindingStatus, 'active' | 'disabled'>;
+}
+
+export interface PluginResourceBindings {
+  get(input: PluginResourceBindingLookupInput): Promise<PluginResourceBindingRecord | null>;
+  list(input: PluginResourceBindingListInput): Promise<PluginResourceBindingRecord[]>;
+  upsert(input: PluginResourceBindingUpsertInput): Promise<PluginResourceBindingRecord>;
+  archive(id: string): Promise<PluginResourceBindingRecord>;
+}
+
+export type PluginServiceQuery =
+  | URLSearchParams
+  | Record<string, string | number | boolean | null | undefined>;
+
+export interface PluginServiceRequestInit {
+  method?: string;
+  headers?: HeadersInit;
+  query?: PluginServiceQuery;
+  body?: BodyInit | Record<string, unknown> | unknown[];
+  json?: unknown;
+  scope?: PluginResourceScope;
+  signal?: AbortSignal;
+}
+
+export interface PluginServices {
+  fetch(service: string, path: string, init?: PluginServiceRequestInit): Promise<Response>;
+  json<T = unknown>(service: string, path: string, init?: PluginServiceRequestInit): Promise<T>;
+}
+
 export interface PluginAuthContext {
   apiKey?: {
     id: string;
@@ -973,6 +1041,7 @@ export interface PluginContext {
   ai: PluginAi;
   secrets: PluginSecrets;
   config: PluginConfig;
+  resourceBindings: PluginResourceBindings;
   audit: PluginAudit;
   usage: PluginUsage;
   credits: PluginCredits;
@@ -985,5 +1054,6 @@ export interface PluginContext {
   notifications: PluginNotifications;
   webhooks: PluginWebhooks;
   http: PluginHttp;
+  services: PluginServices;
   json(data: unknown, init?: ResponseInit): Response;
 }

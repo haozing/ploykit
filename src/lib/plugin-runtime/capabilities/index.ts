@@ -107,12 +107,31 @@ export {
   type PluginRateLimitScope,
 } from './rate-limit-capability.server';
 export {
+  createPluginResourceBindingsCapability,
+  DbPluginResourceBindingsRepository,
+  type CreatePluginResourceBindingsOptions,
+  type PluginResourceBindingsRepository,
+  type PluginResourceBindingsScope,
+} from './resource-bindings-capability.server';
+export {
   createPluginRunsCapability,
   DbPluginRunsRepository,
   type CreatePluginRunsOptions,
   type PluginRunsRepository,
   type PluginRunsScope,
 } from './runs-capability.server';
+export {
+  createPluginServicesCapability,
+  getDefaultPluginInternalServiceRegistry,
+  setDefaultPluginInternalServiceRegistry,
+  type CreatePluginServicesOptions,
+  type PluginInternalServiceActorClaimsConfig,
+  type PluginInternalServiceAuth,
+  type PluginInternalServiceDefinition,
+  type PluginInternalServiceRegistry,
+  type PluginServiceCallLogRepository,
+  type PluginServicesHttpHost,
+} from './services-capability.server';
 export {
   createPluginHttpCapability,
   type CreatePluginHttpOptions,
@@ -146,6 +165,7 @@ export {
   assertJsonSerializable,
   assertName,
   assertResourceScopeAccess,
+  assertResourceScopeWorkspaceRoles,
   denormalizeResourceScope,
   assertPluginNamespaced,
   currentApiKeyId,

@@ -21,6 +21,7 @@ interface Props {
     lang: string;
     slug?: string[];
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function localToolPath(slug: readonly string[]): string {
@@ -44,8 +45,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     : {};
 }
 
-export default async function PluginToolPage({ params }: Props) {
+export default async function PluginToolPage({ params, searchParams }: Props) {
   const { lang, slug = [] } = await params;
+  const query = await searchParams;
   const match = await resolvePluginToolRoute(`/${localToolPath(slug)}`);
 
   if (!match) {
@@ -60,7 +62,8 @@ export default async function PluginToolPage({ params }: Props) {
     requestHeaders,
     lang,
     slug,
-    match.entry
+    match.entry,
+    query
   );
   const structuredDataScripts = runtimeResult.route.tool
     ? createPluginToolStructuredDataScripts(runtimeResult.route.tool, { locale: lang })
@@ -91,12 +94,14 @@ async function resolveToolRuntimePageOrNotFound(
   requestHeaders: Headers,
   lang: string,
   publicSlug: readonly string[],
-  entry: NonNullable<Awaited<ReturnType<typeof resolvePluginToolRoute>>>['entry']
+  entry: NonNullable<Awaited<ReturnType<typeof resolvePluginToolRoute>>>['entry'],
+  query?: Record<string, string | string[] | undefined>
 ) {
   try {
     return await resolvePluginPageRuntime(pluginId, slug, requestHeaders, {
       entry: entry ?? undefined,
       publicPathPrefix: 'tools',
+      query,
     });
   } catch (error) {
     handleToolRuntimePageResolutionError(error, lang, pluginId, publicSlug);

@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { PluginError } from '@ploykit/plugin-sdk';
-import { matchRuntimePath, normalizeRuntimePath, type PluginRuntimeContract } from '../contract';
+import {
+  matchRuntimePathWithParams,
+  normalizeRuntimePath,
+  type PluginRuntimeContract,
+} from '../contract';
 import {
   getPluginRuntimeMapEntry,
   listPluginRuntimeIds,
@@ -16,6 +20,7 @@ export interface PluginPublicRouteAliasMatch {
   route: RuntimePageRoute;
   aliasPath: string;
   requestPath: string;
+  params: Record<string, string>;
   slug: string[];
   entry: PluginRuntimeMapEntry | null;
 }
@@ -68,9 +73,13 @@ export async function resolvePluginPublicRouteAlias(
         continue;
       }
 
-      const alias = route.publicAliases.find((candidate) =>
-        matchRuntimePath(candidate.path, requestPath)
-      );
+      const aliasMatch = route.publicAliases
+        .map((candidate) => ({
+          alias: candidate,
+          match: matchRuntimePathWithParams(candidate.path, requestPath),
+        }))
+        .find((candidate) => candidate.match);
+      const alias = aliasMatch?.alias;
       if (!alias) {
         continue;
       }
@@ -85,6 +94,7 @@ export async function resolvePluginPublicRouteAlias(
         route,
         aliasPath: alias.path,
         requestPath,
+        params: aliasMatch?.match?.params ?? {},
         slug: pathToSlug(route.path),
         entry,
       };

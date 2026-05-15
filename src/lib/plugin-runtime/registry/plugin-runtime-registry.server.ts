@@ -2,8 +2,8 @@ import { PluginError } from '@ploykit/plugin-sdk';
 import { CACHE_KEYS, pluginContractCache } from '@/lib/cache';
 import {
   assertValidPluginRuntimeContract,
-  findRuntimeApiRoute,
-  findRuntimePageRoute,
+  findRuntimeApiRouteMatch,
+  findRuntimePageRouteMatch,
   normalizePluginRuntimeContract,
   type PluginRuntimeContract,
   type RuntimeApiRoute,
@@ -111,12 +111,16 @@ export class PluginRuntimeRegistry {
     area?: RuntimePageRoute['area']
   ): RuntimePageRoute | null {
     const contract = this.get(pluginId);
-    return contract ? findRuntimePageRoute(contract.routes.pages, path, area) : null;
+    return contract
+      ? (findRuntimePageRouteMatch(contract.routes.pages, path, area)?.route ?? null)
+      : null;
   }
 
   matchApi(pluginId: string, path: string, method: string): RuntimeApiRoute | null {
     const contract = this.get(pluginId);
-    return contract ? findRuntimeApiRoute(contract.routes.apis, path, method) : null;
+    return contract
+      ? (findRuntimeApiRouteMatch(contract.routes.apis, path, method)?.route ?? null)
+      : null;
   }
 }
 

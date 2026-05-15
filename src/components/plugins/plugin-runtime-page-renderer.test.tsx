@@ -29,6 +29,8 @@ describe('PluginRuntimePageRenderer', () => {
       pluginId: 'runtime-props',
       localPath: '/reports/weekly',
       requestPath: '/plugins/runtime-props/reports/weekly',
+      params: { period: 'weekly' },
+      query: { tab: 'summary' },
       assets: {},
       route: {
         path: '/reports/:period',
@@ -63,6 +65,8 @@ function createRuntimeResult(
       webhooks: {},
       hooks: {},
       meters: [],
+      services: [],
+      resourceBindings: [],
       egress: [],
       definition: {
         id: 'runtime-props',
@@ -91,6 +95,8 @@ function createRuntimeResult(
     },
     localPath: '/reports/weekly',
     requestPath: '/plugins/runtime-props/reports/weekly',
+    params: { period: 'weekly' },
+    query: { tab: 'summary' },
     module: {
       componentPath: './pages/Report',
       load: async () => ({ default: PluginPage }),

@@ -21,6 +21,9 @@ export const Permission = {
   WorkspaceRead: 'workspace.read',
   WorkspaceWrite: 'workspace.write',
 
+  ResourceBindingsRead: 'resourceBindings.read',
+  ResourceBindingsWrite: 'resourceBindings.write',
+
   ArtifactsRead: 'artifacts.read',
   ArtifactsWrite: 'artifacts.write',
 
@@ -57,6 +60,7 @@ export const Permission = {
   NotificationsSend: 'notifications.send',
 
   ExternalHttp: 'http.external',
+  ServicesInvoke: 'services.invoke',
 
   UnsafeSqlRaw: 'unsafe.sql.raw',
   UnsafeInternalResource: 'unsafe.internal_resource',

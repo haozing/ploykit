@@ -580,7 +580,7 @@ describe('plugin runtime', () => {
 
     const result = await resolvePluginPageRuntime(match!.pluginId, match!.slug, new Headers(), {
       entry,
-      matchedRoute: match!.route,
+      routeMatch: { route: match!.route, params: match!.params },
       requestPathOverride: match!.requestPath,
     });
 

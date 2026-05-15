@@ -92,6 +92,8 @@ interface PluginInspectPluginReport {
   };
   webhooks: number;
   egress: readonly string[];
+  services: number;
+  resourceBindings: number;
   files: {
     scanned: number;
     source: string[];
@@ -130,6 +132,7 @@ function printUsage(): void {
   ploykit plugin inspect [path] [--out .ploykit-build]
   ploykit plugin doctor [path] [--out .ploykit-build]
   ploykit plugin dev [path] [--watch]
+  ploykit plugin service-client --service <name> --openapi <file.json> --out <generated.ts>
 `);
 }
 
@@ -778,6 +781,8 @@ async function inspectPluginRoot(
     },
     webhooks: plugin.webhooks ? Object.keys(plugin.webhooks).length : 0,
     egress: plugin.egress ?? [],
+    services: plugin.services?.length ?? 0,
+    resourceBindings: plugin.resourceBindings?.length ?? 0,
     files: {
       scanned: sourceFiles.length,
       source: sourceFiles,
@@ -831,6 +836,148 @@ async function runInspect(args: ParsedArgs): Promise<void> {
     )
   );
   process.exitCode = check.success ? 0 : 1;
+}
+
+interface OpenApiOperation {
+  operationId?: string;
+  responses?: Record<string, { content?: Record<string, { schema?: unknown }> }>;
+}
+
+interface OpenApiDocument {
+  paths?: Record<string, Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete', OpenApiOperation>>>;
+  components?: {
+    schemas?: Record<string, unknown>;
+  };
+}
+
+function toIdentifier(value: string): string {
+  const words = value
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const identifier = words
+    .map((word, index) => {
+      const stripped = word.replace(/^[0-9]+/, '');
+      if (!stripped) return '';
+      return index === 0
+        ? `${stripped[0]?.toLowerCase() ?? ''}${stripped.slice(1)}`
+        : `${stripped[0]?.toUpperCase() ?? ''}${stripped.slice(1)}`;
+    })
+    .join('');
+  return identifier || 'operation';
+}
+
+function toTypeName(value: string): string {
+  const identifier = toIdentifier(value);
+  return `${identifier[0]?.toUpperCase() ?? 'T'}${identifier.slice(1)}`;
+}
+
+function schemaToType(schema: unknown): string {
+  if (!schema || typeof schema !== 'object') return 'unknown';
+  const record = schema as Record<string, unknown>;
+  if (typeof record.$ref === 'string') {
+    return toTypeName(record.$ref.split('/').at(-1) ?? 'Schema');
+  }
+  if (record.type === 'array') return `${schemaToType(record.items)}[]`;
+  if (record.type === 'integer' || record.type === 'number') return 'number';
+  if (record.type === 'boolean') return 'boolean';
+  if (record.type === 'string') return 'string';
+  if (record.type === 'object') {
+    const properties = record.properties as Record<string, unknown> | undefined;
+    if (!properties) return 'Record<string, unknown>';
+    const required = new Set((record.required as string[] | undefined) ?? []);
+    return `{\n${Object.entries(properties)
+      .map(([key, value]) => `  ${JSON.stringify(key)}${required.has(key) ? '' : '?'}: ${schemaToType(value)};`)
+      .join('\n')}\n}`;
+  }
+  return 'unknown';
+}
+
+function operationResponseType(operation: OpenApiOperation): string {
+  const successResponse = Object.entries(operation.responses ?? {}).find(([status]) =>
+    /^2\d\d$/.test(status)
+  )?.[1];
+  const schema =
+    successResponse?.content?.['application/json']?.schema ??
+    successResponse?.content?.['application/*+json']?.schema;
+  return schemaToType(schema);
+}
+
+function pathExpression(pathTemplate: string): { args: string[]; expression: string } {
+  const args: string[] = [];
+  const expression = pathTemplate.replace(
+    /\{([^}]+)\}|:([A-Za-z0-9_]+)/g,
+    (_match, braced, colon) => {
+      const name = String(braced ?? colon);
+      args.push(name);
+      return `\${encodeURIComponent(String(${name}))}`;
+    }
+  );
+  const uniqueArgs = [...new Set(args)];
+  return uniqueArgs.length
+    ? { args: uniqueArgs, expression: `\`${expression}\`` }
+    : { args: [], expression: JSON.stringify(pathTemplate) };
+}
+
+function readOpenApiDocument(filePath: string): OpenApiDocument {
+  if (!filePath.endsWith('.json')) {
+    throw new Error('The built-in service-client generator currently supports JSON OpenAPI files.');
+  }
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as OpenApiDocument;
+}
+
+function generateServiceClient(service: string, document: OpenApiDocument): string {
+  const types = Object.entries(document.components?.schemas ?? {}).map(
+    ([name, schema]) => `export type ${toTypeName(name)} = ${schemaToType(schema)};`
+  );
+  const operations: string[] = [];
+
+  for (const [template, methods] of Object.entries(document.paths ?? {})) {
+    for (const [method, operation] of Object.entries(methods)) {
+      if (!operation) continue;
+      const name = toIdentifier(operation.operationId ?? `${method} ${template}`);
+      const { args, expression } = pathExpression(template);
+      const signature = args.map((arg) => `${arg}: string`).join(', ');
+      operations.push(`    ${name}(${signature}) {
+      return ctx.services.json<${operationResponseType(operation)}>(${JSON.stringify(service)}, ${expression}, {
+        method: ${JSON.stringify(method.toUpperCase())},
+      });
+    }`);
+    }
+  }
+
+  return `import type { PluginContext } from '@ploykit/plugin-sdk';
+
+${types.join('\n\n')}
+
+export function create${toTypeName(service)}Client(ctx: PluginContext) {
+  return {
+${operations.join(',\n\n')}
+  };
+}
+`;
+}
+
+async function runServiceClient(args: ParsedArgs): Promise<void> {
+  const service = getFlag(args, 'service');
+  const openapi = getFlag(args, 'openapi');
+  const out = getFlag(args, 'out');
+  if (!service || !openapi || !out) {
+    throw new Error('Missing required flags: --service, --openapi, and --out.');
+  }
+  const document = readOpenApiDocument(path.resolve(PROJECT_ROOT, openapi));
+  const output = generateServiceClient(service, document);
+  const outputPath = path.resolve(PROJECT_ROOT, out);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, output, 'utf-8');
+  console.log(
+    JSON.stringify(
+      { success: true, service, out: toPosix(path.relative(PROJECT_ROOT, outputPath)) },
+      null,
+      2
+    )
+  );
 }
 
 async function runDoctor(args: ParsedArgs): Promise<void> {
@@ -956,6 +1103,9 @@ async function main(): Promise<void> {
       return;
     case 'dev':
       await runDev(args);
+      return;
+    case 'service-client':
+      await runServiceClient(args);
       return;
     default:
       printUsage();

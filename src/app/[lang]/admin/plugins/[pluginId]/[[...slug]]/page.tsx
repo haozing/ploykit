@@ -16,16 +16,19 @@ interface Props {
     pluginId: string;
     slug?: string[];
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function AdminPluginPage({ params }: Props) {
+export default async function AdminPluginPage({ params, searchParams }: Props) {
   const { lang, pluginId, slug = [] } = await params;
+  const query = await searchParams;
   const requestHeaders = await headers();
   const runtimeResult = await resolveAdminRuntimePageOrNotFound(
     pluginId,
     slug,
     requestHeaders,
-    lang
+    lang,
+    query
   );
 
   return <PluginRuntimePageRenderer result={runtimeResult} />;
@@ -35,10 +38,11 @@ async function resolveAdminRuntimePageOrNotFound(
   pluginId: string,
   slug: string[],
   requestHeaders: Headers,
-  lang: string
+  lang: string,
+  query?: Record<string, string | string[] | undefined>
 ) {
   try {
-    return await resolveAdminPluginPageRuntime(pluginId, slug, requestHeaders);
+    return await resolveAdminPluginPageRuntime(pluginId, slug, requestHeaders, { query });
   } catch (error) {
     handleRuntimePageResolutionError(error, lang, pluginId, slug);
   }

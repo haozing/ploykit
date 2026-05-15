@@ -42,6 +42,8 @@ export interface PluginRuntimePageProps {
   pluginId: string;
   localPath: string;
   requestPath: string;
+  params: Record<string, string>;
+  query: Record<string, string | string[]>;
   assets: Record<string, string>;
   route: PluginRuntimePageRouteProps;
 }
@@ -396,6 +398,29 @@ export interface PluginMeterDefinition {
   description?: string;
 }
 
+export interface PluginServiceDefinition {
+  name: string;
+  methods: readonly PluginHttpMethod[];
+  paths: readonly string[];
+  actorClaims?: boolean;
+}
+
+export type PluginResourceBindingScopeType = 'user' | 'workspace';
+export type PluginResourceBindingCardinality = 'one' | 'many';
+export type PluginResourceBindingRole = 'owner' | 'admin' | 'editor' | 'viewer';
+
+export interface PluginResourceBindingPermissionDefinition {
+  read?: readonly PluginResourceBindingRole[];
+  write?: readonly PluginResourceBindingRole[];
+}
+
+export interface PluginResourceBindingDefinition {
+  type: string;
+  scope: PluginResourceBindingScopeType;
+  cardinality?: PluginResourceBindingCardinality;
+  permissions?: PluginResourceBindingPermissionDefinition;
+}
+
 export interface PluginDefinition {
   id: string;
   name: string;
@@ -413,6 +438,8 @@ export interface PluginDefinition {
   resources?: PluginResourcesDefinition;
   theme?: PluginThemeDefinition;
   meters?: readonly PluginMeterDefinition[];
+  services?: readonly PluginServiceDefinition[];
+  resourceBindings?: readonly PluginResourceBindingDefinition[];
   config?: PluginConfigDefinition;
   configSchema?: unknown;
   lifecycle?: PluginLifecycle;

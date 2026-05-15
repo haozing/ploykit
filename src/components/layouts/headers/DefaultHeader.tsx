@@ -19,8 +19,8 @@
 
 import { SlotRenderer } from '@/components/SlotRenderer';
 import type { LayoutComponentProps } from '@/lib/ui/layout/layout-resolver';
-import { siteConfig } from '../../../../site.config';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ClientNav } from './ClientNav';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { UserMenuClient } from './UserMenuClient';
@@ -40,7 +40,14 @@ function DefaultLogo() {
         color: 'var(--header-text)',
       }}
     >
-      <span>{siteConfig.name}</span>
+      <Image
+        src="/brand/ploykit-logo.svg"
+        alt="PloyKit"
+        width={210}
+        height={48}
+        priority
+        className="h-9 w-auto"
+      />
     </Link>
   );
 }

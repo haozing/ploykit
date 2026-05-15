@@ -1,12 +1,16 @@
 import { createHmac } from 'crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { definePlugin, Permission, type PermissionValue } from '@ploykit/plugin-sdk';
+import { definePlugin, Permission, PluginError, type PermissionValue } from '@ploykit/plugin-sdk';
 import { normalizePluginRuntimeContract } from '../../contract';
 import { createPluginRuntimeContext } from '../../context';
+import { setDefaultPluginInternalServiceRegistry } from '..';
 import type { AuditEvent, AuditPort } from '@/lib/audit/audit-port.server';
 import type { UsageLedger, UsageRecord } from '@/lib/usage/usage-ledger.server';
 import type { PluginArtifact } from '@/lib/db/schema/plugin-storage';
-import type { PluginFile as PluginFileRow } from '@/lib/db/schema/plugin-platform';
+import type {
+  PluginFile as PluginFileRow,
+  PluginResourceBinding as PluginResourceBindingRow,
+} from '@/lib/db/schema/plugin-platform';
 import type {
   PluginArtifactsRepository,
   PluginAiHost,
@@ -18,6 +22,10 @@ import type {
   PluginFilesScope,
   PluginHttpHost,
   PluginNotificationsHost,
+  PluginInternalServiceRegistry,
+  PluginResourceBindingsRepository,
+  PluginResourceBindingsScope,
+  PluginServiceCallLogRepository,
   PluginSecretScope,
   PluginSecretsRepository,
 } from '..';
@@ -342,6 +350,110 @@ class MemoryFilesRepository implements PluginFilesRepository {
   }
 }
 
+class MemoryResourceBindingsRepository implements PluginResourceBindingsRepository {
+  readonly values = new Map<string, PluginResourceBindingRow>();
+
+  async get(
+    scope: PluginResourceBindingsScope,
+    input: Parameters<PluginResourceBindingsRepository['get']>[1]
+  ) {
+    return (
+      Array.from(this.values.values()).find(
+        (row) =>
+          row.pluginId === scope.pluginId &&
+          row.scopeType === input.resourceScope.type &&
+          row.scopeId === input.resourceScope.id &&
+          row.resourceType === input.resourceType &&
+          (!input.resourceId || row.resourceId === input.resourceId) &&
+          (!input.status || row.status === input.status)
+      ) ?? null
+    );
+  }
+
+  async list(
+    scope: PluginResourceBindingsScope,
+    input: Parameters<PluginResourceBindingsRepository['list']>[1]
+  ) {
+    return Array.from(this.values.values())
+      .filter(
+        (row) =>
+          row.pluginId === scope.pluginId &&
+          row.scopeType === input.resourceScope.type &&
+          row.scopeId === input.resourceScope.id &&
+          (!input.resourceType || row.resourceType === input.resourceType) &&
+          (!input.status || row.status === input.status)
+      )
+      .slice(input.offset, input.offset + input.limit);
+  }
+
+  async upsert(
+    scope: PluginResourceBindingsScope,
+    input: Parameters<PluginResourceBindingsRepository['upsert']>[1]
+  ) {
+    const now = new Date();
+    if (input.cardinality === 'one') {
+      for (const row of this.values.values()) {
+        if (
+          row.pluginId === scope.pluginId &&
+          row.scopeType === input.resourceScope.type &&
+          row.scopeId === input.resourceScope.id &&
+          row.resourceType === input.resourceType
+        ) {
+          row.status = 'archived';
+          row.archivedAt = now;
+          row.updatedAt = now;
+        }
+      }
+    }
+
+    const existing = Array.from(this.values.values()).find(
+      (row) =>
+        row.pluginId === scope.pluginId &&
+        row.scopeType === input.resourceScope.type &&
+        row.scopeId === input.resourceScope.id &&
+        row.resourceType === input.resourceType &&
+        row.resourceId === input.resourceId
+    );
+    const row: PluginResourceBindingRow = {
+      id: existing?.id ?? `binding-${this.values.size + 1}`,
+      pluginId: scope.pluginId,
+      scopeType: input.resourceScope.type,
+      scopeId: input.resourceScope.id,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      displayName: input.displayName ?? null,
+      status: input.status,
+      metadata: input.metadata,
+      createdByUserId: existing?.createdByUserId ?? scope.userId,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      archivedAt: null,
+    };
+    this.values.set(row.id, row);
+    return row;
+  }
+
+  async getById(scope: PluginResourceBindingsScope, id: string) {
+    const row = this.values.get(id);
+    return row?.pluginId === scope.pluginId ? row : null;
+  }
+
+  async archive(scope: PluginResourceBindingsScope, id: string) {
+    const row = await this.getById(scope, id);
+    if (!row) {
+      throw new Error('not found');
+    }
+    const archived = {
+      ...row,
+      status: 'archived',
+      archivedAt: new Date(),
+      updatedAt: new Date(),
+    } satisfies PluginResourceBindingRow;
+    this.values.set(id, archived);
+    return archived;
+  }
+}
+
 describe('plugin capability context', () => {
   const auditEvents: AuditEvent[] = [];
   const usageRecords: UsageRecord[] = [];
@@ -379,6 +491,7 @@ describe('plugin capability context', () => {
     eventHandlers.clear();
     registeredJobs.clear();
     webhookReceipts.length = 0;
+    setDefaultPluginInternalServiceRegistry(undefined);
   });
 
   it('wires files, events, jobs, audit, usage, credits, billing, notifications, config, secrets, and webhooks with gates', async () => {
@@ -1158,6 +1271,289 @@ describe('plugin capability context', () => {
       code: 'PLUGIN_HTTP_SSRF_FORBIDDEN',
       details: { host: '169.254.169.254' },
     });
+  });
+
+  it('invokes host internal services with declared paths and signed actor claims', async () => {
+    const serviceLogs: unknown[] = [];
+    const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async (_url, init) => {
+      const headers = new Headers(init?.headers);
+      return Response.json({
+        ok: true,
+        authorization: headers.get('authorization'),
+        claims: headers.get('ploykit-actor-claims'),
+        signature: headers.get('ploykit-actor-signature'),
+        spoofed: headers.get('ploykit-actor-jwt'),
+      });
+    });
+    const registry: PluginInternalServiceRegistry = {
+      get(name) {
+        return {
+          name,
+          baseUrl: 'https://internal.example.test',
+          auth: { type: 'bearer', token: 'service-token' },
+          actorClaims: { enabled: true, secret: 'actor-secret', ttlSeconds: 60 },
+        };
+      },
+    };
+    const logRepository: PluginServiceCallLogRepository = {
+      async record(input) {
+        serviceLogs.push(input);
+      },
+    };
+    const contract = normalizePluginRuntimeContract(
+      definePlugin({
+        id: 'capability-test',
+        name: 'Capability Test',
+        version: '1.0.0',
+        permissions: [Permission.ServicesInvoke],
+        services: [
+          {
+            name: 'core-api',
+            methods: ['GET'],
+            paths: ['/v1/projects/:projectId'],
+            actorClaims: true,
+          },
+        ],
+      })
+    );
+    const context = createPluginRuntimeContext({
+      contract,
+      request: new Request('https://test.local/api/plugins/capability-test/projects/project-1'),
+      user: { id: 'user-1', role: 'user', email: 'user@example.test' },
+      requestId: 'request-1',
+      capabilities: {
+        services: {
+          registry,
+          httpHost: { fetch: serviceFetch },
+          logRepository,
+          auditPort,
+          usageLedger,
+        },
+      },
+    });
+
+    const payload = await context.services.json<{
+      authorization: string;
+      claims: string;
+      signature: string;
+      spoofed: string | null;
+    }>('core-api', '/v1/projects/project-1', {
+      headers: {
+        authorization: 'Bearer spoof',
+        'ploykit-actor-jwt': 'spoof',
+      },
+    });
+    await context.services.fetch('core-api', '/v1/projects/project-1');
+
+    expect(serviceFetch).toHaveBeenCalledWith(
+      'https://internal.example.test/v1/projects/project-1',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(payload.authorization).toBe('Bearer service-token');
+    expect(payload.claims).toBeTruthy();
+    expect(payload.signature).toMatch(/^v1=/);
+    expect(payload.spoofed).toBeNull();
+    expect(serviceLogs[0]).toMatchObject({
+      pluginId: 'capability-test',
+      serviceName: 'core-api',
+      method: 'GET',
+      path: '/v1/projects/project-1',
+      pathTemplate: '/v1/projects/:projectId',
+      status: 200,
+    });
+    expect(serviceLogs).toHaveLength(2);
+    expect(usageRecords).toHaveLength(2);
+    expect(new Set(usageRecords.map((record) => record.idempotencyKey)).size).toBe(2);
+  });
+
+  it('uses the host default internal service registry when no per-context registry is passed', async () => {
+    const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async () =>
+      Response.json({ ok: true, source: 'default-registry' })
+    );
+    setDefaultPluginInternalServiceRegistry({
+      get(name) {
+        return {
+          name,
+          baseUrl: 'https://default.internal.test',
+        };
+      },
+    });
+    const contract = normalizePluginRuntimeContract(
+      definePlugin({
+        id: 'capability-test',
+        name: 'Capability Test',
+        version: '1.0.0',
+        permissions: [Permission.ServicesInvoke],
+        services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects'] }],
+      })
+    );
+    const context = createPluginRuntimeContext({
+      contract,
+      request: new Request('https://test.local/api/plugins/capability-test/projects'),
+      user: { id: 'user-1', role: 'user' },
+      capabilities: {
+        services: {
+          httpHost: { fetch: serviceFetch },
+          logRepository: { record: async () => undefined },
+        },
+      },
+    });
+
+    await expect(context.services.json('core-api', '/v1/projects')).resolves.toMatchObject({
+      source: 'default-registry',
+    });
+    expect(serviceFetch).toHaveBeenCalledWith(
+      'https://default.internal.test/v1/projects',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('manages declared resource bindings with scoped archive checks', async () => {
+    await withPluginResourceScopeAccessOverride(
+      async () => true,
+      async () => {
+        const repository = new MemoryResourceBindingsRepository();
+        const contract = normalizePluginRuntimeContract(
+          definePlugin({
+            id: 'capability-test',
+            name: 'Capability Test',
+            version: '1.0.0',
+            permissions: [Permission.ResourceBindingsRead, Permission.ResourceBindingsWrite],
+            resourceBindings: [
+              {
+                type: 'project',
+                scope: 'workspace',
+                cardinality: 'one',
+                permissions: {
+                  read: ['owner', 'admin', 'editor', 'viewer'],
+                  write: ['owner', 'admin'],
+                },
+              },
+            ],
+          })
+        );
+        const context = createPluginRuntimeContext({
+          contract,
+          request: new Request('https://test.local/api/plugins/capability-test/bindings'),
+          user: { id: 'user-1', role: 'user' },
+          requestId: 'request-1',
+          capabilities: {
+            resourceBindings: { repository, auditPort },
+          },
+        });
+
+        const binding = await context.resourceBindings.upsert({
+          scope: { type: 'workspace', id: 'workspace-1' },
+          resourceType: 'project',
+          resourceId: 'project-1',
+          displayName: 'Project 1',
+        });
+        const found = await context.resourceBindings.get({
+          scope: { type: 'workspace', id: 'workspace-1' },
+          resourceType: 'project',
+        });
+        const archived = await context.resourceBindings.archive(binding.id);
+
+        expect(found?.id).toBe(binding.id);
+        expect(archived.status).toBe('archived');
+        expect(auditEvents.map((event) => event.action)).toEqual(
+          expect.arrayContaining([
+            'capability-test.resourceBindings.upsert',
+            'capability-test.resourceBindings.archive',
+          ])
+        );
+      }
+    );
+  });
+
+  it('enforces declared resource binding workspace roles exactly', async () => {
+    const repository = new MemoryResourceBindingsRepository();
+    const roleForUser = new Map<string, 'owner' | 'admin' | 'editor' | 'viewer'>([
+      ['owner-user', 'owner'],
+      ['editor-user', 'editor'],
+      ['viewer-user', 'viewer'],
+    ]);
+    const contract = normalizePluginRuntimeContract(
+      definePlugin({
+        id: 'capability-test',
+        name: 'Capability Test',
+        version: '1.0.0',
+        permissions: [Permission.ResourceBindingsRead, Permission.ResourceBindingsWrite],
+        resourceBindings: [
+          {
+            type: 'project',
+            scope: 'workspace',
+            permissions: {
+              read: ['editor'],
+              write: ['editor'],
+            },
+          },
+        ],
+      })
+    );
+    const contextFor = (userId: string) =>
+      createPluginRuntimeContext({
+        contract,
+        request: new Request('https://test.local/api/plugins/capability-test/bindings'),
+        user: { id: userId, role: 'user' },
+        capabilities: {
+          resourceBindings: { repository },
+        },
+      });
+
+    await withPluginResourceScopeAccessOverride(
+      async (scope, resourceScope, action, capability, requiredRoles) => {
+        if (resourceScope.type === 'user') {
+          return resourceScope.id === scope.user?.id;
+        }
+        const role = roleForUser.get(scope.user?.id ?? '');
+        if (role && requiredRoles?.includes(role)) {
+          return true;
+        }
+        throw new PluginError({
+          code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+          message: `${capability} cannot ${action} workspace in test.`,
+          statusCode: 403,
+          details: { requiredRoles, role },
+        });
+      },
+      async () => {
+        const editorContext = contextFor('editor-user');
+        await expect(
+          editorContext.resourceBindings.upsert({
+            scope: { type: 'workspace', id: 'workspace-1' },
+            resourceType: 'project',
+            resourceId: 'project-1',
+          })
+        ).resolves.toMatchObject({ resourceId: 'project-1' });
+        await expect(
+          editorContext.resourceBindings.get({
+            scope: { type: 'workspace', id: 'workspace-1' },
+            resourceType: 'project',
+          })
+        ).resolves.toMatchObject({ resourceId: 'project-1' });
+
+        await expect(
+          contextFor('viewer-user').resourceBindings.upsert({
+            scope: { type: 'workspace', id: 'workspace-1' },
+            resourceType: 'project',
+            resourceId: 'project-2',
+          })
+        ).rejects.toMatchObject({
+          code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+          details: { role: 'viewer', requiredRoles: ['editor'] },
+        });
+        await expect(
+          contextFor('owner-user').resourceBindings.get({
+            scope: { type: 'workspace', id: 'workspace-1' },
+            resourceType: 'project',
+          })
+        ).rejects.toMatchObject({
+          code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+          details: { role: 'owner', requiredRoles: ['editor'] },
+        });
+      }
+    );
   });
 
   it('returns structured errors for invalid notification input', async () => {

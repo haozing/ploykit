@@ -34,20 +34,30 @@ export default function OpenGraphImage() {
             fontWeight: 700,
           }}
         >
-          <div
+          <svg
+            width="72"
+            height="72"
+            viewBox="0 0 96 96"
+            aria-label="PloyKit mark"
             style={{
               width: 72,
               height: 72,
-              background: '#0ea5e9',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 12,
             }}
           >
-            P
-          </div>
+            <rect x="8" y="8" width="80" height="80" rx="18" fill="#0f172a" />
+            <path
+              d="M28 66V30h22c9 0 16 6 16 15s-7 15-16 15H39v6H28Zm11-16h10c4 0 7-2 7-5s-3-5-7-5H39v10Z"
+              fill="#f8fafc"
+            />
+            <circle cx="69" cy="26" r="6" fill="#14b8a6" />
+            <circle cx="74" cy="70" r="6" fill="#f59e0b" />
+            <path
+              d="M64 31l-9 9M60 57l10 9"
+              stroke="#e2e8f0"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+          </svg>
           {siteConfig.name}
         </div>
         <div

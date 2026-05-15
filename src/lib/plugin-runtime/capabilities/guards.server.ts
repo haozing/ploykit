@@ -38,25 +38,20 @@ const WORKSPACE_READ_ROLES = ['owner', 'admin', 'editor', 'viewer'] satisfies Wo
 const WORKSPACE_WRITE_ROLES = ['owner', 'admin', 'editor'] satisfies WorkspaceRole[];
 const WORKSPACE_MANAGE_ROLES = ['owner', 'admin'] satisfies WorkspaceRole[];
 
+type PluginResourceScopeAccessOverride = (
+  scope: PluginCapabilityScope,
+  resourceScope: NormalizedPluginResourceScope,
+  action: PluginResourceScopeAccessAction,
+  capability: string,
+  requiredRoles?: readonly WorkspaceRole[]
+) => Promise<boolean> | boolean;
+
 const workspaceAccessOverrides = new AsyncLocalStorage<
-  | ((
-      scope: PluginCapabilityScope,
-      resourceScope: NormalizedPluginResourceScope,
-      action: PluginResourceScopeAccessAction,
-      capability: string
-    ) => Promise<boolean> | boolean)
-  | undefined
+  PluginResourceScopeAccessOverride | undefined
 >();
 
 export async function withPluginResourceScopeAccessOverride<T>(
-  override:
-    | ((
-        scope: PluginCapabilityScope,
-        resourceScope: NormalizedPluginResourceScope,
-        action: PluginResourceScopeAccessAction,
-        capability: string
-      ) => Promise<boolean> | boolean)
-    | undefined,
+  override: PluginResourceScopeAccessOverride | undefined,
   callback: () => Promise<T>
 ): Promise<T> {
   return workspaceAccessOverrides.run(override, callback);
@@ -284,14 +279,71 @@ function requiredWorkspaceRoles(action: PluginResourceScopeAccessAction): readon
   return WORKSPACE_MANAGE_ROLES;
 }
 
+function uniqueWorkspaceRoles(roles: readonly WorkspaceRole[]): readonly WorkspaceRole[] {
+  return [...new Set(roles)];
+}
+
+async function assertWorkspaceRoleAccess(
+  scope: PluginCapabilityScope,
+  resourceScope: NormalizedPluginResourceScope,
+  action: PluginResourceScopeAccessAction,
+  capability: string,
+  roles: readonly WorkspaceRole[]
+): Promise<void> {
+  const requiredRoles = uniqueWorkspaceRoles(roles);
+  const override = workspaceAccessOverrides.getStore();
+  if (override && (await override(scope, resourceScope, action, capability, requiredRoles))) {
+    return;
+  }
+
+  if (scope.system) {
+    return;
+  }
+
+  const user = requireUser(scope, capability);
+  const rows = await withSystemContext((database) =>
+    database
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, resourceScope.id),
+          eq(workspaceMembers.userId, user.id),
+          eq(workspaceMembers.status, 'active'),
+          inArray(workspaceMembers.role, requiredRoles)
+        )
+      )
+      .limit(1)
+  );
+
+  if (rows.length > 0) {
+    return;
+  }
+
+  throw new PluginError({
+    code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+    message: `${capability} cannot ${action} workspace "${resourceScope.id}" from this context.`,
+    statusCode: 403,
+    details: {
+      pluginId: scope.contract.id,
+      capability,
+      action,
+      requestedScope: resourceScope,
+      requiredRoles,
+      userId: user.id,
+    },
+  });
+}
+
 export async function assertResourceScopeAccess(
   scope: PluginCapabilityScope,
   resourceScope: NormalizedPluginResourceScope,
   action: PluginResourceScopeAccessAction,
   capability: string
 ): Promise<void> {
+  const roles = requiredWorkspaceRoles(action);
   const override = workspaceAccessOverrides.getStore();
-  if (override && (await override(scope, resourceScope, action, capability))) {
+  if (override && (await override(scope, resourceScope, action, capability, roles))) {
     return;
   }
 
@@ -319,37 +371,20 @@ export async function assertResourceScopeAccess(
     });
   }
 
-  const roles = requiredWorkspaceRoles(action);
-  const rows = await withSystemContext((database) =>
-    database
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, resourceScope.id),
-          eq(workspaceMembers.userId, user.id),
-          eq(workspaceMembers.status, 'active'),
-          inArray(workspaceMembers.role, roles)
-        )
-      )
-      .limit(1)
-  );
+  await assertWorkspaceRoleAccess(scope, resourceScope, action, capability, roles);
+}
 
-  if (rows.length > 0) {
+export async function assertResourceScopeWorkspaceRoles(
+  scope: PluginCapabilityScope,
+  resourceScope: NormalizedPluginResourceScope,
+  action: PluginResourceScopeAccessAction,
+  requiredRoles: readonly WorkspaceRole[],
+  capability: string
+): Promise<void> {
+  if (resourceScope.type !== 'workspace') {
+    await assertResourceScopeAccess(scope, resourceScope, action, capability);
     return;
   }
 
-  throw new PluginError({
-    code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
-    message: `${capability} cannot ${action} workspace "${resourceScope.id}" from this context.`,
-    statusCode: 403,
-    details: {
-      pluginId: scope.contract.id,
-      capability,
-      action,
-      requestedScope: resourceScope,
-      requiredRoles: roles,
-      userId: user.id,
-    },
-  });
+  await assertWorkspaceRoleAccess(scope, resourceScope, action, capability, requiredRoles);
 }

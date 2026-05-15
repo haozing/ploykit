@@ -1,5 +1,5 @@
 import { PluginError, type PermissionValue, type PluginApiMethodName } from '@ploykit/plugin-sdk';
-import { findRuntimeApiRoute, normalizeRuntimePath, type RuntimeApiRoute } from '../contract';
+import { findRuntimeApiRouteMatch, normalizeRuntimePath, type RuntimeApiRoute } from '../contract';
 import {
   extractDefinedApi,
   getPluginRuntimeMapEntry,
@@ -31,6 +31,7 @@ export interface PluginApiRuntimeOptions {
 export interface PluginApiRuntimeMatch {
   route: RuntimeApiRoute;
   localPath: string;
+  params: Record<string, string>;
 }
 
 function methodToHandlerName(method: string): PluginApiMethodName {
@@ -73,9 +74,9 @@ export async function matchPluginApiRuntimeRoute(
   const entry = options.entry ?? getPluginRuntimeMapEntry(pluginId);
   const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
   const localPath = normalizeRuntimePath(slug.join('/'));
-  const route = findRuntimeApiRoute(contract.routes.apis, localPath, method);
+  const match = findRuntimeApiRouteMatch(contract.routes.apis, localPath, method);
 
-  if (!route) {
+  if (!match) {
     throw new PluginError({
       code: 'PLUGIN_ROUTE_NOT_FOUND',
       message: `No plugin API route matches ${method.toUpperCase()} ${localPath}.`,
@@ -88,8 +89,9 @@ export async function matchPluginApiRuntimeRoute(
   }
 
   return {
-    route,
+    route: match.route,
     localPath,
+    params: match.params,
   };
 }
 
@@ -105,7 +107,7 @@ export async function handlePluginApiRuntime(
       enforce: options.enforceInstallation ?? !options.entry,
     });
     const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
-    const { route } = await matchPluginApiRuntimeRoute(pluginId, slug, request.method, {
+    const { route, params } = await matchPluginApiRuntimeRoute(pluginId, slug, request.method, {
       ...options,
       entry: entry ?? undefined,
     });
@@ -180,6 +182,7 @@ export async function handlePluginApiRuntime(
       request,
       user,
       apiKey,
+      routeParams: params,
       anonymousPolicyState,
     });
 

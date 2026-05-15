@@ -7,7 +7,7 @@ import { hasPluginDiagnosticErrors, type PluginDiagnostic } from '@/plugin-sdk/d
 import { Permission, type PermissionValue } from '@/plugin-sdk/permissions';
 import { findPluginRoutePatternConflict } from '@/plugin-sdk/route-patterns';
 import type { DefinedPlugin, PluginDefinition, PluginHttpMethod } from '@/plugin-sdk/types';
-import { isDefinedPlugin, normalizeRuntimePath } from '../contract';
+import { isDefinedPlugin, matchRuntimePathWithParams, normalizeRuntimePath } from '../contract';
 import { normalizePluginAssetPath } from '../assets';
 
 const SDK_IMPORTS = new Set([
@@ -60,8 +60,10 @@ const DYNAMIC_CTX_CAPABILITY_PERMISSIONS = new Map<string, readonly PermissionVa
   ['notifications', [Permission.NotificationsSend]],
   ['rag', [Permission.RagRead, Permission.RagWrite]],
   ['rateLimit', [Permission.RateLimitCheck]],
+  ['resourceBindings', [Permission.ResourceBindingsRead, Permission.ResourceBindingsWrite]],
   ['runs', [Permission.RunsRead, Permission.RunsWrite]],
   ['secrets', [Permission.SecretsRead, Permission.SecretsWrite]],
+  ['services', [Permission.ServicesInvoke]],
   ['storage', [Permission.StorageRead, Permission.StorageWrite]],
   ['ui', [Permission.UiToast]],
   ['usage', [Permission.UsageWrite]],
@@ -100,6 +102,16 @@ export interface PluginCheckHttpFetchUse {
   reason: string;
   url?: string;
   origin?: string;
+  dynamic: boolean;
+}
+
+export interface PluginCheckServiceUse {
+  file: string;
+  line: number;
+  column: number;
+  service?: string;
+  path?: string;
+  method?: string;
   dynamic: boolean;
 }
 
@@ -142,6 +154,8 @@ type PluginCheckContract = { id: string } & Partial<
     | 'resources'
     | 'theme'
     | 'egress'
+    | 'services'
+    | 'resourceBindings'
   >
 >;
 
@@ -153,6 +167,7 @@ interface ScannedFileResult {
   diagnostics: PluginDiagnostic[];
   permissionUses: Map<PermissionValue, PluginCheckPermissionUse>;
   httpFetchUses: PluginCheckHttpFetchUse[];
+  serviceUses: PluginCheckServiceUse[];
   fileCount: number;
 }
 
@@ -373,6 +388,27 @@ function recordHttpFetchUse(
   });
 }
 
+function recordServiceUse(
+  serviceUses: PluginCheckServiceUse[],
+  file: string,
+  node: ts.CallExpression,
+  sourceFile: ts.SourceFile,
+  service?: string,
+  servicePath?: string,
+  method?: string
+): void {
+  const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile, false));
+  serviceUses.push({
+    file,
+    line: position.line + 1,
+    column: position.character + 1,
+    service,
+    path: servicePath,
+    method,
+    dynamic: !service || !servicePath,
+  });
+}
+
 function normalizeHttpOrigin(value: string): string | null {
   try {
     const url = new URL(value);
@@ -533,6 +569,50 @@ function extractStaticHttpFetchUrl(argument: ts.Expression | undefined): string 
   return undefined;
 }
 
+function extractStaticString(argument: ts.Expression | undefined): string | undefined {
+  return argument && ts.isStringLiteralLike(argument) ? argument.text : undefined;
+}
+
+function extractServicePathTemplate(argument: ts.Expression | undefined): string | undefined {
+  if (!argument) {
+    return undefined;
+  }
+
+  if (ts.isStringLiteralLike(argument)) {
+    return argument.text;
+  }
+
+  if (!ts.isTemplateExpression(argument) && !ts.isNoSubstitutionTemplateLiteral(argument)) {
+    return undefined;
+  }
+
+  if (ts.isNoSubstitutionTemplateLiteral(argument)) {
+    return argument.text;
+  }
+
+  const segments: string[] = [argument.head.text];
+  for (const span of argument.templateSpans) {
+    segments.push(':param', span.literal.text);
+  }
+
+  return segments.join('');
+}
+
+function extractServiceInitMethod(argument: ts.Expression | undefined): string | undefined {
+  if (!argument || !ts.isObjectLiteralExpression(argument)) {
+    return undefined;
+  }
+
+  const methodProperty = argument.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      ((ts.isIdentifier(property.name) && property.name.text === 'method') ||
+        (ts.isStringLiteralLike(property.name) && property.name.text === 'method'))
+  );
+
+  return methodProperty ? extractStaticString(methodProperty.initializer) : undefined;
+}
+
 function isExternalHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
@@ -574,6 +654,7 @@ function isNestedProcessEnvAccess(
 function captureCapabilityPermissions(
   permissionUses: Map<PermissionValue, PluginCheckPermissionUse>,
   httpFetchUses: PluginCheckHttpFetchUse[],
+  serviceUses: PluginCheckServiceUse[],
   sourceFile: ts.SourceFile,
   filePath: string,
   node: ts.CallExpression
@@ -803,6 +884,33 @@ function captureCapabilityPermissions(
     }
   }
 
+  if (matchesPrefix(chain, ['ctx', 'resourceBindings'])) {
+    const method = chain[2];
+    if (method === 'get' || method === 'list') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.ResourceBindingsRead,
+        filePath,
+        node,
+        `ctx.resourceBindings.${method}`,
+        sourceFile
+      );
+      return;
+    }
+
+    if (method === 'upsert' || method === 'archive') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.ResourceBindingsWrite,
+        filePath,
+        node,
+        `ctx.resourceBindings.${method}`,
+        sourceFile
+      );
+      return;
+    }
+  }
+
   if (matchesPrefix(chain, ['ctx', 'apiKeys'])) {
     const method = chain[2];
     if (method === 'list') {
@@ -929,6 +1037,30 @@ function captureCapabilityPermissions(
       extractStaticHttpFetchUrl(firstArgument)
     );
     return;
+  }
+
+  if (matchesPrefix(chain, ['ctx', 'services'])) {
+    const method = chain[2];
+    if (method === 'fetch' || method === 'json') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.ServicesInvoke,
+        filePath,
+        node,
+        `ctx.services.${method}`,
+        sourceFile
+      );
+      recordServiceUse(
+        serviceUses,
+        filePath,
+        node,
+        sourceFile,
+        extractStaticString(node.arguments[0]),
+        extractServicePathTemplate(node.arguments[1]),
+        extractServiceInitMethod(node.arguments[2])
+      );
+      return;
+    }
   }
 
   if (matchesPrefix(chain, ['ctx', 'audit']) && chain[2] === 'record') {
@@ -1182,6 +1314,7 @@ function scanFile(
   const diagnostics: PluginDiagnostic[] = [];
   const permissionUses = new Map<PermissionValue, PluginCheckPermissionUse>();
   const httpFetchUses: PluginCheckHttpFetchUse[] = [];
+  const serviceUses: PluginCheckServiceUse[] = [];
   const sourceText = fs.readFileSync(filePath, 'utf-8');
   const scriptKind =
     filePath.endsWith('.tsx') || filePath.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -1475,7 +1608,14 @@ function scanFile(
         }
       }
 
-      captureCapabilityPermissions(permissionUses, httpFetchUses, sourceFile, filePath, node);
+      captureCapabilityPermissions(
+        permissionUses,
+        httpFetchUses,
+        serviceUses,
+        sourceFile,
+        filePath,
+        node
+      );
     } else if (ts.isNewExpression(node)) {
       const chain = extractAccessSegments(node.expression);
       if (chain && chain[chain.length - 1] === 'Function') {
@@ -1499,6 +1639,7 @@ function scanFile(
     diagnostics,
     permissionUses,
     httpFetchUses,
+    serviceUses,
     fileCount: 1,
   };
 }
@@ -1884,6 +2025,25 @@ function buildDeclaredPermissionUses(
 
   if ((contract.egress ?? []).length > 0) {
     recordDeclaredPermissionUse(permissionUses, Permission.ExternalHttp, entryFile, 'egress');
+  }
+
+  if ((contract.services ?? []).length > 0) {
+    recordDeclaredPermissionUse(permissionUses, Permission.ServicesInvoke, entryFile, 'services');
+  }
+
+  if ((contract.resourceBindings ?? []).length > 0) {
+    recordDeclaredPermissionUse(
+      permissionUses,
+      Permission.ResourceBindingsRead,
+      entryFile,
+      'resourceBindings'
+    );
+    recordDeclaredPermissionUse(
+      permissionUses,
+      Permission.ResourceBindingsWrite,
+      entryFile,
+      'resourceBindings'
+    );
   }
 
   return permissionUses;
@@ -2597,6 +2757,128 @@ function buildEgressDiagnostics(
   return diagnostics;
 }
 
+function servicePathAllowed(pattern: string, pathValue: string): boolean {
+  const normalizedPattern = normalizeRuntimePath(pattern.replace(/\/\*\*$/, '/[...rest]'));
+  return matchRuntimePathWithParams(normalizedPattern, normalizeRuntimePath(pathValue)) !== null;
+}
+
+function buildServiceDiagnostics(
+  pluginRoot: string,
+  contract: PluginCheckContract,
+  serviceUses: readonly PluginCheckServiceUse[]
+): PluginDiagnostic[] {
+  const diagnostics: PluginDiagnostic[] = [];
+  const entryFile = path.join(pluginRoot, 'plugin.ts');
+  const serviceDeclarations = new Map((contract.services ?? []).map((service) => [service.name, service]));
+  const staticUses = new Set<string>();
+
+  for (const use of serviceUses) {
+    if (use.dynamic) {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_SERVICE_DYNAMIC_USE_UNVERIFIED',
+          'warning',
+          `ctx.services use in ${use.file}:${use.line}:${use.column} is dynamic; plugin check cannot prove service/path coverage.`,
+          relativeToCwd(entryFile),
+          'services',
+          'Prefer static service name and path literals when possible; runtime guards will still enforce plugin.ts services.',
+          {
+            usedIn: use.file,
+            line: use.line,
+            column: use.column,
+          }
+        )
+      );
+      continue;
+    }
+
+    const serviceName = use.service!;
+    const servicePath = normalizeRuntimePath(use.path!);
+    const method = (use.method ?? 'GET').toUpperCase();
+    const declaration = serviceDeclarations.get(serviceName);
+    staticUses.add(`${serviceName}:${method}:${servicePath}`);
+
+    if (!declaration) {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_SERVICE_UNDECLARED',
+          'error',
+          `ctx.services uses service "${serviceName}" in ${use.file}:${use.line}:${use.column}, but plugin.ts does not declare it.`,
+          relativeToCwd(entryFile),
+          'services',
+          `Add a services entry for "${serviceName}" with method "${method}" and path "${servicePath}".`,
+          {
+            service: serviceName,
+            path: servicePath,
+            method,
+            usedIn: use.file,
+          }
+        )
+      );
+      continue;
+    }
+
+    const methods = new Set(declaration.methods.map((item) => item.toUpperCase()));
+    if (!methods.has(method)) {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_SERVICE_METHOD_FORBIDDEN',
+          'error',
+          `ctx.services uses "${method}" for service "${serviceName}", but plugin.ts does not allow that method.`,
+          relativeToCwd(entryFile),
+          'services',
+          `Add "${method}" to services[].methods for "${serviceName}" or change the call method.`,
+          {
+            service: serviceName,
+            path: servicePath,
+            method,
+            allowedMethods: [...methods],
+          }
+        )
+      );
+    }
+
+    const pathAllowed = declaration.paths.some((pattern) => servicePathAllowed(pattern, servicePath));
+    if (!pathAllowed) {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_SERVICE_PATH_FORBIDDEN',
+          'error',
+          `ctx.services uses "${servicePath}" for service "${serviceName}", but plugin.ts does not allow that path.`,
+          relativeToCwd(entryFile),
+          'services',
+          `Add "${servicePath}" or a matching template to services[].paths for "${serviceName}".`,
+          {
+            service: serviceName,
+            path: servicePath,
+            method,
+            allowedPaths: declaration.paths,
+          }
+        )
+      );
+    }
+  }
+
+  for (const declaration of contract.services ?? []) {
+    const used = [...staticUses].some((key) => key.startsWith(`${declaration.name}:`));
+    if (!used && serviceUses.every((use) => !use.dynamic)) {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_SERVICE_UNUSED',
+          'warning',
+          `plugin.ts declares service "${declaration.name}", but no static ctx.services call uses it.`,
+          relativeToCwd(entryFile),
+          'services',
+          `Remove service "${declaration.name}" if it is not needed.`,
+          { service: declaration.name }
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
 function extractPluginDiagnosticError(error: unknown, entryFile: string): PluginDiagnostic | null {
   const rawMessage = error instanceof Error ? error.message : String(error);
   const messages = rawMessage
@@ -2650,6 +2932,7 @@ async function checkPluginRoot(
   ];
   const permissionUses = new Map<PermissionValue, PluginCheckPermissionUse>();
   const httpFetchUses: PluginCheckHttpFetchUse[] = [];
+  const serviceUses: PluginCheckServiceUse[] = [];
   let entryFile: string | undefined;
 
   if (legacyEntryFiles.length > 0) {
@@ -2677,6 +2960,7 @@ async function checkPluginRoot(
       }
     });
     httpFetchUses.push(...scanned.httpFetchUses);
+    serviceUses.push(...scanned.serviceUses);
     if (path.basename(filePath) === 'plugin.ts') {
       entryFile = filePath;
     }
@@ -2751,6 +3035,7 @@ async function checkPluginRoot(
     diagnostics.push(...buildRuntimeRouteDiagnostics(pluginRoot, contract));
     diagnostics.push(...buildMenuRouteDiagnostics(pluginRoot, contract));
     diagnostics.push(...buildEgressDiagnostics(pluginRoot, contract, httpFetchUses));
+    diagnostics.push(...buildServiceDiagnostics(pluginRoot, contract, serviceUses));
     diagnostics.push(...buildDeclaredHandlerDiagnostics(pluginRoot, contract));
     diagnostics.push(...buildAssetDiagnostics(pluginRoot, contract));
   } catch (error) {

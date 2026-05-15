@@ -8,6 +8,8 @@ import {
   type PluginMenuDefinition,
   type PluginMeterDefinition,
   type PluginPublicRouteAliasDeclaration,
+  type PluginResourceBindingCardinality,
+  type PluginResourceBindingRole,
   type PluginAssetDeclaration,
   type PluginAnonymousRateLimitBucket,
   type PluginAnonymousPolicy,
@@ -43,6 +45,8 @@ const EVENT_NAME_PATTERN = /^[a-z][a-z0-9.-]*$/;
 const JOB_NAME_PATTERN = /^[a-z][a-z0-9.-]*$/;
 const LOCALE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
 const METER_ID_PATTERN = /^[a-z][a-z0-9.-]*$/;
+const SERVICE_NAME_PATTERN = /^[a-zA-Z0-9._:-]+$/;
+const RESOURCE_BINDING_TYPE_PATTERN = /^[a-zA-Z0-9._:-]+$/;
 const LENGTH_VALUE_PATTERN = /^(\d+(\.\d+)?)(px|rem|em|%)$/;
 const COLOR_VALUE_PATTERN =
   /^(#[0-9a-fA-F]{3,8}|rgb\([^)]+\)|rgba\([^)]+\)|hsl\([^)]+\)|hsla\([^)]+\)|oklch\([^)]+\)|transparent|currentColor)$/;
@@ -137,6 +141,14 @@ const FIELD_BASE_TYPES = new Set<PluginCollectionFieldBase>([
 ]);
 const WEBHOOK_SIGNATURE_POLICIES = new Set(['none', 'hmac-sha256', 'stripe', 'github']);
 const UNSAFE_PERMISSION_PREFIX = 'unsafe.';
+const RESOURCE_BINDING_SCOPES = new Set(['user', 'workspace']);
+const RESOURCE_BINDING_CARDINALITIES = new Set<PluginResourceBindingCardinality>(['one', 'many']);
+const RESOURCE_BINDING_ROLES = new Set<PluginResourceBindingRole>([
+  'owner',
+  'admin',
+  'editor',
+  'viewer',
+]);
 
 interface RoutePatternDeclaration {
   path: string;
@@ -163,6 +175,8 @@ export function validatePluginDefinition(definition: PluginDefinition): PluginDi
   validateResources(definition.resources, diagnostics);
   validateTheme(definition.theme, diagnostics);
   validateMeters(definition, diagnostics);
+  validateServices(definition, diagnostics);
+  validateResourceBindings(definition, diagnostics);
   validateConfig(definition.config, diagnostics);
   validateEgress(definition, diagnostics);
 
@@ -1726,6 +1740,169 @@ function validateMeters(definition: PluginDefinition, diagnostics: PluginDiagnos
       );
     }
     seen.add(meter.id);
+  }
+}
+
+function validateServices(definition: PluginDefinition, diagnostics: PluginDiagnostic[]): void {
+  const services = definition.services ?? [];
+  const seen = new Set<string>();
+
+  if (services.length > 0 && !hasDeclaredPermission(definition, Permission.ServicesInvoke)) {
+    addError(
+      diagnostics,
+      'PLUGIN_SERVICE_PERMISSION_MISSING',
+      'Declaring internal services requires Permission.ServicesInvoke.',
+      'permissions',
+      'Add Permission.ServicesInvoke to plugin.ts permissions or remove services.'
+    );
+  }
+
+  for (const [index, service] of services.entries()) {
+    const basePath = `services.${index}`;
+    if (!SERVICE_NAME_PATTERN.test(service.name)) {
+      addError(
+        diagnostics,
+        'PLUGIN_SERVICE_NAME_INVALID',
+        `Service name "${service.name}" may only contain letters, numbers, dots, underscores, colons, and hyphens.`,
+        `${basePath}.name`
+      );
+    }
+
+    if (seen.has(service.name)) {
+      addError(
+        diagnostics,
+        'PLUGIN_SERVICE_DUPLICATE',
+        `Service "${service.name}" is declared more than once.`,
+        `${basePath}.name`,
+        'Merge duplicate service declarations.'
+      );
+    }
+    seen.add(service.name);
+
+    if (!service.methods?.length) {
+      addError(
+        diagnostics,
+        'PLUGIN_SERVICE_METHODS_REQUIRED',
+        `Service "${service.name}" must declare allowed methods.`,
+        `${basePath}.methods`
+      );
+    }
+
+    for (const [methodIndex, method] of (service.methods ?? []).entries()) {
+      if (!HTTP_METHODS.has(method)) {
+        addError(
+          diagnostics,
+          'PLUGIN_SERVICE_METHOD_INVALID',
+          `Unsupported service method "${method}".`,
+          `${basePath}.methods.${methodIndex}`
+        );
+      }
+    }
+
+    if (!service.paths?.length) {
+      addError(
+        diagnostics,
+        'PLUGIN_SERVICE_PATHS_REQUIRED',
+        `Service "${service.name}" must declare allowed paths.`,
+        `${basePath}.paths`
+      );
+    }
+
+    for (const [pathIndex, servicePath] of (service.paths ?? []).entries()) {
+      const pathValue = servicePath.replace(/\/\*\*$/, '');
+      validateAbsolutePath(pathValue || '/', `${basePath}.paths.${pathIndex}`, 'Service path', diagnostics);
+      if (/^https?:\/\//i.test(servicePath)) {
+        addError(
+          diagnostics,
+          'PLUGIN_SERVICE_PATH_ABSOLUTE_FORBIDDEN',
+          `Service path "${servicePath}" must be service-local, not an absolute URL.`,
+          `${basePath}.paths.${pathIndex}`
+        );
+      }
+    }
+  }
+}
+
+function validateResourceBindingRoles(
+  roles: readonly PluginResourceBindingRole[] | undefined,
+  path: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  for (const [index, role] of (roles ?? []).entries()) {
+    if (!RESOURCE_BINDING_ROLES.has(role)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_ROLE_INVALID',
+        `Unsupported resource binding role "${String(role)}".`,
+        `${path}.${index}`
+      );
+    }
+  }
+}
+
+function validateResourceBindings(
+  definition: PluginDefinition,
+  diagnostics: PluginDiagnostic[]
+): void {
+  const bindings = definition.resourceBindings ?? [];
+  const seen = new Set<string>();
+
+  if (
+    bindings.length > 0 &&
+    !hasDeclaredPermission(definition, Permission.ResourceBindingsRead) &&
+    !hasDeclaredPermission(definition, Permission.ResourceBindingsWrite)
+  ) {
+    addError(
+      diagnostics,
+      'PLUGIN_RESOURCE_BINDING_PERMISSION_MISSING',
+      'Declaring resource bindings requires ResourceBindingsRead or ResourceBindingsWrite.',
+      'permissions',
+      'Add Permission.ResourceBindingsRead or Permission.ResourceBindingsWrite to plugin.ts permissions.'
+    );
+  }
+
+  for (const [index, binding] of bindings.entries()) {
+    const basePath = `resourceBindings.${index}`;
+    if (!RESOURCE_BINDING_TYPE_PATTERN.test(binding.type)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_TYPE_INVALID',
+        `Resource binding type "${binding.type}" may only contain letters, numbers, dots, underscores, colons, and hyphens.`,
+        `${basePath}.type`
+      );
+    }
+
+    if (!RESOURCE_BINDING_SCOPES.has(binding.scope)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_SCOPE_INVALID',
+        `Resource binding scope "${String(binding.scope)}" is invalid.`,
+        `${basePath}.scope`
+      );
+    }
+
+    const key = `${binding.scope}:${binding.type}`;
+    if (seen.has(key)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_DUPLICATE',
+        `Resource binding "${binding.type}" for ${binding.scope} scope is declared more than once.`,
+        `${basePath}.type`
+      );
+    }
+    seen.add(key);
+
+    if (binding.cardinality && !RESOURCE_BINDING_CARDINALITIES.has(binding.cardinality)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_CARDINALITY_INVALID',
+        `Resource binding cardinality "${String(binding.cardinality)}" is invalid.`,
+        `${basePath}.cardinality`
+      );
+    }
+
+    validateResourceBindingRoles(binding.permissions?.read, `${basePath}.permissions.read`, diagnostics);
+    validateResourceBindingRoles(binding.permissions?.write, `${basePath}.permissions.write`, diagnostics);
   }
 }
 

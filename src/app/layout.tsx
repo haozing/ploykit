@@ -34,6 +34,10 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(appBaseUrl()),
     title: siteConfig.name,
     description: siteConfig.description,
+    icons: {
+      icon: [{ url: '/brand/favicon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico' }],
+      shortcut: '/brand/favicon.svg',
+    },
   };
 
   // TODO: Collect metadata from plugin hooks.

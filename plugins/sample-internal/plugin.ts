@@ -7,7 +7,28 @@ export default definePlugin({
   description: 'Internal sample plugin used to verify the plugin runtime path.',
   kind: 'app',
   trustLevel: 'trusted',
-  permissions: [Permission.StorageRead, Permission.StorageWrite, Permission.UiToast],
+  permissions: [
+    Permission.StorageRead,
+    Permission.StorageWrite,
+    Permission.UiToast,
+    Permission.ResourceBindingsRead,
+    Permission.ResourceBindingsWrite,
+    Permission.ServicesInvoke,
+  ],
+  resourceBindings: [
+    {
+      type: 'project',
+      scope: 'workspace',
+      cardinality: 'one',
+    },
+  ],
+  services: [
+    {
+      name: 'core-api',
+      methods: ['GET'],
+      paths: ['/v1/projects/:projectId'],
+    },
+  ],
   data: {
     collections: {
       sample_internal_notes: {
@@ -37,7 +58,7 @@ export default definePlugin({
     ],
     apis: [
       {
-        path: '/notes',
+        path: '/notes/:projectId',
         handler: './api/notes',
         auth: 'auth',
         methods: ['GET', 'POST'],

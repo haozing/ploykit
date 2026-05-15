@@ -1,11 +1,13 @@
 export { isDefinedPlugin, normalizePluginRuntimeContract } from './normalize-contract';
 export {
-  findRuntimeApiRoute,
-  findRuntimePageRoute,
+  findRuntimeApiRouteMatch,
+  findRuntimePageRouteMatch,
   matchRuntimePath,
+  matchRuntimePathWithParams,
   normalizeRuntimeMethod,
   normalizeRuntimePath,
 } from './route-matcher';
+export type { RuntimePathMatch } from './route-matcher';
 export {
   assertValidPluginRuntimeContract,
   validatePluginRuntimeContract,

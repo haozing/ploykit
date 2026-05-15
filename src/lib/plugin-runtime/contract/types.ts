@@ -11,6 +11,7 @@ import type {
   PluginKind,
   PluginMenuDefinition,
   PluginMeterDefinition,
+  PluginResourceBindingDefinition,
   PluginPublicRouteAlias,
   PluginResourcesDefinition,
   PluginRouteAuth,
@@ -19,6 +20,7 @@ import type {
   PluginAnonymousPolicy,
   PluginThemeDefinition,
   PluginToolRouteRuntimeMetadata,
+  PluginServiceDefinition,
   PluginSlotsDefinition,
   PluginTrustLevel,
   PluginWebhookDefinition,
@@ -74,6 +76,8 @@ export interface PluginRuntimeContract {
   webhooks: Readonly<Record<string, PluginWebhookDefinition>>;
   hooks: PluginHooksDefinition;
   meters: readonly PluginMeterDefinition[];
+  services: readonly PluginServiceDefinition[];
+  resourceBindings: readonly PluginResourceBindingDefinition[];
   egress: readonly string[];
   definition: DefinedPlugin | PluginDefinition;
   routes: {

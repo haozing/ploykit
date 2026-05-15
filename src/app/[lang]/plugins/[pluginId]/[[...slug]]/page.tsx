@@ -19,12 +19,14 @@ interface Props {
     pluginId: string;
     slug?: string[];
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function PluginPage({ params }: Props) {
+export default async function PluginPage({ params, searchParams }: Props) {
   const { lang, pluginId, slug = [] } = await params;
+  const query = await searchParams;
   const requestHeaders = await headers();
-  const runtimeResult = await resolveRuntimePageOrNotFound(pluginId, slug, requestHeaders, lang);
+  const runtimeResult = await resolveRuntimePageOrNotFound(pluginId, slug, requestHeaders, lang, query);
   const pluginContent = <PluginRuntimePageRenderer result={runtimeResult} />;
 
   if (runtimeResult.route.layout === 'site') {
@@ -50,10 +52,11 @@ async function resolveRuntimePageOrNotFound(
   pluginId: string,
   slug: string[],
   requestHeaders: Headers,
-  lang: string
+  lang: string,
+  query?: Record<string, string | string[] | undefined>
 ) {
   try {
-    return await resolvePluginPageRuntime(pluginId, slug, requestHeaders);
+    return await resolvePluginPageRuntime(pluginId, slug, requestHeaders, { query });
   } catch (error) {
     handleRuntimePageResolutionError(error, lang, pluginId, slug);
   }

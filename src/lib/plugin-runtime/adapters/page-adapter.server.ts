@@ -1,9 +1,10 @@
 import { PluginError } from '@ploykit/plugin-sdk';
 import {
-  findRuntimePageRoute,
+  findRuntimePageRouteMatch,
   normalizeRuntimePath,
   type PluginRuntimeContract,
   type RuntimePageRoute,
+  type RuntimePathMatch,
 } from '../contract';
 import {
   getPluginRuntimeMapEntry,
@@ -18,7 +19,8 @@ export interface PluginPageRuntimeOptions {
   entry?: PluginRuntimeMapEntry;
   enforceInstallation?: boolean;
   publicPathPrefix?: string;
-  matchedRoute?: RuntimePageRoute;
+  routeMatch?: { route: RuntimePageRoute } & RuntimePathMatch;
+  query?: URLSearchParams | Record<string, string | string[] | undefined>;
   requestPathOverride?: string;
 }
 
@@ -27,6 +29,8 @@ export interface PluginPageRuntimeResult {
   route: RuntimePageRoute;
   localPath: string;
   requestPath: string;
+  params: Record<string, string>;
+  query: Record<string, string | string[]>;
   module: {
     componentPath: string;
     load: () => Promise<unknown>;
@@ -85,9 +89,10 @@ async function resolvePluginPageRuntimeInternal(
   });
   const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
   const localPath = normalizeRuntimePath(slug.join('/'));
-  const route =
-    options.matchedRoute ??
-    findRuntimePageRoute(contract.routes.pages, localPath, admin ? 'admin' : 'public');
+  const matched =
+    options.routeMatch ??
+    findRuntimePageRouteMatch(contract.routes.pages, localPath, admin ? 'admin' : 'public');
+  const route = matched?.route;
 
   if (!route) {
     throw new PluginError({
@@ -120,6 +125,8 @@ async function resolvePluginPageRuntimeInternal(
     contract,
     route,
     localPath,
+    params: matched?.params ?? {},
+    query: normalizeQuery(options.query),
     requestPath:
       options.requestPathOverride ??
       createRequestPath(pluginId, slug, admin, options.publicPathPrefix),
@@ -128,4 +135,34 @@ async function resolvePluginPageRuntimeInternal(
       load: moduleLoader,
     },
   };
+}
+
+function normalizeQuery(
+  query: URLSearchParams | Record<string, string | string[] | undefined> | undefined
+): Record<string, string | string[]> {
+  if (!query) {
+    return {};
+  }
+
+  if (query instanceof URLSearchParams) {
+    const output: Record<string, string | string[]> = {};
+    for (const [key, value] of query.entries()) {
+      const existing = output[key];
+      if (existing === undefined) {
+        output[key] = value;
+      } else if (Array.isArray(existing)) {
+        existing.push(value);
+      } else {
+        output[key] = [existing, value];
+      }
+    }
+    return output;
+  }
+
+  return Object.fromEntries(
+    Object.entries(query).filter((entry): entry is [string, string | string[]] => {
+      const value = entry[1];
+      return typeof value === 'string' || Array.isArray(value);
+    })
+  );
 }

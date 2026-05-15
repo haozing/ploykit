@@ -5,6 +5,8 @@ import type {
   PluginConnectorResolvedFile,
   PluginConnectorRetryPolicy,
   PluginContext,
+  PluginResourceBindingRecord,
+  PluginResourceBindingStatus,
   PluginResourceScope,
   PluginRunCostReference,
   PluginRunFiles,
@@ -17,6 +19,11 @@ import { PluginError } from './errors';
 import { Permission, type PermissionValue } from './permissions';
 import type { PluginStorage, PluginStorageCollection, PluginStorageQuery } from './storage';
 import type { DefinedPlugin } from './types';
+import {
+  isPluginRouteCatchAllSegment,
+  isPluginRouteDynamicSegment,
+  normalizePluginRoutePath,
+} from './route-patterns';
 
 export interface PluginTestHelpers<TContext extends PluginContext = PluginContext> {
   ctx: TContext;
@@ -32,6 +39,8 @@ export interface PluginTestRequestOptions {
   method?: string;
   url?: string;
   headers?: HeadersInit;
+  params?: Record<string, string>;
+  query?: URLSearchParams | Record<string, string | number | boolean | null | undefined>;
   json?: unknown;
   text?: string;
   formData?: FormData;
@@ -104,6 +113,7 @@ export interface PluginTestHostStore {
       metadata?: Record<string, unknown>;
     }
   >;
+  resourceBindings: Map<string, PluginResourceBindingRecord>;
   files: Map<string, PluginTestFile>;
 }
 
@@ -211,6 +221,22 @@ export interface PluginTestState {
   connectors: Array<{ operation: string; name: string; runId?: string; status?: number }>;
   apiKeys: Array<{ operation: string; id?: string; name?: string }>;
   rateLimit: Array<{ bucket: string; limit: number; window: string }>;
+  resourceBindings: Array<{ operation: string; id?: string; resourceType?: string }>;
+  services: Array<{ service: string; path: string; method: string; status: number }>;
+}
+
+export type PluginTestServiceHandler = (request: {
+  service: string;
+  path: string;
+  method: string;
+  headers: Headers;
+  query: URLSearchParams;
+  body?: unknown;
+  scope?: PluginResourceScope;
+}) => Response | Promise<Response>;
+
+export interface PluginTestServices {
+  [service: string]: PluginTestServiceHandler;
 }
 
 export interface PluginTestHost<TContext extends PluginContext = PluginContext> {
@@ -232,6 +258,8 @@ interface MutableRequestState {
   method: string;
   url: string;
   headers: Headers;
+  params: Record<string, string>;
+  query: URLSearchParams;
   json: unknown;
   text: string;
   formData: FormData;
@@ -298,6 +326,7 @@ export function createPluginTestHostStore(): PluginTestHostStore {
     apiKeys: new Map(),
     rateLimits: new Map(),
     connectors: new Map(),
+    resourceBindings: new Map(),
     files: new Map(),
   };
 }
@@ -325,6 +354,8 @@ function createInitialState(): PluginTestState {
     connectors: [],
     apiKeys: [],
     rateLimit: [],
+    resourceBindings: [],
+    services: [],
   };
 }
 
@@ -487,6 +518,38 @@ function splitFakeChunks(content: string, size = 1200, overlap = 120): string[] 
   return chunks;
 }
 
+function servicePathAllowed(pattern: string, servicePath: string): boolean {
+  const normalizedPattern = normalizePluginRoutePath(pattern.replace(/\/\*\*$/, '/[...rest]'));
+  const patternSegments =
+    normalizedPattern === '/' ? [] : normalizedPattern.slice(1).split('/').filter(Boolean);
+  const normalizedPath = normalizePluginRoutePath(servicePath);
+  const pathSegments =
+    normalizedPath === '/' ? [] : normalizedPath.slice(1).split('/').filter(Boolean);
+
+  for (let index = 0; index < patternSegments.length; index += 1) {
+    const patternSegment = patternSegments[index];
+    const pathSegment = pathSegments[index];
+
+    if (isPluginRouteCatchAllSegment(patternSegment)) {
+      return true;
+    }
+
+    if (pathSegment === undefined) {
+      return false;
+    }
+
+    if (isPluginRouteDynamicSegment(patternSegment)) {
+      continue;
+    }
+
+    if (patternSegment !== pathSegment) {
+      return false;
+    }
+  }
+
+  return patternSegments.length === pathSegments.length;
+}
+
 function stateHasAiResponse(entry: { response?: unknown }): boolean {
   return Object.prototype.hasOwnProperty.call(entry, 'response');
 }
@@ -522,14 +585,28 @@ function normalizeHttpOrigin(value: string): string | null {
 }
 
 function createRequestState(pluginId: string, options: PluginTestRequestOptions = {}) {
+  const url = new URL(options.url ?? `https://ploykit.test/plugins/${pluginId}`);
+  if (options.query) {
+    const query =
+      options.query instanceof URLSearchParams
+        ? options.query
+        : new URLSearchParams(
+            Object.entries(options.query)
+              .filter((entry) => entry[1] !== undefined && entry[1] !== null)
+              .map(([key, value]) => [key, String(value)])
+          );
+    url.search = query.toString();
+  }
   const jsonBody = options.json ?? {};
   const textBody =
     options.text ?? (typeof jsonBody === 'string' ? jsonBody : JSON.stringify(jsonBody));
 
   return {
     method: options.method ?? 'GET',
-    url: options.url ?? `https://ploykit.test/plugins/${pluginId}`,
+    url: url.toString(),
     headers: new Headers(options.headers),
+    params: options.params ?? {},
+    query: url.searchParams,
     json: jsonBody,
     text: textBody,
     formData: options.formData ?? new FormData(),
@@ -593,7 +670,7 @@ function applyQuery<TRecord extends Record<string, unknown>>(
 
 export function createPluginTestHost<TContext extends PluginContext = PluginContext>(
   plugin: DefinedPlugin,
-  options: PluginTestHostOptions = {}
+  options: PluginTestHostOptions & { services?: PluginTestServices } = {}
 ): PluginTestHost<TContext> {
   const store = options.store ?? createPluginTestHostStore();
   const user = options.user === undefined ? createDefaultUser() : options.user;
@@ -688,6 +765,17 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       return { type: 'user', id: input?.id ?? user?.id ?? 'system' };
     }
     return { type: 'workspace', id: input.id };
+  }
+
+  function declaredBinding(resourceType: string, scope: PluginResourceScope) {
+    const normalized = normalizeScope(scope);
+    return plugin.resourceBindings?.find(
+      (binding) => binding.type === resourceType && binding.scope === normalized.type
+    );
+  }
+
+  function bindingKey(scope: PluginResourceScope, resourceType: string, resourceId: string) {
+    return `${plugin.id}:${resourceScopeKey(normalizeScope(scope), user)}:${resourceType}:${resourceId}`;
   }
 
   function getArtifacts(scope: PluginResourceScope): Map<string, PluginTestArtifact> {
@@ -813,6 +901,12 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       },
       get headers() {
         return requestState.headers;
+      },
+      get params() {
+        return requestState.params;
+      },
+      get query() {
+        return requestState.query;
       },
       async json(schema: unknown) {
         return parseRequestJson(schema, requestState.json);
@@ -1447,6 +1541,116 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
         store.config.delete(scopeKey(plugin.id, user, key));
       },
     },
+    resourceBindings: {
+      async get(input) {
+        enforcePermission(Permission.ResourceBindingsRead, 'ctx.resourceBindings.get');
+        if (!declaredBinding(input.resourceType, input.scope)) {
+          throw new PluginError({
+            code: 'PLUGIN_RESOURCE_BINDING_UNDECLARED',
+            message: `Resource binding "${input.resourceType}" is not declared.`,
+            statusCode: 403,
+          });
+        }
+        state.resourceBindings.push({ operation: 'get', resourceType: input.resourceType });
+        const status = input.status ?? 'active';
+        return (
+          Array.from(store.resourceBindings.values()).find(
+            (binding) =>
+              binding.resourceType === input.resourceType &&
+              (!input.resourceId || binding.resourceId === input.resourceId) &&
+              binding.status === status &&
+              resourceScopeKey(binding.scope, user) ===
+                resourceScopeKey(normalizeScope(input.scope), user)
+          ) ?? null
+        );
+      },
+      async list(input) {
+        enforcePermission(Permission.ResourceBindingsRead, 'ctx.resourceBindings.list');
+        state.resourceBindings.push({ operation: 'list', resourceType: input.resourceType });
+        const status = input.status ?? 'active';
+        return Array.from(store.resourceBindings.values())
+          .filter(
+            (binding) =>
+              (!input.resourceType || binding.resourceType === input.resourceType) &&
+              binding.status === status &&
+              resourceScopeKey(binding.scope, user) ===
+                resourceScopeKey(normalizeScope(input.scope), user)
+          )
+          .slice(input.offset ?? 0, (input.offset ?? 0) + (input.limit ?? 100));
+      },
+      async upsert(input) {
+        enforcePermission(Permission.ResourceBindingsWrite, 'ctx.resourceBindings.upsert');
+        const declaration = declaredBinding(input.resourceType, input.scope);
+        if (!declaration) {
+          throw new PluginError({
+            code: 'PLUGIN_RESOURCE_BINDING_UNDECLARED',
+            message: `Resource binding "${input.resourceType}" is not declared.`,
+            statusCode: 403,
+          });
+        }
+        const scope = normalizeScope(input.scope);
+        const now = new Date();
+        if ((declaration.cardinality ?? 'many') === 'one') {
+          for (const [key, binding] of store.resourceBindings.entries()) {
+            if (
+              binding.resourceType === input.resourceType &&
+              resourceScopeKey(binding.scope, user) === resourceScopeKey(scope, user)
+            ) {
+              store.resourceBindings.set(key, {
+                ...binding,
+                status: 'archived',
+                archivedAt: now,
+                updatedAt: now,
+              });
+            }
+          }
+        }
+        const existingKey = bindingKey(scope, input.resourceType, input.resourceId);
+        const existing = store.resourceBindings.get(existingKey);
+        const record: PluginResourceBindingRecord = {
+          id: existing?.id ?? `binding-${store.resourceBindings.size + 1}`,
+          scope,
+          resourceType: input.resourceType,
+          resourceId: input.resourceId,
+          displayName: input.displayName,
+          status: (input.status ?? 'active') as PluginResourceBindingStatus,
+          metadata: input.metadata ?? {},
+          createdByUserId: existing?.createdByUserId ?? user?.id,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        };
+        store.resourceBindings.set(existingKey, record);
+        state.resourceBindings.push({
+          operation: 'upsert',
+          id: record.id,
+          resourceType: input.resourceType,
+        });
+        return record;
+      },
+      async archive(id) {
+        enforcePermission(Permission.ResourceBindingsWrite, 'ctx.resourceBindings.archive');
+        const existing = Array.from(store.resourceBindings.entries()).find(
+          ([, binding]) => binding.id === id
+        );
+        if (!existing) {
+          throw new PluginError({
+            code: 'PLUGIN_RESOURCE_BINDING_NOT_FOUND',
+            message: 'Resource binding not found.',
+            statusCode: 404,
+          });
+        }
+        const [key, binding] = existing;
+        const archived = {
+          ...binding,
+          status: 'archived' as const,
+          archivedAt: new Date(),
+          updatedAt: new Date(),
+        };
+        store.resourceBindings.set(key, archived);
+        state.resourceBindings.push({ operation: 'archive', id });
+        return archived;
+      },
+    },
     audit: {
       async record(action: string, details?: Record<string, unknown>) {
         enforcePermission(Permission.AuditWrite, 'ctx.audit.record');
@@ -2000,6 +2204,72 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
         return Response.json({ ok: true, url: parsedUrl.href });
       },
     },
+    services: {
+      async fetch(service, servicePath, init = {}) {
+        enforcePermission(Permission.ServicesInvoke, 'ctx.services.fetch');
+        const declaration = plugin.services?.find((entry) => entry.name === service);
+        const method = (init.method ?? 'GET').toUpperCase();
+        if (!declaration) {
+          throw new PluginError({
+            code: 'PLUGIN_SERVICE_UNDECLARED',
+            message: `Service "${service}" is not declared.`,
+            statusCode: 403,
+          });
+        }
+        if (!declaration.methods.map((item) => item.toUpperCase()).includes(method)) {
+          throw new PluginError({
+            code: 'PLUGIN_SERVICE_METHOD_FORBIDDEN',
+            message: `Service "${service}" does not allow method "${method}".`,
+            statusCode: 403,
+          });
+        }
+        if (!declaration.paths.some((pathPattern) => servicePathAllowed(pathPattern, servicePath))) {
+          throw new PluginError({
+            code: 'PLUGIN_SERVICE_PATH_FORBIDDEN',
+            message: `Service "${service}" does not allow path "${servicePath}".`,
+            statusCode: 403,
+          });
+        }
+        const handler = options.services?.[service];
+        if (!handler) {
+          throw new PluginError({
+            code: 'PLUGIN_SERVICE_NOT_REGISTERED',
+            message: `Test service "${service}" is not registered.`,
+            statusCode: 502,
+          });
+        }
+        const query =
+          init.query instanceof URLSearchParams
+            ? init.query
+            : new URLSearchParams(
+                Object.entries(init.query ?? {})
+                  .filter((entry) => entry[1] !== undefined && entry[1] !== null)
+                  .map(([key, value]) => [key, String(value)])
+              );
+        const response = await handler({
+          service,
+          path: servicePath,
+          method,
+          headers: new Headers(init.headers),
+          query,
+          body: init.json ?? init.body,
+          scope: init.scope,
+        });
+        state.services.push({ service, path: servicePath, method, status: response.status });
+        return response;
+      },
+      async json(service, servicePath, init) {
+        const response = await ctx.services.fetch(service, servicePath, init);
+        if (!response.ok) {
+          throw new PluginError({
+            code: 'SERVICE_REQUEST_FAILED',
+            message: `Test service "${service}" returned ${response.status}.`,
+            statusCode: 502,
+          });
+        }
+        return response.json();
+      },
+    },
     json(data: unknown, init?: ResponseInit) {
       return Response.json(data, init);
     },
@@ -2047,6 +2317,7 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       store.apiKeys.clear();
       store.rateLimits.clear();
       store.connectors.clear();
+      store.resourceBindings.clear();
       store.files.clear();
       state = createInitialState();
       host.state = state;
