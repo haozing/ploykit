@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { Activity, Clock3, ExternalLink, FileText, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,8 +30,8 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   return 'outline';
 }
 
-function formatDate(value: string): string {
-  return new Date(value).toLocaleString();
+function formatDate(value: string, locale: string): string {
+  return new Date(value).toLocaleString(locale);
 }
 
 function activeCount(tasks: PluginTaskSummary[]): number {
@@ -41,26 +42,26 @@ function activeCount(tasks: PluginTaskSummary[]): number {
 
 export default async function PluginTasksPage({ params }: { params: Promise<{ lang: string }> }) {
   const [user, resolvedParams] = await Promise.all([requireAuth(), params]);
+  const t = await getTranslations('dashboard.tasks');
   const tasks = await listUserPluginTasks(user.id, {
     limit: 50,
     offset: 0,
     includeInternal: false,
   });
   const lang = resolvedParams.lang;
+  const locale = lang === 'zh' ? 'zh-CN' : 'en-US';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Task Center</h1>
-          <p className="text-muted-foreground">
-            User-visible plugin runs, generated files, connector calls, and metering records.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('page.title')}</h1>
+          <p className="text-muted-foreground">{t('page.description')}</p>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link href={`/${lang}/tasks`}>
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            {t('actions.refresh')}
           </Link>
         </Button>
       </div>
@@ -68,30 +69,30 @@ export default async function PluginTasksPage({ params }: { params: Promise<{ la
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardDescription>Total Tasks</CardDescription>
+            <CardDescription>{t('stats.totalTasks')}</CardDescription>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{tasks.length.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{tasks.length.toLocaleString(locale)}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardDescription>Active</CardDescription>
+            <CardDescription>{t('stats.active')}</CardDescription>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeCount(tasks).toLocaleString()}</div>
+            <div className="text-2xl font-bold">{activeCount(tasks).toLocaleString(locale)}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardDescription>Last Updated</CardDescription>
+            <CardDescription>{t('stats.lastUpdated')}</CardDescription>
             <Clock3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-sm font-medium">
-              {tasks[0] ? formatDate(tasks[0].updatedAt) : 'No task yet'}
+              {tasks[0] ? formatDate(tasks[0].updatedAt, locale) : t('empty.noTaskYet')}
             </div>
           </CardContent>
         </Card>
@@ -99,26 +100,24 @@ export default async function PluginTasksPage({ params }: { params: Promise<{ la
 
       <Card>
         <CardHeader>
-          <CardTitle>Plugin Tasks</CardTitle>
-          <CardDescription>
-            Only runs declared as user-visible by plugins appear here.
-          </CardDescription>
+          <CardTitle>{t('list.title')}</CardTitle>
+          <CardDescription>{t('list.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           {tasks.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No user-visible plugin tasks yet.
+              {t('empty.noUserVisibleTasks')}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Task</TableHead>
-                  <TableHead>Plugin</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="min-w-[180px]">Progress</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="text-right">Open</TableHead>
+                  <TableHead>{t('table.task')}</TableHead>
+                  <TableHead>{t('table.plugin')}</TableHead>
+                  <TableHead>{t('table.status')}</TableHead>
+                  <TableHead className="min-w-[180px]">{t('table.progress')}</TableHead>
+                  <TableHead>{t('table.updated')}</TableHead>
+                  <TableHead className="text-right">{t('table.open')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -145,7 +144,7 @@ export default async function PluginTasksPage({ params }: { params: Promise<{ la
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell>{formatDate(task.updatedAt)}</TableCell>
+                    <TableCell>{formatDate(task.updatedAt, locale)}</TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="ghost" size="sm">
                         <Link href={`/${lang}/tasks/${task.id}`}>

@@ -598,6 +598,99 @@
         "noData": "No system status data available"
       }
     },
+    "tasks": {
+      "page": {
+        "title": "Task Center",
+        "description": "User-visible plugin runs, generated files, connector calls, and metering records."
+      },
+      "actions": {
+        "refresh": "Refresh"
+      },
+      "stats": {
+        "totalTasks": "Total Tasks",
+        "active": "Active",
+        "lastUpdated": "Last Updated"
+      },
+      "list": {
+        "title": "Plugin Tasks",
+        "description": "Only runs declared as user-visible by plugins appear here."
+      },
+      "table": {
+        "task": "Task",
+        "plugin": "Plugin",
+        "status": "Status",
+        "progress": "Progress",
+        "updated": "Updated",
+        "open": "Open"
+      },
+      "empty": {
+        "noTaskYet": "No task yet",
+        "noUserVisibleTasks": "No user-visible plugin tasks yet."
+      }
+    },
+    "taskDetail": {
+      "never": "Never",
+      "actions": {
+        "backToTasks": "Tasks",
+        "cancel": "Cancel",
+        "cancelFailed": "Cancel request failed",
+        "cancelReasonPrompt": "Cancel reason:"
+      },
+      "overview": {
+        "title": "Run Overview",
+        "description": "{pluginName} · {pluginId} · updated {updatedAt}",
+        "created": "Created",
+        "started": "Started",
+        "finished": "Finished",
+        "cancel": "Cancel",
+        "notRequested": "Not requested"
+      },
+      "logs": {
+        "title": "Logs"
+      },
+      "files": {
+        "title": "Files And Results",
+        "bytes": "{count} bytes",
+        "columns": {
+          "name": "Name",
+          "purpose": "Purpose",
+          "status": "Status",
+          "size": "Size"
+        }
+      },
+      "results": {
+        "columns": {
+          "type": "Type",
+          "ref": "Ref",
+          "created": "Created"
+        }
+      },
+      "connectorCalls": {
+        "title": "Connector Calls",
+        "durationMs": "{count} ms",
+        "columns": {
+          "connector": "Connector",
+          "status": "Status",
+          "duration": "Duration",
+          "credits": "Credits"
+        }
+      },
+      "usage": {
+        "title": "Usage And Metering",
+        "columns": {
+          "meter": "Meter",
+          "metric": "Metric",
+          "value": "Value",
+          "recorded": "Recorded"
+        }
+      },
+      "metadata": {
+        "title": "Inputs, Costs, Metadata"
+      },
+      "empty": {
+        "noRecords": "No records."
+      }
+    },
     "profile": {
       "title": "Profile",
       "description": "Manage your account information and preference settings",
@@ -1290,6 +1383,49 @@
           "pending": "Pending",
           "suspended": "Suspended",
           "deleted": "Deleted"
+        }
+      },
+      "detail": {
+        "unknownUser": "Unknown User",
+        "status": {
+          "active": "Active",
+          "pending": "Pending",
+          "verified": "Verified"
+        },
+        "empty": {
+          "noData": "No data"
+        },
+        "actions": {
+          "backToUsers": "Back to Users",
+          "editInUsersList": "Edit in Users List",
+          "manageRoles": "Manage Roles"
+        },
+        "labels": {
+          "joined": "Joined {date}",
+          "lastLogin": "Last login {date}"
+        },
+        "tabs": {
+          "overview": "Overview",
+          "roles": "Roles & Permissions",
+          "activity": "Activity"
+        },
+        "roles": {
+          "title": "Roles",
+          "assignedCount": "{count, plural, =0 {No roles assigned} =1 {1 role assigned} other {# roles assigned}}",
+          "permissionCount": "{count, plural, =0 {No permissions} =1 {1 permission} other {# permissions}}",
+          "noRolesAssigned": "No roles assigned",
+          "manageTitle": "Manage Role",
+          "manageDescription": "Assign or revoke this user's active role",
+          "assignedTitle": "Assigned Roles",
+          "assignedDescription": "Roles and permissions for this user",
+          "noRolesAssignedToUser": "No roles assigned to this user"
+        },
+        "activity": {
+          "title": "Recent Activity",
+          "description": "Latest user actions",
+          "eventsDescription": "User actions and events",
+          "userRegister": "User registered",
+          "ip": "IP: {ip}"
         }
       }
     },
@@ -2110,6 +2246,61 @@
           "MB": "MB",
           "GB": "GB",
           "calls": "calls"
+        }
+      },
+      "detail": {
+        "loading": "Loading plan details...",
+        "actions": {
+          "backToPlans": "Back to Plans",
+          "returnToPlans": "Return to Plans",
+          "editPlan": "Edit Plan",
+          "viewSubscribers": "View Subscribers"
+        },
+        "errors": {
+          "fetchPlanDetails": "Failed to fetch plan details",
+          "loadPlan": "Failed to load plan",
+          "planNotFound": "Plan not found"
+        },
+        "pricing": {
+          "free": "Free",
+          "monthShort": "mo",
+          "yearShort": "yr",
+          "perMonth": "per month",
+          "perYear": "per year"
+        },
+        "status": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "default": "Default"
+        },
+        "stats": {
+          "subscribers": "Subscribers",
+          "status": "Status"
+        },
+        "tabs": {
+          "features": "Features & Limits",
+          "settings": "Settings"
+        },
+        "features": {
+          "title": "Features",
+          "description": "All available features in this plan",
+          "enabled": "Enabled",
+          "disabled": "Disabled"
+        },
+        "limits": {
+          "title": "Resource Limits",
+          "description": "Usage quotas and restrictions",
+          "unlimited": "Unlimited",
+          "monthly": "Monthly",
+          "yearly": "Yearly"
+        },
+        "settings": {
+          "title": "Plan Settings",
+          "description": "Configuration and metadata",
+          "planSlug": "Plan Slug",
+          "sortOrder": "Sort Order",
+          "created": "Created",
+          "lastUpdated": "Last Updated"
         }
       }
     },

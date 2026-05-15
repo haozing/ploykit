@@ -47,6 +47,7 @@ const LOCALE_PATTERN = /^[a-z]{2}(-[A-Z]{2})?$/;
 const METER_ID_PATTERN = /^[a-z][a-z0-9.-]*$/;
 const SERVICE_NAME_PATTERN = /^[a-zA-Z0-9._:-]+$/;
 const RESOURCE_BINDING_TYPE_PATTERN = /^[a-zA-Z0-9._:-]+$/;
+const I18N_KEY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const LENGTH_VALUE_PATTERN = /^(\d+(\.\d+)?)(px|rem|em|%)$/;
 const COLOR_VALUE_PATTERN =
   /^(#[0-9a-fA-F]{3,8}|rgb\([^)]+\)|rgba\([^)]+\)|hsl\([^)]+\)|hsla\([^)]+\)|oklch\([^)]+\)|transparent|currentColor)$/;
@@ -1070,12 +1071,49 @@ function validateMenu(
   publicAliasPaths: ReadonlySet<string>,
   diagnostics: PluginDiagnostic[]
 ): void {
-  if (!menu.label.trim()) {
+  validateMenuText(menu, basePath, diagnostics);
+
+  if (menu.labelKey !== undefined) {
+    validatePluginLocalI18nKey(menu.labelKey, `${basePath}.labelKey`, 'Menu labelKey', diagnostics);
+  }
+
+  if (menu.groupKey !== undefined) {
+    validatePluginLocalI18nKey(menu.groupKey, `${basePath}.groupKey`, 'Menu groupKey', diagnostics);
+  }
+
+  if (menu.fallbackLabel !== undefined && !menu.fallbackLabel.trim()) {
     addError(
       diagnostics,
-      'PLUGIN_MENU_LABEL_REQUIRED',
-      'Menu label is required.',
+      'PLUGIN_MENU_FALLBACK_LABEL_INVALID',
+      'Menu fallbackLabel must not be empty when provided.',
+      `${basePath}.fallbackLabel`
+    );
+  }
+
+  if (menu.label !== undefined && !menu.label.trim()) {
+    addError(
+      diagnostics,
+      'PLUGIN_MENU_LABEL_INVALID',
+      'Menu label must not be empty when provided.',
       `${basePath}.label`
+    );
+  }
+
+  if (menu.fallbackGroup !== undefined && !menu.fallbackGroup.trim()) {
+    addError(
+      diagnostics,
+      'PLUGIN_MENU_FALLBACK_GROUP_INVALID',
+      'Menu fallbackGroup must not be empty when provided.',
+      `${basePath}.fallbackGroup`
+    );
+  }
+
+  if (menu.group !== undefined && !menu.group.trim()) {
+    addError(
+      diagnostics,
+      'PLUGIN_MENU_GROUP_INVALID',
+      'Menu group must not be empty when provided.',
+      `${basePath}.group`
     );
   }
 
@@ -1096,6 +1134,53 @@ function validateMenu(
       `Menu path "${menu.path}" must point to a declared page route or public alias in plugin.ts.`,
       `${basePath}.path`,
       'Use the same path as one of routes.pages entries, tool routes, or publicAliases entries.'
+    );
+  }
+}
+
+function validateMenuText(
+  menu: PluginMenuDefinition,
+  basePath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  const label = menu.label?.trim();
+  const labelKey = menu.labelKey?.trim();
+  const fallbackLabel = menu.fallbackLabel?.trim();
+
+  if (label || labelKey || fallbackLabel) {
+    return;
+  }
+
+  addError(
+    diagnostics,
+    'PLUGIN_MENU_LABEL_REQUIRED',
+    'Menu label, labelKey, or fallbackLabel is required.',
+    `${basePath}.label`,
+    'Use label for a literal label, or labelKey + fallbackLabel with plugin resources.locales.'
+  );
+}
+
+function validatePluginLocalI18nKey(
+  key: string,
+  path: string,
+  label: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  const trimmed = key.trim();
+
+  if (
+    !trimmed ||
+    !I18N_KEY_PATTERN.test(trimmed) ||
+    trimmed.startsWith('.') ||
+    trimmed.endsWith('.') ||
+    trimmed.includes('..')
+  ) {
+    addError(
+      diagnostics,
+      'PLUGIN_MENU_I18N_KEY_INVALID',
+      `${label} must contain only letters, numbers, dots, underscores, or hyphens, and cannot start, end, or contain consecutive dots.`,
+      path,
+      'Use a plugin-local key such as "menu.console" or "nav.jobs".'
     );
   }
 }

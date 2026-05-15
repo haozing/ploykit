@@ -22,6 +22,7 @@ export type MenuLocation =
 
   // Backend menus (differentiate user/admin via guard)
   | 'dashboard.sidebar' // Dashboard sidebar
+  | 'admin.sidebar' // Admin dashboard sidebar
   | 'dashboard.topbar'; // Dashboard top bar
 
 //
@@ -58,7 +59,8 @@ export type NavGroup = keyof typeof SYSTEM_NAV_GROUPS | string;
 export interface BaseMenuItem {
   id: string; // Unique identifier
   i18nKey: string; // Translation key
-  label?: string; // Optional direct label for plugin-provided menu items
+  label?: string; // Optional direct label for menu items
+  fallbackLabel?: string; // Fallback when i18nKey is missing
   href: string; // Link path
   icon?: string; // Icon name (Lucide)
   weight?: number; // Sort weight (lower = higher priority, default: 100)
@@ -77,6 +79,8 @@ export type SiteMenuItem = BaseMenuItem;
  */
 export interface DashboardMenuItem extends BaseMenuItem {
   group?: NavGroup; // Navigation group
+  groupTitleKey?: string; // Translation key for plugin-created custom groups
+  fallbackGroup?: string; // Fallback title for plugin-created custom groups
   badge?: string; // Badge text
   badgeVariant?: 'default' | 'secondary' | 'destructive' | 'outline';
 }
@@ -103,6 +107,7 @@ export interface MenusByLocation {
   'site.footer'?: SiteMenuItem[];
   'site.account'?: SiteMenuItem[];
   'dashboard.sidebar'?: DashboardMenuItem[];
+  'admin.sidebar'?: DashboardMenuItem[];
   'dashboard.topbar'?: DashboardMenuItem[];
 }
 
@@ -118,6 +123,7 @@ export interface MenusByLocation {
 export interface NavGroupConfig {
   key: string; // Group key
   titleKey: string; // Group title translation key
+  fallbackTitle?: string; // Fallback title when titleKey is missing
   items: DashboardMenuItem[]; // Menu items
   adminOnly?: boolean; // Admin only
   weight?: number; // Sort weight

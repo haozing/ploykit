@@ -69,6 +69,21 @@ function isGroupVisible(group: NavGroupConfig, context: { isAdmin: boolean }): b
   return true;
 }
 
+function createPluginNavGroup(
+  groupKey: string,
+  item: DashboardMenuItem,
+  adminOnly: boolean
+): NavGroupConfig {
+  return {
+    key: groupKey,
+    titleKey: item.groupTitleKey || `nav.${groupKey}`,
+    fallbackTitle: item.fallbackGroup || groupKey,
+    items: [],
+    adminOnly,
+    weight: 100,
+  };
+}
+
 //
 // System Navigation Groups Configuration
 //
@@ -148,11 +163,13 @@ export const getAdminSidebarNavGroups = cache(async (): Promise<NavGroupConfig[]
   }
 
   // 3. Load plugin navigation and filter by visibility
-  const pluginMenus = await loadPluginNavigation('dashboard.sidebar');
-  const pluginNavs = pluginMenus['dashboard.sidebar'] || [];
+  const pluginMenus = await loadPluginNavigation();
+  const pluginNavs = [
+    ...(pluginMenus['dashboard.sidebar'] || []),
+    ...(pluginMenus['admin.sidebar'] || []),
+  ];
 
-  // Admin sidebar should only show admin-relevant entries; user-facing plugin items (guard: 'auth')
-  // can lead to a layout switch and confusing navigation context.
+  // Admin sidebar accepts explicit admin.sidebar items plus admin-relevant dashboard.sidebar items.
   const visiblePluginNavs = pluginNavs.filter((item) => {
     if (!isMenuItemVisible(item, { isAdmin })) return false;
     return item.guard === 'admin' || item.href.startsWith('/admin');
@@ -174,13 +191,7 @@ export const getAdminSidebarNavGroups = cache(async (): Promise<NavGroupConfig[]
 
     if (!groups.has(groupKey)) {
       logger.warn({ groupKey, menuId: item.id }, 'Unknown nav group, creating default group');
-      groups.set(groupKey, {
-        key: groupKey,
-        titleKey: `nav.${groupKey}`,
-        items: [],
-        adminOnly: true,
-        weight: 100,
-      });
+      groups.set(groupKey, createPluginNavGroup(groupKey, item, true));
     }
 
     groups.get(groupKey)!.items.push(item);
@@ -232,7 +243,7 @@ export const getUserSidebarNavGroups = cache(
     myAccountGroup.items.push(...(SYSTEM_DASHBOARD_MENUS.myAccount || []));
 
     // 2) Plugin menu items (user-visible only; admin plugin items stay in admin sidebar)
-    const pluginMenus = await loadPluginNavigation('dashboard.sidebar');
+  const pluginMenus = await loadPluginNavigation('dashboard.sidebar');
     const pluginNavs = pluginMenus['dashboard.sidebar'] || [];
 
     const visiblePluginNavs = pluginNavs.filter((item) =>
@@ -241,9 +252,11 @@ export const getUserSidebarNavGroups = cache(
     for (const item of visiblePluginNavs) {
       const groupKey = item.group || 'myAccount';
 
-      // If plugin uses an unknown group (not custom group and not myAccount), fall back to myAccount.
-      const targetGroup = groups.get(groupKey) || groups.get('myAccount');
-      targetGroup?.items.push(item);
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, createPluginNavGroup(groupKey, item, false));
+      }
+
+      groups.get(groupKey)?.items.push(item);
     }
 
     logger.debug(

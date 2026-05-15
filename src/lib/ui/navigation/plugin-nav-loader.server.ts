@@ -31,6 +31,16 @@ function createPluginMenuHref(
   return `/${segments.join('/')}`;
 }
 
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
+function resolvePluginI18nKey(pluginId: string, key: string | undefined): string | undefined {
+  const normalized = normalizeOptionalText(key);
+  return normalized ? `${pluginId}.${normalized}` : undefined;
+}
+
 function mapPluginMenuItem(
   contract: PluginRuntimeContract,
   pluginId: string,
@@ -44,16 +54,24 @@ function mapPluginMenuItem(
       page.publicAliases.some((alias) => alias.path === normalizedPath)
   );
   const publicAliasPath = route?.publicAliases.find((alias) => alias.path === normalizedPath)?.path;
+  const labelKey = resolvePluginI18nKey(pluginId, item.labelKey);
+  const groupTitleKey = resolvePluginI18nKey(pluginId, item.groupKey);
+  const literalLabel = normalizeOptionalText(item.label);
+  const fallbackLabel = normalizeOptionalText(item.fallbackLabel) ?? literalLabel;
+  const group = normalizeOptionalText(item.group);
 
   return {
     id: `${pluginId}/${item.path}/${index}`,
-    i18nKey: `${pluginId}.menu.${index}`,
-    label: item.label,
+    i18nKey: labelKey ?? `${pluginId}.menu.${index}`,
+    label: labelKey ? undefined : literalLabel,
+    fallbackLabel,
     href: createPluginMenuHref(pluginId, item.path, route?.layout, publicAliasPath),
     icon: item.icon,
     weight: item.weight,
     guard: route?.auth ?? 'auth',
-    group: item.group,
+    group,
+    groupTitleKey,
+    fallbackGroup: normalizeOptionalText(item.fallbackGroup) ?? group,
     _pluginId: pluginId,
   } as MenuItem;
 }

@@ -4,6 +4,19 @@ import { locales } from './config';
 type MessageRecord = Record<string, unknown>;
 
 const SHARED_CLIENT_MESSAGE_PATHS = ['common', 'components.shared.userDropdown'];
+const HOST_MESSAGE_NAMESPACES = new Set([
+  'common',
+  'home',
+  'about',
+  'privacy',
+  'terms',
+  'contact',
+  'errors',
+  'auth',
+  'components',
+  'dashboard',
+  'pricing',
+]);
 
 const PUBLIC_SITE_MESSAGE_PATHS: Record<string, string[]> = {
   '/': ['home'],
@@ -108,5 +121,13 @@ export function getClientMessagesForPath(
     return messages;
   }
 
-  return pickMessagePaths(source, paths) as AbstractIntlMessages;
+  const selected = pickMessagePaths(source, paths);
+
+  for (const [key, value] of Object.entries(source)) {
+    if (!HOST_MESSAGE_NAMESPACES.has(key) && isRecord(value)) {
+      selected[key] = value;
+    }
+  }
+
+  return selected as AbstractIntlMessages;
 }

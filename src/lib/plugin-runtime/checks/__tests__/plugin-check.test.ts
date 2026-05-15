@@ -951,6 +951,39 @@ export async function ping(ctx) {
     );
   });
 
+  it('accepts plugin-local menu i18n keys without direct labels', async () => {
+    const pluginRoot = createPluginRoot('menu-i18n');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(pluginRoot, 'pages/Home.tsx', `export default function Home() {}`);
+
+    const report = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) => ({
+        id: path.basename(root),
+        permissions: [],
+        routes: {
+          pages: [{ path: '/', component: './pages/Home', layout: 'dashboard' }],
+        },
+        resources: {
+          locales: {
+            en: './locales/en.json',
+            zh: './locales/zh.json',
+          },
+        },
+        menu: {
+          location: 'dashboard.sidebar',
+          labelKey: 'menu.console',
+          fallbackLabel: 'Console',
+          groupKey: 'menu.groups.apps',
+          fallbackGroup: 'Apps',
+          path: '/',
+        },
+      }),
+    });
+
+    expect(report.success).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+  });
+
   it('fails ambiguous dynamic page, API, and webhook route patterns', async () => {
     const pluginRoot = createPluginRoot('dynamic-route-conflicts');
     writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);

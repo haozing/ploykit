@@ -85,6 +85,8 @@ describe('plugin SDK contract helpers', () => {
     const diagnostics = validatePluginDefinition(todoPlugin);
 
     expect(diagnostics).toEqual([]);
+    const todoMenu = Array.isArray(todoPlugin.menu) ? todoPlugin.menu[0] : todoPlugin.menu;
+    expect(todoMenu).toMatchObject({ labelKey: 'menu.label', fallbackLabel: 'Todo' });
     expect(todoPlugin.routes?.pages?.[0]?.layout).toBe('dashboard');
     expect(todoPlugin.data?.collections?.todos.indexes).toHaveLength(2);
     expect(todoPlugin.resources?.locales?.zh).toBe('./locales/zh.json');
@@ -739,6 +741,13 @@ describe('plugin SDK contract helpers', () => {
         },
       },
       egress: ['ftp://bad.example.com', 'https://api.example.com/v1'],
+      menu: {
+        location: 'dashboard.sidebar',
+        label: ' ',
+        labelKey: 'bad..key',
+        fallbackLabel: '',
+        path: '/',
+      },
     } as unknown as Parameters<typeof validatePluginDefinition>[0];
 
     const diagnostics = validatePluginDefinition(invalidPlugin);
@@ -758,6 +767,9 @@ describe('plugin SDK contract helpers', () => {
         'PLUGIN_ROUTE_AUTH_TOO_WEAK',
         'PLUGIN_LOCALE_INVALID',
         'PLUGIN_EGRESS_INVALID',
+        'PLUGIN_MENU_LABEL_INVALID',
+        'PLUGIN_MENU_I18N_KEY_INVALID',
+        'PLUGIN_MENU_FALLBACK_LABEL_INVALID',
       ])
     );
 

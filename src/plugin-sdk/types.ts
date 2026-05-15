@@ -155,10 +155,19 @@ export interface PluginRoutesDefinition {
 
 export interface PluginMenuDefinition {
   location: 'site.header' | 'site.footer' | 'site.account' | 'dashboard.sidebar' | 'admin.sidebar';
-  label: string;
+  /** Direct menu label. Prefer labelKey + fallbackLabel when the plugin declares locale resources. */
+  label?: string;
+  /** Plugin-local i18n key. The host resolves it as `${pluginId}.${labelKey}`. */
+  labelKey?: string;
+  /** Displayed when labelKey cannot be translated. */
+  fallbackLabel?: string;
   icon?: string;
   path: string;
   group?: string;
+  /** Plugin-local i18n key for custom dashboard sidebar groups. */
+  groupKey?: string;
+  /** Displayed when groupKey cannot be translated. */
+  fallbackGroup?: string;
   weight?: number;
 }
 

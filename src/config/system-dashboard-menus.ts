@@ -19,7 +19,7 @@ export const MY_ACCOUNT_ITEMS: DashboardMenuItem[] = [
     id: 'system-profile',
     i18nKey: 'dashboard.nav.profile',
     href: '/profile',
-    icon: 'user',
+    icon: 'User',
     weight: 10,
     guard: 'auth',
     showInMenu: true,

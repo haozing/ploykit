@@ -58,7 +58,8 @@ export const todoPlugin = definePlugin({
   },
   menu: {
     location: 'dashboard.sidebar',
-    label: 'Todo',
+    labelKey: 'menu.label',
+    fallbackLabel: 'Todo',
     icon: 'CheckSquare',
     path: '/',
   },

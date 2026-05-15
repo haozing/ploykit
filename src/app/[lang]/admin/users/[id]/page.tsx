@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { ArrowLeft, Mail, Calendar, Shield, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +31,8 @@ export default async function UserDetailPage({
 }) {
   // Await params in Next.js 15
   const { lang, id } = await params;
+  const t = await getTranslations('dashboard.users.detail');
+  const locale = lang === 'zh' ? 'zh-CN' : 'en-US';
 
   // Fetch real user data from service
   const userData = await getUserById(id);
@@ -41,10 +44,11 @@ export default async function UserDetailPage({
   // Transform data to match the page structure
   const user = {
     id: userData.id,
-    name: userData.name || 'Unknown User',
+    name: userData.name || t('unknownUser'),
     email: userData.email,
     avatar: userData.image,
     status: userData.emailVerified ? 'active' : 'pending',
+    statusLabel: userData.emailVerified ? t('status.active') : t('status.pending'),
     createdAt: userData.createdAt.toISOString(),
     lastLogin: null as string | null,
     emailVerified: userData.emailVerified,
@@ -64,9 +68,9 @@ export default async function UserDetailPage({
     // Recent activity: real audit-log activity can be added once this page gets a client data panel.
     recentActivity: [
       {
-        action: 'UserRegister',
+        action: t('activity.userRegister'),
         timestamp: userData.createdAt.toISOString(),
-        ipAddress: 'No data',
+        ipAddress: t('empty.noData'),
       },
     ],
   };
@@ -85,7 +89,7 @@ export default async function UserDetailPage({
       <Button variant="ghost" asChild>
         <Link href={`/${lang}/admin/users`}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Users
+          {t('actions.backToUsers')}
         </Link>
       </Button>
 
@@ -105,7 +109,7 @@ export default async function UserDetailPage({
                 <div className="flex items-center gap-3">
                   <h1 className="text-3xl font-bold">{user.name}</h1>
                   <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
-                    {user.status}
+                    {user.statusLabel}
                   </Badge>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -114,28 +118,33 @@ export default async function UserDetailPage({
                     {user.email}
                     {user.emailVerified && (
                       <Badge variant="outline" className="ml-1 text-xs">
-                        Verified
+                        {t('status.verified')}
                       </Badge>
                     )}
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    Joined {new Date(user.createdAt).toLocaleDateString()}
+                    {t('labels.joined', {
+                      date: new Date(user.createdAt).toLocaleDateString(locale),
+                    })}
                   </span>
                   <span className="flex items-center gap-1">
                     <Activity className="h-4 w-4" />
-                    Last login{' '}
-                    {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'No data'}
+                    {t('labels.lastLogin', {
+                      date: user.lastLogin
+                        ? new Date(user.lastLogin).toLocaleDateString(locale)
+                        : t('empty.noData'),
+                    })}
                   </span>
                 </div>
               </div>
 
               <div className="flex gap-2">
                 <Button asChild>
-                  <Link href={`/${lang}/admin/users`}>Edit in Users List</Link>
+                  <Link href={`/${lang}/admin/users`}>{t('actions.editInUsersList')}</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link href={`/${lang}/admin/users?tab=rbac`}>Manage Roles</Link>
+                  <Link href={`/${lang}/admin/users?tab=rbac`}>{t('actions.manageRoles')}</Link>
                 </Button>
               </div>
             </div>
@@ -146,9 +155,9 @@ export default async function UserDetailPage({
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="overview">{t('tabs.overview')}</TabsTrigger>
+          <TabsTrigger value="roles">{t('tabs.roles')}</TabsTrigger>
+          <TabsTrigger value="activity">{t('tabs.activity')}</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -158,9 +167,11 @@ export default async function UserDetailPage({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
-                  Roles
+                  {t('roles.title')}
                 </CardTitle>
-                <CardDescription>{user.roles.length} roles assigned</CardDescription>
+                <CardDescription>
+                  {t('roles.assignedCount', { count: user.roles.length })}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -171,12 +182,12 @@ export default async function UserDetailPage({
                           <p className="font-medium">{role.name}</p>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {role.permissions.length} permissions
+                          {t('roles.permissionCount', { count: role.permissions.length })}
                         </p>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">No roles assigned</p>
+                    <p className="text-sm text-muted-foreground">{t('roles.noRolesAssigned')}</p>
                   )}
                 </div>
               </CardContent>
@@ -186,9 +197,9 @@ export default async function UserDetailPage({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="h-5 w-5" />
-                  Recent Activity
+                  {t('activity.title')}
                 </CardTitle>
-                <CardDescription>Latest user actions</CardDescription>
+                <CardDescription>{t('activity.description')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -196,7 +207,7 @@ export default async function UserDetailPage({
                     <div key={idx} className="text-sm">
                       <p className="font-medium">{activity.action}</p>
                       <p className="text-muted-foreground">
-                        {new Date(activity.timestamp).toLocaleString()}
+                        {new Date(activity.timestamp).toLocaleString(locale)}
                       </p>
                     </div>
                   ))}
@@ -210,8 +221,8 @@ export default async function UserDetailPage({
         <TabsContent value="roles" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Manage Role</CardTitle>
-              <CardDescription>Assign or revoke this user&apos;s active role</CardDescription>
+              <CardTitle>{t('roles.manageTitle')}</CardTitle>
+              <CardDescription>{t('roles.manageDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               <UserRoleManager
@@ -232,8 +243,8 @@ export default async function UserDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Assigned Roles</CardTitle>
-              <CardDescription>Roles and permissions for this user</CardDescription>
+              <CardTitle>{t('roles.assignedTitle')}</CardTitle>
+              <CardDescription>{t('roles.assignedDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -244,7 +255,7 @@ export default async function UserDetailPage({
                         <div>
                           <h4 className="font-semibold">{role.name}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {role.permissions.length} permissions
+                            {t('roles.permissionCount', { count: role.permissions.length })}
                           </p>
                         </div>
                       </div>
@@ -261,7 +272,9 @@ export default async function UserDetailPage({
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No roles assigned to this user</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('roles.noRolesAssignedToUser')}
+                  </p>
                 )}
               </div>
             </CardContent>
@@ -272,8 +285,8 @@ export default async function UserDetailPage({
         <TabsContent value="activity" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>User actions and events</CardDescription>
+              <CardTitle>{t('activity.title')}</CardTitle>
+              <CardDescription>{t('activity.eventsDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -285,8 +298,8 @@ export default async function UserDetailPage({
                     <div className="flex-1">
                       <p className="text-sm font-medium">{activity.action}</p>
                       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-1">
-                        <span>{new Date(activity.timestamp).toLocaleString()}</span>
-                        <span>IP: {activity.ipAddress}</span>
+                        <span>{new Date(activity.timestamp).toLocaleString(locale)}</span>
+                        <span>{t('activity.ip', { ip: activity.ipAddress })}</span>
                       </div>
                     </div>
                   </div>

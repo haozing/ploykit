@@ -598,6 +598,99 @@
         "noData": "暂无系统状态数据"
       }
     },
+    "tasks": {
+      "page": {
+        "title": "任务中心",
+        "description": "查看对用户可见的插件运行、生成文件、连接器调用和计量记录。"
+      },
+      "actions": {
+        "refresh": "刷新"
+      },
+      "stats": {
+        "totalTasks": "任务总数",
+        "active": "进行中",
+        "lastUpdated": "最后更新"
+      },
+      "list": {
+        "title": "插件任务",
+        "description": "只有插件声明为用户可见的运行记录会显示在这里。"
+      },
+      "table": {
+        "task": "任务",
+        "plugin": "插件",
+        "status": "状态",
+        "progress": "进度",
+        "updated": "更新时间",
+        "open": "打开"
+      },
+      "empty": {
+        "noTaskYet": "暂无任务",
+        "noUserVisibleTasks": "暂无用户可见的插件任务。"
+      }
+    },
+    "taskDetail": {
+      "never": "从未",
+      "actions": {
+        "backToTasks": "任务",
+        "cancel": "取消",
+        "cancelFailed": "取消请求失败",
+        "cancelReasonPrompt": "取消原因："
+      },
+      "overview": {
+        "title": "运行概览",
+        "description": "{pluginName} · {pluginId} · 更新于 {updatedAt}",
+        "created": "创建时间",
+        "started": "开始时间",
+        "finished": "完成时间",
+        "cancel": "取消",
+        "notRequested": "未请求"
+      },
+      "logs": {
+        "title": "日志"
+      },
+      "files": {
+        "title": "文件和结果",
+        "bytes": "{count} 字节",
+        "columns": {
+          "name": "名称",
+          "purpose": "用途",
+          "status": "状态",
+          "size": "大小"
+        }
+      },
+      "results": {
+        "columns": {
+          "type": "类型",
+          "ref": "引用",
+          "created": "创建时间"
+        }
+      },
+      "connectorCalls": {
+        "title": "连接器调用",
+        "durationMs": "{count} 毫秒",
+        "columns": {
+          "connector": "连接器",
+          "status": "状态",
+          "duration": "耗时",
+          "credits": "点数"
+        }
+      },
+      "usage": {
+        "title": "用量和计量",
+        "columns": {
+          "meter": "计量器",
+          "metric": "指标",
+          "value": "数值",
+          "recorded": "记录时间"
+        }
+      },
+      "metadata": {
+        "title": "输入、费用、元数据"
+      },
+      "empty": {
+        "noRecords": "暂无记录。"
+      }
+    },
     "profile": {
       "title": "个人资料",
       "description": "管理您的账户信息和偏好设置",
@@ -1290,6 +1383,49 @@
           "pending": "待处理",
           "suspended": "已暂停",
           "deleted": "已删除"
+        }
+      },
+      "detail": {
+        "unknownUser": "未知用户",
+        "status": {
+          "active": "活跃",
+          "pending": "待验证",
+          "verified": "已验证"
+        },
+        "empty": {
+          "noData": "暂无数据"
+        },
+        "actions": {
+          "backToUsers": "返回用户列表",
+          "editInUsersList": "在用户列表中编辑",
+          "manageRoles": "管理角色"
+        },
+        "labels": {
+          "joined": "加入时间 {date}",
+          "lastLogin": "上次登录 {date}"
+        },
+        "tabs": {
+          "overview": "概览",
+          "roles": "角色与权限",
+          "activity": "活动"
+        },
+        "roles": {
+          "title": "角色",
+          "assignedCount": "已分配 {count} 个角色",
+          "permissionCount": "{count} 个权限",
+          "noRolesAssigned": "未分配角色",
+          "manageTitle": "管理角色",
+          "manageDescription": "分配或撤销此用户的当前角色",
+          "assignedTitle": "已分配角色",
+          "assignedDescription": "此用户的角色和权限",
+          "noRolesAssignedToUser": "此用户尚未分配角色"
+        },
+        "activity": {
+          "title": "最近活动",
+          "description": "最新用户操作",
+          "eventsDescription": "用户操作和事件",
+          "userRegister": "用户注册",
+          "ip": "IP：{ip}"
         }
       }
     },
@@ -2110,6 +2246,61 @@
           "MB": "MB",
           "GB": "GB",
           "calls": "次调用"
+        }
+      },
+      "detail": {
+        "loading": "正在加载计划详情...",
+        "actions": {
+          "backToPlans": "返回计划列表",
+          "returnToPlans": "返回计划列表",
+          "editPlan": "编辑计划",
+          "viewSubscribers": "查看订阅用户"
+        },
+        "errors": {
+          "fetchPlanDetails": "获取计划详情失败",
+          "loadPlan": "加载计划失败",
+          "planNotFound": "未找到计划"
+        },
+        "pricing": {
+          "free": "免费",
+          "monthShort": "月",
+          "yearShort": "年",
+          "perMonth": "每月",
+          "perYear": "每年"
+        },
+        "status": {
+          "active": "启用",
+          "inactive": "停用",
+          "default": "默认"
+        },
+        "stats": {
+          "subscribers": "订阅用户",
+          "status": "状态"
+        },
+        "tabs": {
+          "features": "功能与限制",
+          "settings": "设置"
+        },
+        "features": {
+          "title": "功能",
+          "description": "此计划包含的全部可用功能",
+          "enabled": "已启用",
+          "disabled": "已禁用"
+        },
+        "limits": {
+          "title": "资源限制",
+          "description": "使用配额和限制规则",
+          "unlimited": "无限制",
+          "monthly": "每月",
+          "yearly": "每年"
+        },
+        "settings": {
+          "title": "计划设置",
+          "description": "配置和元数据",
+          "planSlug": "计划标识",
+          "sortOrder": "排序",
+          "created": "创建时间",
+          "lastUpdated": "最后更新"
         }
       }
     },

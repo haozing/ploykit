@@ -18,6 +18,7 @@
 
 import { SlotRenderer } from '@/components/SlotRenderer';
 import type { LayoutComponentProps } from '@/lib/ui/layout/layout-resolver';
+import { getSiteFooterNavItems } from '@/lib/ui/navigation';
 import { siteConfig } from '../../../../site.config';
 import { ClientFooterLinks } from './ClientFooterLinks';
 
@@ -46,7 +47,9 @@ function DefaultCopyright() {
  * DefaultFooter Component
  * ==========================================================================
  */
-export default function DefaultFooter({ tokens }: LayoutComponentProps) {
+export default async function DefaultFooter({ tokens }: LayoutComponentProps) {
+  const footerLinks = await getSiteFooterNavItems();
+
   return (
     <>
       {/* 🆕 Footer before slot */}
@@ -82,7 +85,11 @@ export default function DefaultFooter({ tokens }: LayoutComponentProps) {
             <SlotRenderer slotName="footer:links-before" mode="append" />
 
             {/* Links 插槽（现有）*/}
-            <SlotRenderer slotName="footer:links" mode="replace" fallback={<ClientFooterLinks />} />
+            <SlotRenderer
+              slotName="footer:links"
+              mode="replace"
+              fallback={<ClientFooterLinks links={footerLinks} />}
+            />
 
             {/* 🆕 Links after slot */}
             <SlotRenderer slotName="footer:links-after" mode="append" />

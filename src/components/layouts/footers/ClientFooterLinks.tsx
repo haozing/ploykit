@@ -15,22 +15,30 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
-import { siteConfig } from '../../../../site.config';
+import type { SiteMenuItem } from '@/lib/ui/navigation/types';
+
+type TranslationFn = ReturnType<typeof useTranslations>;
+
+interface ClientFooterLinksProps {
+  links: SiteMenuItem[];
+}
+
+function translateWithFallback(t: TranslationFn, key: string, fallback?: string): string {
+  return t.has(key) ? t(key) : fallback || key;
+}
 
 /**
  * ClientFooterLinks Component
  *
  * Renders the link list in Footer
  */
-export function ClientFooterLinks() {
+export function ClientFooterLinks({ links }: ClientFooterLinksProps) {
   const t = useTranslations();
   const locale = useLocale();
 
-  const footerLinks = siteConfig.footer?.links || [];
-
   return (
     <nav className="flex items-center gap-6">
-      {footerLinks.map((link) => {
+      {links.map((link) => {
         // Add language prefix to href
         const href = link.href === '/' ? `/${locale}` : `/${locale}${link.href}`;
 
@@ -43,7 +51,7 @@ export function ClientFooterLinks() {
               color: 'var(--footer-text)',
             }}
           >
-            {t(link.i18nKey)}
+            {link.label ?? translateWithFallback(t, link.i18nKey, link.fallbackLabel)}
           </Link>
         );
       })}

@@ -22,11 +22,17 @@ import Link from 'next/link';
 import { cn } from '@/lib/_core/utils';
 import type { SiteMenuItem } from '@/lib/ui/navigation/types';
 
+type TranslationFn = ReturnType<typeof useTranslations>;
+
 interface ClientNavProps {
   /**
    * Navigation item list (system + plugins, already sorted)
    */
   navItems: SiteMenuItem[];
+}
+
+function translateWithFallback(t: TranslationFn, key: string, fallback?: string): string {
+  return t.has(key) ? t(key) : fallback || key;
 }
 
 export function ClientNav({ navItems }: ClientNavProps) {
@@ -77,7 +83,7 @@ export function ClientNav({ navItems }: ClientNavProps) {
               color: 'var(--header-text)',
             }}
           >
-            {item.label ?? t(item.i18nKey)}
+            {item.label ?? translateWithFallback(t, item.i18nKey, item.fallbackLabel)}
           </Link>
         );
       })}

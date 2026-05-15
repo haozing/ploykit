@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { ArrowLeft, Database, FileArchive, Gauge, Network, TerminalSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,8 +31,8 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   return 'outline';
 }
 
-function formatDate(value?: string): string {
-  return value ? new Date(value).toLocaleString() : 'Never';
+function formatDate(value: string | undefined, locale: string, fallback: string): string {
+  return value ? new Date(value).toLocaleString(locale) : fallback;
 }
 
 function JsonBlock({ value }: { value: unknown }) {
@@ -52,7 +53,9 @@ export default async function PluginTaskDetailPage({
   params: Promise<{ lang: string; id: string }>;
 }) {
   const [user, resolvedParams] = await Promise.all([requireAuth(), params]);
+  const t = await getTranslations('dashboard.taskDetail');
   const task = await getUserPluginTask(user.id, resolvedParams.id);
+  const locale = resolvedParams.lang === 'zh' ? 'zh-CN' : 'en-US';
 
   return (
     <div className="space-y-6">
@@ -61,7 +64,7 @@ export default async function PluginTaskDetailPage({
           <Button asChild variant="ghost" size="sm" className="-ml-3">
             <Link href={`/${resolvedParams.lang}/tasks`}>
               <ArrowLeft className="h-4 w-4" />
-              Tasks
+              {t('actions.backToTasks')}
             </Link>
           </Button>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -75,9 +78,13 @@ export default async function PluginTaskDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Run Overview</CardTitle>
+          <CardTitle>{t('overview.title')}</CardTitle>
           <CardDescription>
-            {task.pluginName} · {task.pluginId} · updated {formatDate(task.updatedAt)}
+            {t('overview.description', {
+              pluginName: task.pluginName,
+              pluginId: task.pluginId,
+              updatedAt: formatDate(task.updatedAt, locale, t('never')),
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -86,10 +93,22 @@ export default async function PluginTaskDetailPage({
             <span className="w-12 text-right text-sm text-muted-foreground">{task.progress}%</span>
           </div>
           <div className="grid gap-3 md:grid-cols-4">
-            <Detail label="Created" value={formatDate(task.createdAt)} />
-            <Detail label="Started" value={formatDate(task.startedAt)} />
-            <Detail label="Finished" value={formatDate(task.finishedAt)} />
-            <Detail label="Cancel" value={task.cancelReason ?? 'Not requested'} />
+            <Detail
+              label={t('overview.created')}
+              value={formatDate(task.createdAt, locale, t('never'))}
+            />
+            <Detail
+              label={t('overview.started')}
+              value={formatDate(task.startedAt, locale, t('never'))}
+            />
+            <Detail
+              label={t('overview.finished')}
+              value={formatDate(task.finishedAt, locale, t('never'))}
+            />
+            <Detail
+              label={t('overview.cancel')}
+              value={task.cancelReason ?? t('overview.notRequested')}
+            />
           </div>
         </CardContent>
       </Card>
@@ -99,12 +118,12 @@ export default async function PluginTaskDetailPage({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <TerminalSquare className="h-4 w-4" />
-              Logs
+              {t('logs.title')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {task.logs.length === 0 ? (
-              <Empty />
+              <Empty label={t('empty.noRecords')} />
             ) : (
               <div className="space-y-2">
                 {task.logs.map((log) => (
@@ -112,7 +131,7 @@ export default async function PluginTaskDetailPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={statusVariant(log.level)}>{log.level}</Badge>
                       <span className="text-xs text-muted-foreground">
-                        {formatDate(log.createdAt)}
+                        {formatDate(log.createdAt, locale, t('never'))}
                       </span>
                     </div>
                     <p className="mt-2 text-sm">{log.message}</p>
@@ -127,26 +146,37 @@ export default async function PluginTaskDetailPage({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileArchive className="h-4 w-4" />
-              Files And Results
+              {t('files.title')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <SimpleTable
-              columns={['Name', 'Purpose', 'Status', 'Size']}
+              columns={[
+                t('files.columns.name'),
+                t('files.columns.purpose'),
+                t('files.columns.status'),
+                t('files.columns.size'),
+              ]}
               rows={task.files.map((file) => [
                 file.fileName,
                 file.purpose,
                 file.status,
-                `${file.size.toLocaleString()} bytes`,
+                t('files.bytes', { count: file.size.toLocaleString(locale) }),
               ])}
+              emptyLabel={t('empty.noRecords')}
             />
             <SimpleTable
-              columns={['Type', 'Ref', 'Created']}
+              columns={[
+                t('results.columns.type'),
+                t('results.columns.ref'),
+                t('results.columns.created'),
+              ]}
               rows={task.results.map((result) => [
                 result.type,
                 result.ref,
-                formatDate(result.createdAt),
+                formatDate(result.createdAt, locale, t('never')),
               ])}
+              emptyLabel={t('empty.noRecords')}
             />
           </CardContent>
         </Card>
@@ -155,18 +185,28 @@ export default async function PluginTaskDetailPage({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Network className="h-4 w-4" />
-              Connector Calls
+              {t('connectorCalls.title')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <SimpleTable
-              columns={['Connector', 'Status', 'Duration', 'Credits']}
+              columns={[
+                t('connectorCalls.columns.connector'),
+                t('connectorCalls.columns.status'),
+                t('connectorCalls.columns.duration'),
+                t('connectorCalls.columns.credits'),
+              ]}
               rows={task.connectorCalls.map((call) => [
                 call.connectorName,
                 call.status == null ? 'error' : String(call.status),
-                call.durationMs == null ? '-' : `${call.durationMs} ms`,
-                call.creditsConsumed.toLocaleString(),
+                call.durationMs == null
+                  ? '-'
+                  : t('connectorCalls.durationMs', {
+                      count: call.durationMs.toLocaleString(locale),
+                    }),
+                call.creditsConsumed.toLocaleString(locale),
               ])}
+              emptyLabel={t('empty.noRecords')}
             />
           </CardContent>
         </Card>
@@ -175,18 +215,24 @@ export default async function PluginTaskDetailPage({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Gauge className="h-4 w-4" />
-              Usage And Metering
+              {t('usage.title')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <SimpleTable
-              columns={['Meter', 'Metric', 'Value', 'Recorded']}
+              columns={[
+                t('usage.columns.meter'),
+                t('usage.columns.metric'),
+                t('usage.columns.value'),
+                t('usage.columns.recorded'),
+              ]}
               rows={task.usage.map((record) => [
                 record.meter ?? record.metric,
                 record.metric,
                 `${record.value} ${record.unit}`,
-                formatDate(record.recordedAt),
+                formatDate(record.recordedAt, locale, t('never')),
               ])}
+              emptyLabel={t('empty.noRecords')}
             />
           </CardContent>
         </Card>
@@ -196,7 +242,7 @@ export default async function PluginTaskDetailPage({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Database className="h-4 w-4" />
-            Inputs, Costs, Metadata
+            {t('metadata.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-3">
@@ -218,12 +264,20 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Empty() {
-  return <div className="py-8 text-center text-sm text-muted-foreground">No records.</div>;
+function Empty({ label }: { label: string }) {
+  return <div className="py-8 text-center text-sm text-muted-foreground">{label}</div>;
 }
 
-function SimpleTable({ columns, rows }: { columns: string[]; rows: string[][] }) {
-  if (rows.length === 0) return <Empty />;
+function SimpleTable({
+  columns,
+  rows,
+  emptyLabel,
+}: {
+  columns: string[];
+  rows: string[][];
+  emptyLabel: string;
+}) {
+  if (rows.length === 0) return <Empty label={emptyLabel} />;
   return (
     <Table>
       <TableHeader>
