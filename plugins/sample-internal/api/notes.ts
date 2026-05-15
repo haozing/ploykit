@@ -17,7 +17,11 @@ export default defineApi({
     });
     const project =
       includeProject && projectId
-        ? await ctx.services.json('core-api', `/v1/projects/${projectId}`)
+        ? await ctx.services.json('core-api', {
+            method: 'GET',
+            template: '/v1/projects/:projectId',
+            params: { projectId },
+          })
         : null;
 
     return ctx.json({ notes, projectId, preview, project });

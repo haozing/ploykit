@@ -1,4 +1,14 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export type ResourceScopeType = 'user' | 'workspace';
 export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
@@ -281,6 +291,7 @@ export const pluginResourceBindings = pgTable(
     scopeId: text('scope_id').notNull(),
     resourceType: text('resource_type').notNull(),
     resourceId: text('resource_id').notNull(),
+    cardinality: text('cardinality').notNull().default('many'),
     displayName: text('display_name'),
     status: text('status').notNull().default('active'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
@@ -297,6 +308,9 @@ export const pluginResourceBindings = pgTable(
       table.resourceType,
       table.resourceId
     ),
+    oneActiveResourceIdx: uniqueIndex('plugin_resource_bindings_one_active_resource')
+      .on(table.pluginId, table.scopeType, table.scopeId, table.resourceType)
+      .where(sql`${table.status} = 'active' AND ${table.cardinality} = 'one'`),
     scopeIdx: index('plugin_resource_bindings_scope_idx').on(
       table.pluginId,
       table.scopeType,
@@ -334,6 +348,77 @@ export const pluginServiceCallLogs = pgTable(
       table.createdAt
     ),
     requestIdx: index('plugin_service_call_logs_request_idx').on(table.requestId),
+  })
+);
+
+export const pluginInternalServiceBindings = pgTable(
+  'plugin_internal_service_bindings',
+  {
+    id: text('id').primaryKey(),
+    pluginId: text('plugin_id').notNull(),
+    serviceName: text('service_name').notNull(),
+    scopeType: text('scope_type').notNull().default('global'),
+    scopeId: text('scope_id'),
+    environment: text('environment'),
+    baseUrl: text('base_url').notNull(),
+    authType: text('auth_type').notNull().default('none'),
+    authSecretRef: text('auth_secret_ref'),
+    authUsernameRef: text('auth_username_ref'),
+    authPasswordRef: text('auth_password_ref'),
+    authHeaderName: text('auth_header_name'),
+    actorClaimsEnabled: boolean('actor_claims_enabled').notNull().default(false),
+    actorClaimsType: text('actor_claims_type').notNull().default('hmac'),
+    actorClaimsAudience: text('actor_claims_audience'),
+    actorClaimsSecretRef: text('actor_claims_secret_ref'),
+    actorClaimsPreviousSecretRef: text('actor_claims_previous_secret_ref'),
+    actorClaimsKeyId: text('actor_claims_key_id'),
+    actorClaimsPreviousKeyId: text('actor_claims_previous_key_id'),
+    actorClaimsTtlSeconds: integer('actor_claims_ttl_seconds').notNull().default(60),
+    timeoutMs: integer('timeout_ms').notNull().default(30000),
+    retryAttempts: integer('retry_attempts').notNull().default(0),
+    retryBackoffMs: integer('retry_backoff_ms').notNull().default(250),
+    maxResponseBytes: integer('max_response_bytes').notNull().default(10485760),
+    healthPath: text('health_path'),
+    healthMethod: text('health_method').notNull().default('GET'),
+    healthExpectedStatus: integer('health_expected_status').notNull().default(200),
+    status: text('status').notNull().default('active'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
+    lastCheckStatus: text('last_check_status'),
+    lastCheckError: text('last_check_error'),
+    createdByUserId: text('created_by_user_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    bindingGlobalDefaultIdx: uniqueIndex('plugin_internal_service_bindings_global_default_idx')
+      .on(table.pluginId, table.serviceName)
+      .where(sql`${table.scopeType} = 'global' AND ${table.environment} IS NULL`),
+    bindingGlobalEnvironmentIdx: uniqueIndex(
+      'plugin_internal_service_bindings_global_environment_idx'
+    )
+      .on(table.pluginId, table.serviceName, table.environment)
+      .where(sql`${table.scopeType} = 'global' AND ${table.environment} IS NOT NULL`),
+    bindingWorkspaceDefaultIdx: uniqueIndex(
+      'plugin_internal_service_bindings_workspace_default_idx'
+    )
+      .on(table.pluginId, table.serviceName, table.scopeId)
+      .where(sql`${table.scopeType} = 'workspace' AND ${table.environment} IS NULL`),
+    bindingWorkspaceEnvironmentIdx: uniqueIndex(
+      'plugin_internal_service_bindings_workspace_environment_idx'
+    )
+      .on(table.pluginId, table.serviceName, table.scopeId, table.environment)
+      .where(sql`${table.scopeType} = 'workspace' AND ${table.environment} IS NOT NULL`),
+    pluginServiceIdx: index('plugin_internal_service_bindings_plugin_service_idx').on(
+      table.pluginId,
+      table.serviceName,
+      table.status
+    ),
+    scopeIdx: index('plugin_internal_service_bindings_scope_lookup_idx').on(
+      table.scopeType,
+      table.scopeId,
+      table.environment
+    ),
   })
 );
 
@@ -411,6 +496,8 @@ export type PluginResourceBinding = typeof pluginResourceBindings.$inferSelect;
 export type NewPluginResourceBinding = typeof pluginResourceBindings.$inferInsert;
 export type PluginServiceCallLog = typeof pluginServiceCallLogs.$inferSelect;
 export type NewPluginServiceCallLog = typeof pluginServiceCallLogs.$inferInsert;
+export type PluginInternalServiceBinding = typeof pluginInternalServiceBindings.$inferSelect;
+export type NewPluginInternalServiceBinding = typeof pluginInternalServiceBindings.$inferInsert;
 export type PluginApiKey = typeof pluginApiKeys.$inferSelect;
 export type NewPluginApiKey = typeof pluginApiKeys.$inferInsert;
 export type PluginRateLimitBucket = typeof pluginRateLimitBuckets.$inferSelect;

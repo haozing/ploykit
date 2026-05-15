@@ -44,6 +44,7 @@ describe('createPluginTestHost platform helpers', () => {
     });
 
     expect(binding.resourceId).toBe('project-1');
+    expect(binding.cardinality).toBe('one');
     await expect(
       host.ctx.resourceBindings.get({
         scope: { type: 'workspace', id: 'workspace-1' },
@@ -52,7 +53,9 @@ describe('createPluginTestHost platform helpers', () => {
     ).resolves.toMatchObject({ resourceId: 'project-2' });
 
     await expect(
-      host.ctx.services.json('core-api', '/v1/projects/project-2', {
+      host.ctx.services.json('core-api', {
+        template: '/v1/projects/:projectId',
+        params: { projectId: 'project-2' },
         query: { limit: 10 },
       })
     ).resolves.toEqual({ id: 'project-2', limit: '10' });

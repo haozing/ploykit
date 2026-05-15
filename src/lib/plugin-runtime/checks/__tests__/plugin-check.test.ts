@@ -1226,6 +1226,40 @@ export async function project(ctx) {
     expect(report.diagnostics).toEqual([]);
   });
 
+  it('checks object-form ctx.services templates against service declarations', async () => {
+    const pluginRoot = createPluginRoot('service-object-template-check');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'api/project.ts',
+      `
+export async function project(ctx) {
+  return ctx.services.requestJson('core-api', {
+    method: 'POST',
+    template: '/v1/projects/:projectId/jobs/:jobId',
+    params: { projectId: 'project-1', jobId: 'job-1' }
+  });
+}
+`
+    );
+
+    const report = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        createContract(root, [Permission.ServicesInvoke], {
+          services: [
+            {
+              name: 'core-api',
+              methods: ['POST'],
+              paths: ['/v1/projects/:projectId/jobs/:jobId'],
+            },
+          ],
+        }),
+    });
+
+    expect(report.success).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+  });
+
   it('infers static origins from URL objects with static absolute URLs', async () => {
     const pluginRoot = createPluginRoot('url-object-egress');
     writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);

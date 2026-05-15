@@ -82,7 +82,10 @@ const VALID_STATUS = new Set<PluginResourceBindingStatus>(['active', 'archived',
 const DEFAULT_READ_ROLES = ['owner', 'admin', 'editor', 'viewer'] satisfies PluginWorkspaceRole[];
 const DEFAULT_WRITE_ROLES = ['owner', 'admin'] satisfies PluginWorkspaceRole[];
 
-function resolveScope(scope: PluginCapabilityScope, capability: string): PluginResourceBindingsScope {
+function resolveScope(
+  scope: PluginCapabilityScope,
+  capability: string
+): PluginResourceBindingsScope {
   const user = requireUser(scope, capability);
   return { pluginId: scope.contract.id, userId: user.id };
 }
@@ -169,6 +172,7 @@ function toRecord(row: PluginResourceBinding): PluginResourceBindingRecord {
     }),
     resourceType: row.resourceType,
     resourceId: row.resourceId,
+    cardinality: row.cardinality as 'one' | 'many',
     displayName: row.displayName ?? undefined,
     status: normalizeStatus(row.status as PluginResourceBindingStatus, 'active'),
     metadata: row.metadata,
@@ -280,7 +284,8 @@ export class DbPluginResourceBindingsRepository implements PluginResourceBinding
               eq(pluginResourceBindings.pluginId, scope.pluginId),
               eq(pluginResourceBindings.scopeType, input.resourceScope.type),
               eq(pluginResourceBindings.scopeId, input.resourceScope.id),
-              eq(pluginResourceBindings.resourceType, input.resourceType)
+              eq(pluginResourceBindings.resourceType, input.resourceType),
+              eq(pluginResourceBindings.status, 'active')
             )
           );
       }
@@ -294,6 +299,7 @@ export class DbPluginResourceBindingsRepository implements PluginResourceBinding
           scopeId: input.resourceScope.id,
           resourceType: input.resourceType,
           resourceId: input.resourceId,
+          cardinality: input.cardinality,
           displayName: input.displayName,
           status: input.status,
           metadata: input.metadata,
@@ -310,6 +316,7 @@ export class DbPluginResourceBindingsRepository implements PluginResourceBinding
           ],
           set: {
             displayName: input.displayName,
+            cardinality: input.cardinality,
             status: input.status,
             metadata: input.metadata,
             archivedAt: null,
@@ -327,7 +334,10 @@ export class DbPluginResourceBindingsRepository implements PluginResourceBinding
         .select()
         .from(pluginResourceBindings)
         .where(
-          and(eq(pluginResourceBindings.pluginId, scope.pluginId), eq(pluginResourceBindings.id, id))
+          and(
+            eq(pluginResourceBindings.pluginId, scope.pluginId),
+            eq(pluginResourceBindings.id, id)
+          )
         )
         .limit(1);
       return rows[0] ?? null;
@@ -341,7 +351,10 @@ export class DbPluginResourceBindingsRepository implements PluginResourceBinding
         .update(pluginResourceBindings)
         .set({ status: 'archived', archivedAt: now, updatedAt: now })
         .where(
-          and(eq(pluginResourceBindings.pluginId, scope.pluginId), eq(pluginResourceBindings.id, id))
+          and(
+            eq(pluginResourceBindings.pluginId, scope.pluginId),
+            eq(pluginResourceBindings.id, id)
+          )
         )
         .returning();
       if (!row) {
@@ -370,11 +383,7 @@ export function createPluginResourceBindingsCapability(
         'ctx.resourceBindings.get'
       );
       const capabilityScope = resolveScope(scope, 'ctx.resourceBindings.get');
-      const resourceScope = normalizeResourceScope(
-        scope,
-        input.scope,
-        'ctx.resourceBindings.get'
-      );
+      const resourceScope = normalizeResourceScope(scope, input.scope, 'ctx.resourceBindings.get');
       const resourceType = normalizeResourceType(input.resourceType);
       const declaration = requireBindingDeclaration(
         scope,
@@ -405,12 +414,10 @@ export function createPluginResourceBindingsCapability(
         'ctx.resourceBindings.list'
       );
       const capabilityScope = resolveScope(scope, 'ctx.resourceBindings.list');
-      const resourceScope = normalizeResourceScope(
-        scope,
-        input.scope,
-        'ctx.resourceBindings.list'
-      );
-      const resourceType = input.resourceType ? normalizeResourceType(input.resourceType) : undefined;
+      const resourceScope = normalizeResourceScope(scope, input.scope, 'ctx.resourceBindings.list');
+      const resourceType = input.resourceType
+        ? normalizeResourceType(input.resourceType)
+        : undefined;
       if (resourceType) {
         const declaration = requireBindingDeclaration(
           scope,

@@ -34,10 +34,12 @@ import { getPluginRuntimeMapEntry } from '../loader';
 import { pluginRuntimeRegistry } from '../registry';
 import { assertNoPluginPublicAliasConflicts } from '../public-routes/public-route-conflicts.server';
 import { eq } from 'drizzle-orm';
+import { env } from '@/lib/_core/env';
 import {
   createPluginStorageRuntime,
   DbPluginStorageRepository,
 } from '../storage/db-storage.server';
+import { listInternalServiceRequirements } from '../admin';
 
 async function deletePluginRuntimeState(pluginId: string): Promise<void> {
   await db.delete(pluginJobRuns).where(eq(pluginJobRuns.pluginId, pluginId));
@@ -184,6 +186,31 @@ export class PluginRuntimeInstallerService {
           success: true,
           installation,
         };
+      }
+
+      const serviceRequirements = await listInternalServiceRequirements({ pluginId });
+      const missingServices = serviceRequirements.filter(
+        (requirement) => requirement.bindingStatus !== 'bound'
+      );
+      const strictServices =
+        env.NODE_ENV === 'production' || env.PLUGIN_INTERNAL_SERVICE_STRICT_MODE === 'true';
+      if (strictServices && missingServices.length > 0) {
+        throw new PluginLifecycleError(
+          pluginId,
+          'enable',
+          `Internal service binding missing: ${missingServices
+            .map((requirement) => requirement.serviceName)
+            .join(', ')}`
+        );
+      }
+      if (missingServices.length > 0) {
+        logger.warn(
+          {
+            pluginId,
+            services: missingServices.map((requirement) => requirement.serviceName),
+          },
+          'Plugin enabled with unbound internal services'
+        );
       }
 
       const lifecycle = await runPluginLifecycle({

@@ -5,6 +5,9 @@ import type {
   PluginConnectorResolvedFile,
   PluginConnectorRetryPolicy,
   PluginContext,
+  PluginServiceObjectRequest,
+  PluginServiceRequest,
+  PluginServiceRequestInit,
   PluginResourceBindingRecord,
   PluginResourceBindingStatus,
   PluginResourceScope,
@@ -548,6 +551,38 @@ function servicePathAllowed(pattern: string, servicePath: string): boolean {
   }
 
   return patternSegments.length === pathSegments.length;
+}
+
+function normalizeTestPath(pathValue: string): string {
+  return normalizePluginRoutePath(pathValue);
+}
+
+function interpolateTestServiceTemplate(
+  template: string,
+  params: Record<string, string | number | boolean | null | undefined> | undefined
+): string {
+  const values = params ?? {};
+  const normalizedTemplate = normalizeTestPath(template);
+  return normalizeTestPath(
+    normalizedTemplate
+      .split('/')
+      .map((segment) => {
+        if (!segment.startsWith(':')) {
+          return segment;
+        }
+        const name = segment.slice(1);
+        const value = values[name];
+        if (value === undefined || value === null) {
+          throw new PluginError({
+            code: 'PLUGIN_SERVICE_TEMPLATE_PARAM_MISSING',
+            message: `Service path template "${normalizedTemplate}" is missing param "${name}".`,
+            statusCode: 400,
+          });
+        }
+        return encodeURIComponent(String(value));
+      })
+      .join('/')
+  );
 }
 
 function stateHasAiResponse(entry: { response?: unknown }): boolean {
@@ -1612,6 +1647,7 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           scope,
           resourceType: input.resourceType,
           resourceId: input.resourceId,
+          cardinality: declaration.cardinality ?? 'many',
           displayName: input.displayName,
           status: (input.status ?? 'active') as PluginResourceBindingStatus,
           metadata: input.metadata ?? {},
@@ -2205,10 +2241,18 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       },
     },
     services: {
-      async fetch(service, servicePath, init = {}) {
+      async fetch(
+        service: string,
+        servicePathOrRequest: PluginServiceRequest,
+        init: PluginServiceRequestInit = {}
+      ): Promise<Response> {
         enforcePermission(Permission.ServicesInvoke, 'ctx.services.fetch');
         const declaration = plugin.services?.find((entry) => entry.name === service);
-        const method = (init.method ?? 'GET').toUpperCase();
+        const request =
+          typeof servicePathOrRequest === 'string'
+            ? { path: servicePathOrRequest, ...init }
+            : servicePathOrRequest;
+        const method = (request.method ?? 'GET').toUpperCase();
         if (!declaration) {
           throw new PluginError({
             code: 'PLUGIN_SERVICE_UNDECLARED',
@@ -2223,7 +2267,22 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
             statusCode: 403,
           });
         }
-        if (!declaration.paths.some((pathPattern) => servicePathAllowed(pathPattern, servicePath))) {
+        const servicePath = request.template
+          ? interpolateTestServiceTemplate(request.template, request.params)
+          : request.path;
+        if (!servicePath) {
+          throw new PluginError({
+            code: 'PLUGIN_SERVICE_PATH_REQUIRED',
+            message: `Service "${service}" requires a path or template.`,
+            statusCode: 400,
+          });
+        }
+        const allowed = declaration.paths.some((pathPattern) =>
+          request.template
+            ? normalizeTestPath(pathPattern) === normalizeTestPath(request.template)
+            : servicePathAllowed(pathPattern, servicePath)
+        );
+        if (!allowed) {
           throw new PluginError({
             code: 'PLUGIN_SERVICE_PATH_FORBIDDEN',
             message: `Service "${service}" does not allow path "${servicePath}".`,
@@ -2239,10 +2298,10 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           });
         }
         const query =
-          init.query instanceof URLSearchParams
-            ? init.query
+          request.query instanceof URLSearchParams
+            ? request.query
             : new URLSearchParams(
-                Object.entries(init.query ?? {})
+                Object.entries(request.query ?? {})
                   .filter((entry) => entry[1] !== undefined && entry[1] !== null)
                   .map(([key, value]) => [key, String(value)])
               );
@@ -2250,16 +2309,23 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           service,
           path: servicePath,
           method,
-          headers: new Headers(init.headers),
+          headers: new Headers(request.headers),
           query,
-          body: init.json ?? init.body,
-          scope: init.scope,
+          body: request.json ?? request.body,
+          scope: request.scope,
         });
         state.services.push({ service, path: servicePath, method, status: response.status });
         return response;
       },
-      async json(service, servicePath, init) {
-        const response = await ctx.services.fetch(service, servicePath, init);
+      async json<T = unknown>(
+        service: string,
+        servicePathOrRequest: PluginServiceRequest,
+        init?: PluginServiceRequestInit
+      ): Promise<T> {
+        const response =
+          typeof servicePathOrRequest === 'string'
+            ? await ctx.services.fetch(service, servicePathOrRequest, init)
+            : await ctx.services.fetch(service, servicePathOrRequest);
         if (!response.ok) {
           throw new PluginError({
             code: 'SERVICE_REQUEST_FAILED',
@@ -2267,7 +2333,26 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
             statusCode: 502,
           });
         }
-        return response.json();
+        return response.json() as Promise<T>;
+      },
+      async requestJson<T = unknown>(service: string, request: PluginServiceObjectRequest) {
+        const response = await ctx.services.fetch(service, request);
+        const headers = new Headers(response.headers);
+        const contentType = response.headers.get('content-type') ?? '';
+        const payload = contentType.includes('application/json')
+          ? await response.json()
+          : await response.text();
+        if (response.ok) {
+          return { ok: true, status: response.status, data: payload as T, headers };
+        }
+        if (request.errorMode === 'throw') {
+          throw new PluginError({
+            code: 'SERVICE_REQUEST_FAILED',
+            message: `Test service "${service}" returned ${response.status}.`,
+            statusCode: 502,
+          });
+        }
+        return { ok: false, status: response.status, error: payload, headers };
       },
     },
     json(data: unknown, init?: ResponseInit) {

@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { PluginStorage } from './storage';
+import type { PluginResourceBindingCardinality } from './types';
 
 export interface PluginUser {
   id: string;
@@ -953,6 +954,7 @@ export interface PluginResourceBindingRecord {
   scope: PluginResourceScope;
   resourceType: string;
   resourceId: string;
+  cardinality?: PluginResourceBindingCardinality;
   displayName?: string;
   status: PluginResourceBindingStatus;
   metadata: Record<string, unknown>;
@@ -1007,9 +1009,28 @@ export interface PluginServiceRequestInit {
   signal?: AbortSignal;
 }
 
+export interface PluginServiceObjectRequest extends PluginServiceRequestInit {
+  path?: string;
+  template?: string;
+  params?: Record<string, string | number | boolean | null | undefined>;
+  errorMode?: 'throw' | 'preserve';
+}
+
+export type PluginServiceRequest = string | PluginServiceObjectRequest;
+
+export type PluginServiceJsonResult<T = unknown> =
+  | { ok: true; status: number; data: T; headers: Headers }
+  | { ok: false; status: number; error: unknown; headers: Headers };
+
 export interface PluginServices {
   fetch(service: string, path: string, init?: PluginServiceRequestInit): Promise<Response>;
+  fetch(service: string, request: PluginServiceObjectRequest): Promise<Response>;
   json<T = unknown>(service: string, path: string, init?: PluginServiceRequestInit): Promise<T>;
+  json<T = unknown>(service: string, request: PluginServiceObjectRequest): Promise<T>;
+  requestJson<T = unknown>(
+    service: string,
+    request: PluginServiceObjectRequest
+  ): Promise<PluginServiceJsonResult<T>>;
 }
 
 export interface PluginAuthContext {

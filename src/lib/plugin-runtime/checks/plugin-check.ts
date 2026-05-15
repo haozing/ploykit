@@ -598,19 +598,37 @@ function extractServicePathTemplate(argument: ts.Expression | undefined): string
   return segments.join('');
 }
 
-function extractServiceInitMethod(argument: ts.Expression | undefined): string | undefined {
+function objectProperty(
+  argument: ts.Expression | undefined,
+  name: string
+): ts.Expression | undefined {
   if (!argument || !ts.isObjectLiteralExpression(argument)) {
     return undefined;
   }
 
-  const methodProperty = argument.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) &&
-      ((ts.isIdentifier(property.name) && property.name.text === 'method') ||
-        (ts.isStringLiteralLike(property.name) && property.name.text === 'method'))
+  const property = argument.properties.find(
+    (candidate): candidate is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(candidate) &&
+      ((ts.isIdentifier(candidate.name) && candidate.name.text === name) ||
+        (ts.isStringLiteralLike(candidate.name) && candidate.name.text === name))
   );
 
-  return methodProperty ? extractStaticString(methodProperty.initializer) : undefined;
+  return property?.initializer;
+}
+
+function extractServiceRequestPath(argument: ts.Expression | undefined): string | undefined {
+  if (!argument || !ts.isObjectLiteralExpression(argument)) {
+    return extractServicePathTemplate(argument);
+  }
+
+  return (
+    extractServicePathTemplate(objectProperty(argument, 'template')) ??
+    extractServicePathTemplate(objectProperty(argument, 'path'))
+  );
+}
+
+function extractServiceInitMethod(argument: ts.Expression | undefined): string | undefined {
+  return extractStaticString(objectProperty(argument, 'method'));
 }
 
 function isExternalHttpUrl(value: string): boolean {
@@ -1041,7 +1059,8 @@ function captureCapabilityPermissions(
 
   if (matchesPrefix(chain, ['ctx', 'services'])) {
     const method = chain[2];
-    if (method === 'fetch' || method === 'json') {
+    if (method === 'fetch' || method === 'json' || method === 'requestJson') {
+      const requestArgument = node.arguments[1];
       recordPermissionUse(
         permissionUses,
         Permission.ServicesInvoke,
@@ -1056,8 +1075,10 @@ function captureCapabilityPermissions(
         node,
         sourceFile,
         extractStaticString(node.arguments[0]),
-        extractServicePathTemplate(node.arguments[1]),
-        extractServiceInitMethod(node.arguments[2])
+        extractServiceRequestPath(requestArgument),
+        ts.isObjectLiteralExpression(requestArgument)
+          ? extractServiceInitMethod(requestArgument)
+          : extractServiceInitMethod(node.arguments[2])
       );
       return;
     }
@@ -2769,7 +2790,9 @@ function buildServiceDiagnostics(
 ): PluginDiagnostic[] {
   const diagnostics: PluginDiagnostic[] = [];
   const entryFile = path.join(pluginRoot, 'plugin.ts');
-  const serviceDeclarations = new Map((contract.services ?? []).map((service) => [service.name, service]));
+  const serviceDeclarations = new Map(
+    (contract.services ?? []).map((service) => [service.name, service])
+  );
   const staticUses = new Set<string>();
 
   for (const use of serviceUses) {
@@ -2838,7 +2861,9 @@ function buildServiceDiagnostics(
       );
     }
 
-    const pathAllowed = declaration.paths.some((pattern) => servicePathAllowed(pattern, servicePath));
+    const pathAllowed = declaration.paths.some((pattern) =>
+      servicePathAllowed(pattern, servicePath)
+    );
     if (!pathAllowed) {
       diagnostics.push(
         createDiagnostic(

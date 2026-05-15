@@ -555,6 +555,7 @@
       "plugins": "插件管理",
       "pluginDevConsole": "开发控制台",
       "pluginOperations": "插件运营",
+      "pluginInternalServices": "内部服务",
       "revenue": "收入管理",
       "operationsCenter": "运维中心",
       "systemSettings": "系统设置",

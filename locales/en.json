@@ -555,6 +555,7 @@
       "plugins": "Plugins",
       "pluginDevConsole": "Plugin Dev Console",
       "pluginOperations": "Plugin Operations",
+      "pluginInternalServices": "Internal Services",
       "revenue": "Revenue",
       "operationsCenter": "Operations Center",
       "systemSettings": "System Settings",

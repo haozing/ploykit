@@ -397,7 +397,8 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
           row.pluginId === scope.pluginId &&
           row.scopeType === input.resourceScope.type &&
           row.scopeId === input.resourceScope.id &&
-          row.resourceType === input.resourceType
+          row.resourceType === input.resourceType &&
+          row.status === 'active'
         ) {
           row.status = 'archived';
           row.archivedAt = now;
@@ -421,6 +422,7 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
       scopeId: input.resourceScope.id,
       resourceType: input.resourceType,
       resourceId: input.resourceId,
+      cardinality: input.cardinality,
       displayName: input.displayName ?? null,
       status: input.status,
       metadata: input.metadata,
@@ -1286,9 +1288,9 @@ describe('plugin capability context', () => {
       });
     });
     const registry: PluginInternalServiceRegistry = {
-      get(name) {
+      get({ serviceName }) {
         return {
-          name,
+          name: serviceName,
           baseUrl: 'https://internal.example.test',
           auth: { type: 'bearer', token: 'service-token' },
           actorClaims: { enabled: true, secret: 'actor-secret', ttlSeconds: 60 },
@@ -1366,14 +1368,68 @@ describe('plugin capability context', () => {
     expect(new Set(usageRecords.map((record) => record.idempotencyKey)).size).toBe(2);
   });
 
+  it('supports object-form service templates and preserved JSON errors', async () => {
+    const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async (url) =>
+      Response.json({ message: 'not found', url }, { status: 404 })
+    );
+    const registry: PluginInternalServiceRegistry = {
+      get({ serviceName }) {
+        return {
+          name: serviceName,
+          baseUrl: 'https://internal.example.test',
+        };
+      },
+    };
+    const contract = normalizePluginRuntimeContract(
+      definePlugin({
+        id: 'capability-test',
+        name: 'Capability Test',
+        version: '1.0.0',
+        permissions: [Permission.ServicesInvoke],
+        services: [
+          {
+            name: 'core-api',
+            methods: ['GET'],
+            paths: ['/v1/projects/:projectId/jobs/:jobId'],
+          },
+        ],
+      })
+    );
+    const context = createPluginRuntimeContext({
+      contract,
+      request: new Request('https://test.local/api/plugins/capability-test/jobs'),
+      user: { id: 'user-1', role: 'user' },
+      capabilities: {
+        services: {
+          registry,
+          httpHost: { fetch: serviceFetch },
+          logRepository: { record: async () => undefined },
+        },
+      },
+    });
+
+    const result = await context.services.requestJson<{ message: string }>('core-api', {
+      method: 'GET',
+      template: '/v1/projects/:projectId/jobs/:jobId',
+      params: { projectId: 'project 1', jobId: 'job/2' },
+      query: { include: 'events' },
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 404 });
+    expect(serviceFetch).toHaveBeenCalledWith(
+      'https://internal.example.test/v1/projects/project%201/jobs/job%2F2?include=events',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
   it('uses the host default internal service registry when no per-context registry is passed', async () => {
     const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async () =>
       Response.json({ ok: true, source: 'default-registry' })
     );
     setDefaultPluginInternalServiceRegistry({
-      get(name) {
+      get({ serviceName }) {
         return {
-          name,
+          name: serviceName,
           baseUrl: 'https://default.internal.test',
         };
       },
@@ -1454,6 +1510,7 @@ describe('plugin capability context', () => {
         });
         const archived = await context.resourceBindings.archive(binding.id);
 
+        expect(binding.cardinality).toBe('one');
         expect(found?.id).toBe(binding.id);
         expect(archived.status).toBe('archived');
         expect(auditEvents.map((event) => event.action)).toEqual(
