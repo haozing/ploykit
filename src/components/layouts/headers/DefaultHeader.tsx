@@ -77,7 +77,7 @@ function DefaultLogo() {
  * DefaultHeader Component
  * ===========================================================================
  */
-export default async function DefaultHeader({ tokens }: LayoutComponentProps) {
+export default async function DefaultHeader({ tokens, locale }: LayoutComponentProps) {
   const variant = tokens.header.variant || 'solid';
 
   // Load navigation data (system + plugins)
@@ -86,7 +86,7 @@ export default async function DefaultHeader({ tokens }: LayoutComponentProps) {
   return (
     <>
       {/* 🆕 Header before slot */}
-      <SlotRenderer slotName="header:before" mode="append" />
+      <SlotRenderer slotName="header:before" mode="append" locale={locale} />
 
       <header
         className="w-full"
@@ -112,29 +112,35 @@ export default async function DefaultHeader({ tokens }: LayoutComponentProps) {
           {/* Left side: Logo area */}
           <div className="flex items-center gap-2">
             {/* 🆕 Logo before slot */}
-            <SlotRenderer slotName="header:logo-before" mode="append" />
+            <SlotRenderer slotName="header:logo-before" mode="append" locale={locale} />
 
             {/* Logo slot (existing) */}
-            <SlotRenderer slotName="header:logo" mode="replace" fallback={<DefaultLogo />} />
+            <SlotRenderer
+              slotName="header:logo"
+              mode="replace"
+              fallback={<DefaultLogo />}
+              locale={locale}
+            />
 
             {/* 🆕 Logo after slot */}
-            <SlotRenderer slotName="header:logo-after" mode="append" />
+            <SlotRenderer slotName="header:logo-after" mode="append" locale={locale} />
           </div>
 
           {/* Center: Navigation area */}
           <div className="flex-1 flex justify-center items-center">
             {/* 🆕 Nav before slot */}
-            <SlotRenderer slotName="header:nav-before" mode="append" />
+            <SlotRenderer slotName="header:nav-before" mode="append" locale={locale} />
 
             {/* Nav slot (existing) */}
             <SlotRenderer
               slotName="header:nav"
               mode="replace"
               fallback={<ClientNav navItems={navItems} />}
+              locale={locale}
             />
 
             {/* 🆕 Nav after slot */}
-            <SlotRenderer slotName="header:nav-after" mode="append" />
+            <SlotRenderer slotName="header:nav-after" mode="append" locale={locale} />
           </div>
 
           {/* Right side: Action area */}
@@ -144,6 +150,7 @@ export default async function DefaultHeader({ tokens }: LayoutComponentProps) {
               slotName="header:actions-before"
               mode="append"
               className="flex items-center gap-2"
+              locale={locale}
             />
 
             {/* Extra slot (existing) */}
@@ -151,6 +158,7 @@ export default async function DefaultHeader({ tokens }: LayoutComponentProps) {
               slotName="header:extra"
               mode="append"
               className="flex items-center gap-2"
+              locale={locale}
             />
 
             {/* Language switcher */}
@@ -164,13 +172,14 @@ export default async function DefaultHeader({ tokens }: LayoutComponentProps) {
               slotName="header:actions-after"
               mode="append"
               className="flex items-center gap-2"
+              locale={locale}
             />
           </div>
         </div>
       </header>
 
       {/* 🆕 Header after slot */}
-      <SlotRenderer slotName="header:after" mode="append" />
+      <SlotRenderer slotName="header:after" mode="append" locale={locale} />
     </>
   );
 }

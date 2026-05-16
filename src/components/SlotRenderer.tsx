@@ -50,6 +50,9 @@ export interface SlotRendererProps {
    * CSS class name for the wrapper container (optional)
    */
   className?: string;
+
+  /** Active locale passed to plugin-rendered slot components */
+  locale?: string;
 }
 
 /**
@@ -64,6 +67,7 @@ export async function SlotRenderer({
   mode = 'append',
   fallback = null,
   className,
+  locale = 'en',
 }: SlotRendererProps): Promise<ReactElement> {
   // Log component invocation
   logger.debug(
@@ -76,7 +80,7 @@ export async function SlotRenderer({
   let hasError = false;
 
   try {
-    components = await slotManager.renderSlot(slotName, mode);
+    components = await slotManager.renderSlot(slotName, mode, { locale });
 
     logger.debug(
       {

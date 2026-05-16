@@ -1,16 +1,17 @@
-import { labMessages, resolveLabLocale } from '../messages';
+import { createPluginTranslator, type PluginRuntimeSlotProps } from '@ploykit/plugin-sdk';
+import { labMarkers } from '../test-markers';
 
-export default function HomeHeroAfter({ locale }: { locale?: string }) {
-  const messages = labMessages[resolveLabLocale(locale)];
+export default function HomeHeroAfter(props: PluginRuntimeSlotProps) {
+  const t = createPluginTranslator(props.i18n);
 
   return (
     <section
       data-testid="host-lab-home-hero-after"
-      data-capability-marker={messages.marker.homeAfter}
+      data-capability-marker={labMarkers.homeAfter}
       className="rounded-md border border-cyan-200 bg-cyan-50 p-4 text-cyan-900"
     >
-      <div className="text-sm font-semibold">{messages.slots.homeAfterTitle}</div>
-      <p className="mt-1 text-sm">{messages.slots.homeAfterBody}</p>
+      <div className="text-sm font-semibold">{t('slots.homeAfterTitle')}</div>
+      <p className="mt-1 text-sm">{t('slots.homeAfterBody')}</p>
     </section>
   );
 }

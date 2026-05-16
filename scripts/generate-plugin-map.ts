@@ -4,7 +4,8 @@ import path from 'path';
 import crypto from 'crypto';
 
 const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
-const RUNTIME_MANIFEST_FILE = path.join(PLUGINS_DIR, 'runtime-manifest.json');
+const RUNTIME_MANIFEST_PATH = 'config/plugin-runtime.manifest.json';
+const RUNTIME_MANIFEST_FILE = path.join(process.cwd(), RUNTIME_MANIFEST_PATH);
 const OUTPUT_FILE = path.join(process.cwd(), 'src/lib/plugin-map.ts');
 const MANIFEST_FILE = path.join(process.cwd(), 'src/lib/plugin-map.manifest.json');
 
@@ -185,8 +186,7 @@ function normalizeBundlePlugins(value: unknown, pathName: string): RuntimeBundle
 
     return {
       pluginId: item.pluginId,
-      enableByDefault:
-        typeof item.enableByDefault === 'boolean' ? item.enableByDefault : undefined,
+      enableByDefault: typeof item.enableByDefault === 'boolean' ? item.enableByDefault : undefined,
       required: typeof item.required === 'boolean' ? item.required : undefined,
     };
   });
@@ -195,17 +195,17 @@ function normalizeBundlePlugins(value: unknown, pathName: string): RuntimeBundle
 function readRuntimeManifest(): RuntimeManifestIndex {
   if (!fs.existsSync(RUNTIME_MANIFEST_FILE)) {
     throw new Error(
-      'plugins/runtime-manifest.json is required. PloyKit runtime plugins must declare product, suite, and bundle ownership.'
+      `${RUNTIME_MANIFEST_PATH} is required. PloyKit runtime plugins must declare product, suite, and bundle ownership.`
     );
   }
 
   const raw = JSON.parse(fs.readFileSync(RUNTIME_MANIFEST_FILE, 'utf-8')) as unknown;
   if (!isPlainObject(raw) || raw.version !== 1) {
-    throw new Error('plugins/runtime-manifest.json must declare { "version": 1 }');
+    throw new Error(`${RUNTIME_MANIFEST_PATH} must declare { "version": 1 }`);
   }
 
   if (typeof raw.defaultProductId !== 'string' || !raw.defaultProductId.trim()) {
-    throw new Error('plugins/runtime-manifest.json must declare defaultProductId');
+    throw new Error(`${RUNTIME_MANIFEST_PATH} must declare defaultProductId`);
   }
 
   const rawProducts = Array.isArray(raw.products) ? raw.products : [];
@@ -326,6 +326,33 @@ function readRuntimeManifest(): RuntimeManifestIndex {
       metadata: isPlainObject(item.metadata) ? item.metadata : undefined,
     };
   });
+  for (const product of products) {
+    for (const suiteId of product.suites ?? []) {
+      const suite = suites.find((item) => item.id === suiteId);
+      if (!suite) {
+        throw new Error(`products.${product.id}.suites references undeclared suite "${suiteId}"`);
+      }
+      if (suite.productId !== product.id) {
+        throw new Error(
+          `products.${product.id}.suites references suite "${suiteId}" owned by product "${suite.productId}"`
+        );
+      }
+    }
+
+    for (const bundleId of product.bundles ?? []) {
+      const bundle = bundles.find((item) => item.id === bundleId);
+      if (!bundle) {
+        throw new Error(
+          `products.${product.id}.bundles references undeclared bundle "${bundleId}"`
+        );
+      }
+      if (bundle.productId !== product.id) {
+        throw new Error(
+          `products.${product.id}.bundles references bundle "${bundleId}" owned by product "${bundle.productId}"`
+        );
+      }
+    }
+  }
 
   const pluginSuites = new Map<string, RuntimeSuiteManifest>();
   for (const suite of suites) {
@@ -341,7 +368,36 @@ function readRuntimeManifest(): RuntimeManifestIndex {
 
   const pluginBundles = new Map<string, RuntimeBundleManifest[]>();
   for (const bundle of bundles) {
+    if (bundle.suiteId) {
+      const suite = suites.find((item) => item.id === bundle.suiteId);
+      if (!suite) {
+        throw new Error(`bundles.${bundle.id}.suiteId "${bundle.suiteId}" is not declared`);
+      }
+      if (suite.productId !== bundle.productId) {
+        throw new Error(
+          `bundles.${bundle.id}.suiteId "${bundle.suiteId}" is owned by product "${suite.productId}"`
+        );
+      }
+    }
+
     for (const plugin of bundle.plugins) {
+      const suite = pluginSuites.get(plugin.pluginId);
+      if (!suite) {
+        throw new Error(
+          `bundles.${bundle.id}.plugins references plugin "${plugin.pluginId}" that is not declared in any suite`
+        );
+      }
+      if (suite.productId !== bundle.productId) {
+        throw new Error(
+          `bundles.${bundle.id}.plugins references plugin "${plugin.pluginId}" from product "${suite.productId}"`
+        );
+      }
+      if (bundle.suiteId && suite.id !== bundle.suiteId) {
+        throw new Error(
+          `bundles.${bundle.id}.plugins references plugin "${plugin.pluginId}" from suite "${suite.id}", expected "${bundle.suiteId}"`
+        );
+      }
+
       const current = pluginBundles.get(plugin.pluginId) ?? [];
       current.push(bundle);
       pluginBundles.set(plugin.pluginId, current);
@@ -359,6 +415,34 @@ function readRuntimeManifest(): RuntimeManifestIndex {
     pluginSuites,
     pluginBundles,
   };
+}
+
+function listRuntimePluginDirectories(): string[] {
+  if (!fs.existsSync(PLUGINS_DIR)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(PLUGINS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((pluginId) => fs.existsSync(path.join(PLUGINS_DIR, pluginId, 'plugin.ts')))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function validateManifestPluginDirectories(runtimeManifest: RuntimeManifestIndex): void {
+  const localPluginIds = new Set(listRuntimePluginDirectories());
+  const missingPluginIds = [...runtimeManifest.pluginSuites.keys()]
+    .filter((pluginId) => !localPluginIds.has(pluginId))
+    .sort((a, b) => a.localeCompare(b));
+
+  if (missingPluginIds.length > 0) {
+    throw new Error(
+      `${RUNTIME_MANIFEST_PATH} references missing local plugin directories: ${missingPluginIds
+        .map((pluginId) => `"plugins/${pluginId}"`)
+        .join(', ')}`
+    );
+  }
 }
 
 function scanPlugins(runtimeManifest: RuntimeManifestIndex): PluginInfo[] {
@@ -387,13 +471,13 @@ function scanPlugins(runtimeManifest: RuntimeManifestIndex): PluginInfo[] {
     const suite = runtimeManifest.pluginSuites.get(pluginId);
     if (!suite) {
       throw new Error(
-        `Plugin "${pluginId}" is missing from plugins/runtime-manifest.json suites[].plugins.`
+        `Plugin "${pluginId}" is missing from ${RUNTIME_MANIFEST_PATH} suites[].plugins.`
       );
     }
     const bundles = runtimeManifest.pluginBundles.get(pluginId) ?? [];
     if (bundles.length === 0) {
       throw new Error(
-        `Plugin "${pluginId}" is missing from plugins/runtime-manifest.json bundles[].plugins.`
+        `Plugin "${pluginId}" is missing from ${RUNTIME_MANIFEST_PATH} bundles[].plugins.`
       );
     }
 
@@ -738,6 +822,7 @@ function main() {
   }
 
   const runtimeManifest = readRuntimeManifest();
+  validateManifestPluginDirectories(runtimeManifest);
   const plugins = scanPlugins(runtimeManifest);
 
   if (!isQuiet) {

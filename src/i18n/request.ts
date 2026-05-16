@@ -4,19 +4,9 @@ import { locales, type Locale } from './config';
 import { getEnabledPlugins } from '@/lib/bus/hook-helpers.server';
 import { logger } from '@/lib/_core/logger';
 import { env } from '@/lib/_core/env';
-import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
-import {
-  validateDeclaredPluginResources,
-  validateResourceFile,
-} from '@/lib/plugins/resources/plugin-resource-policy.server';
+import { loadPluginLocaleMessages } from '@/lib/plugin-runtime/i18n';
 import fs from 'fs';
 import path from 'path';
-
-const pluginTranslationCache = new Map<string, Record<string, unknown>>();
-
-function normalizePluginResourcePath(resourcePath: string): string {
-  return resourcePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
-}
 
 function resolveLocalesDir(): string {
   const candidates = [
@@ -70,65 +60,13 @@ async function loadPluginTranslations(
     // Load translations for each plugin
     for (const pluginId of enabledPluginIds) {
       try {
-        const contract = await pluginRuntimeRegistry.getOrLoad(pluginId);
-        const declaredLocalePath = contract.resources.locales?.[locale];
-
-        if (!declaredLocalePath) {
-          logger.debug(
-            { pluginId, locale },
-            'Plugin locale resource is not declared in plugin.ts resources, skipping'
-          );
+        const translations = await loadPluginLocaleMessages(pluginId, locale);
+        if (!translations) {
+          logger.debug({ pluginId, locale }, 'Plugin translation unavailable, skipping');
           continue;
         }
 
-        const resourcePath = normalizePluginResourcePath(declaredLocalePath);
-        const declaredResources = validateDeclaredPluginResources(pluginId, [resourcePath]);
-
-        if (!declaredResources.valid) {
-          logger.warn(
-            { pluginId, locale, errors: declaredResources.errors },
-            'Plugin resource declarations are invalid, skipping translation load'
-          );
-          continue;
-        }
-
-        const cacheKey = `${pluginId}:${locale}`;
-        if (env.NODE_ENV === 'production' && pluginTranslationCache.has(cacheKey)) {
-          pluginTranslations[pluginId] = pluginTranslationCache.get(cacheKey)!;
-          continue;
-        }
-
-        // Construct translation file path
-        const translationPath = path.join(process.cwd(), 'plugins', pluginId, resourcePath);
-
-        // Check if translation file exists
-        if (!fs.existsSync(translationPath)) {
-          logger.debug(
-            { pluginId, locale, path: translationPath },
-            'Plugin translation file not found, skipping'
-          );
-          continue;
-        }
-
-        const rawTranslations = fs.readFileSync(translationPath, 'utf-8');
-        const validation = validateResourceFile(resourcePath, rawTranslations, pluginId);
-        if (!validation.valid) {
-          logger.warn(
-            { pluginId, locale, resourcePath, reason: validation.reason },
-            'Plugin translation file failed resource policy validation'
-          );
-          continue;
-        }
-
-        // Read and parse translation file
-        const translations = JSON.parse(rawTranslations) as Record<string, unknown>;
-
-        // Store translations with plugin namespace
         pluginTranslations[pluginId] = translations;
-        if (env.NODE_ENV === 'production') {
-          pluginTranslationCache.set(cacheKey, translations);
-        }
-
         logger.debug(
           { pluginId, locale, keys: Object.keys(translations) },
           '✅ Plugin translation loaded successfully'

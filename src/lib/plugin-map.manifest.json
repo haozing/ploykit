@@ -11,13 +11,11 @@
       "suites": [
         "core",
         "host-capability-lab",
-        "runlynk-dx",
         "samples"
       ],
       "bundles": [
         "core-dev-tools",
         "host-capability-lab",
-        "runlynk-dx",
         "sample-internal"
       ],
       "metadata": {
@@ -46,43 +44,6 @@
       "status": "active",
       "plugins": [
         "host-capability-lab"
-      ]
-    },
-    {
-      "id": "runlynk-dx",
-      "productId": "ploykit",
-      "name": "RunLynk DX",
-      "version": "0.1.0",
-      "status": "active",
-      "plugins": [
-        "runlynk-producer-dx",
-        "runlynk-worker-dx"
-      ],
-      "menu": {
-        "group": "runlynk",
-        "labelKey": "menu.groups.runlynk",
-        "fallbackLabel": "RunLynk"
-      },
-      "billing": {
-        "namespace": "runlynk",
-        "primaryCreditMetric": "runlynk.calls"
-      },
-      "sharedServices": [
-        {
-          "name": "runlynk-core",
-          "methods": [
-            "GET",
-            "POST"
-          ],
-          "actorClaims": true
-        }
-      ],
-      "sharedResourceBindings": [
-        {
-          "type": "project",
-          "scope": "workspace",
-          "cardinality": "one"
-        }
       ]
     },
     {
@@ -124,44 +85,6 @@
           "pluginId": "host-capability-lab",
           "enableByDefault": true,
           "required": true
-        }
-      ]
-    },
-    {
-      "id": "runlynk-dx",
-      "productId": "ploykit",
-      "suiteId": "runlynk-dx",
-      "name": "RunLynk DX",
-      "version": "0.1.0",
-      "sourceType": "local",
-      "plugins": [
-        {
-          "pluginId": "runlynk-worker-dx",
-          "enableByDefault": true,
-          "required": true
-        },
-        {
-          "pluginId": "runlynk-producer-dx",
-          "enableByDefault": true,
-          "required": true
-        }
-      ],
-      "seeds": {
-        "internalServices": [
-          {
-            "ownerType": "suite",
-            "ownerId": "runlynk-dx",
-            "serviceName": "runlynk-core",
-            "baseUrlRef": "env:RUNLYNK_CORE_URL",
-            "actorClaimsSecretRef": "env:RUNLYNK_CORE_ACTOR_SECRET"
-          }
-        ]
-      },
-      "healthChecks": [
-        {
-          "serviceName": "runlynk-core",
-          "path": "/health",
-          "expectedStatus": 200
         }
       ]
     },
@@ -250,64 +173,6 @@
         "slots/PricingMainAfter",
         "slots/PricingMainBefore"
       ]
-    },
-    {
-      "id": "runlynk-producer-dx",
-      "rootDir": "plugins/runlynk-producer-dx",
-      "productId": "ploykit",
-      "suiteId": "runlynk-dx",
-      "bundleIds": [
-        "runlynk-dx"
-      ],
-      "components": [],
-      "pages": [
-        "ProducerDxHome",
-        "ProducerIntegrationPage"
-      ],
-      "apiModules": [
-        "api/integration",
-        "api/producer-keys",
-        "api/projects",
-        "api/task-types"
-      ],
-      "lifecycleModules": [],
-      "jobModules": [],
-      "webhookModules": [],
-      "eventModules": [],
-      "hookModules": [],
-      "slotModules": []
-    },
-    {
-      "id": "runlynk-worker-dx",
-      "rootDir": "plugins/runlynk-worker-dx",
-      "productId": "ploykit",
-      "suiteId": "runlynk-dx",
-      "bundleIds": [
-        "runlynk-dx"
-      ],
-      "components": [],
-      "pages": [
-        "WorkerContractPage",
-        "WorkerDxHome",
-        "WorkerStarterPage",
-        "WorkerValidatorPage"
-      ],
-      "apiModules": [
-        "api/fix-prompt",
-        "api/mock-job",
-        "api/projects",
-        "api/prompt",
-        "api/starter",
-        "api/task-types",
-        "api/validator",
-        "api/worker-contract"
-      ],
-      "lifecycleModules": [],
-      "jobModules": [],
-      "webhookModules": [],
-      "eventModules": [],
-      "hookModules": [],
-      "slotModules": []
     },
     {
       "id": "sample-internal",

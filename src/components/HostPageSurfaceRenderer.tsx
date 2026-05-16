@@ -1,12 +1,14 @@
 import { PluginProvider } from '@ploykit/plugin-sdk/react';
 import { logger } from '@/lib/_core/logger';
+import { listPluginRuntimeAssets } from '@/lib/plugin-runtime/assets';
+import { resolvePluginI18nRuntimeForContract } from '@/lib/plugin-runtime/i18n';
 import {
   resolveHostPageSurface,
   type HostPageSurface,
   HostPageOverrideRegistration,
   HostPageSlotRegistration,
 } from '@/lib/host-pages/surface.server';
-import type { PluginRuntimePageProps } from '@ploykit/plugin-sdk';
+import type { PluginRuntimePageProps, PluginRuntimeSlotProps } from '@ploykit/plugin-sdk';
 import type { ComponentType, ReactNode } from 'react';
 
 interface HostPageSlotListProps {
@@ -29,22 +31,38 @@ interface HostPageSlotBoundaryProps {
   surface?: HostPageSurface | null;
 }
 
+function runtimeAssets(contract: HostPageSlotRegistration['contract']) {
+  return Object.fromEntries(
+    listPluginRuntimeAssets(contract).map((asset) => [asset.path, asset.url])
+  );
+}
+
 export async function HostPageSlotList({ slots, className, locale }: HostPageSlotListProps) {
   const rendered = await Promise.all(
     slots.map(async (slot) => {
       try {
-        const loaded = (await slot.load()) as { default?: ComponentType<{ locale: string }> };
+        const loaded = (await slot.load()) as { default?: ComponentType<PluginRuntimeSlotProps> };
         const Component = loaded.default;
         if (!Component) {
           throw new Error(`Missing default export for ${slot.component}`);
         }
 
+        const i18n = await resolvePluginI18nRuntimeForContract(slot.contract, locale);
+        const slotProps: PluginRuntimeSlotProps = {
+          pluginId: slot.pluginId,
+          page: slot.page,
+          position: slot.position,
+          i18n,
+          assets: runtimeAssets(slot.contract),
+        };
+
         return (
           <PluginProvider
             key={`${slot.pluginId}:${slot.page}:${slot.position}:${slot.component}`}
             pluginId={slot.pluginId}
+            i18n={i18n}
           >
-            <Component locale={locale} />
+            <Component {...slotProps} />
           </PluginProvider>
         );
       } catch (error) {
@@ -100,16 +118,18 @@ export async function HostPageOverride({
     return fallback;
   }
 
+  const i18n = await resolvePluginI18nRuntimeForContract(override.contract, locale);
+
   return (
-    <PluginProvider pluginId={override.pluginId}>
+    <PluginProvider pluginId={override.pluginId} i18n={i18n}>
       <Component
         pluginId={override.pluginId}
         localPath={override.page}
         requestPath={override.page}
-        locale={locale}
         params={{}}
         query={{}}
-        assets={{}}
+        i18n={i18n}
+        assets={runtimeAssets(override.contract)}
         route={{
           path: override.page,
           auth: 'public',

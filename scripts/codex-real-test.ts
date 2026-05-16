@@ -4553,13 +4553,17 @@ async function runAdminSurfaceSmoke(
     redirect: 'manual',
   });
   const operationsPageHtml = await operationsPageResponse.text();
+  const operationsPageHasTitle =
+    operationsPageHtml.includes('Operations Center') || operationsPageHtml.includes('运维中心');
   recordSmoke(
     summary,
     'admin operations page renders operations center',
-    operationsPageResponse.ok && operationsPageHtml.includes('Operations Center'),
+    operationsPageResponse.ok && operationsPageHasTitle,
     {
       status: operationsPageResponse.status,
-      hasTitle: operationsPageHtml.includes('Operations Center'),
+      hasTitle: operationsPageHasTitle,
+      hasEnglishTitle: operationsPageHtml.includes('Operations Center'),
+      hasChineseTitle: operationsPageHtml.includes('运维中心'),
     }
   );
 

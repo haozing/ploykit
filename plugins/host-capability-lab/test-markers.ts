@@ -1,0 +1,7 @@
+export const labMarkers = {
+  homeBefore: 'HOST_CAPABILITY_LAB_HOME_HERO_BEFORE',
+  homeAfter: 'HOST_CAPABILITY_LAB_HOME_HERO_AFTER',
+  pricingBefore: 'HOST_CAPABILITY_LAB_PRICING_MAIN_BEFORE',
+  pricingAfter: 'HOST_CAPABILITY_LAB_PRICING_MAIN_AFTER',
+  override: 'HOST_CAPABILITY_LAB_OVERRIDE_RENDERED',
+} as const;

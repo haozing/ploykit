@@ -12,6 +12,9 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/_core/logger', () => ({
   logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
     error: vi.fn(),
   },
 }));
@@ -29,9 +32,12 @@ describe('PluginRuntimePageRenderer', () => {
       pluginId: 'runtime-props',
       localPath: '/reports/weekly',
       requestPath: '/plugins/runtime-props/reports/weekly',
-      locale: 'zh',
       params: { period: 'weekly' },
       query: { tab: 'summary' },
+      i18n: {
+        locale: 'zh',
+        messages: {},
+      },
       assets: {},
       route: {
         path: '/reports/:period',

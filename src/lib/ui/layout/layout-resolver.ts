@@ -19,6 +19,9 @@ import type { ComponentType } from 'react';
 export interface LayoutComponentProps {
   /** Design tokens used by layout components. */
   tokens: ThemeTokens;
+
+  /** Active locale for plugin-rendered layout slots. */
+  locale: string;
 }
 
 /**

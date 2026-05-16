@@ -9,5 +9,67 @@
         "description": "Host Capability Lab verifies host page override SEO and i18n metadata."
       }
     }
+  },
+  "slots": {
+    "homeBeforeTitle": "Plugin slot before the home hero",
+    "homeBeforeBody": "A plugin can add host-governed content before the homepage hero without owning the page.",
+    "homeAfterTitle": "Plugin slot after the home hero",
+    "homeAfterBody": "The host keeps routing, layout, locale, navigation, and footer while the plugin contributes this block.",
+    "pricingBeforeTitle": "Plugin pricing notice",
+    "pricingBeforeBody": "This block is inserted before the pricing page body through hostPages.slots.",
+    "pricingAfterTitle": "Plugin pricing follow-up",
+    "pricingAfterBody": "This block is inserted after the pricing cards without replacing the host page."
+  },
+  "labPage": {
+    "eyebrow": "Host Capability Lab",
+    "title": "Real plugin capability probe",
+    "body": "This page is rendered as a plugin route with the host site shell. The probe below writes, updates, queries, transacts, and deletes records through ctx.storage.",
+    "cards": {
+      "routeLabel": "Plugin route",
+      "shellLabel": "Host shell",
+      "shellValue": "Header and footer enabled",
+      "storageLabel": "Storage boundary",
+      "storageValue": "Plugin scoped collection"
+    }
+  },
+  "about": {
+    "eyebrow": "Host page override",
+    "title": "About page replaced by a plugin",
+    "body": "This content is not a plugin-owned route. It is mounted into the host about page through hostPages.overrides, while the host shell keeps the site header, footer, language switcher, user menu, canonical metadata, and sitemap policy under host control.",
+    "evidence": "Runtime evidence",
+    "plugin": "Plugin",
+    "overridePath": "Override path",
+    "shellContract": "Shell contract",
+    "shellValue": "Host header and host footer",
+    "seoI18n": "SEO/i18n",
+    "seoI18nValue": "Localized SEO metadata from the plugin contract"
+  },
+  "storage": {
+    "title": "ctx.storage live probe",
+    "body": "Verifies collection schema, database-filtered query operators, transaction, and soft delete in the real plugin runtime.",
+    "runAgain": "Run again",
+    "running": "Running...",
+    "apiOk": "API OK",
+    "readByIdOk": "readById OK",
+    "deleteOk": "delete OK",
+    "transactionOk": "transaction OK",
+    "statusFilter": "Status filter",
+    "nullFilter": "Null filter",
+    "inFilter": "In filter",
+    "jsonContains": "JSON contains",
+    "latestRecords": "Latest ready records",
+    "queryMode": "Query mode",
+    "seed": "seed",
+    "user": "user",
+    "statusLabels": {
+      "queued": "queued",
+      "ready": "ready",
+      "archived": "archived"
+    },
+    "recordTitles": {
+      "browser": "Browser probe",
+      "transaction": "Transaction probe",
+      "delete": "Delete probe"
+    }
   }
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { usePluginApi } from '@ploykit/plugin-sdk/react';
-import { labMessages, resolveLabLocale } from '../messages';
+import { usePluginApi, usePluginTranslations } from '@ploykit/plugin-sdk/react';
+import type { PluginTranslate } from '@ploykit/plugin-sdk';
 
 interface ProbeSummary {
   insertedId: string;
@@ -50,31 +50,28 @@ function StatusPill({ ok, children }: { ok: boolean; children: string }) {
   );
 }
 
-function formatProbeRecordTitle(
-  title: string,
-  messages: (typeof labMessages)[keyof typeof labMessages]
-): string {
+function formatProbeRecordTitle(title: string, t: PluginTranslate): string {
   const seed = title.match(/\d+$/)?.[0];
   if (!seed) {
     return title;
   }
 
   if (title.startsWith('Browser probe')) {
-    return `${messages.storage.recordTitles.browser} ${seed}`;
+    return `${t('storage.recordTitles.browser')} ${seed}`;
   }
   if (title.startsWith('Transaction probe')) {
-    return `${messages.storage.recordTitles.transaction} ${seed}`;
+    return `${t('storage.recordTitles.transaction')} ${seed}`;
   }
   if (title.startsWith('Delete probe')) {
-    return `${messages.storage.recordTitles.delete} ${seed}`;
+    return `${t('storage.recordTitles.delete')} ${seed}`;
   }
 
   return title;
 }
 
-export default function StorageProbeClient({ locale }: { locale: string }) {
+export default function StorageProbeClient() {
   const api = usePluginApi();
-  const messages = labMessages[resolveLabLocale(locale)];
+  const t = usePluginTranslations();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ProbeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +105,8 @@ export default function StorageProbeClient({ locale }: { locale: string }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">{messages.storage.title}</h2>
-          <p className="mt-1 text-sm text-slate-600">{messages.storage.body}</p>
+          <h2 className="text-lg font-semibold text-slate-950">{t('storage.title')}</h2>
+          <p className="mt-1 text-sm text-slate-600">{t('storage.body')}</p>
         </div>
         <button
           type="button"
@@ -117,7 +114,7 @@ export default function StorageProbeClient({ locale }: { locale: string }) {
           disabled={loading}
           className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
-          {loading ? messages.storage.running : messages.storage.runAgain}
+          {loading ? t('storage.running') : t('storage.runAgain')}
         </button>
       </div>
 
@@ -130,35 +127,35 @@ export default function StorageProbeClient({ locale }: { locale: string }) {
       {result ? (
         <div className="mt-5 space-y-4">
           <div className="flex flex-wrap gap-2">
-            <StatusPill ok={result.ok}>{messages.storage.apiOk}</StatusPill>
-            <StatusPill ok={result.summary.readBackOk}>{messages.storage.readByIdOk}</StatusPill>
-            <StatusPill ok={result.summary.deletedGone}>{messages.storage.deleteOk}</StatusPill>
+            <StatusPill ok={result.ok}>{t('storage.apiOk')}</StatusPill>
+            <StatusPill ok={result.summary.readBackOk}>{t('storage.readByIdOk')}</StatusPill>
+            <StatusPill ok={result.summary.deletedGone}>{t('storage.deleteOk')}</StatusPill>
             <StatusPill ok={Boolean(result.summary.transactionId)}>
-              {messages.storage.transactionOk}
+              {t('storage.transactionOk')}
             </StatusPill>
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs uppercase text-slate-500">{messages.storage.statusFilter}</div>
+              <div className="text-xs uppercase text-slate-500">{t('storage.statusFilter')}</div>
               <div className="mt-1 text-xl font-semibold text-slate-950">
                 {result.summary.statusFilterCount}
               </div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs uppercase text-slate-500">{messages.storage.nullFilter}</div>
+              <div className="text-xs uppercase text-slate-500">{t('storage.nullFilter')}</div>
               <div className="mt-1 text-xl font-semibold text-slate-950">
                 {result.summary.nullFilterCount}
               </div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs uppercase text-slate-500">{messages.storage.inFilter}</div>
+              <div className="text-xs uppercase text-slate-500">{t('storage.inFilter')}</div>
               <div className="mt-1 text-xl font-semibold text-slate-950">
                 {result.summary.inFilterCount}
               </div>
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <div className="text-xs uppercase text-slate-500">{messages.storage.jsonContains}</div>
+              <div className="text-xs uppercase text-slate-500">{t('storage.jsonContains')}</div>
               <div className="mt-1 text-xl font-semibold text-slate-950">
                 {result.summary.containsCount}
               </div>
@@ -167,7 +164,7 @@ export default function StorageProbeClient({ locale }: { locale: string }) {
 
           <div className="rounded-md border border-slate-200">
             <div className="border-b border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
-              {messages.storage.latestRecords}
+              {t('storage.latestRecords')}
             </div>
             <div className="divide-y divide-slate-200">
               {result.records.map((record) => (
@@ -177,16 +174,12 @@ export default function StorageProbeClient({ locale }: { locale: string }) {
                 >
                   <div>
                     <div className="font-medium text-slate-950">
-                      {formatProbeRecordTitle(record.title, messages)}
+                      {formatProbeRecordTitle(record.title, t)}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">{record.id}</div>
                   </div>
                   <div className="text-slate-700">
-                    {
-                      messages.storage.statusLabels[
-                        record.status as keyof typeof messages.storage.statusLabels
-                      ]
-                    }
+                    {t(`storage.statusLabels.${record.status}`, { fallback: record.status })}
                   </div>
                   <div className="text-slate-700">{record.sequence}</div>
                 </div>
@@ -195,8 +188,8 @@ export default function StorageProbeClient({ locale }: { locale: string }) {
           </div>
 
           <p className="text-xs text-slate-500">
-            {messages.storage.queryMode}: {result.summary.queryMode}; {messages.storage.seed}:{' '}
-            {result.seed}; {messages.storage.user}: {result.userId}
+            {t('storage.queryMode')}: {result.summary.queryMode}; {t('storage.seed')}: {result.seed}
+            ; {t('storage.user')}: {result.userId}
           </p>
         </div>
       ) : null}

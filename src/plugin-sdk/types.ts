@@ -38,13 +38,37 @@ export interface PluginRuntimePageRouteProps {
   tool?: PluginToolRouteRuntimeMetadata;
 }
 
+export type PluginMessageValue =
+  | string
+  | number
+  | boolean
+  | null
+  | PluginMessageValue[]
+  | { [key: string]: PluginMessageValue };
+
+export type PluginMessages = Record<string, PluginMessageValue>;
+
+export interface PluginI18nRuntime {
+  locale: string;
+  messages: PluginMessages;
+}
+
+export interface PluginRuntimeSlotProps {
+  pluginId: string;
+  slotName?: string;
+  page?: string;
+  position?: PluginRouteSlotPosition | PluginHostPageSlotPosition;
+  i18n: PluginI18nRuntime;
+  assets: Record<string, string>;
+}
+
 export interface PluginRuntimePageProps {
   pluginId: string;
   localPath: string;
   requestPath: string;
-  locale: string;
   params: Record<string, string>;
   query: Record<string, string | string[]>;
+  i18n: PluginI18nRuntime;
   assets: Record<string, string>;
   route: PluginRuntimePageRouteProps;
 }

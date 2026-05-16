@@ -47,13 +47,13 @@ function DefaultCopyright() {
  * DefaultFooter Component
  * ==========================================================================
  */
-export default async function DefaultFooter({ tokens }: LayoutComponentProps) {
+export default async function DefaultFooter({ tokens, locale }: LayoutComponentProps) {
   const footerLinks = await getSiteFooterNavItems();
 
   return (
     <>
       {/* 🆕 Footer before slot */}
-      <SlotRenderer slotName="footer:before" mode="append" />
+      <SlotRenderer slotName="footer:before" mode="append" locale={locale} />
 
       <footer
         className="w-full"
@@ -77,35 +77,38 @@ export default async function DefaultFooter({ tokens }: LayoutComponentProps) {
             slotName="footer:copyright"
             mode="replace"
             fallback={<DefaultCopyright />}
+            locale={locale}
           />
 
           {/* 中间/右侧：链接插槽 */}
           <div className="flex items-center gap-6">
             {/* 🆕 Links before slot */}
-            <SlotRenderer slotName="footer:links-before" mode="append" />
+            <SlotRenderer slotName="footer:links-before" mode="append" locale={locale} />
 
             {/* Links 插槽（现有）*/}
             <SlotRenderer
               slotName="footer:links"
               mode="replace"
               fallback={<ClientFooterLinks links={footerLinks} />}
+              locale={locale}
             />
 
             {/* 🆕 Links after slot */}
-            <SlotRenderer slotName="footer:links-after" mode="append" />
+            <SlotRenderer slotName="footer:links-after" mode="append" locale={locale} />
 
             {/* Extra 插槽（现有）*/}
             <SlotRenderer
               slotName="footer:extra"
               mode="append"
               className="flex items-center gap-4"
+              locale={locale}
             />
           </div>
         </div>
       </footer>
 
       {/* 🆕 Footer after slot */}
-      <SlotRenderer slotName="footer:after" mode="append" />
+      <SlotRenderer slotName="footer:after" mode="append" locale={locale} />
     </>
   );
 }

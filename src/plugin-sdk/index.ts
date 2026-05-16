@@ -10,6 +10,7 @@ export {
   type PluginDiagnosticSeverity,
 } from './diagnostics';
 export { PluginError, type PluginErrorOptions } from './errors';
+export { createPluginTranslator, type PluginTranslate, type PluginTranslateOptions } from './i18n';
 export { HostPermissionValues, Permission, type PermissionValue } from './permissions';
 export { validatePluginDefinition } from './validator';
 export type {
@@ -40,6 +41,7 @@ export type {
   PluginHostPageShellLayout,
   PluginHostPageSlotDefinition,
   PluginHostPageSlotPosition,
+  PluginI18nRuntime,
   PluginJobDefinition,
   PluginKind,
   PluginLifecycle,
@@ -71,6 +73,7 @@ export type {
   PluginRobotsIndex,
   PluginRuntimePageProps,
   PluginRuntimePageRouteProps,
+  PluginRuntimeSlotProps,
   PluginRouteAuth,
   PluginRouteSlotPosition,
   PluginRouteLayout,

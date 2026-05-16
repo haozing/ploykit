@@ -120,10 +120,10 @@ export async function ShellLayout({
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
-      {showHeader ? <HeaderComponent tokens={tokens} /> : null}
+      {showHeader ? <HeaderComponent tokens={tokens} locale={locale} /> : null}
 
       {/* 🆕 Content before slot */}
-      <SlotRenderer slotName="content:before" mode="append" className="w-full" />
+      <SlotRenderer slotName="content:before" mode="append" className="w-full" locale={locale} />
 
       {/* Main Content */}
       <main
@@ -139,17 +139,23 @@ export async function ShellLayout({
           slotName="sidebar:left"
           mode="append"
           className="hidden lg:block lg:w-64 lg:flex-shrink-0"
+          locale={locale}
         />
 
         <div className="flex-1" style={containerStyle}>
           {/* Before slot: render before content (existing) */}
-          <SlotRenderer slotName={beforeSlot} mode="append" className="mb-8" />
+          <SlotRenderer slotName={beforeSlot} mode="append" className="mb-8" locale={locale} />
           <HostPageSlotList
             slots={surface?.slots.filter((slot) => slot.position === 'main.before') ?? []}
             locale={locale}
             className="mb-8"
           />
-          <RouteSlotRenderer pathname={pathname} position="main.before" className="mb-8" />
+          <RouteSlotRenderer
+            pathname={pathname}
+            position="main.before"
+            className="mb-8"
+            locale={locale}
+          />
 
           {/* Replace slot: if exists, completely replace page content (existing) */}
           {surface?.override ? (
@@ -162,6 +168,7 @@ export async function ShellLayout({
                   position="main.replace"
                   mode="replace"
                   fallback={children}
+                  locale={locale}
                 />
               }
             />
@@ -175,19 +182,26 @@ export async function ShellLayout({
                   position="main.replace"
                   mode="replace"
                   fallback={children}
+                  locale={locale}
                 />
               }
+              locale={locale}
             />
           )}
 
           {/* After slot: render after content (existing) */}
-          <RouteSlotRenderer pathname={pathname} position="main.after" className="mt-8" />
+          <RouteSlotRenderer
+            pathname={pathname}
+            position="main.after"
+            className="mt-8"
+            locale={locale}
+          />
           <HostPageSlotList
             slots={surface?.slots.filter((slot) => slot.position === 'main.after') ?? []}
             locale={locale}
             className="mt-8"
           />
-          <SlotRenderer slotName={afterSlot} mode="append" className="mt-8" />
+          <SlotRenderer slotName={afterSlot} mode="append" className="mt-8" locale={locale} />
         </div>
 
         {/* 🆕 Right sidebar slot */}
@@ -195,14 +209,15 @@ export async function ShellLayout({
           slotName="sidebar:right"
           mode="append"
           className="hidden lg:block lg:w-64 lg:flex-shrink-0"
+          locale={locale}
         />
       </main>
 
       {/* 🆕 Content after slot */}
-      <SlotRenderer slotName="content:after" mode="append" className="w-full" />
+      <SlotRenderer slotName="content:after" mode="append" className="w-full" locale={locale} />
 
       {/* Footer */}
-      {showFooter ? <FooterComponent tokens={tokens} /> : null}
+      {showFooter ? <FooterComponent tokens={tokens} locale={locale} /> : null}
     </div>
   );
 }

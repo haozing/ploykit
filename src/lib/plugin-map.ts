@@ -6,7 +6,7 @@
  *
  * Do not modify manually.
  *
- * Plugin count: 5
+ * Plugin count: 3
  */
 
 type PluginModuleLoader = () => Promise<unknown>;
@@ -96,13 +96,11 @@ export const RUNTIME_PRODUCTS: Record<string, RuntimeProductMapEntry> = {
     "suites": [
       "core",
       "host-capability-lab",
-      "runlynk-dx",
       "samples"
     ],
     "bundles": [
       "core-dev-tools",
       "host-capability-lab",
-      "runlynk-dx",
       "sample-internal"
     ],
     "metadata": {
@@ -132,43 +130,6 @@ export const PLUGIN_SUITES: Record<string, RuntimeSuiteMapEntry> = {
     "status": "active",
     "plugins": [
       "host-capability-lab"
-    ]
-  },
-  "runlynk-dx": {
-    "id": "runlynk-dx",
-    "productId": "ploykit",
-    "name": "RunLynk DX",
-    "version": "0.1.0",
-    "status": "active",
-    "plugins": [
-      "runlynk-producer-dx",
-      "runlynk-worker-dx"
-    ],
-    "menu": {
-      "group": "runlynk",
-      "labelKey": "menu.groups.runlynk",
-      "fallbackLabel": "RunLynk"
-    },
-    "billing": {
-      "namespace": "runlynk",
-      "primaryCreditMetric": "runlynk.calls"
-    },
-    "sharedServices": [
-      {
-        "name": "runlynk-core",
-        "methods": [
-          "GET",
-          "POST"
-        ],
-        "actorClaims": true
-      }
-    ],
-    "sharedResourceBindings": [
-      {
-        "type": "project",
-        "scope": "workspace",
-        "cardinality": "one"
-      }
     ]
   },
   "samples": {
@@ -211,44 +172,6 @@ export const APP_BUNDLES: Record<string, RuntimeBundleMapEntry> = {
         "pluginId": "host-capability-lab",
         "enableByDefault": true,
         "required": true
-      }
-    ]
-  },
-  "runlynk-dx": {
-    "id": "runlynk-dx",
-    "productId": "ploykit",
-    "suiteId": "runlynk-dx",
-    "name": "RunLynk DX",
-    "version": "0.1.0",
-    "sourceType": "local",
-    "plugins": [
-      {
-        "pluginId": "runlynk-worker-dx",
-        "enableByDefault": true,
-        "required": true
-      },
-      {
-        "pluginId": "runlynk-producer-dx",
-        "enableByDefault": true,
-        "required": true
-      }
-    ],
-    "seeds": {
-      "internalServices": [
-        {
-          "ownerType": "suite",
-          "ownerId": "runlynk-dx",
-          "serviceName": "runlynk-core",
-          "baseUrlRef": "env:RUNLYNK_CORE_URL",
-          "actorClaimsSecretRef": "env:RUNLYNK_CORE_ACTOR_SECRET"
-        }
-      ]
-    },
-    "healthChecks": [
-      {
-        "serviceName": "runlynk-core",
-        "path": "/health",
-        "expectedStatus": 200
       }
     ]
   },
@@ -325,46 +248,6 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
       'slots/HomeHeroBefore': () => import('@/plugins/host-capability-lab/slots/HomeHeroBefore'),
       'slots/PricingMainAfter': () => import('@/plugins/host-capability-lab/slots/PricingMainAfter'),
       'slots/PricingMainBefore': () => import('@/plugins/host-capability-lab/slots/PricingMainBefore')
-    },
-  },
-  'runlynk-producer-dx': {
-    rootDir: "plugins/runlynk-producer-dx",
-    productId: "ploykit",
-    suiteId: "runlynk-dx",
-    bundleIds: ["runlynk-dx"],
-    plugin: () => import('@/plugins/runlynk-producer-dx/plugin'),
-    pages: {
-      'pages/ProducerDxHome': () => import('@/plugins/runlynk-producer-dx/pages/ProducerDxHome'),
-      'pages/ProducerIntegrationPage': () => import('@/plugins/runlynk-producer-dx/pages/ProducerIntegrationPage')
-    },
-    apis: {
-      'api/integration': () => import('@/plugins/runlynk-producer-dx/api/integration'),
-      'api/producer-keys': () => import('@/plugins/runlynk-producer-dx/api/producer-keys'),
-      'api/projects': () => import('@/plugins/runlynk-producer-dx/api/projects'),
-      'api/task-types': () => import('@/plugins/runlynk-producer-dx/api/task-types')
-    },
-  },
-  'runlynk-worker-dx': {
-    rootDir: "plugins/runlynk-worker-dx",
-    productId: "ploykit",
-    suiteId: "runlynk-dx",
-    bundleIds: ["runlynk-dx"],
-    plugin: () => import('@/plugins/runlynk-worker-dx/plugin'),
-    pages: {
-      'pages/WorkerContractPage': () => import('@/plugins/runlynk-worker-dx/pages/WorkerContractPage'),
-      'pages/WorkerDxHome': () => import('@/plugins/runlynk-worker-dx/pages/WorkerDxHome'),
-      'pages/WorkerStarterPage': () => import('@/plugins/runlynk-worker-dx/pages/WorkerStarterPage'),
-      'pages/WorkerValidatorPage': () => import('@/plugins/runlynk-worker-dx/pages/WorkerValidatorPage')
-    },
-    apis: {
-      'api/fix-prompt': () => import('@/plugins/runlynk-worker-dx/api/fix-prompt'),
-      'api/mock-job': () => import('@/plugins/runlynk-worker-dx/api/mock-job'),
-      'api/projects': () => import('@/plugins/runlynk-worker-dx/api/projects'),
-      'api/prompt': () => import('@/plugins/runlynk-worker-dx/api/prompt'),
-      'api/starter': () => import('@/plugins/runlynk-worker-dx/api/starter'),
-      'api/task-types': () => import('@/plugins/runlynk-worker-dx/api/task-types'),
-      'api/validator': () => import('@/plugins/runlynk-worker-dx/api/validator'),
-      'api/worker-contract': () => import('@/plugins/runlynk-worker-dx/api/worker-contract')
     },
   },
   'sample-internal': {

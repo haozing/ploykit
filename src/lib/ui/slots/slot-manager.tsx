@@ -6,9 +6,12 @@
  */
 
 import React from 'react';
+import { PluginProvider } from '@ploykit/plugin-sdk/react';
 import { parsePluginRouteSlotName, type PluginRouteSlotPosition } from '@ploykit/plugin-sdk';
 import { isValidSlotName, type SlotName, type SlotRegistration, type SlotMode } from './types';
 import { logger } from '@/lib/_core/logger';
+import { listPluginRuntimeAssets } from '@/lib/plugin-runtime/assets';
+import { resolvePluginI18nRuntime } from '@/lib/plugin-runtime/i18n';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
 import { matchRuntimePath, normalizeRuntimePath } from '@/lib/plugin-runtime/contract';
 import {
@@ -19,6 +22,7 @@ import {
 import { getPluginTrustLevelForSlots, validateSlotRegistration } from './slot-policy.server';
 import type { ComponentType } from 'react';
 import type {
+  PluginRuntimeSlotProps,
   PluginSlotDeclaration,
   PluginSlotsDefinition,
   PluginTrustLevel,
@@ -28,6 +32,16 @@ export type PluginId = string;
 export interface SlotRegisterOptions {
   pluginTrustLevel?: PluginTrustLevel;
   auditOnly?: boolean;
+}
+
+export interface SlotRenderOptions {
+  locale?: string;
+}
+
+interface SlotRenderContext {
+  locale: string;
+  page?: string;
+  position?: PluginRuntimeSlotProps['position'];
 }
 
 interface NormalizedSlotDeclaration {
@@ -117,7 +131,7 @@ export class SlotManager {
    *   "language-switcher:header:extra" => LanguageSwitcherComponent
    * }
    */
-  private componentCache = new Map<string, ComponentType>();
+  private componentCache = new Map<string, ComponentType<PluginRuntimeSlotProps>>();
 
   /**
    */
@@ -378,7 +392,11 @@ export class SlotManager {
    * @param mode - RenderPattern
    * @returns ReactComponentArray
    */
-  async renderSlot(slotName: SlotName, mode: SlotMode = 'append'): Promise<React.ReactNode[]> {
+  async renderSlot(
+    slotName: SlotName,
+    mode: SlotMode = 'append',
+    options: SlotRenderOptions = {}
+  ): Promise<React.ReactNode[]> {
     await this.ensureInitialized();
 
     logger.debug({ slotName, mode }, 'renderSlot called');
@@ -398,13 +416,16 @@ export class SlotManager {
 
     const enabled = registrations.filter((r) => r.enabled);
 
-    return this.renderRegistrations(slotName, enabled, mode);
+    return this.renderRegistrations(slotName, enabled, mode, {
+      locale: options.locale ?? 'en',
+    });
   }
 
   async renderRouteSlot(
     pathname: string,
     position: PluginRouteSlotPosition,
-    mode: SlotMode = 'append'
+    mode: SlotMode = 'append',
+    options: SlotRenderOptions = {}
   ): Promise<React.ReactNode[]> {
     await this.ensureInitialized();
 
@@ -424,13 +445,18 @@ export class SlotManager {
 
     const syntheticSlotName = `route:${normalizedPathname}:${position}` as SlotName;
 
-    return this.renderRegistrations(syntheticSlotName, enabled, mode);
+    return this.renderRegistrations(syntheticSlotName, enabled, mode, {
+      locale: options.locale ?? 'en',
+      page: normalizedPathname,
+      position,
+    });
   }
 
   private async renderRegistrations(
     slotName: SlotName,
     registrations: SlotRegistration[],
-    mode: SlotMode
+    mode: SlotMode,
+    context: SlotRenderContext
   ): Promise<React.ReactNode[]> {
     if (registrations.length === 0) {
       logger.debug({ slotName }, 'No enabled registrations for slot');
@@ -443,7 +469,30 @@ export class SlotManager {
       toRender.map(async (registration) => {
         try {
           const Component = await this.loadComponent(registration);
-          return <Component key={`${registration.pluginId}:${slotName}`} />;
+          const i18n = await resolvePluginI18nRuntime(registration.pluginId, context.locale);
+          const contract = pluginRuntimeRegistry.get(registration.pluginId);
+          const props: PluginRuntimeSlotProps = {
+            pluginId: registration.pluginId,
+            slotName,
+            page: context.page,
+            position: context.position,
+            i18n,
+            assets: contract
+              ? Object.fromEntries(
+                  listPluginRuntimeAssets(contract).map((asset) => [asset.path, asset.url])
+                )
+              : {},
+          };
+
+          return (
+            <PluginProvider
+              key={`${registration.pluginId}:${slotName}`}
+              pluginId={registration.pluginId}
+              i18n={i18n}
+            >
+              <Component {...props} />
+            </PluginProvider>
+          );
         } catch (error) {
           logger.error(
             { error, pluginId: registration.pluginId, slotName },
@@ -468,7 +517,9 @@ export class SlotManager {
    * @param registration - RegisterInformation
    * @returns ReactComponent
    */
-  private async loadComponent(registration: SlotRegistration): Promise<ComponentType> {
+  private async loadComponent(
+    registration: SlotRegistration
+  ): Promise<ComponentType<PluginRuntimeSlotProps>> {
     const { pluginId, slotName, componentPath } = registration;
     const cacheKey = `${pluginId}:${slotName}:${componentPath}`;
 
@@ -501,7 +552,9 @@ export class SlotManager {
     }
 
     try {
-      const componentModule = (await componentLoader()) as { default?: ComponentType };
+      const componentModule = (await componentLoader()) as {
+        default?: ComponentType<PluginRuntimeSlotProps>;
+      };
 
       logger.debug(
         {
@@ -661,14 +714,19 @@ export const slotManager = new SlotManager();
  * @param mode - RenderPattern
  * @returns ReactComponentArray
  */
-export async function renderSlot(slotName: SlotName, mode?: SlotMode): Promise<React.ReactNode[]> {
-  return slotManager.renderSlot(slotName, mode);
+export async function renderSlot(
+  slotName: SlotName,
+  mode?: SlotMode,
+  options?: SlotRenderOptions
+): Promise<React.ReactNode[]> {
+  return slotManager.renderSlot(slotName, mode, options);
 }
 
 export async function renderRouteSlot(
   pathname: string,
   position: PluginRouteSlotPosition,
-  mode?: SlotMode
+  mode?: SlotMode,
+  options?: SlotRenderOptions
 ): Promise<React.ReactNode[]> {
-  return slotManager.renderRouteSlot(pathname, position, mode);
+  return slotManager.renderRouteSlot(pathname, position, mode, options);
 }

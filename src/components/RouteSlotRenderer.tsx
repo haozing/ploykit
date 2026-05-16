@@ -10,6 +10,7 @@ export interface RouteSlotRendererProps {
   mode?: SlotMode;
   fallback?: ReactNode;
   className?: string;
+  locale?: string;
 }
 
 export async function RouteSlotRenderer({
@@ -18,12 +19,13 @@ export async function RouteSlotRenderer({
   mode = 'append',
   fallback = null,
   className,
+  locale = 'en',
 }: RouteSlotRendererProps): Promise<ReactElement> {
   let components: ReactNode[] = [];
   let hasError = false;
 
   try {
-    components = await slotManager.renderRouteSlot(pathname, position, mode);
+    components = await slotManager.renderRouteSlot(pathname, position, mode, { locale });
   } catch (error) {
     logger.error({ error, pathname, position }, 'Failed to render route slot');
     hasError = true;
