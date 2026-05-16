@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/auth/client';
 import { useTranslations } from 'next-intl';
+import { Check, Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 type PlanTranslation = {
   name?: string;
@@ -12,35 +14,36 @@ type PlanTranslation = {
   featuresList?: string[];
 };
 
-interface Plan {
+export interface PricingPlan {
   id: string;
   name: string;
   slug: string;
-  priceMonthly?: number;
-  priceYearly?: number | null;
-  currency?: string;
-  pricing?: {
-    currency?: string;
-    monthly?: number;
+  pricing: {
+    currency: string;
+    monthly: number;
     yearly?: number;
-    [key: string]: unknown;
   };
-  features: unknown; // capabilities (machine enforced)
-  limits: Record<string, unknown>; // quotas (not displayed on pricing page)
   langJsonb?: Record<string, PlanTranslation> | null;
   isPopular?: boolean;
-  stripePriceIdMonthly?: string;
-  stripePriceIdYearly?: string;
-  isDefault?: boolean;
 }
 
-export default function PricingContent() {
+interface PricingContentProps {
+  lang: string;
+  plans: PricingPlan[];
+  heroBefore?: ReactNode;
+  heroAfter?: ReactNode;
+}
+
+export default function PricingContent({
+  lang,
+  plans,
+  heroBefore,
+  heroAfter,
+}: PricingContentProps) {
   const router = useRouter();
-  const params = useParams();
   const t = useTranslations('pricing');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState<string | null>(null);
-  const [plans, setPlans] = useState<Plan[]>([]);
   const [currentSubscription, setCurrentSubscription] = useState<{
     planSlug: string;
     status: string;
@@ -49,24 +52,6 @@ export default function PricingContent() {
 
   const { data: session } = useSession();
   const isLoggedIn = !!session?.user;
-  const lang = useMemo(() => (typeof params.lang === 'string' ? params.lang : 'zh'), [params.lang]);
-
-  useEffect(() => {
-    async function fetchPlans() {
-      try {
-        const response = await fetch('/api/plans');
-        if (!response.ok) {
-          throw new Error(t('errors.fetchPlans'));
-        }
-        const data = (await response.json()) as Plan[];
-        setPlans(data);
-      } catch (error) {
-        console.error('Failed to fetch plans:', error);
-      }
-    }
-
-    void fetchPlans();
-  }, [t]);
 
   useEffect(() => {
     async function fetchSubscription() {
@@ -142,25 +127,16 @@ export default function PricingContent() {
     return currentSubscription?.planSlug === planSlug && currentSubscription?.isActive;
   }
 
-  function getPrice(plan: Plan): number {
-    const pricing = plan.pricing || {};
-    const monthlyAmount = pricing.monthly;
-    const yearlyAmount = pricing.yearly;
-
-    const fallbackMonthly = typeof plan.priceMonthly === 'number' ? plan.priceMonthly : 0;
-    const fallbackYearly = typeof plan.priceYearly === 'number' ? plan.priceYearly : null;
-
-    if (billingPeriod === 'monthly') {
-      return typeof monthlyAmount === 'number' ? monthlyAmount : fallbackMonthly;
+  function getPrice(plan: PricingPlan): number {
+    if (billingPeriod === 'yearly' && typeof plan.pricing.yearly === 'number') {
+      return plan.pricing.yearly;
     }
 
-    if (typeof yearlyAmount === 'number') return yearlyAmount;
-    if (typeof fallbackYearly === 'number') return fallbackYearly;
-    return fallbackMonthly * 10;
+    return plan.pricing.monthly;
   }
 
-  function getCurrency(_plan: Plan): string {
-    return 'USD';
+  function getCurrency(plan: PricingPlan): string {
+    return plan.pricing.currency;
   }
 
   function formatMoney(amount: number, currency: string): string {
@@ -172,18 +148,13 @@ export default function PricingContent() {
     }).format(amount);
   }
 
-  function getDisplayTranslation(plan: Plan): PlanTranslation | undefined {
+  function getDisplayTranslation(plan: PricingPlan): PlanTranslation | undefined {
     const map = plan.langJsonb || undefined;
     if (!map) return undefined;
-    return (
-      map[lang] ||
-      (lang.startsWith('zh') ? map['zh'] || map['zh-CN'] : map['en']) ||
-      map['zh'] ||
-      map['en']
-    );
+    return map[lang] || map.zh || map.en;
   }
 
-  function getFeaturesList(plan: Plan): string[] {
+  function getFeaturesList(plan: PricingPlan): string[] {
     const translation = getDisplayTranslation(plan);
     if (translation?.featuresList?.length) {
       return translation.featuresList;
@@ -194,11 +165,13 @@ export default function PricingContent() {
   return (
     <div className="py-12">
       <div className="container mx-auto px-4">
+        {heroBefore}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-4">{t('hero.title')}</h1>
           <p className="text-xl text-muted-foreground">{t('hero.subtitle')}</p>
           {!isLoggedIn && <p className="text-sm text-primary mt-2">{t('hero.loginTip')}</p>}
         </div>
+        {heroAfter}
 
         <div className="flex justify-center mb-12">
           <div className="bg-muted rounded-lg p-1 inline-flex">
@@ -227,26 +200,8 @@ export default function PricingContent() {
         </div>
 
         {plans.length === 0 ? (
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="bg-card rounded-lg shadow-lg p-8 border border-border animate-pulse"
-              >
-                <div className="h-8 bg-muted rounded w-3/4 mb-4"></div>
-                <div className="h-4 bg-muted rounded w-full mb-6"></div>
-                <div className="h-12 bg-muted rounded w-1/2 mb-6"></div>
-                <div className="space-y-3 mb-8">
-                  {[1, 2, 3, 4, 5].map((j) => (
-                    <div key={j} className="flex items-start gap-2">
-                      <div className="h-4 w-4 bg-muted rounded-full flex-shrink-0 mt-0.5"></div>
-                      <div className="h-4 bg-muted rounded flex-1"></div>
-                    </div>
-                  ))}
-                </div>
-                <div className="h-12 bg-muted rounded w-full"></div>
-              </div>
-            ))}
+          <div className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-8 text-center text-muted-foreground shadow-sm">
+            {t('plans.empty')}
           </div>
         ) : (
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -263,22 +218,7 @@ export default function PricingContent() {
               const buttonText =
                 loading === plan.id ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     {t('cta.processing')}
                   </span>
                 ) : isCurrent ? (
@@ -327,7 +267,7 @@ export default function PricingContent() {
                   <ul className="mb-8 space-y-3">
                     {features.map((feature, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-success mr-2 text-lg">*</span>
+                        <Check className="mr-2 mt-0.5 h-4 w-4 flex-shrink-0 text-success" />
                         <span className="text-foreground">{feature}</span>
                       </li>
                     ))}
@@ -356,7 +296,7 @@ export default function PricingContent() {
           <p className="mb-2">{t('footer.coreFeatures')}</p>
           <p>
             {t('footer.questions')}{' '}
-            <Link href="/contact" className="text-primary hover:underline">
+            <Link href={`/${lang}/contact`} className="text-primary hover:underline">
               {t('footer.contact')}
             </Link>
           </p>

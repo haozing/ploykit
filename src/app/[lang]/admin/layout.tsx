@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/shared/role-check';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { getAdminSidebarNavGroups } from '@/lib/ui/navigation';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 /**
  * Admin Layout
@@ -32,5 +33,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   //
   // Render Admin Dashboard (User is authenticated + admin)
   //
-  return <DashboardShell navGroups={navGroups}>{children}</DashboardShell>;
+  return (
+    <IntlMessagesProvider scope="admin">
+      <DashboardShell navGroups={navGroups}>{children}</DashboardShell>
+    </IntlMessagesProvider>
+  );
 }

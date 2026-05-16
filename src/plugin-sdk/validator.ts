@@ -5,6 +5,12 @@ import {
   type PluginEventDefinition,
   type PluginHookDefinition,
   type PluginHttpMethod,
+  type PluginHostPageCacheDefinition,
+  type PluginHostPageI18nDefinition,
+  type PluginHostPagesDefinition,
+  type PluginHostPageSeoDefinition,
+  type PluginHostPageShellDefinition,
+  type PluginHostPageSlotPosition,
   type PluginMenuDefinition,
   type PluginMeterDefinition,
   type PluginPublicRouteAliasDeclaration,
@@ -150,6 +156,26 @@ const RESOURCE_BINDING_ROLES = new Set<PluginResourceBindingRole>([
   'editor',
   'viewer',
 ]);
+const HOST_PAGE_PATHS = new Set([
+  '/',
+  '/about',
+  '/contact',
+  '/pricing',
+  '/privacy',
+  '/terms',
+  '/success',
+]);
+const HOST_PAGE_SLOT_POSITIONS = new Set<PluginHostPageSlotPosition>([
+  'hero.before',
+  'hero.after',
+  'main.before',
+  'main.after',
+  'main.replace',
+]);
+const HOST_PAGE_OVERRIDE_MODES = new Set(['main.replace']);
+const HOST_PAGE_SHELL_LAYOUTS = new Set(['site']);
+const HOST_PAGE_SHELL_CHROME = new Set(['host', 'hidden']);
+const HOST_PAGE_SHELL_CONTAINERS = new Set(['fixed', 'fluid', 'full']);
 
 interface RoutePatternDeclaration {
   path: string;
@@ -168,6 +194,7 @@ export function validatePluginDefinition(definition: PluginDefinition): PluginDi
   validateRoutes(definition, diagnostics, routeKeys);
   validateMenus(definition, diagnostics);
   validateSlots(definition, diagnostics);
+  validateHostPages(definition, diagnostics);
   validateLifecycle(definition, diagnostics);
   validateEvents(definition, definition.events, diagnostics);
   validateJobs(definition, diagnostics);
@@ -1038,6 +1065,16 @@ function validateRoutePermissions(
 
 function validateMenus(definition: PluginDefinition, diagnostics: PluginDiagnostic[]): void {
   const menus = toArray(definition.menu);
+  if (menus.length > 0 && !hasDeclaredPermission(definition, Permission.NavigationExtend)) {
+    addError(
+      diagnostics,
+      'PLUGIN_NAVIGATION_EXTEND_PERMISSION_REQUIRED',
+      'Declaring plugin menu entries requires Permission.NavigationExtend.',
+      'menu',
+      'Add Permission.NavigationExtend to plugin.ts permissions or remove menu entries.'
+    );
+  }
+
   const pageRoutePaths = new Set([
     ...(definition.routes?.pages ?? []).map((route) => normalizeDeclaredRoutePath(route.path)),
     ...(definition.routes?.tools ?? []).map((route) => normalizeToolRuntimePath(route.path)),
@@ -1074,11 +1111,23 @@ function validateMenu(
   validateMenuText(menu, basePath, diagnostics);
 
   if (menu.labelKey !== undefined) {
-    validatePluginLocalI18nKey(menu.labelKey, `${basePath}.labelKey`, 'Menu labelKey', diagnostics);
+    validatePluginLocalI18nKey(
+      menu.labelKey,
+      `${basePath}.labelKey`,
+      'Menu labelKey',
+      diagnostics,
+      'PLUGIN_MENU_I18N_KEY_INVALID'
+    );
   }
 
   if (menu.groupKey !== undefined) {
-    validatePluginLocalI18nKey(menu.groupKey, `${basePath}.groupKey`, 'Menu groupKey', diagnostics);
+    validatePluginLocalI18nKey(
+      menu.groupKey,
+      `${basePath}.groupKey`,
+      'Menu groupKey',
+      diagnostics,
+      'PLUGIN_MENU_I18N_KEY_INVALID'
+    );
   }
 
   if (menu.fallbackLabel !== undefined && !menu.fallbackLabel.trim()) {
@@ -1164,7 +1213,8 @@ function validatePluginLocalI18nKey(
   key: string,
   path: string,
   label: string,
-  diagnostics: PluginDiagnostic[]
+  diagnostics: PluginDiagnostic[],
+  code = 'PLUGIN_I18N_KEY_INVALID'
 ): void {
   const trimmed = key.trim();
 
@@ -1177,7 +1227,7 @@ function validatePluginLocalI18nKey(
   ) {
     addError(
       diagnostics,
-      'PLUGIN_MENU_I18N_KEY_INVALID',
+      code,
       `${label} must contain only letters, numbers, dots, underscores, or hyphens, and cannot start, end, or contain consecutive dots.`,
       path,
       'Use a plugin-local key such as "menu.console" or "nav.jobs".'
@@ -1285,6 +1335,17 @@ function validateSlots(definition: PluginDefinition, diagnostics: PluginDiagnost
       continue;
     }
 
+    if (slotName.startsWith('site.') && slotName.endsWith(':main.replace')) {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_OVERRIDE_SLOT_FORBIDDEN',
+        `Host page replace slot "${slotName}" must be declared through hostPages.overrides.`,
+        basePath,
+        'Move this declaration to hostPages.overrides and declare Permission.HostPageOverride.'
+      );
+      continue;
+    }
+
     const declarations = Array.isArray(declarationOrDeclarations)
       ? declarationOrDeclarations
       : [declarationOrDeclarations];
@@ -1293,6 +1354,417 @@ function validateSlots(definition: PluginDefinition, diagnostics: PluginDiagnost
       validateSlotDeclaration(declaration, `${basePath}.${index}`, diagnostics)
     );
   }
+}
+
+function validateHostPages(definition: PluginDefinition, diagnostics: PluginDiagnostic[]): void {
+  const hostPages = definition.hostPages;
+  if (!hostPages) {
+    return;
+  }
+
+  validateHostPageSlots(definition, hostPages, diagnostics);
+  validateHostPageOverrides(definition, hostPages, diagnostics);
+}
+
+function validateHostPageSlots(
+  definition: PluginDefinition,
+  hostPages: PluginHostPagesDefinition,
+  diagnostics: PluginDiagnostic[]
+): void {
+  const slots = hostPages.slots ?? [];
+
+  if (slots.length > 0 && !hasDeclaredPermission(definition, Permission.HostPageExtend)) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_EXTEND_PERMISSION_REQUIRED',
+      'Declaring host page slots requires Permission.HostPageExtend.',
+      'hostPages.slots',
+      'Add Permission.HostPageExtend to plugin.ts permissions or remove hostPages.slots.'
+    );
+  }
+
+  for (const [index, slot] of slots.entries()) {
+    const basePath = `hostPages.slots.${index}`;
+    validateHostPagePath(slot.page, `${basePath}.page`, diagnostics);
+    validateHostPageSlotPosition(slot.position, `${basePath}.position`, diagnostics);
+    validatePluginModulePath(
+      slot.component,
+      `${basePath}.component`,
+      'Host page slot component',
+      diagnostics
+    );
+    validateHostPagePriority(slot.priority, `${basePath}.priority`, diagnostics);
+
+    if (slot.position === 'main.replace') {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_SLOT_POSITION_FORBIDDEN',
+        'hostPages.slots cannot use main.replace. Use hostPages.overrides instead.',
+        `${basePath}.position`,
+        'Move this entry to hostPages.overrides.'
+      );
+    }
+  }
+}
+
+function validateHostPageOverrides(
+  definition: PluginDefinition,
+  hostPages: PluginHostPagesDefinition,
+  diagnostics: PluginDiagnostic[]
+): void {
+  const overrides = hostPages.overrides ?? [];
+
+  if (overrides.length > 0 && !hasDeclaredPermission(definition, Permission.HostPageOverride)) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_OVERRIDE_PERMISSION_REQUIRED',
+      'Declaring host page overrides requires Permission.HostPageOverride.',
+      'hostPages.overrides',
+      'Add Permission.HostPageOverride to plugin.ts permissions or remove hostPages.overrides.'
+    );
+  }
+
+  if (overrides.length > 0 && (!definition.trustLevel || definition.trustLevel === 'untrusted')) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_OVERRIDE_TRUST_REQUIRED',
+      'Host page overrides require trusted or system plugin trust.',
+      'trustLevel',
+      'Set trustLevel to "trusted" for reviewed host page overrides.'
+    );
+  }
+
+  const seenPages = new Set<string>();
+  for (const [index, override] of overrides.entries()) {
+    const basePath = `hostPages.overrides.${index}`;
+    const page = normalizeDeclaredRoutePath(override.page);
+    validateHostPagePath(override.page, `${basePath}.page`, diagnostics);
+
+    if (seenPages.has(page)) {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_OVERRIDE_DUPLICATE',
+        `Host page "${page}" is overridden more than once by this plugin.`,
+        `${basePath}.page`,
+        'Keep a single override per host page.'
+      );
+    }
+    seenPages.add(page);
+
+    if (!HOST_PAGE_OVERRIDE_MODES.has(override.mode)) {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_OVERRIDE_MODE_INVALID',
+        `Unsupported host page override mode "${String(override.mode)}".`,
+        `${basePath}.mode`,
+        'Use mode: "main.replace".'
+      );
+    }
+
+    validatePluginModulePath(
+      override.component,
+      `${basePath}.component`,
+      'Host page override component',
+      diagnostics
+    );
+    validateHostPagePriority(override.priority, `${basePath}.priority`, diagnostics);
+    validateHostPageShell(override.shell, `${basePath}.shell`, diagnostics);
+    validateHostPageSeo(override.seo, `${basePath}.seo`, diagnostics);
+    validateHostPageI18n(override.i18n, `${basePath}.i18n`, diagnostics);
+    validateHostPageCache(override.cache, `${basePath}.cache`, diagnostics);
+  }
+}
+
+function validateHostPagePath(
+  page: string,
+  diagnosticPath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  validateAbsolutePath(page, diagnosticPath, 'Host page', diagnostics);
+
+  if (!page.startsWith('/')) {
+    return;
+  }
+
+  const normalized = normalizeDeclaredRoutePath(page);
+  if (!HOST_PAGE_PATHS.has(normalized)) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_UNKNOWN',
+      `Host page "${page}" is not an extendable host page.`,
+      diagnosticPath,
+      'Use one of: /, /about, /contact, /pricing, /privacy, /terms, /success.'
+    );
+  }
+}
+
+function validateHostPageSlotPosition(
+  position: PluginHostPageSlotPosition,
+  diagnosticPath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  if (!HOST_PAGE_SLOT_POSITIONS.has(position)) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SLOT_POSITION_INVALID',
+      `Unsupported host page slot position "${String(position)}".`,
+      diagnosticPath,
+      'Use hero.before, hero.after, main.before, main.after, or main.replace.'
+    );
+  }
+}
+
+function validateHostPagePriority(
+  priority: number | undefined,
+  diagnosticPath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  if (
+    priority !== undefined &&
+    (typeof priority !== 'number' || !Number.isFinite(priority) || priority < 0)
+  ) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_PRIORITY_INVALID',
+      'Host page priority must be a non-negative number.',
+      diagnosticPath
+    );
+  }
+}
+
+function validateHostPageShell(
+  shell: PluginHostPageShellDefinition | undefined,
+  basePath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  if (!shell) {
+    return;
+  }
+
+  if (shell.layout !== undefined && !HOST_PAGE_SHELL_LAYOUTS.has(shell.layout)) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SHELL_LAYOUT_INVALID',
+      `Unsupported host page shell layout "${String(shell.layout)}".`,
+      `${basePath}.layout`,
+      'Use layout: "site".'
+    );
+  }
+
+  for (const key of ['header', 'footer'] as const) {
+    const value = shell[key];
+    if (value !== undefined && !HOST_PAGE_SHELL_CHROME.has(value)) {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_SHELL_CHROME_INVALID',
+        `Host page shell ${key} must be "host" or "hidden".`,
+        `${basePath}.${key}`
+      );
+    }
+  }
+
+  if (shell.container !== undefined && !HOST_PAGE_SHELL_CONTAINERS.has(shell.container)) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SHELL_CONTAINER_INVALID',
+      `Unsupported host page shell container "${String(shell.container)}".`,
+      `${basePath}.container`,
+      'Use fixed, fluid, or full.'
+    );
+  }
+
+  if (shell.activeMenuPath !== undefined) {
+    validateAbsolutePath(
+      shell.activeMenuPath,
+      `${basePath}.activeMenuPath`,
+      'Active menu path',
+      diagnostics
+    );
+  }
+}
+
+function validateHostPageSeo(
+  seo: PluginHostPageSeoDefinition | undefined,
+  basePath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  if (!seo || typeof seo !== 'object') {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SEO_REQUIRED',
+      'Host page overrides must declare seo metadata.',
+      basePath,
+      'Add titleKey, descriptionKey, and canonical to the host page override.'
+    );
+    return;
+  }
+
+  if (typeof seo.titleKey === 'string') {
+    validatePluginLocalI18nKey(
+      seo.titleKey,
+      `${basePath}.titleKey`,
+      'Host page SEO titleKey',
+      diagnostics
+    );
+  } else {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SEO_TITLE_KEY_REQUIRED',
+      'Host page SEO titleKey is required.',
+      `${basePath}.titleKey`
+    );
+  }
+
+  if (typeof seo.descriptionKey !== 'string') {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SEO_DESCRIPTION_KEY_REQUIRED',
+      'Host page SEO descriptionKey is required.',
+      `${basePath}.descriptionKey`
+    );
+  } else {
+    validatePluginLocalI18nKey(
+      seo.descriptionKey,
+      `${basePath}.descriptionKey`,
+      'Host page SEO descriptionKey',
+      diagnostics
+    );
+  }
+  if (typeof seo.canonical === 'string') {
+    validateAbsolutePath(
+      seo.canonical,
+      `${basePath}.canonical`,
+      'Host page SEO canonical',
+      diagnostics
+    );
+  } else {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_SEO_CANONICAL_REQUIRED',
+      'Host page SEO canonical is required.',
+      `${basePath}.canonical`
+    );
+  }
+
+  for (const key of ['fallbackTitle', 'fallbackDescription'] as const) {
+    const value = seo[key];
+    if (value !== undefined && (typeof value !== 'string' || !value.trim())) {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_SEO_FALLBACK_INVALID',
+        `Host page SEO ${key} must be a non-empty string when provided.`,
+        `${basePath}.${key}`
+      );
+    }
+  }
+
+  const robots = seo.robots;
+  for (const key of ['index', 'follow'] as const) {
+    const value = robots?.[key];
+    if (
+      value !== undefined &&
+      typeof value !== 'boolean' &&
+      !ROBOTS_DIRECTIVES.has(String(value))
+    ) {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_SEO_ROBOTS_INVALID',
+        `Host page SEO robots.${key} is invalid.`,
+        `${basePath}.robots.${key}`
+      );
+    }
+  }
+
+  if (seo.openGraph) {
+    for (const key of ['titleKey', 'descriptionKey'] as const) {
+      const value = seo.openGraph[key];
+      if (value !== undefined) {
+        validatePluginLocalI18nKey(
+          value,
+          `${basePath}.openGraph.${key}`,
+          `Host page openGraph ${key}`,
+          diagnostics
+        );
+      }
+    }
+    if (seo.openGraph.image !== undefined) {
+      validateAbsolutePath(
+        seo.openGraph.image,
+        `${basePath}.openGraph.image`,
+        'Host page openGraph image',
+        diagnostics
+      );
+    }
+  }
+
+  if (seo.structuredData !== undefined) {
+    try {
+      JSON.stringify(seo.structuredData);
+    } catch {
+      addError(
+        diagnostics,
+        'PLUGIN_HOST_PAGE_SEO_STRUCTURED_DATA_INVALID',
+        'Host page SEO structuredData must be JSON serializable.',
+        `${basePath}.structuredData`
+      );
+    }
+  }
+
+  validateToolSitemap(seo.sitemap, `${basePath}.sitemap`, diagnostics);
+}
+
+function validateHostPageI18n(
+  i18n: PluginHostPageI18nDefinition | undefined,
+  basePath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  if (!i18n || typeof i18n !== 'object') {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_I18N_REQUIRED',
+      'Host page overrides must declare i18n requirements.',
+      basePath,
+      'Declare requiredLocales and the plugin locale namespaces used by this override.'
+    );
+    return;
+  }
+
+  if (!Array.isArray(i18n.requiredLocales) || i18n.requiredLocales.length === 0) {
+    addError(
+      diagnostics,
+      'PLUGIN_HOST_PAGE_I18N_LOCALES_REQUIRED',
+      'Host page override i18n.requiredLocales must include at least one locale.',
+      `${basePath}.requiredLocales`
+    );
+  } else {
+    for (const [index, locale] of i18n.requiredLocales.entries()) {
+      if (!LOCALE_PATTERN.test(locale)) {
+        addError(
+          diagnostics,
+          'PLUGIN_HOST_PAGE_I18N_LOCALE_INVALID',
+          `Host page override locale "${locale}" is invalid.`,
+          `${basePath}.requiredLocales.${index}`
+        );
+      }
+    }
+  }
+
+  for (const [index, namespace] of (i18n.namespaces ?? []).entries()) {
+    validatePluginLocalI18nKey(
+      namespace,
+      `${basePath}.namespaces.${index}`,
+      'Host page i18n namespace',
+      diagnostics
+    );
+  }
+}
+
+function validateHostPageCache(
+  cache: PluginHostPageCacheDefinition | undefined,
+  basePath: string,
+  diagnostics: PluginDiagnostic[]
+): void {
+  validateToolCache(cache, basePath, diagnostics);
 }
 
 function validateTheme(theme: PluginThemeDefinition | undefined, diagnostics: PluginDiagnostic[]) {
@@ -1895,7 +2367,12 @@ function validateServices(definition: PluginDefinition, diagnostics: PluginDiagn
 
     for (const [pathIndex, servicePath] of (service.paths ?? []).entries()) {
       const pathValue = servicePath.replace(/\/\*\*$/, '');
-      validateAbsolutePath(pathValue || '/', `${basePath}.paths.${pathIndex}`, 'Service path', diagnostics);
+      validateAbsolutePath(
+        pathValue || '/',
+        `${basePath}.paths.${pathIndex}`,
+        'Service path',
+        diagnostics
+      );
       if (/^https?:\/\//i.test(servicePath)) {
         addError(
           diagnostics,
@@ -1986,8 +2463,16 @@ function validateResourceBindings(
       );
     }
 
-    validateResourceBindingRoles(binding.permissions?.read, `${basePath}.permissions.read`, diagnostics);
-    validateResourceBindingRoles(binding.permissions?.write, `${basePath}.permissions.write`, diagnostics);
+    validateResourceBindingRoles(
+      binding.permissions?.read,
+      `${basePath}.permissions.read`,
+      diagnostics
+    );
+    validateResourceBindingRoles(
+      binding.permissions?.write,
+      `${basePath}.permissions.write`,
+      diagnostics
+    );
   }
 }
 
@@ -2076,6 +2561,19 @@ function validateEgress(definition: PluginDefinition, diagnostics: PluginDiagnos
 }
 
 function validateData(definition: PluginDefinition, diagnostics: PluginDiagnostic[]): void {
+  if (
+    definition.data?.version !== undefined &&
+    (!Number.isInteger(definition.data.version) || definition.data.version <= 0)
+  ) {
+    addError(
+      diagnostics,
+      'PLUGIN_DATA_VERSION_INVALID',
+      'Plugin data.version must be a positive integer.',
+      'data.version',
+      'Use data.version: 1 and increment it when changing collection schema.'
+    );
+  }
+
   for (const [collectionName, collection] of Object.entries(definition.data?.collections ?? {})) {
     const basePath = `data.collections.${collectionName}`;
 

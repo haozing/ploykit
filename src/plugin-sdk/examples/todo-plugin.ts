@@ -16,6 +16,7 @@ export const todoPlugin = definePlugin({
     Permission.WebhookReceive,
     Permission.AuditWrite,
     Permission.UsageWrite,
+    Permission.NavigationExtend,
     Permission.UiToast,
   ],
   data: {

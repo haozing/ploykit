@@ -360,24 +360,14 @@ export class SlotManager {
     try {
       logger.info('SlotManager: Lazy initializing from database...');
 
-      const { db } = await import('@/lib/db/client.server');
-      const { pluginInstallations } = await import('@/lib/db/schema/plugins');
-      const { eq } = await import('drizzle-orm');
-
-      const enabledPlugins = await db
-        .select()
-        .from(pluginInstallations)
-        .where(eq(pluginInstallations.enabled, true));
-
-      const pluginIds = enabledPlugins
-        .filter((p) => hasPluginRuntimeContract(p.pluginId))
-        .map((p) => p.pluginId);
+      const { getEnabledPlugins } = await import('@/lib/bus/hook-helpers.server');
+      const enabledPluginIds = await getEnabledPlugins();
+      const pluginIds = enabledPluginIds.filter((pluginId) => hasPluginRuntimeContract(pluginId));
 
       await this._initializeWithPlugins(pluginIds);
     } catch (error) {
       logger.error({ error }, 'SlotManager: Database initialization failed');
       this.initialized = true;
-      throw error;
     }
   }
 

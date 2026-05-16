@@ -2743,7 +2743,8 @@
     "plans": {
       "callsPerMonth": "{count} 次/月调用额度（全站插件共享）",
       "noLimits": "暂无调用额度限制信息",
-      "noFeatureDetails": "暂无可用功能描述"
+      "noFeatureDetails": "暂无可用功能描述",
+      "empty": "暂无可用订阅方案"
     },
     "footer": {
       "coreFeatures": "所有付费方案均包含平台核心能力",

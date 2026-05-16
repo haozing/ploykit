@@ -145,6 +145,7 @@ type PluginCheckContract = { id: string } & Partial<
     | 'routes'
     | 'menu'
     | 'slots'
+    | 'hostPages'
     | 'config'
     | 'lifecycle'
     | 'jobs'
@@ -2050,6 +2051,28 @@ function buildDeclaredPermissionUses(
 
   if ((contract.services ?? []).length > 0) {
     recordDeclaredPermissionUse(permissionUses, Permission.ServicesInvoke, entryFile, 'services');
+  }
+
+  if (getContractMenus(contract).length > 0) {
+    recordDeclaredPermissionUse(permissionUses, Permission.NavigationExtend, entryFile, 'menu');
+  }
+
+  if ((contract.hostPages?.slots ?? []).length > 0) {
+    recordDeclaredPermissionUse(
+      permissionUses,
+      Permission.HostPageExtend,
+      entryFile,
+      'hostPages.slots'
+    );
+  }
+
+  if ((contract.hostPages?.overrides ?? []).length > 0) {
+    recordDeclaredPermissionUse(
+      permissionUses,
+      Permission.HostPageOverride,
+      entryFile,
+      'hostPages.overrides'
+    );
   }
 
   if ((contract.resourceBindings ?? []).length > 0) {

@@ -9,6 +9,7 @@ export {
   normalizeCollectionDefinition,
   normalizeCollectionField,
   validatePluginRecordData,
+  validatePluginStorageQuery,
   type NormalizedPluginCollectionDefinition,
   type NormalizedPluginCollectionField,
   type NormalizedPluginCollectionFieldType,

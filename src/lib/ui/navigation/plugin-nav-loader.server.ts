@@ -1,7 +1,3 @@
-/**
- *
- */
-
 import { cache } from 'react';
 import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import type { MenusByLocation, MenuItem } from './types';
@@ -76,24 +72,30 @@ function mapPluginMenuItem(
   } as MenuItem;
 }
 
-/**
- *
- *
- */
 export const loadPluginNavigation = cache(
   async (location?: keyof MenusByLocation): Promise<MenusByLocation> => {
     logger.debug({ location }, 'Loading plugin navigation');
 
-    const installations = await pluginQueryService.listInstalledPlugins();
-    const enabledPlugins = installations.filter((p) => p.enabled);
+    let enabledPluginIds: string[];
 
-    logger.debug({ count: enabledPlugins.length }, 'Found enabled plugins');
+    try {
+      const installations = await pluginQueryService.listInstalledPlugins();
+      enabledPluginIds = installations.filter((p) => p.enabled).map((plugin) => plugin.pluginId);
+    } catch (error) {
+      logger.warn(
+        { location, error },
+        'Plugin navigation is unavailable, rendering system navigation only'
+      );
+      return {};
+    }
+
+    logger.debug({ count: enabledPluginIds.length }, 'Found enabled plugins');
 
     const allMenus: MenusByLocation = {};
 
-    for (const plugin of enabledPlugins) {
+    for (const pluginId of enabledPluginIds) {
       try {
-        const contract = await pluginRuntimeRegistry.getOrLoad(plugin.pluginId);
+        const contract = await pluginRuntimeRegistry.getOrLoad(pluginId);
         const menuItems = contract.menu;
 
         for (const [index, item] of menuItems.entries()) {
@@ -104,13 +106,12 @@ export const loadPluginNavigation = cache(
             allMenus[loc] = [];
           }
 
-          allMenus[loc].push(mapPluginMenuItem(contract, plugin.pluginId, item, index));
+          allMenus[loc].push(mapPluginMenuItem(contract, pluginId, item, index));
         }
 
-        logger.debug({ pluginId: plugin.pluginId }, 'Loaded plugin navigation');
+        logger.debug({ pluginId }, 'Loaded plugin navigation');
       } catch (error) {
-        logger.error({ pluginId: plugin.pluginId, error }, 'Failed to load plugin navigation');
-        // ProcessOtherPlugin
+        logger.error({ pluginId, error }, 'Failed to load plugin navigation');
       }
     }
 

@@ -46,9 +46,11 @@ import {
   pluginInstallations,
   pluginSettings,
   pluginLifecycleLogs,
+  pluginHostPageOverrides,
   pluginInstallationsRelations,
   pluginSettingsRelations,
   pluginLifecycleLogsRelations,
+  pluginHostPageOverridesRelations,
 } from './plugins';
 
 import { pluginModels, pluginModelsRelations } from './plugin-models';
@@ -133,6 +135,7 @@ export const schema = {
   pluginInstallations,
   pluginSettings,
   pluginLifecycleLogs,
+  pluginHostPageOverrides,
   pluginModels,
   pluginCollections,
   pluginRecords,
@@ -201,6 +204,7 @@ export const schema = {
   pluginInstallationsRelations,
   pluginSettingsRelations,
   pluginLifecycleLogsRelations,
+  pluginHostPageOverridesRelations,
   pluginModelsRelations,
   rolesRelations,
   userrolesRelations,
@@ -236,6 +240,8 @@ export type {
   NewPluginSetting,
   PluginLifecycleLog,
   NewPluginLifecycleLog,
+  PluginHostPageOverride,
+  NewPluginHostPageOverride,
 } from './plugins';
 
 export type {

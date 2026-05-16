@@ -13,10 +13,14 @@ export {
   validatePluginRuntimeContract,
   validateRuntimeRouteConflicts,
 } from './validate-contract';
+export { EMPTY_RUNTIME_HOST_PAGES } from './types';
 export type {
   PluginRuntimeContract,
   PluginRuntimeContractValidationResult,
   RuntimeApiRoute,
+  RuntimeHostPageOverride,
+  RuntimeHostPages,
+  RuntimeHostPageSlot,
   RuntimePageRoute,
   RuntimePluginDefinition,
   RuntimeRoute,

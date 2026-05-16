@@ -13,6 +13,7 @@ import {
 import { PluginRuntimePageRenderer } from '@/components/plugins/plugin-runtime-page-renderer';
 import { ShellLayout } from '@/components/layouts/ShellLayout';
 import type { RuntimePageRoute } from '@/lib/plugin-runtime';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 export const revalidate = 300;
 
@@ -70,17 +71,19 @@ export default async function PluginToolPage({ params, searchParams }: Props) {
     : [];
 
   return (
-    <ShellLayout pathname={`/${localToolPath(slug)}`}>
-      {structuredDataScripts.map((script) => (
-        <script
-          key={script.id}
-          id={script.id}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: script.json }}
-        />
-      ))}
-      <PluginRuntimePageRenderer result={runtimeResult} />
-    </ShellLayout>
+    <IntlMessagesProvider scope="site">
+      <ShellLayout pathname={`/${localToolPath(slug)}`} locale={lang}>
+        {structuredDataScripts.map((script) => (
+          <script
+            key={script.id}
+            id={script.id}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: script.json }}
+          />
+        ))}
+        <PluginRuntimePageRenderer result={runtimeResult} />
+      </ShellLayout>
+    </IntlMessagesProvider>
   );
 }
 
@@ -100,6 +103,7 @@ async function resolveToolRuntimePageOrNotFound(
   try {
     return await resolvePluginPageRuntime(pluginId, slug, requestHeaders, {
       entry: entry ?? undefined,
+      locale: lang,
       publicPathPrefix: 'tools',
       query,
     });

@@ -29,6 +29,7 @@ describe('PluginRuntimePageRenderer', () => {
       pluginId: 'runtime-props',
       localPath: '/reports/weekly',
       requestPath: '/plugins/runtime-props/reports/weekly',
+      locale: 'zh',
       params: { period: 'weekly' },
       query: { tab: 'summary' },
       assets: {},
@@ -59,6 +60,7 @@ function createRuntimeResult(
       permissions: ['storage.read.self'],
       menu: [],
       slots: {},
+      hostPages: { slots: [], overrides: [] },
       resources: {},
       events: { publishes: [], subscribes: {} },
       jobs: {},
@@ -95,6 +97,7 @@ function createRuntimeResult(
     },
     localPath: '/reports/weekly',
     requestPath: '/plugins/runtime-props/reports/weekly',
+    locale: 'zh',
     params: { period: 'weekly' },
     query: { tab: 'summary' },
     module: {

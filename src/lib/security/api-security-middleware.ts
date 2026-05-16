@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readProxyRuntimeEnv } from './proxy-runtime-env';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
 const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -25,16 +26,13 @@ export type ApiSecurityDecision =
     };
 
 function readApiSecurityConfig(): ApiSecurityConfig {
+  const runtimeEnv = readProxyRuntimeEnv();
+
   return {
-    // Proxy code must stay edge-safe, so it reads process.env directly instead of importing env.ts.
-    // eslint-disable-next-line no-restricted-syntax
-    nodeEnv: process.env.NODE_ENV || 'development',
-    // eslint-disable-next-line no-restricted-syntax
-    appUrl: process.env.NEXT_PUBLIC_APP_URL,
-    // eslint-disable-next-line no-restricted-syntax
-    authUrl: process.env.BETTER_AUTH_URL,
-    // eslint-disable-next-line no-restricted-syntax
-    serviceToken: process.env.API_SERVICE_TOKEN,
+    nodeEnv: runtimeEnv.nodeEnv,
+    appUrl: runtimeEnv.appUrl,
+    authUrl: runtimeEnv.authUrl,
+    serviceToken: runtimeEnv.serviceToken,
   };
 }
 
@@ -100,16 +98,36 @@ function normalizeOrigin(value: string | undefined): string | null {
   }
 }
 
+function addOriginWithLoopbackAliases(origins: Set<string>, origin: string | null): void {
+  if (!origin) return;
+
+  origins.add(origin);
+
+  try {
+    const url = new URL(origin);
+    const isLoopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    if (!isLoopback) return;
+
+    for (const hostname of ['localhost', '127.0.0.1']) {
+      const alias = new URL(origin);
+      alias.hostname = hostname;
+      origins.add(alias.origin);
+    }
+  } catch {
+    // normalizeOrigin already filtered invalid values; keep this helper defensive.
+  }
+}
+
 function getAllowedOrigins(request: NextRequest, config: ApiSecurityConfig): string[] {
   const origins = new Set<string>();
   const appOrigin = normalizeOrigin(config.appUrl);
   const authOrigin = normalizeOrigin(config.authUrl);
 
-  if (appOrigin) origins.add(appOrigin);
-  if (authOrigin) origins.add(authOrigin);
+  addOriginWithLoopbackAliases(origins, appOrigin);
+  addOriginWithLoopbackAliases(origins, authOrigin);
+  addOriginWithLoopbackAliases(origins, request.nextUrl.origin);
 
   if (config.nodeEnv !== 'production') {
-    origins.add(request.nextUrl.origin);
     origins.add('http://localhost:3000');
     origins.add('http://127.0.0.1:3000');
   }
@@ -122,7 +140,8 @@ function hasAllowedOrigin(request: NextRequest, config: ApiSecurityConfig): bool
   const origin = request.headers.get('origin');
 
   if (origin) {
-    return allowedOrigins.includes(origin);
+    const normalizedOrigin = normalizeOrigin(origin);
+    return normalizedOrigin ? allowedOrigins.includes(normalizedOrigin) : false;
   }
 
   const referer = request.headers.get('referer');

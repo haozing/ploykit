@@ -1,0 +1,13 @@
+{
+  "menu": {
+    "lab": "能力实验室"
+  },
+  "hostPages": {
+    "about": {
+      "seo": {
+        "title": "能力实验室关于页覆盖",
+        "description": "Host Capability Lab 用真实插件验证宿主页覆盖的 SEO 和多语言元数据。"
+      }
+    }
+  }
+}

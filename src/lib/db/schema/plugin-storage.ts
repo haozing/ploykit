@@ -11,6 +11,7 @@ export const pluginCollections = pgTable(
     id: text('id').primaryKey(),
     pluginId: text('plugin_id').notNull(),
     name: text('name').notNull(),
+    schemaVersion: integer('schema_version').notNull().default(1),
     schemaJson: jsonb('schema_json').$type<PluginCollectionSchema>().notNull(),
     schemaHash: text('schema_hash').notNull(),
     indexesJson: jsonb('indexes_json').$type<PluginCollectionIndexes>().notNull().default([]),
@@ -54,6 +55,8 @@ export const pluginRecords = pgTable(
       table.deletedAt
     ),
     createdAtIdx: index('plugin_records_created_at_idx').on(table.createdAt),
+    updatedAtIdx: index('plugin_records_updated_at_idx').on(table.updatedAt),
+    dataGinIdx: index('plugin_records_data_gin_idx').using('gin', table.data),
   })
 );
 

@@ -23,6 +23,9 @@ plugins/<plugin-id>/
 runtime pages, APIs, jobs, events, webhooks, lifecycle handlers, slots, menus,
 assets, and capabilities from that generated map.
 
+For plugins that need to extend or override host-owned pages such as the home,
+about, or pricing pages, see [host page slots and overrides](host-page-overrides.md).
+
 Minimal plugin:
 
 ```ts
@@ -150,6 +153,10 @@ const items = await ctx.storage.collection('sample_items').findMany({
 });
 ```
 
+For database-shaped work beyond plugin-owned records, expose a host service and
+call it through `ctx.services`; ordinary plugins do not access the database
+directly.
+
 ## Host Capabilities
 
 Plugins should treat `ctx` as their host boundary. They should not import
@@ -163,6 +170,7 @@ services through raw `fetch()`.
 | `ctx.files`                              | `FilesRead`, `FilesWrite`                                | Signed upload/download and file metadata                            |
 | `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | User-visible or internal long-running work                          |
 | `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | External service profiles, credentials, retry, redaction, call logs |
+| `ctx.services`                           | `ServicesInvoke`                                         | Host-bound internal APIs for complex domain or database work        |
 | `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | Workspace creation, membership, roles, invitations                  |
 | `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | Plugin API keys and scoped rate limits                              |
 | `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | Usage, action meters, audit trail                                   |

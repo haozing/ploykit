@@ -92,7 +92,7 @@ export default function PlanDetailPage() {
     if (!plan) return '';
     const langJsonb = (plan.langJsonb || {}) as Record<string, Record<string, unknown> | undefined>;
     const direct = langJsonb[lang];
-    const zh = langJsonb.zh || langJsonb['zh-CN'];
+    const zh = langJsonb.zh;
     const en = langJsonb.en;
     const localized = direct || (lang.startsWith('zh') ? zh : en) || zh || en;
     return (localized?.description as string | undefined) || '';

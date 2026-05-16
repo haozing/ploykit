@@ -161,7 +161,7 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
       string,
       Record<string, unknown> | undefined
     >;
-    const zh = langJsonb.zh || langJsonb['zh-CN'];
+    const zh = langJsonb.zh;
     const en = langJsonb.en;
     const featuresListZh = Array.isArray(zh?.featuresList)
       ? (zh?.featuresList as string[]).join('\n')

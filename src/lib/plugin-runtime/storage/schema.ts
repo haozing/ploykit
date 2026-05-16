@@ -2,6 +2,8 @@ import type {
   PluginCollectionDefinition,
   PluginCollectionField,
   PluginCollectionFieldDefinition,
+  PluginStorageFieldOperators,
+  PluginStorageQuery,
 } from '@ploykit/plugin-sdk';
 import { PluginError } from '@ploykit/plugin-sdk';
 import type { PluginRecordData } from '@/lib/db/schema/plugin-storage';
@@ -46,6 +48,18 @@ const FIELD_TYPES = new Set<NormalizedPluginCollectionFieldType>([
   'datetime',
   'json',
 ]);
+const QUERY_OPERATOR_KEYS = new Set<keyof PluginStorageFieldOperators>([
+  'eq',
+  'ne',
+  'in',
+  'contains',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'startsWith',
+]);
+const RUNTIME_QUERY_FIELDS = new Set(['id', 'createdAt', 'updatedAt']);
 
 function createStorageError(
   code: string,
@@ -103,6 +117,78 @@ function cloneDefaultValue(value: unknown): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isOperatorObject(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value) || value instanceof Date) {
+    return false;
+  }
+
+  return Object.keys(value).some((key) =>
+    QUERY_OPERATOR_KEYS.has(key as keyof PluginStorageFieldOperators)
+  );
+}
+
+function fieldTypeForQuery(
+  collection: NormalizedPluginCollectionDefinition,
+  fieldName: string,
+  collectionName?: string
+): NormalizedPluginCollectionFieldType | 'runtime' {
+  if (RUNTIME_QUERY_FIELDS.has(fieldName)) {
+    return 'runtime';
+  }
+
+  const field = collection.fields[fieldName];
+  if (!field) {
+    throw createStorageError(
+      'PLUGIN_STORAGE_QUERY_FIELD_UNKNOWN',
+      `Query field "${fieldName}" is not declared for collection "${collectionName ?? 'unknown'}".`,
+      { collection: collectionName, field: fieldName }
+    );
+  }
+
+  return field.type;
+}
+
+function assertOperatorAllowed(
+  operator: string,
+  fieldName: string,
+  fieldType: NormalizedPluginCollectionFieldType | 'runtime',
+  collectionName?: string
+): void {
+  if (!QUERY_OPERATOR_KEYS.has(operator as keyof PluginStorageFieldOperators)) {
+    throw createStorageError(
+      'PLUGIN_STORAGE_QUERY_OPERATOR_UNKNOWN',
+      `Storage query operator "${operator}" is not supported.`,
+      { collection: collectionName, field: fieldName, operator }
+    );
+  }
+
+  if (
+    operator === 'startsWith' &&
+    fieldType !== 'runtime' &&
+    fieldType !== 'string' &&
+    fieldType !== 'text'
+  ) {
+    throw createStorageError(
+      'PLUGIN_STORAGE_QUERY_OPERATOR_INVALID',
+      `Operator "startsWith" can only be used on string or text fields.`,
+      { collection: collectionName, field: fieldName, fieldType }
+    );
+  }
+
+  if (
+    operator === 'contains' &&
+    fieldType !== 'string' &&
+    fieldType !== 'text' &&
+    fieldType !== 'json'
+  ) {
+    throw createStorageError(
+      'PLUGIN_STORAGE_QUERY_OPERATOR_INVALID',
+      `Operator "contains" can only be used on string, text, or json fields.`,
+      { collection: collectionName, field: fieldName, fieldType }
+    );
+  }
 }
 
 function isJsonSerializable(value: unknown): boolean {
@@ -347,4 +433,32 @@ export function validatePluginRecordData(
   }
 
   return output;
+}
+
+export function validatePluginStorageQuery(
+  collection: PluginCollectionDefinition,
+  query: PluginStorageQuery | undefined,
+  options: { collectionName?: string } = {}
+): void {
+  if (!query) {
+    return;
+  }
+
+  const normalizedCollection = normalizeCollectionDefinition(collection);
+
+  for (const [fieldName, filter] of Object.entries(query.where ?? {})) {
+    const fieldType = fieldTypeForQuery(normalizedCollection, fieldName, options.collectionName);
+
+    if (!isOperatorObject(filter)) {
+      continue;
+    }
+
+    for (const operator of Object.keys(filter)) {
+      assertOperatorAllowed(operator, fieldName, fieldType, options.collectionName);
+    }
+  }
+
+  for (const fieldName of Object.keys(query.orderBy ?? {})) {
+    fieldTypeForQuery(normalizedCollection, fieldName, options.collectionName);
+  }
 }

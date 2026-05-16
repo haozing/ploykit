@@ -8,7 +8,7 @@ import {
   type PluginStorageQuery,
 } from '@ploykit/plugin-sdk';
 import type { PluginCollectionIndexes, PluginRecordData } from '@/lib/db/schema/plugin-storage';
-import { validatePluginRecordData } from './schema';
+import { validatePluginRecordData, validatePluginStorageQuery } from './schema';
 
 export interface PluginStorageScope {
   pluginId: string;
@@ -30,6 +30,7 @@ export interface PluginStoredRecord {
 export interface EnsurePluginCollectionInput {
   pluginId: string;
   name: string;
+  schemaVersion: number;
   schemaJson: PluginCollectionDefinition;
   schemaHash: string;
   indexesJson: PluginCollectionIndexes;
@@ -56,6 +57,7 @@ export interface PluginStorageRepository {
   findMany(
     scope: PluginStorageScope,
     collectionName: string,
+    collection: PluginCollectionDefinition,
     query?: PluginStorageQuery
   ): Promise<PluginStoredRecord[]>;
   findById(
@@ -163,7 +165,8 @@ class RuntimePluginStorageCollection<TRecord extends OutputRecord>
     ensureScope(this.scope);
     this.enforceRead('findMany');
 
-    const records = await this.repository.findMany(this.scope, this.name, query);
+    validatePluginStorageQuery(this.definition, query, { collectionName: this.name });
+    const records = await this.repository.findMany(this.scope, this.name, this.definition, query);
     return records.map((record) => mapRecord(record) as TRecord);
   }
 
@@ -304,6 +307,7 @@ class RuntimePluginStorage implements PluginStorage {
       await this.options.repository.ensureCollection({
         pluginId: this.scope.pluginId,
         name,
+        schemaVersion: this.options.data?.version ?? 1,
         schemaJson: definition,
         schemaHash: createPluginCollectionSchemaHash(definition),
         indexesJson: definition.indexes ? [...definition.indexes] : [],

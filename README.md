@@ -213,8 +213,7 @@ npm run test:run          # Run Vitest
 npm run test:human        # Run browser E2E flow
 ```
 
-For the larger script catalog and acceptance matrices, see
-[scripts/README.md](scripts/README.md).
+For the larger script catalog, see [scripts/README.md](scripts/README.md).
 
 ## Documentation
 
@@ -227,12 +226,10 @@ For the larger script catalog and acceptance matrices, see
 | AI plugin quickstart           | [docs/ai-plugin-quickstart.md](docs/ai-plugin-quickstart.md)                     | [docs/ai-plugin-quickstart.zh-CN.md](docs/ai-plugin-quickstart.zh-CN.md)                     |
 | Codex skill for plugins        | [docs/codex-skill.md](docs/codex-skill.md)                                       | [docs/codex-skill.zh-CN.md](docs/codex-skill.zh-CN.md)                                       |
 | Plugin capabilities            | [docs/plugin-capabilities.md](docs/plugin-capabilities.md)                       | [docs/plugin-capabilities.zh-CN.md](docs/plugin-capabilities.zh-CN.md)                       |
+| Host page slots and overrides  | [docs/host-page-overrides.md](docs/host-page-overrides.md)                       | [docs/host-page-overrides.zh-CN.md](docs/host-page-overrides.zh-CN.md)                       |
 | Plugin diagnostics             | [docs/plugin-diagnostics.md](docs/plugin-diagnostics.md)                         | [docs/plugin-diagnostics.zh-CN.md](docs/plugin-diagnostics.zh-CN.md)                         |
-| Open-source media assets       | [docs/open-source-media-assets.md](docs/open-source-media-assets.md)             | [docs/open-source-media-assets.zh-CN.md](docs/open-source-media-assets.zh-CN.md)             |
 | Database and migrations        | [docs/database-and-migrations.md](docs/database-and-migrations.md)               | [docs/database-and-migrations.zh-CN.md](docs/database-and-migrations.zh-CN.md)               |
 | Routes and API surface         | [docs/routes-and-apis.md](docs/routes-and-apis.md)                               | [docs/routes-and-apis.zh-CN.md](docs/routes-and-apis.zh-CN.md)                               |
-| Testing and maintenance gates  | [docs/testing-and-maintenance.md](docs/testing-and-maintenance.md)               | [docs/testing-and-maintenance.zh-CN.md](docs/testing-and-maintenance.zh-CN.md)               |
-| Open-source release checklist  | [docs/open-source-release.md](docs/open-source-release.md)                       | [docs/open-source-release.zh-CN.md](docs/open-source-release.zh-CN.md)                       |
 
 ## Deployment
 

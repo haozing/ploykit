@@ -91,6 +91,10 @@ interface PluginInspectPluginReport {
     subscribes: number;
   };
   webhooks: number;
+  hostPages: {
+    slots: number;
+    overrides: number;
+  };
   egress: readonly string[];
   services: number;
   resourceBindings: number;
@@ -744,6 +748,84 @@ function getBuildInspectStatus(buildRoot: string, pluginId: string) {
   };
 }
 
+function readJsonFile(filePath: string): Record<string, unknown> | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function readMessageKey(messages: Record<string, unknown>, key: string): unknown {
+  return key.split('.').reduce<unknown>((current, segment) => {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return undefined;
+    }
+
+    return (current as Record<string, unknown>)[segment];
+  }, messages);
+}
+
+function collectHostPageOverrideDiagnostics(
+  root: string,
+  pluginPath: string,
+  plugin: Awaited<ReturnType<typeof loadPluginDefinition>>
+): PluginDiagnostic[] {
+  const diagnostics: PluginDiagnostic[] = [];
+
+  for (const [index, override] of (plugin.hostPages?.overrides ?? []).entries()) {
+    const basePath = `hostPages.overrides.${index}`;
+    const requiredKeys = [override.seo.titleKey, override.seo.descriptionKey];
+
+    for (const locale of override.i18n.requiredLocales ?? []) {
+      const localePath = plugin.resources?.locales?.[locale];
+      if (!localePath) {
+        diagnostics.push({
+          code: 'PLUGIN_HOST_PAGE_I18N_RESOURCE_MISSING',
+          severity: 'error',
+          message: `Host page override requires locale "${locale}" but resources.locales does not declare it.`,
+          file: pluginPath,
+          path: `${basePath}.i18n.requiredLocales`,
+          fix: `Add resources.locales.${locale} or remove the locale from requiredLocales.`,
+        });
+        continue;
+      }
+
+      const messages = readJsonFile(path.resolve(root, localePath));
+      if (!messages) {
+        diagnostics.push({
+          code: 'PLUGIN_HOST_PAGE_I18N_RESOURCE_INVALID',
+          severity: 'error',
+          message: `Host page override locale "${locale}" could not be read as JSON.`,
+          file: pluginPath,
+          path: `resources.locales.${locale}`,
+          fix: 'Create a valid JSON locale file at the declared plugin-local path.',
+        });
+        continue;
+      }
+
+      for (const key of requiredKeys) {
+        if (typeof readMessageKey(messages, key) !== 'string') {
+          diagnostics.push({
+            code: 'PLUGIN_HOST_PAGE_I18N_KEY_MISSING',
+            severity: 'error',
+            message: `Host page override locale "${locale}" is missing key "${key}".`,
+            file: pluginPath,
+            path: `${basePath}.seo`,
+            fix: `Add "${key}" to ${localePath}.`,
+          });
+        }
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
 async function inspectPluginRoot(
   root: string,
   buildRoot: string
@@ -780,6 +862,10 @@ async function inspectPluginRoot(
       subscribes: events.subscribes ? Object.keys(events.subscribes).length : 0,
     },
     webhooks: plugin.webhooks ? Object.keys(plugin.webhooks).length : 0,
+    hostPages: {
+      slots: plugin.hostPages?.slots?.length ?? 0,
+      overrides: plugin.hostPages?.overrides?.length ?? 0,
+    },
     egress: plugin.egress ?? [],
     services: plugin.services?.length ?? 0,
     resourceBindings: plugin.resourceBindings?.length ?? 0,
@@ -844,7 +930,10 @@ interface OpenApiOperation {
 }
 
 interface OpenApiDocument {
-  paths?: Record<string, Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete', OpenApiOperation>>>;
+  paths?: Record<
+    string,
+    Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete', OpenApiOperation>>
+  >;
   components?: {
     schemas?: Record<string, unknown>;
   };
@@ -888,7 +977,10 @@ function schemaToType(schema: unknown): string {
     if (!properties) return 'Record<string, unknown>';
     const required = new Set((record.required as string[] | undefined) ?? []);
     return `{\n${Object.entries(properties)
-      .map(([key, value]) => `  ${JSON.stringify(key)}${required.has(key) ? '' : '?'}: ${schemaToType(value)};`)
+      .map(
+        ([key, value]) =>
+          `  ${JSON.stringify(key)}${required.has(key) ? '' : '?'}: ${schemaToType(value)};`
+      )
       .join('\n')}\n}`;
   }
   return 'unknown';
@@ -991,6 +1083,9 @@ async function runDoctor(args: ParsedArgs): Promise<void> {
 
   for (const root of roots) {
     try {
+      const plugin = await loadPluginDefinition(root, path.join(root, 'plugin.ts'));
+      const pluginPath = toPosix(path.relative(PROJECT_ROOT, root));
+      inspectDiagnostics.push(...collectHostPageOverrideDiagnostics(root, pluginPath, plugin));
       plugins.push(await inspectPluginRoot(root, buildRoot));
     } catch (error) {
       const pluginPath = toPosix(path.relative(PROJECT_ROOT, root));

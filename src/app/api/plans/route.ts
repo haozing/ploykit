@@ -29,17 +29,10 @@ export const GET = withErrorHandling(async () => {
   }
 
   const formattedPlans = plans.map((plan) => {
-    const pricing = (plan.pricing as Record<string, unknown>) || {};
-    const pricingMonthly = typeof pricing.monthly === 'number' ? pricing.monthly : undefined;
-    const pricingYearly = typeof pricing.yearly === 'number' ? pricing.yearly : undefined;
-
     return {
       id: plan.id,
       name: plan.name,
       slug: plan.slug,
-      priceMonthly: pricingMonthly ?? 0,
-      priceYearly: pricingYearly ?? null,
-      currency: (pricing.currency as string) || 'USD',
       features: plan.features,
       limits: plan.limits,
       pricing: plan.pricing,

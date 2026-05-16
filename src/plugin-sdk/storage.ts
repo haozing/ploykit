@@ -30,6 +30,7 @@ export interface PluginCollectionDefinition {
 }
 
 export interface PluginDataDefinition {
+  version?: number;
   collections?: Record<string, PluginCollectionDefinition>;
 }
 

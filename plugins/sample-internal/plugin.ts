@@ -11,6 +11,7 @@ export default definePlugin({
     Permission.StorageRead,
     Permission.StorageWrite,
     Permission.UiToast,
+    Permission.NavigationExtend,
     Permission.ResourceBindingsRead,
     Permission.ResourceBindingsWrite,
     Permission.ServicesInvoke,

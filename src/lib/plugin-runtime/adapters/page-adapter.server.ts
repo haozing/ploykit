@@ -18,6 +18,7 @@ import { enforcePluginCommercialGate } from './commercial-gate.server';
 export interface PluginPageRuntimeOptions {
   entry?: PluginRuntimeMapEntry;
   enforceInstallation?: boolean;
+  locale?: string;
   publicPathPrefix?: string;
   routeMatch?: { route: RuntimePageRoute } & RuntimePathMatch;
   query?: URLSearchParams | Record<string, string | string[] | undefined>;
@@ -29,6 +30,7 @@ export interface PluginPageRuntimeResult {
   route: RuntimePageRoute;
   localPath: string;
   requestPath: string;
+  locale: string;
   params: Record<string, string>;
   query: Record<string, string | string[]>;
   module: {
@@ -125,6 +127,7 @@ async function resolvePluginPageRuntimeInternal(
     contract,
     route,
     localPath,
+    locale: options.locale ?? 'en',
     params: matched?.params ?? {},
     query: normalizeQuery(options.query),
     requestPath:

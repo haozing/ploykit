@@ -10,6 +10,7 @@ import { PluginRuntimePageRenderer } from '@/components/plugins/plugin-runtime-p
 import { ShellLayout } from '@/components/layouts/ShellLayout';
 import { DashboardLayoutWrapper } from '@/components/layouts/DashboardLayoutWrapper';
 import { logger } from '@/lib/_core/logger';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,11 +27,23 @@ export default async function PluginPage({ params, searchParams }: Props) {
   const { lang, pluginId, slug = [] } = await params;
   const query = await searchParams;
   const requestHeaders = await headers();
-  const runtimeResult = await resolveRuntimePageOrNotFound(pluginId, slug, requestHeaders, lang, query);
+  const runtimeResult = await resolveRuntimePageOrNotFound(
+    pluginId,
+    slug,
+    requestHeaders,
+    lang,
+    query
+  );
   const pluginContent = <PluginRuntimePageRenderer result={runtimeResult} />;
 
   if (runtimeResult.route.layout === 'site') {
-    return <ShellLayout pathname={runtimeResult.requestPath}>{pluginContent}</ShellLayout>;
+    return (
+      <IntlMessagesProvider scope="site">
+        <ShellLayout pathname={runtimeResult.requestPath} locale={lang}>
+          {pluginContent}
+        </ShellLayout>
+      </IntlMessagesProvider>
+    );
   }
 
   if (runtimeResult.route.layout === 'dashboard') {
@@ -56,7 +69,7 @@ async function resolveRuntimePageOrNotFound(
   query?: Record<string, string | string[] | undefined>
 ) {
   try {
-    return await resolvePluginPageRuntime(pluginId, slug, requestHeaders, { query });
+    return await resolvePluginPageRuntime(pluginId, slug, requestHeaders, { locale: lang, query });
   } catch (error) {
     handleRuntimePageResolutionError(error, lang, pluginId, slug);
   }

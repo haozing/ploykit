@@ -139,52 +139,9 @@ npm run verify:runtime
 - [插件诊断参考](plugin-diagnostics.zh-CN.md)。
 - [插件能力与权限参考](plugin-capabilities.zh-CN.md)。
 
-## 还可以继续补的支持
+## 相关文档
 
-为了让 PloyKit 更适合 Codex、Copilot、Claude Code、Cursor 等编码代理，建议补这些支持：
-
-| 优先级 | 支持项                           | 目的                                                  |
-| ------ | -------------------------------- | ----------------------------------------------------- |
-| P1     | 导出机器可读的插件合同 schema    | 让代理和编辑器在运行时加载前验证 `plugin.ts` 结构。   |
-| P1     | 增加机器可读 capability manifest | 用 JSON 发布 capability、permission、示例和安全说明。 |
-| P2     | 增加从小 PRD 到插件的样例集      | 把“产品意图 -> 插件实现”作为 AI 代理回归样例。        |
-| P2     | 开发控制台增加复制修复提示词     | 将失败诊断一键复制成 agent-ready repair prompt。      |
-
-## 已完成的第一批落地包
-
-最小但价值最高的一批现在已经具备：
-
-1. 仓库根目录 `AGENTS.md`，写清插件开发规则。
-2. `docs/plugin-diagnostics.md`，维护诊断 code 参考。
-3. 本文档和英文版。
-4. `templates/plugins/*/AI_TASK.md`，写模板级约束。
-5. `npm run plugin:doctor -- plugins/<id>`，输出稳定 JSON。
-6. `docs/ai-plugin-quickstart.md`，提供完整提示词和修复闭环。
-7. `skills/ploykit-plugin-developer`，作为可复用 Codex Skill。
-
-这批支持不需要改变运行时合同，却能显著降低大模型开发插件时的上下文成本和修复成本。
-
-## 当前状态
-
-已经具备：
-
-- 通过 `definePlugin` 提供强类型插件合同
-- 通过 `defineApi` 提供强类型 API handler helper
-- 强类型 `PluginContext`
-- permission 常量
-- 插件模板
-- 插件合同验证
-- 插件本地静态检查
-- fake host 插件测试
-- 插件 CLI 命令的 JSON 输出
-- `plugin:doctor` 聚合 JSON 闭环
-- 运行时 map 生成
-- 仓库级和模板级 agent 指令
-- `skills/ploykit-plugin-developer` 可复用 Codex Skill
-- 插件诊断与 capability 参考
-
-建议继续补：
-
-- 导出机器可读插件合同 schema
-- 发布 JSON capability/permission manifest
-- 增加 PRD 到插件实现的回归样例
+- [AI 插件开发 Quickstart](ai-plugin-quickstart.zh-CN.md)
+- [Codex Skill 安装说明](codex-skill.zh-CN.md)
+- [插件诊断参考](plugin-diagnostics.zh-CN.md)
+- [插件能力与权限参考](plugin-capabilities.zh-CN.md)

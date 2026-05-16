@@ -6,9 +6,11 @@
 
 import { getTranslations } from 'next-intl/server';
 import { ShellLayout } from '@/components/layouts/ShellLayout';
+import { HostPageSlotBoundary } from '@/components/HostPageSurfaceRenderer';
 import { SlotRenderer } from '@/components/SlotRenderer';
 import { ContactForm } from '@/components/forms/ContactForm';
 import { createSitePageMetadata } from '@/lib/seo/site-metadata';
+import { createHostPageOverrideMetadata } from '@/lib/plugin-runtime/seo';
 
 interface ContactPageProps {
   params: Promise<{ lang: string }>;
@@ -16,6 +18,11 @@ interface ContactPageProps {
 
 export async function generateMetadata({ params }: ContactPageProps) {
   const { lang } = await params;
+  const overrideMetadata = await createHostPageOverrideMetadata({ path: '/contact', locale: lang });
+  if (overrideMetadata) {
+    return overrideMetadata;
+  }
+
   const t = await getTranslations('contact');
 
   return createSitePageMetadata({
@@ -26,7 +33,8 @@ export async function generateMetadata({ params }: ContactPageProps) {
   });
 }
 
-export default async function ContactPage() {
+export default async function ContactPage({ params }: ContactPageProps) {
+  const { lang } = await params;
   const t = await getTranslations('contact');
   const tMethods = await getTranslations('contact.methods');
 
@@ -82,11 +90,17 @@ export default async function ContactPage() {
   ];
 
   return (
-    <ShellLayout pathname="/contact">
+    <ShellLayout pathname="/contact" locale={lang}>
       <div className="max-w-6xl mx-auto py-16 px-4">
         <SlotRenderer slotName="site.contact:main.before" />
 
         {/* Hero Section */}
+        <HostPageSlotBoundary
+          pathname="/contact"
+          position="hero.before"
+          locale={lang}
+          className="mb-8"
+        />
         <div className="text-center mb-16">
           <h1
             className="text-4xl md:text-5xl font-bold mb-4"
@@ -101,6 +115,12 @@ export default async function ContactPage() {
             {t('subtitle')}
           </p>
         </div>
+        <HostPageSlotBoundary
+          pathname="/contact"
+          position="hero.after"
+          locale={lang}
+          className="mb-16"
+        />
 
         {/* Contact Methods */}
         <div className="grid md:grid-cols-3 gap-6 mb-16">

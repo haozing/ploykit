@@ -1,37 +1,35 @@
 import type { AbstractIntlMessages } from 'next-intl';
-import { locales } from './config';
 
 type MessageRecord = Record<string, unknown>;
 
-const SHARED_CLIENT_MESSAGE_PATHS = ['common', 'components.shared.userDropdown'];
-const HOST_MESSAGE_NAMESPACES = new Set([
-  'common',
-  'home',
-  'about',
-  'privacy',
-  'terms',
-  'contact',
-  'errors',
-  'auth',
-  'components',
-  'dashboard',
-  'pricing',
-]);
+const GLOBAL_CLIENT_MESSAGE_PATHS = ['common', 'components.shared.userDropdown', 'errors'];
+const PUBLIC_SITE_MESSAGE_PATHS = ['home', 'about', 'privacy', 'terms', 'contact', 'pricing'];
+const AUTH_MESSAGE_PATHS = ['auth'];
+const DASHBOARD_MESSAGE_PATHS = ['dashboard', 'components'];
+const ADMIN_MESSAGE_PATHS = ['dashboard', 'components'];
 
-const PUBLIC_SITE_MESSAGE_PATHS: Record<string, string[]> = {
-  '/': ['home'],
-  '/about': ['about'],
-  '/contact': ['contact'],
-  '/pricing': ['pricing'],
-  '/privacy': ['privacy'],
-  '/terms': ['terms'],
-};
+const HOST_MESSAGE_NAMESPACES = new Set(
+  [
+    ...GLOBAL_CLIENT_MESSAGE_PATHS,
+    ...PUBLIC_SITE_MESSAGE_PATHS,
+    ...AUTH_MESSAGE_PATHS,
+    ...DASHBOARD_MESSAGE_PATHS,
+    ...ADMIN_MESSAGE_PATHS,
+  ].map((path) => path.split('.')[0])
+);
 
-const AUTH_MESSAGE_PATHS: Record<string, string[]> = {
-  '/login': ['auth.login', 'common'],
-  '/register': ['auth.register', 'common'],
-  '/forgot-password': ['auth.forgotPassword', 'common'],
-  '/reset-password': ['auth.resetPassword', 'common'],
+export type ClientMessageScope = 'global' | 'site' | 'auth' | 'dashboard' | 'admin';
+
+function withGlobalMessagePaths(paths: readonly string[]): string[] {
+  return [...new Set([...GLOBAL_CLIENT_MESSAGE_PATHS, ...paths])];
+}
+
+const SCOPE_MESSAGE_PATHS: Record<ClientMessageScope, readonly string[]> = {
+  global: GLOBAL_CLIENT_MESSAGE_PATHS,
+  site: withGlobalMessagePaths(PUBLIC_SITE_MESSAGE_PATHS),
+  auth: withGlobalMessagePaths(AUTH_MESSAGE_PATHS),
+  dashboard: withGlobalMessagePaths(DASHBOARD_MESSAGE_PATHS),
+  admin: withGlobalMessagePaths(ADMIN_MESSAGE_PATHS),
 };
 
 function isRecord(value: unknown): value is MessageRecord {
@@ -80,54 +78,22 @@ function pickMessagePaths(messages: MessageRecord, paths: readonly string[]): Me
   return selected;
 }
 
-function normalizeRoutePath(pathname: string, locale: string): string {
-  const rawPath = pathname || `/${locale}`;
-  const withoutQuery = rawPath.split('?')[0] || rawPath;
-  const localePattern = new RegExp(`^/(${locales.join('|')})(?=/|$)`);
-  const withoutLocale = withoutQuery.replace(localePattern, '') || '/';
-  const normalized = `/${withoutLocale}`.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
-
-  return normalized === '' ? '/' : normalized;
-}
-
-function clientMessagePathsForRoute(routePath: string): string[] | null {
-  const publicPaths = PUBLIC_SITE_MESSAGE_PATHS[routePath];
-  if (publicPaths) {
-    return [...SHARED_CLIENT_MESSAGE_PATHS, ...publicPaths];
-  }
-
-  const authPaths = AUTH_MESSAGE_PATHS[routePath];
-  if (authPaths) {
-    return [...new Set([...SHARED_CLIENT_MESSAGE_PATHS, ...authPaths])];
-  }
-
-  if (routePath === '/not-found') {
-    return [...SHARED_CLIENT_MESSAGE_PATHS, 'errors.404'];
-  }
-
-  return null;
-}
-
-export function getClientMessagesForPath(
-  messages: AbstractIntlMessages,
-  pathname: string,
-  locale: string
-): AbstractIntlMessages {
-  const source = messages as MessageRecord;
-  const routePath = normalizeRoutePath(pathname, locale);
-  const paths = clientMessagePathsForRoute(routePath);
-
-  if (!paths) {
-    return messages;
-  }
-
-  const selected = pickMessagePaths(source, paths);
-
+function copyPluginNamespaces(source: MessageRecord, selected: MessageRecord): void {
   for (const [key, value] of Object.entries(source)) {
     if (!HOST_MESSAGE_NAMESPACES.has(key) && isRecord(value)) {
       selected[key] = value;
     }
   }
+}
+
+export function getClientMessagesForScope(
+  messages: AbstractIntlMessages,
+  scope: ClientMessageScope
+): AbstractIntlMessages {
+  const paths = SCOPE_MESSAGE_PATHS[scope];
+  const source = messages as MessageRecord;
+  const selected = pickMessagePaths(source, paths);
+  copyPluginNamespaces(source, selected);
 
   return selected as AbstractIntlMessages;
 }

@@ -1,6 +1,8 @@
 import { ShellLayout } from '@/components/layouts/ShellLayout';
+import { HostPageSlotBoundary } from '@/components/HostPageSurfaceRenderer';
 import { getTranslations } from 'next-intl/server';
 import { createSitePageMetadata } from '@/lib/seo/site-metadata';
+import { createHostPageOverrideMetadata } from '@/lib/plugin-runtime/seo';
 
 interface TermsPageProps {
   params: Promise<{ lang: string }>;
@@ -8,6 +10,11 @@ interface TermsPageProps {
 
 export async function generateMetadata({ params }: TermsPageProps) {
   const { lang } = await params;
+  const overrideMetadata = await createHostPageOverrideMetadata({ path: '/terms', locale: lang });
+  if (overrideMetadata) {
+    return overrideMetadata;
+  }
+
   const t = await getTranslations('terms');
 
   return createSitePageMetadata({
@@ -18,7 +25,8 @@ export async function generateMetadata({ params }: TermsPageProps) {
   });
 }
 
-export default async function TermsPage() {
+export default async function TermsPage({ params }: TermsPageProps) {
+  const { lang } = await params;
   const t = await getTranslations('terms');
 
   const sections = [
@@ -33,9 +41,15 @@ export default async function TermsPage() {
   ];
 
   return (
-    <ShellLayout pathname="/terms">
+    <ShellLayout pathname="/terms" locale={lang}>
       <div className="max-w-4xl mx-auto py-16 px-4">
         {/* Hero */}
+        <HostPageSlotBoundary
+          pathname="/terms"
+          position="hero.before"
+          locale={lang}
+          className="mb-8"
+        />
         <div className="mb-12">
           <h1
             className="text-4xl md:text-5xl font-bold mb-4"
@@ -47,6 +61,12 @@ export default async function TermsPage() {
             {t('effectiveDate')}: 2025-01-01
           </p>
         </div>
+        <HostPageSlotBoundary
+          pathname="/terms"
+          position="hero.after"
+          locale={lang}
+          className="mb-12"
+        />
 
         {/* Introduction */}
         <div className="mb-12 p-6 rounded-lg" style={{ backgroundColor: 'var(--color-bg)' }}>

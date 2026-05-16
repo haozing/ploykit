@@ -577,6 +577,8 @@ export async function ping(ctx) {
     const pluginRoot = createPluginRoot('contract-permissions');
     writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
     writePluginFile(pluginRoot, 'pages/Admin.tsx', `export default function AdminPage() {}`);
+    writePluginFile(pluginRoot, 'pages/AboutOverride.tsx', `export default function About() {}`);
+    writePluginFile(pluginRoot, 'slots/HomeBefore.tsx', `export default function HomeBefore() {}`);
     writePluginFile(pluginRoot, 'api/admin.ts', `export default {};`);
     writePluginFile(pluginRoot, 'jobs/sync.ts', `export default async function sync() {}`);
     writePluginFile(
@@ -596,6 +598,7 @@ export async function ping(ctx) {
           id: path.basename(root),
           name: 'Contract Permissions',
           version: '1.0.0',
+          trustLevel: 'trusted',
           permissions: [
             Permission.BillingRead,
             Permission.EventsEmit,
@@ -604,6 +607,9 @@ export async function ping(ctx) {
             Permission.WebhookReceive,
             Permission.ResourceBindingsRead,
             Permission.ResourceBindingsWrite,
+            Permission.NavigationExtend,
+            Permission.HostPageExtend,
+            Permission.HostPageOverride,
           ],
           routes: {
             pages: [
@@ -646,6 +652,35 @@ export async function ping(ctx) {
               cardinality: 'one',
             },
           ],
+          menu: {
+            location: 'site.header',
+            label: 'Reports',
+            path: '/reports',
+          },
+          hostPages: {
+            slots: [
+              {
+                page: '/',
+                position: 'hero.before',
+                component: './slots/HomeBefore',
+              },
+            ],
+            overrides: [
+              {
+                page: '/about',
+                mode: 'main.replace',
+                component: './pages/AboutOverride',
+                seo: {
+                  titleKey: 'about.seo.title',
+                  descriptionKey: 'about.seo.description',
+                  canonical: '/about',
+                },
+                i18n: {
+                  requiredLocales: ['en', 'zh'],
+                },
+              },
+            ],
+          },
         }),
     });
 
@@ -959,7 +994,7 @@ export async function ping(ctx) {
     const report = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) => ({
         id: path.basename(root),
-        permissions: [],
+        permissions: [Permission.NavigationExtend],
         routes: {
           pages: [{ path: '/', component: './pages/Home', layout: 'dashboard' }],
         },

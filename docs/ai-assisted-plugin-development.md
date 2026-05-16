@@ -152,54 +152,9 @@ This repository now includes a first pass of agent-facing support:
 - [plugin diagnostics reference](plugin-diagnostics.md).
 - [plugin capability and permission reference](plugin-capabilities.md).
 
-## What To Add Next
+## Related Docs
 
-These additions would make PloyKit even stronger for AI-assisted plugin
-development.
-
-| Priority | Support                                          | Purpose                                                                            |
-| -------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| P1       | Export a machine-readable plugin contract schema | Let agents and editors validate `plugin.ts` shape before runtime loading.          |
-| P1       | Add a machine-readable capability manifest       | Publish capability to permission mappings, examples, and safe usage notes as JSON. |
-| P2       | Add generated examples from small PRDs           | Keep a few product-intent to plugin examples as regression fixtures for AI agents. |
-| P2       | Add dev-console copy prompt action               | Let a developer copy failing diagnostics as an agent-ready repair prompt.          |
-
-## Completed First Implementation Pack
-
-The first high-value pack is now present:
-
-1. `AGENTS.md` at the repo root with plugin authoring rules.
-2. `docs/plugin-diagnostics.md` maintained from known diagnostic codes.
-3. `docs/ai-assisted-plugin-development.md` and the Chinese counterpart.
-4. `templates/plugins/*/AI_TASK.md` with template-specific constraints.
-5. `npm run plugin:doctor -- plugins/<id>` as a stable JSON loop.
-6. `docs/ai-plugin-quickstart.md` with a complete prompt and repair loop.
-7. `skills/ploykit-plugin-developer` as a reusable Codex skill.
-
-That pack would make the project easier for Codex, Copilot, Claude Code, Cursor,
-and other coding agents to use without changing the runtime contract.
-
-## Current Status
-
-Already available:
-
-- typed plugin contract through `definePlugin`
-- typed API handler helper through `defineApi`
-- typed `PluginContext`
-- permission constants
-- plugin templates
-- plugin contract validation
-- plugin-local static checks
-- fake host plugin tests
-- JSON output from plugin CLI commands
-- `plugin:doctor` aggregated JSON loop
-- runtime map generation
-- repository and template agent instructions
-- reusable Codex skill under `skills/ploykit-plugin-developer`
-- plugin diagnostics and capability references
-
-Recommended next changes:
-
-- export a machine-readable plugin contract schema
-- publish a JSON capability/permission manifest
-- add generated PRD-to-plugin examples as regression fixtures
+- [AI plugin quickstart](ai-plugin-quickstart.md)
+- [Codex skill installation guide](codex-skill.md)
+- [Plugin diagnostics reference](plugin-diagnostics.md)
+- [Plugin capability and permission reference](plugin-capabilities.md)

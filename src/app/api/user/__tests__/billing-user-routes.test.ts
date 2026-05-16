@@ -169,8 +169,7 @@ describe('user billing routes', () => {
       plan: {
         id: 'plan_free',
         slug: 'free',
-        priceMonthly: 0,
-        currency: 'USD',
+        pricing: { currency: 'USD', monthly: 0 },
       },
       usage: { 'runlynk.calls': 2 },
     });

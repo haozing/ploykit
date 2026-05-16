@@ -136,9 +136,14 @@ vi.mock('@/lib/plugin-runtime/storage/db-storage.server', () => ({
   DbPluginStorageRepository: mocks.DbPluginStorageRepository,
 }));
 
-vi.mock('drizzle-orm', () => ({
-  eq: mocks.eq,
-}));
+vi.mock('drizzle-orm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('drizzle-orm')>();
+
+  return {
+    ...actual,
+    eq: mocks.eq,
+  };
+});
 
 import { PluginRuntimeInstallerService } from '../plugin-runtime-installer.server';
 
@@ -155,6 +160,7 @@ function createContract(overrides: Partial<PluginRuntimeContract> = {}): PluginR
     permissions: [],
     menu: [],
     slots: {},
+    hostPages: { slots: [], overrides: [] },
     resources: {},
     events: {},
     jobs: {},

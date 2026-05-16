@@ -33,6 +33,7 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
   async findMany(
     scope: PluginStorageScope,
     collectionName: string,
+    _collection: PluginCollectionDefinition,
     query?: PluginStorageQuery
   ): Promise<PluginStoredRecord[]> {
     const scopedRecords = [...this.records.values()].filter((record) =>
@@ -234,6 +235,8 @@ describe('plugin storage runtime', () => {
     });
 
     await storage.ensureCollections();
+
+    expect(repository.collections.get('todo:todos')?.schemaVersion).toBe(1);
     const inserted = await storage.collection('todos').insert({ title: 'gated todo' });
     await storage.collection('todos').findMany();
     await storage.collection('todos').findById(inserted.id as string);

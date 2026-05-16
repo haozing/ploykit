@@ -6,6 +6,7 @@
  */
 
 import { buildCSPHeader, createCSPPolicy } from './csp-policy.server';
+import { readProxyRuntimeEnv } from './proxy-runtime-env';
 
 export interface SecurityHeaders {
   'Content-Security-Policy'?: string;
@@ -25,8 +26,7 @@ export interface SecurityHeaderOptions {
  * Get default security headers.
  */
 export function getSecurityHeaders(options: SecurityHeaderOptions = {}): SecurityHeaders {
-  // eslint-disable-next-line no-restricted-syntax
-  const nodeEnv = options.nodeEnv || process.env.NODE_ENV || 'development';
+  const nodeEnv = options.nodeEnv || readProxyRuntimeEnv().nodeEnv;
   const includeCsp = options.includeCsp ?? true;
 
   const headers: SecurityHeaders = {

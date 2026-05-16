@@ -46,6 +46,7 @@ export default definePlugin({
     Permission.WebhookReceive,
     Permission.NotificationsSend,
     Permission.UiToast,
+    Permission.NavigationExtend,
     Permission.ExternalHttp,
   ],
   egress: ['https://example.com'],

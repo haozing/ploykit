@@ -6,6 +6,7 @@
 
 import 'server-only';
 
+import { validateDatabaseConfig } from '@/lib/db/config.server';
 import { db } from '@/lib/db/client.server';
 import { pluginInstallations } from '@/lib/db/schema/plugins';
 import { eq } from 'drizzle-orm';
@@ -99,6 +100,15 @@ export async function getUrlFromHeaders(): Promise<string> {
  * Get all enabled plugins
  */
 export const getEnabledPlugins = cache(async (): Promise<string[]> => {
+  const dbConfig = validateDatabaseConfig();
+  if (!dbConfig.valid) {
+    logger.debug(
+      { errors: dbConfig.errors },
+      'Plugin installation lookup skipped without database configuration'
+    );
+    return [];
+  }
+
   try {
     const installations = await db
       .select({ pluginId: pluginInstallations.pluginId })

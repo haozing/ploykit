@@ -7,6 +7,12 @@ import type {
   PluginEventDefinition,
   PluginHooksDefinition,
   PluginHttpMethod,
+  PluginHostPageCacheDefinition,
+  PluginHostPageI18nDefinition,
+  PluginHostPageOverrideMode,
+  PluginHostPageSeoDefinition,
+  PluginHostPageShellDefinition,
+  PluginHostPageSlotPosition,
   PluginJobDefinition,
   PluginKind,
   PluginMenuDefinition,
@@ -58,6 +64,37 @@ export interface RuntimeApiRoute extends RuntimeRouteBase {
 
 export type RuntimeRoute = RuntimePageRoute | RuntimeApiRoute;
 
+export interface RuntimeHostPageSlot {
+  page: string;
+  position: Exclude<PluginHostPageSlotPosition, 'main.replace'>;
+  component: string;
+  priority: number;
+}
+
+export interface RuntimeHostPageOverride {
+  page: string;
+  mode: PluginHostPageOverrideMode;
+  component: string;
+  priority: number;
+  shell: Required<
+    Pick<PluginHostPageShellDefinition, 'layout' | 'header' | 'footer' | 'container'>
+  > &
+    Pick<PluginHostPageShellDefinition, 'activeMenuPath'>;
+  seo: PluginHostPageSeoDefinition;
+  i18n: PluginHostPageI18nDefinition;
+  cache?: PluginHostPageCacheDefinition;
+}
+
+export interface RuntimeHostPages {
+  slots: RuntimeHostPageSlot[];
+  overrides: RuntimeHostPageOverride[];
+}
+
+export const EMPTY_RUNTIME_HOST_PAGES: RuntimeHostPages = {
+  slots: [],
+  overrides: [],
+};
+
 export interface PluginRuntimeContract {
   id: string;
   name: string;
@@ -68,6 +105,7 @@ export interface PluginRuntimeContract {
   data?: PluginDataDefinition;
   menu: readonly PluginMenuDefinition[];
   slots: PluginSlotsDefinition;
+  hostPages?: RuntimeHostPages;
   resources: PluginResourcesDefinition;
   theme?: PluginThemeDefinition;
   config?: PluginConfigDefinition;

@@ -1,6 +1,8 @@
 import {
   type DefinedPlugin,
   type PluginDefinition,
+  type PluginHostPageOverrideDefinition,
+  type PluginHostPageSlotDefinition,
   type PluginHttpMethod,
   type PluginPublicRouteAlias,
   type PluginPublicRouteAliasDeclaration,
@@ -9,9 +11,12 @@ import {
   type PluginToolRoute,
 } from '@ploykit/plugin-sdk';
 import { normalizeRuntimePath } from './route-matcher';
+import { EMPTY_RUNTIME_HOST_PAGES } from './types';
 import type {
   PluginRuntimeContract,
   RuntimeApiRoute,
+  RuntimeHostPageOverride,
+  RuntimeHostPageSlot,
   RuntimePageRoute,
   RuntimePluginDefinition,
   RuntimeRouteArea,
@@ -141,6 +146,62 @@ function normalizeMenus(definition: PluginDefinition) {
   return Array.isArray(menu) ? [...menu] : [menu];
 }
 
+function normalizeHostPageSlots(definition: PluginDefinition): RuntimeHostPageSlot[] {
+  return (definition.hostPages?.slots ?? [])
+    .filter(
+      (
+        slot
+      ): slot is PluginHostPageSlotDefinition & {
+        position: Exclude<PluginHostPageSlotDefinition['position'], 'main.replace'>;
+      } => slot.position !== 'main.replace'
+    )
+    .map((slot) => ({
+      page: normalizeRuntimePath(slot.page),
+      position: slot.position,
+      component: slot.component,
+      priority: slot.priority ?? 100,
+    }));
+}
+
+function normalizeHostPageOverride(
+  override: PluginHostPageOverrideDefinition
+): RuntimeHostPageOverride {
+  const page = normalizeRuntimePath(override.page);
+
+  return {
+    page,
+    mode: override.mode,
+    component: override.component,
+    priority: override.priority ?? 100,
+    shell: {
+      layout: override.shell?.layout ?? 'site',
+      header: override.shell?.header ?? 'host',
+      footer: override.shell?.footer ?? 'host',
+      container: override.shell?.container ?? 'fixed',
+      activeMenuPath: override.shell?.activeMenuPath
+        ? normalizeRuntimePath(override.shell.activeMenuPath)
+        : page,
+    },
+    seo: {
+      ...override.seo,
+      canonical: normalizeRuntimePath(override.seo.canonical),
+    },
+    i18n: {
+      ...override.i18n,
+      namespaces: [...(override.i18n.namespaces ?? [])],
+      requiredLocales: [...override.i18n.requiredLocales],
+    },
+    cache: override.cache,
+  };
+}
+
+function normalizeHostPages(definition: PluginDefinition) {
+  return {
+    slots: normalizeHostPageSlots(definition),
+    overrides: (definition.hostPages?.overrides ?? []).map(normalizeHostPageOverride),
+  };
+}
+
 export function isDefinedPlugin(value: unknown): value is DefinedPlugin {
   return Boolean(
     value &&
@@ -166,6 +227,10 @@ export function normalizePluginRuntimeContract(
     data: definition.data,
     menu: normalizeMenus(definition),
     slots: definition.slots ?? {},
+    hostPages:
+      definition.hostPages?.slots?.length || definition.hostPages?.overrides?.length
+        ? normalizeHostPages(definition)
+        : EMPTY_RUNTIME_HOST_PAGES,
     resources: definition.resources ?? {},
     theme: definition.theme,
     config: definition.config,

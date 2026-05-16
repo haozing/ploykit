@@ -171,8 +171,7 @@ export default function BillingPage() {
   const planName = (() => {
     const map = subscription.plan.langJsonb || undefined;
     if (!map) return subscription.plan.name;
-    const translation =
-      map[lang] || (lang.startsWith('zh') ? map.zh || map['zh-CN'] : map.en) || map.zh || map.en;
+    const translation = map[lang] || (lang.startsWith('zh') ? map.zh : map.en) || map.zh || map.en;
     return translation?.name || subscription.plan.name;
   })();
 

@@ -23,7 +23,7 @@ import { resolve } from 'path';
 const envPath = resolve(__dirname, '../.env');
 const result = config({ path: envPath });
 
-if (result.error) {
+if (result.error && !process.env.DATABASE_URL) {
   console.error('❌ Failed to load .env file:', result.error);
   process.exit(1);
 }
@@ -44,7 +44,11 @@ if (!process.env.NODE_ENV) {
   (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
 }
 
-console.warn('✅ Environment variables loaded successfully');
+if (result.error) {
+  console.warn('⚠️ .env file not found, using environment variables from the current process');
+} else {
+  console.warn('✅ Environment variables loaded successfully');
+}
 console.warn(`   DB_PROVIDER: ${process.env.DB_PROVIDER}`);
 console.warn(`   NODE_ENV: ${process.env.NODE_ENV}`);
 console.warn('');

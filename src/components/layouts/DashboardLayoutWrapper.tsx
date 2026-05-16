@@ -18,6 +18,7 @@ import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { defaultLocale } from '@/i18n/config';
 import { getUserSidebarNavGroups } from '@/lib/ui/navigation';
 import { getUserAccountAccessStatus } from '@/lib/services/user/user-status';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 interface DashboardLayoutWrapperProps {
   children: React.ReactNode;
@@ -64,5 +65,9 @@ export async function DashboardLayoutWrapper({ children }: DashboardLayoutWrappe
   //
   // Render Dashboard Layout
   //
-  return <DashboardShell navGroups={navGroups}>{children}</DashboardShell>;
+  return (
+    <IntlMessagesProvider scope="dashboard">
+      <DashboardShell navGroups={navGroups}>{children}</DashboardShell>
+    </IntlMessagesProvider>
+  );
 }

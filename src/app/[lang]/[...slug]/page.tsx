@@ -12,6 +12,7 @@ import {
 } from '@/lib/plugin-runtime';
 import { PluginRuntimePageRenderer } from '@/components/plugins/plugin-runtime-page-renderer';
 import { ShellLayout } from '@/components/layouts/ShellLayout';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 export const revalidate = 300;
 
@@ -63,17 +64,19 @@ export default async function PluginPublicAliasPage({ params, searchParams }: Pr
     : [];
 
   return (
-    <ShellLayout pathname={match.requestPath}>
-      {structuredDataScripts.map((script) => (
-        <script
-          key={script.id}
-          id={script.id}
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: script.json }}
-        />
-      ))}
-      <PluginRuntimePageRenderer result={runtimeResult} />
-    </ShellLayout>
+    <IntlMessagesProvider scope="site">
+      <ShellLayout pathname={match.requestPath} locale={lang}>
+        {structuredDataScripts.map((script) => (
+          <script
+            key={script.id}
+            id={script.id}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: script.json }}
+          />
+        ))}
+        <PluginRuntimePageRenderer result={runtimeResult} />
+      </ShellLayout>
+    </IntlMessagesProvider>
   );
 }
 
@@ -86,6 +89,7 @@ async function resolveAliasRuntimePageOrNotFound(
   try {
     return await resolvePluginPageRuntime(match.pluginId, match.slug, requestHeaders, {
       entry: match.entry ?? undefined,
+      locale: lang,
       routeMatch: { route: match.route, params: match.params },
       query,
       requestPathOverride: match.requestPath,

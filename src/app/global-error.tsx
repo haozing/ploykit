@@ -10,64 +10,123 @@
 'use client';
 
 export default function GlobalError({
-  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
   return (
-    <html lang="zh-CN">
-      <body>
-        <div className="min-h-screen bg-muted flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-card rounded-lg shadow-lg p-6 text-center">
-            <div className="mb-4">
-              <svg
-                className="h-16 w-16 text-destructive mx-auto"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
+    <html lang="en">
+      <body
+        style={{
+          margin: 0,
+          background: '#f8fafc',
+          color: '#111827',
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
+        <main
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            padding: 16,
+          }}
+        >
+          <section
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e5e7eb',
+              borderRadius: 8,
+              boxShadow: '0 18px 45px rgba(15, 23, 42, 0.12)',
+              maxWidth: 420,
+              padding: 28,
+              textAlign: 'center',
+              width: '100%',
+            }}
+          >
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="64"
+              stroke="#dc2626"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              width="64"
+            >
+              <path
+                d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
 
-            <h1 className="text-2xl font-bold text-foreground mb-2">Application Crashed</h1>
+            <h1
+              style={{
+                fontSize: 28,
+                lineHeight: 1.2,
+                margin: '20px 0 8px',
+              }}
+            >
+              Application Crashed
+            </h1>
 
-            <p className="text-muted-foreground mb-6">
+            <p
+              style={{
+                color: '#4b5563',
+                fontSize: 15,
+                lineHeight: 1.6,
+                margin: '0 0 24px',
+              }}
+            >
               The application encountered an unrecoverable error.
             </p>
 
-            {process.env.NODE_ENV === 'development' && error && (
-              <div className="mb-6 p-3 bg-destructive-50 rounded border border-destructive text-left">
-                <p className="text-xs font-semibold text-destructive-foreground mb-1">
-                  {error.name}
-                </p>
-                <p className="text-xs text-destructive font-mono break-all">{error.message}</p>
-              </div>
-            )}
-
-            <div className="flex gap-2">
+            <div
+              style={{
+                display: 'flex',
+                gap: 10,
+              }}
+            >
               <button
-                onClick={() => reset()}
-                className="flex-1 px-4 py-2 bg-primary text-white text-sm font-medium rounded hover:bg-primary transition-colors"
+                onClick={reset}
+                style={{
+                  background: '#4f46e5',
+                  border: 0,
+                  borderRadius: 6,
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  flex: 1,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  padding: '10px 14px',
+                }}
               >
                 Reload
               </button>
               <button
-                onClick={() => (window.location.href = '/')}
-                className="flex-1 px-4 py-2 bg-accent text-foreground text-sm font-medium rounded hover:bg-gray-300 transition-colors"
+                onClick={() => {
+                  window.location.href = '/';
+                }}
+                style={{
+                  background: '#e5e7eb',
+                  border: 0,
+                  borderRadius: 6,
+                  color: '#111827',
+                  cursor: 'pointer',
+                  flex: 1,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  padding: '10px 14px',
+                }}
               >
                 Return to Home
               </button>
             </div>
-          </div>
-        </div>
+          </section>
+        </main>
       </body>
     </html>
   );

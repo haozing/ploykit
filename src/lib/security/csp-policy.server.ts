@@ -11,6 +11,8 @@
  * - External sources must match allowlist
  */
 
+import { readProxyRuntimeEnv } from './proxy-runtime-env';
+
 export type CSPDirective =
   | 'default-src'
   | 'script-src'
@@ -168,8 +170,7 @@ function isValidSource(source: string): boolean {
     // Only allow https: in production, allow http: in development.
     // Keep this edge-safe: proxy/security header code can import the policy builder.
     if (
-      // eslint-disable-next-line no-restricted-syntax
-      process.env.NODE_ENV === 'production' &&
+      readProxyRuntimeEnv().nodeEnv === 'production' &&
       url.protocol !== 'https:' &&
       url.protocol !== 'wss:'
     ) {

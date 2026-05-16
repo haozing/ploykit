@@ -1,6 +1,8 @@
 import { ShellLayout } from '@/components/layouts/ShellLayout';
+import { HostPageSlotBoundary } from '@/components/HostPageSurfaceRenderer';
 import { getTranslations } from 'next-intl/server';
 import { createSitePageMetadata } from '@/lib/seo/site-metadata';
+import { createHostPageOverrideMetadata } from '@/lib/plugin-runtime/seo';
 
 interface PrivacyPageProps {
   params: Promise<{ lang: string }>;
@@ -8,6 +10,11 @@ interface PrivacyPageProps {
 
 export async function generateMetadata({ params }: PrivacyPageProps) {
   const { lang } = await params;
+  const overrideMetadata = await createHostPageOverrideMetadata({ path: '/privacy', locale: lang });
+  if (overrideMetadata) {
+    return overrideMetadata;
+  }
+
   const t = await getTranslations('privacy');
 
   return createSitePageMetadata({
@@ -18,13 +25,20 @@ export async function generateMetadata({ params }: PrivacyPageProps) {
   });
 }
 
-export default async function PrivacyPage() {
+export default async function PrivacyPage({ params }: PrivacyPageProps) {
+  const { lang } = await params;
   const t = await getTranslations('privacy');
 
   return (
-    <ShellLayout pathname="/privacy">
+    <ShellLayout pathname="/privacy" locale={lang}>
       <div className="max-w-4xl mx-auto py-16 px-4">
         {/* Hero Section */}
+        <HostPageSlotBoundary
+          pathname="/privacy"
+          position="hero.before"
+          locale={lang}
+          className="mb-8"
+        />
         <div className="mb-12">
           <h1
             className="text-4xl md:text-5xl font-bold mb-4"
@@ -36,6 +50,12 @@ export default async function PrivacyPage() {
             {t('lastUpdated')}: 2025-01-01
           </p>
         </div>
+        <HostPageSlotBoundary
+          pathname="/privacy"
+          position="hero.after"
+          locale={lang}
+          className="mb-12"
+        />
 
         {/* Introduction */}
         <div className="mb-12 p-6 rounded-lg" style={{ backgroundColor: 'var(--color-bg)' }}>

@@ -52,9 +52,6 @@ export const GET = withAuth(
     const limits = (entitlement.plan.limits as Record<string, unknown>) || {};
     const pricing = (entitlement.plan.pricing as Record<string, unknown>) || {};
 
-    const pricingMonthly = typeof pricing.monthly === 'number' ? pricing.monthly : undefined;
-    const pricingYearly = typeof pricing.yearly === 'number' ? pricing.yearly : undefined;
-
     //
     // Return formatted data
     //
@@ -68,9 +65,6 @@ export const GET = withAuth(
         limits: limits, // Return limits object
         pricing,
         langJsonb: entitlement.plan.langJsonb,
-        priceMonthly: pricingMonthly ?? 0,
-        priceYearly: (pricingYearly ?? null) as unknown,
-        currency: (pricing.currency as string) || 'USD',
       },
 
       // Status

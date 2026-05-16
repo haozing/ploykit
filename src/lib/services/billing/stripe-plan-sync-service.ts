@@ -23,7 +23,6 @@ function getPlanDescription(
   return (
     ((map.en as Record<string, unknown> | undefined)?.description as string | undefined) ||
     ((map.zh as Record<string, unknown> | undefined)?.description as string | undefined) ||
-    ((map['zh-CN'] as Record<string, unknown> | undefined)?.description as string | undefined) ||
     undefined
   );
 }

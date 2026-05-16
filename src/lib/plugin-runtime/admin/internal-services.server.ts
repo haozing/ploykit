@@ -5,7 +5,7 @@ import { Permission } from '@ploykit/plugin-sdk';
 import type { PluginServiceDefinition } from '@ploykit/plugin-sdk';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/lib/_core/errors';
 import { env } from '@/lib/_core/env';
-import { db, withSystemContext, type Database } from '@/lib/db';
+import { db, withSystemContext, type Database } from '@/lib/db/client.server';
 import {
   pluginInternalServiceBindings,
   pluginResourceBindings,
@@ -744,6 +744,7 @@ function contractForServiceTest(
     permissions: [Permission.ServicesInvoke],
     menu: [],
     slots: {},
+    hostPages: { slots: [], overrides: [] },
     resources: {},
     events: {},
     jobs: {},

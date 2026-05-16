@@ -22,7 +22,12 @@ describe('plugin SDK contract helpers', () => {
       name: 'Todo',
       version: '1.0.0',
       kind: 'tool',
-      permissions: [Permission.StorageRead, Permission.StorageWrite, Permission.UiToast],
+      permissions: [
+        Permission.StorageRead,
+        Permission.StorageWrite,
+        Permission.UiToast,
+        Permission.NavigationExtend,
+      ],
       data: {
         collections: {
           todos: {
@@ -229,6 +234,7 @@ describe('plugin SDK contract helpers', () => {
       id: 'public-aliases',
       name: 'Public Aliases',
       version: '1.0.0',
+      permissions: [Permission.NavigationExtend],
       routes: {
         pages: [
           {
@@ -667,6 +673,98 @@ describe('plugin SDK contract helpers', () => {
         },
       })
     ).toThrow(/PLUGIN_ROUTE_SLOT_ROUTE_UNKNOWN/);
+  });
+
+  it('accepts first-class host page slots and overrides', () => {
+    const plugin = definePlugin({
+      id: 'home-override',
+      name: 'Home Override',
+      version: '1.0.0',
+      trustLevel: 'trusted',
+      permissions: [Permission.HostPageExtend, Permission.HostPageOverride],
+      resources: {
+        locales: {
+          en: './locales/en.json',
+          zh: './locales/zh.json',
+        },
+      },
+      hostPages: {
+        slots: [
+          {
+            page: '/',
+            position: 'hero.before',
+            component: './slots/HomeHeroBefore',
+            priority: 10,
+          },
+        ],
+        overrides: [
+          {
+            page: '/',
+            mode: 'main.replace',
+            component: './pages/HomeOverride',
+            shell: {
+              layout: 'site',
+              header: 'host',
+              footer: 'host',
+              container: 'fixed',
+              activeMenuPath: '/',
+            },
+            i18n: {
+              namespaces: ['homeOverride'],
+              requiredLocales: ['en', 'zh'],
+            },
+            seo: {
+              titleKey: 'homeOverride.seo.title',
+              descriptionKey: 'homeOverride.seo.description',
+              canonical: '/',
+              robots: { index: true, follow: true },
+              openGraph: {
+                image: '/plugins/home-override/og/home.png',
+              },
+            },
+            cache: { strategy: 'public', maxAgeSeconds: 300 },
+          },
+        ],
+      },
+    });
+
+    expect(validatePluginDefinition(plugin)).toEqual([]);
+    expect(plugin.hostPages?.overrides?.[0]?.shell?.header).toBe('host');
+  });
+
+  it('rejects host page overrides without permission, trust, SEO, and i18n contract', () => {
+    const diagnostics = validatePluginDefinition({
+      id: 'bad-host-page',
+      name: 'Bad Host Page',
+      version: '1.0.0',
+      hostPages: {
+        slots: [
+          {
+            page: '/admin',
+            position: 'main.replace',
+            component: './slots/Bad',
+          },
+        ],
+        overrides: [
+          {
+            page: '/',
+            mode: 'main.replace',
+            component: './pages/Home',
+          },
+        ],
+      },
+    } as unknown as Parameters<typeof validatePluginDefinition>[0]);
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining([
+        'PLUGIN_HOST_PAGE_EXTEND_PERMISSION_REQUIRED',
+        'PLUGIN_HOST_PAGE_SLOT_POSITION_FORBIDDEN',
+        'PLUGIN_HOST_PAGE_OVERRIDE_PERMISSION_REQUIRED',
+        'PLUGIN_HOST_PAGE_OVERRIDE_TRUST_REQUIRED',
+        'PLUGIN_HOST_PAGE_SEO_REQUIRED',
+        'PLUGIN_HOST_PAGE_I18N_REQUIRED',
+      ])
+    );
   });
 
   it('validates controlled plugin theme tokens', () => {

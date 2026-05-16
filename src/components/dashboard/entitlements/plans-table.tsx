@@ -140,7 +140,7 @@ export function PlansTable({
     if (!langJsonb) return { name: plan.name, description: '' };
 
     const direct = langJsonb[lang];
-    const zh = langJsonb.zh || langJsonb['zh-CN'];
+    const zh = langJsonb.zh;
     const localized = direct || (lang.startsWith('zh') ? zh : undefined);
 
     return {

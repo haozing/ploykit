@@ -13,7 +13,8 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 
 import { logger } from '@/lib/_core/logger';
-import { auditLogs, db as defaultDb, type AuditLogMetadata, type Database } from '@/lib/db';
+import { db as defaultDb, type Database } from '@/lib/db/client.server';
+import { auditLogs, type AuditLogMetadata } from '@/lib/db/schema/audit-logs';
 
 export type AuditEventType =
   | 'auth.login'

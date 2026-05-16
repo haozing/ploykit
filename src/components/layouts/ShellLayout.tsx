@@ -26,6 +26,8 @@ import { SlotRenderer } from '@/components/SlotRenderer';
 import { RouteSlotRenderer } from '@/components/RouteSlotRenderer';
 import type { SlotName } from '@/lib/ui/slots/types';
 import type { ReactNode, ReactElement } from 'react';
+import { resolveHostPageSurface } from '@/lib/host-pages/surface.server';
+import { HostPageOverride, HostPageSlotList } from '@/components/HostPageSurfaceRenderer';
 
 /**
  * ============================================================================
@@ -35,6 +37,9 @@ import type { ReactNode, ReactElement } from 'react';
 export interface ShellLayoutProps {
   /** Page path (used to find page configuration) */
   pathname: string;
+
+  /** Active locale passed to plugin-rendered host page surfaces */
+  locale?: string;
 
   /** Page content */
   children: ReactNode;
@@ -47,11 +52,16 @@ export interface ShellLayoutProps {
  *
  * This is a Server Component (still needs async due to other async operations)
  */
-export async function ShellLayout({ pathname, children }: ShellLayoutProps): Promise<ReactElement> {
+export async function ShellLayout({
+  pathname,
+  locale = 'en',
+  children,
+}: ShellLayoutProps): Promise<ReactElement> {
   //
   // 1. Load Design Tokens (synchronous)
   //
   const tokens = await resolvePluginThemeTokens(getThemeTokens());
+  const surface = await resolveHostPageSurface(pathname);
 
   //
   // 2. Load Header and Footer components
@@ -66,13 +76,17 @@ export async function ShellLayout({ pathname, children }: ShellLayoutProps): Pro
     layout: 'shell' as const,
     container: 'fixed' as const,
   };
+  const shell = surface?.override?.shell;
+  const showHeader = pageConfig.hideHeader !== true && shell?.header !== 'hidden';
+  const showFooter = pageConfig.hideFooter !== true && shell?.footer !== 'hidden';
+  const container = shell?.container ?? surface?.page.defaultContainer ?? pageConfig.container;
 
   //
   // 4. Calculate page-level slot names
   //
   // Convert pathname to slot name: '/' -> 'site.home', '/about' -> 'site.about'
   const pageName = pathname === '/' ? 'home' : pathname.slice(1).replace(/\//g, '.');
-  const slotPrefix = `site.${pageName}` as const;
+  const slotPrefix = surface?.page.slotPrefix ?? (`site.${pageName}` as const);
 
   const beforeSlot = `${slotPrefix}:main.before` as SlotName;
   const afterSlot = `${slotPrefix}:main.after` as SlotName;
@@ -82,7 +96,7 @@ export async function ShellLayout({ pathname, children }: ShellLayoutProps): Pro
   // 5. Container styles
   //
   const containerStyle =
-    pageConfig.container === 'fixed'
+    container === 'fixed'
       ? {
           maxWidth: tokens.common.containerMaxW,
           marginLeft: 'auto',
@@ -90,11 +104,15 @@ export async function ShellLayout({ pathname, children }: ShellLayoutProps): Pro
           paddingLeft: '24px',
           paddingRight: '24px',
         }
-      : {
-          width: '100%',
-          paddingLeft: '24px',
-          paddingRight: '24px',
-        };
+      : container === 'full'
+        ? {
+            width: '100%',
+          }
+        : {
+            width: '100%',
+            paddingLeft: '24px',
+            paddingRight: '24px',
+          };
 
   //
   // 6. Render layout
@@ -102,7 +120,7 @@ export async function ShellLayout({ pathname, children }: ShellLayoutProps): Pro
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
-      <HeaderComponent tokens={tokens} />
+      {showHeader ? <HeaderComponent tokens={tokens} /> : null}
 
       {/* 🆕 Content before slot */}
       <SlotRenderer slotName="content:before" mode="append" className="w-full" />
@@ -126,24 +144,49 @@ export async function ShellLayout({ pathname, children }: ShellLayoutProps): Pro
         <div className="flex-1" style={containerStyle}>
           {/* Before slot: render before content (existing) */}
           <SlotRenderer slotName={beforeSlot} mode="append" className="mb-8" />
+          <HostPageSlotList
+            slots={surface?.slots.filter((slot) => slot.position === 'main.before') ?? []}
+            locale={locale}
+            className="mb-8"
+          />
           <RouteSlotRenderer pathname={pathname} position="main.before" className="mb-8" />
 
           {/* Replace slot: if exists, completely replace page content (existing) */}
-          <SlotRenderer
-            slotName={replaceSlot}
-            mode="replace"
-            fallback={
-              <RouteSlotRenderer
-                pathname={pathname}
-                position="main.replace"
-                mode="replace"
-                fallback={children}
-              />
-            }
-          />
+          {surface?.override ? (
+            <HostPageOverride
+              override={surface.override}
+              locale={locale}
+              fallback={
+                <RouteSlotRenderer
+                  pathname={pathname}
+                  position="main.replace"
+                  mode="replace"
+                  fallback={children}
+                />
+              }
+            />
+          ) : (
+            <SlotRenderer
+              slotName={replaceSlot}
+              mode="replace"
+              fallback={
+                <RouteSlotRenderer
+                  pathname={pathname}
+                  position="main.replace"
+                  mode="replace"
+                  fallback={children}
+                />
+              }
+            />
+          )}
 
           {/* After slot: render after content (existing) */}
           <RouteSlotRenderer pathname={pathname} position="main.after" className="mt-8" />
+          <HostPageSlotList
+            slots={surface?.slots.filter((slot) => slot.position === 'main.after') ?? []}
+            locale={locale}
+            className="mt-8"
+          />
           <SlotRenderer slotName={afterSlot} mode="append" className="mt-8" />
         </div>
 
@@ -159,7 +202,7 @@ export async function ShellLayout({ pathname, children }: ShellLayoutProps): Pro
       <SlotRenderer slotName="content:after" mode="append" className="w-full" />
 
       {/* Footer */}
-      <FooterComponent tokens={tokens} />
+      {showFooter ? <FooterComponent tokens={tokens} /> : null}
     </div>
   );
 }

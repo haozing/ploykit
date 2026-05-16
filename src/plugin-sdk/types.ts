@@ -42,6 +42,7 @@ export interface PluginRuntimePageProps {
   pluginId: string;
   localPath: string;
   requestPath: string;
+  locale: string;
   params: Record<string, string>;
   query: Record<string, string | string[]>;
   assets: Record<string, string>;
@@ -136,6 +137,82 @@ export interface PluginToolRouteRuntimeMetadata {
   anonymousPolicy?: PluginAnonymousPolicy;
 }
 
+export type PluginHostPageSlotPosition =
+  | 'hero.before'
+  | 'hero.after'
+  | 'main.before'
+  | 'main.after'
+  | 'main.replace';
+
+export type PluginHostPageOverrideMode = 'main.replace';
+export type PluginHostPageShellLayout = 'site';
+export type PluginHostPageShellChrome = 'host' | 'hidden';
+export type PluginHostPageShellContainer = 'fixed' | 'fluid' | 'full';
+
+export interface PluginHostPageShellDefinition {
+  layout?: PluginHostPageShellLayout;
+  header?: PluginHostPageShellChrome;
+  footer?: PluginHostPageShellChrome;
+  container?: PluginHostPageShellContainer;
+  activeMenuPath?: string;
+}
+
+export interface PluginHostPageOpenGraphMetadata {
+  titleKey?: string;
+  descriptionKey?: string;
+  image?: string;
+  type?: 'website' | 'article' | string;
+}
+
+export interface PluginHostPageSeoDefinition {
+  titleKey: string;
+  descriptionKey: string;
+  canonical: string;
+  fallbackTitle?: string;
+  fallbackDescription?: string;
+  robots?: {
+    index?: PluginRobotsIndex;
+    follow?: PluginRobotsFollow;
+  };
+  openGraph?: PluginHostPageOpenGraphMetadata;
+  structuredData?: Record<string, unknown> | readonly Record<string, unknown>[];
+  sitemap?: PluginToolSitemapDefinition;
+}
+
+export interface PluginHostPageI18nDefinition {
+  namespaces?: readonly string[];
+  requiredLocales: readonly string[];
+}
+
+export interface PluginHostPageCacheDefinition {
+  strategy: PluginToolCacheStrategy;
+  maxAgeSeconds?: number;
+  staleWhileRevalidateSeconds?: number;
+}
+
+export interface PluginHostPageSlotDefinition {
+  page: string;
+  position: PluginHostPageSlotPosition;
+  component: string;
+  priority?: number;
+}
+
+export interface PluginHostPageOverrideDefinition {
+  page: string;
+  mode: PluginHostPageOverrideMode;
+  component: string;
+  priority?: number;
+  shell?: PluginHostPageShellDefinition;
+  seo: PluginHostPageSeoDefinition;
+  i18n: PluginHostPageI18nDefinition;
+  cache?: PluginHostPageCacheDefinition;
+}
+
+export interface PluginHostPagesDefinition {
+  slots?: readonly PluginHostPageSlotDefinition[];
+  overrides?: readonly PluginHostPageOverrideDefinition[];
+}
+
 export interface PluginApiRoute {
   path: string;
   handler: string;
@@ -195,14 +272,37 @@ export const PLUGIN_SLOT_NAMES = [
   'site.home:hero.after',
   'site.home:main.before',
   'site.home:main.after',
+  'site.home:main.replace',
+  'site.about:hero.before',
+  'site.about:hero.after',
   'site.about:main.before',
   'site.about:main.after',
-  'site.privacy:main.before',
-  'site.privacy:main.after',
-  'site.terms:main.before',
-  'site.terms:main.after',
+  'site.about:main.replace',
+  'site.pricing:hero.before',
+  'site.pricing:hero.after',
+  'site.pricing:main.before',
+  'site.pricing:main.after',
+  'site.pricing:main.replace',
+  'site.contact:hero.before',
+  'site.contact:hero.after',
   'site.contact:main.before',
   'site.contact:main.after',
+  'site.contact:main.replace',
+  'site.privacy:hero.before',
+  'site.privacy:hero.after',
+  'site.privacy:main.before',
+  'site.privacy:main.after',
+  'site.privacy:main.replace',
+  'site.terms:hero.before',
+  'site.terms:hero.after',
+  'site.terms:main.before',
+  'site.terms:main.after',
+  'site.terms:main.replace',
+  'site.success:hero.before',
+  'site.success:hero.after',
+  'site.success:main.before',
+  'site.success:main.after',
+  'site.success:main.replace',
   'main:before',
   'main:after',
   'content:before',
@@ -444,6 +544,7 @@ export interface PluginDefinition {
   routes?: PluginRoutesDefinition;
   menu?: PluginMenuDefinition | readonly PluginMenuDefinition[];
   slots?: PluginSlotsDefinition;
+  hostPages?: PluginHostPagesDefinition;
   resources?: PluginResourcesDefinition;
   theme?: PluginThemeDefinition;
   meters?: readonly PluginMeterDefinition[];

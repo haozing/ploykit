@@ -36,6 +36,79 @@
       ]
     },
     {
+      "id": "host-capability-lab",
+      "rootDir": "plugins/host-capability-lab",
+      "components": [
+        "StorageProbeClient"
+      ],
+      "pages": [
+        "AboutOverride",
+        "LabPage"
+      ],
+      "apiModules": [
+        "api/storage-probe"
+      ],
+      "lifecycleModules": [],
+      "jobModules": [],
+      "webhookModules": [],
+      "eventModules": [],
+      "hookModules": [],
+      "slotModules": [
+        "slots/HomeHeroAfter",
+        "slots/HomeHeroBefore",
+        "slots/PricingMainAfter",
+        "slots/PricingMainBefore"
+      ]
+    },
+    {
+      "id": "runlynk-producer-dx",
+      "rootDir": "plugins/runlynk-producer-dx",
+      "components": [],
+      "pages": [
+        "ProducerDxHome",
+        "ProducerIntegrationPage"
+      ],
+      "apiModules": [
+        "api/integration",
+        "api/producer-keys",
+        "api/projects",
+        "api/task-types"
+      ],
+      "lifecycleModules": [],
+      "jobModules": [],
+      "webhookModules": [],
+      "eventModules": [],
+      "hookModules": [],
+      "slotModules": []
+    },
+    {
+      "id": "runlynk-worker-dx",
+      "rootDir": "plugins/runlynk-worker-dx",
+      "components": [],
+      "pages": [
+        "WorkerContractPage",
+        "WorkerDxHome",
+        "WorkerStarterPage",
+        "WorkerValidatorPage"
+      ],
+      "apiModules": [
+        "api/fix-prompt",
+        "api/mock-job",
+        "api/projects",
+        "api/prompt",
+        "api/starter",
+        "api/task-types",
+        "api/validator",
+        "api/worker-contract"
+      ],
+      "lifecycleModules": [],
+      "jobModules": [],
+      "webhookModules": [],
+      "eventModules": [],
+      "hookModules": [],
+      "slotModules": []
+    },
+    {
       "id": "sample-internal",
       "rootDir": "plugins/sample-internal",
       "components": [],

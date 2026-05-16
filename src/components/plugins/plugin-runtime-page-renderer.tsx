@@ -48,6 +48,7 @@ export async function PluginRuntimePageRenderer({ result }: PluginRuntimePageRen
     pluginId: result.contract.id,
     localPath: result.localPath,
     requestPath: result.requestPath,
+    locale: result.locale,
     params: result.params,
     query: result.query,
     assets: Object.fromEntries(

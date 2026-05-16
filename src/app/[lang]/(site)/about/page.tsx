@@ -1,6 +1,8 @@
 import { ShellLayout } from '@/components/layouts/ShellLayout';
+import { HostPageSlotBoundary } from '@/components/HostPageSurfaceRenderer';
 import { getTranslations } from 'next-intl/server';
 import { createSitePageMetadata } from '@/lib/seo/site-metadata';
+import { createHostPageOverrideMetadata } from '@/lib/plugin-runtime/seo';
 
 interface AboutPageProps {
   params: Promise<{ lang: string }>;
@@ -8,6 +10,11 @@ interface AboutPageProps {
 
 export async function generateMetadata({ params }: AboutPageProps) {
   const { lang } = await params;
+  const overrideMetadata = await createHostPageOverrideMetadata({ path: '/about', locale: lang });
+  if (overrideMetadata) {
+    return overrideMetadata;
+  }
+
   const t = await getTranslations('about');
 
   return createSitePageMetadata({
@@ -18,12 +25,19 @@ export async function generateMetadata({ params }: AboutPageProps) {
   });
 }
 
-export default async function AboutPage() {
+export default async function AboutPage({ params }: AboutPageProps) {
+  const { lang } = await params;
   const t = await getTranslations('about');
 
   return (
-    <ShellLayout pathname="/about">
+    <ShellLayout pathname="/about" locale={lang}>
       <div className="max-w-4xl mx-auto py-16">
+        <HostPageSlotBoundary
+          pathname="/about"
+          position="hero.before"
+          locale={lang}
+          className="mb-8"
+        />
         <div className="text-center mb-16">
           <h1
             className="text-4xl md:text-5xl font-bold mb-4"
@@ -35,6 +49,12 @@ export default async function AboutPage() {
             {t('hero.subtitle')}
           </p>
         </div>
+        <HostPageSlotBoundary
+          pathname="/about"
+          position="hero.after"
+          locale={lang}
+          className="mb-16"
+        />
 
         <section className="mb-16">
           <h2 className="text-3xl font-bold mb-6" style={{ color: 'var(--color-text)' }}>

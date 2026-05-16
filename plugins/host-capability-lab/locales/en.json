@@ -1,0 +1,13 @@
+{
+  "menu": {
+    "lab": "Capability Lab"
+  },
+  "hostPages": {
+    "about": {
+      "seo": {
+        "title": "Capability Lab About Override",
+        "description": "Host Capability Lab verifies host page override SEO and i18n metadata."
+      }
+    }
+  }
+}

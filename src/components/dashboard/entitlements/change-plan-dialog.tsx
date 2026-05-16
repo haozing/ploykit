@@ -133,9 +133,6 @@ export function ChangePlanDialog({
     return (
       ((langJsonb.en as Record<string, unknown> | undefined)?.description as string | undefined) ||
       ((langJsonb.zh as Record<string, unknown> | undefined)?.description as string | undefined) ||
-      ((langJsonb['zh-CN'] as Record<string, unknown> | undefined)?.description as
-        | string
-        | undefined) ||
       ''
     );
   };

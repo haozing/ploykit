@@ -44,9 +44,6 @@ export function PlanDetailsDialog({ plan, open, onOpenChange, onEdit }: PlanDeta
   const description =
     ((langJsonb.en as Record<string, unknown> | undefined)?.description as string | undefined) ||
     ((langJsonb.zh as Record<string, unknown> | undefined)?.description as string | undefined) ||
-    ((langJsonb['zh-CN'] as Record<string, unknown> | undefined)?.description as
-      | string
-      | undefined) ||
     '';
   const pricing = (plan.pricing || {}) as { currency?: string; monthly?: number; yearly?: number };
   const formatPrice = (amount: number | undefined, interval: 'monthly' | 'yearly') => {

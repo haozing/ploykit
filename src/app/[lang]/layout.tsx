@@ -1,9 +1,6 @@
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { locales, type Locale } from '@/i18n/config';
-import { getClientMessagesForPath } from '@/i18n/client-messages';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 interface LangLayoutProps {
   children: React.ReactNode;
@@ -17,17 +14,7 @@ export default async function LangLayout({ children, params }: LangLayoutProps) 
     notFound();
   }
 
-  // Load messages and pass to ClientComponent
-  const messages = await getMessages();
-  const requestHeaders = await headers();
-  const pathname = requestHeaders.get('x-pathname') || `/${lang}`;
-  const clientMessages = getClientMessagesForPath(messages, pathname, lang);
-
-  return (
-    <NextIntlClientProvider messages={clientMessages} locale={lang}>
-      {children}
-    </NextIntlClientProvider>
-  );
+  return <IntlMessagesProvider scope="global">{children}</IntlMessagesProvider>;
 }
 
 export function generateStaticParams() {

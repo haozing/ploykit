@@ -19,6 +19,8 @@ plugins/<plugin-id>/
 
 `plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 扫描插件合同，写入 `src/lib/plugin-map.ts`，再从生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
 
+如果插件需要扩展或覆盖宿主自带页面，例如首页、关于页或定价页，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
+
 最小插件：
 
 ```ts
@@ -144,6 +146,8 @@ const items = await ctx.storage.collection('sample_items').findMany({
 });
 ```
 
+超出插件私有记录的数据库形态工作，应由宿主实现 service/repository，插件通过 `ctx.services` 调用；普通插件不直接访问数据库。
+
 ## 宿主能力
 
 插件应该把 `ctx` 当作宿主边界。插件不应该导入 `src/lib/*`、读取 `process.env`、直接访问数据库，或用原始 `fetch()` 调用外部服务。
@@ -155,6 +159,7 @@ const items = await ctx.storage.collection('sample_items').findMany({
 | `ctx.files`                              | `FilesRead`, `FilesWrite`                                | 签名上传/下载与文件元数据                                 |
 | `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | 用户可见或内部长期任务                                    |
 | `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | 外部服务 profile、credential、retry、redaction、call logs |
+| `ctx.services`                           | `ServicesInvoke`                                         | 宿主绑定的内部 API，用于复杂领域或数据库工作              |
 | `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | workspace 创建、成员、角色、邀请                          |
 | `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | 插件 API keys 与 scoped rate limits                       |
 | `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | 用量、action meters、审计轨迹                             |

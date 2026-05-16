@@ -39,7 +39,7 @@ import {
   createPluginStorageRuntime,
   DbPluginStorageRepository,
 } from '../storage/db-storage.server';
-import { listInternalServiceRequirements } from '../admin';
+import { listInternalServiceRequirements } from '../admin/internal-services.server';
 
 async function deletePluginRuntimeState(pluginId: string): Promise<void> {
   await db.delete(pluginJobRuns).where(eq(pluginJobRuns.pluginId, pluginId));

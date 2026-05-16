@@ -5,6 +5,11 @@ export const Permission = {
   UiToast: 'ui.toast',
   UiModal: 'ui.modal',
   UiNavigate: 'ui.navigate',
+  NavigationExtend: 'navigation.extend',
+  HeadTagWrite: 'head.write',
+  BodyScriptWrite: 'body.write',
+  HostPageExtend: 'hostPage.extend',
+  HostPageOverride: 'hostPage.override',
 
   EventsEmit: 'events.emit',
   EventsSubscribe: 'events.subscribe',

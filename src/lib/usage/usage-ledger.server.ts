@@ -13,7 +13,8 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, lte, type SQL } from 'drizzle-orm';
 
 import { logger } from '@/lib/_core/logger';
-import { usageHistory, withSystemContext, type Database } from '@/lib/db';
+import { withSystemContext, type Database } from '@/lib/db/client.server';
+import { usageHistory } from '@/lib/db/schema/entitlement';
 
 export type UsageCategory =
   | 'storage'

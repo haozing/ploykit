@@ -3,7 +3,6 @@ import { resolve } from 'path';
 import { parse } from 'dotenv';
 
 const DEFAULT_DOCKER_DB_ENV: Record<string, string> = {
-  NODE_ENV: 'development',
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
   BETTER_AUTH_URL: 'http://localhost:3000',
   BETTER_AUTH_SECRET: 'local-docker-dev-secret-change-me-32-chars',

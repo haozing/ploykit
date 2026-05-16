@@ -186,7 +186,7 @@ npm run test:run          # 运行 Vitest
 npm run test:human        # 运行浏览器 E2E 流程
 ```
 
-更大的脚本目录和验收矩阵见 [scripts/README.md](scripts/README.md)。
+更完整的脚本目录见 [scripts/README.md](scripts/README.md)。
 
 ## 文档
 
@@ -199,12 +199,10 @@ npm run test:human        # 运行浏览器 E2E 流程
 | AI 插件 Quickstart | [docs/ai-plugin-quickstart.zh-CN.md](docs/ai-plugin-quickstart.zh-CN.md)                     | [docs/ai-plugin-quickstart.md](docs/ai-plugin-quickstart.md)                     |
 | 插件 Codex Skill   | [docs/codex-skill.zh-CN.md](docs/codex-skill.zh-CN.md)                                       | [docs/codex-skill.md](docs/codex-skill.md)                                       |
 | 插件能力           | [docs/plugin-capabilities.zh-CN.md](docs/plugin-capabilities.zh-CN.md)                       | [docs/plugin-capabilities.md](docs/plugin-capabilities.md)                       |
+| 宿主页面插槽与覆盖 | [docs/host-page-overrides.zh-CN.md](docs/host-page-overrides.zh-CN.md)                       | [docs/host-page-overrides.md](docs/host-page-overrides.md)                       |
 | 插件诊断           | [docs/plugin-diagnostics.zh-CN.md](docs/plugin-diagnostics.zh-CN.md)                         | [docs/plugin-diagnostics.md](docs/plugin-diagnostics.md)                         |
-| 开源多媒体资源     | [docs/open-source-media-assets.zh-CN.md](docs/open-source-media-assets.zh-CN.md)             | [docs/open-source-media-assets.md](docs/open-source-media-assets.md)             |
 | 数据库与迁移       | [docs/database-and-migrations.zh-CN.md](docs/database-and-migrations.zh-CN.md)               | [docs/database-and-migrations.md](docs/database-and-migrations.md)               |
 | 路由与 API 面      | [docs/routes-and-apis.zh-CN.md](docs/routes-and-apis.zh-CN.md)                               | [docs/routes-and-apis.md](docs/routes-and-apis.md)                               |
-| 测试与维护门禁     | [docs/testing-and-maintenance.zh-CN.md](docs/testing-and-maintenance.zh-CN.md)               | [docs/testing-and-maintenance.md](docs/testing-and-maintenance.md)               |
-| 开源发布清单       | [docs/open-source-release.zh-CN.md](docs/open-source-release.zh-CN.md)                       | [docs/open-source-release.md](docs/open-source-release.md)                       |
 
 ## 部署
 

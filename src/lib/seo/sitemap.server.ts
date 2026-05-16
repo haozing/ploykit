@@ -4,6 +4,7 @@ import type { MetadataRoute } from 'next';
 import { locales } from '@/i18n/config';
 import { triggerSitemapHook, type SitemapEntry } from '@/lib/bus/hook-helpers.server';
 import {
+  listHostPageOverrideSitemapEntries,
   listPluginPublicAliasSitemapEntries,
   listPluginToolSitemapEntries,
 } from '@/lib/plugin-runtime';
@@ -40,8 +41,10 @@ export async function collectSitemapItems(): Promise<MetadataRoute.Sitemap> {
       alternates: entry.alternates,
     })
   );
+  const hostPageOverrideEntries = await listHostPageOverrideSitemapEntries();
 
   return dedupeSitemapItems([
+    ...hostPageOverrideEntries,
     ...listLocalizedPublicSiteSitemapEntries(),
     ...pluginEntriesByLocale.flat(),
     ...pluginHookEntries,

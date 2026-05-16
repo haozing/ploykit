@@ -1,5 +1,7 @@
+import { readProxyRuntimeEnv } from './proxy-runtime-env';
+
 export function getRateLimitMultiplier(): number {
-  const raw = process.env.PLOYKIT_API_RATE_LIMIT_MULTIPLIER;
+  const raw = readProxyRuntimeEnv().apiRateLimitMultiplier;
   if (!raw) return 1;
 
   const parsed = Number(raw);

@@ -417,10 +417,8 @@ export class UnifiedHookSystem {
     return executionResults;
   }
 
-  // Query API - QueryInterface
-
   /**
-   * GetRegisterList
+   * Get registered hooks.
    */
   private getRegistrations(
     hookName: AllHookName,
@@ -436,8 +434,7 @@ export class UnifiedHookSystem {
   }
 
   /**
-   *
-   * @param hookName - HookName
+   * Get plugin ids registered for a hook.
    */
   getPlugins(hookName: AllHookName): string[] {
     const registrations = this.getRegistrations(hookName);
@@ -445,9 +442,7 @@ export class UnifiedHookSystem {
   }
 
   /**
-   *
-   * @param pluginId - PluginID
-   * @param hookName - HookName
+   * Check whether a plugin registered a hook.
    */
   hasHook(pluginId: string, hookName: AllHookName): boolean {
     const registrations = this.getRegistrations(hookName);

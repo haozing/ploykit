@@ -6,6 +6,7 @@ import { defaultLocale } from '@/i18n/config';
 import { getUserSidebarNavGroups } from '@/lib/ui/navigation';
 import { isAdmin } from '@/lib/auth/permissions';
 import { getUserAccountAccessStatus } from '@/lib/services/user/user-status';
+import { IntlMessagesProvider } from '@/i18n/IntlMessagesProvider';
 
 /**
  * User Dashboard Layout
@@ -62,5 +63,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Render Dashboard (User is authenticated)
   //
 
-  return <DashboardShell navGroups={navGroups}>{children}</DashboardShell>;
+  return (
+    <IntlMessagesProvider scope="dashboard">
+      <DashboardShell navGroups={navGroups}>{children}</DashboardShell>
+    </IntlMessagesProvider>
+  );
 }

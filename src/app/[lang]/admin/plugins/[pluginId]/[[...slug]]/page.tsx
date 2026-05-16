@@ -42,7 +42,10 @@ async function resolveAdminRuntimePageOrNotFound(
   query?: Record<string, string | string[] | undefined>
 ) {
   try {
-    return await resolveAdminPluginPageRuntime(pluginId, slug, requestHeaders, { query });
+    return await resolveAdminPluginPageRuntime(pluginId, slug, requestHeaders, {
+      locale: lang,
+      query,
+    });
   } catch (error) {
     handleRuntimePageResolutionError(error, lang, pluginId, slug);
   }

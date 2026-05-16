@@ -2743,7 +2743,8 @@
     "plans": {
       "callsPerMonth": "{count} calls/month across all plugins",
       "noLimits": "No usage limits listed",
-      "noFeatureDetails": "No feature details available"
+      "noFeatureDetails": "No feature details available",
+      "empty": "No subscription plans are available"
     },
     "footer": {
       "coreFeatures": "Every paid plan includes the platform core features",
