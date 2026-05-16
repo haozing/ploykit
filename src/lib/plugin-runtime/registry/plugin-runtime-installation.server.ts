@@ -1,6 +1,6 @@
 import { PluginError } from '@ploykit/plugin-sdk';
 import { env } from '@/lib/_core/env';
-import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
+import { runtimeScopeService } from '@/lib/plugin-runtime/scope';
 
 export interface PluginRuntimeInstallationGateOptions {
   enforce?: boolean;
@@ -18,7 +18,7 @@ export async function enforcePluginRuntimeEnabled(
     return;
   }
 
-  const enabled = await pluginQueryService.isEnabled(pluginId);
+  const enabled = await runtimeScopeService.isRuntimePluginEnabled(pluginId);
   if (enabled) {
     return;
   }

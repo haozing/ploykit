@@ -60,7 +60,7 @@ async function loadPluginTranslations(
 
   try {
     // Get all enabled plugins
-    const enabledPluginIds = await getEnabledPlugins();
+    const enabledPluginIds = await getEnabledPlugins('i18n');
 
     logger.debug(
       { enabledPlugins: enabledPluginIds, locale },

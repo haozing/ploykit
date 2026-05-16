@@ -7,7 +7,7 @@ export default definePlugin({
   description: 'A dashboard plugin template for read-heavy summaries and reports.',
   kind: 'app',
   trustLevel: 'untrusted',
-  permissions: [Permission.StorageRead],
+  permissions: [Permission.StorageRead, Permission.NavigationExtend],
   data: {
     collections: {
       dashboard_template_metrics: {

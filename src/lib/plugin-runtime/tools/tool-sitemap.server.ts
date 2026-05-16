@@ -1,17 +1,18 @@
 import 'server-only';
 
 import { logger } from '@/lib/_core/logger';
-import { getEnabledPlugins } from '@/lib/bus/hook-helpers.server';
 import type { SitemapEntry } from '@/lib/bus/hook-helpers.server';
 import { absoluteUrl } from '@/lib/seo/url-policy';
 import { pluginRuntimeRegistry } from '../registry';
 import { createPluginToolSitemapEntry } from './tool-route-metadata.server';
+import { runtimeScopeService } from '../scope';
 
 export async function listPluginToolSitemapEntries(input?: {
   pluginIds?: readonly string[];
   locale?: string;
 }): Promise<SitemapEntry[]> {
-  const pluginIds = input?.pluginIds ?? (await getEnabledPlugins());
+  const pluginIds =
+    input?.pluginIds ?? (await runtimeScopeService.listRuntimePluginIds({ surface: 'sitemap' }));
   const entries: SitemapEntry[] = [];
 
   for (const pluginId of pluginIds) {

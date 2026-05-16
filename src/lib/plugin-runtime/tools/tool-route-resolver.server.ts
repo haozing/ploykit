@@ -4,10 +4,10 @@ import { PluginError } from '@ploykit/plugin-sdk';
 import { normalizeRuntimePath, type PluginRuntimeContract } from '../contract';
 import {
   getPluginRuntimeMapEntry,
-  listPluginRuntimeIds,
   type PluginRuntimeMapEntry,
 } from '../loader';
 import { enforcePluginRuntimeEnabled, pluginRuntimeRegistry } from '../registry';
+import { runtimeScopeService } from '../scope';
 
 export interface PluginToolRouteMatch {
   pluginId: string;
@@ -51,7 +51,13 @@ export async function resolvePluginToolRoute(
 ): Promise<PluginToolRouteMatch | null> {
   const localPath = normalizeRuntimePath(path);
   const entries = options.entries ?? {};
-  const candidateIds = new Set([...Object.keys(entries), ...listPluginRuntimeIds()]);
+  const scopedPluginIds = options.entries
+    ? []
+    : await runtimeScopeService.listRuntimePluginIds({
+        surface: 'route',
+        includeDisabled: Boolean(options.entries),
+      });
+  const candidateIds = new Set([...Object.keys(entries), ...scopedPluginIds]);
 
   for (const pluginId of candidateIds) {
     const entry = entries[pluginId] ?? getPluginRuntimeMapEntry(pluginId);

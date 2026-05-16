@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { getEnabledPlugins } from '@/lib/bus/hook-helpers.server';
 import { logger } from '@/lib/_core/logger';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
+import { runtimeScopeService } from '@/lib/plugin-runtime/scope';
 import type { PluginThemeDefinition, PluginThemeTokenOverrides } from '@ploykit/plugin-sdk';
 import type { ThemeTokens } from './types';
 
@@ -30,12 +30,15 @@ export function applyPluginThemeTokens(
 export async function listEnabledPluginThemes(input?: {
   pluginIds?: readonly string[];
 }): Promise<Array<{ pluginId: string; theme: PluginThemeDefinition }>> {
-  const pluginIds = input?.pluginIds ?? (await getEnabledPlugins());
+  const pluginRefs = input?.pluginIds
+    ? input.pluginIds.map((pluginId) => ({ pluginId, contract: null }))
+    : await runtimeScopeService.getEnabledRuntimePlugins({ surface: 'theme' });
   const themes: Array<{ pluginId: string; theme: PluginThemeDefinition }> = [];
 
-  for (const pluginId of pluginIds) {
+  for (const pluginRef of pluginRefs) {
+    const pluginId = pluginRef.pluginId;
     try {
-      const contract = await pluginRuntimeRegistry.getOrLoad(pluginId);
+      const contract = pluginRef.contract ?? (await pluginRuntimeRegistry.getOrLoad(pluginId));
       if (!contract.theme) {
         continue;
       }

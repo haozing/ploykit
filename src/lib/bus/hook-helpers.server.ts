@@ -6,10 +6,6 @@
 
 import 'server-only';
 
-import { validateDatabaseConfig } from '@/lib/db/config.server';
-import { db } from '@/lib/db/client.server';
-import { pluginInstallations } from '@/lib/db/schema/plugins';
-import { eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 import { unifiedHookSystem } from './hooks/unified-system';
@@ -22,6 +18,7 @@ import {
   getPluginTrustLevel,
   sanitizeHeadTags,
 } from '@/lib/plugins/head/head-tag-policy.server';
+import { listEnabledRuntimePluginIds, type RuntimeSurfaceType } from '@/lib/plugin-runtime/scope';
 
 function isDynamicServerUsageError(error: unknown): boolean {
   const candidate = error as { digest?: unknown; message?: unknown; description?: unknown };
@@ -99,25 +96,11 @@ export async function getUrlFromHeaders(): Promise<string> {
 /**
  * Get all enabled plugins
  */
-export const getEnabledPlugins = cache(async (): Promise<string[]> => {
-  const dbConfig = validateDatabaseConfig();
-  if (!dbConfig.valid) {
-    logger.debug(
-      { errors: dbConfig.errors },
-      'Plugin installation lookup skipped without database configuration'
-    );
-    return [];
-  }
-
+export const getEnabledPlugins = cache(async (surface?: RuntimeSurfaceType): Promise<string[]> => {
   try {
-    const installations = await db
-      .select({ pluginId: pluginInstallations.pluginId })
-      .from(pluginInstallations)
-      .where(eq(pluginInstallations.enabled, true));
-
-    return installations.map((i) => i.pluginId);
+    return await listEnabledRuntimePluginIds({ surface });
   } catch (error) {
-    logger.error({ error }, 'Failed to get enabled plugins');
+    logger.error({ error, surface }, 'Failed to get runtime-scoped enabled plugins');
     return [];
   }
 });
@@ -171,7 +154,7 @@ export async function triggerRenderHeadHook(options?: {
   userId?: string;
 }): Promise<HeadTag[]> {
   try {
-    const enabledPlugins = await getEnabledPlugins();
+    const enabledPlugins = await getEnabledPlugins('hook');
     if (enabledPlugins.length === 0) {
       return [];
     }
@@ -214,7 +197,7 @@ export async function triggerRenderHeadHookResults(options?: {
   userId?: string;
 }): Promise<PluginHeadTagResult[]> {
   try {
-    const enabledPlugins = await getEnabledPlugins();
+    const enabledPlugins = await getEnabledPlugins('hook');
     if (enabledPlugins.length === 0) {
       return [];
     }
@@ -315,7 +298,7 @@ export async function triggerBeforeHandleHook(options: {
   userId?: string;
 }): Promise<BeforeHandleResult> {
   try {
-    const enabledPlugins = await getEnabledPlugins();
+    const enabledPlugins = await getEnabledPlugins('hook');
     if (enabledPlugins.length === 0) {
       return {};
     }
@@ -402,7 +385,7 @@ export async function triggerAfterHandleHook(options: {
   userId?: string;
 }): Promise<void> {
   try {
-    const enabledPlugins = await getEnabledPlugins();
+    const enabledPlugins = await getEnabledPlugins('hook');
 
     if (enabledPlugins.length === 0) return;
 
@@ -437,7 +420,7 @@ export async function triggerSitemapHook(options: {
   userId?: string;
 }): Promise<SitemapEntry[]> {
   try {
-    const enabledPlugins = await getEnabledPlugins();
+    const enabledPlugins = await getEnabledPlugins('sitemap');
     if (enabledPlugins.length === 0) {
       return [];
     }

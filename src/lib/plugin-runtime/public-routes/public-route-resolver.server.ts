@@ -8,11 +8,11 @@ import {
 } from '../contract';
 import {
   getPluginRuntimeMapEntry,
-  listPluginRuntimeIds,
   type PluginRuntimeMapEntry,
 } from '../loader';
 import { enforcePluginRuntimeEnabled, pluginRuntimeRegistry } from '../registry';
 import type { RuntimePageRoute } from '../contract';
+import { runtimeScopeService } from '../scope';
 
 export interface PluginPublicRouteAliasMatch {
   pluginId: string;
@@ -59,7 +59,13 @@ export async function resolvePluginPublicRouteAlias(
 ): Promise<PluginPublicRouteAliasMatch | null> {
   const requestPath = normalizeRuntimePath(path);
   const entries = options.entries ?? {};
-  const candidateIds = new Set([...Object.keys(entries), ...listPluginRuntimeIds()]);
+  const scopedPluginIds = options.entries
+    ? []
+    : await runtimeScopeService.listRuntimePluginIds({
+        surface: 'route',
+        includeDisabled: Boolean(options.entries),
+      });
+  const candidateIds = new Set([...Object.keys(entries), ...scopedPluginIds]);
 
   for (const pluginId of candidateIds) {
     const entry = entries[pluginId] ?? getPluginRuntimeMapEntry(pluginId);

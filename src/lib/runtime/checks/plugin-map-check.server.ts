@@ -13,7 +13,11 @@ const PLUGIN_MAP_MANIFEST_FILE = path.join(process.cwd(), 'src/lib/plugin-map.ma
 
 interface PluginMapManifest {
   version: number;
-  plugins: Array<{ id: string }>;
+  defaultProductId: string;
+  products: Array<{ id: string; suites: string[]; bundles: string[] }>;
+  suites: Array<{ id: string; productId: string; plugins: string[] }>;
+  bundles: Array<{ id: string; productId: string; plugins: Array<{ pluginId: string }> }>;
+  plugins: Array<{ id: string; productId: string; suiteId: string; bundleIds: string[] }>;
 }
 
 export const pluginMapCheck: RuntimeCheck = {
@@ -47,6 +51,9 @@ export const pluginMapCheck: RuntimeCheck = {
       };
     }
     const declaredPlugins = manifest.plugins.map((plugin) => plugin.id);
+    const productIds = new Set(manifest.products.map((product) => product.id));
+    const suiteIds = new Set(manifest.suites.map((suite) => suite.id));
+    const bundleIds = new Set(manifest.bundles.map((bundle) => bundle.id));
 
     // Compare
     const actualSet = new Set(actualPlugins);
@@ -54,14 +61,27 @@ export const pluginMapCheck: RuntimeCheck = {
 
     const missingFromMap = actualPlugins.filter((p) => !declaredSet.has(p));
     const staleInMap = declaredPlugins.filter((p) => !actualSet.has(p));
+    const invalidOwnership = manifest.plugins.filter(
+      (plugin) =>
+        !productIds.has(plugin.productId) ||
+        !suiteIds.has(plugin.suiteId) ||
+        plugin.bundleIds.some((bundleId) => !bundleIds.has(bundleId))
+    );
 
-    if (missingFromMap.length > 0 || staleInMap.length > 0) {
+    if (missingFromMap.length > 0 || staleInMap.length > 0 || invalidOwnership.length > 0) {
       const messages: string[] = [];
       if (missingFromMap.length > 0) {
         messages.push(`Plugins in directory but not in map: ${missingFromMap.join(', ')}`);
       }
       if (staleInMap.length > 0) {
         messages.push(`Plugins in map but not in directory: ${staleInMap.join(', ')}`);
+      }
+      if (invalidOwnership.length > 0) {
+        messages.push(
+          `Plugins with invalid runtime ownership: ${invalidOwnership
+            .map((plugin) => plugin.id)
+            .join(', ')}`
+        );
       }
 
       return {
@@ -93,9 +113,41 @@ function readPluginMapManifest(): PluginMapManifest | null {
     ) as PluginMapManifest;
 
     if (
-      manifest.version !== 1 ||
+      manifest.version !== 2 ||
+      typeof manifest.defaultProductId !== 'string' ||
+      !Array.isArray(manifest.products) ||
+      !Array.isArray(manifest.suites) ||
+      !Array.isArray(manifest.bundles) ||
       !Array.isArray(manifest.plugins) ||
-      manifest.plugins.some((plugin) => !plugin || typeof plugin.id !== 'string')
+      manifest.products.some(
+        (product) =>
+          !product ||
+          typeof product.id !== 'string' ||
+          !Array.isArray(product.suites) ||
+          !Array.isArray(product.bundles)
+      ) ||
+      manifest.suites.some(
+        (suite) =>
+          !suite ||
+          typeof suite.id !== 'string' ||
+          typeof suite.productId !== 'string' ||
+          !Array.isArray(suite.plugins)
+      ) ||
+      manifest.bundles.some(
+        (bundle) =>
+          !bundle ||
+          typeof bundle.id !== 'string' ||
+          typeof bundle.productId !== 'string' ||
+          !Array.isArray(bundle.plugins)
+      ) ||
+      manifest.plugins.some(
+        (plugin) =>
+          !plugin ||
+          typeof plugin.id !== 'string' ||
+          typeof plugin.productId !== 'string' ||
+          typeof plugin.suiteId !== 'string' ||
+          !Array.isArray(plugin.bundleIds)
+      )
     ) {
       return null;
     }

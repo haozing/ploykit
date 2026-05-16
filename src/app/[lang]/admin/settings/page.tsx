@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import useSWR from 'swr';
+import { useTranslations } from 'next-intl';
 import { Save, Settings2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ async function fetchSystemSettings(url: string): Promise<SystemSettingsPayload> 
 }
 
 export default function AdminSettingsPage() {
+  const t = useTranslations('dashboard.systemSettingsPage');
   const { data, error, isLoading, mutate } = useSWR('/api/admin/settings', fetchSystemSettings, {
     revalidateOnFocus: false,
   });
@@ -89,7 +91,7 @@ export default function AdminSettingsPage() {
 
       setForm(body.data);
       await mutate(body.data, { revalidate: false });
-      setMessage('System settings saved.');
+      setMessage(t('messages.saved'));
     } catch (saveFailure) {
       setSaveError(
         saveFailure instanceof Error ? saveFailure.message : 'Failed to save system settings'
@@ -119,24 +121,20 @@ export default function AdminSettingsPage() {
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">System Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Platform defaults for identity, security, email, and notifications.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('description')}</p>
         </div>
         <Button onClick={handleSave} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
-          Save
+          {t('actions.save')}
         </Button>
       </div>
 
       {error ? (
         <Card className="border-destructive">
           <CardHeader>
-            <CardTitle>Settings data unavailable</CardTitle>
-            <CardDescription>
-              The admin settings API did not return a valid payload.
-            </CardDescription>
+            <CardTitle>{t('error.title')}</CardTitle>
+            <CardDescription>{t('error.description')}</CardDescription>
           </CardHeader>
         </Card>
       ) : null}
@@ -149,45 +147,42 @@ export default function AdminSettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-muted-foreground" />
-              <CardTitle>General</CardTitle>
-              <Badge variant="outline">Config Source</Badge>
+              <CardTitle>{t('sections.general.title')}</CardTitle>
+              <Badge variant="outline">{t('sections.general.badge')}</Badge>
             </div>
-            <CardDescription>
-              Platform identity and locale defaults. Runtime consumers should read these values
-              explicitly.
-            </CardDescription>
+            <CardDescription>{t('sections.general.description')}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Site Name">
+            <Field label={t('fields.siteName')}>
               <Input
                 value={form.general.siteName}
                 onChange={(event) => updateSection('general', { siteName: event.target.value })}
               />
             </Field>
-            <Field label="Support Email">
+            <Field label={t('fields.supportEmail')}>
               <Input
                 type="email"
                 value={form.general.supportEmail}
                 onChange={(event) => updateSection('general', { supportEmail: event.target.value })}
               />
             </Field>
-            <Field label="Default Locale">
+            <Field label={t('fields.defaultLocale')}>
               <Select
                 value={form.general.defaultLocale}
                 onValueChange={(value) =>
                   updateSection('general', { defaultLocale: value as 'en' | 'zh' })
                 }
               >
-                <SelectTrigger aria-label="Default Locale">
+                <SelectTrigger aria-label={t('fields.defaultLocale')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="zh">Chinese</SelectItem>
+                  <SelectItem value="en">{t('options.english')}</SelectItem>
+                  <SelectItem value="zh">{t('options.chinese')}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Timezone">
+            <Field label={t('fields.timezone')}>
               <Input
                 value={form.general.timezone}
                 onChange={(event) => updateSection('general', { timezone: event.target.value })}
@@ -199,23 +194,20 @@ export default function AdminSettingsPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle>Security</CardTitle>
-              <Badge variant="secondary">Static Auth Runtime</Badge>
+              <CardTitle>{t('sections.security.title')}</CardTitle>
+              <Badge variant="secondary">{t('sections.security.badge')}</Badge>
             </div>
-            <CardDescription>
-              Baseline policy values stored for platform configuration. Better Auth session and
-              password enforcement still use server startup configuration.
-            </CardDescription>
+            <CardDescription>{t('sections.security.description')}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <ToggleField
-              label="Email Verification"
+              label={t('fields.emailVerification')}
               checked={form.security.requireEmailVerification}
               onCheckedChange={(checked) =>
                 updateSection('security', { requireEmailVerification: checked })
               }
             />
-            <Field label="Session Max Age">
+            <Field label={t('fields.sessionMaxAge')}>
               <Input
                 type="number"
                 min={1}
@@ -228,7 +220,7 @@ export default function AdminSettingsPage() {
                 }
               />
             </Field>
-            <Field label="Password Min Length">
+            <Field label={t('fields.passwordMinLength')}>
               <Input
                 type="number"
                 min={8}
@@ -247,56 +239,53 @@ export default function AdminSettingsPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle>Email</CardTitle>
-              <Badge variant="secondary">Provider Pending</Badge>
+              <CardTitle>{t('sections.email.title')}</CardTitle>
+              <Badge variant="secondary">{t('sections.email.badge')}</Badge>
             </div>
-            <CardDescription>
-              Transactional email defaults. Password reset delivery currently follows
-              AUTH_PASSWORD_RESET_DELIVERY until a real email provider is wired.
-            </CardDescription>
+            <CardDescription>{t('sections.email.description')}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Provider">
+            <Field label={t('fields.provider')}>
               <Select
                 value={form.email.provider}
                 onValueChange={(value) =>
                   updateSection('email', { provider: value as 'log' | 'smtp' | 'resend' })
                 }
               >
-                <SelectTrigger aria-label="Provider">
+                <SelectTrigger aria-label={t('fields.provider')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="log">Log</SelectItem>
-                  <SelectItem value="smtp">SMTP</SelectItem>
-                  <SelectItem value="resend">Resend</SelectItem>
+                  <SelectItem value="log">{t('options.log')}</SelectItem>
+                  <SelectItem value="smtp">{t('options.smtp')}</SelectItem>
+                  <SelectItem value="resend">{t('options.resend')}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Password Reset Delivery">
+            <Field label={t('fields.passwordResetDelivery')}>
               <Select
                 value={form.email.passwordResetDelivery}
                 onValueChange={(value) =>
                   updateSection('email', { passwordResetDelivery: value as 'log' | 'email' })
                 }
               >
-                <SelectTrigger aria-label="Password Reset Delivery">
+                <SelectTrigger aria-label={t('fields.passwordResetDelivery')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="log">Log</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="log">{t('options.log')}</SelectItem>
+                  <SelectItem value="email">{t('options.email')}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="From Email">
+            <Field label={t('fields.fromEmail')}>
               <Input
                 type="email"
                 value={form.email.fromEmail}
                 onChange={(event) => updateSection('email', { fromEmail: event.target.value })}
               />
             </Field>
-            <Field label="From Name">
+            <Field label={t('fields.fromName')}>
               <Input
                 value={form.email.fromName}
                 onChange={(event) => updateSection('email', { fromName: event.target.value })}
@@ -308,36 +297,34 @@ export default function AdminSettingsPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <CardTitle>Notifications</CardTitle>
-              <Badge>Runtime Active</Badge>
+              <CardTitle>{t('sections.notifications.title')}</CardTitle>
+              <Badge>{t('sections.notifications.badge')}</Badge>
             </div>
-            <CardDescription>
-              Platform delivery defaults read by notification preferences and notification creation.
-            </CardDescription>
+            <CardDescription>{t('sections.notifications.description')}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <ToggleField
-              label="In-App"
+              label={t('fields.inApp')}
               checked={form.notifications.inAppEnabled}
               onCheckedChange={(checked) =>
                 updateSection('notifications', { inAppEnabled: checked })
               }
             />
             <ToggleField
-              label="Email"
+              label={t('fields.email')}
               checked={form.notifications.emailEnabled}
               onCheckedChange={(checked) =>
                 updateSection('notifications', { emailEnabled: checked })
               }
             />
             <ToggleField
-              label="Webhook"
+              label={t('fields.webhook')}
               checked={form.notifications.webhookEnabled}
               onCheckedChange={(checked) =>
                 updateSection('notifications', { webhookEnabled: checked })
               }
             />
-            <Field label="Digest Frequency">
+            <Field label={t('fields.digestFrequency')}>
               <Select
                 value={form.notifications.digestFrequency}
                 onValueChange={(value) =>
@@ -346,13 +333,13 @@ export default function AdminSettingsPage() {
                   })
                 }
               >
-                <SelectTrigger aria-label="Digest Frequency">
+                <SelectTrigger aria-label={t('fields.digestFrequency')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="never">Never</SelectItem>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="never">{t('options.never')}</SelectItem>
+                  <SelectItem value="daily">{t('options.daily')}</SelectItem>
+                  <SelectItem value="weekly">{t('options.weekly')}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>

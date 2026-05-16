@@ -6,6 +6,7 @@
 
 import { sql } from 'drizzle-orm';
 import { getDatabase } from '../src/lib/db/client.server';
+import { PLATFORM_PRIMARY_CREDIT_METRIC } from '../src/lib/billing/billing-metrics';
 
 const db = getDatabase();
 
@@ -60,7 +61,7 @@ async function verifyDatabase() {
     console.log(`   Found ${plans.length} plans:`);
     plans.forEach((p: any) =>
       console.log(
-        `   - ${p.name} (${p.slug}): ${p.limits?.monthly?.['runlynk.calls'] ?? 'N/A'} calls/month${p.is_default ? ' [default]' : ''}`
+        `   - ${p.name} (${p.slug}): ${p.limits?.monthly?.[PLATFORM_PRIMARY_CREDIT_METRIC] ?? 'N/A'} credits/month${p.is_default ? ' [default]' : ''}`
       )
     );
 

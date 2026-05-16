@@ -30,16 +30,17 @@ import {
   PluginNotInstalledError,
 } from '@/lib/_core/errors';
 import { runPluginLifecycle } from '../adapters';
-import { getPluginRuntimeMapEntry } from '../loader';
 import { pluginRuntimeRegistry } from '../registry';
 import { assertNoPluginPublicAliasConflicts } from '../public-routes/public-route-conflicts.server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { env } from '@/lib/_core/env';
 import {
   createPluginStorageRuntime,
   DbPluginStorageRepository,
 } from '../storage/db-storage.server';
 import { listInternalServiceRequirements } from '../admin/internal-services.server';
+import { resolvePluginRuntimeOwnership } from '../product-context.server';
+import { syncRuntimeCatalog } from '../catalog/runtime-catalog-sync.server';
 
 async function deletePluginRuntimeState(pluginId: string): Promise<void> {
   await db.delete(pluginJobRuns).where(eq(pluginJobRuns.pluginId, pluginId));
@@ -51,8 +52,11 @@ async function deletePluginRuntimeState(pluginId: string): Promise<void> {
   await db.delete(pluginCollections).where(eq(pluginCollections.pluginId, pluginId));
 }
 
-async function listEnabledRuntimePluginIdsIncluding(pluginId: string): Promise<string[]> {
-  const installations = await pluginQueryService.listInstalledPlugins();
+async function listEnabledRuntimePluginIdsIncluding(
+  pluginId: string,
+  productId: string
+): Promise<string[]> {
+  const installations = await pluginQueryService.listInstalledPlugins({ productId });
   return [
     ...new Set([
       ...installations
@@ -64,11 +68,21 @@ async function listEnabledRuntimePluginIdsIncluding(pluginId: string): Promise<s
 }
 
 export class PluginRuntimeInstallerService {
-  async installPlugin(pluginId: string, userId?: string): Promise<PluginOperationResult> {
+  async installPlugin(
+    pluginId: string,
+    userId?: string,
+    options: { productId?: string; bundleId?: string } = {}
+  ): Promise<PluginOperationResult> {
     try {
-      logger.info({ pluginId, userId }, 'Installing plugin from runtime contract');
+      const ownership = resolvePluginRuntimeOwnership(pluginId, options);
+      const productId = ownership.productId;
+      const bundleId = options.bundleId ?? ownership.bundleIds[0];
+      logger.info(
+        { pluginId, userId, productId, suiteId: ownership.suiteId, bundleId },
+        'Installing plugin from runtime contract'
+      );
 
-      const entry = getPluginRuntimeMapEntry(pluginId);
+      const entry = ownership.entry;
       if (!entry?.plugin && !entry?.runtimeContract) {
         throw new PluginNotFoundError(pluginId);
       }
@@ -76,23 +90,34 @@ export class PluginRuntimeInstallerService {
       const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
 
       const result = await db.transaction(async (tx) => {
+        await syncRuntimeCatalog(tx);
+
         const [existing] = await tx
           .select()
           .from(pluginInstallations)
-          .where(eq(pluginInstallations.pluginId, pluginId))
+          .where(
+            and(
+              eq(pluginInstallations.productId, productId),
+              eq(pluginInstallations.pluginId, pluginId)
+            )
+          )
           .for('update')
           .limit(1);
 
         if (existing) {
-          throw new PluginAlreadyInstalledError(pluginId, 'global');
+          throw new PluginAlreadyInstalledError(pluginId, productId);
         }
 
         const [installation] = await tx
           .insert(pluginInstallations)
           .values({
+            productId,
+            suiteId: ownership.suiteId,
+            bundleId,
             pluginId,
             version: contract.version,
             enabled: false,
+            installStatus: 'installed',
             installedBy: userId,
           })
           .returning();
@@ -121,7 +146,14 @@ export class PluginRuntimeInstallerService {
       });
 
       if (!lifecycle.success) {
-        await db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId));
+        await db
+          .delete(pluginInstallations)
+          .where(
+            and(
+              eq(pluginInstallations.productId, productId),
+              eq(pluginInstallations.pluginId, pluginId)
+            )
+          );
         await deletePluginRuntimeState(pluginId);
         throw new PluginInstallError(pluginId, lifecycle.error ?? 'Install lifecycle failed', {
           userId,
@@ -133,6 +165,7 @@ export class PluginRuntimeInstallerService {
         'plugin-runtime-installer',
         {
           pluginId,
+          productId,
           userId,
           version: contract.version,
           installationId: result.installation?.id,
@@ -165,13 +198,22 @@ export class PluginRuntimeInstallerService {
     }
   }
 
-  async enablePlugin(pluginId: string, userId?: string): Promise<PluginOperationResult> {
+  async enablePlugin(
+    pluginId: string,
+    userId?: string,
+    options: { productId?: string } = {}
+  ): Promise<PluginOperationResult> {
     try {
-      logger.info({ pluginId, userId }, 'Enabling plugin from runtime contract');
+      const ownership = resolvePluginRuntimeOwnership(pluginId, options);
+      const productId = ownership.productId;
+      logger.info(
+        { pluginId, userId, productId, suiteId: ownership.suiteId },
+        'Enabling plugin from runtime contract'
+      );
 
-      const installation = await pluginQueryService.getInstallation(pluginId);
+      const installation = await pluginQueryService.getInstallation(pluginId, { productId });
       if (!installation) {
-        throw new PluginNotInstalledError(pluginId, 'global');
+        throw new PluginNotInstalledError(pluginId, productId);
       }
 
       if (installation.enabled) {
@@ -180,7 +222,7 @@ export class PluginRuntimeInstallerService {
         await registerPluginRuntimeHooks(pluginId);
         await slotManager.registerFromContract(pluginId);
         await assertNoPluginPublicAliasConflicts({
-          pluginIds: await listEnabledRuntimePluginIdsIncluding(pluginId),
+          pluginIds: await listEnabledRuntimePluginIdsIncluding(pluginId, productId),
         });
         return {
           success: true,
@@ -235,7 +277,7 @@ export class PluginRuntimeInstallerService {
         await registerPluginRuntimeHooks(pluginId);
         await slotManager.registerFromContract(pluginId);
         await assertNoPluginPublicAliasConflicts({
-          pluginIds: await listEnabledRuntimePluginIdsIncluding(pluginId),
+          pluginIds: await listEnabledRuntimePluginIdsIncluding(pluginId, productId),
         });
 
         [updated] = await db
@@ -244,7 +286,12 @@ export class PluginRuntimeInstallerService {
             enabled: true,
             updatedAt: new Date(),
           })
-          .where(eq(pluginInstallations.pluginId, pluginId))
+          .where(
+            and(
+              eq(pluginInstallations.productId, productId),
+              eq(pluginInstallations.pluginId, pluginId)
+            )
+          )
           .returning();
       } catch (registrationOrUpdateError) {
         bus.onPluginDisabled(pluginId);
@@ -262,6 +309,7 @@ export class PluginRuntimeInstallerService {
         'plugin-runtime-installer',
         {
           pluginId,
+          productId,
           version: mapped.version,
           installationId: mapped.id,
         },
@@ -290,13 +338,22 @@ export class PluginRuntimeInstallerService {
     }
   }
 
-  async disablePlugin(pluginId: string, userId?: string): Promise<PluginOperationResult> {
+  async disablePlugin(
+    pluginId: string,
+    userId?: string,
+    options: { productId?: string } = {}
+  ): Promise<PluginOperationResult> {
     try {
-      logger.info({ pluginId, userId }, 'Disabling plugin from runtime contract');
+      const ownership = resolvePluginRuntimeOwnership(pluginId, options);
+      const productId = ownership.productId;
+      logger.info(
+        { pluginId, userId, productId, suiteId: ownership.suiteId },
+        'Disabling plugin from runtime contract'
+      );
 
-      const installation = await pluginQueryService.getInstallation(pluginId);
+      const installation = await pluginQueryService.getInstallation(pluginId, { productId });
       if (!installation) {
-        throw new PluginNotInstalledError(pluginId, 'global');
+        throw new PluginNotInstalledError(pluginId, productId);
       }
 
       if (!installation.enabled) {
@@ -339,7 +396,12 @@ export class PluginRuntimeInstallerService {
           enabled: false,
           updatedAt: new Date(),
         })
-        .where(eq(pluginInstallations.pluginId, pluginId))
+        .where(
+          and(
+            eq(pluginInstallations.productId, productId),
+            eq(pluginInstallations.pluginId, pluginId)
+          )
+        )
         .returning();
 
       const mapped = pluginQueryService.mapInstallation(updated);
@@ -349,6 +411,7 @@ export class PluginRuntimeInstallerService {
         'plugin-runtime-installer',
         {
           pluginId,
+          productId,
           version: mapped.version,
           installationId: mapped.id,
         },
@@ -377,17 +440,26 @@ export class PluginRuntimeInstallerService {
     }
   }
 
-  async uninstallPlugin(pluginId: string, userId?: string): Promise<PluginOperationResult> {
+  async uninstallPlugin(
+    pluginId: string,
+    userId?: string,
+    options: { productId?: string } = {}
+  ): Promise<PluginOperationResult> {
     try {
-      logger.info({ pluginId, userId }, 'Uninstalling plugin from runtime contract');
+      const ownership = resolvePluginRuntimeOwnership(pluginId, options);
+      const productId = ownership.productId;
+      logger.info(
+        { pluginId, userId, productId, suiteId: ownership.suiteId },
+        'Uninstalling plugin from runtime contract'
+      );
 
-      const installation = await pluginQueryService.getInstallation(pluginId);
+      const installation = await pluginQueryService.getInstallation(pluginId, { productId });
       if (!installation) {
-        throw new PluginNotInstalledError(pluginId, 'global');
+        throw new PluginNotInstalledError(pluginId, productId);
       }
 
       if (installation.enabled) {
-        await this.disablePlugin(pluginId, userId);
+        await this.disablePlugin(pluginId, userId, { productId });
       }
 
       const lifecycle = await runPluginLifecycle({
@@ -408,7 +480,14 @@ export class PluginRuntimeInstallerService {
       }
 
       await deletePluginRuntimeState(pluginId);
-      await db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId));
+      await db
+        .delete(pluginInstallations)
+        .where(
+          and(
+            eq(pluginInstallations.productId, productId),
+            eq(pluginInstallations.pluginId, pluginId)
+          )
+        );
       pluginRuntimeRegistry.unregister(pluginId);
 
       await bus.event.emit(
@@ -416,6 +495,7 @@ export class PluginRuntimeInstallerService {
         'plugin-runtime-installer',
         {
           pluginId,
+          productId,
           version: installation.version,
           installationId: installation.id,
         },

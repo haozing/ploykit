@@ -307,7 +307,7 @@ export default function AnalyticsPage() {
 
   const formatDateTime = (value: string | null): string => {
     if (!value) {
-      return 'None';
+      return t('reliability.emptyValue');
     }
 
     return new Intl.DateTimeFormat('en-US', {
@@ -359,7 +359,7 @@ export default function AnalyticsPage() {
           <TabsTrigger value="growth">{t('tabs.growth')}</TabsTrigger>
           <TabsTrigger value="churn">{t('tabs.churn')}</TabsTrigger>
           <TabsTrigger value="usage">{t('tabs.usage')}</TabsTrigger>
-          <TabsTrigger value="reliability">Reliability</TabsTrigger>
+          <TabsTrigger value="reliability">{t('tabs.reliability')}</TabsTrigger>
           <TabsTrigger value="cohorts">{t('tabs.cohorts')}</TabsTrigger>
         </TabsList>
 
@@ -930,7 +930,9 @@ export default function AnalyticsPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Work Items</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                      {t('reliability.metrics.workItems.title')}
+                    </CardTitle>
                     <Activity className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -938,14 +940,18 @@ export default function AnalyticsPage() {
                       {formatNumber(reliability.reliability.overall.totalWorkItems)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Last {reliability.rangeDays} days
+                      {t('reliability.metrics.workItems.description', {
+                        days: reliability.rangeDays,
+                      })}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Backlog</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                      {t('reliability.metrics.backlog.title')}
+                    </CardTitle>
                     <Clock className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -953,14 +959,16 @@ export default function AnalyticsPage() {
                       {formatNumber(reliability.reliability.overall.backlog)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Pending, processing, received, or running
+                      {t('reliability.metrics.backlog.description')}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Failures</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                      {t('reliability.metrics.failures.title')}
+                    </CardTitle>
                     <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -968,14 +976,18 @@ export default function AnalyticsPage() {
                       {formatNumber(reliability.reliability.overall.failedWorkItems)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {reliability.reliability.overall.failureRate.toFixed(2)}% overall failure rate
+                      {t('reliability.metrics.failures.description', {
+                        rate: reliability.reliability.overall.failureRate.toFixed(2),
+                      })}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Retry Attempts</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                      {t('reliability.metrics.retryAttempts.title')}
+                    </CardTitle>
                     <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -983,8 +995,11 @@ export default function AnalyticsPage() {
                       {formatNumber(reliability.reliability.webhooks.retryAttempts)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {formatNumber(reliability.reliability.webhooks.successfulRetryAttempts)}{' '}
-                      succeeded
+                      {t('reliability.metrics.retryAttempts.description', {
+                        count: formatNumber(
+                          reliability.reliability.webhooks.successfulRetryAttempts
+                        ),
+                      })}
                     </p>
                   </CardContent>
                 </Card>
@@ -993,31 +1008,37 @@ export default function AnalyticsPage() {
               <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
                 <Card className="min-w-0">
                   <CardHeader>
-                    <CardTitle>Failure Trend</CardTitle>
-                    <CardDescription>
-                      Daily failed work items across queues and plugin jobs.
-                    </CardDescription>
+                    <CardTitle>{t('reliability.trend.title')}</CardTitle>
+                    <CardDescription>{t('reliability.trend.description')}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ReliabilityTrendChart data={reliability.reliability.trend} />
+                    <ReliabilityTrendChart
+                      data={reliability.reliability.trend}
+                      emptyLabel={t('reliability.trend.empty')}
+                      seriesLabels={{
+                        outbox: t('reliability.trend.series.outbox'),
+                        webhooks: t('reliability.trend.series.webhooks'),
+                        jobs: t('reliability.trend.series.jobs'),
+                      }}
+                    />
                   </CardContent>
                 </Card>
 
                 <Card className="min-w-0">
                   <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <CardTitle>Edge Access</CardTitle>
-                      <CardDescription>Gateway and edge request failures.</CardDescription>
+                      <CardTitle>{t('reliability.edge.title')}</CardTitle>
+                      <CardDescription>{t('reliability.edge.description')}</CardDescription>
                     </div>
                     <Select
                       value={reliabilityFailureType}
                       onValueChange={setReliabilityFailureType}
                     >
                       <SelectTrigger className="w-full sm:w-[190px]">
-                        <SelectValue placeholder="Failure type" />
+                        <SelectValue placeholder={t('reliability.edge.failureType')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All failure types</SelectItem>
+                        <SelectItem value="all">{t('reliability.edge.allFailureTypes')}</SelectItem>
                         {reliabilityFailureTypeOptions.map((failureType) => (
                           <SelectItem key={failureType} value={failureType}>
                             {failureType}
@@ -1029,19 +1050,25 @@ export default function AnalyticsPage() {
                   <CardContent className="space-y-4">
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Requests</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t('reliability.edge.requests')}
+                        </div>
                         <div className="mt-1 text-xl font-semibold">
                           {formatNumber(reliability.reliability.edgeAccess.total)}
                         </div>
                       </div>
                       <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Failed</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t('reliability.edge.failed')}
+                        </div>
                         <div className="mt-1 text-xl font-semibold">
                           {formatNumber(reliability.reliability.edgeAccess.failed)}
                         </div>
                       </div>
                       <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">P95 Latency</div>
+                        <div className="text-xs text-muted-foreground">
+                          {t('reliability.edge.p95Latency')}
+                        </div>
                         <div className="mt-1 text-xl font-semibold">
                           {formatNumber(reliability.reliability.edgeAccess.p95DurationMs)} ms
                         </div>
@@ -1050,7 +1077,9 @@ export default function AnalyticsPage() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Failure Rate</span>
+                        <span className="text-muted-foreground">
+                          {t('reliability.edge.failureRate')}
+                        </span>
                         <span className="font-medium">
                           {reliability.reliability.edgeAccess.failureRate.toFixed(2)}%
                         </span>
@@ -1062,14 +1091,14 @@ export default function AnalyticsPage() {
                             className="flex items-center justify-between gap-4 rounded-md border px-3 py-2 text-sm"
                           >
                             <span className="truncate text-muted-foreground">
-                              {item.failureType ?? 'unknown'}
+                              {item.failureType ?? t('reliability.edge.unknown')}
                             </span>
                             <Badge variant="secondary">{formatNumber(Number(item.count))}</Badge>
                           </div>
                         ))
                       ) : (
                         <div className="rounded-md border px-3 py-6 text-center text-sm text-muted-foreground">
-                          No edge failure types recorded.
+                          {t('reliability.edge.empty')}
                         </div>
                       )}
                     </div>
@@ -1079,47 +1108,107 @@ export default function AnalyticsPage() {
 
               <div className="grid gap-4 lg:grid-cols-3">
                 <ReliabilityCard
-                  title="Outbox"
-                  description="Internal async event delivery"
+                  title={t('reliability.outbox.title')}
+                  description={t('reliability.outbox.description')}
                   rows={[
-                    ['Total', formatNumber(reliability.reliability.outbox.total)],
-                    ['Pending', formatNumber(reliability.reliability.outbox.pending)],
-                    ['Processing', formatNumber(reliability.reliability.outbox.processing)],
-                    ['Completed', formatNumber(reliability.reliability.outbox.completed)],
-                    ['Failed', formatNumber(reliability.reliability.outbox.failed)],
-                    ['Ready Pending', formatNumber(reliability.reliability.outbox.readyPending)],
-                    ['Failure Rate', `${reliability.reliability.outbox.failureRate.toFixed(2)}%`],
                     [
-                      'Oldest Failed',
+                      t('reliability.cards.total'),
+                      formatNumber(reliability.reliability.outbox.total),
+                    ],
+                    [
+                      t('reliability.cards.pending'),
+                      formatNumber(reliability.reliability.outbox.pending),
+                    ],
+                    [
+                      t('reliability.cards.processing'),
+                      formatNumber(reliability.reliability.outbox.processing),
+                    ],
+                    [
+                      t('reliability.cards.completed'),
+                      formatNumber(reliability.reliability.outbox.completed),
+                    ],
+                    [
+                      t('reliability.cards.failed'),
+                      formatNumber(reliability.reliability.outbox.failed),
+                    ],
+                    [
+                      t('reliability.cards.readyPending'),
+                      formatNumber(reliability.reliability.outbox.readyPending),
+                    ],
+                    [
+                      t('reliability.cards.failureRate'),
+                      `${reliability.reliability.outbox.failureRate.toFixed(2)}%`,
+                    ],
+                    [
+                      t('reliability.cards.oldestFailed'),
                       formatDateTime(reliability.reliability.outbox.oldestFailedAt),
                     ],
                   ]}
                 />
                 <ReliabilityCard
-                  title="Webhooks"
-                  description="Inbound webhook receipt processing"
+                  title={t('reliability.webhooks.title')}
+                  description={t('reliability.webhooks.description')}
                   rows={[
-                    ['Total', formatNumber(reliability.reliability.webhooks.total)],
-                    ['Received', formatNumber(reliability.reliability.webhooks.received)],
-                    ['Processing', formatNumber(reliability.reliability.webhooks.processing)],
-                    ['Processed', formatNumber(reliability.reliability.webhooks.processed)],
-                    ['Failed', formatNumber(reliability.reliability.webhooks.failed)],
-                    ['Dead Letter', formatNumber(reliability.reliability.webhooks.deadLetter)],
-                    ['Retryable', formatNumber(reliability.reliability.webhooks.retryable)],
-                    ['Failure Rate', `${reliability.reliability.webhooks.failureRate.toFixed(2)}%`],
+                    [
+                      t('reliability.cards.total'),
+                      formatNumber(reliability.reliability.webhooks.total),
+                    ],
+                    [
+                      t('reliability.cards.received'),
+                      formatNumber(reliability.reliability.webhooks.received),
+                    ],
+                    [
+                      t('reliability.cards.processing'),
+                      formatNumber(reliability.reliability.webhooks.processing),
+                    ],
+                    [
+                      t('reliability.cards.processed'),
+                      formatNumber(reliability.reliability.webhooks.processed),
+                    ],
+                    [
+                      t('reliability.cards.failed'),
+                      formatNumber(reliability.reliability.webhooks.failed),
+                    ],
+                    [
+                      t('reliability.cards.deadLetter'),
+                      formatNumber(reliability.reliability.webhooks.deadLetter),
+                    ],
+                    [
+                      t('reliability.cards.retryable'),
+                      formatNumber(reliability.reliability.webhooks.retryable),
+                    ],
+                    [
+                      t('reliability.cards.failureRate'),
+                      `${reliability.reliability.webhooks.failureRate.toFixed(2)}%`,
+                    ],
                   ]}
                 />
                 <ReliabilityCard
-                  title="Plugin Jobs"
-                  description="Plugin job execution status"
+                  title={t('reliability.jobs.title')}
+                  description={t('reliability.jobs.description')}
                   rows={[
-                    ['Total', formatNumber(reliability.reliability.jobs.total)],
-                    ['Running', formatNumber(reliability.reliability.jobs.running)],
-                    ['Succeeded', formatNumber(reliability.reliability.jobs.succeeded)],
-                    ['Dead Letter', formatNumber(reliability.reliability.jobs.deadLetter)],
-                    ['Failure Rate', `${reliability.reliability.jobs.failureRate.toFixed(2)}%`],
                     [
-                      'Oldest Dead Letter',
+                      t('reliability.cards.total'),
+                      formatNumber(reliability.reliability.jobs.total),
+                    ],
+                    [
+                      t('reliability.cards.running'),
+                      formatNumber(reliability.reliability.jobs.running),
+                    ],
+                    [
+                      t('reliability.cards.succeeded'),
+                      formatNumber(reliability.reliability.jobs.succeeded),
+                    ],
+                    [
+                      t('reliability.cards.deadLetter'),
+                      formatNumber(reliability.reliability.jobs.deadLetter),
+                    ],
+                    [
+                      t('reliability.cards.failureRate'),
+                      `${reliability.reliability.jobs.failureRate.toFixed(2)}%`,
+                    ],
+                    [
+                      t('reliability.cards.oldestDeadLetter'),
                       formatDateTime(reliability.reliability.jobs.oldestDeadLetteredAt),
                     ],
                   ]}
@@ -1129,10 +1218,8 @@ export default function AnalyticsPage() {
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>Reliability data unavailable</CardTitle>
-                <CardDescription>
-                  The reliability API did not return queue health metrics.
-                </CardDescription>
+                <CardTitle>{t('reliability.unavailable.title')}</CardTitle>
+                <CardDescription>{t('reliability.unavailable.description')}</CardDescription>
               </CardHeader>
             </Card>
           )}
@@ -1202,11 +1289,23 @@ export default function AnalyticsPage() {
   );
 }
 
-function ReliabilityTrendChart({ data }: { data: ReliabilityMetrics['reliability']['trend'] }) {
+function ReliabilityTrendChart({
+  data,
+  emptyLabel,
+  seriesLabels,
+}: {
+  data: ReliabilityMetrics['reliability']['trend'];
+  emptyLabel: string;
+  seriesLabels: {
+    outbox: string;
+    webhooks: string;
+    jobs: string;
+  };
+}) {
   if (data.length === 0) {
     return (
       <div className="flex h-[320px] items-center justify-center rounded-md border text-sm text-muted-foreground">
-        No reliability trend data.
+        {emptyLabel}
       </div>
     );
   }
@@ -1223,7 +1322,7 @@ function ReliabilityTrendChart({ data }: { data: ReliabilityMetrics['reliability
           <Line
             type="monotone"
             dataKey="outboxFailed"
-            name="Outbox"
+            name={seriesLabels.outbox}
             stroke="#2563eb"
             strokeWidth={2}
             dot={false}
@@ -1231,7 +1330,7 @@ function ReliabilityTrendChart({ data }: { data: ReliabilityMetrics['reliability
           <Line
             type="monotone"
             dataKey="webhookFailed"
-            name="Webhooks"
+            name={seriesLabels.webhooks}
             stroke="#f97316"
             strokeWidth={2}
             dot={false}
@@ -1239,7 +1338,7 @@ function ReliabilityTrendChart({ data }: { data: ReliabilityMetrics['reliability
           <Line
             type="monotone"
             dataKey="jobFailed"
-            name="Plugin Jobs"
+            name={seriesLabels.jobs}
             stroke="#dc2626"
             strokeWidth={2}
             dot={false}

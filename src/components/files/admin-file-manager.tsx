@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { formatDistance } from 'date-fns';
+import { enUS, zhCN } from 'date-fns/locale';
 import {
   AlertCircle,
   Download,
@@ -16,6 +17,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -82,6 +84,9 @@ interface AdminStatsResponse {
 const PAGE_SIZE = 25;
 
 export function AdminFileManager() {
+  const t = useTranslations('components.files.adminFileManager');
+  const locale = useLocale();
+  const dateLocale = locale.startsWith('zh') ? zhCN : enUS;
   const [files, setFiles] = React.useState<AdminFileMetadata[]>([]);
   const [stats, setStats] = React.useState<AdminStorageStats | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -151,10 +156,10 @@ export function AdminFileManager() {
       ]);
 
       if (!filesResponse.ok) {
-        throw new Error('Failed to fetch platform files');
+        throw new Error(t('errors.fetchFiles'));
       }
       if (!statsResponse.ok) {
-        throw new Error('Failed to fetch platform storage stats');
+        throw new Error(t('errors.fetchStats'));
       }
 
       const filesData = (await filesResponse.json()) as AdminFilesResponse;
@@ -164,7 +169,7 @@ export function AdminFileManager() {
       setTotal(filesData.pagination?.total ?? 0);
       setStats(statsData.stats ?? null);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to fetch platform files');
+      setError(error instanceof Error ? error.message : t('errors.fetchFiles'));
     } finally {
       setLoading(false);
     }
@@ -179,6 +184,7 @@ export function AdminFileManager() {
     maxSizeFilter,
     startDateFilter,
     endDateFilter,
+    t,
   ]);
 
   React.useEffect(() => {
@@ -211,7 +217,7 @@ export function AdminFileManager() {
   async function handleDownload(file: AdminFileMetadata) {
     const response = await apiFetch(`/api/admin/files/${file.id}?download=true`);
     if (!response.ok) {
-      setError('Failed to download file');
+      setError(t('errors.download'));
       return;
     }
 
@@ -227,7 +233,7 @@ export function AdminFileManager() {
   }
 
   async function handleDelete(file: AdminFileMetadata) {
-    if (!window.confirm(`Delete ${file.originalName}?`)) {
+    if (!window.confirm(t('confirm.deleteFile', { name: file.originalName }))) {
       return;
     }
 
@@ -240,12 +246,12 @@ export function AdminFileManager() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete file');
+        throw new Error(t('errors.delete'));
       }
 
       await fetchFiles();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to delete file');
+      setError(error instanceof Error ? error.message : t('errors.delete'));
     } finally {
       setDeletingId(null);
     }
@@ -254,7 +260,7 @@ export function AdminFileManager() {
   async function handleBulkDelete() {
     if (
       selectedFileIds.length === 0 ||
-      !window.confirm(`Delete ${selectedFileIds.length} file(s)?`)
+      !window.confirm(t('confirm.deleteSelected', { count: selectedFileIds.length }))
     ) {
       return;
     }
@@ -269,30 +275,28 @@ export function AdminFileManager() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to bulk delete files');
+        throw new Error(t('errors.bulkDelete'));
       }
 
       setSelectedFileIds([]);
       await fetchFiles();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to bulk delete files');
+      setError(error instanceof Error ? error.message : t('errors.bulkDelete'));
     } finally {
       setBulkWorking(false);
     }
   }
 
   async function handleRetention(action: 'archive' | 'delete') {
-    const rawDays = window.prompt(
-      `Apply ${action} retention to files older than how many days?`,
-      '90'
-    );
+    const actionLabel = action === 'archive' ? t('retention.archive') : t('retention.delete');
+    const rawDays = window.prompt(t('confirm.retention', { action: actionLabel }), '90');
     if (!rawDays) {
       return;
     }
 
     const retentionDays = Number(rawDays);
     if (!Number.isInteger(retentionDays) || retentionDays < 1) {
-      setError('Retention days must be a positive integer');
+      setError(t('errors.retentionDaysPositive'));
       return;
     }
 
@@ -312,12 +316,12 @@ export function AdminFileManager() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to apply retention policy');
+        throw new Error(t('errors.retention'));
       }
 
       await fetchFiles();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to apply retention policy');
+      setError(error instanceof Error ? error.message : t('errors.retention'));
     } finally {
       setBulkWorking(false);
     }
@@ -330,9 +334,12 @@ export function AdminFileManager() {
     <div className="min-w-0 space-y-6">
       {stats && (
         <div className="grid gap-4 md:grid-cols-3">
-          <StatCard label="Total Files" value={stats.totalFiles.toLocaleString()} />
-          <StatCard label="Storage Used" value={formatFileSize(stats.totalSize)} />
-          <StatCard label="File Types" value={stats.filesByType.length.toLocaleString()} />
+          <StatCard label={t('stats.totalFiles')} value={stats.totalFiles.toLocaleString(locale)} />
+          <StatCard label={t('stats.storageUsed')} value={formatFileSize(stats.totalSize)} />
+          <StatCard
+            label={t('stats.fileTypes')}
+            value={stats.filesByType.length.toLocaleString(locale)}
+          />
         </div>
       )}
 
@@ -340,16 +347,14 @@ export function AdminFileManager() {
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
-              <CardTitle>Platform Files</CardTitle>
-              <CardDescription>
-                Review, download, and remove files across all users.
-              </CardDescription>
+              <CardTitle>{t('title')}</CardTitle>
+              <CardDescription>{t('description')}</CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search files"
+                  placeholder={t('searchPlaceholder')}
                   value={searchTerm}
                   onChange={(event) => handleSearchChange(event.target.value)}
                   className="w-full pl-8"
@@ -358,7 +363,7 @@ export function AdminFileManager() {
               <Button
                 variant="outline"
                 size="icon"
-                aria-label="Refresh files"
+                aria-label={t('actions.refresh')}
                 onClick={fetchFiles}
                 disabled={loading}
               >
@@ -370,7 +375,7 @@ export function AdminFileManager() {
                 onClick={handleBulkDelete}
                 disabled={selectedFileIds.length === 0 || bulkWorking}
               >
-                Delete Selected
+                {t('actions.deleteSelected')}
               </Button>
               <Button
                 variant="outline"
@@ -378,7 +383,7 @@ export function AdminFileManager() {
                 onClick={() => void handleRetention('archive')}
                 disabled={bulkWorking}
               >
-                Retain Archive
+                {t('actions.retainArchive')}
               </Button>
               <Button
                 variant="outline"
@@ -386,7 +391,7 @@ export function AdminFileManager() {
                 onClick={() => void handleRetention('delete')}
                 disabled={bulkWorking}
               >
-                Retain Delete
+                {t('actions.retainDelete')}
               </Button>
             </div>
           </div>
@@ -400,57 +405,57 @@ export function AdminFileManager() {
           )}
 
           <div className="grid min-w-0 gap-3 rounded-lg border p-4 md:grid-cols-3">
-            <FilterField label="Owner or Email">
+            <FilterField label={t('filters.owner')}>
               <Input
-                aria-label="Owner or Email"
-                placeholder="user id or email"
+                aria-label={t('filters.owner')}
+                placeholder={t('filters.ownerPlaceholder')}
                 value={ownerFilter}
                 onChange={(event) => handleFilterChange(setOwnerFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="MIME Type">
+            <FilterField label={t('filters.mimeType')}>
               <Input
-                aria-label="MIME Type"
-                placeholder="image, text/plain"
+                aria-label={t('filters.mimeType')}
+                placeholder={t('filters.mimeTypePlaceholder')}
                 value={mimeTypeFilter}
                 onChange={(event) => handleFilterChange(setMimeTypeFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="Folder">
+            <FilterField label={t('filters.folder')}>
               <Input
-                aria-label="Folder"
-                placeholder="reports, avatars"
+                aria-label={t('filters.folder')}
+                placeholder={t('filters.folderPlaceholder')}
                 value={folderFilter}
                 onChange={(event) => handleFilterChange(setFolderFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="Provider">
+            <FilterField label={t('filters.provider')}>
               <Input
-                aria-label="Provider"
-                placeholder="local, s3"
+                aria-label={t('filters.provider')}
+                placeholder={t('filters.providerPlaceholder')}
                 value={providerFilter}
                 onChange={(event) => handleFilterChange(setProviderFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="Uploaded From">
+            <FilterField label={t('filters.uploadedFrom')}>
               <Input
-                aria-label="Uploaded From"
+                aria-label={t('filters.uploadedFrom')}
                 type="date"
                 value={startDateFilter}
                 onChange={(event) => handleFilterChange(setStartDateFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="Uploaded To">
+            <FilterField label={t('filters.uploadedTo')}>
               <Input
-                aria-label="Uploaded To"
+                aria-label={t('filters.uploadedTo')}
                 type="date"
                 value={endDateFilter}
                 onChange={(event) => handleFilterChange(setEndDateFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="Min Size MB">
+            <FilterField label={t('filters.minSizeMb')}>
               <Input
-                aria-label="Min Size MB"
+                aria-label={t('filters.minSizeMb')}
                 type="number"
                 min="0"
                 step="0.01"
@@ -458,10 +463,10 @@ export function AdminFileManager() {
                 onChange={(event) => handleFilterChange(setMinSizeFilter, event.target.value)}
               />
             </FilterField>
-            <FilterField label="Max Size MB">
+            <FilterField label={t('filters.maxSizeMb')}>
               <div className="flex gap-2">
                 <Input
-                  aria-label="Max Size MB"
+                  aria-label={t('filters.maxSizeMb')}
                   type="number"
                   min="0"
                   step="0.01"
@@ -469,7 +474,7 @@ export function AdminFileManager() {
                   onChange={(event) => handleFilterChange(setMaxSizeFilter, event.target.value)}
                 />
                 <Button type="button" variant="outline" onClick={clearFilters}>
-                  Clear
+                  {t('actions.clear')}
                 </Button>
               </div>
             </FilterField>
@@ -484,10 +489,8 @@ export function AdminFileManager() {
           ) : files.length === 0 ? (
             <div className="py-12 text-center">
               <File className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-              <h3 className="text-lg font-semibold">No files found</h3>
-              <p className="text-sm text-muted-foreground">
-                Try a different search term or upload files as a user first.
-              </p>
+              <h3 className="text-lg font-semibold">{t('empty.title')}</h3>
+              <p className="text-sm text-muted-foreground">{t('empty.description')}</p>
             </div>
           ) : (
             <Table className="min-w-[1040px]">
@@ -496,7 +499,7 @@ export function AdminFileManager() {
                   <TableHead className="w-[40px]">
                     <input
                       type="checkbox"
-                      aria-label="Select all files"
+                      aria-label={t('selection.selectAll')}
                       checked={files.length > 0 && selectedFileIds.length === files.length}
                       onChange={(event) =>
                         setSelectedFileIds(event.target.checked ? files.map((file) => file.id) : [])
@@ -504,13 +507,13 @@ export function AdminFileManager() {
                     />
                   </TableHead>
                   <TableHead className="w-[40px]" />
-                  <TableHead>Name</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>Folder</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Uploaded</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('table.name')}</TableHead>
+                  <TableHead>{t('table.owner')}</TableHead>
+                  <TableHead>{t('table.folder')}</TableHead>
+                  <TableHead>{t('table.provider')}</TableHead>
+                  <TableHead>{t('table.size')}</TableHead>
+                  <TableHead>{t('table.uploaded')}</TableHead>
+                  <TableHead className="text-right">{t('table.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -519,7 +522,7 @@ export function AdminFileManager() {
                     <TableCell>
                       <input
                         type="checkbox"
-                        aria-label={`Select ${file.originalName}`}
+                        aria-label={t('selection.selectFile', { name: file.originalName })}
                         checked={selectedFileIds.includes(file.id)}
                         onChange={(event) =>
                           setSelectedFileIds((current) =>
@@ -540,8 +543,11 @@ export function AdminFileManager() {
                       </div>
                     </TableCell>
                     <TableCell className="max-w-[260px]">
-                      <div className="truncate text-sm" title={file.uploadedByEmail || 'Unknown'}>
-                        {file.uploadedByEmail || 'Unknown'}
+                      <div
+                        className="truncate text-sm"
+                        title={file.uploadedByEmail || t('unknown')}
+                      >
+                        {file.uploadedByEmail || t('unknown')}
                       </div>
                       <div className="max-w-[220px] truncate text-xs text-muted-foreground">
                         {file.userId}
@@ -553,7 +559,10 @@ export function AdminFileManager() {
                     <TableCell>{file.provider || 'local'}</TableCell>
                     <TableCell>{formatFileSize(file.size)}</TableCell>
                     <TableCell>
-                      {formatDistance(new Date(file.createdAt), new Date(), { addSuffix: true })}
+                      {formatDistance(new Date(file.createdAt), new Date(), {
+                        addSuffix: true,
+                        locale: dateLocale,
+                      })}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -561,17 +570,17 @@ export function AdminFileManager() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            aria-label={`File actions for ${file.originalName}`}
+                            aria-label={t('actions.fileActions', { name: file.originalName })}
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuLabel>{t('table.actions')}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDownload(file)}>
                             <Download className="mr-2 h-4 w-4" />
-                            Download
+                            {t('actions.download')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -580,7 +589,7 @@ export function AdminFileManager() {
                             onClick={() => handleDelete(file)}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            {deletingId === file.id ? 'Deleting...' : 'Delete'}
+                            {deletingId === file.id ? t('actions.deleting') : t('actions.delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -592,9 +601,7 @@ export function AdminFileManager() {
           )}
 
           <div className="flex items-center justify-between border-t pt-4 text-sm text-muted-foreground">
-            <span>
-              Showing {currentStart}-{currentEnd} of {total}
-            </span>
+            <span>{t('pagination.showing', { start: currentStart, end: currentEnd, total })}</span>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -602,7 +609,7 @@ export function AdminFileManager() {
                 disabled={offset === 0 || loading}
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               >
-                Previous
+                {t('pagination.previous')}
               </Button>
               <Button
                 variant="outline"
@@ -610,7 +617,7 @@ export function AdminFileManager() {
                 disabled={offset + PAGE_SIZE >= total || loading}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
               >
-                Next
+                {t('pagination.next')}
               </Button>
             </div>
           </div>

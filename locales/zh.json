@@ -188,6 +188,23 @@
       }
     }
   },
+  "success": {
+    "title": "订阅成功！",
+    "thanks": "感谢您订阅 PloyKit。",
+    "ready": "您现在可以使用订阅计划中的全部插件能力。",
+    "sessionId": "会话 ID",
+    "availableTitle": "您现在可以：",
+    "features": {
+      "tools": "使用所有已开放的工具插件",
+      "limits": "享受订阅计划包含的配额和功能",
+      "billing": "在账单页面管理您的订阅"
+    },
+    "actions": {
+      "billing": "查看订阅详情",
+      "profile": "完善个人资料"
+    },
+    "redirect": "{count} 秒后自动跳转到订阅详情..."
+  },
   "errors": {
     "404": {
       "title": "页面未找到",
@@ -483,6 +500,82 @@
         "failedToUpload": "文件上传失败",
         "failedToDownload": "文件下载失败",
         "failedToDelete": "文件删除失败"
+      },
+      "adminFileManager": {
+        "stats": {
+          "totalFiles": "文件总数",
+          "storageUsed": "已用存储",
+          "fileTypes": "文件类型"
+        },
+        "title": "平台文件",
+        "description": "查看、下载并移除所有用户的文件。",
+        "searchPlaceholder": "搜索文件",
+        "actions": {
+          "refresh": "刷新文件",
+          "deleteSelected": "删除选中",
+          "retainArchive": "按保留策略归档",
+          "retainDelete": "按保留策略删除",
+          "clear": "清除",
+          "download": "下载",
+          "delete": "删除",
+          "deleting": "删除中...",
+          "fileActions": "{name} 的文件操作"
+        },
+        "filters": {
+          "owner": "所有者或邮箱",
+          "ownerPlaceholder": "用户 ID 或邮箱",
+          "mimeType": "MIME 类型",
+          "mimeTypePlaceholder": "image, text/plain",
+          "folder": "文件夹",
+          "folderPlaceholder": "reports, avatars",
+          "provider": "存储提供方",
+          "providerPlaceholder": "local, s3",
+          "uploadedFrom": "上传起始",
+          "uploadedTo": "上传截止",
+          "minSizeMb": "最小大小 MB",
+          "maxSizeMb": "最大大小 MB"
+        },
+        "empty": {
+          "title": "未找到文件",
+          "description": "请尝试其他搜索条件，或先以用户身份上传文件。"
+        },
+        "table": {
+          "name": "名称",
+          "owner": "所有者",
+          "folder": "文件夹",
+          "provider": "提供方",
+          "size": "大小",
+          "uploaded": "上传时间",
+          "actions": "操作"
+        },
+        "selection": {
+          "selectAll": "选择所有文件",
+          "selectFile": "选择 {name}"
+        },
+        "pagination": {
+          "showing": "显示 {start}-{end} / 共 {total}",
+          "previous": "上一页",
+          "next": "下一页"
+        },
+        "confirm": {
+          "deleteFile": "删除 {name}？",
+          "deleteSelected": "删除 {count} 个文件？",
+          "retention": "对早于多少天的文件执行{action}保留策略？"
+        },
+        "retention": {
+          "archive": "归档",
+          "delete": "删除"
+        },
+        "errors": {
+          "fetchFiles": "加载平台文件失败",
+          "fetchStats": "加载平台存储统计失败",
+          "download": "下载文件失败",
+          "delete": "删除文件失败",
+          "bulkDelete": "批量删除文件失败",
+          "retention": "应用保留策略失败",
+          "retentionDaysPositive": "保留天数必须是正整数"
+        },
+        "unknown": "未知"
       }
     },
     "notifications": {
@@ -596,6 +689,545 @@
         "title": "系统状态",
         "description": "平台服务的当前健康状况",
         "noData": "暂无系统状态数据"
+      }
+    },
+    "files": {
+      "page": {
+        "title": "文件管理",
+        "description": "审计并管理所有用户上传的文件。"
+      }
+    },
+    "operationsCenter": {
+      "title": "运维中心",
+      "description": "查看队列健康、死信条目和 Webhook 重试状态。",
+      "actions": {
+        "refresh": "刷新",
+        "retryWebhooks": "重试 Webhook"
+      },
+      "alerts": {
+        "failed": "操作失败",
+        "complete": "操作完成"
+      },
+      "stats": {
+        "outboxFailed": "Outbox 失败",
+        "outboxPending": "Outbox 待处理",
+        "webhookRetryable": "可重试 Webhook",
+        "outboxTotal": "Outbox 总数"
+      },
+      "tabs": {
+        "outbox": "Outbox",
+        "webhooks": "Webhook"
+      },
+      "outbox": {
+        "title": "死信队列",
+        "description": "失败的 Outbox 条目，可重放、忽略或归档。",
+        "replaySelected": "重放选中",
+        "ignoreSelected": "忽略选中",
+        "archiveSelected": "归档选中",
+        "empty": "暂无死信",
+        "noError": "没有记录错误",
+        "headers": {
+          "event": "事件",
+          "emitter": "发送方",
+          "attempts": "尝试次数",
+          "lastError": "最后错误",
+          "updated": "更新时间",
+          "action": "操作"
+        },
+        "actions": {
+          "replay": "重放",
+          "ignore": "忽略",
+          "archive": "归档"
+        }
+      },
+      "webhooks": {
+        "title": "可重试回执",
+        "description": "等待手动或计划重试的 Webhook 回执。",
+        "queued": "{count} 个排队中",
+        "empty": "暂无可重试回执",
+        "noError": "没有记录错误",
+        "headers": {
+          "provider": "提供方",
+          "event": "事件",
+          "status": "状态",
+          "retries": "重试",
+          "lastError": "最后错误",
+          "updated": "更新时间",
+          "action": "操作"
+        },
+        "actions": {
+          "detail": "详情",
+          "retry": "重试"
+        }
+      }
+    },
+    "pluginOperationsPage": {
+      "title": "插件运营",
+      "description": "查看已安装插件的运行任务、连接器治理和计量记录。",
+      "actions": {
+        "refresh": "刷新",
+        "cancel": "取消",
+        "test": "测试",
+        "disable": "禁用",
+        "enable": "启用",
+        "rotate": "轮换"
+      },
+      "alerts": {
+        "failed": "操作失败",
+        "complete": "操作完成"
+      },
+      "stats": {
+        "activeRuns": "进行中的运行",
+        "failedRuns": "失败运行",
+        "connectors": "连接器",
+        "meterRecords": "计量记录"
+      },
+      "tabs": {
+        "runs": "运行",
+        "connectors": "连接器",
+        "metering": "计量",
+        "calls": "调用"
+      },
+      "runs": {
+        "title": "运行任务",
+        "description": "管理员可见的队列和任务中心状态。",
+        "empty": "暂无插件运行。",
+        "headers": {
+          "task": "任务",
+          "plugin": "插件",
+          "status": "状态",
+          "progress": "进度",
+          "updated": "更新时间",
+          "action": "操作"
+        }
+      },
+      "connectors": {
+        "title": "连接器治理",
+        "description": "禁用、测试或轮换连接器凭据。",
+        "empty": "暂无连接器。",
+        "headers": {
+          "connector": "连接器",
+          "baseUrl": "基础 URL",
+          "status": "状态",
+          "auth": "认证",
+          "updated": "更新时间",
+          "action": "操作"
+        }
+      },
+      "metering": {
+        "title": "计量汇总",
+        "description": "插件计量的聚合使用记录。",
+        "empty": "暂无计量记录。",
+        "headers": {
+          "plugin": "插件",
+          "meter": "计量器",
+          "metric": "指标",
+          "total": "总量",
+          "records": "记录数"
+        }
+      },
+      "calls": {
+        "title": "最近连接器调用",
+        "description": "带脱敏请求和响应元数据的连接器审计轨迹。",
+        "empty": "暂无连接器调用。",
+        "headers": {
+          "connector": "连接器",
+          "status": "状态",
+          "duration": "耗时",
+          "meter": "计量器",
+          "created": "创建时间"
+        }
+      },
+      "loadedUsageRows": "已加载 {count} 条最近使用记录。"
+    },
+    "pluginInternalServices": {
+      "title": "内部服务",
+      "description": "宿主管理的服务绑定、健康检查、调用日志和资源绑定。",
+      "actions": {
+        "refresh": "刷新",
+        "bind": "绑定",
+        "edit": "编辑",
+        "test": "测试",
+        "disable": "禁用",
+        "enable": "启用"
+      },
+      "alerts": {
+        "failed": "操作失败",
+        "done": "已完成"
+      },
+      "stats": {
+        "declaredServices": "声明的服务",
+        "missing": "缺失",
+        "bindings": "绑定",
+        "recentCalls": "最近调用"
+      },
+      "tabs": {
+        "requirements": "需求",
+        "bindings": "绑定",
+        "editor": "编辑器",
+        "logs": "日志",
+        "resources": "资源"
+      },
+      "requirements": {
+        "title": "声明的服务需求",
+        "description": "插件声明的服务。",
+        "empty": "暂无服务需求。",
+        "headers": {
+          "plugin": "插件",
+          "service": "服务",
+          "methods": "方法",
+          "paths": "路径",
+          "status": "状态",
+          "action": "操作"
+        }
+      },
+      "bindings": {
+        "title": "宿主绑定",
+        "description": "基础 URL、认证、参与者声明和健康状态。",
+        "empty": "暂无内部服务绑定。",
+        "headers": {
+          "binding": "绑定",
+          "baseUrl": "基础 URL",
+          "auth": "认证",
+          "actor": "参与者",
+          "health": "健康",
+          "action": "操作"
+        }
+      },
+      "editor": {
+        "title": "绑定编辑器",
+        "description": "密钥以引用形式保存，页面不会显示密钥值。",
+        "fields": {
+          "pluginId": "插件 ID",
+          "serviceName": "服务名称",
+          "baseUrl": "基础 URL",
+          "environment": "环境",
+          "scope": "作用域",
+          "workspaceId": "工作区 ID",
+          "authType": "认证类型",
+          "authSecretRef": "认证密钥引用",
+          "newAuthSecret": "新认证密钥",
+          "basicUsernameRef": "Basic 用户名引用",
+          "newBasicUsername": "新 Basic 用户名",
+          "basicPasswordRef": "Basic 密码引用",
+          "newBasicPassword": "新 Basic 密码",
+          "authHeader": "认证 Header",
+          "actorClaims": "参与者声明",
+          "actorAudience": "参与者 Audience",
+          "actorSecretRef": "参与者密钥引用",
+          "newActorSecret": "新参与者密钥",
+          "timeoutMs": "超时毫秒",
+          "retryAttempts": "重试次数",
+          "maxResponseBytes": "最大响应字节数",
+          "healthPath": "健康检查路径"
+        },
+        "saveBinding": "保存绑定"
+      },
+      "logs": {
+        "title": "服务调用日志",
+        "description": "已脱敏的宿主侧服务调用记录。",
+        "empty": "暂无服务调用。",
+        "headers": {
+          "service": "服务",
+          "method": "方法",
+          "pathTemplate": "路径模板",
+          "status": "状态",
+          "duration": "耗时",
+          "created": "创建时间"
+        },
+        "retentionDays": "保留天数",
+        "applyRetention": "应用保留策略"
+      },
+      "resources": {
+        "title": "资源绑定",
+        "description": "按作用域关联的插件自有资源链接。",
+        "empty": "暂无资源绑定。",
+        "headers": {
+          "plugin": "插件",
+          "scope": "作用域",
+          "resource": "资源",
+          "cardinality": "基数",
+          "status": "状态",
+          "updated": "更新时间"
+        }
+      }
+    },
+    "pluginDevConsolePage": {
+      "title": "插件开发控制台",
+      "status": {
+        "needsRepair": "需要修复",
+        "healthy": "健康"
+      },
+      "generatedAt": "生成于 {time}",
+      "summary": {
+        "plugins": "插件",
+        "passing": "通过",
+        "failing": "失败",
+        "diagnostics": "诊断",
+        "legacy": "旧目录"
+      },
+      "runtimeReconcile": "运行时校准",
+      "runtimeUnavailable": "运行时报告不可用。",
+      "legacyManifestDirectories": "旧 Manifest 目录",
+      "noPlugins": "在 {targets} 中未找到 definePlugin 契约。",
+      "copyDiagnostics": "复制诊断",
+      "copyPluginDiagnostics": "复制插件诊断",
+      "copied": "已复制",
+      "noDiagnostics": "无诊断。",
+      "none": "无",
+      "pending": "待处理",
+      "contractLoadFailed": "无法加载契约。",
+      "sections": {
+        "contract": "契约",
+        "diagnostics": "诊断",
+        "routesAndMenus": "路由与菜单",
+        "permissions": "权限",
+        "dataAndResources": "数据与资源",
+        "runtimeSurface": "运行时能力面",
+        "activity": "活动",
+        "rawContract": "原始契约",
+        "jobs": "任务",
+        "events": "事件",
+        "webhooks": "Webhook"
+      },
+      "fields": {
+        "version": "版本",
+        "kind": "类型",
+        "trust": "信任级别",
+        "pages": "页面",
+        "apis": "API",
+        "menu": "菜单",
+        "collections": "集合",
+        "resources": "资源"
+      },
+      "statuses": {
+        "passing": "通过",
+        "failing": "失败",
+        "enabled": "已启用",
+        "disabled": "已停用",
+        "ok": "正常",
+        "ready": "就绪",
+        "failed": "失败",
+        "error": "错误",
+        "missing": "缺失",
+        "warning": "警告",
+        "skipped": "已跳过",
+        "registered": "已注册",
+        "default": "默认",
+        "trusted": "可信",
+        "untrusted": "未信任",
+        "system": "系统"
+      },
+      "activityNames": {
+        "audit": "审计",
+        "usage": "用量",
+        "jobs": "任务",
+        "events": "事件",
+        "webhooks": "Webhook"
+      },
+      "runtimeCheckMessages": {
+        "env": "环境变量已通过校验。",
+        "db": "数据库连接已验证。",
+        "pluginMap": "插件映射清单缺失或无效。",
+        "rls": "RLS 策略已完成校验。",
+        "security": "安全基线检查完成：{message}",
+        "storage": "BlobStore 运行时已验证。",
+        "pluginStorage": "插件存储运行时已通过真实数据库 CRUD 探测。",
+        "pluginRuntime": "插件运行时契约已验证。",
+        "outbox": "关键事件 outbox 通道可用。",
+        "auditUsage": "审计端口和用量账本已配置。",
+        "pluginCapabilities": "插件能力上下文已通过加密 ctx.secrets 存储验证。"
+      },
+      "runtimeChecks": {
+        "check": "检查项",
+        "status": "状态",
+        "message": "消息"
+      },
+      "runtimeActivity": {
+        "runtimeStatus": "运行时状态",
+        "registered": "已注册",
+        "recentRuns": "最近运行",
+        "attempts": "尝试次数",
+        "publishes": "发布",
+        "subscriptions": "订阅",
+        "listeners": "监听器",
+        "retries": "重试次数"
+      }
+    },
+    "revenueMetrics": {
+      "title": "收入指标",
+      "description": "基于活跃权益的 MRR、ARR、账户价值和计划收入。",
+      "actions": {
+        "refresh": "刷新"
+      },
+      "timeframes": {
+        "7days": "7 天",
+        "30days": "30 天",
+        "90days": "90 天",
+        "12months": "12 个月"
+      },
+      "error": {
+        "title": "收入数据不可用",
+        "description": "收入分析 API 未返回有效的指标载荷。"
+      },
+      "metrics": {
+        "mrr": {
+          "label": "MRR",
+          "detail": "较上一窗口 {percentage}"
+        },
+        "arr": {
+          "label": "ARR",
+          "detail": "年度经常性收入"
+        },
+        "arpu": {
+          "label": "ARPU",
+          "detail": "每活跃用户平均收入"
+        },
+        "ltv": {
+          "label": "LTV",
+          "detail": "当前 24 个月估算"
+        }
+      },
+      "byPlan": {
+        "title": "按计划划分的收入",
+        "description": "按计划名称汇总的 MRR 贡献。",
+        "empty": "当前窗口没有活跃付费收入。",
+        "headers": {
+          "plan": "计划",
+          "mrr": "MRR",
+          "share": "占比"
+        }
+      }
+    },
+    "systemSettingsPage": {
+      "title": "系统设置",
+      "description": "身份、安全、邮件和通知的平台注册默认值。",
+      "actions": {
+        "save": "保存"
+      },
+      "messages": {
+        "saved": "系统设置已保存。"
+      },
+      "error": {
+        "title": "设置数据不可用",
+        "description": "管理员设置 API 未返回有效载荷。"
+      },
+      "sections": {
+        "general": {
+          "title": "通用",
+          "badge": "配置来源",
+          "description": "平台身份和默认地区设置。运行时消费者应显式读取这些值。"
+        },
+        "security": {
+          "title": "安全",
+          "badge": "静态认证运行时",
+          "description": "用于平台配置的基础策略值。Better Auth 会话和密码强度仍使用服务启动配置。"
+        },
+        "email": {
+          "title": "邮件",
+          "badge": "提供方待接入",
+          "description": "事务邮件默认值。接入真实邮件提供方前，密码重置投递仍遵循 AUTH_PASSWORD_RESET_DELIVERY。"
+        },
+        "notifications": {
+          "title": "通知",
+          "badge": "运行时已启用",
+          "description": "通知偏好和通知创建读取的平台投递默认值。"
+        }
+      },
+      "fields": {
+        "siteName": "站点名称",
+        "supportEmail": "支持邮箱",
+        "defaultLocale": "默认语言",
+        "timezone": "时区",
+        "emailVerification": "邮箱验证",
+        "sessionMaxAge": "会话最长天数",
+        "passwordMinLength": "密码最小长度",
+        "provider": "提供方",
+        "passwordResetDelivery": "密码重置投递",
+        "fromEmail": "发件邮箱",
+        "fromName": "发件名称",
+        "inApp": "应用内",
+        "email": "邮件",
+        "webhook": "Webhook",
+        "digestFrequency": "摘要频率"
+      },
+      "options": {
+        "english": "英语",
+        "chinese": "中文",
+        "log": "日志",
+        "smtp": "SMTP",
+        "resend": "Resend",
+        "email": "邮件",
+        "never": "从不",
+        "daily": "每日",
+        "weekly": "每周"
+      }
+    },
+    "usageAdmin": {
+      "title": "使用情况",
+      "description": "最近 {days} 天的平台配额事件和高使用消费者。",
+      "actions": {
+        "refresh": "刷新",
+        "apply": "应用",
+        "clear": "清除"
+      },
+      "filters": {
+        "title": "筛选",
+        "description": "按时间、指标键或用户 ID 限制使用窗口。",
+        "window": "窗口",
+        "rows": "行数",
+        "metric": "指标",
+        "userId": "用户 ID",
+        "userPlaceholder": "用户 ID"
+      },
+      "days": {
+        "7": "7 天",
+        "30": "30 天",
+        "90": "90 天",
+        "365": "365 天"
+      },
+      "error": {
+        "title": "使用数据不可用",
+        "description": "管理员使用情况 API 未返回有效的平台使用汇总。"
+      },
+      "metrics": {
+        "events": {
+          "label": "事件",
+          "detail": "窗口：{days} 天"
+        },
+        "tracked": {
+          "label": "跟踪指标",
+          "detail": "按插件和指标分组"
+        },
+        "activeUsers": {
+          "label": "活跃用户",
+          "detail": "按使用值排序"
+        }
+      },
+      "sections": {
+        "topMetrics": {
+          "title": "高频指标",
+          "loading": "正在加载当前使用窗口",
+          "empty": "当前窗口没有记录使用事件。"
+        },
+        "topUsers": {
+          "title": "高使用用户",
+          "description": "记录配额使用量最高的用户。",
+          "empty": "当前窗口没有用户使用记录。"
+        },
+        "recentEvents": {
+          "title": "最近事件",
+          "filteredDescription": "匹配当前筛选条件的最新使用记录。",
+          "description": "当前窗口内的最新使用记录。",
+          "empty": "没有匹配当前筛选条件的使用事件。"
+        }
+      },
+      "table": {
+        "user": "用户",
+        "usage": "使用量",
+        "metric": "指标",
+        "value": "值",
+        "time": "时间"
       }
     },
     "tasks": {
@@ -2438,6 +3070,7 @@
           "growth": "增长",
           "churn": "流失",
           "usage": "使用情况",
+          "reliability": "可靠性",
           "cohorts": "队列分析"
         },
         "overview": {
@@ -2577,6 +3210,82 @@
               "decreasing": "下降",
               "stable": "稳定"
             }
+          }
+        },
+        "reliability": {
+          "metrics": {
+            "workItems": {
+              "title": "工作项",
+              "description": "最近 {days} 天"
+            },
+            "backlog": {
+              "title": "积压",
+              "description": "待处理、处理中、已接收或运行中"
+            },
+            "failures": {
+              "title": "失败",
+              "description": "整体失败率 {rate}%"
+            },
+            "retryAttempts": {
+              "title": "重试次数",
+              "description": "{count} 次成功"
+            }
+          },
+          "trend": {
+            "title": "失败趋势",
+            "description": "队列和插件任务的每日失败工作项。",
+            "empty": "暂无可靠性趋势数据。",
+            "series": {
+              "outbox": "Outbox",
+              "webhooks": "Webhook",
+              "jobs": "插件任务"
+            }
+          },
+          "edge": {
+            "title": "边缘访问",
+            "description": "网关和边缘请求失败。",
+            "failureType": "失败类型",
+            "allFailureTypes": "所有失败类型",
+            "requests": "请求",
+            "failed": "失败",
+            "p95Latency": "P95 延迟",
+            "failureRate": "失败率",
+            "unknown": "未知",
+            "empty": "暂无边缘失败类型记录。"
+          },
+          "cards": {
+            "total": "总数",
+            "pending": "待处理",
+            "processing": "处理中",
+            "completed": "已完成",
+            "failed": "失败",
+            "readyPending": "就绪待处理",
+            "failureRate": "失败率",
+            "oldestFailed": "最早失败",
+            "received": "已接收",
+            "processed": "已处理",
+            "deadLetter": "死信",
+            "retryable": "可重试",
+            "running": "运行中",
+            "succeeded": "成功",
+            "oldestDeadLetter": "最早死信"
+          },
+          "outbox": {
+            "title": "Outbox",
+            "description": "内部异步事件投递"
+          },
+          "webhooks": {
+            "title": "Webhook",
+            "description": "入站 Webhook 回执处理"
+          },
+          "jobs": {
+            "title": "插件任务",
+            "description": "插件任务执行状态"
+          },
+          "emptyValue": "无",
+          "unavailable": {
+            "title": "可靠性数据不可用",
+            "description": "可靠性 API 未返回队列健康指标。"
           }
         },
         "cohorts": {

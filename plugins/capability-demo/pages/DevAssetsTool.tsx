@@ -15,14 +15,13 @@ export default function DevAssetsTool(props: PluginRuntimePageProps) {
       <section className="grid gap-4 md:grid-cols-[260px_1fr]">
         <div className="rounded-md border bg-muted/20 p-4">
           {templateUrl ? (
-            <object
-              data={templateUrl}
-              type="image/svg+xml"
-              aria-label="Capability demo template asset"
-              className="aspect-square w-full rounded bg-background"
-            >
-              Capability demo template asset
-            </object>
+            // Plugin asset URLs are runtime gateway URLs, and img-src is the CSP path for SVG previews.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={templateUrl}
+              alt="Capability demo template asset"
+              className="aspect-square w-full rounded bg-background object-contain"
+            />
           ) : (
             <div className="text-sm text-muted-foreground">Template asset missing</div>
           )}

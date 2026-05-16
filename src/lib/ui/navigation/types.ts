@@ -58,6 +58,7 @@ export type NavGroup = keyof typeof SYSTEM_NAV_GROUPS | string;
  */
 export interface BaseMenuItem {
   id: string; // Unique identifier
+  pluginId?: string; // Owning plugin for plugin-provided menu items
   i18nKey: string; // Translation key
   label?: string; // Optional direct label for menu items
   fallbackLabel?: string; // Fallback when i18nKey is missing
@@ -65,6 +66,14 @@ export interface BaseMenuItem {
   icon?: string; // Icon name (Lucide)
   weight?: number; // Sort weight (lower = higher priority, default: 100)
   guard?: 'public' | 'auth' | 'admin'; // Menu visibility control (public/auth/admin)
+  visibility?: 'public' | 'signedIn' | 'admin' | 'workspaceMember' | 'suiteAdmin';
+  requires?: {
+    permissions?: readonly string[];
+    workspaceRoles?: readonly ('owner' | 'admin' | 'editor' | 'viewer')[];
+    entitlements?: readonly string[];
+    servicesBound?: readonly string[];
+    resourceBindings?: readonly string[];
+  };
   showInMenu?: boolean; // Whether to show in menu (default: true)
 }
 

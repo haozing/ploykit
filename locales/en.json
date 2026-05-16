@@ -188,6 +188,23 @@
       }
     }
   },
+  "success": {
+    "title": "Subscription successful!",
+    "thanks": "Thanks for subscribing to PloyKit.",
+    "ready": "You can now use every plugin capability included in your plan.",
+    "sessionId": "Session ID",
+    "availableTitle": "You can now:",
+    "features": {
+      "tools": "Use all available tool plugins",
+      "limits": "Enjoy the quotas and features included in your plan",
+      "billing": "Manage your subscription from the billing page"
+    },
+    "actions": {
+      "billing": "View subscription details",
+      "profile": "Complete your profile"
+    },
+    "redirect": "Redirecting to subscription details in {count} second(s)..."
+  },
   "errors": {
     "404": {
       "title": "Page Not Found",
@@ -483,6 +500,82 @@
         "failedToUpload": "Failed to upload file",
         "failedToDownload": "Failed to download file",
         "failedToDelete": "Failed to delete file"
+      },
+      "adminFileManager": {
+        "stats": {
+          "totalFiles": "Total Files",
+          "storageUsed": "Storage Used",
+          "fileTypes": "File Types"
+        },
+        "title": "Platform Files",
+        "description": "Review, download, and remove files across all users.",
+        "searchPlaceholder": "Search files",
+        "actions": {
+          "refresh": "Refresh files",
+          "deleteSelected": "Delete Selected",
+          "retainArchive": "Retain Archive",
+          "retainDelete": "Retain Delete",
+          "clear": "Clear",
+          "download": "Download",
+          "delete": "Delete",
+          "deleting": "Deleting...",
+          "fileActions": "File actions for {name}"
+        },
+        "filters": {
+          "owner": "Owner or Email",
+          "ownerPlaceholder": "user id or email",
+          "mimeType": "MIME Type",
+          "mimeTypePlaceholder": "image, text/plain",
+          "folder": "Folder",
+          "folderPlaceholder": "reports, avatars",
+          "provider": "Provider",
+          "providerPlaceholder": "local, s3",
+          "uploadedFrom": "Uploaded From",
+          "uploadedTo": "Uploaded To",
+          "minSizeMb": "Min Size MB",
+          "maxSizeMb": "Max Size MB"
+        },
+        "empty": {
+          "title": "No files found",
+          "description": "Try a different search term or upload files as a user first."
+        },
+        "table": {
+          "name": "Name",
+          "owner": "Owner",
+          "folder": "Folder",
+          "provider": "Provider",
+          "size": "Size",
+          "uploaded": "Uploaded",
+          "actions": "Actions"
+        },
+        "selection": {
+          "selectAll": "Select all files",
+          "selectFile": "Select {name}"
+        },
+        "pagination": {
+          "showing": "Showing {start}-{end} of {total}",
+          "previous": "Previous",
+          "next": "Next"
+        },
+        "confirm": {
+          "deleteFile": "Delete {name}?",
+          "deleteSelected": "Delete {count} file(s)?",
+          "retention": "Apply {action} retention to files older than how many days?"
+        },
+        "retention": {
+          "archive": "archive",
+          "delete": "delete"
+        },
+        "errors": {
+          "fetchFiles": "Failed to fetch platform files",
+          "fetchStats": "Failed to fetch platform storage stats",
+          "download": "Failed to download file",
+          "delete": "Failed to delete file",
+          "bulkDelete": "Failed to bulk delete files",
+          "retention": "Failed to apply retention policy",
+          "retentionDaysPositive": "Retention days must be a positive integer"
+        },
+        "unknown": "Unknown"
       }
     },
     "notifications": {
@@ -596,6 +689,545 @@
         "title": "System Status",
         "description": "Current health of platform services",
         "noData": "No system status data available"
+      }
+    },
+    "files": {
+      "page": {
+        "title": "File Management",
+        "description": "Audit and manage files across all users."
+      }
+    },
+    "operationsCenter": {
+      "title": "Operations Center",
+      "description": "Queue health, dead letters, and webhook retries.",
+      "actions": {
+        "refresh": "Refresh",
+        "retryWebhooks": "Retry Webhooks"
+      },
+      "alerts": {
+        "failed": "Operation failed",
+        "complete": "Operation complete"
+      },
+      "stats": {
+        "outboxFailed": "Outbox Failed",
+        "outboxPending": "Outbox Pending",
+        "webhookRetryable": "Webhook Retryable",
+        "outboxTotal": "Outbox Total"
+      },
+      "tabs": {
+        "outbox": "Outbox",
+        "webhooks": "Webhooks"
+      },
+      "outbox": {
+        "title": "Dead Letters",
+        "description": "Failed outbox entries that can be replayed, ignored, or archived.",
+        "replaySelected": "Replay Selected",
+        "ignoreSelected": "Ignore Selected",
+        "archiveSelected": "Archive Selected",
+        "empty": "No dead letters",
+        "noError": "No error recorded",
+        "headers": {
+          "event": "Event",
+          "emitter": "Emitter",
+          "attempts": "Attempts",
+          "lastError": "Last Error",
+          "updated": "Updated",
+          "action": "Action"
+        },
+        "actions": {
+          "replay": "Replay",
+          "ignore": "Ignore",
+          "archive": "Archive"
+        }
+      },
+      "webhooks": {
+        "title": "Retryable Receipts",
+        "description": "Webhook receipts waiting for a manual or scheduled retry.",
+        "queued": "{count} queued",
+        "empty": "No retryable receipts",
+        "noError": "No error recorded",
+        "headers": {
+          "provider": "Provider",
+          "event": "Event",
+          "status": "Status",
+          "retries": "Retries",
+          "lastError": "Last Error",
+          "updated": "Updated",
+          "action": "Action"
+        },
+        "actions": {
+          "detail": "Detail",
+          "retry": "Retry"
+        }
+      }
+    },
+    "pluginOperationsPage": {
+      "title": "Plugin Operations",
+      "description": "Runtime tasks, connector governance, and metering records for installed plugins.",
+      "actions": {
+        "refresh": "Refresh",
+        "cancel": "Cancel",
+        "test": "Test",
+        "disable": "Disable",
+        "enable": "Enable",
+        "rotate": "Rotate"
+      },
+      "alerts": {
+        "failed": "Operation failed",
+        "complete": "Operation complete"
+      },
+      "stats": {
+        "activeRuns": "Active Runs",
+        "failedRuns": "Failed Runs",
+        "connectors": "Connectors",
+        "meterRecords": "Meter Records"
+      },
+      "tabs": {
+        "runs": "Runs",
+        "connectors": "Connectors",
+        "metering": "Metering",
+        "calls": "Calls"
+      },
+      "runs": {
+        "title": "Runtime Runs",
+        "description": "Admin-visible queue and task center state.",
+        "empty": "No plugin runs.",
+        "headers": {
+          "task": "Task",
+          "plugin": "Plugin",
+          "status": "Status",
+          "progress": "Progress",
+          "updated": "Updated",
+          "action": "Action"
+        }
+      },
+      "connectors": {
+        "title": "Connector Governance",
+        "description": "Disable, test, or rotate connector credentials.",
+        "empty": "No connectors.",
+        "headers": {
+          "connector": "Connector",
+          "baseUrl": "Base URL",
+          "status": "Status",
+          "auth": "Auth",
+          "updated": "Updated",
+          "action": "Action"
+        }
+      },
+      "metering": {
+        "title": "Metering Summary",
+        "description": "Aggregated usage rows from plugin metering.",
+        "empty": "No metering records.",
+        "headers": {
+          "plugin": "Plugin",
+          "meter": "Meter",
+          "metric": "Metric",
+          "total": "Total",
+          "records": "Records"
+        }
+      },
+      "calls": {
+        "title": "Recent Connector Calls",
+        "description": "Connector audit trail with redacted request and response metadata.",
+        "empty": "No connector calls.",
+        "headers": {
+          "connector": "Connector",
+          "status": "Status",
+          "duration": "Duration",
+          "meter": "Meter",
+          "created": "Created"
+        }
+      },
+      "loadedUsageRows": "{count} recent usage rows loaded."
+    },
+    "pluginInternalServices": {
+      "title": "Internal Services",
+      "description": "Host-managed service bindings, health checks, call logs, and resource bindings.",
+      "actions": {
+        "refresh": "Refresh",
+        "bind": "Bind",
+        "edit": "Edit",
+        "test": "Test",
+        "disable": "Disable",
+        "enable": "Enable"
+      },
+      "alerts": {
+        "failed": "Action failed",
+        "done": "Done"
+      },
+      "stats": {
+        "declaredServices": "Declared Services",
+        "missing": "Missing",
+        "bindings": "Bindings",
+        "recentCalls": "Recent Calls"
+      },
+      "tabs": {
+        "requirements": "Requirements",
+        "bindings": "Bindings",
+        "editor": "Editor",
+        "logs": "Logs",
+        "resources": "Resources"
+      },
+      "requirements": {
+        "title": "Declared Service Requirements",
+        "description": "Services declared by plugins.",
+        "empty": "No service requirements.",
+        "headers": {
+          "plugin": "Plugin",
+          "service": "Service",
+          "methods": "Methods",
+          "paths": "Paths",
+          "status": "Status",
+          "action": "Action"
+        }
+      },
+      "bindings": {
+        "title": "Host Bindings",
+        "description": "Base URL, auth, actor claims, and health status.",
+        "empty": "No internal service bindings.",
+        "headers": {
+          "binding": "Binding",
+          "baseUrl": "Base URL",
+          "auth": "Auth",
+          "actor": "Actor",
+          "health": "Health",
+          "action": "Action"
+        }
+      },
+      "editor": {
+        "title": "Binding Editor",
+        "description": "Secrets are stored as refs and never displayed.",
+        "fields": {
+          "pluginId": "Plugin ID",
+          "serviceName": "Service Name",
+          "baseUrl": "Base URL",
+          "environment": "Environment",
+          "scope": "Scope",
+          "workspaceId": "Workspace ID",
+          "authType": "Auth Type",
+          "authSecretRef": "Auth Secret Ref",
+          "newAuthSecret": "New Auth Secret",
+          "basicUsernameRef": "Basic Username Ref",
+          "newBasicUsername": "New Basic Username",
+          "basicPasswordRef": "Basic Password Ref",
+          "newBasicPassword": "New Basic Password",
+          "authHeader": "Auth Header",
+          "actorClaims": "Actor Claims",
+          "actorAudience": "Actor Audience",
+          "actorSecretRef": "Actor Secret Ref",
+          "newActorSecret": "New Actor Secret",
+          "timeoutMs": "Timeout ms",
+          "retryAttempts": "Retry Attempts",
+          "maxResponseBytes": "Max Response Bytes",
+          "healthPath": "Health Path"
+        },
+        "saveBinding": "Save Binding"
+      },
+      "logs": {
+        "title": "Service Call Logs",
+        "description": "Redacted host-side service invocation records.",
+        "empty": "No service calls.",
+        "headers": {
+          "service": "Service",
+          "method": "Method",
+          "pathTemplate": "Path Template",
+          "status": "Status",
+          "duration": "Duration",
+          "created": "Created"
+        },
+        "retentionDays": "Retention Days",
+        "applyRetention": "Apply Retention"
+      },
+      "resources": {
+        "title": "Resource Bindings",
+        "description": "Plugin-owned resource links by scope.",
+        "empty": "No resource bindings.",
+        "headers": {
+          "plugin": "Plugin",
+          "scope": "Scope",
+          "resource": "Resource",
+          "cardinality": "Cardinality",
+          "status": "Status",
+          "updated": "Updated"
+        }
+      }
+    },
+    "pluginDevConsolePage": {
+      "title": "Plugin Dev Console",
+      "status": {
+        "needsRepair": "needs repair",
+        "healthy": "healthy"
+      },
+      "generatedAt": "Generated at {time}",
+      "summary": {
+        "plugins": "Plugins",
+        "passing": "Passing",
+        "failing": "Failing",
+        "diagnostics": "Diagnostics",
+        "legacy": "Legacy"
+      },
+      "runtimeReconcile": "Runtime Reconcile",
+      "runtimeUnavailable": "Runtime report unavailable.",
+      "legacyManifestDirectories": "Legacy Manifest Directories",
+      "noPlugins": "No definePlugin contracts found in {targets}.",
+      "copyDiagnostics": "Copy diagnostics",
+      "copyPluginDiagnostics": "Copy plugin diagnostics",
+      "copied": "Copied",
+      "noDiagnostics": "No diagnostics.",
+      "none": "None",
+      "pending": "pending",
+      "contractLoadFailed": "Contract could not be loaded.",
+      "sections": {
+        "contract": "Contract",
+        "diagnostics": "Diagnostics",
+        "routesAndMenus": "Routes And Menus",
+        "permissions": "Permissions",
+        "dataAndResources": "Data And Resources",
+        "runtimeSurface": "Runtime Surface",
+        "activity": "Activity",
+        "rawContract": "Raw Contract",
+        "jobs": "Jobs",
+        "events": "Events",
+        "webhooks": "Webhooks"
+      },
+      "fields": {
+        "version": "Version",
+        "kind": "Kind",
+        "trust": "Trust",
+        "pages": "Pages",
+        "apis": "APIs",
+        "menu": "Menu",
+        "collections": "Collections",
+        "resources": "Resources"
+      },
+      "statuses": {
+        "passing": "passing",
+        "failing": "failing",
+        "enabled": "enabled",
+        "disabled": "disabled",
+        "ok": "ok",
+        "ready": "ready",
+        "failed": "failed",
+        "error": "error",
+        "missing": "missing",
+        "warning": "warning",
+        "skipped": "skipped",
+        "registered": "registered",
+        "default": "default",
+        "trusted": "trusted",
+        "untrusted": "untrusted",
+        "system": "system"
+      },
+      "activityNames": {
+        "audit": "Audit",
+        "usage": "Usage",
+        "jobs": "Jobs",
+        "events": "Events",
+        "webhooks": "Webhooks"
+      },
+      "runtimeCheckMessages": {
+        "env": "Environment variables validated.",
+        "db": "Database connection verified.",
+        "pluginMap": "Plugin map manifest is missing or invalid.",
+        "rls": "RLS policies validated.",
+        "security": "Security baseline check completed: {message}",
+        "storage": "BlobStore runtime verified.",
+        "pluginStorage": "Plugin storage runtime verified with a real DB CRUD probe.",
+        "pluginRuntime": "Plugin runtime contracts verified.",
+        "outbox": "Critical event outbox transport is available.",
+        "auditUsage": "Audit port and usage ledger are configured.",
+        "pluginCapabilities": "Plugin capability context verified with encrypted ctx.secrets storage."
+      },
+      "runtimeChecks": {
+        "check": "Check",
+        "status": "Status",
+        "message": "Message"
+      },
+      "runtimeActivity": {
+        "runtimeStatus": "Runtime Status",
+        "registered": "Registered",
+        "recentRuns": "Recent Runs",
+        "attempts": "attempts",
+        "publishes": "Publishes",
+        "subscriptions": "Subscriptions",
+        "listeners": "listeners",
+        "retries": "retries"
+      }
+    },
+    "revenueMetrics": {
+      "title": "Revenue",
+      "description": "MRR, ARR, account value, and plan revenue from active entitlements.",
+      "actions": {
+        "refresh": "Refresh"
+      },
+      "timeframes": {
+        "7days": "7 days",
+        "30days": "30 days",
+        "90days": "90 days",
+        "12months": "12 months"
+      },
+      "error": {
+        "title": "Revenue data unavailable",
+        "description": "The analytics revenue API did not return a valid metrics payload."
+      },
+      "metrics": {
+        "mrr": {
+          "label": "MRR",
+          "detail": "{percentage} from previous window"
+        },
+        "arr": {
+          "label": "ARR",
+          "detail": "Annualized recurring revenue"
+        },
+        "arpu": {
+          "label": "ARPU",
+          "detail": "Average revenue per active user"
+        },
+        "ltv": {
+          "label": "LTV",
+          "detail": "Current 24 month estimate"
+        }
+      },
+      "byPlan": {
+        "title": "Revenue By Plan",
+        "description": "MRR contribution grouped by plan name.",
+        "empty": "No active paid revenue in this window.",
+        "headers": {
+          "plan": "Plan",
+          "mrr": "MRR",
+          "share": "Share"
+        }
+      }
+    },
+    "systemSettingsPage": {
+      "title": "System Settings",
+      "description": "Platform defaults for identity, security, email, and notifications.",
+      "actions": {
+        "save": "Save"
+      },
+      "messages": {
+        "saved": "System settings saved."
+      },
+      "error": {
+        "title": "Settings data unavailable",
+        "description": "The admin settings API did not return a valid payload."
+      },
+      "sections": {
+        "general": {
+          "title": "General",
+          "badge": "Config Source",
+          "description": "Platform identity and locale defaults. Runtime consumers should read these values explicitly."
+        },
+        "security": {
+          "title": "Security",
+          "badge": "Static Auth Runtime",
+          "description": "Baseline policy values stored for platform configuration. Better Auth session and password enforcement still use server startup configuration."
+        },
+        "email": {
+          "title": "Email",
+          "badge": "Provider Pending",
+          "description": "Transactional email defaults. Password reset delivery currently follows AUTH_PASSWORD_RESET_DELIVERY until a real email provider is wired."
+        },
+        "notifications": {
+          "title": "Notifications",
+          "badge": "Runtime Active",
+          "description": "Platform delivery defaults read by notification preferences and notification creation."
+        }
+      },
+      "fields": {
+        "siteName": "Site Name",
+        "supportEmail": "Support Email",
+        "defaultLocale": "Default Locale",
+        "timezone": "Timezone",
+        "emailVerification": "Email Verification",
+        "sessionMaxAge": "Session Max Age",
+        "passwordMinLength": "Password Min Length",
+        "provider": "Provider",
+        "passwordResetDelivery": "Password Reset Delivery",
+        "fromEmail": "From Email",
+        "fromName": "From Name",
+        "inApp": "In-App",
+        "email": "Email",
+        "webhook": "Webhook",
+        "digestFrequency": "Digest Frequency"
+      },
+      "options": {
+        "english": "English",
+        "chinese": "Chinese",
+        "log": "Log",
+        "smtp": "SMTP",
+        "resend": "Resend",
+        "email": "Email",
+        "never": "Never",
+        "daily": "Daily",
+        "weekly": "Weekly"
+      }
+    },
+    "usageAdmin": {
+      "title": "Usage",
+      "description": "Platform quota events and top consumers from the last {days} days.",
+      "actions": {
+        "refresh": "Refresh",
+        "apply": "Apply",
+        "clear": "Clear"
+      },
+      "filters": {
+        "title": "Filters",
+        "description": "Limit the usage window by time, metric key, or user id.",
+        "window": "Window",
+        "rows": "Rows",
+        "metric": "Metric",
+        "userId": "User ID",
+        "userPlaceholder": "user id"
+      },
+      "days": {
+        "7": "7 days",
+        "30": "30 days",
+        "90": "90 days",
+        "365": "365 days"
+      },
+      "error": {
+        "title": "Usage data unavailable",
+        "description": "The admin usage API did not return a valid platform usage summary."
+      },
+      "metrics": {
+        "events": {
+          "label": "Events",
+          "detail": "Window: {days} days"
+        },
+        "tracked": {
+          "label": "Tracked metrics",
+          "detail": "Grouped by plugin and metric"
+        },
+        "activeUsers": {
+          "label": "Active users",
+          "detail": "Ranked by usage value"
+        }
+      },
+      "sections": {
+        "topMetrics": {
+          "title": "Top Metrics",
+          "loading": "Loading current usage window",
+          "empty": "No usage events recorded in this window."
+        },
+        "topUsers": {
+          "title": "Top Users",
+          "description": "Users with the highest recorded quota usage.",
+          "empty": "No user usage records in this window."
+        },
+        "recentEvents": {
+          "title": "Recent Events",
+          "filteredDescription": "Latest usage records matching the active filters.",
+          "description": "Latest usage records in the active window.",
+          "empty": "No usage events match the current filters."
+        }
+      },
+      "table": {
+        "user": "User",
+        "usage": "Usage",
+        "metric": "Metric",
+        "value": "Value",
+        "time": "Time"
       }
     },
     "tasks": {
@@ -2438,6 +3070,7 @@
           "growth": "Growth",
           "churn": "Churn",
           "usage": "Usage",
+          "reliability": "Reliability",
           "cohorts": "Cohorts"
         },
         "overview": {
@@ -2577,6 +3210,82 @@
               "decreasing": "decreasing",
               "stable": "stable"
             }
+          }
+        },
+        "reliability": {
+          "metrics": {
+            "workItems": {
+              "title": "Work Items",
+              "description": "Last {days} days"
+            },
+            "backlog": {
+              "title": "Backlog",
+              "description": "Pending, processing, received, or running"
+            },
+            "failures": {
+              "title": "Failures",
+              "description": "{rate}% overall failure rate"
+            },
+            "retryAttempts": {
+              "title": "Retry Attempts",
+              "description": "{count} succeeded"
+            }
+          },
+          "trend": {
+            "title": "Failure Trend",
+            "description": "Daily failed work items across queues and plugin jobs.",
+            "empty": "No reliability trend data.",
+            "series": {
+              "outbox": "Outbox",
+              "webhooks": "Webhooks",
+              "jobs": "Plugin Jobs"
+            }
+          },
+          "edge": {
+            "title": "Edge Access",
+            "description": "Gateway and edge request failures.",
+            "failureType": "Failure type",
+            "allFailureTypes": "All failure types",
+            "requests": "Requests",
+            "failed": "Failed",
+            "p95Latency": "P95 Latency",
+            "failureRate": "Failure Rate",
+            "unknown": "unknown",
+            "empty": "No edge failure types recorded."
+          },
+          "cards": {
+            "total": "Total",
+            "pending": "Pending",
+            "processing": "Processing",
+            "completed": "Completed",
+            "failed": "Failed",
+            "readyPending": "Ready Pending",
+            "failureRate": "Failure Rate",
+            "oldestFailed": "Oldest Failed",
+            "received": "Received",
+            "processed": "Processed",
+            "deadLetter": "Dead Letter",
+            "retryable": "Retryable",
+            "running": "Running",
+            "succeeded": "Succeeded",
+            "oldestDeadLetter": "Oldest Dead Letter"
+          },
+          "outbox": {
+            "title": "Outbox",
+            "description": "Internal async event delivery"
+          },
+          "webhooks": {
+            "title": "Webhooks",
+            "description": "Inbound webhook receipt processing"
+          },
+          "jobs": {
+            "title": "Plugin Jobs",
+            "description": "Plugin job execution status"
+          },
+          "emptyValue": "None",
+          "unavailable": {
+            "title": "Reliability data unavailable",
+            "description": "The reliability API did not return queue health metrics."
           }
         },
         "cohorts": {

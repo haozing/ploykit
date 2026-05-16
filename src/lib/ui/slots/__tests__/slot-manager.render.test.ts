@@ -35,8 +35,17 @@ const MockComponent2 = createMockComponent('Component2');
 const MockComponent3 = createMockComponent('Component3');
 
 vi.mock('@/lib/plugin-map', () => ({
+  DEFAULT_RUNTIME_PRODUCT_ID: 'ploykit',
+  RUNTIME_PRODUCTS: {
+    ploykit: { id: 'ploykit', name: 'PloyKit', suites: ['default'], bundles: [] },
+  },
+  PLUGIN_SUITES: {},
+  APP_BUNDLES: {},
   PLUGIN_MAP: {
     welcome: {
+      productId: 'ploykit',
+      suiteId: 'default',
+      bundleIds: [],
       plugin: vi.fn(),
       components: {
         'components/Component1': () => Promise.resolve({ default: MockComponent1 }),
@@ -49,7 +58,6 @@ vi.mock('@/lib/plugin-map', () => ({
       },
     },
   },
-  hasPlugin: vi.fn((id: string) => id === 'welcome'),
 }));
 
 // ============================================================================

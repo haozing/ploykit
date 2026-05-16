@@ -4,6 +4,7 @@ import type {
   PluginCommercialRequirement,
   PluginDataDefinition,
   PluginDefinition,
+  PluginDependencyDefinition,
   PluginEventDefinition,
   PluginHooksDefinition,
   PluginHttpMethod,
@@ -116,6 +117,7 @@ export interface PluginRuntimeContract {
   meters: readonly PluginMeterDefinition[];
   services: readonly PluginServiceDefinition[];
   resourceBindings: readonly PluginResourceBindingDefinition[];
+  dependencies?: PluginDependencyDefinition;
   egress: readonly string[];
   definition: DefinedPlugin | PluginDefinition;
   routes: {

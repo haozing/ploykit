@@ -26,6 +26,14 @@ const mocks = vi.hoisted(() => ({
   },
   runPluginLifecycle: vi.fn(),
   getPluginRuntimeMapEntry: vi.fn(),
+  listRuntimeProducts: vi.fn(() => [
+    { id: 'ploykit', name: 'PloyKit', suites: ['default'], bundles: [] },
+  ]),
+  listRuntimePluginSuites: vi.fn(() => [
+    { id: 'default', productId: 'ploykit', name: 'Default', plugins: ['runtime-notes'] },
+  ]),
+  listRuntimeAppBundles: vi.fn(() => []),
+  DEFAULT_PRODUCT_ID: 'ploykit',
   pluginRuntimeRegistry: {
     getOrLoad: vi.fn(),
     unregister: vi.fn(),
@@ -54,8 +62,16 @@ vi.mock('@/lib/db/client.server', () => ({
 
 vi.mock('@/lib/db/schema/plugins', () => ({
   pluginInstallations: {
+    productId: 'product_id',
+    suiteId: 'suite_id',
+    bundleId: 'bundle_id',
     pluginId: 'plugin_id',
   },
+  appProducts: {},
+  pluginSuites: {},
+  pluginSuiteMembers: {},
+  appBundles: {},
+  appBundleMembers: {},
 }));
 
 vi.mock('@/lib/db/schema/plugin-capabilities', () => ({
@@ -105,7 +121,11 @@ vi.mock('@/lib/plugin-runtime/adapters', () => ({
 }));
 
 vi.mock('@/lib/plugin-runtime/loader', () => ({
+  DEFAULT_PRODUCT_ID: mocks.DEFAULT_PRODUCT_ID,
   getPluginRuntimeMapEntry: mocks.getPluginRuntimeMapEntry,
+  listRuntimeProducts: mocks.listRuntimeProducts,
+  listRuntimePluginSuites: mocks.listRuntimePluginSuites,
+  listRuntimeAppBundles: mocks.listRuntimeAppBundles,
 }));
 
 vi.mock('@/lib/plugin-runtime/registry', () => ({
@@ -190,6 +210,11 @@ function createInstallation(overrides: Record<string, unknown> = {}) {
     installedAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     installedBy: USER_ID,
+    productId: 'ploykit',
+    suiteId: 'default',
+    bundleId: null,
+    installStatus: 'installed',
+    metadata: {},
     ...overrides,
   };
 }
@@ -209,6 +234,7 @@ function createSelectBuilder(result: unknown[]) {
 function createInsertBuilder(result: unknown[]) {
   return {
     values: vi.fn().mockReturnThis(),
+    onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
     returning: vi.fn().mockResolvedValue(result),
   };
 }
@@ -242,7 +268,12 @@ describe('PluginRuntimeInstallerService', () => {
     vi.clearAllMocks();
     service = new PluginRuntimeInstallerService();
 
-    mocks.getPluginRuntimeMapEntry.mockReturnValue({ plugin: vi.fn() });
+    mocks.getPluginRuntimeMapEntry.mockReturnValue({
+      plugin: vi.fn(),
+      productId: 'ploykit',
+      suiteId: 'default',
+      bundleIds: [],
+    });
     mocks.pluginRuntimeRegistry.getOrLoad.mockResolvedValue(createContract());
     mocks.runPluginLifecycle.mockResolvedValue({
       success: true,
@@ -290,9 +321,13 @@ describe('PluginRuntimeInstallerService', () => {
       expect.objectContaining({ plugin: expect.any(Function) })
     );
     expect(insertBuilder.values).toHaveBeenCalledWith({
+      productId: 'ploykit',
+      suiteId: 'default',
+      bundleId: undefined,
       pluginId: PLUGIN_ID,
       version: '2.3.4',
       enabled: false,
+      installStatus: 'installed',
       installedBy: USER_ID,
     });
     expect(mocks.createPluginStorageRuntime).toHaveBeenCalledWith({
@@ -316,6 +351,7 @@ describe('PluginRuntimeInstallerService', () => {
       'plugin-runtime-installer',
       {
         pluginId: PLUGIN_ID,
+        productId: 'ploykit',
         userId: USER_ID,
         version: '2.3.4',
         installationId: 'install-1',
@@ -407,6 +443,7 @@ describe('PluginRuntimeInstallerService', () => {
       'plugin-runtime-installer',
       {
         pluginId: PLUGIN_ID,
+        productId: 'ploykit',
         version: '2.3.4',
         installationId: 'install-1',
       },
@@ -600,6 +637,7 @@ describe('PluginRuntimeInstallerService', () => {
       'plugin-runtime-installer',
       {
         pluginId: PLUGIN_ID,
+        productId: 'ploykit',
         version: '2.3.4',
         installationId: 'install-1',
       },

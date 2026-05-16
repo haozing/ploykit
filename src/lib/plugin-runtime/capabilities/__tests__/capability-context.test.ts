@@ -360,7 +360,9 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
     return (
       Array.from(this.values.values()).find(
         (row) =>
-          row.pluginId === scope.pluginId &&
+          row.productId === scope.productId &&
+          row.ownerType === scope.ownerType &&
+          row.ownerId === scope.ownerId &&
           row.scopeType === input.resourceScope.type &&
           row.scopeId === input.resourceScope.id &&
           row.resourceType === input.resourceType &&
@@ -377,7 +379,9 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
     return Array.from(this.values.values())
       .filter(
         (row) =>
-          row.pluginId === scope.pluginId &&
+          row.productId === scope.productId &&
+          row.ownerType === scope.ownerType &&
+          row.ownerId === scope.ownerId &&
           row.scopeType === input.resourceScope.type &&
           row.scopeId === input.resourceScope.id &&
           (!input.resourceType || row.resourceType === input.resourceType) &&
@@ -394,7 +398,9 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
     if (input.cardinality === 'one') {
       for (const row of this.values.values()) {
         if (
-          row.pluginId === scope.pluginId &&
+          row.productId === scope.productId &&
+          row.ownerType === scope.ownerType &&
+          row.ownerId === scope.ownerId &&
           row.scopeType === input.resourceScope.type &&
           row.scopeId === input.resourceScope.id &&
           row.resourceType === input.resourceType &&
@@ -409,7 +415,9 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
 
     const existing = Array.from(this.values.values()).find(
       (row) =>
-        row.pluginId === scope.pluginId &&
+        row.productId === scope.productId &&
+        row.ownerType === scope.ownerType &&
+        row.ownerId === scope.ownerId &&
         row.scopeType === input.resourceScope.type &&
         row.scopeId === input.resourceScope.id &&
         row.resourceType === input.resourceType &&
@@ -417,7 +425,11 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
     );
     const row: PluginResourceBindingRow = {
       id: existing?.id ?? `binding-${this.values.size + 1}`,
+      productId: scope.productId,
       pluginId: scope.pluginId,
+      ownerType: scope.ownerType,
+      ownerId: scope.ownerId,
+      visibility: scope.visibility,
       scopeType: input.resourceScope.type,
       scopeId: input.resourceScope.id,
       resourceType: input.resourceType,
@@ -437,7 +449,11 @@ class MemoryResourceBindingsRepository implements PluginResourceBindingsReposito
 
   async getById(scope: PluginResourceBindingsScope, id: string) {
     const row = this.values.get(id);
-    return row?.pluginId === scope.pluginId ? row : null;
+    return row?.productId === scope.productId &&
+      row.ownerType === scope.ownerType &&
+      row.ownerId === scope.ownerId
+      ? row
+      : null;
   }
 
   async archive(scope: PluginResourceBindingsScope, id: string) {

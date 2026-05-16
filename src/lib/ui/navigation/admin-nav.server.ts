@@ -14,6 +14,13 @@ import type { NavGroupConfig, DashboardMenuItem } from './types';
 import { SYSTEM_NAV_GROUPS } from './types';
 import { logger } from '@/lib/_core/logger';
 import { SYSTEM_DASHBOARD_MENUS } from '@/config/system-dashboard-menus';
+import {
+  listAdminResourceBindings,
+  listInternalServiceRequirements,
+} from '@/lib/plugin-runtime/admin';
+import { getPluginRuntimeMapEntry } from '@/lib/plugin-runtime/loader';
+import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
+import type { PluginResourceBindingDefinition } from '@ploykit/plugin-sdk';
 
 //
 // Permission Check Helpers
@@ -30,7 +37,25 @@ import { SYSTEM_DASHBOARD_MENUS } from '@/config/system-dashboard-menus';
  * @param context - User context (isAdmin flag)
  * @returns true if item should be visible
  */
-function isMenuItemVisible(item: DashboardMenuItem, context: { isAdmin: boolean }): boolean {
+interface MenuVisibilityContext {
+  isAdmin: boolean;
+  permissions?: readonly string[];
+  workspaceRole?: 'owner' | 'admin' | 'editor' | 'viewer';
+  entitlements?: readonly string[];
+}
+
+function includesAll(
+  required: readonly string[] | undefined,
+  available: readonly string[] | undefined
+) {
+  if (!required?.length) {
+    return true;
+  }
+  const availableSet = new Set(available ?? []);
+  return required.every((item) => availableSet.has(item));
+}
+
+function isMenuItemVisible(item: DashboardMenuItem, context: MenuVisibilityContext): boolean {
   // Check showInMenu flag
   if (item.showInMenu === false) {
     return false;
@@ -41,7 +66,139 @@ function isMenuItemVisible(item: DashboardMenuItem, context: { isAdmin: boolean 
     return false;
   }
 
+  if ((item.visibility === 'admin' || item.visibility === 'suiteAdmin') && !context.isAdmin) {
+    return false;
+  }
+
+  if (!includesAll(item.requires?.permissions, context.permissions)) {
+    return false;
+  }
+  if (!includesAll(item.requires?.entitlements, context.entitlements)) {
+    return false;
+  }
+  if (
+    item.requires?.workspaceRoles?.length &&
+    (!context.workspaceRole || !item.requires.workspaceRoles.includes(context.workspaceRole))
+  ) {
+    return false;
+  }
+
   return true;
+}
+
+function parsePluginIdFromMenu(item: DashboardMenuItem): string | undefined {
+  return item.pluginId ?? item.id.split('/')[0];
+}
+
+async function servicesAreBound(pluginId: string, services: readonly string[]): Promise<boolean> {
+  if (services.length === 0) {
+    return true;
+  }
+
+  const requirements = await listInternalServiceRequirements({ pluginId });
+  const boundServices = new Set(
+    requirements
+      .filter((requirement) => requirement.bindingStatus === 'bound')
+      .map((requirement) => requirement.serviceName)
+  );
+  return services.every((service) => boundServices.has(service));
+}
+
+function resolveResourceBindingOwner(
+  pluginId: string,
+  declaration: PluginResourceBindingDefinition
+): { productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string } | null {
+  const entry = getPluginRuntimeMapEntry(pluginId);
+  const productId = entry?.productId;
+  if (!productId) {
+    return null;
+  }
+
+  const ownerType = declaration.owner ?? 'plugin';
+  const ownerId =
+    ownerType === 'plugin' ? pluginId : ownerType === 'suite' ? entry.suiteId : productId;
+
+  return ownerId ? { productId, ownerType, ownerId } : null;
+}
+
+async function resourceBindingsAreBound(
+  pluginId: string,
+  resourceTypes: readonly string[]
+): Promise<boolean> {
+  if (resourceTypes.length === 0) {
+    return true;
+  }
+
+  const entry = getPluginRuntimeMapEntry(pluginId);
+  const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
+
+  for (const resourceType of resourceTypes) {
+    const declarations = contract.resourceBindings.filter(
+      (binding) => binding.type === resourceType
+    );
+    if (declarations.length === 0) {
+      return false;
+    }
+
+    let hasActiveBinding = false;
+    for (const declaration of declarations) {
+      const owner = resolveResourceBindingOwner(pluginId, declaration);
+      if (!owner) {
+        continue;
+      }
+      const rows = await listAdminResourceBindings({
+        ...owner,
+        resourceType,
+        status: 'active',
+        limit: 1,
+      });
+      if (rows.length > 0) {
+        hasActiveBinding = true;
+        break;
+      }
+    }
+
+    if (!hasActiveBinding) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function areRuntimeMenuRequirementsSatisfied(item: DashboardMenuItem): Promise<boolean> {
+  const services = item.requires?.servicesBound ?? [];
+  const resources = item.requires?.resourceBindings ?? [];
+  if (services.length === 0 && resources.length === 0) {
+    return true;
+  }
+
+  const pluginId = parsePluginIdFromMenu(item);
+  if (!pluginId) {
+    return false;
+  }
+
+  try {
+    return (
+      (await servicesAreBound(pluginId, services)) &&
+      (await resourceBindingsAreBound(pluginId, resources))
+    );
+  } catch (error) {
+    logger.warn({ pluginId, menuId: item.id, error }, 'Plugin menu requirements are not satisfied');
+    return false;
+  }
+}
+
+async function filterVisibleMenuItems(
+  items: DashboardMenuItem[],
+  context: MenuVisibilityContext
+): Promise<DashboardMenuItem[]> {
+  const checks = await Promise.all(
+    items.map(
+      async (item) => isMenuItemVisible(item, context) && areRuntimeMenuRequirementsSatisfied(item)
+    )
+  );
+  return items.filter((_, index) => checks[index]);
 }
 
 /**
@@ -170,10 +327,9 @@ export const getAdminSidebarNavGroups = cache(async (): Promise<NavGroupConfig[]
   ];
 
   // Admin sidebar accepts explicit admin.sidebar items plus admin-relevant dashboard.sidebar items.
-  const visiblePluginNavs = pluginNavs.filter((item) => {
-    if (!isMenuItemVisible(item, { isAdmin })) return false;
-    return item.guard === 'admin' || item.href.startsWith('/admin');
-  });
+  const visiblePluginNavs = (await filterVisibleMenuItems(pluginNavs, { isAdmin })).filter(
+    (item) => item.guard === 'admin' || item.href.startsWith('/admin')
+  );
 
   logger.debug(
     { total: pluginNavs.length, visible: visiblePluginNavs.length },
@@ -243,12 +399,10 @@ export const getUserSidebarNavGroups = cache(
     myAccountGroup.items.push(...(SYSTEM_DASHBOARD_MENUS.myAccount || []));
 
     // 2) Plugin menu items (user-visible only; admin plugin items stay in admin sidebar)
-  const pluginMenus = await loadPluginNavigation('dashboard.sidebar');
+    const pluginMenus = await loadPluginNavigation('dashboard.sidebar');
     const pluginNavs = pluginMenus['dashboard.sidebar'] || [];
 
-    const visiblePluginNavs = pluginNavs.filter((item) =>
-      isMenuItemVisible(item, { isAdmin: false })
-    );
+    const visiblePluginNavs = await filterVisibleMenuItems(pluginNavs, { isAdmin: false });
     for (const item of visiblePluginNavs) {
       const groupKey = item.group || 'myAccount';
 

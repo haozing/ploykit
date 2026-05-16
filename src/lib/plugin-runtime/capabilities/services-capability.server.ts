@@ -29,6 +29,7 @@ import { recordCapabilityAudit } from './audit-helper.server';
 import { DbPluginSecretsRepository } from './secrets-capability.server';
 import type { AuditPort } from '@/lib/audit/audit-port.server';
 import { getUsageLedger, type UsageLedger } from '@/lib/usage/usage-ledger.server';
+import { DEFAULT_PRODUCT_ID, getPluginRuntimeMapEntry } from '@/lib/plugin-runtime/loader';
 
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Database | TransactionDatabase;
@@ -71,6 +72,8 @@ export interface PluginInternalServiceRegistry {
 
 export interface PluginInternalServiceLookup {
   pluginId: string;
+  productId?: string;
+  suiteId?: string;
   serviceName: string;
   workspaceId?: string;
   environment?: string;
@@ -511,6 +514,46 @@ function bindingScopeRank(row: PluginInternalServiceBinding, workspaceId?: strin
   return 99;
 }
 
+function ownerRank(row: PluginInternalServiceBinding, input: PluginInternalServiceLookup): number {
+  if (row.ownerType === 'plugin' && row.ownerId === input.pluginId) {
+    return 0;
+  }
+  if (row.ownerType === 'suite') {
+    return 1;
+  }
+  if (row.ownerType === 'product') {
+    return 2;
+  }
+  return 99;
+}
+
+function ownerConditions(input: PluginInternalServiceLookup): SQL[] {
+  const runtimeEntry = getPluginRuntimeMapEntry(input.pluginId);
+  const productId = input.productId ?? runtimeEntry?.productId ?? DEFAULT_PRODUCT_ID;
+  const suiteId = input.suiteId ?? runtimeEntry?.suiteId;
+  const candidates: SQL[] = [
+    and(
+      eq(pluginInternalServiceBindings.ownerType, 'plugin'),
+      eq(pluginInternalServiceBindings.ownerId, input.pluginId)
+    )!,
+    and(
+      eq(pluginInternalServiceBindings.ownerType, 'product'),
+      eq(pluginInternalServiceBindings.ownerId, productId)
+    )!,
+  ];
+
+  if (suiteId) {
+    candidates.push(
+      and(
+        eq(pluginInternalServiceBindings.ownerType, 'suite'),
+        eq(pluginInternalServiceBindings.ownerId, suiteId)
+      )!
+    );
+  }
+
+  return [eq(pluginInternalServiceBindings.productId, productId), or(...candidates)!];
+}
+
 function parseSecretRef(
   ref: string | null | undefined
 ): { kind: 'env' | 'dbsec'; name: string } | null {
@@ -675,7 +718,7 @@ export class DbPluginInternalServiceRegistry implements PluginInternalServiceReg
       );
     }
     const conditions: SQL[] = [
-      eq(pluginInternalServiceBindings.pluginId, input.pluginId),
+      ...ownerConditions(input),
       eq(pluginInternalServiceBindings.serviceName, input.serviceName),
       or(...scopeConditions)!,
       or(
@@ -697,6 +740,7 @@ export class DbPluginInternalServiceRegistry implements PluginInternalServiceReg
     const selected = rows
       .sort(
         (left, right) =>
+          ownerRank(left, input) - ownerRank(right, input) ||
           bindingScopeRank(left, input.workspaceId) - bindingScopeRank(right, input.workspaceId)
       )
       .at(0);

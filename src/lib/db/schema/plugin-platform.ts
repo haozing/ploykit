@@ -12,6 +12,8 @@ import { sql } from 'drizzle-orm';
 
 export type ResourceScopeType = 'user' | 'workspace';
 export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type PluginCapabilityOwnerType = 'plugin' | 'suite' | 'product';
+export type PluginCapabilityVisibility = 'private' | 'suite' | 'product';
 
 export const workspaces = pgTable(
   'workspaces',
@@ -286,7 +288,11 @@ export const pluginResourceBindings = pgTable(
   'plugin_resource_bindings',
   {
     id: text('id').primaryKey(),
+    productId: text('product_id').notNull(),
     pluginId: text('plugin_id').notNull(),
+    ownerType: text('owner_type').notNull().default('plugin'),
+    ownerId: text('owner_id').notNull(),
+    visibility: text('visibility').notNull().default('private'),
     scopeType: text('scope_type').notNull(),
     scopeId: text('scope_id').notNull(),
     resourceType: text('resource_type').notNull(),
@@ -302,23 +308,40 @@ export const pluginResourceBindings = pgTable(
   },
   (table) => ({
     uniqueResourceIdx: uniqueIndex('plugin_resource_bindings_unique_resource').on(
-      table.pluginId,
+      table.productId,
+      table.ownerType,
+      table.ownerId,
       table.scopeType,
       table.scopeId,
       table.resourceType,
       table.resourceId
     ),
     oneActiveResourceIdx: uniqueIndex('plugin_resource_bindings_one_active_resource')
-      .on(table.pluginId, table.scopeType, table.scopeId, table.resourceType)
+      .on(
+        table.productId,
+        table.ownerType,
+        table.ownerId,
+        table.scopeType,
+        table.scopeId,
+        table.resourceType
+      )
       .where(sql`${table.status} = 'active' AND ${table.cardinality} = 'one'`),
     scopeIdx: index('plugin_resource_bindings_scope_idx').on(
-      table.pluginId,
+      table.productId,
+      table.ownerType,
+      table.ownerId,
       table.scopeType,
       table.scopeId,
       table.resourceType,
       table.status
     ),
-    statusIdx: index('plugin_resource_bindings_status_idx').on(table.pluginId, table.status),
+    pluginIdx: index('plugin_resource_bindings_plugin_idx').on(table.pluginId),
+    statusIdx: index('plugin_resource_bindings_status_idx').on(
+      table.productId,
+      table.ownerType,
+      table.ownerId,
+      table.status
+    ),
   })
 );
 
@@ -355,7 +378,10 @@ export const pluginInternalServiceBindings = pgTable(
   'plugin_internal_service_bindings',
   {
     id: text('id').primaryKey(),
+    productId: text('product_id').notNull(),
     pluginId: text('plugin_id').notNull(),
+    ownerType: text('owner_type').notNull().default('plugin'),
+    ownerId: text('owner_id').notNull(),
     serviceName: text('service_name').notNull(),
     scopeType: text('scope_type').notNull().default('global'),
     scopeId: text('scope_id'),
@@ -392,25 +418,39 @@ export const pluginInternalServiceBindings = pgTable(
   },
   (table) => ({
     bindingGlobalDefaultIdx: uniqueIndex('plugin_internal_service_bindings_global_default_idx')
-      .on(table.pluginId, table.serviceName)
+      .on(table.productId, table.ownerType, table.ownerId, table.serviceName)
       .where(sql`${table.scopeType} = 'global' AND ${table.environment} IS NULL`),
     bindingGlobalEnvironmentIdx: uniqueIndex(
       'plugin_internal_service_bindings_global_environment_idx'
     )
-      .on(table.pluginId, table.serviceName, table.environment)
+      .on(table.productId, table.ownerType, table.ownerId, table.serviceName, table.environment)
       .where(sql`${table.scopeType} = 'global' AND ${table.environment} IS NOT NULL`),
     bindingWorkspaceDefaultIdx: uniqueIndex(
       'plugin_internal_service_bindings_workspace_default_idx'
     )
-      .on(table.pluginId, table.serviceName, table.scopeId)
+      .on(table.productId, table.ownerType, table.ownerId, table.serviceName, table.scopeId)
       .where(sql`${table.scopeType} = 'workspace' AND ${table.environment} IS NULL`),
     bindingWorkspaceEnvironmentIdx: uniqueIndex(
       'plugin_internal_service_bindings_workspace_environment_idx'
     )
-      .on(table.pluginId, table.serviceName, table.scopeId, table.environment)
+      .on(
+        table.productId,
+        table.ownerType,
+        table.ownerId,
+        table.serviceName,
+        table.scopeId,
+        table.environment
+      )
       .where(sql`${table.scopeType} = 'workspace' AND ${table.environment} IS NOT NULL`),
     pluginServiceIdx: index('plugin_internal_service_bindings_plugin_service_idx').on(
       table.pluginId,
+      table.serviceName,
+      table.status
+    ),
+    ownerServiceIdx: index('plugin_internal_service_bindings_owner_service_idx').on(
+      table.productId,
+      table.ownerType,
+      table.ownerId,
       table.serviceName,
       table.status
     ),

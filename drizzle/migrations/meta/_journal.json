@@ -190,6 +190,13 @@
       "when": 1778918400000,
       "tag": "0026_host_page_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1778919000000,
+      "tag": "0027_plugin_runtime_products",
+      "breakpoints": true
     }
   ]
 }

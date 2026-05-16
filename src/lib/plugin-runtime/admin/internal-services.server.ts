@@ -15,8 +15,12 @@ import {
   type PluginResourceBinding,
   type PluginServiceCallLog,
 } from '@/lib/db/schema/plugin-platform';
-import { getPluginRuntimeMapEntry } from '../loader';
-import { listPluginRuntimeIds } from '../loader';
+import {
+  getPluginRuntimeMapEntry,
+  getRuntimePluginSuite,
+  listPluginRuntimeIdsForProduct,
+} from '../loader';
+import { getCurrentRuntimeProductId } from '../product-context.server';
 import { pluginRuntimeRegistry } from '../registry';
 import { DbPluginSecretsRepository } from '../capabilities/secrets-capability.server';
 import {
@@ -34,9 +38,13 @@ const bindingScopeSchema = z.enum(['global', 'workspace']);
 const bindingStatusSchema = z.enum(['active', 'disabled']);
 const bindingAuthTypeSchema = z.enum(['none', 'bearer', 'basic', 'apiKey']);
 const bindingActorClaimsTypeSchema = z.enum(['hmac']);
+const bindingOwnerTypeSchema = z.enum(['plugin', 'suite', 'product']);
 
 export const internalServiceBindingListQuerySchema = z.object({
+  productId: z.string().min(1).max(120).optional(),
   pluginId: z.string().min(1).max(120).optional(),
+  ownerType: bindingOwnerTypeSchema.optional(),
+  ownerId: z.string().min(1).max(120).optional(),
   serviceName: z.string().min(1).max(120).optional(),
   status: z.enum(['active', 'disabled']).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
@@ -44,6 +52,7 @@ export const internalServiceBindingListQuerySchema = z.object({
 });
 
 export const internalServiceRequirementsQuerySchema = z.object({
+  productId: z.string().min(1).max(120).optional(),
   pluginId: z.string().min(1).max(120).optional(),
   environment: z.string().min(1).max(80).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
@@ -69,7 +78,10 @@ export const internalServiceLogsRetentionSchema = z.object({
 });
 
 export const resourceBindingAdminListQuerySchema = z.object({
+  productId: z.string().min(1).max(120).optional(),
   pluginId: z.string().min(1).max(120).optional(),
+  ownerType: bindingOwnerTypeSchema.optional(),
+  ownerId: z.string().min(1).max(120).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
   scopeType: z.enum(['user', 'workspace']).optional(),
   resourceType: z.string().min(1).max(120).optional(),
@@ -89,7 +101,10 @@ export const internalServiceBindingActionSchema = z.discriminatedUnion('action',
   z.object({
     action: z.literal('upsert'),
     id: z.string().min(1).max(200).optional(),
+    productId: z.string().min(1).max(120).optional(),
     pluginId: z.string().min(1).max(120),
+    ownerType: bindingOwnerTypeSchema.default('plugin'),
+    ownerId: z.string().min(1).max(120).optional(),
     serviceName: z.string().min(1).max(120),
     scopeType: bindingScopeSchema.default('global'),
     scopeId: z.string().max(200).optional().nullable(),
@@ -143,7 +158,10 @@ export type InternalServiceBindingActionInput = z.infer<typeof internalServiceBi
 
 export interface AdminInternalServiceBindingSummary {
   id: string;
+  productId: string;
   pluginId: string;
+  ownerType: string;
+  ownerId: string;
   serviceName: string;
   scopeType: string;
   scopeId?: string;
@@ -177,7 +195,10 @@ export interface AdminInternalServiceBindingSummary {
 }
 
 export interface AdminInternalServiceRequirement {
+  productId: string;
   pluginId: string;
+  ownerType: 'plugin' | 'suite' | 'product';
+  ownerId: string;
   serviceName: string;
   methods: readonly string[];
   paths: readonly string[];
@@ -212,7 +233,11 @@ export interface AdminServiceCallLogRetentionResult {
 
 export interface AdminResourceBindingSummary {
   id: string;
+  productId: string;
   pluginId: string;
+  ownerType: string;
+  ownerId: string;
+  visibility: string;
   scopeType: string;
   scopeId: string;
   resourceType: string;
@@ -252,6 +277,80 @@ function validateServiceName(name: string): string {
     throw new ValidationError('Internal service name is invalid.');
   }
   return normalized;
+}
+
+function resolveRuntimeOwner(input: {
+  productId?: string;
+  pluginId: string;
+  ownerType?: 'plugin' | 'suite' | 'product';
+  ownerId?: string;
+}): { productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string } {
+  const entry = getPluginRuntimeMapEntry(input.pluginId);
+  const entryProductId = entry?.productId;
+  const productId = input.productId ?? entryProductId ?? getCurrentRuntimeProductId();
+  if (entryProductId && productId !== entryProductId) {
+    throw new ValidationError(
+      `Plugin "${input.pluginId}" belongs to product "${entryProductId}", not "${productId}".`
+    );
+  }
+  const ownerType = input.ownerType ?? 'plugin';
+  const ownerId =
+    input.ownerId ??
+    (ownerType === 'plugin' ? input.pluginId : ownerType === 'suite' ? entry?.suiteId : productId);
+
+  if (!ownerId) {
+    throw new ValidationError(`Cannot resolve ${ownerType} owner for plugin "${input.pluginId}".`);
+  }
+  if (ownerType === 'plugin' && ownerId !== input.pluginId) {
+    throw new ValidationError(
+      'Plugin-owned internal service bindings must use the plugin id as owner.'
+    );
+  }
+  if (ownerType === 'suite' && entry?.suiteId && ownerId !== entry.suiteId) {
+    throw new ValidationError(
+      `Suite-owned internal service bindings for "${input.pluginId}" must use suite "${entry.suiteId}".`
+    );
+  }
+  if (ownerType === 'product' && ownerId !== productId) {
+    throw new ValidationError(
+      'Product-owned internal service bindings must use the product id as owner.'
+    );
+  }
+
+  return { productId, ownerType, ownerId };
+}
+
+function sharedServiceName(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const name = (value as Record<string, unknown>).name;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+function resolveServiceRequirementOwner(input: {
+  productId: string;
+  pluginId: string;
+  serviceName: string;
+}): { productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string } {
+  const entry = getPluginRuntimeMapEntry(input.pluginId);
+  if (entry?.productId && entry.productId !== input.productId) {
+    throw new ValidationError(
+      `Plugin "${input.pluginId}" belongs to product "${entry.productId}", not "${input.productId}".`
+    );
+  }
+
+  if (entry?.suiteId) {
+    const suite = getRuntimePluginSuite(entry.suiteId);
+    const isSuiteSharedService = suite?.sharedServices?.some(
+      (service) => sharedServiceName(service) === input.serviceName
+    );
+    if (isSuiteSharedService) {
+      return { productId: input.productId, ownerType: 'suite', ownerId: entry.suiteId };
+    }
+  }
+
+  return { productId: input.productId, ownerType: 'plugin', ownerId: input.pluginId };
 }
 
 function assertNoUnsafeSecretRef(ref: string | null | undefined): void {
@@ -299,7 +398,10 @@ function assertBindingSecrets(
 function toBindingSummary(row: PluginInternalServiceBinding): AdminInternalServiceBindingSummary {
   return {
     id: row.id,
+    productId: row.productId,
     pluginId: row.pluginId,
+    ownerType: row.ownerType,
+    ownerId: row.ownerId,
     serviceName: row.serviceName,
     scopeType: row.scopeType,
     scopeId: row.scopeId ?? undefined,
@@ -356,7 +458,11 @@ function toCallLogSummary(row: PluginServiceCallLog): AdminServiceCallLogSummary
 function toResourceBindingSummary(row: PluginResourceBinding): AdminResourceBindingSummary {
   return {
     id: row.id,
+    productId: row.productId,
     pluginId: row.pluginId,
+    ownerType: row.ownerType,
+    ownerId: row.ownerId,
+    visibility: row.visibility,
     scopeType: row.scopeType,
     scopeId: row.scopeId,
     resourceType: row.resourceType,
@@ -426,7 +532,10 @@ async function getBindingOrThrow(
 async function findInternalServiceBindingForUpsert(
   executor: Executor,
   input: {
+    productId: string;
     pluginId: string;
+    ownerType: string;
+    ownerId: string;
     serviceName: string;
     scopeType: string;
     scopeId: string | null;
@@ -434,7 +543,9 @@ async function findInternalServiceBindingForUpsert(
   }
 ): Promise<PluginInternalServiceBinding | null> {
   const conditions: SQL[] = [
-    eq(pluginInternalServiceBindings.pluginId, input.pluginId),
+    eq(pluginInternalServiceBindings.productId, input.productId),
+    eq(pluginInternalServiceBindings.ownerType, input.ownerType),
+    eq(pluginInternalServiceBindings.ownerId, input.ownerId),
     eq(pluginInternalServiceBindings.serviceName, input.serviceName),
     eq(pluginInternalServiceBindings.scopeType, input.scopeType),
   ];
@@ -462,8 +573,12 @@ async function findInternalServiceBindingForUpsert(
 export async function listInternalServiceBindings(
   input: z.infer<typeof internalServiceBindingListQuerySchema>
 ) {
-  const conditions: SQL[] = [];
+  const productId = input.productId ?? getCurrentRuntimeProductId();
+  const conditions: SQL[] = [eq(pluginInternalServiceBindings.productId, productId)];
   if (input.pluginId) conditions.push(eq(pluginInternalServiceBindings.pluginId, input.pluginId));
+  if (input.ownerType)
+    conditions.push(eq(pluginInternalServiceBindings.ownerType, input.ownerType));
+  if (input.ownerId) conditions.push(eq(pluginInternalServiceBindings.ownerId, input.ownerId));
   if (input.serviceName)
     conditions.push(eq(pluginInternalServiceBindings.serviceName, input.serviceName));
   if (input.status) conditions.push(eq(pluginInternalServiceBindings.status, input.status));
@@ -493,7 +608,10 @@ export async function listInternalServiceBindings(
 export async function listInternalServiceRequirements(
   input: z.infer<typeof internalServiceRequirementsQuerySchema>
 ): Promise<AdminInternalServiceRequirement[]> {
-  const pluginIds = input.pluginId ? [input.pluginId] : [...new Set(listPluginRuntimeIds())];
+  const productId = input.productId ?? getCurrentRuntimeProductId();
+  const pluginIds = input.pluginId
+    ? [input.pluginId]
+    : [...new Set(listPluginRuntimeIdsForProduct(productId))];
   const registry = new DbPluginInternalServiceRegistry();
   const requirements: AdminInternalServiceRequirement[] = [];
 
@@ -504,8 +622,14 @@ export async function listInternalServiceRequirements(
     }
     const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
     for (const service of contract.services) {
+      const owner = resolveServiceRequirementOwner({
+        productId,
+        pluginId,
+        serviceName: service.name,
+      });
       const activeBinding = await registry.resolveBinding({
         pluginId,
+        productId,
         serviceName: service.name,
         workspaceId: input.workspaceId,
         environment: input.environment,
@@ -515,6 +639,7 @@ export async function listInternalServiceRequirements(
         activeBinding ??
         (await registry.resolveBinding({
           pluginId,
+          productId,
           serviceName: service.name,
           workspaceId: input.workspaceId,
           environment: input.environment,
@@ -522,7 +647,13 @@ export async function listInternalServiceRequirements(
         }));
       const binding = inactiveBinding ? toBindingSummary(inactiveBinding) : undefined;
       requirements.push({
+        productId,
         pluginId,
+        ownerType:
+          binding?.ownerType === 'suite' || binding?.ownerType === 'product'
+            ? binding.ownerType
+            : owner.ownerType,
+        ownerId: binding?.ownerId ?? owner.ownerId,
         serviceName: service.name,
         methods: service.methods,
         paths: service.paths,
@@ -599,6 +730,12 @@ export async function handleInternalServiceBindingAction(
 
   const serviceName = validateServiceName(input.serviceName);
   await assertServiceDeclared(input.pluginId, serviceName);
+  const owner = resolveRuntimeOwner({
+    productId: input.productId,
+    pluginId: input.pluginId,
+    ownerType: input.ownerType,
+    ownerId: input.ownerId,
+  });
   assertBindingSecrets(input);
   const now = new Date();
   const row = await withSystemContext(async (database) => {
@@ -632,7 +769,10 @@ export async function handleInternalServiceBindingAction(
       input.id !== undefined
         ? await getBindingOrThrow(database, input.id)
         : await findInternalServiceBindingForUpsert(database, {
+            productId: owner.productId,
             pluginId: input.pluginId,
+            ownerType: owner.ownerType,
+            ownerId: owner.ownerId,
             serviceName,
             scopeType: input.scopeType,
             scopeId,
@@ -640,7 +780,10 @@ export async function handleInternalServiceBindingAction(
           });
     if (
       existing &&
-      (existing.pluginId !== input.pluginId ||
+      (existing.productId !== owner.productId ||
+        existing.ownerType !== owner.ownerType ||
+        existing.ownerId !== owner.ownerId ||
+        existing.pluginId !== input.pluginId ||
         existing.serviceName !== serviceName ||
         existing.scopeType !== input.scopeType ||
         existing.scopeId !== scopeId ||
@@ -653,7 +796,10 @@ export async function handleInternalServiceBindingAction(
     const id = existing?.id ?? randomUUID();
     const values = {
       id,
+      productId: owner.productId,
       pluginId: input.pluginId,
+      ownerType: owner.ownerType,
+      ownerId: owner.ownerId,
       serviceName,
       scopeType: input.scopeType,
       scopeId,
@@ -896,8 +1042,11 @@ export async function applyInternalServiceCallLogRetention(
 export async function listAdminResourceBindings(
   input: z.infer<typeof resourceBindingAdminListQuerySchema>
 ) {
-  const conditions: SQL[] = [];
+  const productId = input.productId ?? getCurrentRuntimeProductId();
+  const conditions: SQL[] = [eq(pluginResourceBindings.productId, productId)];
   if (input.pluginId) conditions.push(eq(pluginResourceBindings.pluginId, input.pluginId));
+  if (input.ownerType) conditions.push(eq(pluginResourceBindings.ownerType, input.ownerType));
+  if (input.ownerId) conditions.push(eq(pluginResourceBindings.ownerId, input.ownerId));
   if (input.scopeType) conditions.push(eq(pluginResourceBindings.scopeType, input.scopeType));
   if (input.workspaceId) {
     conditions.push(eq(pluginResourceBindings.scopeType, 'workspace'));

@@ -34,6 +34,10 @@ vi.mock('@/lib/plugins/head/head-tag-policy.server', () => ({
   sanitizeHeadTags: vi.fn((tags: HeadTag[]) => ({ allowed: tags, blocked: [] })),
 }));
 
+vi.mock('@/lib/plugin-runtime/scope', () => ({
+  listEnabledRuntimePluginIds: vi.fn(async () => ['head-plugin']),
+}));
+
 describe('hook helpers', () => {
   it('deduplicates plugin head tags after sorting by priority', async () => {
     executeMock.mockResolvedValue([

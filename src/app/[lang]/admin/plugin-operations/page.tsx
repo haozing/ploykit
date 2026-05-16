@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Activity,
   AlertCircle,
@@ -70,6 +71,7 @@ function formatDate(value?: string): string {
 }
 
 export default function AdminPluginOperationsPage() {
+  const t = useTranslations('dashboard.pluginOperationsPage');
   const [summary, setSummary] = React.useState<PluginOperationsSummary>(emptySummary);
   const [tasks, setTasks] = React.useState<PluginTaskSummary[]>([]);
   const [connectors, setConnectors] = React.useState<AdminConnectorSummary[]>([]);
@@ -236,10 +238,8 @@ export default function AdminPluginOperationsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Plugin Operations</h1>
-          <p className="text-muted-foreground">
-            Runtime tasks, connector governance, and metering records for installed plugins.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
         </div>
         <Button
           variant="outline"
@@ -248,14 +248,14 @@ export default function AdminPluginOperationsPage() {
           onClick={() => void refresh(true)}
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('actions.refresh')}
         </Button>
       </div>
 
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Operation failed</AlertTitle>
+          <AlertTitle>{t('alerts.failed')}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -263,7 +263,7 @@ export default function AdminPluginOperationsPage() {
       {message && (
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Operation complete</AlertTitle>
+          <AlertTitle>{t('alerts.complete')}</AlertTitle>
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
@@ -271,45 +271,52 @@ export default function AdminPluginOperationsPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
           icon={<Activity className="h-4 w-4" />}
-          label="Active Runs"
+          label={t('stats.activeRuns')}
           value={summary.runs.active}
         />
         <StatCard
           icon={<AlertCircle className="h-4 w-4" />}
-          label="Failed Runs"
+          label={t('stats.failedRuns')}
           value={summary.runs.failed}
         />
         <StatCard
           icon={<Network className="h-4 w-4" />}
-          label="Connectors"
+          label={t('stats.connectors')}
           value={summary.connectors.total}
         />
         <StatCard
           icon={<Gauge className="h-4 w-4" />}
-          label="Meter Records"
+          label={t('stats.meterRecords')}
           value={summary.metering.records}
         />
       </div>
 
       <Tabs defaultValue="runs" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="runs">Runs</TabsTrigger>
-          <TabsTrigger value="connectors">Connectors</TabsTrigger>
-          <TabsTrigger value="metering">Metering</TabsTrigger>
-          <TabsTrigger value="calls">Calls</TabsTrigger>
+          <TabsTrigger value="runs">{t('tabs.runs')}</TabsTrigger>
+          <TabsTrigger value="connectors">{t('tabs.connectors')}</TabsTrigger>
+          <TabsTrigger value="metering">{t('tabs.metering')}</TabsTrigger>
+          <TabsTrigger value="calls">{t('tabs.calls')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="runs">
           <Card>
             <CardHeader>
-              <CardTitle>Runtime Runs</CardTitle>
-              <CardDescription>Admin-visible queue and task center state.</CardDescription>
+              <CardTitle>{t('runs.title')}</CardTitle>
+              <CardDescription>{t('runs.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
                 loading={loading}
-                empty="No plugin runs."
-                headers={['Task', 'Plugin', 'Status', 'Progress', 'Updated', 'Action']}
+                empty={t('runs.empty')}
+                headers={[
+                  t('runs.headers.task'),
+                  t('runs.headers.plugin'),
+                  t('runs.headers.status'),
+                  t('runs.headers.progress'),
+                  t('runs.headers.updated'),
+                  t('runs.headers.action'),
+                ]}
                 rows={tasks.map((task) => [
                   <TaskCell key="task" task={task} />,
                   task.pluginId,
@@ -326,7 +333,7 @@ export default function AdminPluginOperationsPage() {
                     onClick={() => void cancelRun(task)}
                   >
                     <RotateCcw className="h-4 w-4" />
-                    Cancel
+                    {t('actions.cancel')}
                   </Button>,
                 ])}
               />
@@ -337,14 +344,21 @@ export default function AdminPluginOperationsPage() {
         <TabsContent value="connectors">
           <Card>
             <CardHeader>
-              <CardTitle>Connector Governance</CardTitle>
-              <CardDescription>Disable, test, or rotate connector credentials.</CardDescription>
+              <CardTitle>{t('connectors.title')}</CardTitle>
+              <CardDescription>{t('connectors.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
                 loading={loading}
-                empty="No connectors."
-                headers={['Connector', 'Base URL', 'Status', 'Auth', 'Updated', 'Action']}
+                empty={t('connectors.empty')}
+                headers={[
+                  t('connectors.headers.connector'),
+                  t('connectors.headers.baseUrl'),
+                  t('connectors.headers.status'),
+                  t('connectors.headers.auth'),
+                  t('connectors.headers.updated'),
+                  t('connectors.headers.action'),
+                ]}
                 rows={connectors.map((connector) => {
                   const key = `${connector.pluginId}:${connector.name}`;
                   return [
@@ -363,7 +377,7 @@ export default function AdminPluginOperationsPage() {
                         onClick={() => void testConnector(connector)}
                       >
                         <ShieldCheck className="h-4 w-4" />
-                        Test
+                        {t('actions.test')}
                       </Button>
                       <Button
                         variant="outline"
@@ -376,7 +390,7 @@ export default function AdminPluginOperationsPage() {
                           )
                         }
                       >
-                        {connector.status === 'active' ? 'Disable' : 'Enable'}
+                        {connector.status === 'active' ? t('actions.disable') : t('actions.enable')}
                       </Button>
                       <Button
                         variant="outline"
@@ -384,7 +398,7 @@ export default function AdminPluginOperationsPage() {
                         disabled={acting === key}
                         onClick={() => void rotateSecret(connector)}
                       >
-                        Rotate
+                        {t('actions.rotate')}
                       </Button>
                     </div>,
                   ];
@@ -397,14 +411,20 @@ export default function AdminPluginOperationsPage() {
         <TabsContent value="metering">
           <Card>
             <CardHeader>
-              <CardTitle>Metering Summary</CardTitle>
-              <CardDescription>Aggregated usage rows from plugin metering.</CardDescription>
+              <CardTitle>{t('metering.title')}</CardTitle>
+              <CardDescription>{t('metering.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
                 loading={loading}
-                empty="No metering records."
-                headers={['Plugin', 'Meter', 'Metric', 'Total', 'Records']}
+                empty={t('metering.empty')}
+                headers={[
+                  t('metering.headers.plugin'),
+                  t('metering.headers.meter'),
+                  t('metering.headers.metric'),
+                  t('metering.headers.total'),
+                  t('metering.headers.records'),
+                ]}
                 rows={meters.map((meter) => [
                   meter.pluginId,
                   meter.meter,
@@ -420,16 +440,20 @@ export default function AdminPluginOperationsPage() {
         <TabsContent value="calls">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Connector Calls</CardTitle>
-              <CardDescription>
-                Connector audit trail with redacted request and response metadata.
-              </CardDescription>
+              <CardTitle>{t('calls.title')}</CardTitle>
+              <CardDescription>{t('calls.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
                 loading={loading}
-                empty="No connector calls."
-                headers={['Connector', 'Status', 'Duration', 'Meter', 'Created']}
+                empty={t('calls.empty')}
+                headers={[
+                  t('calls.headers.connector'),
+                  t('calls.headers.status'),
+                  t('calls.headers.duration'),
+                  t('calls.headers.meter'),
+                  t('calls.headers.created'),
+                ]}
                 rows={connectorCalls.map((call) => [
                   `${call.pluginId}:${call.connectorName}`,
                   call.status == null ? 'error' : String(call.status),
@@ -443,7 +467,7 @@ export default function AdminPluginOperationsPage() {
         </TabsContent>
       </Tabs>
 
-      <div className="sr-only">{usage.length} recent usage rows loaded.</div>
+      <div className="sr-only">{t('loadedUsageRows', { count: usage.length })}</div>
     </div>
   );
 }

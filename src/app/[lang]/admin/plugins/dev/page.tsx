@@ -1,5 +1,6 @@
 import { Activity, AlertTriangle, CheckCircle2, FileCode2, Route, ServerCog } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { getTranslations } from 'next-intl/server';
 import { Badge } from '@/components/ui/badge';
 import { PluginDevCopyButton } from '@/components/admin/plugin-dev-copy-button';
 import { requireAdmin } from '@/lib/shared/role-check';
@@ -14,6 +15,76 @@ import type { RuntimeCheckResult } from '@/lib/runtime';
 import { cn } from '@/lib/_core/utils';
 
 export const dynamic = 'force-dynamic';
+
+interface PluginDevConsoleLabels {
+  copyDiagnostics: string;
+  copyPluginDiagnostics: string;
+  copied: string;
+  noDiagnostics: string;
+  none: string;
+  pending: string;
+  contractLoadFailed: string;
+  sections: {
+    contract: string;
+    diagnostics: string;
+    routesAndMenus: string;
+    permissions: string;
+    dataAndResources: string;
+    runtimeSurface: string;
+    activity: string;
+    rawContract: string;
+    jobs: string;
+    events: string;
+    webhooks: string;
+  };
+  fields: {
+    version: string;
+    kind: string;
+    trust: string;
+    pages: string;
+    apis: string;
+    menu: string;
+    collections: string;
+    resources: string;
+  };
+  statuses: Record<string, string>;
+  activityNames: Record<string, string>;
+  runtimeCheckMessages: Record<string, string>;
+  runtimeChecks: {
+    check: string;
+    status: string;
+    message: string;
+  };
+  runtimeActivity: {
+    runtimeStatus: string;
+    registered: string;
+    recentRuns: string;
+    attempts: string;
+    publishes: string;
+    subscriptions: string;
+    listeners: string;
+    retries: string;
+  };
+}
+
+function translatedValue(value: string, labels: Record<string, string>): string {
+  return labels[value] ?? value;
+}
+
+function runtimeCheckMessage(
+  check: RuntimeCheckResult,
+  labels: PluginDevConsoleLabels['runtimeCheckMessages']
+): string {
+  const template = labels[check.key];
+
+  if (template) {
+    return template
+      .replace('{message}', check.message)
+      .replace('{durationMs}', String(check.durationMs ?? 0));
+  }
+
+  return check.message;
+}
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (status === 'ok' || status === 'ready') {
@@ -96,9 +167,15 @@ function DiagnosticFields({ fields }: { fields: PluginDiagnosticDisplayField[] }
   );
 }
 
-function DiagnosticsList({ diagnostics }: { diagnostics: PluginDiagnostic[] }) {
+function DiagnosticsList({
+  diagnostics,
+  emptyLabel,
+}: {
+  diagnostics: PluginDiagnostic[];
+  emptyLabel: string;
+}) {
   if (diagnostics.length === 0) {
-    return <p className="text-sm text-muted-foreground">No diagnostics.</p>;
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
   }
 
   return (
@@ -131,13 +208,23 @@ function DiagnosticsList({ diagnostics }: { diagnostics: PluginDiagnostic[] }) {
   );
 }
 
-function RuntimeChecks({ checks }: { checks: RuntimeCheckResult[] }) {
+function RuntimeChecks({
+  checks,
+  labels,
+  statusLabels,
+  messageLabels,
+}: {
+  checks: RuntimeCheckResult[];
+  labels: PluginDevConsoleLabels['runtimeChecks'];
+  statusLabels: PluginDevConsoleLabels['statuses'];
+  messageLabels: PluginDevConsoleLabels['runtimeCheckMessages'];
+}) {
   return (
     <div className="overflow-hidden rounded-md border">
       <div className="grid grid-cols-[160px_120px_1fr] border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-        <span>Check</span>
-        <span>Status</span>
-        <span>Message</span>
+        <span>{labels.check}</span>
+        <span>{labels.status}</span>
+        <span>{labels.message}</span>
       </div>
       {checks.map((check) => (
         <div
@@ -146,18 +233,20 @@ function RuntimeChecks({ checks }: { checks: RuntimeCheckResult[] }) {
         >
           <span className="font-mono">{check.key}</span>
           <span>
-            <Badge variant={statusVariant(check.status)}>{check.status}</Badge>
+            <Badge variant={statusVariant(check.status)}>
+              {translatedValue(check.status, statusLabels)}
+            </Badge>
           </span>
-          <span className="text-muted-foreground">{check.message}</span>
+          <span className="text-muted-foreground">{runtimeCheckMessage(check, messageLabels)}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function TinyList({ items }: { items: unknown[] }) {
+function TinyList({ items, emptyLabel }: { items: unknown[]; emptyLabel: string }) {
   if (items.length === 0) {
-    return <span className="text-muted-foreground">None</span>;
+    return <span className="text-muted-foreground">{emptyLabel}</span>;
   }
 
   return (
@@ -171,8 +260,8 @@ function TinyList({ items }: { items: unknown[] }) {
   );
 }
 
-function shortDate(value?: string) {
-  return value ? new Date(value).toLocaleString() : 'pending';
+function shortDate(value: string | undefined, pendingLabel: string) {
+  return value ? new Date(value).toLocaleString() : pendingLabel;
 }
 
 function RuntimeDetailList({ title, children }: { title: string; children: ReactNode }) {
@@ -184,17 +273,23 @@ function RuntimeDetailList({ title, children }: { title: string; children: React
   );
 }
 
-function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
+function RuntimeActivityDetails({
+  plugin,
+  labels,
+}: {
+  plugin: PluginDevPluginReport;
+  labels: PluginDevConsoleLabels;
+}) {
   const { jobs, events, webhooks } = plugin.activity;
 
   return (
     <section className="space-y-3 xl:col-span-2">
-      <h3 className="text-sm font-semibold">Runtime Status</h3>
+      <h3 className="text-sm font-semibold">{labels.runtimeActivity.runtimeStatus}</h3>
       <div className="grid gap-3 lg:grid-cols-3">
-        <RuntimeDetailList title="Jobs">
+        <RuntimeDetailList title={labels.sections.jobs}>
           <div className="space-y-3 text-xs">
             <div>
-              <div className="mb-1 text-muted-foreground">Registered</div>
+              <div className="mb-1 text-muted-foreground">{labels.runtimeActivity.registered}</div>
               {jobs.registered.length > 0 ? (
                 <div className="space-y-1">
                   {jobs.registered.map((job) => (
@@ -206,11 +301,11 @@ function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
                   ))}
                 </div>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-muted-foreground">{labels.none}</span>
               )}
             </div>
             <div>
-              <div className="mb-1 text-muted-foreground">Recent Runs</div>
+              <div className="mb-1 text-muted-foreground">{labels.runtimeActivity.recentRuns}</div>
               {jobs.items.length > 0 ? (
                 <div className="space-y-2">
                   {jobs.items.map((run) => (
@@ -219,31 +314,36 @@ function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
                       className="space-y-1 border-t pt-2 first:border-t-0 first:pt-0"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                        <Badge variant={statusVariant(run.status)}>
+                          {translatedValue(run.status, labels.statuses)}
+                        </Badge>
                         <span className="font-mono">{run.jobName}</span>
                       </div>
                       <div className="text-muted-foreground">
-                        attempts {run.attempts} · {shortDate(run.completedAt ?? run.startedAt)}
+                        {labels.runtimeActivity.attempts} {run.attempts} ·{' '}
+                        {shortDate(run.completedAt ?? run.startedAt, labels.pending)}
                       </div>
                       {run.error && <div className="text-destructive">{run.error}</div>}
                     </div>
                   ))}
                 </div>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-muted-foreground">{labels.none}</span>
               )}
             </div>
           </div>
         </RuntimeDetailList>
 
-        <RuntimeDetailList title="Events">
+        <RuntimeDetailList title={labels.sections.events}>
           <div className="space-y-3 text-xs">
             <div>
-              <div className="mb-1 text-muted-foreground">Publishes</div>
-              <TinyList items={events.publishes} />
+              <div className="mb-1 text-muted-foreground">{labels.runtimeActivity.publishes}</div>
+              <TinyList items={events.publishes} emptyLabel={labels.none} />
             </div>
             <div>
-              <div className="mb-1 text-muted-foreground">Subscriptions</div>
+              <div className="mb-1 text-muted-foreground">
+                {labels.runtimeActivity.subscriptions}
+              </div>
               {events.items.length > 0 ? (
                 <div className="space-y-2">
                   {events.items.map((subscription) => (
@@ -253,7 +353,10 @@ function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={subscription.registered ? 'default' : 'destructive'}>
-                          {subscription.registered ? 'registered' : 'missing'}
+                          {translatedValue(
+                            subscription.registered ? 'registered' : 'missing',
+                            labels.statuses
+                          )}
                         </Badge>
                         <span className="font-mono">{subscription.event}</span>
                       </div>
@@ -263,19 +366,19 @@ function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
                         </div>
                       )}
                       <div className="text-muted-foreground">
-                        listeners {subscription.listeners.length}
+                        {labels.runtimeActivity.listeners} {subscription.listeners.length}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <span className="text-muted-foreground">None</span>
+                <span className="text-muted-foreground">{labels.none}</span>
               )}
             </div>
           </div>
         </RuntimeDetailList>
 
-        <RuntimeDetailList title="Webhooks">
+        <RuntimeDetailList title={labels.sections.webhooks}>
           {webhooks.items.length > 0 ? (
             <div className="space-y-2 text-xs">
               {webhooks.items.map((receipt) => (
@@ -284,19 +387,21 @@ function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
                   className="space-y-1 border-t pt-2 first:border-t-0 first:pt-0"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={statusVariant(receipt.status)}>{receipt.status}</Badge>
+                    <Badge variant={statusVariant(receipt.status)}>
+                      {translatedValue(receipt.status, labels.statuses)}
+                    </Badge>
                     <span className="font-mono">{receipt.eventType}</span>
                   </div>
                   <div className="text-muted-foreground">
-                    retries {receipt.retryCount ?? 0} ·{' '}
-                    {shortDate(receipt.processedAt ?? receipt.createdAt)}
+                    {labels.runtimeActivity.retries} {receipt.retryCount ?? 0} ·{' '}
+                    {shortDate(receipt.processedAt ?? receipt.createdAt, labels.pending)}
                   </div>
                   {receipt.error && <div className="text-destructive">{receipt.error}</div>}
                 </div>
               ))}
             </div>
           ) : (
-            <span className="text-xs text-muted-foreground">None</span>
+            <span className="text-xs text-muted-foreground">{labels.none}</span>
           )}
         </RuntimeDetailList>
       </div>
@@ -304,7 +409,13 @@ function RuntimeActivityDetails({ plugin }: { plugin: PluginDevPluginReport }) {
   );
 }
 
-function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
+function PluginPanel({
+  plugin,
+  labels,
+}: {
+  plugin: PluginDevPluginReport;
+  labels: PluginDevConsoleLabels;
+}) {
   const contract = plugin.contract;
 
   return (
@@ -314,10 +425,13 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold">{contract?.name ?? plugin.pluginId}</h2>
             <Badge variant={plugin.success ? 'default' : 'destructive'}>
-              {plugin.success ? 'passing' : 'failing'}
+              {translatedValue(plugin.success ? 'passing' : 'failing', labels.statuses)}
             </Badge>
             <Badge variant={plugin.installation.enabled ? 'default' : 'secondary'}>
-              {plugin.installation.enabled ? 'enabled' : plugin.installation.status}
+              {translatedValue(
+                plugin.installation.enabled ? 'enabled' : plugin.installation.status,
+                labels.statuses
+              )}
             </Badge>
             <Badge variant="outline">{plugin.sourceTarget}</Badge>
           </div>
@@ -337,7 +451,8 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
             null,
             2
           )}
-          label="Copy plugin diagnostics"
+          label={labels.copyPluginDiagnostics}
+          copiedLabel={labels.copied}
         />
       </div>
 
@@ -345,7 +460,7 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
         <section className="space-y-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <FileCode2 className="h-4 w-4" />
-            Contract
+            {labels.sections.contract}
           </h3>
           {contract ? (
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -354,29 +469,29 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
                 <div className="font-mono">{contract.id}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Version</div>
+                <div className="text-xs text-muted-foreground">{labels.fields.version}</div>
                 <div>{contract.version}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Kind</div>
+                <div className="text-xs text-muted-foreground">{labels.fields.kind}</div>
                 <div>{contract.kind}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Trust</div>
-                <div>{contract.trustLevel ?? 'default'}</div>
+                <div className="text-xs text-muted-foreground">{labels.fields.trust}</div>
+                <div>{translatedValue(contract.trustLevel ?? 'default', labels.statuses)}</div>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Contract could not be loaded.</p>
+            <p className="text-sm text-muted-foreground">{labels.contractLoadFailed}</p>
           )}
         </section>
 
         <section className="space-y-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <AlertTriangle className="h-4 w-4" />
-            Diagnostics
+            {labels.sections.diagnostics}
           </h3>
-          <DiagnosticsList diagnostics={plugin.diagnostics} />
+          <DiagnosticsList diagnostics={plugin.diagnostics} emptyLabel={labels.noDiagnostics} />
         </section>
 
         {contract && (
@@ -384,26 +499,32 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
             <section className="space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <Route className="h-4 w-4" />
-                Routes And Menus
+                {labels.sections.routesAndMenus}
               </h3>
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Pages</div>
-                  <TinyList items={contract.routes.pages} />
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.fields.pages}
+                  </div>
+                  <TinyList items={contract.routes.pages} emptyLabel={labels.none} />
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">APIs</div>
-                  <TinyList items={contract.routes.apis} />
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.fields.apis}
+                  </div>
+                  <TinyList items={contract.routes.apis} emptyLabel={labels.none} />
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Menu</div>
-                  <TinyList items={contract.menu} />
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.fields.menu}
+                  </div>
+                  <TinyList items={contract.menu} emptyLabel={labels.none} />
                 </div>
               </div>
             </section>
 
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold">Permissions</h3>
+              <h3 className="text-sm font-semibold">{labels.sections.permissions}</h3>
               <div className="flex flex-wrap gap-2">
                 {contract.permissions.length > 0 ? (
                   contract.permissions.map((permission) => (
@@ -412,20 +533,24 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-sm text-muted-foreground">None</span>
+                  <span className="text-sm text-muted-foreground">{labels.none}</span>
                 )}
               </div>
             </section>
 
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold">Data And Resources</h3>
+              <h3 className="text-sm font-semibold">{labels.sections.dataAndResources}</h3>
               <div className="grid gap-3 text-sm md:grid-cols-2">
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Collections</div>
-                  <TinyList items={contract.data.collections} />
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.fields.collections}
+                  </div>
+                  <TinyList items={contract.data.collections} emptyLabel={labels.none} />
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Resources</div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.fields.resources}
+                  </div>
                   <TinyList
                     items={[
                       ...contract.resources.locales.map(
@@ -433,6 +558,7 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
                       ),
                       ...contract.resources.assets,
                     ]}
+                    emptyLabel={labels.none}
                   />
                 </div>
               </div>
@@ -441,19 +567,25 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
             <section className="space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <ServerCog className="h-4 w-4" />
-                Runtime Surface
+                {labels.sections.runtimeSurface}
               </h3>
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Jobs</div>
-                  <TinyList items={contract.jobs} />
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.sections.jobs}
+                  </div>
+                  <TinyList items={contract.jobs} emptyLabel={labels.none} />
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Webhooks</div>
-                  <TinyList items={contract.webhooks} />
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.sections.webhooks}
+                  </div>
+                  <TinyList items={contract.webhooks} emptyLabel={labels.none} />
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-medium text-muted-foreground">Events</div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">
+                    {labels.sections.events}
+                  </div>
                   <TinyList
                     items={[
                       ...contract.events.publishes,
@@ -461,6 +593,7 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
                         (subscription) => `${subscription.event} -> ${subscription.handler}`
                       ),
                     ]}
+                    emptyLabel={labels.none}
                   />
                 </div>
               </div>
@@ -471,7 +604,7 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
         <section className="space-y-3 xl:col-span-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <Activity className="h-4 w-4" />
-            Activity
+            {labels.sections.activity}
           </h3>
           <div className="grid gap-3 md:grid-cols-4">
             {Object.entries({
@@ -483,8 +616,12 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
             }).map(([name, section]) => (
               <div key={name} className="rounded-md border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium capitalize">{name}</span>
-                  <Badge variant={statusVariant(section.status)}>{section.status}</Badge>
+                  <span className="text-sm font-medium">
+                    {translatedValue(name, labels.activityNames)}
+                  </span>
+                  <Badge variant={statusVariant(section.status)}>
+                    {translatedValue(section.status, labels.statuses)}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">{section.message}</p>
               </div>
@@ -492,10 +629,10 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
           </div>
         </section>
 
-        <RuntimeActivityDetails plugin={plugin} />
+        <RuntimeActivityDetails plugin={plugin} labels={labels} />
 
         <section className="space-y-3 xl:col-span-2">
-          <h3 className="text-sm font-semibold">Raw Contract</h3>
+          <h3 className="text-sm font-semibold">{labels.sections.rawContract}</h3>
           <JsonBlock value={contract?.raw ?? null} />
         </section>
       </div>
@@ -506,7 +643,93 @@ function PluginPanel({ plugin }: { plugin: PluginDevPluginReport }) {
 export default async function PluginDevConsolePage() {
   await requireAdmin();
 
+  const t = await getTranslations('dashboard.pluginDevConsolePage');
   const report = await buildPluginDevConsoleReport();
+  const labels: PluginDevConsoleLabels = {
+    copyDiagnostics: t('copyDiagnostics'),
+    copyPluginDiagnostics: t('copyPluginDiagnostics'),
+    copied: t('copied'),
+    noDiagnostics: t('noDiagnostics'),
+    none: t('none'),
+    pending: t('pending'),
+    contractLoadFailed: t('contractLoadFailed'),
+    sections: {
+      contract: t('sections.contract'),
+      diagnostics: t('sections.diagnostics'),
+      routesAndMenus: t('sections.routesAndMenus'),
+      permissions: t('sections.permissions'),
+      dataAndResources: t('sections.dataAndResources'),
+      runtimeSurface: t('sections.runtimeSurface'),
+      activity: t('sections.activity'),
+      rawContract: t('sections.rawContract'),
+      jobs: t('sections.jobs'),
+      events: t('sections.events'),
+      webhooks: t('sections.webhooks'),
+    },
+    fields: {
+      version: t('fields.version'),
+      kind: t('fields.kind'),
+      trust: t('fields.trust'),
+      pages: t('fields.pages'),
+      apis: t('fields.apis'),
+      menu: t('fields.menu'),
+      collections: t('fields.collections'),
+      resources: t('fields.resources'),
+    },
+    statuses: {
+      passing: t('statuses.passing'),
+      failing: t('statuses.failing'),
+      enabled: t('statuses.enabled'),
+      disabled: t('statuses.disabled'),
+      ok: t('statuses.ok'),
+      ready: t('statuses.ready'),
+      failed: t('statuses.failed'),
+      error: t('statuses.error'),
+      missing: t('statuses.missing'),
+      warning: t('statuses.warning'),
+      skipped: t('statuses.skipped'),
+      registered: t('statuses.registered'),
+      default: t('statuses.default'),
+      trusted: t('statuses.trusted'),
+      untrusted: t('statuses.untrusted'),
+      system: t('statuses.system'),
+    },
+    activityNames: {
+      audit: t('activityNames.audit'),
+      usage: t('activityNames.usage'),
+      jobs: t('activityNames.jobs'),
+      events: t('activityNames.events'),
+      webhooks: t('activityNames.webhooks'),
+    },
+    runtimeCheckMessages: {
+      env: t('runtimeCheckMessages.env'),
+      db: t('runtimeCheckMessages.db'),
+      'plugin-map': t('runtimeCheckMessages.pluginMap'),
+      rls: t('runtimeCheckMessages.rls'),
+      security: t('runtimeCheckMessages.security'),
+      storage: t('runtimeCheckMessages.storage'),
+      'plugin-storage': t('runtimeCheckMessages.pluginStorage'),
+      'plugin-runtime': t('runtimeCheckMessages.pluginRuntime'),
+      outbox: t('runtimeCheckMessages.outbox'),
+      'audit-usage': t('runtimeCheckMessages.auditUsage'),
+      'plugin-capabilities': t('runtimeCheckMessages.pluginCapabilities'),
+    },
+    runtimeChecks: {
+      check: t('runtimeChecks.check'),
+      status: t('runtimeChecks.status'),
+      message: t('runtimeChecks.message'),
+    },
+    runtimeActivity: {
+      runtimeStatus: t('runtimeActivity.runtimeStatus'),
+      registered: t('runtimeActivity.registered'),
+      recentRuns: t('runtimeActivity.recentRuns'),
+      attempts: t('runtimeActivity.attempts'),
+      publishes: t('runtimeActivity.publishes'),
+      subscriptions: t('runtimeActivity.subscriptions'),
+      listeners: t('runtimeActivity.listeners'),
+      retries: t('runtimeActivity.retries'),
+    },
+  };
   const copyPayload = JSON.stringify(
     {
       generatedAt: report.generatedAt,
@@ -531,33 +754,41 @@ export default async function PluginDevConsolePage() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-foreground">Plugin Dev Console</h1>
+            <h1 className="text-3xl font-bold text-foreground">{t('title')}</h1>
             <Badge variant={report.summary.errors > 0 ? 'destructive' : 'default'}>
-              {report.summary.errors > 0 ? 'needs repair' : 'healthy'}
+              {report.summary.errors > 0 ? t('status.needsRepair') : t('status.healthy')}
             </Badge>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Generated at {new Date(report.generatedAt).toLocaleString()}
+            {t('generatedAt', { time: new Date(report.generatedAt).toLocaleString() })}
           </p>
         </div>
-        <PluginDevCopyButton value={copyPayload} />
+        <PluginDevCopyButton
+          value={copyPayload}
+          label={labels.copyDiagnostics}
+          copiedLabel={labels.copied}
+        />
       </header>
 
       <section className="grid gap-3 md:grid-cols-5">
-        <SummaryTile label="Plugins" value={report.summary.totalPlugins} />
-        <SummaryTile label="Passing" value={report.summary.passingPlugins} tone="good" />
+        <SummaryTile label={t('summary.plugins')} value={report.summary.totalPlugins} />
         <SummaryTile
-          label="Failing"
+          label={t('summary.passing')}
+          value={report.summary.passingPlugins}
+          tone="good"
+        />
+        <SummaryTile
+          label={t('summary.failing')}
           value={report.summary.failingPlugins}
           tone={report.summary.failingPlugins > 0 ? 'bad' : 'neutral'}
         />
         <SummaryTile
-          label="Diagnostics"
+          label={t('summary.diagnostics')}
           value={report.summary.diagnostics}
           tone={report.summary.diagnostics > 0 ? 'warn' : 'neutral'}
         />
         <SummaryTile
-          label="Legacy"
+          label={t('summary.legacy')}
           value={report.summary.legacyPluginDirectories}
           tone={report.summary.legacyPluginDirectories > 0 ? 'warn' : 'neutral'}
         />
@@ -566,32 +797,40 @@ export default async function PluginDevConsolePage() {
       <section className="rounded-md border bg-background p-5">
         <div className="mb-4 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4" />
-          <h2 className="text-lg font-semibold">Runtime Reconcile</h2>
+          <h2 className="text-lg font-semibold">{t('runtimeReconcile')}</h2>
           {report.runtime && (
-            <Badge variant={statusVariant(report.runtime.overall)}>{report.runtime.overall}</Badge>
+            <Badge variant={statusVariant(report.runtime.overall)}>
+              {translatedValue(report.runtime.overall, labels.statuses)}
+            </Badge>
           )}
         </div>
         {report.runtime ? (
-          <RuntimeChecks checks={report.runtime.checks} />
+          <RuntimeChecks
+            checks={report.runtime.checks}
+            labels={labels.runtimeChecks}
+            statusLabels={labels.statuses}
+            messageLabels={labels.runtimeCheckMessages}
+          />
         ) : (
-          <p className="text-sm text-muted-foreground">Runtime report unavailable.</p>
+          <p className="text-sm text-muted-foreground">{t('runtimeUnavailable')}</p>
         )}
       </section>
 
       {report.legacy.length > 0 && (
         <section className="rounded-md border border-amber-300 bg-amber-50 p-5 text-amber-950">
-          <h2 className="text-lg font-semibold">Legacy Manifest Directories</h2>
-          <TinyList items={report.legacy} />
+          <h2 className="text-lg font-semibold">{t('legacyManifestDirectories')}</h2>
+          <TinyList items={report.legacy} emptyLabel={labels.none} />
         </section>
       )}
 
       <section className="space-y-5">
         {report.plugins.length > 0 ? (
-          report.plugins.map((plugin) => <PluginPanel key={plugin.pluginPath} plugin={plugin} />)
+          report.plugins.map((plugin) => (
+            <PluginPanel key={plugin.pluginPath} plugin={plugin} labels={labels} />
+          ))
         ) : (
           <div className="rounded-md border p-8 text-center text-muted-foreground">
-            No definePlugin contracts found in{' '}
-            {report.targetPaths.join(', ') || 'configured targets'}.
+            {t('noPlugins', { targets: report.targetPaths.join(', ') || 'configured targets' })}
           </div>
         )}
       </section>

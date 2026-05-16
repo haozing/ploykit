@@ -1,8 +1,8 @@
 import { cache } from 'react';
-import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import type { MenusByLocation, MenuItem } from './types';
 import { logger } from '@/lib/_core/logger';
-import { pluginRuntimeRegistry, normalizeRuntimePath } from '@/lib/plugin-runtime';
+import { normalizeRuntimePath } from '@/lib/plugin-runtime';
+import { runtimeScopeService } from '@/lib/plugin-runtime/scope';
 import type { PluginRuntimeContract } from '@/lib/plugin-runtime';
 import type { PluginMenuDefinition, PluginRouteLayout } from '@ploykit/plugin-sdk';
 
@@ -58,6 +58,7 @@ function mapPluginMenuItem(
 
   return {
     id: `${pluginId}/${item.path}/${index}`,
+    pluginId,
     i18nKey: labelKey ?? `${pluginId}.menu.${index}`,
     label: labelKey ? undefined : literalLabel,
     fallbackLabel,
@@ -65,10 +66,21 @@ function mapPluginMenuItem(
     icon: item.icon,
     weight: item.weight,
     guard: route?.auth ?? 'auth',
+    visibility:
+      item.visibility ??
+      (item.location === 'admin.sidebar'
+        ? 'admin'
+        : item.location === 'dashboard.sidebar'
+          ? 'signedIn'
+          : route?.auth === 'admin'
+            ? 'admin'
+            : route?.auth === 'public'
+              ? 'public'
+              : 'signedIn'),
+    requires: item.requires,
     group,
     groupTitleKey,
     fallbackGroup: normalizeOptionalText(item.fallbackGroup) ?? group,
-    _pluginId: pluginId,
   } as MenuItem;
 }
 
@@ -76,11 +88,12 @@ export const loadPluginNavigation = cache(
   async (location?: keyof MenusByLocation): Promise<MenusByLocation> => {
     logger.debug({ location }, 'Loading plugin navigation');
 
-    let enabledPluginIds: string[];
+    let runtimePlugins;
 
     try {
-      const installations = await pluginQueryService.listInstalledPlugins();
-      enabledPluginIds = installations.filter((p) => p.enabled).map((plugin) => plugin.pluginId);
+      runtimePlugins = await runtimeScopeService.getEnabledRuntimePlugins({
+        surface: 'navigation',
+      });
     } catch (error) {
       logger.warn(
         { location, error },
@@ -89,13 +102,14 @@ export const loadPluginNavigation = cache(
       return {};
     }
 
-    logger.debug({ count: enabledPluginIds.length }, 'Found enabled plugins');
+    logger.debug({ count: runtimePlugins.length }, 'Found runtime-scoped navigation plugins');
 
     const allMenus: MenusByLocation = {};
 
-    for (const pluginId of enabledPluginIds) {
+    for (const runtimePlugin of runtimePlugins) {
+      const pluginId = runtimePlugin.pluginId;
       try {
-        const contract = await pluginRuntimeRegistry.getOrLoad(pluginId);
+        const contract = runtimePlugin.contract;
         const menuItems = contract.menu;
 
         for (const [index, item] of menuItems.entries()) {

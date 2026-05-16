@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -50,7 +51,11 @@ interface ResourceBindingsResponse {
 }
 
 type BindingDraft = {
+  id: string;
+  productId: string;
   pluginId: string;
+  ownerType: 'plugin' | 'suite' | 'product';
+  ownerId: string;
   serviceName: string;
   scopeType: 'global' | 'workspace';
   scopeId: string;
@@ -75,7 +80,11 @@ type BindingDraft = {
 };
 
 const emptyDraft: BindingDraft = {
+  id: '',
+  productId: '',
   pluginId: '',
+  ownerType: 'plugin',
+  ownerId: '',
   serviceName: '',
   scopeType: 'global',
   scopeId: '',
@@ -110,6 +119,7 @@ function formatDate(value?: string) {
 }
 
 export default function AdminPluginInternalServicesPage() {
+  const t = useTranslations('dashboard.pluginInternalServices');
   const [requirements, setRequirements] = React.useState<AdminInternalServiceRequirement[]>([]);
   const [bindings, setBindings] = React.useState<AdminInternalServiceBindingSummary[]>([]);
   const [logs, setLogs] = React.useState<AdminServiceCallLogSummary[]>([]);
@@ -161,7 +171,14 @@ export default function AdminPluginInternalServicesPage() {
 
   function editBinding(binding: AdminInternalServiceBindingSummary) {
     setDraft({
+      id: binding.id,
+      productId: binding.productId,
       pluginId: binding.pluginId,
+      ownerType:
+        binding.ownerType === 'suite' || binding.ownerType === 'product'
+          ? binding.ownerType
+          : 'plugin',
+      ownerId: binding.ownerId,
       serviceName: binding.serviceName,
       scopeType: binding.scopeType === 'workspace' ? 'workspace' : 'global',
       scopeId: binding.scopeId ?? '',
@@ -189,7 +206,10 @@ export default function AdminPluginInternalServicesPage() {
   function bindRequirement(requirement: AdminInternalServiceRequirement) {
     setDraft({
       ...emptyDraft,
+      productId: requirement.productId,
       pluginId: requirement.pluginId,
+      ownerType: requirement.ownerType,
+      ownerId: requirement.ownerId,
       serviceName: requirement.serviceName,
       actorClaimsEnabled: requirement.actorClaims,
       actorClaimsAudience: requirement.serviceName,
@@ -207,6 +227,9 @@ export default function AdminPluginInternalServicesPage() {
         body: JSON.stringify({
           action: 'upsert',
           ...draft,
+          id: draft.id || undefined,
+          productId: draft.productId || undefined,
+          ownerId: draft.ownerId || undefined,
           scopeId: draft.scopeType === 'workspace' ? draft.scopeId : null,
           environment: draft.environment || null,
           authSecretRef: draft.authSecretRef || null,
@@ -286,57 +309,62 @@ export default function AdminPluginInternalServicesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Internal Services</h1>
-          <p className="text-muted-foreground">
-            Host-managed service bindings, health checks, call logs, and resource bindings.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
         </div>
         <Button variant="outline" size="sm" disabled={loading} onClick={() => void refresh()}>
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('actions.refresh')}
         </Button>
       </div>
 
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Action failed</AlertTitle>
+          <AlertTitle>{t('alerts.failed')}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       {message && (
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Done</AlertTitle>
+          <AlertTitle>{t('alerts.done')}</AlertTitle>
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
 
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Declared Services" value={requirements.length} />
+        <StatCard label={t('stats.declaredServices')} value={requirements.length} />
         <StatCard
-          label="Missing"
+          label={t('stats.missing')}
           value={requirements.filter((item) => item.bindingStatus === 'missing').length}
         />
-        <StatCard label="Bindings" value={bindings.length} />
-        <StatCard label="Recent Calls" value={logs.length} />
+        <StatCard label={t('stats.bindings')} value={bindings.length} />
+        <StatCard label={t('stats.recentCalls')} value={logs.length} />
       </div>
 
       <Tabs defaultValue="requirements" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="requirements">Requirements</TabsTrigger>
-          <TabsTrigger value="bindings">Bindings</TabsTrigger>
-          <TabsTrigger value="editor">Editor</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-          <TabsTrigger value="resources">Resources</TabsTrigger>
+          <TabsTrigger value="requirements">{t('tabs.requirements')}</TabsTrigger>
+          <TabsTrigger value="bindings">{t('tabs.bindings')}</TabsTrigger>
+          <TabsTrigger value="editor">{t('tabs.editor')}</TabsTrigger>
+          <TabsTrigger value="logs">{t('tabs.logs')}</TabsTrigger>
+          <TabsTrigger value="resources">{t('tabs.resources')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="requirements">
-          <Panel title="Declared Service Requirements" description="Services declared by plugins.">
+          <Panel title={t('requirements.title')} description={t('requirements.description')}>
             <DataTable
               loading={loading}
-              empty="No service requirements."
-              headers={['Plugin', 'Service', 'Methods', 'Paths', 'Status', 'Action']}
+              empty={t('requirements.empty')}
+              headers={[
+                t('requirements.headers.plugin'),
+                t('requirements.headers.service'),
+                t('requirements.headers.methods'),
+                t('requirements.headers.paths'),
+                t('requirements.headers.status'),
+                t('requirements.headers.action'),
+              ]}
               rows={requirements.map((item) => [
                 item.pluginId,
                 item.serviceName,
@@ -351,7 +379,7 @@ export default function AdminPluginInternalServicesPage() {
                   size="sm"
                   onClick={() => bindRequirement(item)}
                 >
-                  Bind
+                  {t('actions.bind')}
                 </Button>,
               ])}
             />
@@ -359,14 +387,18 @@ export default function AdminPluginInternalServicesPage() {
         </TabsContent>
 
         <TabsContent value="bindings">
-          <Panel
-            title="Host Bindings"
-            description="Base URL, auth, actor claims, and health status."
-          >
+          <Panel title={t('bindings.title')} description={t('bindings.description')}>
             <DataTable
               loading={loading}
-              empty="No internal service bindings."
-              headers={['Binding', 'Base URL', 'Auth', 'Actor', 'Health', 'Action']}
+              empty={t('bindings.empty')}
+              headers={[
+                t('bindings.headers.binding'),
+                t('bindings.headers.baseUrl'),
+                t('bindings.headers.auth'),
+                t('bindings.headers.actor'),
+                t('bindings.headers.health'),
+                t('bindings.headers.action'),
+              ]}
               rows={bindings.map((binding) => [
                 <Identity
                   key="id"
@@ -384,7 +416,7 @@ export default function AdminPluginInternalServicesPage() {
                 </Badge>,
                 <div key="action" className="flex justify-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => editBinding(binding)}>
-                    Edit
+                    {t('actions.edit')}
                   </Button>
                   <Button
                     variant="outline"
@@ -398,7 +430,7 @@ export default function AdminPluginInternalServicesPage() {
                     }
                   >
                     <ShieldCheck className="h-4 w-4" />
-                    Test
+                    {t('actions.test')}
                   </Button>
                   <Button
                     variant="outline"
@@ -415,7 +447,7 @@ export default function AdminPluginInternalServicesPage() {
                       )
                     }
                   >
-                    {binding.status === 'active' ? 'Disable' : 'Enable'}
+                    {binding.status === 'active' ? t('actions.disable') : t('actions.enable')}
                   </Button>
                 </div>,
               ])}
@@ -424,33 +456,30 @@ export default function AdminPluginInternalServicesPage() {
         </TabsContent>
 
         <TabsContent value="editor">
-          <Panel
-            title="Binding Editor"
-            description="Secrets are stored as refs and never displayed."
-          >
+          <Panel title={t('editor.title')} description={t('editor.description')}>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
-                label="Plugin ID"
+                label={t('editor.fields.pluginId')}
                 value={draft.pluginId}
                 onChange={(pluginId) => setDraft({ ...draft, pluginId })}
               />
               <Field
-                label="Service Name"
+                label={t('editor.fields.serviceName')}
                 value={draft.serviceName}
                 onChange={(serviceName) => setDraft({ ...draft, serviceName })}
               />
               <Field
-                label="Base URL"
+                label={t('editor.fields.baseUrl')}
                 value={draft.baseUrl}
                 onChange={(baseUrl) => setDraft({ ...draft, baseUrl })}
               />
               <Field
-                label="Environment"
+                label={t('editor.fields.environment')}
                 value={draft.environment}
                 onChange={(environment) => setDraft({ ...draft, environment })}
               />
               <div className="space-y-2">
-                <Label>Scope</Label>
+                <Label>{t('editor.fields.scope')}</Label>
                 <Select
                   value={draft.scopeType}
                   onValueChange={(scopeType) =>
@@ -467,12 +496,12 @@ export default function AdminPluginInternalServicesPage() {
                 </Select>
               </div>
               <Field
-                label="Workspace ID"
+                label={t('editor.fields.workspaceId')}
                 value={draft.scopeId}
                 onChange={(scopeId) => setDraft({ ...draft, scopeId })}
               />
               <div className="space-y-2">
-                <Label>Auth Type</Label>
+                <Label>{t('editor.fields.authType')}</Label>
                 <Select
                   value={draft.authType}
                   onValueChange={(authType) =>
@@ -491,12 +520,12 @@ export default function AdminPluginInternalServicesPage() {
                 </Select>
               </div>
               <Field
-                label="Auth Secret Ref"
+                label={t('editor.fields.authSecretRef')}
                 value={draft.authSecretRef}
                 onChange={(authSecretRef) => setDraft({ ...draft, authSecretRef })}
               />
               <Field
-                label="New Auth Secret"
+                label={t('editor.fields.newAuthSecret')}
                 type="password"
                 value={draft.authSecretValue}
                 onChange={(authSecretValue) => setDraft({ ...draft, authSecretValue })}
@@ -504,23 +533,23 @@ export default function AdminPluginInternalServicesPage() {
               {draft.authType === 'basic' && (
                 <>
                   <Field
-                    label="Basic Username Ref"
+                    label={t('editor.fields.basicUsernameRef')}
                     value={draft.authUsernameRef}
                     onChange={(authUsernameRef) => setDraft({ ...draft, authUsernameRef })}
                   />
                   <Field
-                    label="New Basic Username"
+                    label={t('editor.fields.newBasicUsername')}
                     type="password"
                     value={draft.authUsernameValue}
                     onChange={(authUsernameValue) => setDraft({ ...draft, authUsernameValue })}
                   />
                   <Field
-                    label="Basic Password Ref"
+                    label={t('editor.fields.basicPasswordRef')}
                     value={draft.authPasswordRef}
                     onChange={(authPasswordRef) => setDraft({ ...draft, authPasswordRef })}
                   />
                   <Field
-                    label="New Basic Password"
+                    label={t('editor.fields.newBasicPassword')}
                     type="password"
                     value={draft.authPasswordValue}
                     onChange={(authPasswordValue) => setDraft({ ...draft, authPasswordValue })}
@@ -528,12 +557,12 @@ export default function AdminPluginInternalServicesPage() {
                 </>
               )}
               <Field
-                label="Auth Header"
+                label={t('editor.fields.authHeader')}
                 value={draft.authHeaderName}
                 onChange={(authHeaderName) => setDraft({ ...draft, authHeaderName })}
               />
               <div className="flex h-10 items-center justify-between rounded-md border px-3">
-                <Label>Actor Claims</Label>
+                <Label>{t('editor.fields.actorClaims')}</Label>
                 <Switch
                   checked={draft.actorClaimsEnabled}
                   onCheckedChange={(actorClaimsEnabled) =>
@@ -542,7 +571,7 @@ export default function AdminPluginInternalServicesPage() {
                 />
               </div>
               <Field
-                label="Actor Audience"
+                label={t('editor.fields.actorAudience')}
                 value={draft.actorClaimsAudience}
                 onChange={(actorClaimsAudience) =>
                   setDraft({
@@ -553,12 +582,12 @@ export default function AdminPluginInternalServicesPage() {
                 }
               />
               <Field
-                label="Actor Secret Ref"
+                label={t('editor.fields.actorSecretRef')}
                 value={draft.actorClaimsSecretRef}
                 onChange={(actorClaimsSecretRef) => setDraft({ ...draft, actorClaimsSecretRef })}
               />
               <Field
-                label="New Actor Secret"
+                label={t('editor.fields.newActorSecret')}
                 type="password"
                 value={draft.actorClaimsSecretValue}
                 onChange={(actorClaimsSecretValue) =>
@@ -570,43 +599,47 @@ export default function AdminPluginInternalServicesPage() {
                 }
               />
               <Field
-                label="Timeout ms"
+                label={t('editor.fields.timeoutMs')}
                 value={draft.timeoutMs}
                 onChange={(timeoutMs) => setDraft({ ...draft, timeoutMs })}
               />
               <Field
-                label="Retry Attempts"
+                label={t('editor.fields.retryAttempts')}
                 value={draft.retryAttempts}
                 onChange={(retryAttempts) => setDraft({ ...draft, retryAttempts })}
               />
               <Field
-                label="Max Response Bytes"
+                label={t('editor.fields.maxResponseBytes')}
                 value={draft.maxResponseBytes}
                 onChange={(maxResponseBytes) => setDraft({ ...draft, maxResponseBytes })}
               />
               <Field
-                label="Health Path"
+                label={t('editor.fields.healthPath')}
                 value={draft.healthPath}
                 onChange={(healthPath) => setDraft({ ...draft, healthPath })}
               />
             </div>
             <div className="mt-4 flex justify-end">
               <Button disabled={acting === 'save'} onClick={() => void saveBinding()}>
-                Save Binding
+                {t('editor.saveBinding')}
               </Button>
             </div>
           </Panel>
         </TabsContent>
 
         <TabsContent value="logs">
-          <Panel
-            title="Service Call Logs"
-            description="Redacted host-side service invocation records."
-          >
+          <Panel title={t('logs.title')} description={t('logs.description')}>
             <DataTable
               loading={loading}
-              empty="No service calls."
-              headers={['Service', 'Method', 'Path Template', 'Status', 'Duration', 'Created']}
+              empty={t('logs.empty')}
+              headers={[
+                t('logs.headers.service'),
+                t('logs.headers.method'),
+                t('logs.headers.pathTemplate'),
+                t('logs.headers.status'),
+                t('logs.headers.duration'),
+                t('logs.headers.created'),
+              ]}
               rows={logs.map((log) => [
                 `${log.pluginId}:${log.serviceName}`,
                 log.method,
@@ -619,7 +652,7 @@ export default function AdminPluginInternalServicesPage() {
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
               <div className="w-full sm:w-40">
                 <Field
-                  label="Retention Days"
+                  label={t('logs.retentionDays')}
                   type="number"
                   value={retentionDays}
                   onChange={setRetentionDays}
@@ -630,18 +663,25 @@ export default function AdminPluginInternalServicesPage() {
                 disabled={acting === 'retention'}
                 onClick={() => void runRetention()}
               >
-                Apply Retention
+                {t('logs.applyRetention')}
               </Button>
             </div>
           </Panel>
         </TabsContent>
 
         <TabsContent value="resources">
-          <Panel title="Resource Bindings" description="Plugin-owned resource links by scope.">
+          <Panel title={t('resources.title')} description={t('resources.description')}>
             <DataTable
               loading={loading}
-              empty="No resource bindings."
-              headers={['Plugin', 'Scope', 'Resource', 'Cardinality', 'Status', 'Updated']}
+              empty={t('resources.empty')}
+              headers={[
+                t('resources.headers.plugin'),
+                t('resources.headers.scope'),
+                t('resources.headers.resource'),
+                t('resources.headers.cardinality'),
+                t('resources.headers.status'),
+                t('resources.headers.updated'),
+              ]}
               rows={resourceBindings.map((binding) => [
                 binding.pluginId,
                 `${binding.scopeType}:${binding.scopeId}`,

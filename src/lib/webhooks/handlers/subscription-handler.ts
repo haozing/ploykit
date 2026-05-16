@@ -38,8 +38,10 @@ import { entitlementPlans, userEntitlements } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { getPlanForStripePriceId } from '@/lib/services/billing/plan-price-service';
 import { WEBHOOK_PLUGIN_IDS, BILLING_EVENTS, PAYMENT_FAILURE_CONFIG } from '../constants';
+import { getProductPrimaryCreditMetric } from '@/lib/billing/product-billing.server';
 
 const PLUGIN_ID = WEBHOOK_PLUGIN_IDS.STRIPE;
+const PRIMARY_CREDIT_METRIC = getProductPrimaryCreditMetric();
 
 type BillingInterval = 'monthly' | 'yearly';
 
@@ -212,7 +214,7 @@ export function initSubscriptionHandlers() {
 
         if (plan) {
           const interval = resolvedBillingInterval || 'monthly';
-          const creditsGranted = readPlanLimitValue(plan.limits, 'runlynk.calls', interval) ?? 0;
+          const creditsGranted = readPlanLimitValue(plan.limits, PRIMARY_CREDIT_METRIC, interval) ?? 0;
 
           if (creditsGranted > 0) {
             await logSubscriptionCreated({
@@ -748,7 +750,7 @@ export function initSubscriptionHandlers() {
             );
           } else {
             const resetAmount =
-              readPlanLimitValue(userEntitlement.plan.limits, 'runlynk.calls', 'monthly') ?? 0;
+              readPlanLimitValue(userEntitlement.plan.limits, PRIMARY_CREDIT_METRIC, 'monthly') ?? 0;
 
             if (resetAmount > 0) {
               await logMonthlyReset({
@@ -954,7 +956,7 @@ export function initSubscriptionHandlers() {
 
           if (plan) {
             const creditsToRevoke =
-              readPlanLimitValue(plan.limits, 'runlynk.calls', 'monthly') ?? 0;
+              readPlanLimitValue(plan.limits, PRIMARY_CREDIT_METRIC, 'monthly') ?? 0;
 
             if (creditsToRevoke > 0) {
               await logRefundRevoke({

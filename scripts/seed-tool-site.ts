@@ -65,6 +65,10 @@ import {
 } from '../src/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { hashPassword } from 'better-auth/crypto';
+import {
+  PLATFORM_OUTPUT_QUALITY_CAPABILITY,
+  PLATFORM_PRIMARY_CREDIT_METRIC,
+} from '../src/lib/billing/billing-metrics';
 
 // ═══════════════════════════════════════════════════════════════
 // 配置
@@ -109,21 +113,21 @@ const CONFIG = {
       langJsonb: {
         en: {
           name: 'Free',
-          description: 'Basic access for trying RunLynk',
-          featuresList: ['10 calls/month', 'Up to 480p output', 'Community support'],
+          description: 'Basic access for trying PloyKit',
+          featuresList: ['10 credits/month', 'Basic output quality', 'Community support'],
         },
         zh: {
           name: '免费版',
           description: '适合试用与轻度使用',
-          featuresList: ['每月 10 次调用额度', '最高 480p 输出', '社区支持'],
+          featuresList: ['每月 10 点额度', '基础输出质量', '社区支持'],
         },
       },
       features: {
-        'runlynk.outputResolution': '480p' as const,
+        [PLATFORM_OUTPUT_QUALITY_CAPABILITY]: '480p' as const,
       },
       limits: {
-        monthly: { 'runlynk.calls': 10 },
-        yearly: { 'runlynk.calls': 10 },
+        monthly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 10 },
+        yearly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 10 },
       },
       pricing: {
         currency: 'USD',
@@ -146,20 +150,20 @@ const CONFIG = {
         en: {
           name: 'Pro',
           description: 'For creators and pros who need more capacity',
-          featuresList: ['100 calls/month', 'Up to 1080p output', 'Priority support'],
+          featuresList: ['100 credits/month', 'High output quality', 'Priority support'],
         },
         zh: {
           name: '专业版',
           description: '适合高频使用与更高质量输出',
-          featuresList: ['每月 100 次调用额度', '最高 1080p 输出', '优先支持'],
+          featuresList: ['每月 100 点额度', '高质量输出', '优先支持'],
         },
       },
       features: {
-        'runlynk.outputResolution': '1080p' as const,
+        [PLATFORM_OUTPUT_QUALITY_CAPABILITY]: '1080p' as const,
       },
       limits: {
-        monthly: { 'runlynk.calls': 100 },
-        yearly: { 'runlynk.calls': 100 },
+        monthly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 100 },
+        yearly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 100 },
       },
       pricing: {
         currency: 'USD',
@@ -182,20 +186,20 @@ const CONFIG = {
         en: {
           name: 'Enterprise',
           description: 'Unlimited usage and full-quality output',
-          featuresList: ['Unlimited calls', 'Original output', 'SLA / dedicated support'],
+          featuresList: ['Unlimited credits', 'Original output quality', 'SLA / dedicated support'],
         },
         zh: {
           name: '企业版',
           description: '不限额度，解锁全部能力',
-          featuresList: ['不限调用额度', '原始质量输出', 'SLA / 专属支持'],
+          featuresList: ['不限额度', '原始输出质量', 'SLA / 专属支持'],
         },
       },
       features: {
-        'runlynk.outputResolution': 'original' as const,
+        [PLATFORM_OUTPUT_QUALITY_CAPABILITY]: 'original' as const,
       },
       limits: {
-        monthly: { 'runlynk.calls': -1 },
-        yearly: { 'runlynk.calls': -1 },
+        monthly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: -1 },
+        yearly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: -1 },
       },
       pricing: {
         currency: 'USD',
@@ -322,16 +326,14 @@ async function seedPlans() {
         .returning();
 
       const monthlyAmount = (planData as any).pricing?.monthly ?? 0;
-      const calls = (planData.limits as any).monthly?.['runlynk.calls'];
-      const callsLabel = calls === -1 ? 'Unlimited' : `${calls} calls/month`;
-      const resolution =
-        (planData.features as any)['runlynk.outputResolution'] ??
-        (planData.features as any).outputResolution;
+      const credits = (planData.limits as any).monthly?.[PLATFORM_PRIMARY_CREDIT_METRIC];
+      const creditsLabel = credits === -1 ? 'Unlimited' : `${credits} credits/month`;
+      const outputQuality = (planData.features as any)[PLATFORM_OUTPUT_QUALITY_CAPABILITY];
 
       log(`Plan "${planData.name}" (${planData.slug}) created successfully`, 'success');
       log(`  ├─ Price: $${monthlyAmount}/month`, 'info');
-      log(`  ├─ Calls: ${callsLabel}`, 'info');
-      log(`  ├─ Resolution: ${resolution}`, 'info');
+      log(`  ├─ Credits: ${creditsLabel}`, 'info');
+      log(`  ├─ Output quality: ${outputQuality}`, 'info');
       if (planData.isDefault) {
         log(`  └─ Default plan`, 'info');
       }

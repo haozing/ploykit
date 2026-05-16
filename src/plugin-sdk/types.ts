@@ -246,6 +246,14 @@ export interface PluginMenuDefinition {
   /** Displayed when groupKey cannot be translated. */
   fallbackGroup?: string;
   weight?: number;
+  visibility?: 'public' | 'signedIn' | 'admin' | 'workspaceMember' | 'suiteAdmin';
+  requires?: {
+    permissions?: readonly PermissionValue[];
+    workspaceRoles?: readonly ('owner' | 'admin' | 'editor' | 'viewer')[];
+    entitlements?: readonly string[];
+    servicesBound?: readonly string[];
+    resourceBindings?: readonly string[];
+  };
 }
 
 export const PLUGIN_SLOT_NAMES = [
@@ -517,6 +525,8 @@ export interface PluginServiceDefinition {
 export type PluginResourceBindingScopeType = 'user' | 'workspace';
 export type PluginResourceBindingCardinality = 'one' | 'many';
 export type PluginResourceBindingRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type PluginResourceBindingOwner = 'plugin' | 'suite' | 'product';
+export type PluginResourceBindingVisibility = 'private' | 'suite' | 'product';
 
 export interface PluginResourceBindingPermissionDefinition {
   read?: readonly PluginResourceBindingRole[];
@@ -526,8 +536,31 @@ export interface PluginResourceBindingPermissionDefinition {
 export interface PluginResourceBindingDefinition {
   type: string;
   scope: PluginResourceBindingScopeType;
+  owner?: PluginResourceBindingOwner;
+  visibility?: PluginResourceBindingVisibility;
   cardinality?: PluginResourceBindingCardinality;
   permissions?: PluginResourceBindingPermissionDefinition;
+}
+
+export interface PluginDependencyDefinition {
+  plugins?: Record<string, string>;
+  suites?: Record<string, string>;
+  hostCapabilities?: readonly string[];
+  components?: readonly {
+    type:
+      | 'plugin'
+      | 'suite'
+      | 'internalService'
+      | 'storageCollection'
+      | 'resourceBinding'
+      | 'worker'
+      | 'assetPack'
+      | 'modelProvider';
+    name: string;
+    required?: boolean;
+    version?: string;
+    metadata?: Record<string, unknown>;
+  }[];
 }
 
 export interface PluginDefinition {
@@ -550,6 +583,7 @@ export interface PluginDefinition {
   meters?: readonly PluginMeterDefinition[];
   services?: readonly PluginServiceDefinition[];
   resourceBindings?: readonly PluginResourceBindingDefinition[];
+  dependencies?: PluginDependencyDefinition;
   config?: PluginConfigDefinition;
   configSchema?: unknown;
   lifecycle?: PluginLifecycle;

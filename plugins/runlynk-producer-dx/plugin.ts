@@ -23,6 +23,8 @@ export default definePlugin({
     {
       type: 'project',
       scope: 'workspace',
+      owner: 'suite',
+      visibility: 'suite',
       cardinality: 'one',
       permissions: {
         read: ['owner', 'admin', 'editor', 'viewer'],
@@ -106,5 +108,10 @@ export default definePlugin({
     groupKey: 'menu.groups.apps',
     fallbackGroup: 'Apps',
     weight: 12,
+    visibility: 'signedIn',
+    requires: {
+      servicesBound: ['runlynk-core'],
+      resourceBindings: ['project'],
+    },
   },
 });

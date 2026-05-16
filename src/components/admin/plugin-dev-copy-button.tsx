@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 interface PluginDevCopyButtonProps {
   value: string;
   label?: string;
+  copiedLabel?: string;
 }
 
 export function PluginDevCopyButton({
   value,
   label = 'Copy diagnostics',
+  copiedLabel = 'Copied',
 }: PluginDevCopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
@@ -24,7 +26,7 @@ export function PluginDevCopyButton({
   return (
     <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-      {copied ? 'Copied' : label}
+      {copied ? copiedLabel : label}
     </Button>
   );
 }

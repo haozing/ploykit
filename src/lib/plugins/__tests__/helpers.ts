@@ -25,9 +25,14 @@ export function createMockInstallation(
 ): PluginInstallation {
   return {
     id: '1',
+    productId: 'ploykit',
+    suiteId: 'test-suite',
+    bundleId: 'test-bundle',
     pluginId: TEST_PLUGIN_ID,
     version: TEST_PLUGIN_VERSION,
     enabled: false,
+    installStatus: 'installed',
+    metadata: {},
     installedAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
     installedBy: TEST_USER_ID,

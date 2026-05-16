@@ -3,7 +3,15 @@ import type { AbstractIntlMessages } from 'next-intl';
 type MessageRecord = Record<string, unknown>;
 
 const GLOBAL_CLIENT_MESSAGE_PATHS = ['common', 'components.shared.userDropdown', 'errors'];
-const PUBLIC_SITE_MESSAGE_PATHS = ['home', 'about', 'privacy', 'terms', 'contact', 'pricing'];
+const PUBLIC_SITE_MESSAGE_PATHS = [
+  'home',
+  'about',
+  'privacy',
+  'terms',
+  'contact',
+  'pricing',
+  'success',
+];
 const AUTH_MESSAGE_PATHS = ['auth'];
 const DASHBOARD_MESSAGE_PATHS = ['dashboard', 'components'];
 const ADMIN_MESSAGE_PATHS = ['dashboard', 'components'];

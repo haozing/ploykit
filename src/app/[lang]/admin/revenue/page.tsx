@@ -3,6 +3,7 @@
 import * as React from 'react';
 import useSWR from 'swr';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Calendar, DollarSign, RefreshCw, TrendingUp, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,6 +81,7 @@ async function fetchRevenue(url: string): Promise<RevenueMetrics> {
 
 export default function RevenuePage() {
   const params = useParams();
+  const t = useTranslations('dashboard.revenueMetrics');
   const lang = params.lang === 'zh' ? 'zh' : 'en';
   const [timeframe, setTimeframe] = React.useState<TimeframeKey>('30days');
 
@@ -132,10 +134,8 @@ export default function RevenuePage() {
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Revenue</h1>
-          <p className="text-sm text-muted-foreground">
-            MRR, ARR, account value, and plan revenue from active entitlements.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('description')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={timeframe} onValueChange={(value) => setTimeframe(value as TimeframeKey)}>
@@ -144,15 +144,15 @@ export default function RevenuePage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7days">7 days</SelectItem>
-              <SelectItem value="30days">30 days</SelectItem>
-              <SelectItem value="90days">90 days</SelectItem>
-              <SelectItem value="12months">12 months</SelectItem>
+              <SelectItem value="7days">{t('timeframes.7days')}</SelectItem>
+              <SelectItem value="30days">{t('timeframes.30days')}</SelectItem>
+              <SelectItem value="90days">{t('timeframes.90days')}</SelectItem>
+              <SelectItem value="12months">{t('timeframes.12months')}</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={() => void mutate()} disabled={isValidating}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+            {t('actions.refresh')}
           </Button>
         </div>
       </div>
@@ -160,10 +160,8 @@ export default function RevenuePage() {
       {error ? (
         <Card className="border-destructive">
           <CardHeader>
-            <CardTitle>Revenue data unavailable</CardTitle>
-            <CardDescription>
-              The analytics revenue API did not return a valid metrics payload.
-            </CardDescription>
+            <CardTitle>{t('error.title')}</CardTitle>
+            <CardDescription>{t('error.description')}</CardDescription>
           </CardHeader>
         </Card>
       ) : null}
@@ -171,34 +169,36 @@ export default function RevenuePage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <RevenueMetricCard
           icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          label="MRR"
+          label={t('metrics.mrr.label')}
           value={isLoading ? null : formatCurrency(data?.mrr ?? 0)}
-          detail={`${formatPercentage(data?.revenueGrowth ?? 0)} from previous window`}
+          detail={t('metrics.mrr.detail', {
+            percentage: formatPercentage(data?.revenueGrowth ?? 0),
+          })}
         />
         <RevenueMetricCard
           icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
-          label="ARR"
+          label={t('metrics.arr.label')}
           value={isLoading ? null : formatCurrency(data?.arr ?? 0)}
-          detail="Annualized recurring revenue"
+          detail={t('metrics.arr.detail')}
         />
         <RevenueMetricCard
           icon={<Users className="h-4 w-4 text-muted-foreground" />}
-          label="ARPU"
+          label={t('metrics.arpu.label')}
           value={isLoading ? null : formatCurrency(data?.averageRevenuePerUser ?? 0)}
-          detail="Average revenue per active user"
+          detail={t('metrics.arpu.detail')}
         />
         <RevenueMetricCard
           icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-          label="LTV"
+          label={t('metrics.ltv.label')}
           value={isLoading ? null : formatCurrency(data?.lifetimeValue ?? 0)}
-          detail="Current 24 month estimate"
+          detail={t('metrics.ltv.detail')}
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Revenue By Plan</CardTitle>
-          <CardDescription>MRR contribution grouped by plan name.</CardDescription>
+          <CardTitle>{t('byPlan.title')}</CardTitle>
+          <CardDescription>{t('byPlan.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -207,9 +207,11 @@ export default function RevenuePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Plan</TableHead>
-                  <TableHead className="text-right">MRR</TableHead>
-                  <TableHead className="w-[180px] text-right">Share</TableHead>
+                  <TableHead>{t('byPlan.headers.plan')}</TableHead>
+                  <TableHead className="text-right">{t('byPlan.headers.mrr')}</TableHead>
+                  <TableHead className="w-[180px] text-right">
+                    {t('byPlan.headers.share')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -237,7 +239,7 @@ export default function RevenuePage() {
             </Table>
           ) : (
             <div className="rounded-md border border-dashed py-10 text-center text-sm text-muted-foreground">
-              No active paid revenue in this window.
+              {t('byPlan.empty')}
             </div>
           )}
         </CardContent>

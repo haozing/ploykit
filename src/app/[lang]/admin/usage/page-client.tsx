@@ -3,6 +3,7 @@
 import * as React from 'react';
 import useSWR from 'swr';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Activity, BarChart3, Filter, RefreshCw, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,6 +76,7 @@ async function fetchAdminUsage(url: string): Promise<AdminUsageData> {
 
 export default function UsageDashboardPageClient() {
   const params = useParams();
+  const t = useTranslations('dashboard.usageAdmin');
   const lang = params.lang === 'zh' ? 'zh' : 'en';
   const [days, setDays] = React.useState('30');
   const [limit, setLimit] = React.useState('10');
@@ -152,14 +154,14 @@ export default function UsageDashboardPageClient() {
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Usage</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Platform quota events and top consumers from the last {data?.rangeDays ?? 30} days.
+            {t('description', { days: data?.rangeDays ?? 30 })}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void mutate()} disabled={isValidating}>
           <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
+          {t('actions.refresh')}
         </Button>
       </div>
 
@@ -167,28 +169,28 @@ export default function UsageDashboardPageClient() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Filter className="h-4 w-4" />
-            Filters
+            {t('filters.title')}
           </CardTitle>
-          <CardDescription>Limit the usage window by time, metric key, or user id.</CardDescription>
+          <CardDescription>{t('filters.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-[140px_140px_minmax(180px,1fr)_minmax(180px,1fr)_auto] md:items-end">
             <div className="space-y-2">
-              <Label htmlFor="usage-days">Window</Label>
+              <Label htmlFor="usage-days">{t('filters.window')}</Label>
               <Select value={days} onValueChange={setDays}>
                 <SelectTrigger id="usage-days">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7">7 days</SelectItem>
-                  <SelectItem value="30">30 days</SelectItem>
-                  <SelectItem value="90">90 days</SelectItem>
-                  <SelectItem value="365">365 days</SelectItem>
+                  <SelectItem value="7">{t('days.7')}</SelectItem>
+                  <SelectItem value="30">{t('days.30')}</SelectItem>
+                  <SelectItem value="90">{t('days.90')}</SelectItem>
+                  <SelectItem value="365">{t('days.365')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="usage-limit">Rows</Label>
+              <Label htmlFor="usage-limit">{t('filters.rows')}</Label>
               <Select value={limit} onValueChange={setLimit}>
                 <SelectTrigger id="usage-limit">
                   <SelectValue />
@@ -202,7 +204,7 @@ export default function UsageDashboardPageClient() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="usage-metric">Metric</Label>
+              <Label htmlFor="usage-metric">{t('filters.metric')}</Label>
               <Input
                 id="usage-metric"
                 value={metricDraft}
@@ -211,20 +213,20 @@ export default function UsageDashboardPageClient() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="usage-user">User ID</Label>
+              <Label htmlFor="usage-user">{t('filters.userId')}</Label>
               <Input
                 id="usage-user"
                 value={userDraft}
                 onChange={(event) => setUserDraft(event.target.value)}
-                placeholder="user id"
+                placeholder={t('filters.userPlaceholder')}
               />
             </div>
             <div className="flex gap-2">
               <Button type="button" onClick={applyFilters}>
-                Apply
+                {t('actions.apply')}
               </Button>
               <Button type="button" variant="outline" onClick={clearFilters}>
-                Clear
+                {t('actions.clear')}
               </Button>
             </div>
           </div>
@@ -234,10 +236,8 @@ export default function UsageDashboardPageClient() {
       {error ? (
         <Card className="border-destructive">
           <CardHeader>
-            <CardTitle>Usage data unavailable</CardTitle>
-            <CardDescription>
-              The admin usage API did not return a valid platform usage summary.
-            </CardDescription>
+            <CardTitle>{t('error.title')}</CardTitle>
+            <CardDescription>{t('error.description')}</CardDescription>
           </CardHeader>
         </Card>
       ) : null}
@@ -245,34 +245,34 @@ export default function UsageDashboardPageClient() {
       <div className="grid gap-4 md:grid-cols-3">
         <MetricCard
           icon={<Activity className="h-4 w-4 text-muted-foreground" />}
-          label="Events"
+          label={t('metrics.events.label')}
           value={isLoading ? null : formatNumber(data?.totalEvents ?? 0)}
-          detail={`Window: ${data?.rangeDays ?? 30} days`}
+          detail={t('metrics.events.detail', { days: data?.rangeDays ?? 30 })}
         />
         <MetricCard
           icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
-          label="Tracked metrics"
+          label={t('metrics.tracked.label')}
           value={isLoading ? null : formatNumber(data?.topMetrics.length ?? 0)}
-          detail="Grouped by plugin and metric"
+          detail={t('metrics.tracked.detail')}
         />
         <MetricCard
           icon={<Users className="h-4 w-4 text-muted-foreground" />}
-          label="Active users"
+          label={t('metrics.activeUsers.label')}
           value={isLoading ? null : formatNumber(data?.topUsers.length ?? 0)}
-          detail="Ranked by usage value"
+          detail={t('metrics.activeUsers.detail')}
         />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Top Metrics</CardTitle>
+            <CardTitle>{t('sections.topMetrics.title')}</CardTitle>
             <CardDescription>
               {data
                 ? `${dateFormatter.format(new Date(data.startAt))} - ${dateFormatter.format(
                     new Date(data.endAt)
                   )}`
-                : 'Loading current usage window'}
+                : t('sections.topMetrics.loading')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -297,15 +297,15 @@ export default function UsageDashboardPageClient() {
                 ))}
               </div>
             ) : (
-              <EmptyState message="No usage events recorded in this window." />
+              <EmptyState message={t('sections.topMetrics.empty')} />
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Top Users</CardTitle>
-            <CardDescription>Users with the highest recorded quota usage.</CardDescription>
+            <CardTitle>{t('sections.topUsers.title')}</CardTitle>
+            <CardDescription>{t('sections.topUsers.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -314,8 +314,8 @@ export default function UsageDashboardPageClient() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead className="text-right">Usage</TableHead>
+                    <TableHead>{t('table.user')}</TableHead>
+                    <TableHead className="text-right">{t('table.usage')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -348,7 +348,7 @@ export default function UsageDashboardPageClient() {
                 </TableBody>
               </Table>
             ) : (
-              <EmptyState message="No user usage records in this window." />
+              <EmptyState message={t('sections.topUsers.empty')} />
             )}
           </CardContent>
         </Card>
@@ -356,11 +356,11 @@ export default function UsageDashboardPageClient() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Events</CardTitle>
+          <CardTitle>{t('sections.recentEvents.title')}</CardTitle>
           <CardDescription>
             {data?.filters.metric || data?.filters.userId
-              ? 'Latest usage records matching the active filters.'
-              : 'Latest usage records in the active window.'}
+              ? t('sections.recentEvents.filteredDescription')
+              : t('sections.recentEvents.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -370,10 +370,10 @@ export default function UsageDashboardPageClient() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Metric</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead className="text-right">Value</TableHead>
-                  <TableHead className="text-right">Time</TableHead>
+                  <TableHead>{t('table.metric')}</TableHead>
+                  <TableHead>{t('table.user')}</TableHead>
+                  <TableHead className="text-right">{t('table.value')}</TableHead>
+                  <TableHead className="text-right">{t('table.time')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -401,7 +401,7 @@ export default function UsageDashboardPageClient() {
               </TableBody>
             </Table>
           ) : (
-            <EmptyState message="No usage events match the current filters." />
+            <EmptyState message={t('sections.recentEvents.empty')} />
           )}
         </CardContent>
       </Card>

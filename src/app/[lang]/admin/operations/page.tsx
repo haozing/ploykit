@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { formatDistance } from 'date-fns';
+import { useTranslations } from 'next-intl';
 import {
   Activity,
   AlertCircle,
@@ -113,6 +114,7 @@ interface WebhookReceiptDetailResponse {
 }
 
 export default function AdminOperationsPage() {
+  const t = useTranslations('dashboard.operationsCenter');
   const [outboxStats, setOutboxStats] = React.useState<OutboxStats | null>(null);
   const [outboxEntries, setOutboxEntries] = React.useState<OutboxDeadLetter[]>([]);
   const [webhookReceipts, setWebhookReceipts] = React.useState<WebhookReceipt[]>([]);
@@ -354,8 +356,8 @@ export default function AdminOperationsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Operations Center</h1>
-          <p className="text-muted-foreground">Queue health, dead letters, and webhook retries.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">{t('description')}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -365,7 +367,7 @@ export default function AdminOperationsPage() {
             disabled={loading || refreshing}
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            {t('actions.refresh')}
           </Button>
           <Button
             size="sm"
@@ -373,7 +375,7 @@ export default function AdminOperationsPage() {
             disabled={loading || retryingWebhooks}
           >
             <RotateCcw className={`h-4 w-4 ${retryingWebhooks ? 'animate-spin' : ''}`} />
-            Retry Webhooks
+            {t('actions.retryWebhooks')}
           </Button>
         </div>
       </div>
@@ -381,7 +383,7 @@ export default function AdminOperationsPage() {
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Operation failed</AlertTitle>
+          <AlertTitle>{t('alerts.failed')}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -389,7 +391,7 @@ export default function AdminOperationsPage() {
       {message && (
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Operation complete</AlertTitle>
+          <AlertTitle>{t('alerts.complete')}</AlertTitle>
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
@@ -397,32 +399,32 @@ export default function AdminOperationsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<Inbox className="h-4 w-4 text-muted-foreground" />}
-          label="Outbox Failed"
+          label={t('stats.outboxFailed')}
           value={(outboxStats?.failed ?? 0).toLocaleString()}
           tone={hasOutboxFailures ? 'danger' : 'default'}
         />
         <StatCard
           icon={<Clock className="h-4 w-4 text-muted-foreground" />}
-          label="Outbox Pending"
+          label={t('stats.outboxPending')}
           value={(outboxStats?.pending ?? 0).toLocaleString()}
         />
         <StatCard
           icon={<Webhook className="h-4 w-4 text-muted-foreground" />}
-          label="Webhook Retryable"
+          label={t('stats.webhookRetryable')}
           value={webhookReceipts.length.toLocaleString()}
           tone={hasWebhookRetries ? 'warning' : 'default'}
         />
         <StatCard
           icon={<Activity className="h-4 w-4 text-muted-foreground" />}
-          label="Outbox Total"
+          label={t('stats.outboxTotal')}
           value={(outboxStats?.total ?? 0).toLocaleString()}
         />
       </div>
 
       <Tabs defaultValue="outbox" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="outbox">Outbox</TabsTrigger>
-          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+          <TabsTrigger value="outbox">{t('tabs.outbox')}</TabsTrigger>
+          <TabsTrigger value="webhooks">{t('tabs.webhooks')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="outbox">
@@ -430,10 +432,8 @@ export default function AdminOperationsPage() {
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle>Dead Letters</CardTitle>
-                  <CardDescription>
-                    Failed outbox entries that can be replayed, ignored, or archived.
-                  </CardDescription>
+                  <CardTitle>{t('outbox.title')}</CardTitle>
+                  <CardDescription>{t('outbox.description')}</CardDescription>
                 </div>
                 {outboxEntries.length > 0 && (
                   <div className="flex flex-wrap gap-2">
@@ -443,7 +443,7 @@ export default function AdminOperationsPage() {
                       disabled={selectedOutboxIds.length === 0}
                       onClick={() => void handleBulkOutbox('replay')}
                     >
-                      Replay Selected
+                      {t('outbox.replaySelected')}
                     </Button>
                     <Button
                       variant="outline"
@@ -451,7 +451,7 @@ export default function AdminOperationsPage() {
                       disabled={selectedOutboxIds.length === 0}
                       onClick={() => void handleBulkOutbox('ignore')}
                     >
-                      Ignore Selected
+                      {t('outbox.ignoreSelected')}
                     </Button>
                     <Button
                       variant="outline"
@@ -459,7 +459,7 @@ export default function AdminOperationsPage() {
                       disabled={selectedOutboxIds.length === 0}
                       onClick={() => void handleBulkOutbox('archive')}
                     >
-                      Archive Selected
+                      {t('outbox.archiveSelected')}
                     </Button>
                   </div>
                 )}
@@ -469,7 +469,10 @@ export default function AdminOperationsPage() {
               {loading ? (
                 <LoadingRows />
               ) : outboxEntries.length === 0 ? (
-                <EmptyState icon={<CheckCircle2 className="h-10 w-10" />} title="No dead letters" />
+                <EmptyState
+                  icon={<CheckCircle2 className="h-10 w-10" />}
+                  title={t('outbox.empty')}
+                />
               ) : (
                 <Table>
                   <TableHeader>
@@ -489,12 +492,12 @@ export default function AdminOperationsPage() {
                           }
                         />
                       </TableHead>
-                      <TableHead>Event</TableHead>
-                      <TableHead>Emitter</TableHead>
-                      <TableHead>Attempts</TableHead>
-                      <TableHead>Last Error</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableHead>{t('outbox.headers.event')}</TableHead>
+                      <TableHead>{t('outbox.headers.emitter')}</TableHead>
+                      <TableHead>{t('outbox.headers.attempts')}</TableHead>
+                      <TableHead>{t('outbox.headers.lastError')}</TableHead>
+                      <TableHead>{t('outbox.headers.updated')}</TableHead>
+                      <TableHead className="text-right">{t('outbox.headers.action')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -530,7 +533,7 @@ export default function AdminOperationsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="max-w-[300px] truncate text-sm text-muted-foreground">
-                            {entry.error ?? 'No error recorded'}
+                            {entry.error ?? t('outbox.noError')}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -547,7 +550,7 @@ export default function AdminOperationsPage() {
                               <RotateCcw
                                 className={`h-4 w-4 ${actingId === entry.id ? 'animate-spin' : ''}`}
                               />
-                              Replay
+                              {t('outbox.actions.replay')}
                             </Button>
                             <Button
                               variant="outline"
@@ -564,7 +567,7 @@ export default function AdminOperationsPage() {
                               }}
                               disabled={actingId === entry.id}
                             >
-                              Ignore
+                              {t('outbox.actions.ignore')}
                             </Button>
                             <Button
                               variant="outline"
@@ -581,7 +584,7 @@ export default function AdminOperationsPage() {
                               }}
                               disabled={actingId === entry.id}
                             >
-                              Archive
+                              {t('outbox.actions.archive')}
                             </Button>
                           </div>
                         </TableCell>
@@ -599,13 +602,13 @@ export default function AdminOperationsPage() {
             <CardHeader>
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle>Retryable Receipts</CardTitle>
-                  <CardDescription>
-                    Webhook receipts waiting for a manual or scheduled retry.
-                  </CardDescription>
+                  <CardTitle>{t('webhooks.title')}</CardTitle>
+                  <CardDescription>{t('webhooks.description')}</CardDescription>
                 </div>
                 {hasWebhookRetries && (
-                  <Badge variant="secondary">{webhookReceipts.length} queued</Badge>
+                  <Badge variant="secondary">
+                    {t('webhooks.queued', { count: webhookReceipts.length })}
+                  </Badge>
                 )}
               </div>
             </CardHeader>
@@ -615,19 +618,19 @@ export default function AdminOperationsPage() {
               ) : webhookReceipts.length === 0 ? (
                 <EmptyState
                   icon={<CheckCircle2 className="h-10 w-10" />}
-                  title="No retryable receipts"
+                  title={t('webhooks.empty')}
                 />
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Event</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Retries</TableHead>
-                      <TableHead>Last Error</TableHead>
-                      <TableHead>Updated</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableHead>{t('webhooks.headers.provider')}</TableHead>
+                      <TableHead>{t('webhooks.headers.event')}</TableHead>
+                      <TableHead>{t('webhooks.headers.status')}</TableHead>
+                      <TableHead>{t('webhooks.headers.retries')}</TableHead>
+                      <TableHead>{t('webhooks.headers.lastError')}</TableHead>
+                      <TableHead>{t('webhooks.headers.updated')}</TableHead>
+                      <TableHead className="text-right">{t('webhooks.headers.action')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -650,7 +653,7 @@ export default function AdminOperationsPage() {
                         <TableCell>{receipt.retryCount.toLocaleString()}</TableCell>
                         <TableCell>
                           <div className="max-w-[320px] truncate text-sm text-muted-foreground">
-                            {receipt.error ?? 'No error recorded'}
+                            {receipt.error ?? t('webhooks.noError')}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -664,7 +667,7 @@ export default function AdminOperationsPage() {
                               onClick={() => void handleViewWebhookReceipt(receipt)}
                             >
                               <Eye className="h-4 w-4" />
-                              Detail
+                              {t('webhooks.actions.detail')}
                             </Button>
                             <Button
                               variant="outline"
@@ -677,7 +680,7 @@ export default function AdminOperationsPage() {
                                   retryingReceiptId === receipt.id ? 'animate-spin' : ''
                                 }`}
                               />
-                              Retry
+                              {t('webhooks.actions.retry')}
                             </Button>
                           </div>
                         </TableCell>

@@ -26,13 +26,21 @@ vi.mock('@/lib/_core/logger', () => ({
 }));
 
 vi.mock('@/lib/plugin-map', () => ({
+  DEFAULT_RUNTIME_PRODUCT_ID: 'ploykit',
+  RUNTIME_PRODUCTS: {
+    ploykit: { id: 'ploykit', name: 'PloyKit', suites: ['default'], bundles: [] },
+  },
+  PLUGIN_SUITES: {},
+  APP_BUNDLES: {},
   PLUGIN_MAP: {
     welcome: {
+      productId: 'ploykit',
+      suiteId: 'default',
+      bundleIds: [],
       plugin: vi.fn(),
       components: {},
     },
   },
-  hasPlugin: vi.fn((id: string) => id === 'welcome'),
 }));
 
 vi.mock('@/lib/plugin-runtime/registry', () => ({

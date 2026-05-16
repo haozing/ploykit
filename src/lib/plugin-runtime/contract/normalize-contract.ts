@@ -244,6 +244,7 @@ export function normalizePluginRuntimeContract(
     meters: definition.meters ?? [],
     services: definition.services ?? [],
     resourceBindings: definition.resourceBindings ?? [],
+    dependencies: definition.dependencies,
     egress: definition.egress ?? [],
     definition,
     routes: {

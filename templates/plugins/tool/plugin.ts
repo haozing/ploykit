@@ -7,7 +7,12 @@ export default definePlugin({
   description: 'A focused tool plugin template with one page and one action API.',
   kind: 'tool',
   trustLevel: 'untrusted',
-  permissions: [Permission.AuditWrite, Permission.UsageWrite, Permission.UiToast],
+  permissions: [
+    Permission.AuditWrite,
+    Permission.UsageWrite,
+    Permission.UiToast,
+    Permission.NavigationExtend,
+  ],
   routes: {
     pages: [
       {

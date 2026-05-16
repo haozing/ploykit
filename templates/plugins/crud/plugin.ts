@@ -17,6 +17,7 @@ export default definePlugin({
     Permission.AuditWrite,
     Permission.UsageWrite,
     Permission.UiToast,
+    Permission.NavigationExtend,
   ],
   data: {
     collections: {

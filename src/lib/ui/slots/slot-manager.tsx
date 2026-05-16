@@ -360,8 +360,8 @@ export class SlotManager {
     try {
       logger.info('SlotManager: Lazy initializing from database...');
 
-      const { getEnabledPlugins } = await import('@/lib/bus/hook-helpers.server');
-      const enabledPluginIds = await getEnabledPlugins();
+      const { runtimeScopeService } = await import('@/lib/plugin-runtime/scope');
+      const enabledPluginIds = await runtimeScopeService.listRuntimePluginIds({ surface: 'slot' });
       const pluginIds = enabledPluginIds.filter((pluginId) => hasPluginRuntimeContract(pluginId));
 
       await this._initializeWithPlugins(pluginIds);

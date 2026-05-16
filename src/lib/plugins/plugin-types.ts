@@ -4,13 +4,18 @@
  */
 
 /**
- * Plugin installation record (Global)
+ * Product-scoped plugin installation record.
  */
 export interface PluginInstallation {
   id: string;
+  productId: string;
+  suiteId?: string;
+  bundleId?: string;
   pluginId: string;
   version: string;
   enabled: boolean;
+  installStatus: string;
+  metadata: Record<string, unknown>;
   installedAt: Date;
   updatedAt: Date;
   installedBy?: string;

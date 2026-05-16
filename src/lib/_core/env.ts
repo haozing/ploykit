@@ -161,6 +161,18 @@ const envSchema = z
     //
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).optional(),
     SUPPORTED_LANGUAGES: z.string().default('en,zh'),
+    PLOYKIT_PRODUCT_ID: z.string().optional(),
+    PLUGIN_RUNTIME_PRODUCT_ID: z.string().optional(),
+
+    //
+    // Host AI provider configuration
+    //
+    AI_PROVIDER: z.enum(['none', 'pi-ai']).default('none'),
+    AI_DEFAULT_GENERATE_MODEL: z.string().default('openai:gpt-4.1-mini'),
+    AI_DEFAULT_EMBED_MODEL: z.string().default('host.default.embed'),
+    AI_MODEL_ALLOWLIST: z.string().optional(),
+    AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+    AI_MAX_RETRIES: z.coerce.number().int().min(0).optional(),
 
     //
     // Stripe configuration

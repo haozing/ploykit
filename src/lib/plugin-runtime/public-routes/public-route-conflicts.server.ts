@@ -4,6 +4,7 @@ import { findPluginRoutePatternConflict } from '@/plugin-sdk/route-patterns';
 import { logger } from '@/lib/_core/logger';
 import { normalizeRuntimePath } from '../contract';
 import { pluginRuntimeRegistry } from '../registry';
+import { runtimeScopeService } from '../scope';
 
 export interface PluginPublicAliasConflict {
   code: 'PLUGIN_PUBLIC_ALIAS_GLOBAL_CONFLICT';
@@ -50,8 +51,7 @@ async function resolvePluginIds(input?: {
     return input.pluginIds;
   }
 
-  const { getEnabledPlugins } = await import('@/lib/bus/hook-helpers.server');
-  return getEnabledPlugins();
+  return runtimeScopeService.listRuntimePluginIds({ surface: 'route' });
 }
 
 export async function findPluginPublicAliasConflicts(input?: {

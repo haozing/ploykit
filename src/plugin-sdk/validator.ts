@@ -150,11 +150,20 @@ const WEBHOOK_SIGNATURE_POLICIES = new Set(['none', 'hmac-sha256', 'stripe', 'gi
 const UNSAFE_PERMISSION_PREFIX = 'unsafe.';
 const RESOURCE_BINDING_SCOPES = new Set(['user', 'workspace']);
 const RESOURCE_BINDING_CARDINALITIES = new Set<PluginResourceBindingCardinality>(['one', 'many']);
+const RESOURCE_BINDING_OWNERS = new Set(['plugin', 'suite', 'product']);
+const RESOURCE_BINDING_VISIBILITIES = new Set(['private', 'suite', 'product']);
 const RESOURCE_BINDING_ROLES = new Set<PluginResourceBindingRole>([
   'owner',
   'admin',
   'editor',
   'viewer',
+]);
+const MENU_VISIBILITIES = new Set([
+  'public',
+  'signedIn',
+  'admin',
+  'workspaceMember',
+  'suiteAdmin',
 ]);
 const HOST_PAGE_PATHS = new Set([
   '/',
@@ -1164,6 +1173,71 @@ function validateMenu(
       'Menu group must not be empty when provided.',
       `${basePath}.group`
     );
+  }
+
+  if (menu.visibility !== undefined && !MENU_VISIBILITIES.has(menu.visibility)) {
+    addError(
+      diagnostics,
+      'PLUGIN_MENU_VISIBILITY_INVALID',
+      `Menu visibility "${String(menu.visibility)}" is invalid.`,
+      `${basePath}.visibility`
+    );
+  }
+
+  for (const [permissionIndex, permission] of (menu.requires?.permissions ?? []).entries()) {
+    if (!HostPermissionValues.has(permission)) {
+      addError(
+        diagnostics,
+        'PLUGIN_MENU_PERMISSION_UNKNOWN',
+        `Menu required permission "${String(permission)}" is not part of @ploykit/plugin-sdk.`,
+        `${basePath}.requires.permissions.${permissionIndex}`,
+        'Use the Permission export from @ploykit/plugin-sdk.'
+      );
+    }
+    if (!hasDeclaredPermission(definition, permission)) {
+      addError(
+        diagnostics,
+        'PLUGIN_MENU_PERMISSION_UNDECLARED',
+        `Menu required permission "${permission}" must also be declared in plugin permissions.`,
+        `${basePath}.requires.permissions.${permissionIndex}`,
+        'Add the permission to the top-level permissions array in plugin.ts.'
+      );
+    }
+  }
+
+  for (const [roleIndex, role] of (menu.requires?.workspaceRoles ?? []).entries()) {
+    if (!RESOURCE_BINDING_ROLES.has(role)) {
+      addError(
+        diagnostics,
+        'PLUGIN_MENU_WORKSPACE_ROLE_INVALID',
+        `Menu workspace role "${String(role)}" is invalid.`,
+        `${basePath}.requires.workspaceRoles.${roleIndex}`
+      );
+    }
+  }
+
+  for (const [serviceIndex, serviceName] of (menu.requires?.servicesBound ?? []).entries()) {
+    if (!definition.services?.some((service) => service.name === serviceName)) {
+      addError(
+        diagnostics,
+        'PLUGIN_MENU_SERVICE_REQUIREMENT_UNKNOWN',
+        `Menu requires service "${serviceName}" but the plugin does not declare that internal service.`,
+        `${basePath}.requires.servicesBound.${serviceIndex}`,
+        `Declare services: [{ name: "${serviceName}", ... }] or remove the menu requirement.`
+      );
+    }
+  }
+
+  for (const [bindingIndex, bindingType] of (menu.requires?.resourceBindings ?? []).entries()) {
+    if (!definition.resourceBindings?.some((binding) => binding.type === bindingType)) {
+      addError(
+        diagnostics,
+        'PLUGIN_MENU_RESOURCE_BINDING_REQUIREMENT_UNKNOWN',
+        `Menu requires resource binding "${bindingType}" but the plugin does not declare it.`,
+        `${basePath}.requires.resourceBindings.${bindingIndex}`,
+        `Declare resourceBindings: [{ type: "${bindingType}", ... }] or remove the menu requirement.`
+      );
+    }
   }
 
   if (publicAliasPaths.has(normalizeDeclaredRoutePath(menu.path))) {
@@ -2460,6 +2534,34 @@ function validateResourceBindings(
         'PLUGIN_RESOURCE_BINDING_CARDINALITY_INVALID',
         `Resource binding cardinality "${String(binding.cardinality)}" is invalid.`,
         `${basePath}.cardinality`
+      );
+    }
+
+    if (binding.owner && !RESOURCE_BINDING_OWNERS.has(binding.owner)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_OWNER_INVALID',
+        `Resource binding owner "${String(binding.owner)}" is invalid.`,
+        `${basePath}.owner`
+      );
+    }
+
+    if (binding.visibility && !RESOURCE_BINDING_VISIBILITIES.has(binding.visibility)) {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_VISIBILITY_INVALID',
+        `Resource binding visibility "${String(binding.visibility)}" is invalid.`,
+        `${basePath}.visibility`
+      );
+    }
+
+    if (binding.owner === 'plugin' && binding.visibility === 'suite') {
+      addError(
+        diagnostics,
+        'PLUGIN_RESOURCE_BINDING_VISIBILITY_OWNER_MISMATCH',
+        'Plugin-owned resource bindings cannot use suite visibility.',
+        `${basePath}.visibility`,
+        'Use owner: "suite" for suite-shared bindings or visibility: "private" for plugin-private bindings.'
       );
     }
 

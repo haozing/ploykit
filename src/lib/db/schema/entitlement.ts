@@ -26,12 +26,12 @@ export type OutputResolution = '480p' | '720p' | '1080p' | '4k' | 'original';
  * Plan features (machine-enforced capabilities/constraints).
  *
  * Conventions:
- * - Prefer namespaced keys: `${pluginId}.xxx` (e.g. `runlynk.outputResolution`)
+ * - Prefer namespaced keys: `${namespace}.xxx` (e.g. `platform.outputQuality`)
  * - For boolean gated capabilities, use true/false
  * - For parameterized capabilities, use string/number (e.g. resolution enum)
  */
 export interface PlanFeatures {
-  'runlynk.outputResolution'?: OutputResolution;
+  'platform.outputQuality'?: OutputResolution;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for JSONB field flexibility in Drizzle ORM
   [key: string]: any;

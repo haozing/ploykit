@@ -29,6 +29,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  PLATFORM_OUTPUT_QUALITY_CAPABILITY,
+  PLATFORM_PRIMARY_CREDIT_METRIC,
+} from '@/lib/billing/billing-metrics';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -88,7 +92,7 @@ const quotaKeySchema = z
   .max(120)
   .regex(
     /^[a-z0-9-]+\.[a-z0-9._-]+$/i,
-    'Key must be in the form ${namespace}.xxx (e.g. runlynk.calls)'
+    'Key must be in the form ${namespace}.xxx (e.g. platform.credits)'
   );
 
 const quotaItemSchema = z.object({
@@ -120,7 +124,7 @@ const planFormSchema = z.object({
 
   // Machine-enforced capabilities (JSON) + common structured fields
   capabilitiesJson: jsonObjectSchema,
-  runlynkOutputResolution: z.preprocess(
+  platformOutputQuality: z.preprocess(
     (value) => (value === '' || value === null ? undefined : value),
     resolutionSchema.optional()
   ),
@@ -174,11 +178,10 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
     const stripeProductId = (stripe.productId as string | undefined) || '';
 
     const capabilities = (plan?.features as Record<string, unknown> | undefined) || {};
-    const runlynkOutputResolution =
-      (capabilities['runlynk.outputResolution'] as string | undefined) ||
-      (capabilities.outputResolution as string | undefined) ||
-      undefined;
-    const parsedResolution = resolutionSchema.safeParse(runlynkOutputResolution);
+    const platformOutputQuality = capabilities[PLATFORM_OUTPUT_QUALITY_CAPABILITY] as
+      | string
+      | undefined;
+    const parsedResolution = resolutionSchema.safeParse(platformOutputQuality);
 
     const allQuotaKeys = Array.from(
       new Set([...Object.keys(limitsMonthly), ...Object.keys(limitsYearly)])
@@ -204,7 +207,7 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
       yearly: yearly ?? undefined,
 
       capabilitiesJson: JSON.stringify(capabilities, null, 2),
-      runlynkOutputResolution: parsedResolution.success ? parsedResolution.data : undefined,
+      platformOutputQuality: parsedResolution.success ? parsedResolution.data : undefined,
       quotaItems,
 
       stripeProductId,
@@ -234,8 +237,8 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
     try {
       const capabilities = parseJsonObject(values.capabilitiesJson || '{}');
 
-      if (values.runlynkOutputResolution) {
-        capabilities['runlynk.outputResolution'] = values.runlynkOutputResolution;
+      if (values.platformOutputQuality) {
+        capabilities[PLATFORM_OUTPUT_QUALITY_CAPABILITY] = values.platformOutputQuality;
       }
 
       const monthlyLimits: Record<string, number> = {};
@@ -570,7 +573,11 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
                     variant="outline"
                     size="sm"
                     onClick={() =>
-                      quotaFields.append({ key: 'runlynk.calls', monthly: 0, yearly: 0 })
+                      quotaFields.append({
+                        key: PLATFORM_PRIMARY_CREDIT_METRIC,
+                        monthly: 0,
+                        yearly: 0,
+                      })
                     }
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -674,7 +681,7 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
               <TabsContent value="capabilities" className="space-y-4 mt-4">
                 <FormField
                   control={form.control}
-                  name="runlynkOutputResolution"
+                  name="platformOutputQuality"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('capabilities.outputResolution.label')}</FormLabel>

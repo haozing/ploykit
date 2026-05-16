@@ -2,13 +2,12 @@ import 'server-only';
 
 import { and, eq } from 'drizzle-orm';
 import { createHash } from 'crypto';
-import { logger } from '@/lib/_core/logger';
 import { db } from '@/lib/db/client.server';
 import { pluginHostPageOverrides, type PluginHostPageOverride } from '@/lib/db/schema/plugins';
-import { getEnabledPlugins } from '@/lib/bus/hook-helpers.server';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
-import type { PluginRuntimeContract } from '@/lib/plugin-runtime/contract';
 import type { RuntimeHostPageOverride } from '@/lib/plugin-runtime/contract';
+import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
+import { runtimeScopeService } from '@/lib/plugin-runtime/scope';
 import {
   getHostPageDefinition,
   listHostPageDefinitions,
@@ -32,18 +31,8 @@ function stableHash(value: unknown): string {
 }
 
 async function loadEnabledRuntimeContracts() {
-  const pluginIds = await getEnabledPlugins();
-  const contracts: PluginRuntimeContract[] = [];
-
-  for (const pluginId of pluginIds) {
-    try {
-      contracts.push(await pluginRuntimeRegistry.getOrLoad(pluginId));
-    } catch (error) {
-      logger.warn({ pluginId, error }, 'Failed to load plugin contract for host page candidates');
-    }
-  }
-
-  return contracts;
+  const refs = await runtimeScopeService.getEnabledRuntimePlugins({ surface: 'hostPageOverride' });
+  return refs.map((ref) => ref.contract);
 }
 
 export async function listHostPageOverrideCandidates(
@@ -52,10 +41,14 @@ export async function listHostPageOverrideCandidates(
   } = {}
 ): Promise<HostPageOverrideCandidate[]> {
   const contracts = await loadEnabledRuntimeContracts();
+  const productId = getCurrentRuntimeProductId();
   const pages = input.pagePath
     ? [getHostPageDefinition(input.pagePath)].filter(Boolean)
     : listHostPageDefinitions();
-  const activeRows = await db.select().from(pluginHostPageOverrides);
+  const activeRows = await db
+    .select()
+    .from(pluginHostPageOverrides)
+    .where(eq(pluginHostPageOverrides.productId, productId));
   const activeByPage = new Map(
     activeRows.filter((row) => row.status === 'active').map((row) => [row.pagePath, row] as const)
   );
@@ -90,7 +83,13 @@ export async function activateHostPageOverride(input: {
     throw new Error(`Host page "${input.pagePath}" cannot be overridden.`);
   }
 
-  const enabledPluginIds = await getEnabledPlugins();
+  const productId = getCurrentRuntimeProductId();
+  const runtimeRefs = await runtimeScopeService.getEnabledRuntimePlugins({
+    productId,
+    surface: 'hostPageOverride',
+  });
+  const runtimeRef = runtimeRefs.find((ref) => ref.pluginId === input.pluginId);
+  const enabledPluginIds = runtimeRefs.map((ref) => ref.pluginId);
   if (!enabledPluginIds.includes(input.pluginId)) {
     throw new Error(
       `Plugin "${input.pluginId}" must be enabled before activating a host page override.`
@@ -116,6 +115,7 @@ export async function activateHostPageOverride(input: {
       .where(
         and(
           eq(pluginHostPageOverrides.pagePath, page.path),
+          eq(pluginHostPageOverrides.productId, productId),
           eq(pluginHostPageOverrides.status, 'active')
         )
       );
@@ -123,6 +123,8 @@ export async function activateHostPageOverride(input: {
     return tx
       .insert(pluginHostPageOverrides)
       .values({
+        productId,
+        suiteId: runtimeRef?.suiteId,
         pagePath: page.path,
         pluginId: input.pluginId,
         componentPath: input.component,
@@ -136,7 +138,11 @@ export async function activateHostPageOverride(input: {
         updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: [pluginHostPageOverrides.pluginId, pluginHostPageOverrides.pagePath],
+        target: [
+          pluginHostPageOverrides.productId,
+          pluginHostPageOverrides.pluginId,
+          pluginHostPageOverrides.pagePath,
+        ],
         set: {
           componentPath: input.component,
           mode: override.mode,
@@ -159,7 +165,9 @@ export async function deactivateHostPageOverride(input: {
   pagePath: HostPagePath;
   pluginId?: string;
 }): Promise<void> {
+  const productId = getCurrentRuntimeProductId();
   const filters = [
+    eq(pluginHostPageOverrides.productId, productId),
     eq(pluginHostPageOverrides.pagePath, input.pagePath),
     eq(pluginHostPageOverrides.status, 'active'),
   ];

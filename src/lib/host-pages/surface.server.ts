@@ -6,7 +6,6 @@ import { logger } from '@/lib/_core/logger';
 import { db } from '@/lib/db/client.server';
 import { pluginHostPageOverrides } from '@/lib/db/schema/plugins';
 import type { PluginHostPageOverride as PluginHostPageOverrideRow } from '@/lib/db/schema/plugins';
-import { getEnabledPlugins } from '@/lib/bus/hook-helpers.server';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
 import {
   getPluginRuntimeMapEntry,
@@ -20,6 +19,8 @@ import type {
   RuntimeHostPageSlot,
 } from '@/lib/plugin-runtime/contract';
 import { getHostPageDefinition, hostPageSlotName, type HostPageDefinition } from './registry';
+import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
+import { runtimeScopeService } from '@/lib/plugin-runtime/scope';
 
 export interface HostPageSlotRegistration extends RuntimeHostPageSlot {
   pluginId: string;
@@ -41,18 +42,11 @@ export interface HostPageSurface {
 }
 
 async function loadEnabledContracts(): Promise<PluginRuntimeContract[]> {
-  const pluginIds = await getEnabledPlugins();
-  const contracts: PluginRuntimeContract[] = [];
-
-  for (const pluginId of pluginIds) {
-    try {
-      contracts.push(await pluginRuntimeRegistry.getOrLoad(pluginId));
-    } catch (error) {
-      logger.warn({ pluginId, error }, 'Failed to load plugin contract for host page surface');
-    }
-  }
-
-  return contracts;
+  const slotRefs = await runtimeScopeService.getEnabledRuntimePlugins({ surface: 'slot' });
+  const overrideRefs = await runtimeScopeService.getEnabledRuntimePlugins({
+    surface: 'hostPageOverride',
+  });
+  return [...new Map([...slotRefs, ...overrideRefs].map((ref) => [ref.pluginId, ref.contract])).values()];
 }
 
 function resolveSlotLoader(pluginId: string, component: string): PluginModuleLoader | null {
@@ -86,11 +80,13 @@ function contractSlotsForPage(
 }
 
 async function getActiveOverrideRecord(page: HostPageDefinition) {
+  const productId = getCurrentRuntimeProductId();
   const rows = await db
     .select()
     .from(pluginHostPageOverrides)
     .where(
       and(
+        eq(pluginHostPageOverrides.productId, productId),
         eq(pluginHostPageOverrides.pagePath, page.path),
         eq(pluginHostPageOverrides.status, 'active')
       )

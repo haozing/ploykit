@@ -9,6 +9,7 @@ import type {
 import { Permission } from '@ploykit/plugin-sdk';
 import { createPluginStorageRuntime } from '../storage/db-storage.server';
 import type { PluginRuntimeContract } from '../contract';
+import { resolveHostPluginAiOptions } from '@/lib/ai/ai-provider-config.server';
 import {
   createPluginAuditCapability,
   createPluginApiKeysCapability,
@@ -161,7 +162,10 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
       pluginId: options.contract.id,
     });
   const files = createPluginFilesCapability(capabilityScope, options.capabilities?.files);
-  const ai = createPluginAiCapability(capabilityScope, options.capabilities?.ai);
+  const ai = createPluginAiCapability(
+    capabilityScope,
+    resolveHostPluginAiOptions(options.capabilities?.ai)
+  );
   const runs = createPluginRunsCapability(capabilityScope, options.capabilities?.runs);
   const connectors = createPluginConnectorsCapability(
     capabilityScope,

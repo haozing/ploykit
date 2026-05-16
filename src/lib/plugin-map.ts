@@ -11,8 +11,67 @@
 
 type PluginModuleLoader = () => Promise<unknown>;
 
+export interface RuntimeProductMapEntry {
+  id: string;
+  name: string;
+  runtimeKey?: string;
+  defaultLocale?: string;
+  status?: string;
+  suites: string[];
+  bundles: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface RuntimeSuiteMapEntry {
+  id: string;
+  productId: string;
+  name: string;
+  version?: string;
+  status?: string;
+  plugins: string[];
+  menu?: {
+    group: string;
+    labelKey?: string;
+    fallbackLabel?: string;
+  };
+  billing?: {
+    namespace: string;
+    primaryCreditMetric?: string;
+  };
+  sharedServices?: Array<Record<string, unknown>>;
+  sharedResourceBindings?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RuntimeBundlePluginMapEntry {
+  pluginId: string;
+  enableByDefault: boolean;
+  required: boolean;
+}
+
+export interface RuntimeBundleMapEntry {
+  id: string;
+  productId: string;
+  suiteId?: string;
+  name: string;
+  version?: string;
+  sourceType?: string;
+  sourceRef?: string;
+  plugins: RuntimeBundlePluginMapEntry[];
+  seeds?: {
+    internalServices?: Array<Record<string, unknown>>;
+    resourceBindings?: Array<Record<string, unknown>>;
+  };
+  healthChecks?: Array<Record<string, unknown>>;
+  dependencies?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
 export interface PluginMapEntry {
   rootDir?: string;
+  productId: string;
+  suiteId: string;
+  bundleIds: string[];
   plugin?: PluginModuleLoader;
   components?: Record<string, PluginModuleLoader>;
   pages?: Record<string, PluginModuleLoader>;
@@ -25,9 +84,197 @@ export interface PluginMapEntry {
   slotModules?: Record<string, PluginModuleLoader>;
 }
 
+export const DEFAULT_RUNTIME_PRODUCT_ID = "ploykit";
+
+export const RUNTIME_PRODUCTS: Record<string, RuntimeProductMapEntry> = {
+  "ploykit": {
+    "id": "ploykit",
+    "name": "PloyKit",
+    "runtimeKey": "ploykit",
+    "defaultLocale": "en",
+    "status": "active",
+    "suites": [
+      "core",
+      "host-capability-lab",
+      "runlynk-dx",
+      "samples"
+    ],
+    "bundles": [
+      "core-dev-tools",
+      "host-capability-lab",
+      "runlynk-dx",
+      "sample-internal"
+    ],
+    "metadata": {
+      "billing": {
+        "primaryCreditMetric": "platform.credits"
+      }
+    }
+  }
+};
+
+export const PLUGIN_SUITES: Record<string, RuntimeSuiteMapEntry> = {
+  "core": {
+    "id": "core",
+    "productId": "ploykit",
+    "name": "PloyKit Core",
+    "version": "0.1.0",
+    "status": "active",
+    "plugins": [
+      "capability-demo"
+    ]
+  },
+  "host-capability-lab": {
+    "id": "host-capability-lab",
+    "productId": "ploykit",
+    "name": "Host Capability Lab",
+    "version": "0.1.0",
+    "status": "active",
+    "plugins": [
+      "host-capability-lab"
+    ]
+  },
+  "runlynk-dx": {
+    "id": "runlynk-dx",
+    "productId": "ploykit",
+    "name": "RunLynk DX",
+    "version": "0.1.0",
+    "status": "active",
+    "plugins": [
+      "runlynk-producer-dx",
+      "runlynk-worker-dx"
+    ],
+    "menu": {
+      "group": "runlynk",
+      "labelKey": "menu.groups.runlynk",
+      "fallbackLabel": "RunLynk"
+    },
+    "billing": {
+      "namespace": "runlynk",
+      "primaryCreditMetric": "runlynk.calls"
+    },
+    "sharedServices": [
+      {
+        "name": "runlynk-core",
+        "methods": [
+          "GET",
+          "POST"
+        ],
+        "actorClaims": true
+      }
+    ],
+    "sharedResourceBindings": [
+      {
+        "type": "project",
+        "scope": "workspace",
+        "cardinality": "one"
+      }
+    ]
+  },
+  "samples": {
+    "id": "samples",
+    "productId": "ploykit",
+    "name": "Sample Plugins",
+    "version": "0.1.0",
+    "status": "active",
+    "plugins": [
+      "sample-internal"
+    ]
+  }
+};
+
+export const APP_BUNDLES: Record<string, RuntimeBundleMapEntry> = {
+  "core-dev-tools": {
+    "id": "core-dev-tools",
+    "productId": "ploykit",
+    "suiteId": "core",
+    "name": "PloyKit Core Developer Tools",
+    "version": "0.1.0",
+    "sourceType": "local",
+    "plugins": [
+      {
+        "pluginId": "capability-demo",
+        "enableByDefault": true,
+        "required": true
+      }
+    ]
+  },
+  "host-capability-lab": {
+    "id": "host-capability-lab",
+    "productId": "ploykit",
+    "suiteId": "host-capability-lab",
+    "name": "Host Capability Lab",
+    "version": "0.1.0",
+    "sourceType": "local",
+    "plugins": [
+      {
+        "pluginId": "host-capability-lab",
+        "enableByDefault": true,
+        "required": true
+      }
+    ]
+  },
+  "runlynk-dx": {
+    "id": "runlynk-dx",
+    "productId": "ploykit",
+    "suiteId": "runlynk-dx",
+    "name": "RunLynk DX",
+    "version": "0.1.0",
+    "sourceType": "local",
+    "plugins": [
+      {
+        "pluginId": "runlynk-worker-dx",
+        "enableByDefault": true,
+        "required": true
+      },
+      {
+        "pluginId": "runlynk-producer-dx",
+        "enableByDefault": true,
+        "required": true
+      }
+    ],
+    "seeds": {
+      "internalServices": [
+        {
+          "ownerType": "suite",
+          "ownerId": "runlynk-dx",
+          "serviceName": "runlynk-core",
+          "baseUrlRef": "env:RUNLYNK_CORE_URL",
+          "actorClaimsSecretRef": "env:RUNLYNK_CORE_ACTOR_SECRET"
+        }
+      ]
+    },
+    "healthChecks": [
+      {
+        "serviceName": "runlynk-core",
+        "path": "/health",
+        "expectedStatus": 200
+      }
+    ]
+  },
+  "sample-internal": {
+    "id": "sample-internal",
+    "productId": "ploykit",
+    "suiteId": "samples",
+    "name": "Sample Internal Service Plugin",
+    "version": "0.1.0",
+    "sourceType": "local",
+    "plugins": [
+      {
+        "pluginId": "sample-internal",
+        "enableByDefault": false,
+        "required": false
+      }
+    ]
+  }
+};
+
 export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   'capability-demo': {
     rootDir: "plugins/capability-demo",
+    productId: "ploykit",
+    suiteId: "core",
+    bundleIds: ["core-dev-tools"],
     plugin: () => import('@/plugins/capability-demo/plugin'),
     pages: {
       'pages/DevAssetsTool': () => import('@/plugins/capability-demo/pages/DevAssetsTool'),
@@ -59,6 +306,9 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   },
   'host-capability-lab': {
     rootDir: "plugins/host-capability-lab",
+    productId: "ploykit",
+    suiteId: "host-capability-lab",
+    bundleIds: ["host-capability-lab"],
     plugin: () => import('@/plugins/host-capability-lab/plugin'),
     components: {
       'components/StorageProbeClient': () => import('@/plugins/host-capability-lab/components/StorageProbeClient')
@@ -79,6 +329,9 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   },
   'runlynk-producer-dx': {
     rootDir: "plugins/runlynk-producer-dx",
+    productId: "ploykit",
+    suiteId: "runlynk-dx",
+    bundleIds: ["runlynk-dx"],
     plugin: () => import('@/plugins/runlynk-producer-dx/plugin'),
     pages: {
       'pages/ProducerDxHome': () => import('@/plugins/runlynk-producer-dx/pages/ProducerDxHome'),
@@ -93,6 +346,9 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   },
   'runlynk-worker-dx': {
     rootDir: "plugins/runlynk-worker-dx",
+    productId: "ploykit",
+    suiteId: "runlynk-dx",
+    bundleIds: ["runlynk-dx"],
     plugin: () => import('@/plugins/runlynk-worker-dx/plugin'),
     pages: {
       'pages/WorkerContractPage': () => import('@/plugins/runlynk-worker-dx/pages/WorkerContractPage'),
@@ -113,6 +369,9 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   },
   'sample-internal': {
     rootDir: "plugins/sample-internal",
+    productId: "ploykit",
+    suiteId: "samples",
+    bundleIds: ["sample-internal"],
     plugin: () => import('@/plugins/sample-internal/plugin'),
     pages: {
       'pages/SamplePage': () => import('@/plugins/sample-internal/pages/SamplePage')

@@ -49,6 +49,7 @@ vi.mock('@/lib/auth/permissions', () => ({
 vi.mock('@/lib/plugins/plugin-query.server', () => ({
   pluginQueryService: {
     isEnabled: vi.fn(),
+    listInstalledPlugins: vi.fn(async () => []),
   },
 }));
 
@@ -277,6 +278,7 @@ function createToolRuntimeEntry(): PluginRuntimeMapEntry {
     name: 'Runtime Tools',
     version: '1.0.0',
     kind: 'tool',
+    permissions: [Permission.NavigationExtend],
     routes: {
       tools: [
         {

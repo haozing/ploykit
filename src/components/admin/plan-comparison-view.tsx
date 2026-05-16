@@ -5,6 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Star, Crown } from 'lucide-react';
 import type { EntitlementPlan as Plan } from '@/lib/db/schema';
+import {
+  formatBillingMetricName,
+  formatCapabilityKey,
+  getBillingMetricUnit,
+} from '@/lib/billing/billing-metrics';
 
 /**
  * Plan Comparison View
@@ -265,32 +270,13 @@ export function PlanComparisonView({ plans, loading }: PlanComparisonViewProps) 
  * Helper functions
  */
 function formatFeatureName(key: string): string {
-  return key
-    .split('.')
-    .map((segment) => segment.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()))
-    .join(' / ');
+  return formatCapabilityKey(key);
 }
 
 function formatLimitName(key: string): string {
-  const names: Record<string, string> = {
-    'platform.users': 'Users',
-    'platform.plugins': 'Plugins',
-    'platform.roles': 'Roles',
-    'platform.storageBytes': 'Storage',
-    'platform.apiCalls': 'API Calls',
-    'runlynk.calls': 'Runlynk Calls',
-  };
-  return names[key] || formatFeatureName(key);
+  return formatBillingMetricName(key);
 }
 
 function getLimitUnit(key: string): string {
-  const units: Record<string, string> = {
-    'platform.users': 'users',
-    'platform.plugins': 'plugins',
-    'platform.roles': 'roles',
-    'platform.storageBytes': 'bytes',
-    'platform.apiCalls': 'calls/month',
-    'runlynk.calls': 'calls/month',
-  };
-  return units[key] || '';
+  return getBillingMetricUnit(key);
 }
