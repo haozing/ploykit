@@ -2,6 +2,24 @@
 
 这个 quickstart 给 AI 编码代理一份完整的 PloyKit 插件任务形态。
 
+## 开始前
+
+AI agent 开始开发前，先安装仓库 `skills/` 下的 Codex Skills。开发时用 `$ploykit-plugin-developer`，测试验收时用 `$ploykit-plugin-tester`。
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+Windows PowerShell：
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
+Get-ChildItem -Path "skills" -Directory | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination "$env:USERPROFILE\.codex\skills" -Recurse -Force
+}
+```
+
 ## 任务提示词
 
 ```text
@@ -26,6 +44,7 @@
 - tests: contract、API extraction、storage write、audit、usage、page import smoke
 
 规则：
+- 开始开发前，先安装仓库 skills 目录下的 Codex Skills；开发时使用 $ploykit-plugin-developer，测试验收时使用 $ploykit-plugin-tester。
 - 只在 plugins/invoice-helper 内工作。
 - 先更新 plugin.ts。
 - 使用 @ploykit/plugin-sdk 导出。

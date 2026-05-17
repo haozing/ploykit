@@ -38,6 +38,26 @@ code is corrected through local templates plus machine-readable diagnostics.
 
 Use this loop when an AI coding assistant builds a plugin.
 
+0. Install and enable the repository skills first.
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
+Get-ChildItem -Path "skills" -Directory | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination "$env:USERPROFILE\.codex\skills" -Recurse -Force
+}
+```
+
+Then start a new Codex session. Use `$ploykit-plugin-developer` while authoring
+plugins, and `$ploykit-plugin-tester` for real API, page screenshot, and locale
+validation.
+
 1. Choose the narrowest template.
 
 ```bash
@@ -130,6 +150,9 @@ Contract:
 - tests to add:
 
 Rules:
+- Install the Codex Skills from the repository skills directory before starting;
+  use $ploykit-plugin-developer for development and $ploykit-plugin-tester for
+  validation.
 - Work only inside plugins/<id> unless documentation changes are requested.
 - Update plugin.ts first.
 - Use @ploykit/plugin-sdk exports.
@@ -155,6 +178,8 @@ This repository now includes a first pass of agent-facing support:
 - template-local `AI_TASK.md` files under `templates/plugins/*`.
 - `skills/ploykit-plugin-developer` as an optional open-source Codex skill for
   plugin authoring.
+- `skills/ploykit-plugin-tester` as an optional Codex skill for layered
+  code-level, real API, and browser screenshot plugin validation.
 - `npm run plugin:doctor -- plugins/<plugin-id>` for the check/test/inspect JSON loop.
 - [AI plugin quickstart](ai-plugin-quickstart.md).
 - [Codex skill installation guide](codex-skill.md).

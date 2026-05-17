@@ -31,6 +31,24 @@ PloyKit 是一个适合大模型开发插件的宿主：产品意图先落成强
 
 当 AI 编码助手开发插件时，推荐使用这个流程：
 
+0. 先安装并启用仓库自带 skills。
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+Windows PowerShell：
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
+Get-ChildItem -Path "skills" -Directory | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination "$env:USERPROFILE\.codex\skills" -Recurse -Force
+}
+```
+
+安装后开启新的 Codex 会话。开发插件时调用 `$ploykit-plugin-developer`；做真实 API、页面截图和多语言验收时调用 `$ploykit-plugin-tester`。
+
 1. 选择最窄模板。
 
 ```bash
@@ -116,6 +134,7 @@ npm run verify:runtime
 - tests to add:
 
 规则：
+- 开始开发前，先安装仓库 skills 目录下的 Codex Skills；开发时使用 $ploykit-plugin-developer，测试验收时使用 $ploykit-plugin-tester。
 - 除非明确要求改文档，否则只在 plugins/<id> 下工作。
 - 先更新 plugin.ts。
 - 使用 @ploykit/plugin-sdk 导出。
@@ -137,6 +156,7 @@ npm run verify:runtime
 - `.github/copilot-instructions.md`，作为 GitHub Copilot 指令。
 - `templates/plugins/*` 下的模板级 `AI_TASK.md`。
 - `skills/ploykit-plugin-developer`，作为可随开源仓库发布的插件开发 Codex Skill。
+- `skills/ploykit-plugin-tester`，作为代码级、真实 API 和浏览器截图三层插件验证 Codex Skill。
 - `npm run plugin:doctor -- plugins/<plugin-id>`，作为 check/test/inspect 聚合 JSON 闭环。
 - [AI 插件开发 Quickstart](ai-plugin-quickstart.zh-CN.md)。
 - [Codex Skill 安装说明](codex-skill.zh-CN.md)。

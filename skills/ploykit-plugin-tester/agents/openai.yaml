@@ -1,0 +1,4 @@
+interface:
+  display_name: 'PloyKit Plugin Tester'
+  short_description: 'Run layered real plugin validation'
+  default_prompt: 'Use $ploykit-plugin-tester to fully validate a PloyKit plugin with code, API, and browser screenshot checks.'

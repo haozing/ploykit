@@ -3,6 +3,26 @@
 This quickstart gives an AI coding agent a complete task shape for building a
 PloyKit plugin.
 
+## Before You Start
+
+Before development begins, install the Codex Skills from the repository
+`skills/` directory. Use `$ploykit-plugin-developer` while authoring, and
+`$ploykit-plugin-tester` for validation.
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
+Get-ChildItem -Path "skills" -Directory | ForEach-Object {
+  Copy-Item -LiteralPath $_.FullName -Destination "$env:USERPROFILE\.codex\skills" -Recurse -Force
+}
+```
+
 ## Task Prompt
 
 ```text
@@ -27,6 +47,9 @@ Contract:
 - tests: contract, API extraction, storage write, audit, usage, page import smoke
 
 Rules:
+- Install the Codex Skills from the repository skills directory before starting;
+  use $ploykit-plugin-developer for development and $ploykit-plugin-tester for
+  validation.
 - Work only inside plugins/invoice-helper.
 - Update plugin.ts first.
 - Use @ploykit/plugin-sdk exports.

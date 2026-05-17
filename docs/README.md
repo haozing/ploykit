@@ -11,7 +11,7 @@ self-hosting details live here.
 | Plugin development                   | [plugin-development.md](plugin-development.md)                         | [plugin-development.zh-CN.md](plugin-development.zh-CN.md)                         |
 | AI-assisted plugin development       | [ai-assisted-plugin-development.md](ai-assisted-plugin-development.md) | [ai-assisted-plugin-development.zh-CN.md](ai-assisted-plugin-development.zh-CN.md) |
 | AI plugin quickstart                 | [ai-plugin-quickstart.md](ai-plugin-quickstart.md)                     | [ai-plugin-quickstart.zh-CN.md](ai-plugin-quickstart.zh-CN.md)                     |
-| Codex skill for plugins              | [codex-skill.md](codex-skill.md)                                       | [codex-skill.zh-CN.md](codex-skill.zh-CN.md)                                       |
+| Codex skills for plugins             | [codex-skill.md](codex-skill.md)                                       | [codex-skill.zh-CN.md](codex-skill.zh-CN.md)                                       |
 | Plugin capabilities                  | [plugin-capabilities.md](plugin-capabilities.md)                       | [plugin-capabilities.zh-CN.md](plugin-capabilities.zh-CN.md)                       |
 | Host page slots and overrides        | [host-page-overrides.md](host-page-overrides.md)                       | [host-page-overrides.zh-CN.md](host-page-overrides.zh-CN.md)                       |
 | Plugin diagnostics                   | [plugin-diagnostics.md](plugin-diagnostics.md)                         | [plugin-diagnostics.zh-CN.md](plugin-diagnostics.zh-CN.md)                         |
