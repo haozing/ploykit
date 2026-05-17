@@ -35,8 +35,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: siteConfig.name,
     description: siteConfig.description,
     icons: {
-      icon: [{ url: '/brand/favicon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico' }],
-      shortcut: '/brand/favicon.svg',
+      icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }, { url: '/favicon.ico' }],
+      shortcut: '/favicon.ico',
+      apple: '/brand/apple-touch-icon.png',
     },
   };
 

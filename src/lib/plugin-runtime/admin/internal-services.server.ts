@@ -133,7 +133,7 @@ export const internalServiceBindingActionSchema = z.discriminatedUnion('action',
     healthMethod: z.string().max(20).default('GET'),
     healthExpectedStatus: z.number().int().min(100).max(599).default(200),
     status: bindingStatusSchema.default('active'),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   z.object({
     action: z.literal('setStatus'),

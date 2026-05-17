@@ -1417,9 +1417,9 @@ async function runUserBillingSmoke(
     'user orders API returns real seeded order data',
     Boolean(
       smokeOrder &&
-        smokeOrder.orderType === 'one_time_purchase' &&
-        smokeOrder.providerOrderId === smokeProviderOrderId &&
-        smokeOrder.amount === '12.34'
+      smokeOrder.orderType === 'one_time_purchase' &&
+      smokeOrder.providerOrderId === smokeProviderOrderId &&
+      smokeOrder.amount === '12.34'
     ),
     {
       status: ordersResponse.status,
@@ -1515,9 +1515,9 @@ async function runUserBillingSmoke(
     'user credit history API returns real seeded credit log',
     Boolean(
       smokeCreditLog &&
-        smokeCreditLog.logType === 'grant' &&
-        smokeCreditLog.changeAmount === 1234 &&
-        smokeCreditLog.relatedOrder?.id === smokeOrderId
+      smokeCreditLog.logType === 'grant' &&
+      smokeCreditLog.changeAmount === 1234 &&
+      smokeCreditLog.relatedOrder?.id === smokeOrderId
     ),
     {
       status: creditHistoryResponse.status,
@@ -3146,8 +3146,8 @@ async function runCapabilityDemoRuntimeSmoke(
     'capability demo machine API key route accepts scoped bearer key',
     Boolean(
       apiKeyEchoResponse?.ok &&
-        echoApiKey?.id === selfTestBody?.apiKey?.id &&
-        echoApiKey?.scope?.id === selfTestBody?.apiKey?.scope?.id
+      echoApiKey?.id === selfTestBody?.apiKey?.id &&
+      echoApiKey?.scope?.id === selfTestBody?.apiKey?.scope?.id
     ),
     {
       status: apiKeyEchoResponse?.status,
@@ -3451,10 +3451,10 @@ async function runCapabilityDemoRuntimeSmoke(
     'capability demo DB evidence shows real host-side persistence',
     Boolean(
       dbEvidence.run &&
-        Number(dbEvidence.pluginFileRows ?? 0) >= 1 &&
-        Array.isArray(dbEvidence.usageMetrics) &&
-        dbEvidence.apiKey &&
-        webhookResponse.status === 202
+      Number(dbEvidence.pluginFileRows ?? 0) >= 1 &&
+      Array.isArray(dbEvidence.usageMetrics) &&
+      dbEvidence.apiKey &&
+      webhookResponse.status === 202
     ),
     fullDbEvidence
   );
@@ -3897,9 +3897,9 @@ async function runNotificationSmoke(
     'notification mark-read endpoint marks one notification read',
     Boolean(
       markReadResponse?.ok &&
-        markReadBody?.success === true &&
-        markReadBody.notification?.id === testNotification?.id &&
-        typeof markReadBody.notification?.readAt === 'string'
+      markReadBody?.success === true &&
+      markReadBody.notification?.id === testNotification?.id &&
+      typeof markReadBody.notification?.readAt === 'string'
     ),
     {
       status: markReadResponse?.status,

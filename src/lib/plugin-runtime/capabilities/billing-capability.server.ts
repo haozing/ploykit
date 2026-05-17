@@ -72,12 +72,10 @@ const defaultBillingHost: PluginBillingHost = {
       return false;
     }
 
-    const { hasFeature, hasRequiredPlanTier } = await import(
-      '@/lib/services/user/user-entitlement-service'
-    );
-    const { hasDigitalEntitlement } = await import(
-      '@/lib/services/billing/digital-entitlement-service'
-    );
+    const { hasFeature, hasRequiredPlanTier } =
+      await import('@/lib/services/user/user-entitlement-service');
+    const { hasDigitalEntitlement } =
+      await import('@/lib/services/billing/digital-entitlement-service');
 
     if (feature.startsWith('plan:')) {
       return hasRequiredPlanTier(scope.userId, feature.slice('plan:'.length));

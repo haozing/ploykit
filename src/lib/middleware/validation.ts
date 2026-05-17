@@ -6,7 +6,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { ZodSchema, ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import type { ApiHandler, DefaultRouteContext } from './api-error-handler';
 import { ValidationError } from '@/lib/_core/errors';
 
@@ -23,9 +23,9 @@ export interface ValidationContext<TBody = unknown, TQuery = unknown, TParams = 
  * Validation schemas configuration
  */
 export interface ValidationSchemas<TBody = unknown, TQuery = unknown, TParams = unknown> {
-  body?: ZodSchema<TBody>;
-  query?: ZodSchema<TQuery>;
-  params?: ZodSchema<TParams>;
+  body?: z.ZodType<TBody>;
+  query?: z.ZodType<TQuery>;
+  params?: z.ZodType<TParams>;
 }
 
 /**
@@ -68,9 +68,9 @@ export type ValidatedApiHandler<
  * );
  * ```
  */
-export function withBodyValidation<TBody, TContext = DefaultRouteContext>(
-  schema: ZodSchema<TBody>,
-  handler: ValidatedApiHandler<TBody, never, never, TContext>
+export function withBodyValidation<TSchema extends z.ZodType, TContext = DefaultRouteContext>(
+  schema: TSchema,
+  handler: ValidatedApiHandler<z.output<TSchema>, never, never, TContext>
 ): ApiHandler<TContext> {
   return async (request: NextRequest, context: TContext) => {
     try {
@@ -86,7 +86,7 @@ export function withBodyValidation<TBody, TContext = DefaultRouteContext>(
     } catch (error) {
       if (error instanceof ZodError) {
         throw new ValidationError('Invalid request body', {
-          errors: error.errors.map((error) => ({
+          errors: error.issues.map((error) => ({
             path: error.path.join('.'),
             message: error.message,
             code: error.code,
@@ -125,9 +125,9 @@ export function withBodyValidation<TBody, TContext = DefaultRouteContext>(
  * );
  * ```
  */
-export function withQueryValidation<TQuery, TContext = DefaultRouteContext>(
-  schema: ZodSchema<TQuery>,
-  handler: ValidatedApiHandler<never, TQuery, never, TContext>
+export function withQueryValidation<TSchema extends z.ZodType, TContext = DefaultRouteContext>(
+  schema: TSchema,
+  handler: ValidatedApiHandler<never, z.output<TSchema>, never, TContext>
 ): ApiHandler<TContext> {
   return async (request: NextRequest, context: TContext) => {
     try {
@@ -146,7 +146,7 @@ export function withQueryValidation<TQuery, TContext = DefaultRouteContext>(
     } catch (error) {
       if (error instanceof ZodError) {
         throw new ValidationError('Invalid query parameters', {
-          errors: error.errors.map((error) => ({
+          errors: error.issues.map((error) => ({
             path: error.path.join('.'),
             message: error.message,
             code: error.code,
@@ -183,9 +183,12 @@ export function withQueryValidation<TQuery, TContext = DefaultRouteContext>(
  * );
  * ```
  */
-export function withParamsValidation<TParams, TContext extends object = DefaultRouteContext>(
-  schema: ZodSchema<TParams>,
-  handler: ValidatedApiHandler<never, never, TParams, TContext>
+export function withParamsValidation<
+  TSchema extends z.ZodType,
+  TContext extends object = DefaultRouteContext,
+>(
+  schema: TSchema,
+  handler: ValidatedApiHandler<never, never, z.output<TSchema>, TContext>
 ): ApiHandler<TContext> {
   return async (request: NextRequest, context: TContext) => {
     try {
@@ -207,7 +210,7 @@ export function withParamsValidation<TParams, TContext extends object = DefaultR
     } catch (error) {
       if (error instanceof ZodError) {
         throw new ValidationError('Invalid URL parameters', {
-          errors: error.errors.map((error) => ({
+          errors: error.issues.map((error) => ({
             path: error.path.join('.'),
             message: error.message,
             code: error.code,
@@ -244,29 +247,42 @@ export function withParamsValidation<TParams, TContext extends object = DefaultR
  * ```
  */
 export function withValidation<
-  TBody = unknown,
-  TQuery = unknown,
-  TParams = unknown,
+  TBodySchema extends z.ZodType | undefined = undefined,
+  TQuerySchema extends z.ZodType | undefined = undefined,
+  TParamsSchema extends z.ZodType | undefined = undefined,
   TContext extends object = DefaultRouteContext,
 >(
-  schemas: ValidationSchemas<TBody, TQuery, TParams>,
-  handler: ValidatedApiHandler<TBody, TQuery, TParams, TContext>
+  schemas: {
+    body?: TBodySchema;
+    query?: TQuerySchema;
+    params?: TParamsSchema;
+  },
+  handler: ValidatedApiHandler<
+    TBodySchema extends z.ZodType ? z.output<TBodySchema> : unknown,
+    TQuerySchema extends z.ZodType ? z.output<TQuerySchema> : unknown,
+    TParamsSchema extends z.ZodType ? z.output<TParamsSchema> : unknown,
+    TContext
+  >
 ): ApiHandler<TContext> {
   return async (request: NextRequest, context: TContext) => {
-    const validated: ValidationContext<TBody, TQuery, TParams> = {};
+    const validated: ValidationContext<
+      TBodySchema extends z.ZodType ? z.output<TBodySchema> : unknown,
+      TQuerySchema extends z.ZodType ? z.output<TQuerySchema> : unknown,
+      TParamsSchema extends z.ZodType ? z.output<TParamsSchema> : unknown
+    > = {};
 
     try {
       // Validate body if schema provided
       if (schemas.body) {
         const rawBody = await request.json();
-        validated.body = schemas.body.parse(rawBody);
+        validated.body = schemas.body.parse(rawBody) as typeof validated.body;
       }
 
       // Validate query if schema provided
       if (schemas.query) {
         const searchParams = request.nextUrl.searchParams;
         const queryObject = Object.fromEntries(searchParams.entries());
-        validated.query = schemas.query.parse(queryObject);
+        validated.query = schemas.query.parse(queryObject) as typeof validated.query;
       }
 
       // Validate params if schema provided
@@ -277,7 +293,7 @@ export function withValidation<
           'params' in context && contextWithParams.params instanceof Promise
             ? await contextWithParams.params
             : contextWithParams.params || {};
-        validated.params = schemas.params.parse(params);
+        validated.params = schemas.params.parse(params) as typeof validated.params;
       }
 
       // Call handler with validated data
@@ -288,7 +304,7 @@ export function withValidation<
     } catch (error) {
       if (error instanceof ZodError) {
         throw new ValidationError('Validation failed', {
-          errors: error.errors.map((error) => ({
+          errors: error.issues.map((error) => ({
             path: error.path.join('.'),
             message: error.message,
             code: error.code,

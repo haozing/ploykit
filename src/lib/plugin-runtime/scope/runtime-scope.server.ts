@@ -64,7 +64,9 @@ function contractSupportsSurface(
     case 'hook':
       return Boolean(contract.hooks.renderHead || contract.hooks.sitemap);
     case 'slot':
-      return Object.keys(contract.slots ?? {}).length > 0 || (contract.hostPages?.slots.length ?? 0) > 0;
+      return (
+        Object.keys(contract.slots ?? {}).length > 0 || (contract.hostPages?.slots.length ?? 0) > 0
+      );
     case 'hostPageOverride':
       return (contract.hostPages?.overrides.length ?? 0) > 0;
     case 'i18n':
@@ -85,7 +87,9 @@ function contractSupportsSurface(
     case 'route':
       return contract.routes.pages.length > 0;
     case 'api':
-      return contract.routes.apis.length > 0 || Boolean(entry.apis && Object.keys(entry.apis).length > 0);
+      return (
+        contract.routes.apis.length > 0 || Boolean(entry.apis && Object.keys(entry.apis).length > 0)
+      );
     case 'job':
       return Object.keys(contract.jobs).length > 0;
     case 'event':
@@ -121,7 +125,9 @@ export class RuntimeScopeService {
     const candidatePluginIds = input.includeDisabled
       ? runtimePluginIds
       : installations
-          .filter((installation) => installation.enabled && installation.installStatus === 'installed')
+          .filter(
+            (installation) => installation.enabled && installation.installStatus === 'installed'
+          )
           .map((installation) => installation.pluginId);
 
     const refs: RuntimePluginRef[] = [];

@@ -5,7 +5,7 @@
  * Focuses on transaction atomicity and error handling
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createMockDb,
   createMockCache,
@@ -190,10 +190,9 @@ async function simulateRegistration(config: {
 describe('user Registration (Transaction Atomicity)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    mockAssignrole.mockReset();
+    mockCreateDefaultEntitlement.mockReset();
+    mockDb.transaction.mockReset();
   });
 
   //

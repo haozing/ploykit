@@ -205,9 +205,9 @@ function normalizeHostPages(definition: PluginDefinition) {
 export function isDefinedPlugin(value: unknown): value is DefinedPlugin {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      '$$ploykit' in value &&
-      (value as { $$ploykit?: { type?: unknown } }).$$ploykit?.type === 'ploykit.plugin'
+    typeof value === 'object' &&
+    '$$ploykit' in value &&
+    (value as { $$ploykit?: { type?: unknown } }).$$ploykit?.type === 'ploykit.plugin'
   );
 }
 

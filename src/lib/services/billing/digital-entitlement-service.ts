@@ -223,9 +223,8 @@ export async function revokeDigitalEntitlement(
 export async function grantOneTimePurchaseEntitlement(
   input: GrantOneTimePurchaseEntitlementInput
 ): Promise<{ order: Order; entitlement: DigitalEntitlement }> {
-  const { createOrder, getOrderByProviderId } = await import(
-    '@/lib/services/billing/order-service'
-  );
+  const { createOrder, getOrderByProviderId } =
+    await import('@/lib/services/billing/order-service');
   const provider = input.provider ?? 'local';
   const entitlementKey = normalizeKey(input.entitlementKey);
   let order = await getOrderByProviderId(provider, input.providerOrderId);
@@ -263,9 +262,8 @@ export async function grantOneTimePurchaseEntitlement(
 export async function refundOneTimePurchaseEntitlement(
   input: RefundOneTimePurchaseEntitlementInput
 ): Promise<{ refundOrder: Order; entitlement: DigitalEntitlement | null }> {
-  const { createRefundOrder, getOrderByProviderId } = await import(
-    '@/lib/services/billing/order-service'
-  );
+  const { createRefundOrder, getOrderByProviderId } =
+    await import('@/lib/services/billing/order-service');
   const provider = input.provider ?? 'local';
   const entitlementKey = normalizeKey(input.entitlementKey);
   let refundOrder = await getOrderByProviderId(provider, input.providerRefundId);

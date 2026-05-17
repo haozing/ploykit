@@ -19,7 +19,7 @@ export const edgeAccessLogInputSchema = z.object({
   apiKeyId: z.string().optional(),
   region: z.string().optional(),
   failureType: z.string().optional(),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
   occurredAt: z.coerce.date().optional(),
 });
 

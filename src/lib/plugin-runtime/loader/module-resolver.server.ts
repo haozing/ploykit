@@ -61,7 +61,9 @@ export function getRuntimeProduct(productId: string): RuntimeProduct | null {
 }
 
 export function listRuntimePluginSuites(productId?: string): RuntimePluginSuite[] {
-  return Object.values(PLUGIN_SUITES).filter((suite) => !productId || suite.productId === productId);
+  return Object.values(PLUGIN_SUITES).filter(
+    (suite) => !productId || suite.productId === productId
+  );
 }
 
 export function getRuntimePluginSuite(suiteId: string): RuntimePluginSuite | null {
@@ -69,7 +71,9 @@ export function getRuntimePluginSuite(suiteId: string): RuntimePluginSuite | nul
 }
 
 export function listRuntimeAppBundles(productId?: string): RuntimeAppBundle[] {
-  return Object.values(APP_BUNDLES).filter((bundle) => !productId || bundle.productId === productId);
+  return Object.values(APP_BUNDLES).filter(
+    (bundle) => !productId || bundle.productId === productId
+  );
 }
 
 export function getRuntimeAppBundle(bundleId: string): RuntimeAppBundle | null {
@@ -105,7 +109,10 @@ export function getPluginRuntimeBundleIds(pluginId: string): readonly string[] {
   return getPluginRuntimeMapEntry(pluginId)?.bundleIds ?? [];
 }
 
-export function isPluginInRuntimeProduct(pluginId: string, productId = DEFAULT_PRODUCT_ID): boolean {
+export function isPluginInRuntimeProduct(
+  pluginId: string,
+  productId = DEFAULT_PRODUCT_ID
+): boolean {
   return getPluginRuntimeProductId(pluginId) === productId;
 }
 

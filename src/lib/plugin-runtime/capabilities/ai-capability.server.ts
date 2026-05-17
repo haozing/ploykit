@@ -44,14 +44,18 @@ export interface PluginAiHostScope {
   system: boolean;
 }
 
-export interface PluginAiGenerateHostInput
-  extends Omit<PluginAiGenerateTextInput, 'meter' | 'creditAmount' | 'idempotencyKey'> {
+export interface PluginAiGenerateHostInput extends Omit<
+  PluginAiGenerateTextInput,
+  'meter' | 'creditAmount' | 'idempotencyKey'
+> {
   model: string;
   messages: PluginAiMessage[];
 }
 
-export interface PluginAiEmbedHostInput
-  extends Omit<PluginAiEmbedTextInput, 'meter' | 'creditAmount' | 'idempotencyKey'> {
+export interface PluginAiEmbedHostInput extends Omit<
+  PluginAiEmbedTextInput,
+  'meter' | 'creditAmount' | 'idempotencyKey'
+> {
   model: string;
   input: string[];
 }

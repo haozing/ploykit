@@ -22,7 +22,7 @@ export function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not configured');
     }
     _stripe = new Stripe(secretKey, {
-      apiVersion: '2025-02-24.acacia',
+      apiVersion: '2026-04-22.dahlia',
       typescript: true,
       appInfo: {
         name: 'PloyKit',

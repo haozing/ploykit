@@ -1,4 +1,5 @@
 import { createPluginTestHost, testPlugin } from '@ploykit/plugin-sdk/testing';
+import type { z } from 'zod';
 import plugin from '../plugin';
 import notesApi from '../api/notes';
 
@@ -20,8 +21,8 @@ export default testPlugin(plugin, async ({ ctx, plugin }) => {
     ...ctx,
     request: {
       ...ctx.request,
-      async json() {
-        return { title: 'First note', status: 'open' };
+      async json<TSchema extends z.ZodType>(schema: TSchema): Promise<z.output<TSchema>> {
+        return schema.parse({ title: 'First note', status: 'open' }) as z.output<TSchema>;
       },
     },
   });

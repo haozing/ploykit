@@ -26,7 +26,7 @@ export const localInvoiceSchema = z.object({
   pdfUrl: z.string().url().optional(),
   dueAt: z.coerce.date().optional(),
   paidAt: z.coerce.date().optional(),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
 export const localPaymentMethodSchema = z.object({
@@ -46,7 +46,7 @@ export const localPaymentMethodSchema = z.object({
   billingCountry: z.string().length(2).optional(),
   status: z.enum(['active', 'expired', 'removed']).default('active'),
   isDefault: z.boolean().default(false),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
 export const taxProfileSchema = z.object({
@@ -61,7 +61,7 @@ export const taxProfileSchema = z.object({
   addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),
   status: z.enum(['active', 'archived']).default('active'),
-  metadata: z.record(z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
 export type LocalInvoiceInput = z.input<typeof localInvoiceSchema>;

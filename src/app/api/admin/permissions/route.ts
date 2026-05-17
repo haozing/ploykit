@@ -24,7 +24,7 @@ const listPermissionsSchema = z.object({
 export const GET = withAdminGuard(
   withErrorHandling(
     withQueryValidation(listPermissionsSchema, async (request, { validated }) => {
-      const query = validated.query || {};
+      const query = validated.query!;
       const { search, resource, templates } = query;
 
       // If templates=true, return predefined templates

@@ -18,6 +18,7 @@ import type {
   PluginRunVisibility,
   PluginUser,
 } from './context';
+import type { z } from 'zod';
 import { PluginError } from './errors';
 import { Permission, type PermissionValue } from './permissions';
 import type { PluginStorage, PluginStorageCollection, PluginStorageQuery } from './storage';
@@ -648,12 +649,15 @@ function createRequestState(pluginId: string, options: PluginTestRequestOptions 
   };
 }
 
-function parseRequestJson(schema: unknown, value: unknown): unknown {
+function parseRequestJson<TSchema extends z.ZodType>(
+  schema: TSchema,
+  value: unknown
+): z.output<TSchema> {
   if (schema && typeof schema === 'object' && 'parse' in schema) {
-    return (schema as { parse(input: unknown): unknown }).parse(value);
+    return schema.parse(value) as z.output<TSchema>;
   }
 
-  return value;
+  return value as z.output<TSchema>;
 }
 
 function matchesWhere(record: Record<string, unknown>, query?: PluginStorageQuery): boolean {
@@ -943,7 +947,7 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       get query() {
         return requestState.query;
       },
-      async json(schema: unknown) {
+      async json<TSchema extends z.ZodType>(schema: TSchema): Promise<z.output<TSchema>> {
         return parseRequestJson(schema, requestState.json);
       },
       async text() {

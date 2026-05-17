@@ -703,7 +703,7 @@ export default function AdminOperationsPage() {
         error={webhookDetailError}
         retrying={Boolean(
           (webhookDetail?.receipt?.id ?? selectedWebhookReceipt?.id) &&
-            retryingReceiptId === (webhookDetail?.receipt?.id ?? selectedWebhookReceipt?.id)
+          retryingReceiptId === (webhookDetail?.receipt?.id ?? selectedWebhookReceipt?.id)
         )}
         onRetry={(receiptId) => void handleRetryWebhookReceipt(receiptId)}
       />

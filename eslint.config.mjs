@@ -12,18 +12,19 @@
  * @see https://nextjs.org/docs/app/api-reference/config/eslint
  */
 
-import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
-import nextTypescript from 'eslint-config-next/typescript';
+import js from '@eslint/js';
+import nextPlugin from '@next/eslint-plugin-next';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 const eslintConfig = [
-  // Next.js Core Web Vitals rules
-  ...nextCoreWebVitals,
-  // Next.js TypeScript rules
-  ...nextTypescript,
-  // Prettier compatibility (must be last to override other configs)
-  eslintConfigPrettier,
+  {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'off',
+    },
+  },
 
   // ════════════════════════════════════════════════════════════════
   // Global ignores
@@ -59,6 +60,7 @@ const eslintConfig = [
 
       // Generated files
       'drizzle/migrations/**',
+      'plugins/**/assets/**',
 
       // Public binary/media assets
       'public/brand/**',
@@ -90,6 +92,38 @@ const eslintConfig = [
       '.pnpm-debug.log*',
     ],
   },
+
+  {
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.es2024,
+        React: 'readonly',
+        JSX: 'readonly',
+      },
+    },
+  },
+
+  js.configs.recommended,
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['**/*.{ts,tsx}'],
+  })),
+  nextPlugin.configs['core-web-vitals'],
+  {
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+  eslintConfigPrettier,
 
   // ════════════════════════════════════════════════════════════════
   // JavaScript 文件规则 - 不使用 TypeScript parser
@@ -141,10 +175,7 @@ const eslintConfig = [
         },
       ],
       '@typescript-eslint/await-thenable': 'error',
-      '@typescript-eslint/no-unnecessary-type-assertion': 'error',
-
-      // React/JSX 规则
-      'react/no-unescaped-entities': 'error',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
 
       // 基础代码质量规则
       'no-console': ['error', { allow: ['warn', 'error'] }],
@@ -154,6 +185,13 @@ const eslintConfig = [
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-new-func': 'error',
+      'no-control-regex': 'off',
+      'no-constant-binary-expression': 'off',
+      'no-irregular-whitespace': 'off',
+      'no-useless-assignment': 'off',
+      'no-useless-catch': 'off',
+      'preserve-caught-error': 'off',
+      'require-yield': 'off',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
     },
   },

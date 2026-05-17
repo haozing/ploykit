@@ -84,7 +84,7 @@ const connectorAuthSchema = z
     scopes: z.array(z.string().min(1).max(120)).max(50).optional(),
   })
   .passthrough();
-const connectorPolicySchema = z.record(z.unknown()).optional();
+const connectorPolicySchema = z.record(z.string(), z.unknown()).optional();
 
 export const adminConnectorActionSchema = z.discriminatedUnion('action', [
   z.object({
@@ -114,7 +114,7 @@ export const adminConnectorActionSchema = z.discriminatedUnion('action', [
     redaction: connectorPolicySchema,
     timeoutMs: z.number().int().min(100).max(300000).optional(),
     retryCount: z.number().int().min(0).max(5).optional(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   z.object({
     action: z.literal('test'),

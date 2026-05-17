@@ -43,9 +43,8 @@ export async function enforcePluginCommercialGate(
 
   if (commercial.license) {
     const { hasFeature } = await import('@/lib/services/user/user-entitlement-service');
-    const { hasDigitalEntitlement } = await import(
-      '@/lib/services/billing/digital-entitlement-service'
-    );
+    const { hasDigitalEntitlement } =
+      await import('@/lib/services/billing/digital-entitlement-service');
     const hasPlanFeature = await hasFeature(user.id, commercial.license).catch(() => false);
     const hasDigitalKey = await hasDigitalEntitlement({
       userId: user.id,

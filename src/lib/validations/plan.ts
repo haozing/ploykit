@@ -13,10 +13,7 @@ const planSlugSchema = z
   .min(2, 'Plan slug must be at least 2 characters')
   .max(50, 'Plan slug must not exceed 50 characters')
   .regex(/^[a-z0-9-]+$/, 'Plan slug must be lowercase alphanumeric with hyphens only')
-  .refine(
-    (slug) => !RESERVED_PLAN_SLUGS.includes(slug),
-    (slug) => ({ message: `Plan slug '${slug}' is reserved` })
-  )
+  .refine((slug) => !RESERVED_PLAN_SLUGS.includes(slug), 'Plan slug is reserved')
   .refine(
     (slug) => !slug.startsWith('-') && !slug.endsWith('-'),
     'Plan slug cannot start or end with hyphen'

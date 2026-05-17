@@ -149,9 +149,9 @@ function ensureScope(scope: PluginStorageScope): void {
   }
 }
 
-class RuntimePluginStorageCollection<TRecord extends OutputRecord>
-  implements PluginStorageCollection<TRecord>
-{
+class RuntimePluginStorageCollection<
+  TRecord extends OutputRecord,
+> implements PluginStorageCollection<TRecord> {
   constructor(
     private readonly scope: PluginStorageScope,
     private readonly name: string,

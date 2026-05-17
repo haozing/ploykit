@@ -6,10 +6,7 @@ import {
   normalizeRuntimePath,
   type PluginRuntimeContract,
 } from '../contract';
-import {
-  getPluginRuntimeMapEntry,
-  type PluginRuntimeMapEntry,
-} from '../loader';
+import { getPluginRuntimeMapEntry, type PluginRuntimeMapEntry } from '../loader';
 import { enforcePluginRuntimeEnabled, pluginRuntimeRegistry } from '../registry';
 import type { RuntimePageRoute } from '../contract';
 import { runtimeScopeService } from '../scope';

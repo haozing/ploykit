@@ -17,7 +17,7 @@ export const createCheckoutSchema = z.object({
   planId: commonSchemas.uuid.describe('Plan ID to subscribe to'),
   billingPeriod: z
     .enum(['monthly', 'yearly'], {
-      errorMap: () => ({ message: 'Billing period must be either monthly or yearly' }),
+      error: 'Billing period must be either monthly or yearly',
     })
     .describe('Billing period for the subscription'),
   lang: z.enum(['en', 'zh']).optional().describe('UI language for success/cancel redirects'),

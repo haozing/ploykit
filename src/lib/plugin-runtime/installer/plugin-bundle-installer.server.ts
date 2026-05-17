@@ -77,7 +77,9 @@ export class PluginBundleInstallerService {
     }
     const productId = options.productId ?? bundle.productId;
     if (bundle.productId !== productId) {
-      throw new Error(`Bundle "${bundle.id}" belongs to product "${bundle.productId}", not "${productId}".`);
+      throw new Error(
+        `Bundle "${bundle.id}" belongs to product "${bundle.productId}", not "${productId}".`
+      );
     }
 
     const steps: PluginBundleApplyStep[] = [
@@ -105,7 +107,9 @@ export class PluginBundleInstallerService {
       if (!serviceName) {
         continue;
       }
-      const baseUrl = resolveEnvRef(readSeedString(seed.baseUrlRef) ?? readSeedString(seed.baseUrl));
+      const baseUrl = resolveEnvRef(
+        readSeedString(seed.baseUrlRef) ?? readSeedString(seed.baseUrl)
+      );
       steps.push({
         type: 'seedInternalService',
         serviceName,
@@ -157,7 +161,10 @@ export class PluginBundleInstallerService {
       message: 'Runtime product/suite/bundle catalog synchronized.',
     });
 
-    const installations = new Map<string, Awaited<ReturnType<typeof pluginQueryService.getInstallation>>>();
+    const installations = new Map<
+      string,
+      Awaited<ReturnType<typeof pluginQueryService.getInstallation>>
+    >();
 
     for (const plugin of bundle.plugins) {
       let installation = await pluginQueryService.getInstallation(plugin.pluginId, { productId });
@@ -190,7 +197,9 @@ export class PluginBundleInstallerService {
         if (!serviceName) {
           continue;
         }
-        const baseUrl = resolveEnvRef(readSeedString(seed.baseUrlRef) ?? readSeedString(seed.baseUrl));
+        const baseUrl = resolveEnvRef(
+          readSeedString(seed.baseUrlRef) ?? readSeedString(seed.baseUrl)
+        );
         if (!baseUrl) {
           throw new Error(`Internal service seed "${serviceName}" is missing baseUrl/baseUrlRef.`);
         }
@@ -200,7 +209,9 @@ export class PluginBundleInstallerService {
         const pluginId =
           readSeedString(seed.pluginId) ?? (await findSeedPluginId(bundle.plugins, serviceName));
         if (!pluginId) {
-          throw new Error(`Internal service seed "${serviceName}" has no plugin to validate against.`);
+          throw new Error(
+            `Internal service seed "${serviceName}" has no plugin to validate against.`
+          );
         }
 
         await handleInternalServiceBindingAction(

@@ -436,7 +436,6 @@ describe('resetUsage()', () => {
 
       const transactionSpy = vi
         .spyOn(db, 'transaction')
-        // @ts-expect-error - Simplified mock implementation for testing
         .mockImplementation(async (callback: any) => await callback(mockTx));
 
       const options: ResetUsageOptions = {

@@ -3,7 +3,7 @@ import { defineApi, z } from '@ploykit/plugin-sdk';
 const updateItemSchema = z.object({
   title: z.string().min(1).max(160).optional(),
   status: z.enum(['draft', 'active', 'archived']).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 function getItemId(ctx: { request: { url: string } }): string {

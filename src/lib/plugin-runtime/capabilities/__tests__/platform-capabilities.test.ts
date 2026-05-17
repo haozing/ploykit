@@ -1392,9 +1392,9 @@ describe('platform plugin capabilities', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
-    vi.mocked(DbPluginApiKeysRepository).mockImplementation(
-      () => ({ verify }) as unknown as DbPluginApiKeysRepository
-    );
+    vi.mocked(DbPluginApiKeysRepository).mockImplementation(function () {
+      return { verify } as unknown as DbPluginApiKeysRepository;
+    });
 
     const authResult = await enforcePluginRuntimeAuth(
       contract,
@@ -1450,9 +1450,9 @@ describe('platform plugin capabilities', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
-    vi.mocked(DbPluginApiKeysRepository).mockImplementation(
-      () => ({ verify }) as unknown as DbPluginApiKeysRepository
-    );
+    vi.mocked(DbPluginApiKeysRepository).mockImplementation(function () {
+      return { verify } as unknown as DbPluginApiKeysRepository;
+    });
 
     await expect(
       enforcePluginRuntimeAuth(
@@ -1504,9 +1504,9 @@ describe('platform plugin capabilities', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
-    vi.mocked(DbPluginApiKeysRepository).mockImplementation(
-      () => ({ verify }) as unknown as DbPluginApiKeysRepository
-    );
+    vi.mocked(DbPluginApiKeysRepository).mockImplementation(function () {
+      return { verify } as unknown as DbPluginApiKeysRepository;
+    });
 
     await expect(
       enforcePluginRuntimeAuth(
@@ -1574,12 +1574,11 @@ describe('platform plugin capabilities', () => {
         },
       })
     );
-    vi.mocked(DbPluginApiKeysRepository).mockImplementation(
-      () =>
-        ({
-          verify: vi.fn(async () => null),
-        }) as unknown as DbPluginApiKeysRepository
-    );
+    vi.mocked(DbPluginApiKeysRepository).mockImplementation(function () {
+      return {
+        verify: vi.fn(async () => null),
+      } as unknown as DbPluginApiKeysRepository;
+    });
 
     await expect(
       enforcePluginRuntimeAuth(

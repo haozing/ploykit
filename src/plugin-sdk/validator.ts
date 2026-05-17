@@ -158,13 +158,7 @@ const RESOURCE_BINDING_ROLES = new Set<PluginResourceBindingRole>([
   'editor',
   'viewer',
 ]);
-const MENU_VISIBILITIES = new Set([
-  'public',
-  'signedIn',
-  'admin',
-  'workspaceMember',
-  'suiteAdmin',
-]);
+const MENU_VISIBILITIES = new Set(['public', 'signedIn', 'admin', 'workspaceMember', 'suiteAdmin']);
 const HOST_PAGE_PATHS = new Set([
   '/',
   '/about',

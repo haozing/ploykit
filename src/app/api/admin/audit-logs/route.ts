@@ -37,7 +37,7 @@ export const GET = withAdminGuard(
   withErrorHandling(
     withQueryValidation(queryAuditLogsSchema, async (request, { validated }) => {
       // Convert date strings to Date objects
-      const query = validated.query || {};
+      const query = validated.query!;
       const filters = {
         ...query,
         startDate: query.startDate ? new Date(query.startDate) : undefined,

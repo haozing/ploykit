@@ -34,10 +34,7 @@ export const pluginModels = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    productPluginIdx: index('plugin_models_product_plugin_idx').on(
-      table.productId,
-      table.pluginId
-    ),
+    productPluginIdx: index('plugin_models_product_plugin_idx').on(table.productId, table.pluginId),
   })
 );
 

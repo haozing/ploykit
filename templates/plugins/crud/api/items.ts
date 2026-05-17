@@ -3,7 +3,7 @@ import { defineApi, z } from '@ploykit/plugin-sdk';
 const createItemSchema = z.object({
   title: z.string().min(1).max(160),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export default defineApi({

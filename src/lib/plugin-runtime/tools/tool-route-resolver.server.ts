@@ -2,10 +2,7 @@ import 'server-only';
 
 import { PluginError } from '@ploykit/plugin-sdk';
 import { normalizeRuntimePath, type PluginRuntimeContract } from '../contract';
-import {
-  getPluginRuntimeMapEntry,
-  type PluginRuntimeMapEntry,
-} from '../loader';
+import { getPluginRuntimeMapEntry, type PluginRuntimeMapEntry } from '../loader';
 import { enforcePluginRuntimeEnabled, pluginRuntimeRegistry } from '../registry';
 import { runtimeScopeService } from '../scope';
 

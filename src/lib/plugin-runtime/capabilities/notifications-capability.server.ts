@@ -14,8 +14,9 @@ import {
 } from './guards.server';
 import { createNotification } from '@/lib/services/notifications/notification-service';
 
-export interface PluginNotificationDelivery
-  extends Required<Pick<PluginNotificationInput, 'message'>> {
+export interface PluginNotificationDelivery extends Required<
+  Pick<PluginNotificationInput, 'message'>
+> {
   pluginId: string;
   requestId: string;
   recipientUserId: string;

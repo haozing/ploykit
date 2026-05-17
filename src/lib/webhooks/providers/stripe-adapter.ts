@@ -9,6 +9,25 @@ import { logger } from '@/lib/_core/logger';
 import type { WebhookAdapter, WebhookProvider, InternalEvent } from '../types';
 
 type BillingInterval = 'monthly' | 'yearly';
+type InvoiceLineWithLegacyPrice = Stripe.InvoiceLineItem & {
+  price?: string | Stripe.Price | null;
+};
+type InvoiceWithLegacyFields = Stripe.Invoice & {
+  subscription?: string | Stripe.Subscription | null;
+  subscription_details?: {
+    metadata?: Stripe.Metadata | null;
+    subscription?: string | Stripe.Subscription | null;
+  } | null;
+};
+type SubscriptionWithLegacyPeriod = Stripe.Subscription & {
+  current_period_start?: number;
+  current_period_end?: number;
+};
+type StripeApiVersion = NonNullable<
+  NonNullable<ConstructorParameters<typeof Stripe>[1]>['apiVersion']
+>;
+
+const STRIPE_API_VERSION: StripeApiVersion = '2026-04-22.dahlia';
 
 function toBillingInterval(interval: string | null | undefined): BillingInterval | null {
   if (interval === 'month') return 'monthly';
@@ -26,14 +45,63 @@ function getSubscriptionBillingInterval(subscription: Stripe.Subscription): Bill
   return toBillingInterval(price?.recurring?.interval);
 }
 
+function getSubscriptionPeriodStart(subscription: Stripe.Subscription): number {
+  const legacySubscription = subscription as SubscriptionWithLegacyPeriod;
+  return (
+    subscription.items?.data?.[0]?.current_period_start ??
+    legacySubscription.current_period_start ??
+    subscription.created
+  );
+}
+
+function getSubscriptionPeriodEnd(subscription: Stripe.Subscription): number {
+  const legacySubscription = subscription as SubscriptionWithLegacyPeriod;
+  return (
+    subscription.items?.data?.[0]?.current_period_end ??
+    legacySubscription.current_period_end ??
+    subscription.ended_at ??
+    subscription.cancel_at ??
+    subscription.created
+  );
+}
+
+function getInvoiceLine(invoice: Stripe.Invoice): InvoiceLineWithLegacyPrice | undefined {
+  return invoice.lines?.data?.[0] as InvoiceLineWithLegacyPrice | undefined;
+}
+
+function getPriceObject(price: string | Stripe.Price | null | undefined): Stripe.Price | null {
+  return price && typeof price === 'object' ? price : null;
+}
+
+function getInvoicePriceReference(invoice: Stripe.Invoice): string | Stripe.Price | null {
+  const line = getInvoiceLine(invoice);
+  return line?.pricing?.price_details?.price ?? line?.price ?? null;
+}
+
 function getInvoiceStripePriceId(invoice: Stripe.Invoice): string | null {
-  const price = invoice.lines?.data?.[0]?.price as Stripe.Price | undefined;
-  return price?.id || null;
+  const price = getInvoicePriceReference(invoice);
+  return typeof price === 'string' ? price : price?.id || null;
 }
 
 function getInvoiceBillingInterval(invoice: Stripe.Invoice): BillingInterval | null {
-  const price = invoice.lines?.data?.[0]?.price as Stripe.Price | undefined;
+  const price = getPriceObject(getInvoicePriceReference(invoice));
   return toBillingInterval(price?.recurring?.interval);
+}
+
+function getInvoiceSubscriptionDetails(invoice: Stripe.Invoice) {
+  const legacyInvoice = invoice as InvoiceWithLegacyFields;
+  return invoice.parent?.subscription_details ?? legacyInvoice.subscription_details ?? null;
+}
+
+function getInvoiceUserId(invoice: Stripe.Invoice): string | undefined {
+  return invoice.metadata?.userId ?? getInvoiceSubscriptionDetails(invoice)?.metadata?.userId;
+}
+
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const legacyInvoice = invoice as InvoiceWithLegacyFields;
+  const subscription =
+    getInvoiceSubscriptionDetails(invoice)?.subscription ?? legacyInvoice.subscription;
+  return typeof subscription === 'string' ? subscription : (subscription?.id ?? null);
 }
 
 /**
@@ -45,7 +113,7 @@ export class StripeWebhookAdapter implements WebhookAdapter {
 
   constructor(options: { apiKey: string; webhookSecret: string; apiVersion?: string }) {
     this.stripe = new Stripe(options.apiKey, {
-      apiVersion: (options.apiVersion as Stripe.LatestApiVersion) || '2024-11-20.acacia',
+      apiVersion: (options.apiVersion as StripeApiVersion | undefined) ?? STRIPE_API_VERSION,
       typescript: true,
     });
 
@@ -225,8 +293,8 @@ export class StripeWebhookAdapter implements WebhookAdapter {
             planId: planId || undefined,
             stripePriceId: stripePriceId || undefined,
             billingInterval: billingInterval || undefined,
-            currentPeriodStart: new Date(subscription.current_period_start * 1000),
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+            currentPeriodStart: new Date(getSubscriptionPeriodStart(subscription) * 1000),
+            currentPeriodEnd: new Date(getSubscriptionPeriodEnd(subscription) * 1000),
             cancelAtPeriodEnd: subscription.cancel_at_period_end,
             metadata: subscription.metadata,
           },
@@ -265,7 +333,7 @@ export class StripeWebhookAdapter implements WebhookAdapter {
               toPlanId: currentPlanId,
               stripePriceId: stripePriceId || undefined,
               billingInterval: billingInterval || undefined,
-              effectiveDate: new Date(subscription.current_period_start * 1000),
+              effectiveDate: new Date(getSubscriptionPeriodStart(subscription) * 1000),
               metadata: subscription.metadata,
             },
           });
@@ -279,8 +347,8 @@ export class StripeWebhookAdapter implements WebhookAdapter {
               status: subscription.status,
               stripePriceId: stripePriceId || undefined,
               billingInterval: billingInterval || undefined,
-              currentPeriodStart: new Date(subscription.current_period_start * 1000),
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+              currentPeriodStart: new Date(getSubscriptionPeriodStart(subscription) * 1000),
+              currentPeriodEnd: new Date(getSubscriptionPeriodEnd(subscription) * 1000),
               cancelAtPeriodEnd: subscription.cancel_at_period_end,
               changes: previousAttributes,
               metadata: subscription.metadata,
@@ -323,9 +391,10 @@ export class StripeWebhookAdapter implements WebhookAdapter {
       case 'invoice.payment_succeeded': {
         const invoice = stripeEvent.data.object;
 
-        const userId = invoice.metadata?.userId || invoice.subscription_details?.metadata?.userId;
+        const userId = getInvoiceUserId(invoice);
         const stripePriceId = getInvoiceStripePriceId(invoice);
         const billingInterval = getInvoiceBillingInterval(invoice);
+        const subscriptionId = getInvoiceSubscriptionId(invoice);
         const invoiceNumber = invoice.number || invoice.id;
         const hostedInvoiceUrl = invoice.hosted_invoice_url || undefined;
         const invoicePdf = invoice.invoice_pdf || undefined;
@@ -335,12 +404,12 @@ export class StripeWebhookAdapter implements WebhookAdapter {
           break;
         }
 
-        if (invoice.subscription) {
+        if (subscriptionId) {
           events.push({
             eventName: 'billing.subscription.renewed',
             userId,
             data: {
-              subscriptionId: invoice.subscription as string,
+              subscriptionId,
               invoiceId: invoice.id,
               stripePriceId: stripePriceId || undefined,
               billingInterval: billingInterval || undefined,
@@ -378,9 +447,10 @@ export class StripeWebhookAdapter implements WebhookAdapter {
       case 'invoice.payment_failed': {
         const invoice = stripeEvent.data.object;
 
-        const userId = invoice.metadata?.userId || invoice.subscription_details?.metadata?.userId;
+        const userId = getInvoiceUserId(invoice);
         const stripePriceId = getInvoiceStripePriceId(invoice);
         const billingInterval = getInvoiceBillingInterval(invoice);
+        const subscriptionId = getInvoiceSubscriptionId(invoice);
 
         if (!userId) {
           logger.warn({ invoiceId: invoice.id }, 'Invoice missing userId in metadata');
@@ -391,7 +461,7 @@ export class StripeWebhookAdapter implements WebhookAdapter {
           eventName: 'billing.subscription.payment_failed',
           userId,
           data: {
-            subscriptionId: invoice.subscription as string,
+            subscriptionId,
             invoiceId: invoice.id,
             stripePriceId: stripePriceId || undefined,
             billingInterval: billingInterval || undefined,

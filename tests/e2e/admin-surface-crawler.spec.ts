@@ -224,10 +224,10 @@ async function probeClickableLayer(
           const dataState = element.getAttribute('data-state');
           return Boolean(
             hasPopup ||
-              expanded !== null ||
-              controls ||
-              dataState === 'closed' ||
-              dataState === 'open'
+            expanded !== null ||
+            controls ||
+            dataState === 'closed' ||
+            dataState === 'open'
           );
         })
         .catch(() => false));

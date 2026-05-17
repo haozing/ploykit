@@ -22,5 +22,7 @@ function readBillingMetadata(value: unknown): { primaryCreditMetric?: string } |
 
 export function getProductPrimaryCreditMetric(productId = getCurrentRuntimeProductId()): string {
   const product = getRuntimeProduct(productId);
-  return readBillingMetadata(product?.metadata)?.primaryCreditMetric ?? PLATFORM_PRIMARY_CREDIT_METRIC;
+  return (
+    readBillingMetadata(product?.metadata)?.primaryCreditMetric ?? PLATFORM_PRIMARY_CREDIT_METRIC
+  );
 }

@@ -10,7 +10,12 @@ const selfTestSchema = z
     createApiKey: z.boolean().default(true),
     returnApiKey: z.boolean().default(false),
   })
-  .default({});
+  .default({
+    includeAi: true,
+    includeExternal: true,
+    createApiKey: true,
+    returnApiKey: false,
+  });
 
 type CheckStatus = 'passed' | 'failed' | 'skipped';
 

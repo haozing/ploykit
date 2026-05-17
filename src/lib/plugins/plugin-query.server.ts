@@ -49,7 +49,10 @@ export class PluginQueryService {
       .select()
       .from(pluginInstallations)
       .where(
-        and(eq(pluginInstallations.productId, productId), eq(pluginInstallations.pluginId, pluginId))
+        and(
+          eq(pluginInstallations.productId, productId),
+          eq(pluginInstallations.pluginId, pluginId)
+        )
       )
       .limit(1);
 

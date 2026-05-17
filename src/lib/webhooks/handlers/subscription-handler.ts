@@ -214,7 +214,8 @@ export function initSubscriptionHandlers() {
 
         if (plan) {
           const interval = resolvedBillingInterval || 'monthly';
-          const creditsGranted = readPlanLimitValue(plan.limits, PRIMARY_CREDIT_METRIC, interval) ?? 0;
+          const creditsGranted =
+            readPlanLimitValue(plan.limits, PRIMARY_CREDIT_METRIC, interval) ?? 0;
 
           if (creditsGranted > 0) {
             await logSubscriptionCreated({
@@ -750,7 +751,8 @@ export function initSubscriptionHandlers() {
             );
           } else {
             const resetAmount =
-              readPlanLimitValue(userEntitlement.plan.limits, PRIMARY_CREDIT_METRIC, 'monthly') ?? 0;
+              readPlanLimitValue(userEntitlement.plan.limits, PRIMARY_CREDIT_METRIC, 'monthly') ??
+              0;
 
             if (resetAmount > 0) {
               await logMonthlyReset({

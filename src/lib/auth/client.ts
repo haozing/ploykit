@@ -79,15 +79,15 @@ export const signUp = authClient.signUp;
 export const signOut = authClient.signOut;
 
 /**
- * Forgot Password
+ * Request Password Reset
  *
  * @example
- * await forgetPassword({
+ * await requestPasswordReset({
  *   email: "user@example.com",
  *   redirectTo: "/reset-password",
  * });
  */
-export const forgetPassword = authClient.forgetPassword;
+export const forgetPassword = authClient.requestPasswordReset;
 
 /**
  * Reset Password

@@ -55,9 +55,8 @@ export function registerCoreJobs(): void {
       retryDelayMs: 1000,
       timeoutMs: 60_000,
       handler: async (payload = {}) => {
-        const { cleanupPendingFileDeletes } = await import(
-          '@/lib/services/storage/file-storage-service'
-        );
+        const { cleanupPendingFileDeletes } =
+          await import('@/lib/services/storage/file-storage-service');
         await cleanupPendingFileDeletes(payload);
       },
     });
@@ -72,9 +71,8 @@ export function registerCoreJobs(): void {
       retryDelayMs: 1000,
       timeoutMs: 60_000,
       handler: async (payload = {}) => {
-        const { cleanupExpiredPluginFiles } = await import(
-          '@/lib/plugin-runtime/files/plugin-file-cleanup.server'
-        );
+        const { cleanupExpiredPluginFiles } =
+          await import('@/lib/plugin-runtime/files/plugin-file-cleanup.server');
         await cleanupExpiredPluginFiles(payload);
       },
     });
@@ -89,9 +87,8 @@ export function registerCoreJobs(): void {
       retryDelayMs: 0,
       timeoutMs: 60_000,
       handler: async () => {
-        const { runCreditReconciliation } = await import(
-          '@/lib/services/billing/credit-log-service'
-        );
+        const { runCreditReconciliation } =
+          await import('@/lib/services/billing/credit-log-service');
         await runCreditReconciliation();
       },
     });
