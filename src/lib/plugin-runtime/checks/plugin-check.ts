@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { builtinModules, createRequire } from 'node:module';
+import { builtinModules } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { hasPluginDiagnosticErrors, type PluginDiagnostic } from '@/plugin-sdk/diagnostics';
@@ -72,7 +72,9 @@ const DYNAMIC_CTX_CAPABILITY_PERMISSIONS = new Map<string, readonly PermissionVa
 ]);
 
 type PluginModule = Record<string, unknown>;
-type RuntimeRequire = (specifier: string) => unknown;
+type RuntimeRequire = ((specifier: string) => unknown) & {
+  resolve: (specifier: string) => string;
+};
 
 interface RuntimeModuleApi {
   createRequire: (filename: string) => RuntimeRequire;
@@ -1826,8 +1828,13 @@ function loadDependencyPolicy(pluginRoot: string): PluginDependencyPolicy {
   }
 }
 
-const hostRequire = createRequire(path.join(process.cwd(), 'package.json'));
+let hostRequire: RuntimeRequire | null = null;
 let hostRuntimeDependencies: Set<string> | null = null;
+
+function getHostRequire(): RuntimeRequire {
+  hostRequire ??= getRuntimeModuleApi().createRequire(path.join(process.cwd(), 'package.json'));
+  return hostRequire;
+}
 
 function getHostRuntimeDependencies(): Set<string> {
   if (hostRuntimeDependencies) {
@@ -1877,7 +1884,7 @@ function buildDependencyPolicyDiagnostics(
 
   for (const [packageName, versionRange] of Object.entries(dependencyPolicy.dependencies)) {
     try {
-      hostRequire.resolve(packageName);
+      getHostRequire().resolve(packageName);
     } catch {
       diagnostics.push(
         createDiagnostic(
@@ -1996,7 +2003,7 @@ function loadTranspiledModule(
   runtimeModule.paths = [];
   moduleCache.set(resolvedPath, runtimeModule);
 
-  runtimeModule.require = (specifier: string) => {
+  const runtimeRequire = ((specifier: string) => {
     const sdkAlias = resolveSdkAlias(specifier);
 
     if (sdkAlias) {
@@ -2015,7 +2022,30 @@ function loadTranspiledModule(
     }
 
     return projectRequire(specifier);
+  }) as RuntimeRequire;
+
+  runtimeRequire.resolve = (specifier: string) => {
+    const sdkAlias = resolveSdkAlias(specifier);
+
+    if (sdkAlias) {
+      return sdkAlias;
+    }
+
+    if (specifier.startsWith('.') || path.isAbsolute(specifier)) {
+      const basePath = path.isAbsolute(specifier)
+        ? specifier
+        : path.resolve(path.dirname(resolvedPath), specifier);
+      const nextPath = resolveTranspiledPath(basePath);
+
+      if (nextPath) {
+        return nextPath;
+      }
+    }
+
+    return projectRequire.resolve(specifier);
   };
+
+  runtimeModule.require = runtimeRequire;
 
   const source = fs.readFileSync(resolvedPath, 'utf-8');
   const output = ts.transpileModule(source, {

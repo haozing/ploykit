@@ -23,16 +23,35 @@ import { sql } from 'drizzle-orm';
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Database | TransactionDatabase;
 
+export interface RuntimeCatalogSyncOptions {
+  productIds?: readonly string[];
+}
+
 function scrubUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
   ) as T;
 }
 
-export async function syncRuntimeCatalog(executor: Executor = db): Promise<void> {
+export async function syncRuntimeCatalog(
+  executor: Executor = db,
+  options: RuntimeCatalogSyncOptions = {}
+): Promise<void> {
   const now = new Date();
+  const productsById = new Map(listRuntimeProducts().map((product) => [product.id, product]));
+  for (const productId of options.productIds ?? []) {
+    if (!productsById.has(productId)) {
+      productsById.set(productId, {
+        id: productId,
+        name: productId,
+        runtimeKey: productId,
+        defaultLocale: 'en',
+        status: 'active',
+      });
+    }
+  }
 
-  const productRows = listRuntimeProducts().map(
+  const productRows = [...productsById.values()].map(
     (product) =>
       scrubUndefined({
         id: product.id,

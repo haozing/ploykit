@@ -8,11 +8,13 @@ that are important for open-source users and deployers.
 
 - Plugin source is local `plugins/`. There is no remote marketplace, uploaded
   plugin package installation, or license distribution flow yet.
-- Plugin installation records are scoped by product, suite or app bundle, and
-  plugin for admin visibility and audit. Runtime-facing surfaces such as
-  navigation, theme, hooks, slots, and host page overrides are filtered through
-  the current product runtime map so stale records from another product do not
-  contaminate the current build or logs.
+- Plugin source discovery is local and code-only: `plugins/*/plugin.ts` is
+  scanned into a generated module map. Product, suite, and app bundle placement
+  belongs to installation/catalog state, not plugin source discovery.
+- Plugin installation records are scoped by product, optional suite or app
+  bundle, and plugin for admin visibility and audit. Runtime-facing surfaces
+  use installed/enabled plugin state in production; development can load local
+  plugins directly when no database is configured.
 - AI is a host capability interface. The runtime enforces permissions, metering,
   and credit hooks, but a production model provider must be wired by the
   deployer.

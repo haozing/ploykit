@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { cache } from 'react';
 import { logger } from '@/lib/_core/logger';
 import { db } from '@/lib/db/client.server';
+import { validateDatabaseConfig } from '@/lib/db/config.server';
 import { pluginHostPageOverrides } from '@/lib/db/schema/plugins';
 import type { PluginHostPageOverride as PluginHostPageOverrideRow } from '@/lib/db/schema/plugins';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
@@ -84,6 +85,10 @@ function contractSlotsForPage(
 }
 
 async function getActiveOverrideRecord(page: HostPageDefinition) {
+  if (!validateDatabaseConfig().valid) {
+    return null;
+  }
+
   const productId = getCurrentRuntimeProductId();
   const rows = await db
     .select()

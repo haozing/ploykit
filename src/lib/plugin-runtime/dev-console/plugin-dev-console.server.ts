@@ -728,7 +728,7 @@ export async function buildPluginDevConsoleReport(
 
   const allDiagnostics = plugins.flatMap((plugin) => plugin.diagnostics);
   const legacy = listLegacyPluginDirectories();
-  const runtime = await getRuntimeReport(options.includeRuntime ?? true);
+  const runtime = await getRuntimeReport(options.includeRuntime ?? false);
 
   return {
     generatedAt: new Date().toISOString(),

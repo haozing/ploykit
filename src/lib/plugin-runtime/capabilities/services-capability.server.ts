@@ -29,7 +29,8 @@ import { recordCapabilityAudit } from './audit-helper.server';
 import { DbPluginSecretsRepository } from './secrets-capability.server';
 import type { AuditPort } from '@/lib/audit/audit-port.server';
 import { getUsageLedger, type UsageLedger } from '@/lib/usage/usage-ledger.server';
-import { DEFAULT_PRODUCT_ID, getPluginRuntimeMapEntry } from '@/lib/plugin-runtime/loader';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
+import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Database | TransactionDatabase;
@@ -527,10 +528,11 @@ function ownerRank(row: PluginInternalServiceBinding, input: PluginInternalServi
   return 99;
 }
 
-function ownerConditions(input: PluginInternalServiceLookup): SQL[] {
-  const runtimeEntry = getPluginRuntimeMapEntry(input.pluginId);
-  const productId = input.productId ?? runtimeEntry?.productId ?? DEFAULT_PRODUCT_ID;
-  const suiteId = input.suiteId ?? runtimeEntry?.suiteId;
+function ownerConditions(
+  input: PluginInternalServiceLookup,
+  productId: string,
+  suiteId?: string
+): SQL[] {
   const candidates: SQL[] = [
     and(
       eq(pluginInternalServiceBindings.ownerType, 'plugin'),
@@ -707,6 +709,10 @@ export class DbPluginInternalServiceRegistry implements PluginInternalServiceReg
   async resolveBinding(
     input: PluginInternalServiceBindingLookup
   ): Promise<PluginInternalServiceBinding | null> {
+    const productId = input.productId ?? getRuntimeProductId();
+    const suiteId =
+      input.suiteId ??
+      (await pluginQueryService.getInstallation(input.pluginId, { productId }))?.suiteId;
     const environmentValues = environmentCandidates(input.environment);
     const scopeConditions: SQL[] = [eq(pluginInternalServiceBindings.scopeType, 'global')];
     if (input.workspaceId) {
@@ -718,7 +724,7 @@ export class DbPluginInternalServiceRegistry implements PluginInternalServiceReg
       );
     }
     const conditions: SQL[] = [
-      ...ownerConditions(input),
+      ...ownerConditions(input, productId, suiteId),
       eq(pluginInternalServiceBindings.serviceName, input.serviceName),
       or(...scopeConditions)!,
       or(

@@ -6,7 +6,7 @@
 import { db } from '@/lib/db/client.server';
 import { pluginInstallations } from '@/lib/db/schema/plugins';
 import { and, eq } from 'drizzle-orm';
-import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
 import type { PluginInstallation } from './plugin-types';
 
 export interface PluginInstallationQueryScope {
@@ -44,7 +44,7 @@ export class PluginQueryService {
     pluginId: string,
     scope: PluginInstallationQueryScope = {}
   ): Promise<PluginInstallation | null> {
-    const productId = getCurrentRuntimeProductId(scope);
+    const productId = getRuntimeProductId(scope);
     const [installation] = await db
       .select()
       .from(pluginInstallations)

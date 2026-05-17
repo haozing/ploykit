@@ -1,118 +1,9 @@
 {
-  "version": 2,
-  "defaultProductId": "ploykit",
-  "products": [
-    {
-      "id": "ploykit",
-      "name": "PloyKit",
-      "runtimeKey": "ploykit",
-      "defaultLocale": "en",
-      "status": "active",
-      "suites": [
-        "core",
-        "host-capability-lab",
-        "samples"
-      ],
-      "bundles": [
-        "core-dev-tools",
-        "host-capability-lab",
-        "sample-internal"
-      ],
-      "metadata": {
-        "billing": {
-          "primaryCreditMetric": "platform.credits"
-        }
-      }
-    }
-  ],
-  "suites": [
-    {
-      "id": "core",
-      "productId": "ploykit",
-      "name": "PloyKit Core",
-      "version": "0.1.0",
-      "status": "active",
-      "plugins": [
-        "capability-demo"
-      ]
-    },
-    {
-      "id": "host-capability-lab",
-      "productId": "ploykit",
-      "name": "Host Capability Lab",
-      "version": "0.1.0",
-      "status": "active",
-      "plugins": [
-        "host-capability-lab"
-      ]
-    },
-    {
-      "id": "samples",
-      "productId": "ploykit",
-      "name": "Sample Plugins",
-      "version": "0.1.0",
-      "status": "active",
-      "plugins": [
-        "sample-internal"
-      ]
-    }
-  ],
-  "bundles": [
-    {
-      "id": "core-dev-tools",
-      "productId": "ploykit",
-      "suiteId": "core",
-      "name": "PloyKit Core Developer Tools",
-      "version": "0.1.0",
-      "sourceType": "local",
-      "plugins": [
-        {
-          "pluginId": "capability-demo",
-          "enableByDefault": true,
-          "required": true
-        }
-      ]
-    },
-    {
-      "id": "host-capability-lab",
-      "productId": "ploykit",
-      "suiteId": "host-capability-lab",
-      "name": "Host Capability Lab",
-      "version": "0.1.0",
-      "sourceType": "local",
-      "plugins": [
-        {
-          "pluginId": "host-capability-lab",
-          "enableByDefault": true,
-          "required": true
-        }
-      ]
-    },
-    {
-      "id": "sample-internal",
-      "productId": "ploykit",
-      "suiteId": "samples",
-      "name": "Sample Internal Service Plugin",
-      "version": "0.1.0",
-      "sourceType": "local",
-      "plugins": [
-        {
-          "pluginId": "sample-internal",
-          "enableByDefault": false,
-          "required": false
-        }
-      ]
-    }
-  ],
+  "version": 3,
   "plugins": [
     {
       "id": "capability-demo",
       "rootDir": "plugins/capability-demo",
-      "productId": "ploykit",
-      "suiteId": "core",
-      "bundleIds": [
-        "core-dev-tools"
-      ],
       "components": [],
       "pages": [
         "DevAssetsTool",
@@ -147,11 +38,6 @@
     {
       "id": "host-capability-lab",
       "rootDir": "plugins/host-capability-lab",
-      "productId": "ploykit",
-      "suiteId": "host-capability-lab",
-      "bundleIds": [
-        "host-capability-lab"
-      ],
       "components": [
         "HomeComponentSlot",
         "StorageProbeClient"
@@ -178,11 +64,6 @@
     {
       "id": "sample-internal",
       "rootDir": "plugins/sample-internal",
-      "productId": "ploykit",
-      "suiteId": "samples",
-      "bundleIds": [
-        "sample-internal"
-      ],
       "components": [],
       "pages": [
         "SamplePage"

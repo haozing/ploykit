@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
   // Enable standalone output for Docker deployment
   output: 'standalone',
 
+  serverExternalPackages: ['@earendil-works/pi-ai'],
+
   // TypeScript build errors must not be ignored - hard gate for quality
   typescript: {
     ignoreBuildErrors: false,

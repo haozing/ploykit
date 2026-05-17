@@ -4,25 +4,13 @@ import path from 'path';
 import crypto from 'crypto';
 
 const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
-const RUNTIME_MANIFEST_PATH = 'config/plugin-runtime.manifest.json';
-const RUNTIME_MANIFEST_FILE = path.join(process.cwd(), RUNTIME_MANIFEST_PATH);
 const OUTPUT_FILE = path.join(process.cwd(), 'src/lib/plugin-map.ts');
 const MANIFEST_FILE = path.join(process.cwd(), 'src/lib/plugin-map.manifest.json');
 
-/**
- * Calculate MD5 hash of content
- */
 function getContentHash(content: string): string {
   return crypto.createHash('md5').update(content, 'utf-8').digest('hex');
 }
 
-/**
- * Recursively scan pages directory and collect all page file paths
- *
- * @param dir - Current directory being scanned
- * @param baseDir - Root path of the pages directory
- * @param pages - Array collecting page paths
- */
 function scanPagesDirectory(dir: string, baseDir: string, pages: string[]): void {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
 
@@ -30,17 +18,16 @@ function scanPagesDirectory(dir: string, baseDir: string, pages: string[]): void
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      // Recursively scan subdirectories
       scanPagesDirectory(fullPath, baseDir, pages);
-    } else if (entry.isFile()) {
-      // Only process .tsx/.jsx files
-      if (entry.name.endsWith('.tsx') || entry.name.endsWith('.jsx')) {
-        // Calculate path relative to baseDir and remove extension
-        const relativePath = path.relative(baseDir, fullPath);
-        const pagePath = relativePath.replace(/\.(tsx|jsx)$/, '').replace(/\\/g, '/');
-        pages.push(pagePath);
-      }
+      continue;
     }
+
+    if (!entry.isFile() || (!entry.name.endsWith('.tsx') && !entry.name.endsWith('.jsx'))) {
+      continue;
+    }
+
+    const relativePath = path.relative(baseDir, fullPath);
+    pages.push(relativePath.replace(/\.(tsx|jsx)$/, '').replace(/\\/g, '/'));
   }
 }
 
@@ -77,12 +64,8 @@ function scanModuleDirectory(
 interface PluginInfo {
   id: string;
   rootDir: string;
-  productId: string;
-  suiteId: string;
-  bundleIds: string[];
-  hasPluginContract: boolean;
-  components: string[]; // Component list (without extensions)
-  pages: string[]; // Page path list (relative to plugin root, without extensions)
+  components: string[];
+  pages: string[];
   apiModules: string[];
   lifecycleModules: string[];
   jobModules: string[];
@@ -92,403 +75,34 @@ interface PluginInfo {
   slotModules: string[];
 }
 
-interface RuntimeProductManifest {
-  id: string;
-  name: string;
-  runtimeKey?: string;
-  defaultLocale?: string;
-  status?: string;
-  suites?: string[];
-  bundles?: string[];
-  metadata?: Record<string, unknown>;
-}
-
-interface RuntimeSuiteManifest {
-  id: string;
-  productId: string;
-  name: string;
-  version?: string;
-  status?: string;
-  plugins: string[];
-  menu?: {
-    group: string;
-    labelKey?: string;
-    fallbackLabel?: string;
-  };
-  billing?: {
-    namespace: string;
-    primaryCreditMetric?: string;
-  };
-  sharedServices?: Array<Record<string, unknown>>;
-  sharedResourceBindings?: Array<Record<string, unknown>>;
-  metadata?: Record<string, unknown>;
-}
-
-interface RuntimeBundlePluginManifest {
-  pluginId: string;
-  enableByDefault?: boolean;
-  required?: boolean;
-}
-
-interface RuntimeBundleManifest {
-  id: string;
-  productId: string;
-  suiteId?: string;
-  name: string;
-  version?: string;
-  sourceType?: 'local' | 'npm' | 'git' | string;
-  sourceRef?: string;
-  plugins: RuntimeBundlePluginManifest[];
-  seeds?: {
-    internalServices?: Array<Record<string, unknown>>;
-    resourceBindings?: Array<Record<string, unknown>>;
-  };
-  healthChecks?: Array<Record<string, unknown>>;
-  dependencies?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-}
-
-interface RuntimeManifest {
-  version: 1;
-  defaultProductId: string;
-  products: RuntimeProductManifest[];
-  suites: RuntimeSuiteManifest[];
-  bundles: RuntimeBundleManifest[];
-}
-
-interface RuntimeManifestIndex {
-  manifest: RuntimeManifest;
-  pluginSuites: Map<string, RuntimeSuiteManifest>;
-  pluginBundles: Map<string, RuntimeBundleManifest[]>;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function assertStringArray(value: unknown, pathName: string): string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || !item.trim())) {
-    throw new Error(`${pathName} must be a non-empty string array`);
-  }
-
-  return value;
-}
-
-function normalizeBundlePlugins(value: unknown, pathName: string): RuntimeBundlePluginManifest[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${pathName} must contain at least one plugin`);
-  }
-
-  return value.map((item, index) => {
-    if (!isPlainObject(item) || typeof item.pluginId !== 'string' || !item.pluginId.trim()) {
-      throw new Error(`${pathName}.${index}.pluginId must be a non-empty string`);
-    }
-
-    return {
-      pluginId: item.pluginId,
-      enableByDefault: typeof item.enableByDefault === 'boolean' ? item.enableByDefault : undefined,
-      required: typeof item.required === 'boolean' ? item.required : undefined,
-    };
-  });
-}
-
-function readRuntimeManifest(): RuntimeManifestIndex {
-  if (!fs.existsSync(RUNTIME_MANIFEST_FILE)) {
-    throw new Error(
-      `${RUNTIME_MANIFEST_PATH} is required. PloyKit runtime plugins must declare product, suite, and bundle ownership.`
-    );
-  }
-
-  const raw = JSON.parse(fs.readFileSync(RUNTIME_MANIFEST_FILE, 'utf-8')) as unknown;
-  if (!isPlainObject(raw) || raw.version !== 1) {
-    throw new Error(`${RUNTIME_MANIFEST_PATH} must declare { "version": 1 }`);
-  }
-
-  if (typeof raw.defaultProductId !== 'string' || !raw.defaultProductId.trim()) {
-    throw new Error(`${RUNTIME_MANIFEST_PATH} must declare defaultProductId`);
-  }
-
-  const rawProducts = Array.isArray(raw.products) ? raw.products : [];
-  const rawSuites = Array.isArray(raw.suites) ? raw.suites : [];
-  const rawBundles = Array.isArray(raw.bundles) ? raw.bundles : [];
-
-  const products: RuntimeProductManifest[] = rawProducts.map((item, index) => {
-    if (!isPlainObject(item) || typeof item.id !== 'string' || typeof item.name !== 'string') {
-      throw new Error(`products.${index} must declare id and name`);
-    }
-
-    return {
-      id: item.id,
-      name: item.name,
-      runtimeKey: typeof item.runtimeKey === 'string' ? item.runtimeKey : undefined,
-      defaultLocale: typeof item.defaultLocale === 'string' ? item.defaultLocale : undefined,
-      status: typeof item.status === 'string' ? item.status : undefined,
-      suites: item.suites ? assertStringArray(item.suites, `products.${index}.suites`) : [],
-      bundles: item.bundles ? assertStringArray(item.bundles, `products.${index}.bundles`) : [],
-      metadata: isPlainObject(item.metadata) ? item.metadata : undefined,
-    };
-  });
-
-  if (!products.some((product) => product.id === raw.defaultProductId)) {
-    throw new Error(`defaultProductId "${raw.defaultProductId}" is not declared in products`);
-  }
-
-  const productIds = new Set(products.map((product) => product.id));
-  const suites: RuntimeSuiteManifest[] = rawSuites.map((item, index) => {
-    if (
-      !isPlainObject(item) ||
-      typeof item.id !== 'string' ||
-      typeof item.productId !== 'string' ||
-      typeof item.name !== 'string'
-    ) {
-      throw new Error(`suites.${index} must declare id, productId, and name`);
-    }
-
-    if (!productIds.has(item.productId)) {
-      throw new Error(`suites.${index}.productId "${item.productId}" is not declared`);
-    }
-
-    return {
-      id: item.id,
-      productId: item.productId,
-      name: item.name,
-      version: typeof item.version === 'string' ? item.version : undefined,
-      status: typeof item.status === 'string' ? item.status : undefined,
-      plugins: assertStringArray(item.plugins, `suites.${index}.plugins`),
-      menu: isPlainObject(item.menu)
-        ? {
-            group: String(item.menu.group ?? ''),
-            labelKey: typeof item.menu.labelKey === 'string' ? item.menu.labelKey : undefined,
-            fallbackLabel:
-              typeof item.menu.fallbackLabel === 'string' ? item.menu.fallbackLabel : undefined,
-          }
-        : undefined,
-      billing: isPlainObject(item.billing)
-        ? {
-            namespace: String(item.billing.namespace ?? ''),
-            primaryCreditMetric:
-              typeof item.billing.primaryCreditMetric === 'string'
-                ? item.billing.primaryCreditMetric
-                : undefined,
-          }
-        : undefined,
-      sharedServices: Array.isArray(item.sharedServices)
-        ? (item.sharedServices as Array<Record<string, unknown>>)
-        : undefined,
-      sharedResourceBindings: Array.isArray(item.sharedResourceBindings)
-        ? (item.sharedResourceBindings as Array<Record<string, unknown>>)
-        : undefined,
-      metadata: isPlainObject(item.metadata) ? item.metadata : undefined,
-    };
-  });
-
-  const suiteIds = new Set(suites.map((suite) => suite.id));
-  const bundles: RuntimeBundleManifest[] = rawBundles.map((item, index) => {
-    if (
-      !isPlainObject(item) ||
-      typeof item.id !== 'string' ||
-      typeof item.productId !== 'string' ||
-      typeof item.name !== 'string'
-    ) {
-      throw new Error(`bundles.${index} must declare id, productId, and name`);
-    }
-
-    if (!productIds.has(item.productId)) {
-      throw new Error(`bundles.${index}.productId "${item.productId}" is not declared`);
-    }
-    if (typeof item.suiteId === 'string' && !suiteIds.has(item.suiteId)) {
-      throw new Error(`bundles.${index}.suiteId "${item.suiteId}" is not declared`);
-    }
-
-    return {
-      id: item.id,
-      productId: item.productId,
-      suiteId: typeof item.suiteId === 'string' ? item.suiteId : undefined,
-      name: item.name,
-      version: typeof item.version === 'string' ? item.version : undefined,
-      sourceType: typeof item.sourceType === 'string' ? item.sourceType : undefined,
-      sourceRef: typeof item.sourceRef === 'string' ? item.sourceRef : undefined,
-      plugins: normalizeBundlePlugins(item.plugins, `bundles.${index}.plugins`),
-      seeds: isPlainObject(item.seeds)
-        ? {
-            internalServices: Array.isArray(item.seeds.internalServices)
-              ? (item.seeds.internalServices as Array<Record<string, unknown>>)
-              : undefined,
-            resourceBindings: Array.isArray(item.seeds.resourceBindings)
-              ? (item.seeds.resourceBindings as Array<Record<string, unknown>>)
-              : undefined,
-          }
-        : undefined,
-      healthChecks: Array.isArray(item.healthChecks)
-        ? (item.healthChecks as Array<Record<string, unknown>>)
-        : undefined,
-      dependencies: isPlainObject(item.dependencies) ? item.dependencies : undefined,
-      metadata: isPlainObject(item.metadata) ? item.metadata : undefined,
-    };
-  });
-  for (const product of products) {
-    for (const suiteId of product.suites ?? []) {
-      const suite = suites.find((item) => item.id === suiteId);
-      if (!suite) {
-        throw new Error(`products.${product.id}.suites references undeclared suite "${suiteId}"`);
-      }
-      if (suite.productId !== product.id) {
-        throw new Error(
-          `products.${product.id}.suites references suite "${suiteId}" owned by product "${suite.productId}"`
-        );
-      }
-    }
-
-    for (const bundleId of product.bundles ?? []) {
-      const bundle = bundles.find((item) => item.id === bundleId);
-      if (!bundle) {
-        throw new Error(
-          `products.${product.id}.bundles references undeclared bundle "${bundleId}"`
-        );
-      }
-      if (bundle.productId !== product.id) {
-        throw new Error(
-          `products.${product.id}.bundles references bundle "${bundleId}" owned by product "${bundle.productId}"`
-        );
-      }
-    }
-  }
-
-  const pluginSuites = new Map<string, RuntimeSuiteManifest>();
-  for (const suite of suites) {
-    for (const pluginId of suite.plugins) {
-      if (pluginSuites.has(pluginId)) {
-        throw new Error(
-          `Plugin "${pluginId}" is declared in multiple suites. A runtime plugin must have exactly one suite.`
-        );
-      }
-      pluginSuites.set(pluginId, suite);
-    }
-  }
-
-  const pluginBundles = new Map<string, RuntimeBundleManifest[]>();
-  for (const bundle of bundles) {
-    if (bundle.suiteId) {
-      const suite = suites.find((item) => item.id === bundle.suiteId);
-      if (!suite) {
-        throw new Error(`bundles.${bundle.id}.suiteId "${bundle.suiteId}" is not declared`);
-      }
-      if (suite.productId !== bundle.productId) {
-        throw new Error(
-          `bundles.${bundle.id}.suiteId "${bundle.suiteId}" is owned by product "${suite.productId}"`
-        );
-      }
-    }
-
-    for (const plugin of bundle.plugins) {
-      const suite = pluginSuites.get(plugin.pluginId);
-      if (!suite) {
-        throw new Error(
-          `bundles.${bundle.id}.plugins references plugin "${plugin.pluginId}" that is not declared in any suite`
-        );
-      }
-      if (suite.productId !== bundle.productId) {
-        throw new Error(
-          `bundles.${bundle.id}.plugins references plugin "${plugin.pluginId}" from product "${suite.productId}"`
-        );
-      }
-      if (bundle.suiteId && suite.id !== bundle.suiteId) {
-        throw new Error(
-          `bundles.${bundle.id}.plugins references plugin "${plugin.pluginId}" from suite "${suite.id}", expected "${bundle.suiteId}"`
-        );
-      }
-
-      const current = pluginBundles.get(plugin.pluginId) ?? [];
-      current.push(bundle);
-      pluginBundles.set(plugin.pluginId, current);
-    }
-  }
-
-  return {
-    manifest: {
-      version: 1,
-      defaultProductId: raw.defaultProductId,
-      products,
-      suites,
-      bundles,
-    },
-    pluginSuites,
-    pluginBundles,
-  };
-}
-
-function listRuntimePluginDirectories(): string[] {
-  if (!fs.existsSync(PLUGINS_DIR)) {
-    return [];
-  }
-
-  return fs
-    .readdirSync(PLUGINS_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((pluginId) => fs.existsSync(path.join(PLUGINS_DIR, pluginId, 'plugin.ts')))
-    .sort((a, b) => a.localeCompare(b));
-}
-
-function validateManifestPluginDirectories(runtimeManifest: RuntimeManifestIndex): void {
-  const localPluginIds = new Set(listRuntimePluginDirectories());
-  const missingPluginIds = [...runtimeManifest.pluginSuites.keys()]
-    .filter((pluginId) => !localPluginIds.has(pluginId))
-    .sort((a, b) => a.localeCompare(b));
-
-  if (missingPluginIds.length > 0) {
-    throw new Error(
-      `${RUNTIME_MANIFEST_PATH} references missing local plugin directories: ${missingPluginIds
-        .map((pluginId) => `"plugins/${pluginId}"`)
-        .join(', ')}`
-    );
-  }
-}
-
-function scanPlugins(runtimeManifest: RuntimeManifestIndex): PluginInfo[] {
+function scanPlugins(): PluginInfo[] {
   const plugins: PluginInfo[] = [];
 
   if (!fs.existsSync(PLUGINS_DIR)) {
-    console.warn('⚠️  Plugins directory not found');
+    console.warn('Plugins directory not found');
     return plugins;
   }
 
-  const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
+  const entries = fs
+    .readdirSync(PLUGINS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-
     const pluginId = entry.name;
     const pluginPath = path.join(PLUGINS_DIR, pluginId);
 
-    const hasPluginContract = fs.existsSync(path.join(pluginPath, 'plugin.ts'));
-
-    if (!hasPluginContract) {
+    if (!fs.existsSync(path.join(pluginPath, 'plugin.ts'))) {
       console.warn(`Plugin ${pluginId} missing plugin.ts, skipping runtime contract target`);
       continue;
     }
 
-    const suite = runtimeManifest.pluginSuites.get(pluginId);
-    if (!suite) {
-      throw new Error(
-        `Plugin "${pluginId}" is missing from ${RUNTIME_MANIFEST_PATH} suites[].plugins.`
-      );
-    }
-    const bundles = runtimeManifest.pluginBundles.get(pluginId) ?? [];
-    if (bundles.length === 0) {
-      throw new Error(
-        `Plugin "${pluginId}" is missing from ${RUNTIME_MANIFEST_PATH} bundles[].plugins.`
-      );
-    }
-
-    // Scan components directory
     const components: string[] = [];
     const componentsDir = path.join(pluginPath, 'components');
     if (fs.existsSync(componentsDir)) {
       scanModuleDirectory(componentsDir, componentsDir, components, ['.tsx', '.jsx']);
     }
 
-    // Scan pages directory (recursively scan all subdirectories)
     const pages: string[] = [];
     const pagesDir = path.join(pluginPath, 'pages');
     if (fs.existsSync(pagesDir)) {
@@ -540,121 +154,93 @@ function scanPlugins(runtimeManifest: RuntimeManifestIndex): PluginInfo[] {
     plugins.push({
       id: pluginId,
       rootDir: path.relative(process.cwd(), pluginPath).replace(/\\/g, '/'),
-      productId: suite.productId,
-      suiteId: suite.id,
-      bundleIds: bundles.map((bundle) => bundle.id),
-      hasPluginContract,
-      components,
-      pages,
-      apiModules,
-      lifecycleModules,
-      jobModules,
-      webhookModules,
-      eventModules,
-      hookModules,
-      slotModules,
+      components: components.sort(),
+      pages: pages.sort(),
+      apiModules: apiModules.sort(),
+      lifecycleModules: lifecycleModules.sort(),
+      jobModules: jobModules.sort(),
+      webhookModules: webhookModules.sort(),
+      eventModules: eventModules.sort(),
+      hookModules: hookModules.sort(),
+      slotModules: slotModules.sort(),
     });
   }
 
   return plugins;
 }
 
-function generatePluginMap(plugins: PluginInfo[], runtimeManifest: RuntimeManifest): string {
+function moduleMap(
+  pluginId: string,
+  modules: string[],
+  keyPrefix: string,
+  importPrefix: string
+): string | null {
+  if (modules.length === 0) {
+    return null;
+  }
+
+  return modules
+    .map((modulePath) => {
+      const key = keyPrefix ? `${keyPrefix}/${modulePath}` : modulePath;
+      const importPath = importPrefix ? `${importPrefix}/${modulePath}` : modulePath;
+      return `      '${key}': () => import('@/plugins/${pluginId}/${importPath}')`;
+    })
+    .join(',\n');
+}
+
+function generatePluginMap(plugins: PluginInfo[]): string {
   const entries = plugins.map((plugin) => {
-    const {
-      id,
-      rootDir,
-      productId,
-      suiteId,
-      bundleIds,
-      hasPluginContract,
-      components,
-      pages,
-      apiModules,
-      lifecycleModules,
-      jobModules,
-      webhookModules,
-      eventModules,
-      hookModules,
-      slotModules,
-    } = plugin;
-    const parts: string[] = [];
+    const parts: string[] = [
+      `    rootDir: ${JSON.stringify(plugin.rootDir)},`,
+      `    plugin: () => import('@/plugins/${plugin.id}/plugin'),`,
+    ];
 
-    parts.push(`    rootDir: ${JSON.stringify(rootDir)},`);
-    parts.push(`    productId: ${JSON.stringify(productId)},`);
-    parts.push(`    suiteId: ${JSON.stringify(suiteId)},`);
-    parts.push(`    bundleIds: ${JSON.stringify(bundleIds)},`);
-
-    if (hasPluginContract) {
-      parts.push(`    plugin: () => import('@/plugins/${id}/plugin'),`);
-    }
-    // Add components field
-    if (components.length > 0) {
-      const componentEntries = components.map((componentPath) => {
-        const importPath = `@/plugins/${id}/components/${componentPath}`;
-        return `      'components/${componentPath}': () => import('${importPath}')`;
-      });
-      parts.push(`    components: {\n${componentEntries.join(',\n')}\n    },`);
+    const components = moduleMap(plugin.id, plugin.components, 'components', 'components');
+    if (components) {
+      parts.push(`    components: {\n${components}\n    },`);
     }
 
-    // Add pages field (page mappings)
-    if (pages.length > 0) {
-      const pageEntries = pages.map(
-        (pagePath) => `      'pages/${pagePath}': () => import('@/plugins/${id}/pages/${pagePath}')`
-      );
-      parts.push(`    pages: {\n${pageEntries.join(',\n')}\n    },`);
+    const pages = moduleMap(plugin.id, plugin.pages, 'pages', 'pages');
+    if (pages) {
+      parts.push(`    pages: {\n${pages}\n    },`);
     }
 
-    if (apiModules.length > 0) {
-      const apiEntries = apiModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    apis: {\n${apiEntries.join(',\n')}\n    },`);
+    const apis = moduleMap(plugin.id, plugin.apiModules, '', '');
+    if (apis) {
+      parts.push(`    apis: {\n${apis}\n    },`);
     }
 
-    if (lifecycleModules.length > 0) {
-      const lifecycleEntries = lifecycleModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    lifecycleModules: {\n${lifecycleEntries.join(',\n')}\n    },`);
+    const lifecycleModules = moduleMap(plugin.id, plugin.lifecycleModules, '', '');
+    if (lifecycleModules) {
+      parts.push(`    lifecycleModules: {\n${lifecycleModules}\n    },`);
     }
 
-    if (jobModules.length > 0) {
-      const jobEntries = jobModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    jobModules: {\n${jobEntries.join(',\n')}\n    },`);
+    const jobModules = moduleMap(plugin.id, plugin.jobModules, '', '');
+    if (jobModules) {
+      parts.push(`    jobModules: {\n${jobModules}\n    },`);
     }
 
-    if (webhookModules.length > 0) {
-      const webhookEntries = webhookModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    webhookModules: {\n${webhookEntries.join(',\n')}\n    },`);
+    const webhookModules = moduleMap(plugin.id, plugin.webhookModules, '', '');
+    if (webhookModules) {
+      parts.push(`    webhookModules: {\n${webhookModules}\n    },`);
     }
 
-    if (eventModules.length > 0) {
-      const eventEntries = eventModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    eventModules: {\n${eventEntries.join(',\n')}\n    },`);
+    const eventModules = moduleMap(plugin.id, plugin.eventModules, '', '');
+    if (eventModules) {
+      parts.push(`    eventModules: {\n${eventModules}\n    },`);
     }
 
-    if (hookModules.length > 0) {
-      const hookEntries = hookModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    hookModules: {\n${hookEntries.join(',\n')}\n    },`);
+    const hookModules = moduleMap(plugin.id, plugin.hookModules, '', '');
+    if (hookModules) {
+      parts.push(`    hookModules: {\n${hookModules}\n    },`);
     }
 
-    if (slotModules.length > 0) {
-      const slotEntries = slotModules.map(
-        (modulePath) => `      '${modulePath}': () => import('@/plugins/${id}/${modulePath}')`
-      );
-      parts.push(`    slotModules: {\n${slotEntries.join(',\n')}\n    },`);
+    const slotModules = moduleMap(plugin.id, plugin.slotModules, '', '');
+    if (slotModules) {
+      parts.push(`    slotModules: {\n${slotModules}\n    },`);
     }
 
-    return `  '${id}': {\n${parts.join('\n')}\n  }`;
+    return `  '${plugin.id}': {\n${parts.join('\n')}\n  }`;
   });
 
   return `/**
@@ -670,67 +256,8 @@ function generatePluginMap(plugins: PluginInfo[], runtimeManifest: RuntimeManife
 
 type PluginModuleLoader = () => Promise<unknown>;
 
-export interface RuntimeProductMapEntry {
-  id: string;
-  name: string;
-  runtimeKey?: string;
-  defaultLocale?: string;
-  status?: string;
-  suites: string[];
-  bundles: string[];
-  metadata?: Record<string, unknown>;
-}
-
-export interface RuntimeSuiteMapEntry {
-  id: string;
-  productId: string;
-  name: string;
-  version?: string;
-  status?: string;
-  plugins: string[];
-  menu?: {
-    group: string;
-    labelKey?: string;
-    fallbackLabel?: string;
-  };
-  billing?: {
-    namespace: string;
-    primaryCreditMetric?: string;
-  };
-  sharedServices?: Array<Record<string, unknown>>;
-  sharedResourceBindings?: Array<Record<string, unknown>>;
-  metadata?: Record<string, unknown>;
-}
-
-export interface RuntimeBundlePluginMapEntry {
-  pluginId: string;
-  enableByDefault: boolean;
-  required: boolean;
-}
-
-export interface RuntimeBundleMapEntry {
-  id: string;
-  productId: string;
-  suiteId?: string;
-  name: string;
-  version?: string;
-  sourceType?: string;
-  sourceRef?: string;
-  plugins: RuntimeBundlePluginMapEntry[];
-  seeds?: {
-    internalServices?: Array<Record<string, unknown>>;
-    resourceBindings?: Array<Record<string, unknown>>;
-  };
-  healthChecks?: Array<Record<string, unknown>>;
-  dependencies?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-}
-
 export interface PluginMapEntry {
   rootDir?: string;
-  productId: string;
-  suiteId: string;
-  bundleIds: string[];
   plugin?: PluginModuleLoader;
   components?: Record<string, PluginModuleLoader>;
   pages?: Record<string, PluginModuleLoader>;
@@ -743,58 +270,19 @@ export interface PluginMapEntry {
   slotModules?: Record<string, PluginModuleLoader>;
 }
 
-export const DEFAULT_RUNTIME_PRODUCT_ID = ${JSON.stringify(runtimeManifest.defaultProductId)};
-
-export const RUNTIME_PRODUCTS: Record<string, RuntimeProductMapEntry> = ${JSON.stringify(
-    Object.fromEntries(runtimeManifest.products.map((product) => [product.id, product])),
-    null,
-    2
-  )};
-
-export const PLUGIN_SUITES: Record<string, RuntimeSuiteMapEntry> = ${JSON.stringify(
-    Object.fromEntries(runtimeManifest.suites.map((suite) => [suite.id, suite])),
-    null,
-    2
-  )};
-
-export const APP_BUNDLES: Record<string, RuntimeBundleMapEntry> = ${JSON.stringify(
-    Object.fromEntries(
-      runtimeManifest.bundles.map((bundle) => [
-        bundle.id,
-        {
-          ...bundle,
-          plugins: bundle.plugins.map((plugin) => ({
-            pluginId: plugin.pluginId,
-            enableByDefault: plugin.enableByDefault ?? true,
-            required: plugin.required ?? true,
-          })),
-        },
-      ])
-    ),
-    null,
-    2
-  )};
-
 export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
 ${entries.join(',\n')}
 };
 `;
 }
 
-function generatePluginManifest(plugins: PluginInfo[], runtimeManifest: RuntimeManifest): string {
+function generatePluginManifest(plugins: PluginInfo[]): string {
   return `${JSON.stringify(
     {
-      version: 2,
-      defaultProductId: runtimeManifest.defaultProductId,
-      products: runtimeManifest.products,
-      suites: runtimeManifest.suites,
-      bundles: runtimeManifest.bundles,
+      version: 3,
       plugins: plugins.map((plugin) => ({
         id: plugin.id,
         rootDir: plugin.rootDir,
-        productId: plugin.productId,
-        suiteId: plugin.suiteId,
-        bundleIds: plugin.bundleIds,
         components: plugin.components,
         pages: plugin.pages,
         apiModules: plugin.apiModules,
@@ -811,6 +299,29 @@ function generatePluginManifest(plugins: PluginInfo[], runtimeManifest: RuntimeM
   )}\n`;
 }
 
+function printPlugins(plugins: PluginInfo[]): void {
+  console.log(`Found ${plugins.length} plugins:`);
+  plugins.forEach((plugin) => {
+    const features = ['plugin.ts'];
+    if (plugin.components.length > 0) features.push(`${plugin.components.length} components`);
+    if (plugin.pages.length > 0) features.push(`${plugin.pages.length} pages`);
+    if (plugin.apiModules.length > 0) features.push(`${plugin.apiModules.length} api modules`);
+    if (plugin.lifecycleModules.length > 0) {
+      features.push(`${plugin.lifecycleModules.length} lifecycle modules`);
+    }
+    if (plugin.jobModules.length > 0) features.push(`${plugin.jobModules.length} job modules`);
+    if (plugin.webhookModules.length > 0) {
+      features.push(`${plugin.webhookModules.length} webhook modules`);
+    }
+    if (plugin.eventModules.length > 0) {
+      features.push(`${plugin.eventModules.length} event modules`);
+    }
+    if (plugin.hookModules.length > 0) features.push(`${plugin.hookModules.length} hook modules`);
+    if (plugin.slotModules.length > 0) features.push(`${plugin.slotModules.length} slot modules`);
+    console.log(`   - ${plugin.id} (${features.join(', ')})`);
+  });
+}
+
 function main() {
   const isCI = process.env.CI === 'true';
   const isBuild = process.argv.includes('--build');
@@ -821,42 +332,15 @@ function main() {
     console.log('Scanning plugins directory...');
   }
 
-  const runtimeManifest = readRuntimeManifest();
-  validateManifestPluginDirectories(runtimeManifest);
-  const plugins = scanPlugins(runtimeManifest);
+  const plugins = scanPlugins();
 
   if (!isQuiet) {
-    console.log(`Found ${plugins.length} plugins:`);
-    plugins.forEach((p) => {
-      const features = [];
-      if (p.hasPluginContract) features.push('plugin.ts');
-      if (p.components.length > 0) features.push(`${p.components.length} components`);
-      if (p.pages.length > 0) features.push(`${p.pages.length} pages`);
-      if (p.apiModules.length > 0) features.push(`${p.apiModules.length} api modules`);
-      if (p.lifecycleModules.length > 0) {
-        features.push(`${p.lifecycleModules.length} lifecycle modules`);
-      }
-      if (p.jobModules.length > 0) features.push(`${p.jobModules.length} job modules`);
-      if (p.webhookModules.length > 0) {
-        features.push(`${p.webhookModules.length} webhook modules`);
-      }
-      if (p.eventModules.length > 0) {
-        features.push(`${p.eventModules.length} event modules`);
-      }
-      if (p.hookModules.length > 0) {
-        features.push(`${p.hookModules.length} hook modules`);
-      }
-      if (p.slotModules.length > 0) {
-        features.push(`${p.slotModules.length} slot modules`);
-      }
-      console.log(`   - ${p.id} (${features.join(', ')})`);
-    });
+    printPlugins(plugins);
   }
 
-  const content = generatePluginMap(plugins, runtimeManifest.manifest);
-  const manifestContent = generatePluginManifest(plugins, runtimeManifest.manifest);
+  const content = generatePluginMap(plugins);
+  const manifestContent = generatePluginManifest(plugins);
 
-  // --check mode: verify existing plugin-map.ts matches current plugins/ directory
   if (isCheck) {
     if (!fs.existsSync(OUTPUT_FILE)) {
       console.error('Plugin map check failed: src/lib/plugin-map.ts does not exist');
@@ -876,12 +360,11 @@ function main() {
 
     const existingContent = fs.readFileSync(OUTPUT_FILE, 'utf-8');
     const existingManifestContent = fs.readFileSync(MANIFEST_FILE, 'utf-8');
-    const newHash = getContentHash(content);
-    const existingHash = getContentHash(existingContent);
-    const newManifestHash = getContentHash(manifestContent);
-    const existingManifestHash = getContentHash(existingManifestContent);
 
-    if (newHash !== existingHash || newManifestHash !== existingManifestHash) {
+    if (
+      getContentHash(content) !== getContentHash(existingContent) ||
+      getContentHash(manifestContent) !== getContentHash(existingManifestContent)
+    ) {
       console.error(
         'Plugin map check failed: plugins/ directory does not match src/lib/plugin-map.ts'
       );
@@ -895,49 +378,37 @@ function main() {
     return;
   }
 
-  // Ensure directory exists
   const outputDir = path.dirname(OUTPUT_FILE);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Compare content hash to avoid unnecessary writes that trigger HMR
-  const newHash = getContentHash(content);
-  const newManifestHash = getContentHash(manifestContent);
-  let manifestChanged = true;
+  const contentChanged =
+    !fs.existsSync(OUTPUT_FILE) ||
+    getContentHash(content) !== getContentHash(fs.readFileSync(OUTPUT_FILE, 'utf-8'));
+  const manifestChanged =
+    !fs.existsSync(MANIFEST_FILE) ||
+    getContentHash(manifestContent) !== getContentHash(fs.readFileSync(MANIFEST_FILE, 'utf-8'));
 
-  if (fs.existsSync(OUTPUT_FILE)) {
-    const existingContent = fs.readFileSync(OUTPUT_FILE, 'utf-8');
-    const existingHash = getContentHash(existingContent);
+  if (!contentChanged && !manifestChanged) {
+    if (!isQuiet) {
+      console.log('No changes detected, skipping write');
+    }
+    return;
+  }
 
-    if (newHash === existingHash) {
-      if (fs.existsSync(MANIFEST_FILE)) {
-        const existingManifestContent = fs.readFileSync(MANIFEST_FILE, 'utf-8');
-        const existingManifestHash = getContentHash(existingManifestContent);
-        manifestChanged = newManifestHash !== existingManifestHash;
-      }
-
-      if (manifestChanged) {
-        fs.writeFileSync(MANIFEST_FILE, manifestContent, 'utf-8');
-        if (!isQuiet) {
-          console.log(`Generated: ${path.relative(process.cwd(), MANIFEST_FILE)}`);
-        }
-        return;
-      }
-
-      if (!isQuiet) {
-        console.log('No changes detected, skipping write');
-      }
-      return;
+  if (contentChanged) {
+    fs.writeFileSync(OUTPUT_FILE, content, 'utf-8');
+    if (!isQuiet) {
+      console.log(`Generated: ${path.relative(process.cwd(), OUTPUT_FILE)}`);
     }
   }
 
-  fs.writeFileSync(OUTPUT_FILE, content, 'utf-8');
-  fs.writeFileSync(MANIFEST_FILE, manifestContent, 'utf-8');
-
-  if (!isQuiet) {
-    console.log(`Generated: ${path.relative(process.cwd(), MANIFEST_FILE)}`);
-    console.log(`Generated: ${path.relative(process.cwd(), OUTPUT_FILE)}`);
+  if (manifestChanged) {
+    fs.writeFileSync(MANIFEST_FILE, manifestContent, 'utf-8');
+    if (!isQuiet) {
+      console.log(`Generated: ${path.relative(process.cwd(), MANIFEST_FILE)}`);
+    }
   }
 }
 

@@ -19,7 +19,9 @@ import {
   listInternalServiceRequirements,
 } from '@/lib/plugin-runtime/admin';
 import { getPluginRuntimeMapEntry } from '@/lib/plugin-runtime/loader';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
+import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import type { PluginResourceBindingDefinition } from '@ploykit/plugin-sdk';
 
 //
@@ -104,19 +106,22 @@ async function servicesAreBound(pluginId: string, services: readonly string[]): 
   return services.every((service) => boundServices.has(service));
 }
 
-function resolveResourceBindingOwner(
+async function resolveResourceBindingOwner(
   pluginId: string,
   declaration: PluginResourceBindingDefinition
-): { productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string } | null {
-  const entry = getPluginRuntimeMapEntry(pluginId);
-  const productId = entry?.productId;
-  if (!productId) {
-    return null;
-  }
-
+): Promise<{
+  productId: string;
+  ownerType: 'plugin' | 'suite' | 'product';
+  ownerId: string;
+} | null> {
+  const productId = getRuntimeProductId();
   const ownerType = declaration.owner ?? 'plugin';
+  const installation =
+    ownerType === 'suite'
+      ? await pluginQueryService.getInstallation(pluginId, { productId })
+      : null;
   const ownerId =
-    ownerType === 'plugin' ? pluginId : ownerType === 'suite' ? entry.suiteId : productId;
+    ownerType === 'plugin' ? pluginId : ownerType === 'suite' ? installation?.suiteId : productId;
 
   return ownerId ? { productId, ownerType, ownerId } : null;
 }
@@ -142,7 +147,7 @@ async function resourceBindingsAreBound(
 
     let hasActiveBinding = false;
     for (const declaration of declarations) {
-      const owner = resolveResourceBindingOwner(pluginId, declaration);
+      const owner = await resolveResourceBindingOwner(pluginId, declaration);
       if (!owner) {
         continue;
       }

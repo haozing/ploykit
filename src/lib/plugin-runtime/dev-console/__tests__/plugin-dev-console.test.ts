@@ -35,7 +35,6 @@ describe('plugin dev console report', () => {
 
     const report = await buildPluginDevConsoleReport({
       targetPaths: [pluginRoot],
-      includeRuntime: false,
       includeActivity: false,
     });
 
@@ -58,6 +57,7 @@ describe('plugin dev console report', () => {
         status: 'ready',
       }),
     });
+    expect(report.runtime).toBeNull();
   });
 
   it('marks manifest-only directories as legacy plugin targets', () => {

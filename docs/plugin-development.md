@@ -27,6 +27,10 @@ plugins/<plugin-id>/
 runtime pages, APIs, jobs, events, webhooks, lifecycle handlers, slots, menus,
 assets, and capabilities from that generated map.
 
+The generated map is a module index only. It does not assign plugins to
+products, suites, or bundles; those runtime placement decisions live in
+installation/catalog state.
+
 For plugins that need to extend or override host-owned pages such as the home,
 about, or pricing pages, see [host page slots and overrides](host-page-overrides.md).
 

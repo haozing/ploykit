@@ -5,6 +5,10 @@ import {
   getApiSecurityDecision,
   type ApiSecurityConfig,
 } from './lib/security/api-security-middleware';
+import {
+  createMissingStripeSignatureResponse,
+  shouldRejectUnsignedStripeWebhook,
+} from './lib/security/stripe-webhook-proxy-guard';
 
 const productionConfig: ApiSecurityConfig = {
   nodeEnv: 'production',
@@ -143,5 +147,27 @@ describe('API security middleware', () => {
         statusCode: 403,
       },
     });
+  });
+});
+
+describe('API proxy webhook validation', () => {
+  it('rejects unsigned Stripe webhook POSTs before route execution', async () => {
+    const request = createRequest('/api/webhooks/stripe', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+    const response = createMissingStripeSignatureResponse('req_test');
+
+    expect(shouldRejectUnsignedStripeWebhook(request)).toBe(true);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'VAL_001',
+      error: {
+        message: 'Missing stripe-signature header',
+        statusCode: 400,
+      },
+    });
+    expect(response.status).toBe(400);
   });
 });

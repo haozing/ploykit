@@ -16,7 +16,8 @@ import {
   type NewPluginResourceBinding,
   type PluginResourceBinding,
 } from '@/lib/db/schema/plugin-platform';
-import { DEFAULT_PRODUCT_ID, getPluginRuntimeMapEntry } from '@/lib/plugin-runtime/loader';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
+import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import {
   assertJsonSerializable,
   assertName,
@@ -89,20 +90,23 @@ const VALID_STATUS = new Set<PluginResourceBindingStatus>(['active', 'archived',
 const DEFAULT_READ_ROLES = ['owner', 'admin', 'editor', 'viewer'] satisfies PluginWorkspaceRole[];
 const DEFAULT_WRITE_ROLES = ['owner', 'admin'] satisfies PluginWorkspaceRole[];
 
-function resolveOwnerScope(
+async function resolveOwnerScope(
   scope: PluginCapabilityScope,
   declaration: NonNullable<ReturnType<typeof bindingDeclaration>>,
   capability: string
-): PluginResourceBindingsScope {
+): Promise<PluginResourceBindingsScope> {
   const user = requireUser(scope, capability);
-  const runtimeEntry = getPluginRuntimeMapEntry(scope.contract.id);
-  const productId = runtimeEntry?.productId ?? DEFAULT_PRODUCT_ID;
+  const productId = getRuntimeProductId();
   const ownerType = declaration.owner ?? 'plugin';
+  const installation =
+    ownerType === 'suite'
+      ? await pluginQueryService.getInstallation(scope.contract.id, { productId })
+      : null;
   const ownerId =
     ownerType === 'plugin'
       ? scope.contract.id
       : ownerType === 'suite'
-        ? runtimeEntry?.suiteId
+        ? installation?.suiteId
         : productId;
 
   if (!ownerId) {
@@ -110,7 +114,11 @@ function resolveOwnerScope(
       code: 'PLUGIN_RESOURCE_BINDING_OWNER_UNRESOLVED',
       message: `Resource binding owner "${ownerType}" cannot be resolved for plugin "${scope.contract.id}".`,
       statusCode: 500,
-      details: { pluginId: scope.contract.id, ownerType },
+      details: { pluginId: scope.contract.id, productId, ownerType },
+      fix:
+        ownerType === 'suite'
+          ? 'Install the plugin with a suiteId before using suite-owned resource bindings.'
+          : undefined,
     });
   }
 
@@ -451,7 +459,11 @@ export function createPluginResourceBindingsCapability(
         roleAccessAllowed(declaration.permissions?.read, DEFAULT_READ_ROLES),
         'ctx.resourceBindings.get'
       );
-      const capabilityScope = resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.get');
+      const capabilityScope = await resolveOwnerScope(
+        scope,
+        declaration,
+        'ctx.resourceBindings.get'
+      );
       const row = await repository.get(capabilityScope, {
         resourceScope,
         resourceType,
@@ -489,7 +501,11 @@ export function createPluginResourceBindingsCapability(
           roleAccessAllowed(declaration.permissions?.read, DEFAULT_READ_ROLES),
           'ctx.resourceBindings.list'
         );
-        const capabilityScope = resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.list');
+        const capabilityScope = await resolveOwnerScope(
+          scope,
+          declaration,
+          'ctx.resourceBindings.list'
+        );
         const rows = await repository.list(capabilityScope, {
           resourceScope,
           resourceType,
@@ -506,14 +522,17 @@ export function createPluginResourceBindingsCapability(
       );
       const rows = (
         await Promise.all(
-          declarations.map((declaration) =>
-            repository.list(resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.list'), {
-              resourceScope,
-              resourceType: declaration.type,
-              status,
-              limit: offset + limit,
-              offset: 0,
-            })
+          declarations.map(async (declaration) =>
+            repository.list(
+              await resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.list'),
+              {
+                resourceScope,
+                resourceType: declaration.type,
+                status,
+                limit: offset + limit,
+                offset: 0,
+              }
+            )
           )
         )
       ).flat();
@@ -546,7 +565,11 @@ export function createPluginResourceBindingsCapability(
         roleAccessAllowed(declaration.permissions?.write, DEFAULT_WRITE_ROLES),
         'ctx.resourceBindings.upsert'
       );
-      const capabilityScope = resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.upsert');
+      const capabilityScope = await resolveOwnerScope(
+        scope,
+        declaration,
+        'ctx.resourceBindings.upsert'
+      );
       const metadata = input.metadata ?? {};
       assertJsonSerializable(metadata, 'Resource binding metadata');
       const row = await repository.upsert(capabilityScope, {
@@ -580,7 +603,7 @@ export function createPluginResourceBindingsCapability(
       let existing: PluginResourceBinding | null = null;
       let capabilityScope: PluginResourceBindingsScope | null = null;
       for (const declaration of scope.contract.resourceBindings) {
-        const candidateScope = resolveOwnerScope(
+        const candidateScope = await resolveOwnerScope(
           scope,
           declaration,
           'ctx.resourceBindings.archive'
@@ -617,7 +640,8 @@ export function createPluginResourceBindingsCapability(
         'ctx.resourceBindings.archive'
       );
       const archiveScope =
-        capabilityScope ?? resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.archive');
+        capabilityScope ??
+        (await resolveOwnerScope(scope, declaration, 'ctx.resourceBindings.archive'));
       const row = await repository.archive(archiveScope, existing.id);
       await recordCapabilityAudit(
         scope,

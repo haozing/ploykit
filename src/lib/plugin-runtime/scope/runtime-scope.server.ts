@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 import { validateDatabaseConfig } from '@/lib/db/config.server';
+import { env } from '@/lib/_core/env';
 import { logger } from '@/lib/_core/logger';
 import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
@@ -37,7 +38,7 @@ export interface RuntimeScopeInput {
 
 export interface RuntimePluginRef {
   productId: string;
-  suiteId: string;
+  suiteId: string | null;
   bundleIds: readonly string[];
   pluginId: string;
   installationId?: string;
@@ -108,7 +109,7 @@ export class RuntimeScopeService {
     const runtimeIdSet = new Set(runtimePluginIds);
     const dbConfig = validateDatabaseConfig();
 
-    if (!dbConfig.valid && !input.includeDisabled) {
+    if (!dbConfig.valid && env.NODE_ENV === 'production' && !input.includeDisabled) {
       logger.debug(
         { productId, errors: dbConfig.errors },
         'Runtime plugin lookup skipped without database configuration'
@@ -122,13 +123,15 @@ export class RuntimeScopeService {
     const installationsByPluginId = new Map(
       installations.map((installation) => [installation.pluginId, installation])
     );
-    const candidatePluginIds = input.includeDisabled
-      ? runtimePluginIds
-      : installations
-          .filter(
-            (installation) => installation.enabled && installation.installStatus === 'installed'
-          )
-          .map((installation) => installation.pluginId);
+    const devAutoEnabled = !dbConfig.valid && env.NODE_ENV !== 'production';
+    const candidatePluginIds =
+      input.includeDisabled || devAutoEnabled
+        ? runtimePluginIds
+        : installations
+            .filter(
+              (installation) => installation.enabled && installation.installStatus === 'installed'
+            )
+            .map((installation) => installation.pluginId);
 
     const refs: RuntimePluginRef[] = [];
     for (const pluginId of candidatePluginIds) {
@@ -137,15 +140,16 @@ export class RuntimeScopeService {
       }
 
       const entry = getPluginRuntimeMapEntry(pluginId);
-      if (!entry || (entry.productId ?? productId) !== productId) {
+      if (!entry) {
         continue;
       }
-      if (input.suiteId && entry.suiteId !== input.suiteId) {
+      const installation = installationsByPluginId.get(pluginId);
+      const suiteId = installation?.suiteId ?? null;
+      if (input.suiteId && suiteId !== input.suiteId) {
         continue;
       }
 
-      const installation = installationsByPluginId.get(pluginId);
-      if (!input.includeDisabled && !installation?.enabled) {
+      if (!input.includeDisabled && !devAutoEnabled && !installation?.enabled) {
         continue;
       }
 
@@ -163,12 +167,12 @@ export class RuntimeScopeService {
 
       refs.push({
         productId,
-        suiteId: entry.suiteId ?? 'default',
-        bundleIds: entry.bundleIds ?? [],
+        suiteId,
+        bundleIds: installation?.bundleId ? [installation.bundleId] : [],
         pluginId,
         installationId: installation?.id,
         version: installation?.version,
-        enabled: installation?.enabled ?? false,
+        enabled: installation?.enabled ?? devAutoEnabled,
         runtimeMapEntry: entry,
         contract,
       });
@@ -185,13 +189,17 @@ export class RuntimeScopeService {
   async isRuntimePluginEnabled(pluginId: string, input: Omit<RuntimeScopeInput, 'surface'> = {}) {
     const productId = getCurrentRuntimeProductId(input);
     const entry = getPluginRuntimeMapEntry(pluginId);
-    if (!entry || (entry.productId ?? productId) !== productId) {
+    if (!entry) {
       return false;
     }
-    if (input.suiteId && entry.suiteId !== input.suiteId) {
-      return false;
+    const dbConfig = validateDatabaseConfig();
+    if (!dbConfig.valid) {
+      return env.NODE_ENV !== 'production' && !input.suiteId;
     }
     const installation = await pluginQueryService.getInstallation(pluginId, { productId });
+    if (input.suiteId && installation?.suiteId !== input.suiteId) {
+      return false;
+    }
     return installation?.enabled === true && installation.installStatus === 'installed';
   }
 }

@@ -43,6 +43,21 @@ function shouldUseSecureCookies(): boolean {
   }
 }
 
+const LOCAL_AUTH_SECRET = 'ploykit-local-development-build-auth-secret-change-before-production';
+
+function getBetterAuthSecret(): string | undefined {
+  const configuredSecret = env.BETTER_AUTH_SECRET || env.AUTH_SECRET;
+  if (configuredSecret) {
+    return configuredSecret;
+  }
+
+  if (env.NODE_ENV !== 'production' || env.NEXT_PHASE === 'phase-production-build') {
+    return LOCAL_AUTH_SECRET;
+  }
+
+  return undefined;
+}
+
 function maskEmail(email: string): string {
   const [localPart, domain] = email.split('@');
 
@@ -217,7 +232,7 @@ export const auth = betterAuth({
 
   // Configuration
 
-  secret: env.BETTER_AUTH_SECRET || env.AUTH_SECRET,
+  secret: getBetterAuthSecret(),
 
   // CORS
   trustedOrigins: getTrustedOrigins(),

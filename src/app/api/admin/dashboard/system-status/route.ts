@@ -64,7 +64,6 @@ export const GET = withAdminGuard(
       services.push(await refreshRuntimeReconcileStatus());
     } else {
       services.push(getRuntimeReconcileSnapshot());
-      void refreshRuntimeReconcileStatus();
     }
 
     services.push(
@@ -249,7 +248,7 @@ function getRuntimeReconcileSnapshot(): SystemServiceStatus {
     statusCode: 'ok',
     details: {
       mode: 'quick',
-      cache: 'warming',
+      cache: 'empty',
     },
   };
 }

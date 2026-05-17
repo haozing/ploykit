@@ -52,8 +52,37 @@ export async function POST(request: NextRequest) {
   );
 
   try {
+    // 1. Verify signature header exists (Manual validation required for webhooks)
+    const signature = request.headers.get('stripe-signature');
+
+    if (!signature) {
+      logger.warn({ requestId }, 'Stripe webhook request missing signature header');
+      throw new ValidationError('Missing stripe-signature header');
+    }
+
+    if (!isStripeSignatureHeader(signature)) {
+      logger.warn({ requestId }, 'Stripe webhook request has malformed signature header');
+      throw new ValidationError('Invalid stripe-signature header');
+    }
+
+    // 2. Get raw payload (important: must be original string for signature verification)
+    const payload = await request.text();
+
+    if (!payload) {
+      logger.warn({ requestId }, 'Stripe webhook request missing payload');
+      throw new ValidationError('Missing request payload');
+    }
+
+    logger.info(
+      {
+        requestId,
+        payloadSize: payload.length,
+      },
+      'Received Stripe webhook request'
+    );
+
     //
-    // 0. Defensive check: Ensure webhook system has been initialized
+    // 3. Defensive check: Ensure webhook system has been initialized
     //
     logger.info(
       {
@@ -113,31 +142,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 1. Verify signature header exists (Manual validation required for webhooks)
-    const signature = request.headers.get('stripe-signature');
-
-    if (!signature) {
-      logger.warn({ requestId }, 'Stripe webhook request missing signature header');
-      throw new ValidationError('Missing stripe-signature header');
-    }
-
-    // 2. Get raw payload (important: must be original string for signature verification)
-    const payload = await request.text();
-
-    if (!payload) {
-      logger.warn({ requestId }, 'Stripe webhook request missing payload');
-      throw new ValidationError('Missing request payload');
-    }
-
-    logger.info(
-      {
-        requestId,
-        payloadSize: payload.length,
-      },
-      'Received Stripe webhook request'
-    );
-
-    // 3. Verify signature
+    // 4. Verify signature
     const event = (await webhookHandler.verify('stripe', payload, signature)) as StripeEvent;
 
     logger.info(
@@ -149,7 +154,7 @@ export async function POST(request: NextRequest) {
       'Stripe webhook signature verified'
     );
 
-    // 4. Idempotency check
+    // 5. Idempotency check
     const alreadyProcessed = await isWebhookProcessed('stripe', event.id);
     if (alreadyProcessed) {
       logger.info(
@@ -159,7 +164,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, requestId, duplicate: true }, { status: 200 });
     }
 
-    // 5. Persist or reuse receipt before processing.
+    // 6. Persist or reuse receipt before processing.
     const existingReceipt = await getWebhookLogByEventId('stripe', event.id);
     const logResult =
       existingReceipt && existingReceipt.status !== 'processed'
@@ -178,7 +183,7 @@ export async function POST(request: NextRequest) {
             status: 'received',
           });
 
-    // 6. Process the durable receipt. Failed receipts stay in DB for retry worker.
+    // 7. Process the durable receipt. Failed receipts stay in DB for retry worker.
     const processingResult = await processWebhookReceipt(logResult.id);
 
     if (processingResult.success) {
@@ -205,7 +210,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 7. Return success after durable receipt handling.
+    // 8. Return success after durable receipt handling.
     logger.info(
       {
         requestId,
@@ -306,5 +311,17 @@ function createWebhookErrorResponse(input: {
       requestId: input.requestId,
     },
     { status: input.statusCode }
+  );
+}
+
+function isStripeSignatureHeader(signature: string): boolean {
+  const parts = signature
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return (
+    parts.some((part) => /^t=\d+$/.test(part)) &&
+    parts.some((part) => /^v1=[a-fA-F0-9]{64}$/.test(part))
   );
 }

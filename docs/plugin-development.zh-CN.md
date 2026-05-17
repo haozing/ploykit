@@ -23,6 +23,8 @@ plugins/<plugin-id>/
 
 `plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 扫描插件合同，写入 `src/lib/plugin-map.ts`，再从生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
 
+生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。
+
 如果插件需要扩展或覆盖宿主自带页面，例如首页、关于页或定价页，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
 
 最小插件：

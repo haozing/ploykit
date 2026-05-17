@@ -296,6 +296,7 @@ const TEST_FILE_ROOT = resolve(process.cwd(), '.data', 'test-blobs');
 const SAMPLE_PLUGIN_ID = 'sample-internal';
 const SAMPLE_PLUGIN_PROJECT_ID = 'codex-real-project';
 const CAPABILITY_DEMO_PLUGIN_ID = 'capability-demo';
+const AUTH_CALLBACK_PATH = '/zh';
 const ADMIN_EMAIL = 'admin@example.com';
 const ADMIN_PASSWORD = 'Admin@123456';
 const REGULAR_USER_PASSWORD = 'User@123456';
@@ -659,8 +660,29 @@ async function readJsonSafely<T>(response: Response): Promise<T | null> {
   }
 }
 
+function readSitemapLocPaths(xml: string, baseUrl: string): string[] {
+  const paths: string[] = [];
+  const locPattern = /<loc>([^<]+)<\/loc>/g;
+
+  for (const match of xml.matchAll(locPattern)) {
+    const raw = match[1];
+    if (!raw) {
+      continue;
+    }
+
+    try {
+      paths.push(new URL(raw, baseUrl).pathname);
+    } catch {
+      // Ignore malformed entries here; sitemap policy tests cover XML shape.
+    }
+  }
+
+  return paths;
+}
+
 function jsonHeaders(appUrl: string, cookie?: string, clientIp?: string): HeadersInit {
   return {
+    connection: 'close',
     'content-type': 'application/json',
     origin: appUrl,
     referer: `${appUrl}/zh/admin/plugins`,
@@ -672,6 +694,7 @@ function jsonHeaders(appUrl: string, cookie?: string, clientIp?: string): Header
 
 function formHeaders(appUrl: string, cookie: string): HeadersInit {
   return {
+    connection: 'close',
     origin: appUrl,
     referer: `${appUrl}/zh/files`,
     'x-requested-with': 'codex-real-test',
@@ -680,7 +703,10 @@ function formHeaders(appUrl: string, cookie: string): HeadersInit {
 }
 
 function authHeaders(cookie: string): HeadersInit {
-  return { cookie };
+  return {
+    connection: 'close',
+    cookie,
+  };
 }
 
 function randomTestEmail(prefix: string): string {
@@ -706,7 +732,7 @@ async function signInAsAdmin(appUrl: string): Promise<string> {
     body: JSON.stringify({
       email: ADMIN_EMAIL,
       password: ADMIN_PASSWORD,
-      callbackURL: `${appUrl}/zh`,
+      callbackURL: AUTH_CALLBACK_PATH,
     }),
     redirect: 'manual',
   });
@@ -737,7 +763,7 @@ async function registerUser(
       name: 'Codex Real User',
       email,
       password: REGULAR_USER_PASSWORD,
-      callbackURL: `${appUrl}/zh`,
+      callbackURL: AUTH_CALLBACK_PATH,
     }),
     redirect: 'manual',
   });
@@ -754,7 +780,7 @@ async function signInUser(appUrl: string, email: string, clientIp?: string): Pro
     body: JSON.stringify({
       email,
       password: REGULAR_USER_PASSWORD,
-      callbackURL: `${appUrl}/zh`,
+      callbackURL: AUTH_CALLBACK_PATH,
     }),
     redirect: 'manual',
   });
@@ -788,7 +814,7 @@ async function runPasswordResetSmoke(
   const oldCookie = await signInUser(appUrl, email);
   const userId = await fetchSessionUserId(appUrl, oldCookie);
 
-  const requestResponse = await fetch(`${appUrl}/api/auth/forget-password`, {
+  const requestResponse = await fetch(`${appUrl}/api/auth/request-password-reset`, {
     method: 'POST',
     headers: jsonHeaders(appUrl),
     body: JSON.stringify({
@@ -876,7 +902,7 @@ async function runPasswordResetSmoke(
     body: JSON.stringify({
       email,
       password: REGULAR_USER_PASSWORD,
-      callbackURL: `${appUrl}/zh`,
+      callbackURL: AUTH_CALLBACK_PATH,
     }),
     redirect: 'manual',
   });
@@ -893,7 +919,7 @@ async function runPasswordResetSmoke(
     body: JSON.stringify({
       email,
       password: newPassword,
-      callbackURL: `${appUrl}/zh`,
+      callbackURL: AUTH_CALLBACK_PATH,
     }),
     redirect: 'manual',
   });
@@ -1276,7 +1302,7 @@ async function runPasswordCapabilitySmoke(
     body: JSON.stringify({
       email,
       password,
-      callbackURL: `${appUrl}/zh`,
+      callbackURL: AUTH_CALLBACK_PATH,
     }),
     redirect: 'manual',
   });
@@ -2837,16 +2863,18 @@ async function runCapabilityDemoHostSurfaceSmoke(
 
   const sitemapResponse = await fetch(`${appUrl}/sitemap.xml`, { cache: 'no-store' });
   const sitemapXml = await sitemapResponse.text();
-  const localizedAliasUrls = [`${appUrl}/zh/json`, `${appUrl}/en/json`];
+  const localizedAliasPaths = ['/zh/json', '/en/json'];
+  const sitemapPaths = readSitemapLocPaths(sitemapXml, appUrl);
   recordSmoke(
     summary,
     'plugin public alias is listed in sitemap',
-    sitemapResponse.ok && localizedAliasUrls.every((url) => sitemapXml.includes(url)),
+    sitemapResponse.ok && localizedAliasPaths.every((path) => sitemapPaths.includes(path)),
     {
       status: sitemapResponse.status,
-      localizedAliasUrls,
-      hasLocalizedAliases: localizedAliasUrls.every((url) => sitemapXml.includes(url)),
-      hasBareAlias: sitemapXml.includes(`${appUrl}/json`),
+      localizedAliasPaths,
+      matchedAliasPaths: sitemapPaths.filter((path) => path.endsWith('/json')),
+      hasLocalizedAliases: localizedAliasPaths.every((path) => sitemapPaths.includes(path)),
+      hasBareAlias: sitemapPaths.includes('/json'),
     }
   );
 

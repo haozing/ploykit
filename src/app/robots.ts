@@ -3,7 +3,6 @@ import { appBaseUrl, absoluteUrl } from '@/lib/seo/url-policy';
 import { listSitemapChunks } from '@/lib/seo/sitemap.server';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 3600;
 
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const chunks = await listSitemapChunks();

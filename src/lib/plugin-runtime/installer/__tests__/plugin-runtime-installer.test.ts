@@ -26,12 +26,8 @@ const mocks = vi.hoisted(() => ({
   },
   runPluginLifecycle: vi.fn(),
   getPluginRuntimeMapEntry: vi.fn(),
-  listRuntimeProducts: vi.fn(() => [
-    { id: 'ploykit', name: 'PloyKit', suites: ['default'], bundles: [] },
-  ]),
-  listRuntimePluginSuites: vi.fn(() => [
-    { id: 'default', productId: 'ploykit', name: 'Default', plugins: ['runtime-notes'] },
-  ]),
+  listRuntimeProducts: vi.fn(() => [{ id: 'ploykit', name: 'PloyKit' }]),
+  listRuntimePluginSuites: vi.fn(() => []),
   listRuntimeAppBundles: vi.fn(() => []),
   DEFAULT_PRODUCT_ID: 'ploykit',
   pluginRuntimeRegistry: {
@@ -211,7 +207,7 @@ function createInstallation(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     installedBy: USER_ID,
     productId: 'ploykit',
-    suiteId: 'default',
+    suiteId: null,
     bundleId: null,
     installStatus: 'installed',
     metadata: {},
@@ -270,9 +266,6 @@ describe('PluginRuntimeInstallerService', () => {
 
     mocks.getPluginRuntimeMapEntry.mockReturnValue({
       plugin: vi.fn(),
-      productId: 'ploykit',
-      suiteId: 'default',
-      bundleIds: [],
     });
     mocks.pluginRuntimeRegistry.getOrLoad.mockResolvedValue(createContract());
     mocks.runPluginLifecycle.mockResolvedValue({
@@ -322,7 +315,7 @@ describe('PluginRuntimeInstallerService', () => {
     );
     expect(insertBuilder.values).toHaveBeenCalledWith({
       productId: 'ploykit',
-      suiteId: 'default',
+      suiteId: null,
       bundleId: undefined,
       pluginId: PLUGIN_ID,
       version: '2.3.4',

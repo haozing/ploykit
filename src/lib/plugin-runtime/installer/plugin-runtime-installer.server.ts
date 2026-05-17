@@ -71,7 +71,7 @@ export class PluginRuntimeInstallerService {
   async installPlugin(
     pluginId: string,
     userId?: string,
-    options: { productId?: string; bundleId?: string } = {}
+    options: { productId?: string; suiteId?: string | null; bundleId?: string | null } = {}
   ): Promise<PluginOperationResult> {
     try {
       const ownership = resolvePluginRuntimeOwnership(pluginId, options);
@@ -90,7 +90,7 @@ export class PluginRuntimeInstallerService {
       const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
 
       const result = await db.transaction(async (tx) => {
-        await syncRuntimeCatalog(tx);
+        await syncRuntimeCatalog(tx, { productIds: [productId] });
 
         const [existing] = await tx
           .select()
@@ -230,7 +230,7 @@ export class PluginRuntimeInstallerService {
         };
       }
 
-      const serviceRequirements = await listInternalServiceRequirements({ pluginId });
+      const serviceRequirements = await listInternalServiceRequirements({ productId, pluginId });
       const missingServices = serviceRequirements.filter(
         (requirement) => requirement.bindingStatus !== 'bound'
       );

@@ -15,13 +15,10 @@ import {
   type PluginResourceBinding,
   type PluginServiceCallLog,
 } from '@/lib/db/schema/plugin-platform';
-import {
-  getPluginRuntimeMapEntry,
-  getRuntimePluginSuite,
-  listPluginRuntimeIdsForProduct,
-} from '../loader';
+import { getPluginRuntimeMapEntry } from '../loader';
 import { getCurrentRuntimeProductId } from '../product-context.server';
 import { pluginRuntimeRegistry } from '../registry';
+import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import { DbPluginSecretsRepository } from '../capabilities/secrets-capability.server';
 import {
   applyInternalServiceRequestHeaders,
@@ -279,36 +276,34 @@ function validateServiceName(name: string): string {
   return normalized;
 }
 
-function resolveRuntimeOwner(input: {
+async function resolveRuntimeOwner(input: {
   productId?: string;
   pluginId: string;
   ownerType?: 'plugin' | 'suite' | 'product';
   ownerId?: string;
-}): { productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string } {
-  const entry = getPluginRuntimeMapEntry(input.pluginId);
-  const entryProductId = entry?.productId;
-  const productId = input.productId ?? entryProductId ?? getCurrentRuntimeProductId();
-  if (entryProductId && productId !== entryProductId) {
-    throw new ValidationError(
-      `Plugin "${input.pluginId}" belongs to product "${entryProductId}", not "${productId}".`
-    );
-  }
+}): Promise<{ productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string }> {
+  const productId = input.productId ?? getCurrentRuntimeProductId();
   const ownerType = input.ownerType ?? 'plugin';
+  const installation =
+    ownerType === 'suite'
+      ? await pluginQueryService.getInstallation(input.pluginId, { productId })
+      : null;
   const ownerId =
     input.ownerId ??
-    (ownerType === 'plugin' ? input.pluginId : ownerType === 'suite' ? entry?.suiteId : productId);
+    (ownerType === 'plugin'
+      ? input.pluginId
+      : ownerType === 'suite'
+        ? installation?.suiteId
+        : productId);
 
   if (!ownerId) {
-    throw new ValidationError(`Cannot resolve ${ownerType} owner for plugin "${input.pluginId}".`);
+    throw new ValidationError(
+      `Cannot resolve ${ownerType} owner for plugin "${input.pluginId}". Install it with a suiteId or pass ownerId explicitly.`
+    );
   }
   if (ownerType === 'plugin' && ownerId !== input.pluginId) {
     throw new ValidationError(
       'Plugin-owned internal service bindings must use the plugin id as owner.'
-    );
-  }
-  if (ownerType === 'suite' && entry?.suiteId && ownerId !== entry.suiteId) {
-    throw new ValidationError(
-      `Suite-owned internal service bindings for "${input.pluginId}" must use suite "${entry.suiteId}".`
     );
   }
   if (ownerType === 'product' && ownerId !== productId) {
@@ -316,16 +311,13 @@ function resolveRuntimeOwner(input: {
       'Product-owned internal service bindings must use the product id as owner.'
     );
   }
+  if (ownerType === 'suite' && installation?.suiteId && ownerId !== installation.suiteId) {
+    throw new ValidationError(
+      `Suite-owned internal service bindings for "${input.pluginId}" must use suite "${installation.suiteId}".`
+    );
+  }
 
   return { productId, ownerType, ownerId };
-}
-
-function sharedServiceName(value: unknown): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  const name = (value as Record<string, unknown>).name;
-  return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
 function resolveServiceRequirementOwner(input: {
@@ -333,23 +325,6 @@ function resolveServiceRequirementOwner(input: {
   pluginId: string;
   serviceName: string;
 }): { productId: string; ownerType: 'plugin' | 'suite' | 'product'; ownerId: string } {
-  const entry = getPluginRuntimeMapEntry(input.pluginId);
-  if (entry?.productId && entry.productId !== input.productId) {
-    throw new ValidationError(
-      `Plugin "${input.pluginId}" belongs to product "${entry.productId}", not "${input.productId}".`
-    );
-  }
-
-  if (entry?.suiteId) {
-    const suite = getRuntimePluginSuite(entry.suiteId);
-    const isSuiteSharedService = suite?.sharedServices?.some(
-      (service) => sharedServiceName(service) === input.serviceName
-    );
-    if (isSuiteSharedService) {
-      return { productId: input.productId, ownerType: 'suite', ownerId: entry.suiteId };
-    }
-  }
-
   return { productId: input.productId, ownerType: 'plugin', ownerId: input.pluginId };
 }
 
@@ -611,7 +586,13 @@ export async function listInternalServiceRequirements(
   const productId = input.productId ?? getCurrentRuntimeProductId();
   const pluginIds = input.pluginId
     ? [input.pluginId]
-    : [...new Set(listPluginRuntimeIdsForProduct(productId))];
+    : [
+        ...new Set(
+          (await pluginQueryService.listInstalledPlugins({ productId }))
+            .filter((installation) => installation.installStatus === 'installed')
+            .map((installation) => installation.pluginId)
+        ),
+      ];
   const registry = new DbPluginInternalServiceRegistry();
   const requirements: AdminInternalServiceRequirement[] = [];
 
@@ -730,7 +711,7 @@ export async function handleInternalServiceBindingAction(
 
   const serviceName = validateServiceName(input.serviceName);
   await assertServiceDeclared(input.pluginId, serviceName);
-  const owner = resolveRuntimeOwner({
+  const owner = await resolveRuntimeOwner({
     productId: input.productId,
     pluginId: input.pluginId,
     ownerType: input.ownerType,

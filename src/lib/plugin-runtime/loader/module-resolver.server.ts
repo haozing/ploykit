@@ -1,22 +1,10 @@
-import {
-  APP_BUNDLES,
-  DEFAULT_RUNTIME_PRODUCT_ID,
-  PLUGIN_MAP,
-  PLUGIN_SUITES,
-  RUNTIME_PRODUCTS,
-  type RuntimeBundleMapEntry,
-  type RuntimeProductMapEntry,
-  type RuntimeSuiteMapEntry,
-} from '@/lib/plugin-map';
+import { PLUGIN_MAP } from '@/lib/plugin-map';
 import type { PluginRuntimeContract } from '../contract';
 
 export type PluginModuleLoader = () => Promise<unknown>;
 
 export interface PluginRuntimeMapEntry {
   rootDir?: string;
-  productId?: string;
-  suiteId?: string;
-  bundleIds?: string[];
   plugin?: PluginModuleLoader;
   components?: Record<string, PluginModuleLoader>;
   pages?: Record<string, PluginModuleLoader>;
@@ -30,11 +18,133 @@ export interface PluginRuntimeMapEntry {
   runtimeContract?: PluginRuntimeContract;
 }
 
-export type RuntimeProduct = RuntimeProductMapEntry;
-export type RuntimePluginSuite = RuntimeSuiteMapEntry;
-export type RuntimeAppBundle = RuntimeBundleMapEntry;
+export interface RuntimeProduct {
+  id: string;
+  name: string;
+  runtimeKey?: string;
+  defaultLocale?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
 
-export const DEFAULT_PRODUCT_ID = DEFAULT_RUNTIME_PRODUCT_ID;
+export interface RuntimePluginSuite {
+  id: string;
+  productId: string;
+  name: string;
+  version?: string;
+  status?: string;
+  plugins: string[];
+  menu?: {
+    group: string;
+    labelKey?: string;
+    fallbackLabel?: string;
+  };
+  billing?: {
+    namespace: string;
+    primaryCreditMetric?: string;
+  };
+  sharedServices?: Array<Record<string, unknown>>;
+  sharedResourceBindings?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RuntimeBundlePlugin {
+  pluginId: string;
+  enableByDefault: boolean;
+  required: boolean;
+}
+
+export interface RuntimeAppBundle {
+  id: string;
+  productId: string;
+  suiteId?: string;
+  name: string;
+  version?: string;
+  sourceType?: string;
+  sourceRef?: string;
+  plugins: RuntimeBundlePlugin[];
+  seeds?: {
+    internalServices?: Array<Record<string, unknown>>;
+    resourceBindings?: Array<Record<string, unknown>>;
+  };
+  healthChecks?: Array<Record<string, unknown>>;
+  dependencies?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export const DEFAULT_PRODUCT_ID = 'ploykit';
+
+interface RuntimeCatalogProfile {
+  suiteId: string;
+  suiteName: string;
+  bundleId: string;
+  bundleName: string;
+  enableByDefault: boolean;
+  required: boolean;
+}
+
+const DEFAULT_PLUGIN_CATALOG_OVERRIDES: Record<string, Partial<RuntimeCatalogProfile>> = {
+  'capability-demo': {
+    suiteId: 'core',
+    suiteName: 'PloyKit Core',
+    bundleId: 'core-dev-tools',
+    bundleName: 'PloyKit Core Developer Tools',
+    enableByDefault: true,
+    required: true,
+  },
+  'host-capability-lab': {
+    suiteId: 'host-capability-lab',
+    suiteName: 'Host Capability Lab',
+    bundleId: 'host-capability-lab',
+    bundleName: 'Host Capability Lab',
+    enableByDefault: true,
+    required: true,
+  },
+  'sample-internal': {
+    suiteId: 'samples',
+    suiteName: 'Sample Plugins',
+    bundleId: 'sample-internal',
+    bundleName: 'Sample Internal Service Plugin',
+    enableByDefault: false,
+    required: false,
+  },
+};
+
+function titleFromId(id: string): string {
+  return id
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function productMatchesDefault(productId?: string): boolean {
+  return !productId || productId === DEFAULT_PRODUCT_ID;
+}
+
+function getCatalogProfile(pluginId: string): RuntimeCatalogProfile {
+  const fallbackName = titleFromId(pluginId);
+  const override = DEFAULT_PLUGIN_CATALOG_OVERRIDES[pluginId] ?? {};
+
+  return {
+    suiteId: override.suiteId ?? pluginId,
+    suiteName: override.suiteName ?? fallbackName,
+    bundleId: override.bundleId ?? pluginId,
+    bundleName: override.bundleName ?? fallbackName,
+    enableByDefault: override.enableByDefault ?? true,
+    required: override.required ?? false,
+  };
+}
+
+function implicitProduct(productId = DEFAULT_PRODUCT_ID): RuntimeProduct {
+  return {
+    id: productId,
+    name: productId === DEFAULT_PRODUCT_ID ? 'PloyKit' : productId,
+    runtimeKey: productId,
+    defaultLocale: 'en',
+    status: 'active',
+  };
+}
 
 export function normalizePluginModulePath(modulePath: string): string {
   return modulePath
@@ -53,67 +163,97 @@ export function listPluginRuntimeIds(): string[] {
 }
 
 export function listRuntimeProducts(): RuntimeProduct[] {
-  return Object.values(RUNTIME_PRODUCTS);
+  return [implicitProduct()];
 }
 
 export function getRuntimeProduct(productId: string): RuntimeProduct | null {
-  return RUNTIME_PRODUCTS[productId] ?? null;
+  return productId.trim() ? implicitProduct(productId) : null;
 }
 
 export function listRuntimePluginSuites(productId?: string): RuntimePluginSuite[] {
-  return Object.values(PLUGIN_SUITES).filter(
-    (suite) => !productId || suite.productId === productId
-  );
+  if (!productMatchesDefault(productId)) {
+    return [];
+  }
+
+  const suites = new Map<string, RuntimePluginSuite>();
+  for (const pluginId of listPluginRuntimeIds()) {
+    const profile = getCatalogProfile(pluginId);
+    const suite =
+      suites.get(profile.suiteId) ??
+      ({
+        id: profile.suiteId,
+        productId: DEFAULT_PRODUCT_ID,
+        name: profile.suiteName,
+        status: 'active',
+        plugins: [],
+        metadata: { source: 'plugin-map' },
+      } satisfies RuntimePluginSuite);
+    suite.plugins.push(pluginId);
+    suites.set(profile.suiteId, suite);
+  }
+
+  return [...suites.values()];
 }
 
 export function getRuntimePluginSuite(suiteId: string): RuntimePluginSuite | null {
-  return PLUGIN_SUITES[suiteId] ?? null;
+  return listRuntimePluginSuites().find((suite) => suite.id === suiteId) ?? null;
 }
 
 export function listRuntimeAppBundles(productId?: string): RuntimeAppBundle[] {
-  return Object.values(APP_BUNDLES).filter(
-    (bundle) => !productId || bundle.productId === productId
-  );
+  if (!productMatchesDefault(productId)) {
+    return [];
+  }
+
+  return listPluginRuntimeIds().map((pluginId) => {
+    const profile = getCatalogProfile(pluginId);
+    return {
+      id: profile.bundleId,
+      productId: DEFAULT_PRODUCT_ID,
+      suiteId: profile.suiteId,
+      name: profile.bundleName,
+      sourceType: 'local',
+      sourceRef: `plugins/${pluginId}`,
+      plugins: [
+        {
+          pluginId,
+          enableByDefault: profile.enableByDefault,
+          required: profile.required,
+        },
+      ],
+      metadata: { source: 'plugin-map' },
+    } satisfies RuntimeAppBundle;
+  });
 }
 
 export function getRuntimeAppBundle(bundleId: string): RuntimeAppBundle | null {
-  return APP_BUNDLES[bundleId] ?? null;
+  return listRuntimeAppBundles().find((bundle) => bundle.id === bundleId) ?? null;
 }
 
-export function listPluginRuntimeIdsForProduct(productId = DEFAULT_PRODUCT_ID): string[] {
-  return Object.entries(PLUGIN_MAP)
-    .filter(([, entry]) => entry.productId === productId)
-    .map(([pluginId]) => pluginId);
+export function listPluginRuntimeIdsForProduct(_productId = DEFAULT_PRODUCT_ID): string[] {
+  return listPluginRuntimeIds();
 }
 
 export function listPluginRuntimeIdsForSuite(suiteId: string): string[] {
-  const suite = getRuntimePluginSuite(suiteId);
-  if (suite) {
-    return suite.plugins.filter((pluginId) => PLUGIN_MAP[pluginId]);
-  }
-
-  return Object.entries(PLUGIN_MAP)
-    .filter(([, entry]) => entry.suiteId === suiteId)
-    .map(([pluginId]) => pluginId);
+  return getRuntimePluginSuite(suiteId)?.plugins ?? [];
 }
 
 export function getPluginRuntimeProductId(pluginId: string): string | null {
-  return getPluginRuntimeMapEntry(pluginId)?.productId ?? null;
+  return getPluginRuntimeMapEntry(pluginId) ? DEFAULT_PRODUCT_ID : null;
 }
 
 export function getPluginRuntimeSuiteId(pluginId: string): string | null {
-  return getPluginRuntimeMapEntry(pluginId)?.suiteId ?? null;
+  return getPluginRuntimeMapEntry(pluginId) ? getCatalogProfile(pluginId).suiteId : null;
 }
 
 export function getPluginRuntimeBundleIds(pluginId: string): readonly string[] {
-  return getPluginRuntimeMapEntry(pluginId)?.bundleIds ?? [];
+  return getPluginRuntimeMapEntry(pluginId) ? [getCatalogProfile(pluginId).bundleId] : [];
 }
 
 export function isPluginInRuntimeProduct(
   pluginId: string,
-  productId = DEFAULT_PRODUCT_ID
+  _productId = DEFAULT_PRODUCT_ID
 ): boolean {
-  return getPluginRuntimeProductId(pluginId) === productId;
+  return Boolean(getPluginRuntimeMapEntry(pluginId));
 }
 
 export function hasPluginRuntimeContract(pluginId: string): boolean {

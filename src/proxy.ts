@@ -11,6 +11,10 @@ import {
   getApiRateLimitDecision,
 } from './lib/security/api-rate-limit-middleware';
 import { applySecurityHeaders } from './lib/security/security-headers';
+import {
+  createMissingStripeSignatureResponse,
+  shouldRejectUnsignedStripeWebhook,
+} from './lib/security/stripe-webhook-proxy-guard';
 
 const intlMiddleware = createMiddleware({
   locales,
@@ -47,6 +51,10 @@ export function proxy(request: NextRequest) {
       const response = createApiSecurityResponse(decision, requestId);
       response.headers.set('x-request-id', requestId);
       return applySecurityHeaders(response);
+    }
+
+    if (shouldRejectUnsignedStripeWebhook(request)) {
+      return createMissingStripeSignatureResponse(requestId);
     }
 
     const rateLimitDecision = getApiRateLimitDecision(request);
