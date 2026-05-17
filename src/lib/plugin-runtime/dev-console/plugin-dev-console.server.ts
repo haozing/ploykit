@@ -257,7 +257,7 @@ function getTestFiles(pluginRoot: string): string[] {
   return files;
 }
 
-function getBuildStatus(pluginId: string) {
+function getBuildStatus(pluginId: string, pluginPath = `plugins/${pluginId}`) {
   const artifactDir = path.join(process.cwd(), '.ploykit-build', pluginId);
   const reportPath = path.join(artifactDir, 'build-report.json');
   const reportExists = fs.existsSync(reportPath);
@@ -267,7 +267,7 @@ function getBuildStatus(pluginId: string) {
     artifactDir: relativeToProject(artifactDir),
     reportExists,
     reportUpdatedAt: stats?.mtime.toISOString(),
-    command: `npm run plugin:build -- plugins/${pluginId}`,
+    command: `npm run plugin:build -- ${toPluginDevPosix(pluginPath)}`,
   };
 }
 
@@ -719,7 +719,7 @@ export async function buildPluginDevConsoleReport(
         status: testFiles.length > 0 ? 'ready' : 'missing',
         command: `npm run plugin:test -- ${toPluginDevPosix(pluginPath)}`,
       },
-      build: getBuildStatus(pluginId),
+      build: getBuildStatus(pluginId, pluginPath),
       activity: includeActivity
         ? await getPluginActivity(pluginId, contract, installation)
         : emptyActivity(),
@@ -727,7 +727,7 @@ export async function buildPluginDevConsoleReport(
   }
 
   const allDiagnostics = plugins.flatMap((plugin) => plugin.diagnostics);
-  const legacy = listLegacyPluginDirectories();
+  const legacy = targetPaths.flatMap((targetPath) => listLegacyPluginDirectories(targetPath));
   const runtime = await getRuntimeReport(options.includeRuntime ?? false);
 
   return {

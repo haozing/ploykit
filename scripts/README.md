@@ -57,12 +57,20 @@ npm run db:migrate
 
 ### `generate-plugin-map.ts`
 
-Scans `plugins/` and generates `src/lib/plugin-map.ts`.
+Scans the default `plugins/` directory and any external plugin source
+directories configured with `PLOYKIT_PLUGIN_DIRS`, then generates
+`src/lib/plugin-map.ts`.
 
 Current plugin entrypoint:
 
 ```text
 plugins/<plugin-id>/plugin.ts
+```
+
+External source directories can be plugin collections or direct plugin roots:
+
+```bash
+PLOYKIT_PLUGIN_DIRS="../shared-plugins,/opt/ploykit-plugins" npm run plugins:scan
 ```
 
 The generated map can include loaders for:
@@ -83,7 +91,7 @@ npm run plugins:check
 ```
 
 `npm run plugins:check` verifies the generated map is current and then runs the
-plugin runtime checker.
+plugin runtime checker across all configured plugin source directories.
 
 ### `watch-plugins.ts`
 
@@ -103,6 +111,7 @@ Watched plugin files include:
 - `jobs/**`
 - `webhooks/**`
 - `lifecycle/**`
+- `slots/**`
 
 ### `ploykit-plugin.ts`
 

@@ -11,6 +11,7 @@ import {
   validateResourceFile,
 } from '@/lib/plugins/resources/plugin-resource-policy.server';
 import type { PluginRuntimeContract } from '../contract';
+import { getPluginRuntimeMapEntry } from '../loader';
 import { pluginRuntimeRegistry } from '../registry';
 
 export type PluginMessages = Record<string, unknown>;
@@ -19,6 +20,11 @@ const pluginTranslationCache = new Map<string, PluginMessages>();
 
 function normalizeResourcePath(resourcePath: string): string {
   return resourcePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+}
+
+function resolvePluginResourceRoot(pluginId: string): string {
+  const entry = getPluginRuntimeMapEntry(pluginId);
+  return path.resolve(process.cwd(), entry?.rootDir ?? path.join('plugins', pluginId));
 }
 
 function localeCandidates(locale: string): string[] {
@@ -70,7 +76,7 @@ export async function loadPluginLocaleMessagesForContract(
     return null;
   }
 
-  const filePath = path.join(process.cwd(), 'plugins', contract.id, resourcePath);
+  const filePath = path.join(resolvePluginResourceRoot(contract.id), resourcePath);
   if (!fs.existsSync(filePath)) {
     return null;
   }

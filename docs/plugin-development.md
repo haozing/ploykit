@@ -1,7 +1,8 @@
 # Plugin Development
 
-Plugins live under `plugins/<plugin-id>/`. The contract file is the only required
-entry point, and the host derives runtime loading from that contract.
+Plugins normally live under `plugins/<plugin-id>/`. The contract file is the
+only required entry point, and the host derives runtime loading from that
+contract.
 
 ```text
 plugins/<plugin-id>/
@@ -20,12 +21,49 @@ plugins/<plugin-id>/
 `-- tests/
 ```
 
+External plugin source directories are supported for local development and
+self-hosted deployments. Set `PLOYKIT_PLUGIN_DIRS` to one or more extra
+directories, separated by semicolons or commas:
+
+```bash
+PLOYKIT_PLUGIN_DIRS="../my-ploykit-plugins;D:/shared/ploykit-plugins" npm run plugins:scan
+```
+
+PowerShell:
+
+```powershell
+$env:PLOYKIT_PLUGIN_DIRS = 'D:\work\ploykit-plugins;..\shared-plugins'
+npm run plugins:scan
+```
+
+Each external source can either be a directory containing plugin subdirectories
+or a direct plugin root containing `plugin.ts`. The default `plugins/` directory
+is always scanned as well. After changing the value, rerun `npm run
+plugins:scan` and commit the generated plugin map.
+
+Run `npm run plugins:check` to validate every configured source directory, or a
+targeted check such as `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`.
+On Windows, external plugin modules must be on the same drive as the project
+because the generated map uses relative static imports; use a symlink or junction
+inside the project when the plugin source lives elsewhere.
+
+TypeScript resolves bare package imports from the external file location. For
+external directories outside the project, either place them in a workspace that
+can resolve the host `node_modules`, install their dev dependencies there, or
+use a project-local symlink/junction.
+
+For standalone deployments, the configured external directories must be present
+at the same relative paths used during build, or mounted into the runtime
+environment. External source directories inside the project are copied by the
+standalone asset script; directories outside the project should be mounted.
+
 ## Contract Entry
 
-`plugin.ts` is the contract. The host scans plugin contracts with
-`scripts/generate-plugin-map.ts`, writes `src/lib/plugin-map.ts`, and loads
-runtime pages, APIs, jobs, events, webhooks, lifecycle handlers, slots, menus,
-assets, and capabilities from that generated map.
+`plugin.ts` is the contract. The host scans plugin contracts from `plugins/`
+and `PLOYKIT_PLUGIN_DIRS` with `scripts/generate-plugin-map.ts`, writes
+`src/lib/plugin-map.ts`, and loads runtime pages, APIs, jobs, events, webhooks,
+lifecycle handlers, slots, menus, assets, and capabilities from that generated
+map.
 
 The generated map is a module index only. It does not assign plugins to
 products, suites, or bundles; those runtime placement decisions live in

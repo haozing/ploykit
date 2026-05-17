@@ -1,9 +1,18 @@
 {
-  "version": 3,
+  "version": 4,
+  "sourceDirs": [
+    {
+      "path": "plugins",
+      "kind": "default",
+      "directPluginRoot": false
+    }
+  ],
   "plugins": [
     {
       "id": "capability-demo",
       "rootDir": "plugins/capability-demo",
+      "sourceDir": "plugins",
+      "sourceKind": "default",
       "components": [],
       "pages": [
         "DevAssetsTool",
@@ -38,6 +47,8 @@
     {
       "id": "host-capability-lab",
       "rootDir": "plugins/host-capability-lab",
+      "sourceDir": "plugins",
+      "sourceKind": "default",
       "components": [
         "HomeComponentSlot",
         "StorageProbeClient"
@@ -64,6 +75,8 @@
     {
       "id": "sample-internal",
       "rootDir": "plugins/sample-internal",
+      "sourceDir": "plugins",
+      "sourceKind": "default",
       "components": [],
       "pages": [
         "SamplePage"

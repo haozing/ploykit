@@ -1,14 +1,18 @@
 /**
  * Plugin Map Check
  *
- * Verifies that generated plugin map matches the actual plugins/ directory.
+ * Verifies that generated plugin map matches configured plugin source directories.
  */
 
 import fs from 'fs';
 import path from 'path';
 import type { RuntimeCheck } from '../types';
+import {
+  discoverPluginRootsInSourceTarget,
+  formatPluginSourcePath,
+  getPluginSourceTargets,
+} from '@/lib/plugin-runtime/plugin-source-dirs';
 
-const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
 const PLUGIN_MAP_MANIFEST_FILE = path.join(process.cwd(), 'src/lib/plugin-map.manifest.json');
 
 interface PluginMapManifest {
@@ -18,22 +22,35 @@ interface PluginMapManifest {
 
 export const pluginMapCheck: RuntimeCheck = {
   name: 'plugin-map',
-  description: 'Verify plugin map consistency with plugins/ directory',
+  description: 'Verify plugin map consistency with configured plugin source directories',
 
   run() {
-    // Scan definePlugin contract directories. Legacy manifest-only directories are no longer
-    // ordinary plugin runtime targets and are reported by the plugin-runtime check instead.
     const actualPlugins: string[] = [];
-    if (fs.existsSync(PLUGINS_DIR)) {
-      const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const pluginContractPath = path.join(PLUGINS_DIR, entry.name, 'plugin.ts');
-          if (fs.existsSync(pluginContractPath)) {
-            actualPlugins.push(entry.name);
-          }
+    const missingExternalTargets: string[] = [];
+
+    for (const target of getPluginSourceTargets()) {
+      if (!target.exists) {
+        if (target.kind === 'external') {
+          missingExternalTargets.push(target.configuredValue ?? target.displayPath);
         }
+        continue;
       }
+
+      actualPlugins.push(
+        ...discoverPluginRootsInSourceTarget(target).map((root) =>
+          formatPluginSourcePath(root, process.cwd())
+        )
+      );
+    }
+
+    if (missingExternalTargets.length > 0) {
+      return {
+        key: 'plugin-map',
+        status: 'failed',
+        severity: 'error',
+        message: `Configured external plugin directory not found: ${missingExternalTargets.join(', ')}`,
+        fix: 'Update PLOYKIT_PLUGIN_DIRS or create the missing external plugin directory, then run "npm run plugins:scan".',
+      };
     }
 
     const manifest = readPluginMapManifest();
@@ -46,7 +63,7 @@ export const pluginMapCheck: RuntimeCheck = {
         fix: 'Run "npm run plugins:scan", then commit src/lib/plugin-map.ts and src/lib/plugin-map.manifest.json',
       };
     }
-    const declaredPlugins = manifest.plugins.map((plugin) => plugin.id);
+    const declaredPlugins = manifest.plugins.map((plugin) => plugin.rootDir);
 
     // Compare
     const actualSet = new Set(actualPlugins);
@@ -58,10 +75,12 @@ export const pluginMapCheck: RuntimeCheck = {
     if (missingFromMap.length > 0 || staleInMap.length > 0) {
       const messages: string[] = [];
       if (missingFromMap.length > 0) {
-        messages.push(`Plugins in directory but not in map: ${missingFromMap.join(', ')}`);
+        messages.push(
+          `Plugins in configured directories but not in map: ${missingFromMap.join(', ')}`
+        );
       }
       if (staleInMap.length > 0) {
-        messages.push(`Plugins in map but not in directory: ${staleInMap.join(', ')}`);
+        messages.push(`Plugins in map but not in configured directories: ${staleInMap.join(', ')}`);
       }
 
       return {
@@ -93,7 +112,7 @@ function readPluginMapManifest(): PluginMapManifest | null {
     ) as PluginMapManifest;
 
     if (
-      manifest.version !== 3 ||
+      manifest.version !== 4 ||
       !Array.isArray(manifest.plugins) ||
       manifest.plugins.some(
         (plugin) => !plugin || typeof plugin.id !== 'string' || typeof plugin.rootDir !== 'string'

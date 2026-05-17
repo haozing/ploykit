@@ -10,17 +10,20 @@ import chokidar from 'chokidar';
 import { execSync } from 'child_process';
 import path from 'path';
 import ora, { Ora } from 'ora';
+import { getPluginSourceTargets } from '@/lib/plugin-runtime/plugin-source-dirs';
 
-const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
 const DEBOUNCE_DELAY = 300;
 const WATCHED_SOURCE_SEGMENTS = new Set([
   'api',
+  'components',
   'events',
   'jobs',
   'webhooks',
   'lifecycle',
   'pages',
+  'slots',
 ]);
+const SOURCE_TARGETS = getPluginSourceTargets().filter((target) => target.exists);
 
 let debounceTimer: NodeJS.Timeout | null = null;
 let isGenerating = false;
@@ -68,48 +71,68 @@ function shouldRegenerateForChange(filePath: string): boolean {
     return true;
   }
 
-  const relativePath = path.relative(PLUGINS_DIR, filePath);
-  const [pluginId, firstSegment] = relativePath.split(path.sep);
-  if (!pluginId || !firstSegment) {
+  const sourceTarget = SOURCE_TARGETS.find((target) => {
+    const relative = path.relative(target.path, filePath);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  });
+  if (!sourceTarget) {
     return false;
   }
 
-  return WATCHED_SOURCE_SEGMENTS.has(firstSegment);
+  const relativePath = path.relative(sourceTarget.path, filePath);
+  const segments = relativePath.split(path.sep).filter(Boolean);
+  const firstSourceSegment = sourceTarget.directPluginRoot ? segments[0] : segments[1];
+  return Boolean(firstSourceSegment && WATCHED_SOURCE_SEGMENTS.has(firstSourceSegment));
 }
 
-function isPluginRootDirectory(dirPath: string): boolean {
-  const pluginsDirDepth = PLUGINS_DIR.split(path.sep).length;
-  const currentDepth = dirPath.split(path.sep).length;
+function shouldRegenerateForDirectoryChange(dirPath: string): boolean {
+  const sourceTarget = SOURCE_TARGETS.find((target) => {
+    const relative = path.relative(target.path, dirPath);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  });
+  if (!sourceTarget) {
+    return false;
+  }
 
-  return currentDepth === pluginsDirDepth + 1;
+  const relativePath = path.relative(sourceTarget.path, dirPath);
+  const segments = relativePath.split(path.sep).filter(Boolean);
+  if (sourceTarget.directPluginRoot) {
+    return segments.length === 0 || WATCHED_SOURCE_SEGMENTS.has(segments[0] ?? '');
+  }
+
+  return segments.length === 1 || Boolean(segments[1] && WATCHED_SOURCE_SEGMENTS.has(segments[1]));
 }
 
 function startWatching() {
   console.log('');
   console.log('Plugin watcher started');
-  console.log('Watching directory:', PLUGINS_DIR);
-  console.log(
-    'Watching files: plugin.ts, api/**, pages/**, events/**, jobs/**, webhooks/**, lifecycle/**'
-  );
+  console.log('Watching directories:');
+  for (const target of SOURCE_TARGETS) {
+    console.log(`   - ${target.displayPath}${target.kind === 'external' ? ' (external)' : ''}`);
+  }
+  console.log('Watching files: plugin.ts, api/**, pages/**, components/**, slots/**, events/**');
   console.log('Hot reload enabled, no server restart needed');
   console.log('');
 
-  const watcher = chokidar.watch(PLUGINS_DIR, {
-    ignored: [
-      '**/node_modules/**',
-      '**/.git/**',
-      '**/dist/**',
-      '**/*.test.*',
-      '**/*.spec.*',
-      '**/*.md',
-    ],
-    persistent: true,
-    ignoreInitial: true,
-    awaitWriteFinish: {
-      stabilityThreshold: 200,
-      pollInterval: 100,
-    },
-  });
+  const watcher = chokidar.watch(
+    SOURCE_TARGETS.map((target) => target.path),
+    {
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/*.test.*',
+        '**/*.spec.*',
+        '**/*.md',
+      ],
+      persistent: true,
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 200,
+        pollInterval: 100,
+      },
+    }
+  );
 
   watcher
     .on('add', (filePath) => {
@@ -140,21 +163,21 @@ function startWatching() {
       scheduleRegeneration();
     })
     .on('addDir', (dirPath) => {
-      if (!isPluginRootDirectory(dirPath)) {
+      if (!shouldRegenerateForDirectoryChange(dirPath)) {
         return;
       }
 
       const relativePath = path.relative(process.cwd(), dirPath);
-      console.log(`Added plugin directory: ${relativePath}`);
+      console.log(`Added directory: ${relativePath}`);
       scheduleRegeneration();
     })
     .on('unlinkDir', (dirPath) => {
-      if (!isPluginRootDirectory(dirPath)) {
+      if (!shouldRegenerateForDirectoryChange(dirPath)) {
         return;
       }
 
       const relativePath = path.relative(process.cwd(), dirPath);
-      console.log(`Deleted plugin directory: ${relativePath}`);
+      console.log(`Deleted directory: ${relativePath}`);
       scheduleRegeneration();
     })
     .on('error', (error) => {

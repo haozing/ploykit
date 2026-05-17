@@ -5,6 +5,8 @@ export type PluginModuleLoader = () => Promise<unknown>;
 
 export interface PluginRuntimeMapEntry {
   rootDir?: string;
+  sourceDir?: string;
+  sourceKind?: 'default' | 'external';
   plugin?: PluginModuleLoader;
   components?: Record<string, PluginModuleLoader>;
   pages?: Record<string, PluginModuleLoader>;
@@ -206,13 +208,14 @@ export function listRuntimeAppBundles(productId?: string): RuntimeAppBundle[] {
 
   return listPluginRuntimeIds().map((pluginId) => {
     const profile = getCatalogProfile(pluginId);
+    const entry = getPluginRuntimeMapEntry(pluginId);
     return {
       id: profile.bundleId,
       productId: DEFAULT_PRODUCT_ID,
       suiteId: profile.suiteId,
       name: profile.bundleName,
-      sourceType: 'local',
-      sourceRef: `plugins/${pluginId}`,
+      sourceType: entry?.sourceKind === 'external' ? 'external-directory' : 'local',
+      sourceRef: entry?.rootDir ?? `plugins/${pluginId}`,
       plugins: [
         {
           pluginId,
@@ -220,7 +223,11 @@ export function listRuntimeAppBundles(productId?: string): RuntimeAppBundle[] {
           required: profile.required,
         },
       ],
-      metadata: { source: 'plugin-map' },
+      metadata: {
+        source: 'plugin-map',
+        ...(entry?.sourceDir ? { sourceDir: entry.sourceDir } : {}),
+        ...(entry?.sourceKind ? { sourceKind: entry.sourceKind } : {}),
+      },
     } satisfies RuntimeAppBundle;
   });
 }

@@ -1,6 +1,6 @@
-import path from 'node:path';
 import { checkPluginTargets } from '@/lib/plugin-runtime/checks';
 import { listLegacyPluginDirectories } from '@/lib/plugin-runtime/dev-console/legacy-plugin-scan.server';
+import { getPluginSourceTargets } from '@/lib/plugin-runtime/plugin-source-dirs';
 import type { RuntimeCheck } from '../types';
 
 export const pluginRuntimeCheck: RuntimeCheck = {
@@ -8,28 +8,32 @@ export const pluginRuntimeCheck: RuntimeCheck = {
   description: 'Validate definePlugin contract roots and legacy plugin boundary',
 
   async run() {
-    const targetPath = path.join(process.cwd(), 'plugins');
-    const checkReport = await checkPluginTargets(targetPath);
-    const legacy = listLegacyPluginDirectories(targetPath);
-    const errors = checkReport.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-    const warnings = checkReport.diagnostics.filter(
-      (diagnostic) => diagnostic.severity === 'warning'
+    const targetPaths = getPluginSourceTargets()
+      .filter((target) => target.exists)
+      .map((target) => target.path);
+    const checkReports = await Promise.all(
+      targetPaths.map((targetPath) => checkPluginTargets(targetPath))
     );
+    const legacy = targetPaths.flatMap((targetPath) => listLegacyPluginDirectories(targetPath));
+    const diagnostics = checkReports.flatMap((report) => report.diagnostics);
+    const checked = checkReports.reduce((total, report) => total + report.checked, 0);
+    const errors = diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+    const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === 'warning');
 
     if (errors.length > 0) {
       return {
         key: 'plugin-runtime',
         status: 'failed',
         severity: 'error',
-        message: `Plugin runtime contract check failed for ${checkReport.checked} plugin(s)`,
+        message: `Plugin runtime contract check failed for ${checked} plugin(s)`,
         details: {
-          targetPath: checkReport.targetPath,
-          checked: checkReport.checked,
+          targetPaths: checkReports.map((report) => report.targetPath),
+          checked,
           errors,
           warnings,
           legacyPluginDirectories: legacy,
         },
-        fix: 'Run npm run plugin:check -- plugins and fix the reported plugin.ts diagnostics.',
+        fix: 'Run npm run plugin:check -- <plugin-source-dir> and fix the reported plugin.ts diagnostics.',
       };
     }
 
@@ -40,8 +44,8 @@ export const pluginRuntimeCheck: RuntimeCheck = {
         severity: 'error',
         message: `${legacy.length} legacy plugin directorie(s) still use forbidden manifest/index/api entries`,
         details: {
-          targetPath: checkReport.targetPath,
-          checked: checkReport.checked,
+          targetPaths: checkReports.map((report) => report.targetPath),
+          checked,
           legacyPluginDirectories: legacy,
         },
         fix: 'Rewrite legacy plugin directories as plugin.ts definePlugin contracts and remove legacy entry files.',
@@ -52,10 +56,10 @@ export const pluginRuntimeCheck: RuntimeCheck = {
       key: 'plugin-runtime',
       status: warnings.length > 0 ? 'warning' : 'ok',
       severity: warnings.length > 0 ? 'warning' : 'info',
-      message: `Plugin runtime contracts verified: ${checkReport.checked} plugin(s)`,
+      message: `Plugin runtime contracts verified: ${checked} plugin(s)`,
       details: {
-        targetPath: checkReport.targetPath,
-        checked: checkReport.checked,
+        targetPaths: checkReports.map((report) => report.targetPath),
+        checked,
         warnings,
         ordinaryTargetRule: 'Plugin runtime targets must use plugin.ts definePlugin contracts.',
       },

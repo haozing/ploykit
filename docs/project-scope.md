@@ -6,11 +6,14 @@ that are important for open-source users and deployers.
 
 ## Current Boundaries
 
-- Plugin source is local `plugins/`. There is no remote marketplace, uploaded
-  plugin package installation, or license distribution flow yet.
-- Plugin source discovery is local and code-only: `plugins/*/plugin.ts` is
-  scanned into a generated module map. Product, suite, and app bundle placement
-  belongs to installation/catalog state, not plugin source discovery.
+- Plugin source is local code: the default `plugins/` directory plus optional
+  external source directories configured with `PLOYKIT_PLUGIN_DIRS`. There is no
+  remote marketplace, uploaded plugin package installation, or license
+  distribution flow yet.
+- Plugin source discovery is local and code-only: configured plugin roots with
+  `plugin.ts` are scanned into a generated module map. Product, suite, and app
+  bundle placement belongs to installation/catalog state, not plugin source
+  discovery.
 - Plugin installation records are scoped by product, optional suite or app
   bundle, and plugin for admin visibility and audit. Runtime-facing surfaces
   use installed/enabled plugin state in production; development can load local

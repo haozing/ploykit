@@ -1,6 +1,6 @@
 # 插件开发
 
-插件位于 `plugins/<plugin-id>/`。合同文件是唯一必需入口，宿主会从合同推导运行时加载。
+插件通常位于 `plugins/<plugin-id>/`。合同文件是唯一必需入口，宿主会从合同推导运行时加载。
 
 ```text
 plugins/<plugin-id>/
@@ -19,9 +19,30 @@ plugins/<plugin-id>/
 `-- tests/
 ```
 
+也支持外部插件源码目录，适合本地开发和自托管部署。通过 `PLOYKIT_PLUGIN_DIRS` 配置一个或多个额外目录，目录之间用分号或逗号分隔：
+
+```bash
+PLOYKIT_PLUGIN_DIRS="../my-ploykit-plugins;D:/shared/ploykit-plugins" npm run plugins:scan
+```
+
+PowerShell：
+
+```powershell
+$env:PLOYKIT_PLUGIN_DIRS = 'D:\work\ploykit-plugins;..\shared-plugins'
+npm run plugins:scan
+```
+
+每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan` 并提交生成的 plugin map。
+
+运行 `npm run plugins:check` 可校验所有已配置来源；也可以定向运行 `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`。在 Windows 上，外部插件模块必须与项目在同一个盘符，因为生成 map 使用相对静态 import；如果源码在别的盘，可以在项目内放 symlink/junction。
+
+TypeScript 会从外部文件所在位置解析裸包 import。外部目录在项目外时，要么把它放在能解析宿主 `node_modules` 的 workspace 中，要么在外部目录安装开发依赖，要么使用项目内 symlink/junction。
+
+standalone 部署时，外部目录需要在运行环境中保持构建时相同的相对路径，或通过 volume mount 挂载进去。项目内的外部来源会由 standalone asset 脚本复制；项目外目录应通过挂载提供。
+
 ## 合同入口
 
-`plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 扫描插件合同，写入 `src/lib/plugin-map.ts`，再从生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
+`plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 从 `plugins/` 和 `PLOYKIT_PLUGIN_DIRS` 扫描插件合同，写入 `src/lib/plugin-map.ts`，再从生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
 
 生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。
 

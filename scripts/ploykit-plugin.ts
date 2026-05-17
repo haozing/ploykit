@@ -10,6 +10,7 @@ import {
   listPluginFiles,
   loadPluginDefinition,
 } from '@/lib/plugin-runtime/checks';
+import { getPluginSourceTargets } from '@/lib/plugin-runtime/plugin-source-dirs';
 import type { PluginContext, PluginDiagnostic } from '@/plugin-sdk';
 import { createPluginTestHost, type PluginTestHost } from '@/plugin-sdk/testing';
 
@@ -181,6 +182,16 @@ function getTargetPath(args: ParsedArgs, fallback = 'plugins'): string {
   return path.resolve(PROJECT_ROOT, args.positionals[0] ?? fallback);
 }
 
+function getTargetPaths(args: ParsedArgs): string[] {
+  if (args.positionals[0]) {
+    return [path.resolve(PROJECT_ROOT, args.positionals[0])];
+  }
+
+  return getPluginSourceTargets({ cwd: PROJECT_ROOT })
+    .filter((target) => target.exists)
+    .map((target) => target.path);
+}
+
 function toPosix(value: string): string {
   return value.replace(/\\/g, '/');
 }
@@ -320,10 +331,24 @@ async function runCreate(args: ParsedArgs): Promise<void> {
 }
 
 async function runCheck(args: ParsedArgs): Promise<void> {
-  const targetPath = getTargetPath(args);
-  const report = await checkPluginTargets(targetPath);
-  console.log(JSON.stringify(report, null, 2));
-  process.exitCode = report.success ? 0 : 1;
+  const reports = await Promise.all(
+    getTargetPaths(args).map((targetPath) => checkPluginTargets(targetPath))
+  );
+  if (reports.length === 1) {
+    console.log(JSON.stringify(reports[0], null, 2));
+    process.exitCode = reports[0]?.success ? 0 : 1;
+    return;
+  }
+
+  const result = {
+    targetPaths: reports.map((report) => report.targetPath),
+    checked: reports.reduce((total, report) => total + report.checked, 0),
+    diagnostics: reports.flatMap((report) => report.diagnostics),
+    plugins: reports.flatMap((report) => report.plugins),
+    success: reports.every((report) => report.success),
+  };
+  console.log(JSON.stringify(result, null, 2));
+  process.exitCode = result.success ? 0 : 1;
 }
 
 function discoverTestFiles(pluginRoot: string): string[] {

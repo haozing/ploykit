@@ -13,6 +13,8 @@ type PluginModuleLoader = () => Promise<unknown>;
 
 export interface PluginMapEntry {
   rootDir?: string;
+  sourceDir?: string;
+  sourceKind?: 'default' | 'external';
   plugin?: PluginModuleLoader;
   components?: Record<string, PluginModuleLoader>;
   pages?: Record<string, PluginModuleLoader>;
@@ -28,64 +30,70 @@ export interface PluginMapEntry {
 export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   'capability-demo': {
     rootDir: "plugins/capability-demo",
-    plugin: () => import('@/plugins/capability-demo/plugin'),
+    sourceDir: "plugins",
+    sourceKind: "default",
+    plugin: () => import("../../plugins/capability-demo/plugin"),
     pages: {
-      'pages/DevAssetsTool': () => import('@/plugins/capability-demo/pages/DevAssetsTool'),
-      'pages/ImageCutoutTool': () => import('@/plugins/capability-demo/pages/ImageCutoutTool'),
-      'pages/JsonFormatTool': () => import('@/plugins/capability-demo/pages/JsonFormatTool'),
-      'pages/PdfOcrTool': () => import('@/plugins/capability-demo/pages/PdfOcrTool'),
-      'pages/SelfTestTool': () => import('@/plugins/capability-demo/pages/SelfTestTool'),
-      'pages/SelfTestToolClient': () => import('@/plugins/capability-demo/pages/SelfTestToolClient')
+      'pages/DevAssetsTool': () => import("../../plugins/capability-demo/pages/DevAssetsTool"),
+      'pages/ImageCutoutTool': () => import("../../plugins/capability-demo/pages/ImageCutoutTool"),
+      'pages/JsonFormatTool': () => import("../../plugins/capability-demo/pages/JsonFormatTool"),
+      'pages/PdfOcrTool': () => import("../../plugins/capability-demo/pages/PdfOcrTool"),
+      'pages/SelfTestTool': () => import("../../plugins/capability-demo/pages/SelfTestTool"),
+      'pages/SelfTestToolClient': () => import("../../plugins/capability-demo/pages/SelfTestToolClient")
     },
     apis: {
-      'api/api-key-echo': () => import('@/plugins/capability-demo/api/api-key-echo'),
-      'api/csv-convert': () => import('@/plugins/capability-demo/api/csv-convert'),
-      'api/run': () => import('@/plugins/capability-demo/api/run'),
-      'api/self-test': () => import('@/plugins/capability-demo/api/self-test'),
-      'api/seo-check': () => import('@/plugins/capability-demo/api/seo-check')
+      'api/api-key-echo': () => import("../../plugins/capability-demo/api/api-key-echo"),
+      'api/csv-convert': () => import("../../plugins/capability-demo/api/csv-convert"),
+      'api/run': () => import("../../plugins/capability-demo/api/run"),
+      'api/self-test': () => import("../../plugins/capability-demo/api/self-test"),
+      'api/seo-check': () => import("../../plugins/capability-demo/api/seo-check")
     },
     jobModules: {
-      'jobs/selftest': () => import('@/plugins/capability-demo/jobs/selftest')
+      'jobs/selftest': () => import("../../plugins/capability-demo/jobs/selftest")
     },
     webhookModules: {
-      'webhooks/self-test': () => import('@/plugins/capability-demo/webhooks/self-test')
+      'webhooks/self-test': () => import("../../plugins/capability-demo/webhooks/self-test")
     },
     eventModules: {
-      'events/selftest': () => import('@/plugins/capability-demo/events/selftest')
+      'events/selftest': () => import("../../plugins/capability-demo/events/selftest")
     },
     slotModules: {
-      'slots/JsonAliasBanner': () => import('@/plugins/capability-demo/slots/JsonAliasBanner')
+      'slots/JsonAliasBanner': () => import("../../plugins/capability-demo/slots/JsonAliasBanner")
     },
   },
   'host-capability-lab': {
     rootDir: "plugins/host-capability-lab",
-    plugin: () => import('@/plugins/host-capability-lab/plugin'),
+    sourceDir: "plugins",
+    sourceKind: "default",
+    plugin: () => import("../../plugins/host-capability-lab/plugin"),
     components: {
-      'components/HomeComponentSlot': () => import('@/plugins/host-capability-lab/components/HomeComponentSlot'),
-      'components/StorageProbeClient': () => import('@/plugins/host-capability-lab/components/StorageProbeClient')
+      'components/HomeComponentSlot': () => import("../../plugins/host-capability-lab/components/HomeComponentSlot"),
+      'components/StorageProbeClient': () => import("../../plugins/host-capability-lab/components/StorageProbeClient")
     },
     pages: {
-      'pages/AboutOverride': () => import('@/plugins/host-capability-lab/pages/AboutOverride'),
-      'pages/LabPage': () => import('@/plugins/host-capability-lab/pages/LabPage')
+      'pages/AboutOverride': () => import("../../plugins/host-capability-lab/pages/AboutOverride"),
+      'pages/LabPage': () => import("../../plugins/host-capability-lab/pages/LabPage")
     },
     apis: {
-      'api/storage-probe': () => import('@/plugins/host-capability-lab/api/storage-probe')
+      'api/storage-probe': () => import("../../plugins/host-capability-lab/api/storage-probe")
     },
     slotModules: {
-      'slots/HomeHeroAfter': () => import('@/plugins/host-capability-lab/slots/HomeHeroAfter'),
-      'slots/HomeHeroBefore': () => import('@/plugins/host-capability-lab/slots/HomeHeroBefore'),
-      'slots/PricingMainAfter': () => import('@/plugins/host-capability-lab/slots/PricingMainAfter'),
-      'slots/PricingMainBefore': () => import('@/plugins/host-capability-lab/slots/PricingMainBefore')
+      'slots/HomeHeroAfter': () => import("../../plugins/host-capability-lab/slots/HomeHeroAfter"),
+      'slots/HomeHeroBefore': () => import("../../plugins/host-capability-lab/slots/HomeHeroBefore"),
+      'slots/PricingMainAfter': () => import("../../plugins/host-capability-lab/slots/PricingMainAfter"),
+      'slots/PricingMainBefore': () => import("../../plugins/host-capability-lab/slots/PricingMainBefore")
     },
   },
   'sample-internal': {
     rootDir: "plugins/sample-internal",
-    plugin: () => import('@/plugins/sample-internal/plugin'),
+    sourceDir: "plugins",
+    sourceKind: "default",
+    plugin: () => import("../../plugins/sample-internal/plugin"),
     pages: {
-      'pages/SamplePage': () => import('@/plugins/sample-internal/pages/SamplePage')
+      'pages/SamplePage': () => import("../../plugins/sample-internal/pages/SamplePage")
     },
     apis: {
-      'api/notes': () => import('@/plugins/sample-internal/api/notes')
+      'api/notes': () => import("../../plugins/sample-internal/api/notes")
     },
   }
 };

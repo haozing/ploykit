@@ -1,48 +1,23 @@
 /**
  * Plugin Sync
  *
- * Synchronizes plugins from the filesystem to the database on application startup.
+ * Synchronizes runtime plugins from the generated plugin map to the database on
+ * application startup.
  */
 
-import { readdirSync, statSync } from 'fs';
-import { resolve } from 'path';
 import { db } from '@/lib/db/client.server';
 import { pluginInstallations } from '@/lib/db/schema';
 import { logger } from '@/lib/_core/logger';
 import { pluginRuntimeInstallerService } from '@/lib/plugin-runtime/installer';
+import { listPluginRuntimeIds } from '@/lib/plugin-runtime/loader';
 import { SYSTEM_USER_ID } from './constants';
 
 /**
- * Scan the plugins directory for valid plugin folders
+ * Read runtime plugin ids from the generated plugin map. Source discovery can
+ * include the default plugins/ directory and PLOYKIT_PLUGIN_DIRS.
  */
-function scanPluginsDirectory(): string[] {
-  try {
-    const pluginsDir = resolve(process.cwd(), 'plugins');
-    const entries = readdirSync(pluginsDir);
-
-    const validPlugins = entries.filter((entry) => {
-      if (entry.startsWith('.')) return false;
-
-      const fullPath = resolve(pluginsDir, entry);
-      const stat = statSync(fullPath);
-      if (!stat.isDirectory()) return false;
-
-      // Runtime plugins must expose a single plugin.ts contract.
-      try {
-        const contractPath = resolve(fullPath, 'plugin.ts');
-        statSync(contractPath);
-        return true;
-      } catch {
-        logger.warn({ pluginId: entry }, 'Plugin directory missing plugin.ts');
-        return false;
-      }
-    });
-
-    return validPlugins;
-  } catch (error) {
-    logger.error({ error }, 'Failed to scan plugins directory');
-    return [];
-  }
+function listDiscoveredRuntimePlugins(): string[] {
+  return listPluginRuntimeIds().sort((left, right) => left.localeCompare(right));
 }
 
 /**
@@ -56,11 +31,11 @@ export async function syncPluginsToDatabase(): Promise<{
   try {
     logger.info('Starting plugin sync...');
 
-    const discoveredPlugins = scanPluginsDirectory();
+    const discoveredPlugins = listDiscoveredRuntimePlugins();
     logger.debug({ count: discoveredPlugins.length }, 'Discovered plugins');
 
     if (discoveredPlugins.length === 0) {
-      logger.warn('No plugins found in plugins/ directory');
+      logger.warn('No plugins found in generated plugin map');
       return { total: 0, registered: 0, newlyAdded: 0 };
     }
 

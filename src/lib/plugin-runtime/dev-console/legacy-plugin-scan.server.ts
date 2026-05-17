@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { getDefaultPluginDevTargets as getConfiguredPluginDevTargets } from '../plugin-source-dirs';
 
 export interface LegacyPluginDirectory {
   id: string;
@@ -61,7 +62,5 @@ export function listLegacyPluginDirectories(
 }
 
 export function getDefaultPluginDevTargets(): string[] {
-  return ['plugins', 'templates/plugins']
-    .map((targetPath) => path.join(process.cwd(), targetPath))
-    .filter((targetPath) => fs.existsSync(targetPath));
+  return getConfiguredPluginDevTargets();
 }

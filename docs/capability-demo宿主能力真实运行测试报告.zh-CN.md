@@ -42,27 +42,27 @@
 
 ## 分项结果
 
-| ID | 能力 | 状态 | 备注 |
-| --- | --- | --- | --- |
-| context.request | Plugin request/user/auth context | passed |  |
-| workspace.crud | Workspace scope and membership | passed |  |
-| storage.crud | Plugin storage CRUD and transaction | passed |  |
-| config.secrets | Config defaults and encrypted secrets | passed |  |
-| rate-limit | Rate limit bucket | passed |  |
-| runs.lifecycle | Runs lifecycle and task center records | passed |  |
-| files.lifecycle | Files upload/read/sign/archive/delete | passed |  |
-| artifacts.rag | Artifacts and RAG indexing/search/context/delete | passed |  |
-| metering.ledger | Metering authorize/commit/refund/void/reconcile | passed |  |
-| credits.consume | Credits balance and consumption | passed |  |
-| billing.entitlements | Billing plan and entitlement read gates | passed |  |
-| billing.redeem-code | Billing redeemCode host boundary | skipped | PLUGIN_BILLING_REDEMPTION_UNAVAILABLE |
-| billing.grant-plan | Billing grantPlan admin/system guard | skipped | PLUGIN_BILLING_ADMIN_REQUIRED |
-| ai.generate-stream-embed | AI generateText/streamText/embedText | skipped | PLUGIN_AI_PROVIDER_UNCONFIGURED |
-| usage.audit.notification.ui | Usage/audit/notification/UI toast | passed |  |
-| events.jobs | Events emit/subscribe and jobs enqueue/register | passed |  |
-| http.external | External HTTP egress guard | passed |  |
-| connectors.lifecycle-call | Connectors CRUD/call/callback | passed |  |
-| api-keys.lifecycle | Plugin API keys create/list/revoke | passed |  |
+| ID                          | 能力                                             | 状态    | 备注                                  |
+| --------------------------- | ------------------------------------------------ | ------- | ------------------------------------- |
+| context.request             | Plugin request/user/auth context                 | passed  |                                       |
+| workspace.crud              | Workspace scope and membership                   | passed  |                                       |
+| storage.crud                | Plugin storage CRUD and transaction              | passed  |                                       |
+| config.secrets              | Config defaults and encrypted secrets            | passed  |                                       |
+| rate-limit                  | Rate limit bucket                                | passed  |                                       |
+| runs.lifecycle              | Runs lifecycle and task center records           | passed  |                                       |
+| files.lifecycle             | Files upload/read/sign/archive/delete            | passed  |                                       |
+| artifacts.rag               | Artifacts and RAG indexing/search/context/delete | passed  |                                       |
+| metering.ledger             | Metering authorize/commit/refund/void/reconcile  | passed  |                                       |
+| credits.consume             | Credits balance and consumption                  | passed  |                                       |
+| billing.entitlements        | Billing plan and entitlement read gates          | passed  |                                       |
+| billing.redeem-code         | Billing redeemCode host boundary                 | skipped | PLUGIN_BILLING_REDEMPTION_UNAVAILABLE |
+| billing.grant-plan          | Billing grantPlan admin/system guard             | skipped | PLUGIN_BILLING_ADMIN_REQUIRED         |
+| ai.generate-stream-embed    | AI generateText/streamText/embedText             | skipped | PLUGIN_AI_PROVIDER_UNCONFIGURED       |
+| usage.audit.notification.ui | Usage/audit/notification/UI toast                | passed  |                                       |
+| events.jobs                 | Events emit/subscribe and jobs enqueue/register  | passed  |                                       |
+| http.external               | External HTTP egress guard                       | passed  |                                       |
+| connectors.lifecycle-call   | Connectors CRUD/call/callback                    | passed  |                                       |
+| api-keys.lifecycle          | Plugin API keys create/list/revoke               | passed  |                                       |
 
 ## API Key / Webhook 证据
 
@@ -78,10 +78,7 @@
         "type": "workspace",
         "id": "6b641cf3-c4be-4429-a9dc-88a620035cb3"
       },
-      "permissions": [
-        "POST:/api-key-echo",
-        "route:POST:/api-key-echo"
-      ]
+      "permissions": ["POST:/api-key-echo", "route:POST:/api-key-echo"]
     },
     "metering": {
       "meter": "capability-demo.selftest.request",

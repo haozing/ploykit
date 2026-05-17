@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   // Enable standalone output for Docker deployment
   output: 'standalone',
 
+  experimental: {
+    externalDir: true,
+  },
+
   serverExternalPackages: ['@earendil-works/pi-ai'],
 
   // TypeScript build errors must not be ignored - hard gate for quality
@@ -22,6 +26,11 @@ const nextConfig: NextConfig = {
 
   // Keep webpack aliases in sync with tsconfig.json.
   webpack: (config, { isServer }) => {
+    const resolveModules = new Set([
+      path.resolve(__dirname, './node_modules'),
+      ...(config.resolve.modules || []),
+    ]);
+
     config.resolve.alias = {
       ...config.resolve.alias,
 
@@ -39,13 +48,11 @@ const nextConfig: NextConfig = {
       '@': path.resolve(__dirname, './src'),
     };
 
-    // Add absolute path resolution for plugins directory on server side
+    // Add absolute path resolution for the default plugins directory on server side.
     if (isServer) {
-      config.resolve.modules = [
-        ...(config.resolve.modules || []),
-        path.resolve(__dirname, './plugins'),
-      ];
+      resolveModules.add(path.resolve(__dirname, './plugins'));
     }
+    config.resolve.modules = [...resolveModules];
 
     // Suppress expected warnings for plugin system dynamic imports
     config.ignoreWarnings = [

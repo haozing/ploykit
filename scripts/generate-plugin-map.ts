@@ -2,10 +2,18 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import {
+  EXTERNAL_PLUGIN_DIRS_ENV,
+  discoverPluginRootsInSourceTarget,
+  formatPluginSourcePath,
+  getPluginSourceTargets,
+  type PluginSourceKind,
+} from '@/lib/plugin-runtime/plugin-source-dirs';
 
-const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
-const OUTPUT_FILE = path.join(process.cwd(), 'src/lib/plugin-map.ts');
-const MANIFEST_FILE = path.join(process.cwd(), 'src/lib/plugin-map.manifest.json');
+const PROJECT_ROOT = process.cwd();
+const OUTPUT_FILE = path.join(PROJECT_ROOT, 'src/lib/plugin-map.ts');
+const OUTPUT_DIR = path.dirname(OUTPUT_FILE);
+const MANIFEST_FILE = path.join(PROJECT_ROOT, 'src/lib/plugin-map.manifest.json');
 
 function getContentHash(content: string): string {
   return crypto.createHash('md5').update(content, 'utf-8').digest('hex');
@@ -64,6 +72,9 @@ function scanModuleDirectory(
 interface PluginInfo {
   id: string;
   rootDir: string;
+  absoluteRootDir: string;
+  sourceDir: string;
+  sourceKind: PluginSourceKind;
   components: string[];
   pages: string[];
   apiModules: string[];
@@ -77,100 +88,138 @@ interface PluginInfo {
 
 function scanPlugins(): PluginInfo[] {
   const plugins: PluginInfo[] = [];
+  const seen = new Map<string, PluginInfo>();
+  const sourceTargets = getPluginSourceTargets({ cwd: PROJECT_ROOT });
 
-  if (!fs.existsSync(PLUGINS_DIR)) {
-    console.warn('Plugins directory not found');
-    return plugins;
-  }
-
-  const entries = fs
-    .readdirSync(PLUGINS_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  for (const entry of entries) {
-    const pluginId = entry.name;
-    const pluginPath = path.join(PLUGINS_DIR, pluginId);
-
-    if (!fs.existsSync(path.join(pluginPath, 'plugin.ts'))) {
-      console.warn(`Plugin ${pluginId} missing plugin.ts, skipping runtime contract target`);
+  for (const sourceTarget of sourceTargets) {
+    if (!sourceTarget.exists) {
+      if (sourceTarget.kind === 'external') {
+        throw new Error(
+          `Configured external plugin directory not found: ${sourceTarget.configuredValue}. ` +
+            `Update ${EXTERNAL_PLUGIN_DIRS_ENV} or create the directory.`
+        );
+      }
+      console.warn('Plugins directory not found');
       continue;
     }
 
-    const components: string[] = [];
-    const componentsDir = path.join(pluginPath, 'components');
-    if (fs.existsSync(componentsDir)) {
-      scanModuleDirectory(componentsDir, componentsDir, components, ['.tsx', '.jsx']);
-    }
+    for (const pluginPath of discoverPluginRootsInSourceTarget(sourceTarget)) {
+      const pluginId = path.basename(pluginPath);
 
-    const pages: string[] = [];
-    const pagesDir = path.join(pluginPath, 'pages');
-    if (fs.existsSync(pagesDir)) {
-      scanPagesDirectory(pagesDir, pagesDir, pages);
-    }
+      if (seen.has(pluginId)) {
+        const existing = seen.get(pluginId)!;
+        throw new Error(
+          `Duplicate plugin id "${pluginId}" found in ${existing.rootDir} and ${formatPluginSourcePath(
+            pluginPath,
+            PROJECT_ROOT
+          )}. Plugin ids must be unique across all configured plugin directories.`
+        );
+      }
 
-    const apiModules: string[] = [];
-    const apiDir = path.join(pluginPath, 'api');
-    if (fs.existsSync(apiDir)) {
-      scanModuleDirectory(apiDir, pluginPath, apiModules, ['.ts', '.js']);
-    }
+      const components: string[] = [];
+      const componentsDir = path.join(pluginPath, 'components');
+      if (fs.existsSync(componentsDir)) {
+        scanModuleDirectory(componentsDir, componentsDir, components, ['.tsx', '.jsx']);
+      }
 
-    const lifecycleModules: string[] = [];
-    const lifecycleDir = path.join(pluginPath, 'lifecycle');
-    if (fs.existsSync(lifecycleDir)) {
-      scanModuleDirectory(lifecycleDir, pluginPath, lifecycleModules, ['.ts', '.js']);
-    }
+      const pages: string[] = [];
+      const pagesDir = path.join(pluginPath, 'pages');
+      if (fs.existsSync(pagesDir)) {
+        scanPagesDirectory(pagesDir, pagesDir, pages);
+      }
 
-    const jobModules: string[] = [];
-    const jobsDir = path.join(pluginPath, 'jobs');
-    if (fs.existsSync(jobsDir)) {
-      scanModuleDirectory(jobsDir, pluginPath, jobModules, ['.ts', '.js']);
-    }
+      const apiModules: string[] = [];
+      const apiDir = path.join(pluginPath, 'api');
+      if (fs.existsSync(apiDir)) {
+        scanModuleDirectory(apiDir, pluginPath, apiModules, ['.ts', '.js']);
+      }
 
-    const webhookModules: string[] = [];
-    const webhooksDir = path.join(pluginPath, 'webhooks');
-    if (fs.existsSync(webhooksDir)) {
-      scanModuleDirectory(webhooksDir, pluginPath, webhookModules, ['.ts', '.js']);
-    }
+      const lifecycleModules: string[] = [];
+      const lifecycleDir = path.join(pluginPath, 'lifecycle');
+      if (fs.existsSync(lifecycleDir)) {
+        scanModuleDirectory(lifecycleDir, pluginPath, lifecycleModules, ['.ts', '.js']);
+      }
 
-    const eventModules: string[] = [];
-    const eventsDir = path.join(pluginPath, 'events');
-    if (fs.existsSync(eventsDir)) {
-      scanModuleDirectory(eventsDir, pluginPath, eventModules, ['.ts', '.js']);
-    }
+      const jobModules: string[] = [];
+      const jobsDir = path.join(pluginPath, 'jobs');
+      if (fs.existsSync(jobsDir)) {
+        scanModuleDirectory(jobsDir, pluginPath, jobModules, ['.ts', '.js']);
+      }
 
-    const hookModules: string[] = [];
-    const hooksDir = path.join(pluginPath, 'hooks');
-    if (fs.existsSync(hooksDir)) {
-      scanModuleDirectory(hooksDir, pluginPath, hookModules, ['.ts', '.js']);
-    }
+      const webhookModules: string[] = [];
+      const webhooksDir = path.join(pluginPath, 'webhooks');
+      if (fs.existsSync(webhooksDir)) {
+        scanModuleDirectory(webhooksDir, pluginPath, webhookModules, ['.ts', '.js']);
+      }
 
-    const slotModules: string[] = [];
-    const slotsDir = path.join(pluginPath, 'slots');
-    if (fs.existsSync(slotsDir)) {
-      scanModuleDirectory(slotsDir, pluginPath, slotModules);
-    }
+      const eventModules: string[] = [];
+      const eventsDir = path.join(pluginPath, 'events');
+      if (fs.existsSync(eventsDir)) {
+        scanModuleDirectory(eventsDir, pluginPath, eventModules, ['.ts', '.js']);
+      }
 
-    plugins.push({
-      id: pluginId,
-      rootDir: path.relative(process.cwd(), pluginPath).replace(/\\/g, '/'),
-      components: components.sort(),
-      pages: pages.sort(),
-      apiModules: apiModules.sort(),
-      lifecycleModules: lifecycleModules.sort(),
-      jobModules: jobModules.sort(),
-      webhookModules: webhookModules.sort(),
-      eventModules: eventModules.sort(),
-      hookModules: hookModules.sort(),
-      slotModules: slotModules.sort(),
-    });
+      const hookModules: string[] = [];
+      const hooksDir = path.join(pluginPath, 'hooks');
+      if (fs.existsSync(hooksDir)) {
+        scanModuleDirectory(hooksDir, pluginPath, hookModules, ['.ts', '.js']);
+      }
+
+      const slotModules: string[] = [];
+      const slotsDir = path.join(pluginPath, 'slots');
+      if (fs.existsSync(slotsDir)) {
+        scanModuleDirectory(slotsDir, pluginPath, slotModules);
+      }
+
+      plugins.push({
+        id: pluginId,
+        rootDir: formatPluginSourcePath(pluginPath, PROJECT_ROOT),
+        absoluteRootDir: pluginPath,
+        sourceDir: sourceTarget.displayPath,
+        sourceKind: sourceTarget.kind,
+        components: components.sort(),
+        pages: pages.sort(),
+        apiModules: apiModules.sort(),
+        lifecycleModules: lifecycleModules.sort(),
+        jobModules: jobModules.sort(),
+        webhookModules: webhookModules.sort(),
+        eventModules: eventModules.sort(),
+        hookModules: hookModules.sort(),
+        slotModules: slotModules.sort(),
+      });
+
+      seen.set(pluginId, plugins.at(-1)!);
+    }
   }
 
   return plugins;
 }
 
+function assertSameVolumeForImport(modulePath: string): void {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  const outputRoot = path.parse(OUTPUT_DIR).root.toLowerCase();
+  const moduleRoot = path.parse(modulePath).root.toLowerCase();
+  if (outputRoot !== moduleRoot) {
+    throw new Error(
+      `External plugin module "${modulePath}" is on a different Windows drive than the project. ` +
+        `Move the plugin directory onto ${outputRoot} or use a symlink/junction under the project.`
+    );
+  }
+}
+
+function moduleSpecifier(modulePath: string): string {
+  assertSameVolumeForImport(modulePath);
+  let relativePath = path.relative(OUTPUT_DIR, modulePath).replace(/\\/g, '/');
+  if (!relativePath.startsWith('.')) {
+    relativePath = `./${relativePath}`;
+  }
+  return relativePath;
+}
+
 function moduleMap(
-  pluginId: string,
+  plugin: PluginInfo,
   modules: string[],
   keyPrefix: string,
   importPrefix: string
@@ -182,8 +231,10 @@ function moduleMap(
   return modules
     .map((modulePath) => {
       const key = keyPrefix ? `${keyPrefix}/${modulePath}` : modulePath;
-      const importPath = importPrefix ? `${importPrefix}/${modulePath}` : modulePath;
-      return `      '${key}': () => import('@/plugins/${pluginId}/${importPath}')`;
+      const importPath = importPrefix ? path.join(importPrefix, modulePath) : modulePath;
+      return `      '${key}': () => import(${JSON.stringify(
+        moduleSpecifier(path.join(plugin.absoluteRootDir, importPath))
+      )})`;
     })
     .join(',\n');
 }
@@ -192,50 +243,54 @@ function generatePluginMap(plugins: PluginInfo[]): string {
   const entries = plugins.map((plugin) => {
     const parts: string[] = [
       `    rootDir: ${JSON.stringify(plugin.rootDir)},`,
-      `    plugin: () => import('@/plugins/${plugin.id}/plugin'),`,
+      `    sourceDir: ${JSON.stringify(plugin.sourceDir)},`,
+      `    sourceKind: ${JSON.stringify(plugin.sourceKind)},`,
+      `    plugin: () => import(${JSON.stringify(
+        moduleSpecifier(path.join(plugin.absoluteRootDir, 'plugin'))
+      )}),`,
     ];
 
-    const components = moduleMap(plugin.id, plugin.components, 'components', 'components');
+    const components = moduleMap(plugin, plugin.components, 'components', 'components');
     if (components) {
       parts.push(`    components: {\n${components}\n    },`);
     }
 
-    const pages = moduleMap(plugin.id, plugin.pages, 'pages', 'pages');
+    const pages = moduleMap(plugin, plugin.pages, 'pages', 'pages');
     if (pages) {
       parts.push(`    pages: {\n${pages}\n    },`);
     }
 
-    const apis = moduleMap(plugin.id, plugin.apiModules, '', '');
+    const apis = moduleMap(plugin, plugin.apiModules, '', '');
     if (apis) {
       parts.push(`    apis: {\n${apis}\n    },`);
     }
 
-    const lifecycleModules = moduleMap(plugin.id, plugin.lifecycleModules, '', '');
+    const lifecycleModules = moduleMap(plugin, plugin.lifecycleModules, '', '');
     if (lifecycleModules) {
       parts.push(`    lifecycleModules: {\n${lifecycleModules}\n    },`);
     }
 
-    const jobModules = moduleMap(plugin.id, plugin.jobModules, '', '');
+    const jobModules = moduleMap(plugin, plugin.jobModules, '', '');
     if (jobModules) {
       parts.push(`    jobModules: {\n${jobModules}\n    },`);
     }
 
-    const webhookModules = moduleMap(plugin.id, plugin.webhookModules, '', '');
+    const webhookModules = moduleMap(plugin, plugin.webhookModules, '', '');
     if (webhookModules) {
       parts.push(`    webhookModules: {\n${webhookModules}\n    },`);
     }
 
-    const eventModules = moduleMap(plugin.id, plugin.eventModules, '', '');
+    const eventModules = moduleMap(plugin, plugin.eventModules, '', '');
     if (eventModules) {
       parts.push(`    eventModules: {\n${eventModules}\n    },`);
     }
 
-    const hookModules = moduleMap(plugin.id, plugin.hookModules, '', '');
+    const hookModules = moduleMap(plugin, plugin.hookModules, '', '');
     if (hookModules) {
       parts.push(`    hookModules: {\n${hookModules}\n    },`);
     }
 
-    const slotModules = moduleMap(plugin.id, plugin.slotModules, '', '');
+    const slotModules = moduleMap(plugin, plugin.slotModules, '', '');
     if (slotModules) {
       parts.push(`    slotModules: {\n${slotModules}\n    },`);
     }
@@ -258,6 +313,8 @@ type PluginModuleLoader = () => Promise<unknown>;
 
 export interface PluginMapEntry {
   rootDir?: string;
+  sourceDir?: string;
+  sourceKind?: 'default' | 'external';
   plugin?: PluginModuleLoader;
   components?: Record<string, PluginModuleLoader>;
   pages?: Record<string, PluginModuleLoader>;
@@ -279,10 +336,17 @@ ${entries.join(',\n')}
 function generatePluginManifest(plugins: PluginInfo[]): string {
   return `${JSON.stringify(
     {
-      version: 3,
+      version: 4,
+      sourceDirs: getPluginSourceTargets({ cwd: PROJECT_ROOT }).map((target) => ({
+        path: target.displayPath,
+        kind: target.kind,
+        directPluginRoot: target.directPluginRoot,
+      })),
       plugins: plugins.map((plugin) => ({
         id: plugin.id,
         rootDir: plugin.rootDir,
+        sourceDir: plugin.sourceDir,
+        sourceKind: plugin.sourceKind,
         components: plugin.components,
         pages: plugin.pages,
         apiModules: plugin.apiModules,
@@ -329,7 +393,7 @@ function main() {
   const isQuiet = isCI || isBuild || isCheck;
 
   if (!isQuiet) {
-    console.log('Scanning plugins directory...');
+    console.log('Scanning plugin source directories...');
   }
 
   const plugins = scanPlugins();
@@ -366,7 +430,7 @@ function main() {
       getContentHash(manifestContent) !== getContentHash(existingManifestContent)
     ) {
       console.error(
-        'Plugin map check failed: plugins/ directory does not match src/lib/plugin-map.ts'
+        'Plugin map check failed: configured plugin source directories do not match src/lib/plugin-map.ts'
       );
       console.error(
         '   Fix: run npm run plugins:scan, then commit src/lib/plugin-map.ts and manifest'
