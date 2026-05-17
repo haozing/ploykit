@@ -6,7 +6,6 @@
  */
 
 import React from 'react';
-import { PluginProvider } from '@ploykit/plugin-sdk/react';
 import { parsePluginRouteSlotName, type PluginRouteSlotPosition } from '@ploykit/plugin-sdk';
 import { isValidSlotName, type SlotName, type SlotRegistration, type SlotMode } from './types';
 import { logger } from '@/lib/_core/logger';
@@ -48,6 +47,22 @@ interface NormalizedSlotDeclaration {
   slotName: SlotName;
   componentPath: string;
   priority: number;
+}
+
+type PluginProviderComponent = ComponentType<{
+  pluginId: string;
+  i18n?: PluginRuntimeSlotProps['i18n'];
+  children: React.ReactNode;
+}>;
+
+let pluginProviderPromise: Promise<PluginProviderComponent> | null = null;
+
+async function loadPluginProvider(): Promise<PluginProviderComponent> {
+  pluginProviderPromise ??= import('@ploykit/plugin-sdk/react').then(
+    (module) => module.PluginProvider as PluginProviderComponent
+  );
+
+  return pluginProviderPromise;
 }
 
 function toDeclarations(
@@ -464,6 +479,7 @@ export class SlotManager {
     }
 
     const toRender = mode === 'replace' ? [registrations[0]] : registrations;
+    const PluginProvider = await loadPluginProvider();
 
     const components = await Promise.all(
       toRender.map(async (registration) => {

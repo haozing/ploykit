@@ -33,6 +33,9 @@ Rules:
 - Use ctx.* capabilities instead of host internals.
 - Do not import src/lib/*, read process.env, access the database directly, or
   use raw external fetch().
+- When npm UI or runtime packages are needed, declare plugin.dependencies.json
+  and make sure the host package.json runtime dependencies list the same
+  packages.
 - Add permissions that match ctx capability usage.
 - Add plugin tests with @ploykit/plugin-sdk/testing.
 - Run npm run plugin:doctor -- plugins/invoice-helper after edits.
@@ -60,6 +63,9 @@ plugins/invoice-helper/
 |-- README.md
 `-- AI_TASK.md
 ```
+
+Add `plugin.dependencies.json` only when the plugin needs extra npm UI or
+runtime packages.
 
 ## Acceptance Criteria
 

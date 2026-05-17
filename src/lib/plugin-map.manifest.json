@@ -153,6 +153,7 @@
         "host-capability-lab"
       ],
       "components": [
+        "HomeComponentSlot",
         "StorageProbeClient"
       ],
       "pages": [

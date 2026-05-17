@@ -5,12 +5,16 @@
 ```text
 plugins/<plugin-id>/
 |-- plugin.ts
+|-- plugin.dependencies.json
 |-- pages/
 |-- api/
+|-- components/
+|-- slots/
 |-- lifecycle/
 |-- jobs/
 |-- events/
 |-- webhooks/
+|-- locales/
 |-- assets/
 `-- tests/
 ```
@@ -61,6 +65,37 @@ export default definePlugin({
   },
 });
 ```
+
+## 外部 npm 依赖
+
+插件可以使用宿主已经安装并声明为运行时依赖的 npm 包，例如 UI 组件库、图表库、流程图库等。插件不要自己运行安装脚本，也不要依赖偶然存在的传递依赖。
+
+在插件根目录声明 `plugin.dependencies.json`：
+
+```json
+{
+  "dependencies": {
+    "@xyflow/react": "^12.3.6",
+    "recharts": "^3.2.1"
+  }
+}
+```
+
+然后在插件代码里正常导入：
+
+```tsx
+import { ReactFlow } from '@xyflow/react';
+```
+
+宿主必须同时在仓库根 `package.json` 的 `dependencies` 或 `optionalDependencies` 中声明这些包，并完成 `npm install`。`plugin:doctor` 会拒绝下面几类情况：
+
+- `plugin.dependencies.json` 不是合法 JSON。
+- 插件声明了依赖，但宿主没有安装。
+- 包虽然能被解析到，但只是 dev/transitive 依赖，没有出现在宿主运行时依赖里。
+
+`react`、`react-dom`、`@ploykit/plugin-sdk`、`@ploykit/plugin-sdk/react` 和 `@ploykit/plugin-sdk/testing` 属于宿主允许的基础导入，不需要写进 `plugin.dependencies.json`。
+
+如果依赖本质上是模型 provider、数据库驱动、密钥型外部服务或复杂领域能力，应优先由宿主实现成 `ctx.ai`、`ctx.services`、`ctx.connectors` 等 capability，插件通过 `ctx.*` 使用，而不是把这类包直接塞进插件运行时。
 
 ## 公开工具页
 

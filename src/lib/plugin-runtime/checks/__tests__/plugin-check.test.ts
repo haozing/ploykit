@@ -879,6 +879,93 @@ export async function ping(ctx) {
     expect(report.diagnostics).toEqual([]);
   });
 
+  it('fails when declared host page slot or override components do not exist', async () => {
+    const pluginRoot = createPluginRoot('missing-host-page-components');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+
+    const report = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        definePlugin({
+          id: path.basename(root),
+          name: 'Missing Host Page Components',
+          version: '1.0.0',
+          trustLevel: 'trusted',
+          permissions: [Permission.HostPageExtend, Permission.HostPageOverride],
+          hostPages: {
+            slots: [
+              {
+                page: '/',
+                position: 'hero.before',
+                component: './components/HomeBanner',
+              },
+            ],
+            overrides: [
+              {
+                page: '/about',
+                mode: 'main.replace',
+                component: './pages/AboutOverride',
+                seo: {
+                  titleKey: 'about.seo.title',
+                  descriptionKey: 'about.seo.description',
+                  canonical: '/about',
+                },
+                i18n: {
+                  requiredLocales: ['en', 'zh'],
+                },
+              },
+            ],
+          },
+        }),
+    });
+
+    expect(report.success).toBe(false);
+    expect(report.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PLUGIN_HOST_PAGE_SLOT_COMPONENT_NOT_FOUND',
+          path: 'hostPages.slots.0.component',
+        }),
+        expect.objectContaining({
+          code: 'PLUGIN_HOST_PAGE_OVERRIDE_COMPONENT_NOT_FOUND',
+          path: 'hostPages.overrides.0.component',
+        }),
+      ])
+    );
+  });
+
+  it('accepts host page slot components from the plugin components directory', async () => {
+    const pluginRoot = createPluginRoot('host-page-component-slot');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'components/HomeBanner.tsx',
+      `export default function HomeBanner() {}`
+    );
+
+    const report = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        definePlugin({
+          id: path.basename(root),
+          name: 'Host Page Component Slot',
+          version: '1.0.0',
+          trustLevel: 'trusted',
+          permissions: [Permission.HostPageExtend],
+          hostPages: {
+            slots: [
+              {
+                page: '/',
+                position: 'hero.before',
+                component: './components/HomeBanner',
+              },
+            ],
+          },
+        }),
+    });
+
+    expect(report.success).toBe(true);
+    expect(report.diagnostics).toEqual([]);
+  });
+
   it('fails when declared page, API, or lifecycle handlers do not exist', async () => {
     const pluginRoot = createPluginRoot('missing-route-handlers');
     writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
@@ -1414,7 +1501,7 @@ export async function write(ctx) {
     );
   });
 
-  it('fails undeclared external package imports and accepts plugin dependency manifests', async () => {
+  it('fails undeclared external package imports and rejects dependency manifests that the host has not installed', async () => {
     const pluginRoot = createPluginRoot('external-import');
     writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
     writePluginFile(
@@ -1449,11 +1536,83 @@ export function format(value: string) {
       JSON.stringify({ dependencies: { slugify: '^1.6.6' } })
     );
 
+    const rejected = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) => createContract(root, []),
+    });
+
+    expect(rejected.success).toBe(false);
+    expect(rejected.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PLUGIN_DEPENDENCY_NOT_INSTALLED',
+          path: 'dependencies.slugify',
+          severity: 'error',
+        }),
+      ])
+    );
+  });
+
+  it('accepts external package imports when the dependency is declared and installed by the host', async () => {
+    const pluginRoot = createPluginRoot('installed-external-import');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'components/Flow.tsx',
+      `
+import { ReactFlow } from '@xyflow/react';
+
+export default function Flow() {
+  return ReactFlow;
+}
+`
+    );
+    writePluginFile(
+      pluginRoot,
+      'plugin.dependencies.json',
+      JSON.stringify({ dependencies: { '@xyflow/react': '^12.3.6' } })
+    );
+
     const passed = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) => createContract(root, []),
     });
 
     expect(passed.success).toBe(true);
     expect(passed.diagnostics).toEqual([]);
+  });
+
+  it('rejects transitive or dev-only packages as plugin runtime dependencies', async () => {
+    const pluginRoot = createPluginRoot('transitive-external-import');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'api/format.ts',
+      `
+import semver from 'semver';
+
+export function format(value: string) {
+  return semver.valid(value);
+}
+`
+    );
+    writePluginFile(
+      pluginRoot,
+      'plugin.dependencies.json',
+      JSON.stringify({ dependencies: { semver: '^7.7.2' } })
+    );
+
+    const rejected = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) => createContract(root, []),
+    });
+
+    expect(rejected.success).toBe(false);
+    expect(rejected.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PLUGIN_DEPENDENCY_NOT_DECLARED_BY_HOST',
+          path: 'dependencies.semver',
+          severity: 'error',
+        }),
+      ])
+    );
   });
 });

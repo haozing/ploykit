@@ -9,6 +9,7 @@ PloyKit 随仓库提供一个可选 Codex Skill：
 - 先修改 `plugin.ts`，再实现页面、API、job、event、webhook。
 - 默认只在 `plugins/<plugin-id>/` 内工作。
 - 根据 `ctx.*` capability 使用补齐 `Permission.*` 声明。
+- 需要 npm UI/运行时包时维护 `plugin.dependencies.json`，并要求宿主根 `package.json` 声明同名运行时依赖。
 - 使用 `@ploykit/plugin-sdk/testing` 添加 fake-host 测试。
 - 通过 `npm run plugin:doctor -- plugins/<plugin-id>` 诊断、修复、重跑。
 - 复用面向 AI agent 的插件开发提示词结构。

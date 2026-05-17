@@ -9,8 +9,8 @@ import type { PluginHostPageOverride as PluginHostPageOverrideRow } from '@/lib/
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
 import {
   getPluginRuntimeMapEntry,
+  resolvePluginComponentModule,
   resolvePluginPageModule,
-  resolvePluginSlotModule,
   type PluginModuleLoader,
 } from '@/lib/plugin-runtime/loader';
 import type {
@@ -46,17 +46,21 @@ async function loadEnabledContracts(): Promise<PluginRuntimeContract[]> {
   const overrideRefs = await runtimeScopeService.getEnabledRuntimePlugins({
     surface: 'hostPageOverride',
   });
-  return [...new Map([...slotRefs, ...overrideRefs].map((ref) => [ref.pluginId, ref.contract])).values()];
+  return [
+    ...new Map([...slotRefs, ...overrideRefs].map((ref) => [ref.pluginId, ref.contract])).values(),
+  ];
 }
 
 function resolveSlotLoader(pluginId: string, component: string): PluginModuleLoader | null {
   const entry = getPluginRuntimeMapEntry(pluginId) ?? pluginRuntimeRegistry.getEntry(pluginId);
-  return entry ? resolvePluginSlotModule(entry, component) : null;
+  return entry ? resolvePluginComponentModule(entry, component) : null;
 }
 
 function resolveOverrideLoader(pluginId: string, component: string): PluginModuleLoader | null {
   const entry = getPluginRuntimeMapEntry(pluginId) ?? pluginRuntimeRegistry.getEntry(pluginId);
-  return entry ? resolvePluginPageModule(entry, component) : null;
+  return entry
+    ? (resolvePluginPageModule(entry, component) ?? resolvePluginComponentModule(entry, component))
+    : null;
 }
 
 function contractSlotsForPage(

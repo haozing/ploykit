@@ -309,10 +309,30 @@ async function preparePluginState(databaseUrl: string): Promise<void> {
 
   try {
     await sql`
-      insert into plugin_installations (plugin_id, version, enabled, installed_by, updated_at)
-      values (${PLUGIN_ID}, '0.1.0', true, 'host-capability-lab-real-test', ${now})
-      on conflict (plugin_id)
+      insert into plugin_installations (
+        product_id,
+        suite_id,
+        bundle_id,
+        plugin_id,
+        version,
+        enabled,
+        installed_by,
+        updated_at
+      )
+      values (
+        'ploykit',
+        'host-capability-lab',
+        'host-capability-lab',
+        ${PLUGIN_ID},
+        '0.1.0',
+        true,
+        'host-capability-lab-real-test',
+        ${now}
+      )
+      on conflict (product_id, plugin_id)
       do update set
+        suite_id = excluded.suite_id,
+        bundle_id = excluded.bundle_id,
         version = excluded.version,
         enabled = true,
         installed_by = excluded.installed_by,
@@ -322,12 +342,15 @@ async function preparePluginState(databaseUrl: string): Promise<void> {
     await sql`
       update plugin_host_page_overrides
       set status = 'inactive', updated_at = ${now}
-      where page_path = '/about'
+      where product_id = 'ploykit'
+        and page_path = '/about'
         and status = 'active'
     `;
 
     await sql`
       insert into plugin_host_page_overrides (
+        product_id,
+        suite_id,
         page_path,
         plugin_id,
         component_path,
@@ -341,6 +364,8 @@ async function preparePluginState(databaseUrl: string): Promise<void> {
         updated_at
       )
       values (
+        'ploykit',
+        'host-capability-lab',
         '/about',
         ${PLUGIN_ID},
         './pages/AboutOverride',
@@ -353,8 +378,9 @@ async function preparePluginState(databaseUrl: string): Promise<void> {
         ${now},
         ${now}
       )
-      on conflict (plugin_id, page_path)
+      on conflict (product_id, plugin_id, page_path)
       do update set
+        suite_id = excluded.suite_id,
         component_path = excluded.component_path,
         mode = excluded.mode,
         status = excluded.status,
@@ -427,8 +453,12 @@ async function runVisualChecks(summary: TestSummary, adminCookie: string): Promi
     const page = await context.newPage();
 
     await addVisual(summary, page, '01-home-host-slots', '/zh', {
-      texts: ['首页 Hero 前插件插槽', '首页 Hero 后插件插槽'],
-      markers: ['HOST_CAPABILITY_LAB_HOME_HERO_BEFORE', 'HOST_CAPABILITY_LAB_HOME_HERO_AFTER'],
+      texts: ['首页 Hero 前插件插槽', '首页 Hero 后插件插槽', '组件目录宿主插槽'],
+      markers: [
+        'HOST_CAPABILITY_LAB_HOME_HERO_BEFORE',
+        'HOST_CAPABILITY_LAB_HOME_HERO_AFTER',
+        'HOST_CAPABILITY_LAB_HOME_COMPONENT_SLOT',
+      ],
     });
 
     await addVisual(summary, page, '02-pricing-host-slots', '/zh/pricing', {
@@ -444,17 +474,11 @@ async function runVisualChecks(summary: TestSummary, adminCookie: string): Promi
       markers: ['HOST_CAPABILITY_LAB_OVERRIDE_RENDERED'],
     });
 
-    await addVisual(
-      summary,
-      page,
-      '04-about-host-override-en-seo',
-      '/en/about',
-      {
-        texts: ['About page replaced by a plugin'],
-        markers: ['HOST_CAPABILITY_LAB_OVERRIDE_RENDERED'],
-        evidence: { expectedTitleFragment: 'Capability Lab About Override' },
-      }
-    );
+    await addVisual(summary, page, '04-about-host-override-en-seo', '/en/about', {
+      texts: ['About page replaced by a plugin'],
+      markers: ['HOST_CAPABILITY_LAB_OVERRIDE_RENDERED'],
+      evidence: { expectedTitleFragment: 'Capability Lab About Override' },
+    });
 
     const title = await page.title();
     if (!title.includes('Capability Lab About Override')) {
@@ -525,7 +549,10 @@ async function main(): Promise<void> {
     await runCommandStep(summary, 'plugin contract check', 'npm', ['run', 'plugins:check'], env);
 
     await preparePluginState(databaseUrl);
-    summary.steps.push({ name: 'host capability lab plugin enabled and override activated', status: 'passed' });
+    summary.steps.push({
+      name: 'host capability lab plugin enabled and override activated',
+      status: 'passed',
+    });
 
     await runCommandStep(summary, 'production build', 'npm', ['run', 'build'], env);
 

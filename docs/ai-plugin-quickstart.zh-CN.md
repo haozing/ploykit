@@ -31,6 +31,7 @@
 - 使用 @ploykit/plugin-sdk 导出。
 - 通过 ctx.* capability 使用宿主能力。
 - 不导入 src/lib/*，不读取 process.env，不直接访问数据库，不使用原始外部 fetch()。
+- 需要 npm UI/运行时包时，声明 plugin.dependencies.json，并确认宿主 package.json 运行时依赖同步声明。
 - 根据 ctx capability 使用补齐 permissions。
 - 使用 @ploykit/plugin-sdk/testing 添加插件测试。
 - 修改后运行 npm run plugin:doctor -- plugins/invoice-helper。
@@ -58,6 +59,8 @@ plugins/invoice-helper/
 |-- README.md
 `-- AI_TASK.md
 ```
+
+如果这个插件需要额外 npm UI/运行时包，再添加 `plugin.dependencies.json`。
 
 ## 验收标准
 

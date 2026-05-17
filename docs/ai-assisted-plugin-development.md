@@ -19,6 +19,7 @@ The codebase already has several AI-friendly properties.
 | Typed declarations      | `src/plugin-sdk/types.ts`, `src/plugin-sdk/context.ts`, `src/plugin-sdk/permissions.ts` | The model can follow explicit shapes instead of discovering host internals by trial and error.                                                |
 | Strong diagnostics      | `src/plugin-sdk/validator.ts`, `src/plugin-sdk/diagnostics.ts`                          | Errors include code, path, message, and often a fix, which is ideal for iterative repair loops.                                               |
 | Plugin-local boundaries | `src/lib/plugin-runtime/checks/plugin-check.ts`                                         | Checks discourage importing host internals, reading `process.env`, raw external `fetch()`, undeclared imports, and missing permissions.       |
+| npm dependency manifest | `plugins/<plugin-id>/plugin.dependencies.json`                                          | Plugins can explicitly declare host-installed UI or runtime npm packages; diagnostics reject missing, dev-only, or transitive-only packages.  |
 | Capability injection    | `ctx.storage`, `ctx.files`, `ctx.runs`, `ctx.connectors`, `ctx.ai`, and others          | The model composes capabilities through a stable boundary rather than touching database, auth, billing, or storage internals.                 |
 | Templates               | `templates/plugins/{tool,crud,dashboard,connector,service}`                             | The model can start from a known file layout and modify local files only.                                                                     |
 | Fake host tests         | `src/plugin-sdk/testing.ts`                                                             | Plugin tests can exercise API handlers, storage, audit, usage, files, AI, RAG, runs, connectors, billing, and more without a full deployment. |
@@ -67,6 +68,12 @@ Rules:
 - Do not use raw external `fetch()`. Use `ctx.http.fetch(...)` and declare
   `Permission.ExternalHttp` plus `egress`.
 - Do not access the database directly.
+- If the plugin needs npm UI or runtime packages, add them to
+  `plugin.dependencies.json` and make sure the host root `package.json` lists
+  them as runtime dependencies.
+- Prefer host `ctx.*` capabilities for model providers, database drivers,
+  credentialed external services, and complex domain abilities instead of
+  ordinary plugin imports.
 
 4. Add or update plugin tests.
 
@@ -132,6 +139,8 @@ Rules:
 - Add permissions that match ctx capability usage.
 - Declare anonymousPolicy for public APIs.
 - Declare egress for ctx.http.fetch origins.
+- Declare external npm packages in plugin.dependencies.json and require the host
+  package.json runtime dependencies to list the same packages.
 - Add plugin tests with @ploykit/plugin-sdk/testing.
 - After edits, run plugin:doctor for this plugin. If it fails, repair the first
   diagnostic and rerun.

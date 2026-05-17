@@ -3,6 +3,9 @@
 插件应通过 `ctx.*` capability 使用宿主能力，并在 `plugin.ts` 声明匹配权限。这样生成的插件代码才保持局部、可测试、可审查。
 
 如果插件需要扩展或覆盖宿主页面，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
+
+如果插件需要使用宿主已安装的 npm 组件库或运行时库，在插件根目录声明 `plugin.dependencies.json`，并确保宿主根 `package.json` 也把它列为运行时依赖。模型 provider、数据库驱动、密钥型外部服务和复杂领域能力不建议作为普通插件依赖，优先沉到宿主 capability。
+
 | Capability          | 常用权限                                                                                  | 用途                                                  |
 | ------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | `ctx.storage`       | `Permission.StorageRead`, `Permission.StorageWrite`                                       | 插件私有结构化记录，来自 `data.collections` 声明。    |
@@ -38,8 +41,9 @@
 | 场景                 | 推荐路径                                                                                           |
 | -------------------- | -------------------------------------------------------------------------------------------------- |
 | 简单插件私有数据     | `data.collections` + `ctx.storage`。                                                               |
-| 复杂数据库或领域查询 | 宿主 service/repository + `ctx.services`，插件不直接访问数据库。                                  |
+| 复杂数据库或领域查询 | 宿主 service/repository + `ctx.services`，插件不直接访问数据库。                                   |
 | 宿主页面扩展         | `hostPages.slots`；整页主内容替换用 `hostPages.overrides`，并声明 SEO、i18n、shell 和 cache。      |
+| npm UI/运行时组件    | `plugin.dependencies.json` + 宿主根 `package.json` 运行时依赖；插件代码正常 import。               |
 | 可计费同步动作       | route/API commercial gate + `ctx.metering.authorize()` + 业务动作 + `ctx.metering.commit()`。      |
 | 长任务或工作流       | public/API handler 创建 `ctx.runs`，再 enqueue `ctx.jobs`，job 更新进度、结果，并按需 emit event。 |
 | 外部系统集成         | 无凭据短调用用 `ctx.http.fetch`；有凭据、重试、审计或脱敏要求用 `ctx.connectors`。                 |
@@ -60,6 +64,7 @@
 - 只有代码确实使用对应 `ctx.*` capability 时才添加权限。
 - Public API 必须声明 `anonymousPolicy`。
 - 外部 HTTP 同时需要 `Permission.ExternalHttp` 和 `egress`。
+- 外部 npm 包要写入 `plugin.dependencies.json`，并确认宿主根 `package.json` 运行时依赖里也有同名包。
 - AI 调用如果可计费，应声明插件命名空间 meter，例如 `invoice-helper.ai.generate`。
 - Secrets 放在 `ctx.secrets`，不要放到 config、源码或环境变量里。
 - 长任务放到 `ctx.runs` 和 jobs，不要塞进请求响应 handler。

@@ -11,6 +11,8 @@ installed alongside Codex.
 - Editing `plugin.ts` before implementation files.
 - Keeping work inside `plugins/<plugin-id>/`.
 - Mapping `ctx.*` capability usage to `Permission.*` declarations.
+- Maintaining `plugin.dependencies.json` for npm UI or runtime packages and
+  requiring matching host root `package.json` runtime dependencies.
 - Adding fake-host tests with `@ploykit/plugin-sdk/testing`.
 - Running and repairing through `npm run plugin:doctor -- plugins/<plugin-id>`.
 - Reusing a prompt shape for plugin tasks.

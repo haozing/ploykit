@@ -83,6 +83,12 @@ export default definePlugin({
         priority: 5,
       },
       {
+        page: '/',
+        position: 'main.after',
+        component: './components/HomeComponentSlot',
+        priority: 5,
+      },
+      {
         page: '/pricing',
         position: 'main.before',
         component: './slots/PricingMainBefore',

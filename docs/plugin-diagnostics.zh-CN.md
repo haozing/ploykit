@@ -22,6 +22,7 @@
 | SEO/tool routes      | `PLUGIN_TOOL_SEO_REQUIRED`、`PLUGIN_TOOL_SEO_TITLE_REQUIRED`、`PLUGIN_TOOL_SEO_DESCRIPTION_REQUIRED`、`PLUGIN_TOOL_SEO_CANONICAL_REQUIRED`             | 公开工具页 metadata 不完整。                              | 添加 title、description、canonical、robots、sitemap 和 cache metadata。                    |
 | 权限                 | `PLUGIN_PERMISSION_UNKNOWN`、`PLUGIN_ROUTE_PERMISSION_UNDECLARED`、`PLUGIN_CAPABILITY_PERMISSION_MISSING`、`PLUGIN_PERMISSION_UNUSED`                  | 声明权限与 capability 使用不匹配。                        | 在 `plugin.ts` 添加或移除 `Permission.*`。                                                 |
 | 导入                 | `PLUGIN_IMPORT_FORBIDDEN`、`PLUGIN_IMPORT_EXTERNAL_UNDECLARED`、`PLUGIN_NODE_IMPORT_FORBIDDEN`、`PLUGIN_IMPORT_NOT_FOUND`                              | 插件导入宿主内部、未声明外部包、Node builtin 或缺失文件。 | 使用 SDK、本地文件、React，或在 `plugin.dependencies.json` 声明允许外部依赖。              |
+| 外部 npm 依赖        | `PLUGIN_DEPENDENCY_MANIFEST_INVALID`、`PLUGIN_DEPENDENCY_NOT_INSTALLED`、`PLUGIN_DEPENDENCY_NOT_DECLARED_BY_HOST`                                      | 插件依赖清单无效，或依赖没有作为宿主运行时依赖安装。      | 修复 `plugin.dependencies.json`；把依赖加入宿主根 `package.json` 的运行时依赖并安装。      |
 | 环境与危险代码       | `PLUGIN_PROCESS_ENV_FORBIDDEN`、`PLUGIN_EVAL_FORBIDDEN`、`PLUGIN_FUNCTION_FORBIDDEN`                                                                   | 插件绕过宿主边界或执行动态代码。                          | 使用 `ctx.config`、`ctx.secrets` 和显式 handler。                                          |
 | 外部 HTTP            | `PLUGIN_EXTERNAL_FETCH_FORBIDDEN`、`PLUGIN_EGRESS_REQUIRED_FOR_HTTP`、`PLUGIN_EGRESS_ORIGIN_MISSING`、`PLUGIN_EGRESS_DYNAMIC_URL_UNVERIFIED`           | 插件没有通过宿主 egress 边界访问外网。                    | 使用 `ctx.http.fetch(...)`，添加 `Permission.ExternalHttp`，并声明窄范围 `egress` origin。 |
 | 数据集合             | `PLUGIN_COLLECTION_NAME_INVALID`、`PLUGIN_COLLECTION_FIELDS_REQUIRED`、`PLUGIN_COLLECTION_FIELD_TYPE_INVALID`、`PLUGIN_COLLECTION_INDEX_FIELD_UNKNOWN` | 结构化 storage 声明无效。                                 | 使用小写 collection/field 名和支持的字段类型。                                             |
@@ -35,5 +36,6 @@
 - 先修 error，再清 warning。
 - `PLUGIN_PERMISSION_UNUSED` 通常可以移除权限，除非它是为动态路径保留。
 - `PLUGIN_EGRESS_DYNAMIC_URL_UNVERIFIED` 表示静态分析无法证明 URL，保持 `egress` 窄范围并增加运行时测试。
-- `PLUGIN_IMPORT_EXTERNAL_UNDECLARED` 可以通过避免依赖或在 `plugin.dependencies.json` 声明解决。
+- `PLUGIN_IMPORT_EXTERNAL_UNDECLARED` 可以通过避免依赖或在 `plugin.dependencies.json` 声明解决；声明后仍要求宿主把包放在根 `package.json` 的 `dependencies` 或 `optionalDependencies` 中。
+- `PLUGIN_DEPENDENCY_NOT_DECLARED_BY_HOST` 说明包可能只是 dev/transitive 依赖。插件运行时不能依赖这种偶然可解析状态。
 - `PLUGIN_CAPABILITY_DYNAMIC_ACCESS_UNVERIFIED` 通常说明用了 `ctx[someKey]`。优先改成静态的 `ctx.storage`、`ctx.files` 等访问。

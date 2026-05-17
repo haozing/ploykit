@@ -20,6 +20,10 @@
     "pricingAfterTitle": "Plugin pricing follow-up",
     "pricingAfterBody": "This block is inserted after the pricing cards without replacing the host page."
   },
+  "components": {
+    "homeSlotTitle": "Host slot from components directory",
+    "homeSlotBody": "This block comes from the plugin components directory and verifies that the host can install and load plugin-owned UI components."
+  },
   "labPage": {
     "eyebrow": "Host Capability Lab",
     "title": "Real plugin capability probe",

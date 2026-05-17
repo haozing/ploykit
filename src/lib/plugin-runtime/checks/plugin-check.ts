@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { builtinModules } from 'node:module';
+import { builtinModules, createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { hasPluginDiagnosticErrors, type PluginDiagnostic } from '@/plugin-sdk/diagnostics';
@@ -162,6 +162,9 @@ type PluginCheckContract = { id: string } & Partial<
 
 interface PluginDependencyPolicy {
   allowedExternalImports: string[];
+  dependencies: Record<string, string>;
+  manifestPath?: string;
+  malformed?: boolean;
 }
 
 interface ScannedFileResult {
@@ -1784,7 +1787,7 @@ function loadDependencyPolicy(pluginRoot: string): PluginDependencyPolicy {
   const manifestPath = path.join(pluginRoot, 'plugin.dependencies.json');
 
   if (!fs.existsSync(manifestPath)) {
-    return { allowedExternalImports: [] };
+    return { allowedExternalImports: [], dependencies: {} };
   }
 
   try {
@@ -1803,11 +1806,107 @@ function loadDependencyPolicy(pluginRoot: string): PluginDependencyPolicy {
       : [];
 
     return {
+      manifestPath,
+      dependencies:
+        manifest.dependencies && typeof manifest.dependencies === 'object'
+          ? Object.fromEntries(
+              Object.entries(manifest.dependencies as Record<string, unknown>).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[0] === 'string' &&
+                  entry[0].trim().length > 0 &&
+                  typeof entry[1] === 'string' &&
+                  entry[1].trim().length > 0
+              )
+            )
+          : {},
       allowedExternalImports: [...new Set([...dependencyNames, ...allowedExternalImports])],
     };
   } catch {
-    return { allowedExternalImports: [] };
+    return { allowedExternalImports: [], dependencies: {}, manifestPath, malformed: true };
   }
+}
+
+const hostRequire = createRequire(path.join(process.cwd(), 'package.json'));
+let hostRuntimeDependencies: Set<string> | null = null;
+
+function getHostRuntimeDependencies(): Set<string> {
+  if (hostRuntimeDependencies) {
+    return hostRuntimeDependencies;
+  }
+
+  try {
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8')
+    ) as {
+      dependencies?: Record<string, unknown>;
+      optionalDependencies?: Record<string, unknown>;
+    };
+    hostRuntimeDependencies = new Set([
+      ...Object.keys(packageJson.dependencies ?? {}),
+      ...Object.keys(packageJson.optionalDependencies ?? {}),
+    ]);
+  } catch {
+    hostRuntimeDependencies = new Set();
+  }
+
+  return hostRuntimeDependencies;
+}
+
+function buildDependencyPolicyDiagnostics(
+  dependencyPolicy: PluginDependencyPolicy
+): PluginDiagnostic[] {
+  if (!dependencyPolicy.manifestPath) {
+    return [];
+  }
+
+  if (dependencyPolicy.malformed) {
+    return [
+      createDiagnostic(
+        'PLUGIN_DEPENDENCY_MANIFEST_INVALID',
+        'error',
+        'plugin.dependencies.json is not valid JSON.',
+        relativeToCwd(dependencyPolicy.manifestPath),
+        '.',
+        'Fix plugin.dependencies.json so it can be parsed.'
+      ),
+    ];
+  }
+
+  const diagnostics: PluginDiagnostic[] = [];
+  const hostDependencies = getHostRuntimeDependencies();
+
+  for (const [packageName, versionRange] of Object.entries(dependencyPolicy.dependencies)) {
+    try {
+      hostRequire.resolve(packageName);
+    } catch {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_DEPENDENCY_NOT_INSTALLED',
+          'error',
+          `Plugin dependency "${packageName}" is declared but is not installed by the host.`,
+          relativeToCwd(dependencyPolicy.manifestPath),
+          `dependencies.${packageName}`,
+          `Add "${packageName}": "${versionRange}" to the host package.json dependencies and run npm install, or remove the import.`
+        )
+      );
+      continue;
+    }
+
+    if (!hostDependencies.has(packageName)) {
+      diagnostics.push(
+        createDiagnostic(
+          'PLUGIN_DEPENDENCY_NOT_DECLARED_BY_HOST',
+          'error',
+          `Plugin dependency "${packageName}" is installed but is not declared in the host package.json runtime dependencies.`,
+          relativeToCwd(dependencyPolicy.manifestPath),
+          `dependencies.${packageName}`,
+          `Move "${packageName}": "${versionRange}" into the host package.json dependencies, or remove it from plugin.dependencies.json.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
 }
 
 export async function loadPluginDefinition(
@@ -2279,6 +2378,26 @@ function buildDeclaredHandlerDiagnostics(
         `slots.${slotName}.${index}.component`
       );
     });
+  }
+
+  for (const [index, slot] of (contract.hostPages?.slots ?? []).entries()) {
+    checkHandler(
+      'PLUGIN_HOST_PAGE_SLOT_COMPONENT_NOT_FOUND',
+      'Host page slot component',
+      `${slot.page}:${slot.position}`,
+      slot.component,
+      `hostPages.slots.${index}.component`
+    );
+  }
+
+  for (const [index, override] of (contract.hostPages?.overrides ?? []).entries()) {
+    checkHandler(
+      'PLUGIN_HOST_PAGE_OVERRIDE_COMPONENT_NOT_FOUND',
+      'Host page override component',
+      override.page,
+      override.component,
+      `hostPages.overrides.${index}.component`
+    );
   }
 
   if (contract.hooks?.renderHead) {
@@ -2972,6 +3091,7 @@ async function checkPluginRoot(
   const pluginFiles = listPluginFiles(pluginRoot);
   const legacyEntryFiles = listLegacyPluginEntries(pluginRoot);
   const dependencyPolicy = loadDependencyPolicy(pluginRoot);
+  diagnostics.push(...buildDependencyPolicyDiagnostics(dependencyPolicy));
   const allowedExternalImports = [
     ...new Set([
       ...(options.allowedExternalImports ?? []),

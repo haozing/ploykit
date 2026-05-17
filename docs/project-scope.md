@@ -8,9 +8,11 @@ that are important for open-source users and deployers.
 
 - Plugin source is local `plugins/`. There is no remote marketplace, uploaded
   plugin package installation, or license distribution flow yet.
-- `plugin_installations` is global per plugin ID. Workspace/user-scoped
-  resources exist for runs, files, artifacts, connectors, and API keys, but
-  plugin installation itself is not yet tenant-authorized.
+- Plugin installation records are scoped by product, suite or app bundle, and
+  plugin for admin visibility and audit. Runtime-facing surfaces such as
+  navigation, theme, hooks, slots, and host page overrides are filtered through
+  the current product runtime map so stale records from another product do not
+  contaminate the current build or logs.
 - AI is a host capability interface. The runtime enforces permissions, metering,
   and credit hooks, but a production model provider must be wired by the
   deployer.

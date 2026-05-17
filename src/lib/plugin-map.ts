@@ -234,6 +234,7 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
     bundleIds: ["host-capability-lab"],
     plugin: () => import('@/plugins/host-capability-lab/plugin'),
     components: {
+      'components/HomeComponentSlot': () => import('@/plugins/host-capability-lab/components/HomeComponentSlot'),
       'components/StorageProbeClient': () => import('@/plugins/host-capability-lab/components/StorageProbeClient')
     },
     pages: {

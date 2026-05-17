@@ -20,6 +20,10 @@
     "pricingAfterTitle": "定价页插件补充",
     "pricingAfterBody": "这一块插入到定价卡片之后，不会替换宿主页面本身。"
   },
+  "components": {
+    "homeSlotTitle": "组件目录宿主插槽",
+    "homeSlotBody": "这个区块来自插件 components 目录，验证宿主可以安装并加载插件自带 UI 组件。"
+  },
   "labPage": {
     "eyebrow": "宿主能力实验室",
     "title": "真实插件能力探针",

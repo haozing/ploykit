@@ -7,11 +7,11 @@ main content of a host page.
 
 ## Choose The Right Surface
 
-| Need | Contract | Permission |
-| ---- | -------- | ---------- |
-| Add content before or after a host page region | `hostPages.slots` | `Permission.HostPageExtend` |
-| Replace the main content of a host page | `hostPages.overrides` | `Permission.HostPageOverride` |
-| Reuse host header, footer, language switcher, and menu | override `shell` | covered by the override |
+| Need                                                   | Contract              | Permission                    |
+| ------------------------------------------------------ | --------------------- | ----------------------------- |
+| Add content before or after a host page region         | `hostPages.slots`     | `Permission.HostPageExtend`   |
+| Replace the main content of a host page                | `hostPages.overrides` | `Permission.HostPageOverride` |
+| Reuse host header, footer, language switcher, and menu | override `shell`      | covered by the override       |
 
 Do not use `publicAliases` to claim host routes such as `/`, `/about`, or
 `/pricing`. Public aliases are for plugin-owned pages.
@@ -27,6 +27,12 @@ export default definePlugin({
   version: '0.1.0',
   trustLevel: 'trusted',
   permissions: [Permission.HostPageExtend],
+  resources: {
+    locales: {
+      en: './locales/en.json',
+      zh: './locales/zh.json',
+    },
+  },
   hostPages: {
     slots: [
       {
@@ -37,18 +43,27 @@ export default definePlugin({
       {
         page: '/pricing',
         position: 'main.after',
-        component: './slots/PricingNote',
+        component: './components/PricingNote',
       },
     ],
   },
 });
 ```
 
-Slot components receive a `locale` prop when rendered by the host:
+`component` must be a plugin-local module path. Put page-level replacements in
+`./pages/`, reusable UI in `./components/`, and simple slot-only modules in
+`./slots/`; `plugin:doctor` checks that declared modules exist.
+
+Slot components receive `PluginRuntimeSlotProps` from the host, including
+`pluginId`, `page`, `position`, `i18n`, and `assets`:
 
 ```tsx
-export default function HomeBanner({ locale }: { locale: string }) {
-  return <section>{locale === 'zh' ? '插件横幅' : 'Plugin banner'}</section>;
+import { createPluginTranslator, type PluginRuntimeSlotProps } from '@ploykit/plugin-sdk';
+
+export default function HomeBanner(props: PluginRuntimeSlotProps) {
+  const t = createPluginTranslator(props.i18n);
+
+  return <section>{t('home.banner')}</section>;
 }
 ```
 
@@ -100,7 +115,8 @@ export default definePlugin({
 ```
 
 Override page components receive the normal `PluginRuntimePageProps`, including
-`locale`, `pluginId`, `requestPath`, and route metadata.
+`pluginId`, `localPath`, `requestPath`, `params`, `query`, `i18n`, `assets`, and
+route metadata.
 
 ## Rules
 
@@ -110,5 +126,7 @@ Override page components receive the normal `PluginRuntimePageProps`, including
 - Reuse the host header and footer by default.
 - Keep visible UI localized for every locale listed in `requiredLocales`.
 - Keep SEO metadata aligned with the replacement content.
+- Read i18n and assets through `PluginRuntimeSlotProps` or
+  `PluginRuntimePageProps`; do not assume the host passes a bare `locale` prop.
 - Run `npm run plugin:doctor -- plugins/<plugin-id>` after changing the
   contract.

@@ -6,12 +6,16 @@ entry point, and the host derives runtime loading from that contract.
 ```text
 plugins/<plugin-id>/
 |-- plugin.ts
+|-- plugin.dependencies.json
 |-- pages/
 |-- api/
+|-- components/
+|-- slots/
 |-- lifecycle/
 |-- jobs/
 |-- events/
 |-- webhooks/
+|-- locales/
 |-- assets/
 `-- tests/
 ```
@@ -66,6 +70,50 @@ export default definePlugin({
   },
 });
 ```
+
+## External npm Dependencies
+
+Plugins may import npm packages that the host has installed and declared as
+runtime dependencies, such as UI component libraries, charting libraries, and
+flow editors. Plugins do not run install scripts themselves and should not rely
+on accidental transitive dependencies.
+
+Declare plugin-owned npm imports in `plugin.dependencies.json` at the plugin
+root:
+
+```json
+{
+  "dependencies": {
+    "@xyflow/react": "^12.3.6",
+    "recharts": "^3.2.1"
+  }
+}
+```
+
+Then import them from plugin code:
+
+```tsx
+import { ReactFlow } from '@xyflow/react';
+```
+
+The host must also list those packages in the repository root `package.json`
+`dependencies` or `optionalDependencies` and run `npm install`. `plugin:doctor`
+rejects these cases:
+
+- `plugin.dependencies.json` is not valid JSON.
+- The plugin declares a dependency that the host has not installed.
+- The package resolves, but only as a dev or transitive dependency rather than a
+  host runtime dependency.
+
+`react`, `react-dom`, `@ploykit/plugin-sdk`, `@ploykit/plugin-sdk/react`, and
+`@ploykit/plugin-sdk/testing` are base imports allowed by the host and do not
+need to be listed in `plugin.dependencies.json`.
+
+If a dependency is really a model provider, database driver, credentialed
+external service, or complex domain ability, prefer exposing it as `ctx.ai`,
+`ctx.services`, `ctx.connectors`, or another host capability. The plugin should
+consume that capability through `ctx.*` instead of pulling the package directly
+into plugin runtime code.
 
 ## Public Tool Pages
 
