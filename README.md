@@ -42,6 +42,10 @@ storage, billing, routing, and operational boundaries.
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | ![Public JSON tool](public/media/screenshots/public-json-tool.png) | ![AI plugin workflow](public/media/screenshots/ai-plugin-workflow.png) |
 
+| Plugin management                                                    | Runtime sample                                                               |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| ![Plugin management](public/media/screenshots/plugin-management.png) | ![Plugin runtime sample](public/media/screenshots/plugin-runtime-sample.png) |
+
 ## Design Philosophy
 
 PloyKit follows a small set of development conventions. They are not only style
@@ -76,15 +80,16 @@ In practice:
 
 ## Tech Stack
 
-- Next.js `16.0.8`, App Router, standalone output
-- React `19.1.0`
-- TypeScript 5, ESLint 9, Prettier 3
-- Tailwind CSS 4, Radix UI, Lucide React, Recharts, Sonner
-- Better Auth `1.3.x`
-- PostgreSQL, Drizzle ORM, Drizzle Kit
+- Next.js `16.2.6`, App Router, standalone output
+- React `19.2.6`
+- TypeScript `6.0.3`, ESLint `10.4.0`, Prettier `3.8.3`
+- Tailwind CSS `4.3.0`, Radix UI, Lucide React, Recharts `3.8.1`, Sonner
+- Better Auth `1.6.11`
+- PostgreSQL, Drizzle ORM `0.45.2`, Drizzle Kit `0.31.10`
 - next-intl with `zh` and `en`
 - Vitest, Testing Library, Playwright
-- Stripe SDK `17.x`
+- Stripe SDK `22.1.1`
+- Zod `4.4.3`
 
 ## Repository Layout
 
@@ -109,11 +114,32 @@ In practice:
 `-- docs/                    # Detailed project documentation
 ```
 
+## Brand And Media
+
+Public assets live under `public/` and the app-facing paths are mirrored in
+`site.config.ts` under `siteConfig.assets`.
+
+- Browser icons: `public/favicon.svg`, `public/favicon.ico`, and
+  `public/brand/apple-touch-icon.png`.
+- Brand and social images: `public/brand/ploykit-logo.svg`,
+  `public/brand/ploykit-mark.svg`, `public/brand/og-default.png`,
+  `public/media/social/github-preview.png`, and
+  `public/media/social/docs-preview.png`.
+- Product screenshots: `public/media/screenshots/*.png`.
+- Demo loop: `public/media/demo/plugin-create-doctor-loop.gif` and
+  `public/media/demo/plugin-create-doctor-loop.mp4`.
+
+Refresh generated media with:
+
+```bash
+npm run media:generate
+```
+
 ## Quick Start
 
 Prerequisites:
 
-- Node.js `>=20.11 <23`
+- Node.js `>=22 <26`
 - npm `>=10`
 - PostgreSQL, or Docker for the bundled local PostgreSQL service
 

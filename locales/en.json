@@ -1028,7 +1028,7 @@
       "runtimeCheckMessages": {
         "env": "Environment variables validated.",
         "db": "Database connection verified.",
-        "pluginMap": "Plugin map manifest is missing or invalid.",
+        "pluginMap": "Plugin map check completed: {message}",
         "rls": "RLS policies validated.",
         "security": "Security baseline check completed: {message}",
         "storage": "BlobStore runtime verified.",

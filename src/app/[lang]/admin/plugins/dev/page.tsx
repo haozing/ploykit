@@ -77,6 +77,10 @@ function runtimeCheckMessage(
 ): string {
   const template = labels[check.key];
 
+  if (!template || template.startsWith('dashboard.pluginDevConsolePage.runtimeCheckMessages.')) {
+    return check.message;
+  }
+
   if (template) {
     return template
       .replace('{message}', check.message)

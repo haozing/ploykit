@@ -14,6 +14,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useTranslations } from 'next-intl';
 import { AppNav } from './app-nav';
 import type { NavGroupConfig } from '@/lib/ui/navigation/types';
+import { siteConfig } from '@/site.config';
 
 interface AppSidebarProps {
   navGroups: NavGroupConfig[];
@@ -32,7 +33,7 @@ export function AppSidebar({ navGroups }: AppSidebarProps) {
           className="group flex items-center gap-2 font-semibold transition-all duration-200 hover:gap-3"
         >
           <Image
-            src="/brand/ploykit-mark.svg"
+            src={siteConfig.assets.brand.mark}
             alt=""
             width={32}
             height={32}

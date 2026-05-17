@@ -84,8 +84,8 @@ root:
 ```json
 {
   "dependencies": {
-    "@xyflow/react": "^12.3.6",
-    "recharts": "^3.2.1"
+    "@xyflow/react": "^12.10.2",
+    "recharts": "^3.8.1"
   }
 }
 ```

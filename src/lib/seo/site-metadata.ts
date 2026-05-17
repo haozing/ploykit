@@ -14,7 +14,7 @@ export function createSitePageMetadata(input: {
   description: string;
 }): Metadata {
   const canonicalUrl = localizedAbsoluteUrl(input.locale, input.path);
-  const ogImageUrl = absoluteUrl('/opengraph-image');
+  const ogImageUrl = absoluteUrl(siteConfig.assets.brand.openGraph);
 
   return {
     title: input.title,

@@ -1,5 +1,5 @@
+import type { PluginRequest } from '@ploykit/plugin-sdk';
 import { createPluginTestHost, testPlugin } from '@ploykit/plugin-sdk/testing';
-import type { z } from 'zod';
 import plugin from '../plugin';
 import notesApi from '../api/notes';
 
@@ -17,13 +17,14 @@ export default testPlugin(plugin, async ({ ctx, plugin }) => {
     throw new Error('Internal sample plugin must declare its notes collection.');
   }
 
+  const sampleNoteJson: PluginRequest['json'] = async (schema) =>
+    schema.parse({ title: 'First note', status: 'open' });
+
   await notesApi.post?.({
     ...ctx,
     request: {
       ...ctx.request,
-      async json<TSchema extends z.ZodType>(schema: TSchema): Promise<z.output<TSchema>> {
-        return schema.parse({ title: 'First note', status: 'open' }) as z.output<TSchema>;
-      },
+      json: sampleNoteJson,
     },
   });
 

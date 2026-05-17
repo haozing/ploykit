@@ -123,7 +123,7 @@ export default definePlugin({
           canonical: '/about',
           robots: { index: true, follow: true },
           openGraph: {
-            image: '/opengraph-image',
+            image: '/brand/og-default.png',
             type: 'website',
           },
           structuredData: {

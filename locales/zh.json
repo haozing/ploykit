@@ -1028,7 +1028,7 @@
       "runtimeCheckMessages": {
         "env": "环境变量已通过校验。",
         "db": "数据库连接已验证。",
-        "pluginMap": "插件映射清单缺失或无效。",
+        "pluginMap": "插件映射检查完成：{message}",
         "rls": "RLS 策略已完成校验。",
         "security": "安全基线检查完成：{message}",
         "storage": "BlobStore 运行时已验证。",

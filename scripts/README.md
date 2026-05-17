@@ -125,7 +125,10 @@ npm run plugins:templates
 
 ### `generate-open-source-media.ts`
 
-Generates open-source brand, social, demo, and screenshot assets.
+Generates open-source brand, social, demo, and screenshot assets under
+`public/brand` and `public/media`. It also refreshes the browser SVG favicon at
+`public/favicon.svg`; `public/favicon.ico` remains the checked-in ICO fallback.
+Product screenshots are captured only when the configured app URL is reachable.
 
 ```bash
 npm run media:generate

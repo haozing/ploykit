@@ -25,6 +25,7 @@ import { ClientNav } from './ClientNav';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { UserMenuClient } from './UserMenuClient';
 import { getSiteHeaderNavItems } from '@/lib/ui/navigation';
+import { siteConfig } from '@/site.config';
 
 /**
  * ===========================================================================
@@ -41,8 +42,8 @@ function DefaultLogo() {
       }}
     >
       <Image
-        src="/brand/ploykit-logo.svg"
-        alt="PloyKit"
+        src={siteConfig.assets.brand.logo}
+        alt={siteConfig.name}
         width={210}
         height={48}
         priority

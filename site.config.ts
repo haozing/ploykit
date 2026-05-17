@@ -11,6 +11,33 @@ export const siteConfig: SiteConfig = {
   name: 'PloyKit',
   description: 'Pluggable SaaS Platform',
 
+  assets: {
+    brand: {
+      logo: '/brand/ploykit-logo.svg',
+      mark: '/brand/ploykit-mark.svg',
+      faviconSvg: '/favicon.svg',
+      faviconIco: '/favicon.ico',
+      appleTouchIcon: '/brand/apple-touch-icon.png',
+      openGraph: '/brand/og-default.png',
+    },
+    social: {
+      githubPreview: '/media/social/github-preview.png',
+      docsPreview: '/media/social/docs-preview.png',
+    },
+    screenshots: {
+      adminDashboard: '/media/screenshots/dashboard-admin.png',
+      pluginDevConsole: '/media/screenshots/plugin-dev-console.png',
+      pluginManagement: '/media/screenshots/plugin-management.png',
+      pluginRuntimeSample: '/media/screenshots/plugin-runtime-sample.png',
+      publicJsonTool: '/media/screenshots/public-json-tool.png',
+      aiPluginWorkflow: '/media/screenshots/ai-plugin-workflow.png',
+    },
+    demo: {
+      pluginCreateDoctorLoopGif: '/media/demo/plugin-create-doctor-loop.gif',
+      pluginCreateDoctorLoopMp4: '/media/demo/plugin-create-doctor-loop.mp4',
+    },
+  },
+
   layout: {
     /**
      * Header component source.

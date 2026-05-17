@@ -164,7 +164,7 @@ export default definePlugin({
           description: 'Format, inspect, and copy JSON in the Capability Demo tool.',
           canonical: '/tools/json-format',
           robots: { index: true, follow: true },
-          openGraph: { image: '/opengraph-image' },
+          openGraph: { image: '/brand/og-default.png' },
           structuredData: {
             '@context': 'https://schema.org',
             '@type': 'SoftwareApplication',
@@ -181,7 +181,7 @@ export default definePlugin({
               description: 'Format, inspect, and copy JSON from a plugin-owned public alias.',
               canonical: '/json',
               robots: { index: true, follow: true },
-              openGraph: { image: '/opengraph-image' },
+              openGraph: { image: '/brand/og-default.png' },
               structuredData: {
                 '@context': 'https://schema.org',
                 '@type': 'SoftwareApplication',

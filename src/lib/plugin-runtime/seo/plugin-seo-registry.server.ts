@@ -50,7 +50,9 @@ export async function createHostPageOverrideMetadata(input: {
 
   const { title, description } = await hostPageOverrideText(override, input.locale);
   const canonicalUrl = localizedAbsoluteUrl(input.locale, override.seo.canonical);
-  const ogImageUrl = absoluteUrl(override.seo.openGraph?.image ?? '/opengraph-image');
+  const ogImageUrl = absoluteUrl(
+    override.seo.openGraph?.image ?? siteConfig.assets.brand.openGraph
+  );
 
   return {
     title,

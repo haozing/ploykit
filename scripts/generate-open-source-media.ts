@@ -15,6 +15,7 @@ const BASE_URL =
 const ADMIN_EMAIL = process.env.PLOYKIT_MEDIA_ADMIN_EMAIL ?? 'admin@example.com';
 const ADMIN_PASSWORD = process.env.PLOYKIT_MEDIA_ADMIN_PASSWORD ?? 'Admin@123456';
 
+const PUBLIC_DIR = path.join(ROOT, 'public');
 const BRAND_DIR = path.join(ROOT, 'public/brand');
 const SCREENSHOT_DIR = path.join(ROOT, 'public/media/screenshots');
 const SOCIAL_DIR = path.join(ROOT, 'public/media/social');
@@ -242,6 +243,7 @@ async function renderHtml(
 async function generateBrand(browser: Browser) {
   await writeText(path.join(BRAND_DIR, 'ploykit-mark.svg'), markSvg(96));
   await writeText(path.join(BRAND_DIR, 'favicon.svg'), markSvg(96));
+  await writeText(path.join(PUBLIC_DIR, 'favicon.svg'), markSvg(96));
   await writeText(path.join(BRAND_DIR, 'ploykit-logo.svg'), logoSvg());
 
   await renderHtml(
@@ -422,7 +424,7 @@ async function capturePage(
       .waitFor({ timeout: NAVIGATION_TIMEOUT_MS });
     await page.addStyleTag({
       content:
-        '*{animation:none!important;transition:none!important;caret-color:transparent!important} input,textarea{caret-color:transparent!important}',
+        '*{animation:none!important;transition:none!important;caret-color:transparent!important} input,textarea{caret-color:transparent!important} nextjs-portal,nextjs-dev-overlay,nextjs-toast,[data-nextjs-dialog-overlay]{display:none!important;visibility:hidden!important}',
     });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, outputName), fullPage: false });
     console.log(`wrote ${path.join('public/media/screenshots', outputName)}`);

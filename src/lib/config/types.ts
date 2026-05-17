@@ -81,6 +81,60 @@ export interface FooterConfig {
 }
 
 /**
+ * Public brand and media assets.
+ *
+ * Paths are rooted at Next.js public/ and should start with "/".
+ */
+export interface BrandAssetsConfig {
+  /** Full logo used by the default public header */
+  logo: string;
+
+  /** Compact mark used by dashboard chrome and generated media */
+  mark: string;
+
+  /** Browser SVG favicon */
+  faviconSvg: string;
+
+  /** Browser ICO favicon fallback */
+  faviconIco: string;
+
+  /** Apple touch icon */
+  appleTouchIcon: string;
+
+  /** Default 1200x630 Open Graph image */
+  openGraph: string;
+}
+
+export interface SocialMediaAssetsConfig {
+  /** Repository/social preview image */
+  githubPreview: string;
+
+  /** Documentation preview image */
+  docsPreview: string;
+}
+
+export interface ScreenshotMediaAssetsConfig {
+  adminDashboard: string;
+  pluginDevConsole: string;
+  pluginManagement: string;
+  pluginRuntimeSample: string;
+  publicJsonTool: string;
+  aiPluginWorkflow: string;
+}
+
+export interface DemoMediaAssetsConfig {
+  pluginCreateDoctorLoopGif: string;
+  pluginCreateDoctorLoopMp4: string;
+}
+
+export interface SiteAssetsConfig {
+  brand: BrandAssetsConfig;
+  social: SocialMediaAssetsConfig;
+  screenshots: ScreenshotMediaAssetsConfig;
+  demo: DemoMediaAssetsConfig;
+}
+
+/**
  * Complete Site Configuration
  *
  * This is the type definition for site.config.ts
@@ -91,6 +145,9 @@ export interface SiteConfig {
 
   /** Site description */
   description: string;
+
+  /** Public brand and media assets */
+  assets: SiteAssetsConfig;
 
   /** Layout configuration */
   layout: LayoutConfig;
