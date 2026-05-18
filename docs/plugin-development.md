@@ -39,7 +39,9 @@ npm run plugins:scan
 Each external source can either be a directory containing plugin subdirectories
 or a direct plugin root containing `plugin.ts`. The default `plugins/` directory
 is always scanned as well. After changing the value, rerun `npm run
-plugins:scan` and commit the generated plugin map.
+plugins:scan`. The committed `src/lib/plugin-map.ts` tracks the default
+`plugins/` tree; external plugin entries are written to the runtime artifact
+`.runtime/plugin-map.ts` by default, or to `PLOYKIT_PLUGIN_MAP_FILE` when set.
 
 Run `npm run plugins:check` to validate every configured source directory, or a
 targeted check such as `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`.
@@ -47,10 +49,11 @@ On Windows, external plugin modules must be on the same drive as the project
 because the generated map uses relative static imports; use a symlink or junction
 inside the project when the plugin source lives elsewhere.
 
-TypeScript resolves bare package imports from the external file location. For
-external directories outside the project, either place them in a workspace that
-can resolve the host `node_modules`, install their dev dependencies there, or
-use a project-local symlink/junction.
+`plugin:test` and `plugin:doctor` create a temporary dependency bridge for
+external plugin roots, so tests can resolve host dependencies such as React from
+the PloyKit install without copying the plugin or installing per-plugin
+dependencies. Use `--dependency-root <host-root>` when the dependency root is
+not the PloyKit project root.
 
 For standalone deployments, the configured external directories must be present
 at the same relative paths used during build, or mounted into the runtime
@@ -60,14 +63,15 @@ standalone asset script; directories outside the project should be mounted.
 ## Contract Entry
 
 `plugin.ts` is the contract. The host scans plugin contracts from `plugins/`
-and `PLOYKIT_PLUGIN_DIRS` with `scripts/generate-plugin-map.ts`, writes
-`src/lib/plugin-map.ts`, and loads runtime pages, APIs, jobs, events, webhooks,
-lifecycle handlers, slots, menus, assets, and capabilities from that generated
-map.
+and `PLOYKIT_PLUGIN_DIRS` with `scripts/generate-plugin-map.ts`, writes the
+default map to `src/lib/plugin-map.ts`, writes external entries to the active
+runtime map, and loads runtime pages, APIs, jobs, events, webhooks, lifecycle
+handlers, slots, menus, assets, and capabilities from those generated maps.
 
 The generated map is a module index only. It does not assign plugins to
 products, suites, or bundles; those runtime placement decisions live in
-installation/catalog state.
+installation/catalog state. External products can provide that placement with
+`PLOYKIT_RUNTIME_CATALOG_FILE` or `plugins:apply -- --catalog <file>`.
 
 For plugins that need to extend or override host-owned pages such as the home,
 about, or pricing pages, see [host page slots and overrides](host-page-overrides.md).

@@ -51,6 +51,21 @@ function readSeedString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function readSeedBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function readSeedNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
 function resolveEnvRef(ref: string | undefined): string | undefined {
   if (!ref) {
     return undefined;
@@ -179,7 +194,7 @@ async function getCatalogBundle(
     .where(and(...conditions))
     .limit(1);
   if (!bundle) {
-    const runtimeBundle = getRuntimeAppBundle(bundleId);
+    const runtimeBundle = getRuntimeAppBundle(bundleId, productId);
     if (runtimeBundle && (!productId || runtimeBundle.productId === productId)) {
       return runtimeBundle;
     }
@@ -195,10 +210,26 @@ async function getCatalogBundle(
   return toRuntimeBundle(bundle, members);
 }
 
-async function findSeedPluginId(
+async function assertPluginDeclaresService(pluginId: string, serviceName: string): Promise<void> {
+  const entry = getPluginRuntimeMapEntry(pluginId);
+  const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
+  if (!contract.serviceRequirements.some((service) => service.name === serviceName)) {
+    throw new Error(
+      `Service connection seed "${serviceName}" points to plugin "${pluginId}", but the plugin does not declare that serviceRequirements entry.`
+    );
+  }
+}
+
+async function resolveSeedPluginId(
   bundlePlugins: readonly { pluginId: string }[],
-  serviceName: string
+  serviceName: string,
+  explicitPluginId?: string
 ): Promise<string | undefined> {
+  if (explicitPluginId) {
+    await assertPluginDeclaresService(explicitPluginId, serviceName);
+    return explicitPluginId;
+  }
+
   for (const plugin of bundlePlugins) {
     const entry = getPluginRuntimeMapEntry(plugin.pluginId);
     const contract = await pluginRuntimeRegistry.getOrLoad(plugin.pluginId, entry);
@@ -207,7 +238,9 @@ async function findSeedPluginId(
     }
   }
 
-  return bundlePlugins[0]?.pluginId;
+  throw new Error(
+    `Service connection seed "${serviceName}" does not match any plugin serviceRequirements in bundle plugins.`
+  );
 }
 
 export class PluginBundleInstallerService {
@@ -382,13 +415,19 @@ export class PluginBundleInstallerService {
           authUsernameRef,
           authPasswordRef,
         });
-        const pluginId =
-          readSeedString(seed.pluginId) ?? (await findSeedPluginId(bundle.plugins, serviceName));
+        const pluginId = await resolveSeedPluginId(
+          bundle.plugins,
+          serviceName,
+          readSeedString(seed.pluginId)
+        );
         if (!pluginId) {
           throw new Error(
             `Service connection seed "${serviceName}" has no plugin to validate against.`
           );
         }
+        const actorClaimsSecretRef = readSeedString(seed.actorClaimsSecretRef);
+        const actorClaimsEnabled =
+          readSeedBoolean(seed.actorClaimsEnabled) ?? Boolean(actorClaimsSecretRef);
 
         await handleServiceConnectionAction(
           {
@@ -398,8 +437,8 @@ export class PluginBundleInstallerService {
             ownerType,
             ownerId,
             serviceName,
-            scopeType: 'global',
-            scopeId: null,
+            scopeType: readSeedString(seed.scopeType) === 'workspace' ? 'workspace' : 'global',
+            scopeId: readSeedString(seed.scopeId) ?? null,
             environment: options.environment ?? null,
             baseUrl,
             authType,
@@ -407,18 +446,21 @@ export class PluginBundleInstallerService {
             authUsernameSource: seedSecretSource(authUsernameRef),
             authPasswordSource: seedSecretSource(authPasswordRef),
             authHeaderName: readSeedString(seed.authHeaderName) ?? null,
-            actorClaimsEnabled: Boolean(seed.actorClaimsSecretRef),
-            actorClaimsType: 'hmac',
-            actorClaimsSecretSource: seedSecretSource(seed.actorClaimsSecretRef),
-            actorClaimsTtlSeconds: 60,
-            timeoutMs: 30000,
-            retryAttempts: 0,
-            retryBackoffMs: 250,
-            maxResponseBytes: 10485760,
-            healthMethod: 'GET',
+            actorClaimsEnabled,
+            actorClaimsType: readSeedString(seed.actorClaimsType) === 'jwt' ? 'jwt' : 'hmac',
+            actorClaimsAudience: readSeedString(seed.actorClaimsAudience) ?? null,
+            actorClaimsKeyId: readSeedString(seed.actorClaimsKeyId) ?? null,
+            actorClaimsSecretSource: seedSecretSource(actorClaimsSecretRef),
+            actorClaimsTtlSeconds: readSeedNumber(seed.actorClaimsTtlSeconds) ?? 60,
+            timeoutMs: readSeedNumber(seed.timeoutMs) ?? 30000,
+            retryAttempts: readSeedNumber(seed.retryAttempts) ?? 0,
+            retryBackoffMs: readSeedNumber(seed.retryBackoffMs) ?? 250,
+            maxResponseBytes: readSeedNumber(seed.maxResponseBytes) ?? 10485760,
+            healthPath: readSeedString(seed.healthPath) ?? null,
+            healthMethod: readSeedString(seed.healthMethod)?.toUpperCase() ?? 'GET',
             healthExpectedStatus: Number(seed.healthExpectedStatus ?? 200),
-            status: 'active',
-            metadata: { source: 'bundle-seed', bundleId: bundle.id },
+            status: readSeedString(seed.status) === 'disabled' ? 'disabled' : 'active',
+            metadata: { source: 'bundle-seed', bundleId: bundle.id, ...asRecord(seed.metadata) },
           },
           options.userId
         );

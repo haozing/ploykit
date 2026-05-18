@@ -58,8 +58,10 @@ npm run db:migrate
 ### `generate-plugin-map.ts`
 
 Scans the default `plugins/` directory and any external plugin source
-directories configured with `PLOYKIT_PLUGIN_DIRS`, then generates
-`src/lib/plugin-map.ts`.
+directories configured with `PLOYKIT_PLUGIN_DIRS`. Default plugins are generated
+into `src/lib/plugin-map.ts`; external plugin entries are generated into the
+active runtime artifact `.runtime/plugin-map.ts` by default, or
+`PLOYKIT_PLUGIN_MAP_FILE` when configured.
 
 Current plugin entrypoint:
 
@@ -90,12 +92,13 @@ npm run plugins:scan
 npm run plugins:check
 ```
 
-`npm run plugins:check` verifies the generated map is current and then runs the
-plugin runtime checker across all configured plugin source directories.
+`npm run plugins:check` verifies the generated maps are current and then runs
+the plugin runtime checker across all configured plugin source directories.
 
 ### `watch-plugins.ts`
 
-Watches runtime plugin files in development and regenerates `src/lib/plugin-map.ts`.
+Watches runtime plugin files in development and regenerates the active plugin
+map files.
 
 ```bash
 npm run dev:watch

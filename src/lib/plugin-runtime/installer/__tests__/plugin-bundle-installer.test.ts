@@ -93,6 +93,19 @@ const bundleRow = {
           ownerType: 'suite',
           baseUrl: 'https://runlynk.example.test',
           authSecretRef: 'env:RUNLYNK_SERVICE_TOKEN',
+          actorClaimsEnabled: true,
+          actorClaimsSecretRef: 'env:RUNLYNK_ACTOR_SECRET',
+          actorClaimsAudience: 'run-api',
+          actorClaimsKeyId: 'default',
+          actorClaimsTtlSeconds: 300,
+          healthPath: '/healthz',
+          healthMethod: 'HEAD',
+          healthExpectedStatus: 204,
+          timeoutMs: 10000,
+          retryAttempts: 2,
+          retryBackoffMs: 500,
+          maxResponseBytes: 1048576,
+          metadata: { tier: 'dev' },
         },
       ],
     },
@@ -143,6 +156,9 @@ describe('PluginBundleInstallerService', () => {
     mocks.pluginRuntimeInstallerService.enablePlugin.mockResolvedValue({ success: true });
     mocks.handleServiceConnectionAction.mockResolvedValue({ success: true });
     mocks.getRuntimeAppBundle.mockReturnValue(null);
+    mocks.pluginRuntimeRegistry.getOrLoad.mockResolvedValue({
+      serviceRequirements: [{ name: 'run-api' }],
+    });
   });
 
   it('plans a bundle from the database catalog', async () => {
@@ -200,7 +216,7 @@ describe('PluginBundleInstallerService', () => {
       bundleId: 'core-dev-tools',
       dryRun: true,
     });
-    expect(mocks.getRuntimeAppBundle).toHaveBeenCalledWith('core-dev-tools');
+    expect(mocks.getRuntimeAppBundle).toHaveBeenCalledWith('core-dev-tools', 'ploykit');
     expect(mocks.syncRuntimeCatalog).not.toHaveBeenCalled();
     expect(result.steps).toEqual(
       expect.arrayContaining([
@@ -248,6 +264,19 @@ describe('PluginBundleInstallerService', () => {
         baseUrl: 'https://runlynk.example.test',
         authType: 'bearer',
         authSecretSource: { type: 'env', name: 'RUNLYNK_SERVICE_TOKEN' },
+        actorClaimsEnabled: true,
+        actorClaimsAudience: 'run-api',
+        actorClaimsKeyId: 'default',
+        actorClaimsSecretSource: { type: 'env', name: 'RUNLYNK_ACTOR_SECRET' },
+        actorClaimsTtlSeconds: 300,
+        healthPath: '/healthz',
+        healthMethod: 'HEAD',
+        healthExpectedStatus: 204,
+        timeoutMs: 10000,
+        retryAttempts: 2,
+        retryBackoffMs: 500,
+        maxResponseBytes: 1048576,
+        metadata: expect.objectContaining({ source: 'bundle-seed', tier: 'dev' }),
       }),
       'system'
     );
@@ -313,5 +342,27 @@ describe('PluginBundleInstallerService', () => {
         expect.objectContaining({ type: 'enable', status: 'applied' }),
       ])
     );
+  });
+
+  it('rejects service seeds that are not declared by the target plugin', async () => {
+    mockCatalogSelects([bundleRow], [bundleMembers[0]]);
+    mocks.pluginQueryService.getInstallation.mockResolvedValue({
+      pluginId: 'runlynk-product',
+      productId: 'runlynk',
+      suiteId: 'runlynk-suite',
+      bundleId: 'runlynk-bundle',
+      enabled: true,
+      installStatus: 'installed',
+    });
+    mocks.pluginRuntimeRegistry.getOrLoad.mockResolvedValue({
+      serviceRequirements: [{ name: 'other-api' }],
+    });
+
+    await expect(
+      new PluginBundleInstallerService().applyBundle({
+        bundleId: 'runlynk-bundle',
+        productId: 'runlynk',
+      })
+    ).rejects.toThrow(/does not declare that serviceRequirements entry/);
   });
 });

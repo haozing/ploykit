@@ -12,11 +12,11 @@ import {
   formatPluginSourcePath,
   getPluginSourceTargets,
 } from '@/lib/plugin-runtime/plugin-source-dirs';
-
-const PLUGIN_MAP_MANIFEST_FILE = path.join(process.cwd(), 'src/lib/plugin-map.manifest.json');
+import { getActivePluginMapFiles } from '@/lib/plugin-runtime/plugin-map-files';
 
 interface PluginMapManifest {
   version: number;
+  sourceDirs?: Array<{ path: string; kind?: string; directPluginRoot?: boolean }>;
   plugins: Array<{ id: string; rootDir: string }>;
 }
 
@@ -53,14 +53,15 @@ export const pluginMapCheck: RuntimeCheck = {
       };
     }
 
-    const manifest = readPluginMapManifest();
+    const activeFiles = getActivePluginMapFiles();
+    const manifest = readPluginMapManifest(activeFiles.manifestFile);
     if (!manifest) {
       return {
         key: 'plugin-map',
         status: 'failed',
         severity: 'error',
         message: 'Plugin map manifest is missing or invalid',
-        fix: 'Run "npm run plugins:scan", then commit src/lib/plugin-map.ts and src/lib/plugin-map.manifest.json',
+        fix: `Run "npm run plugins:scan" to update ${path.relative(process.cwd(), activeFiles.manifestFile)}.`,
       };
     }
     const declaredPlugins = manifest.plugins.map((plugin) => plugin.rootDir);
@@ -88,7 +89,7 @@ export const pluginMapCheck: RuntimeCheck = {
         status: 'failed',
         severity: 'error',
         message: messages.join('; '),
-        fix: 'Run "npm run plugins:scan", then commit src/lib/plugin-map.ts and src/lib/plugin-map.manifest.json',
+        fix: `Run "npm run plugins:scan" to update ${path.relative(process.cwd(), activeFiles.manifestFile)}.`,
       };
     }
 
@@ -101,18 +102,16 @@ export const pluginMapCheck: RuntimeCheck = {
   },
 };
 
-function readPluginMapManifest(): PluginMapManifest | null {
-  if (!fs.existsSync(PLUGIN_MAP_MANIFEST_FILE)) {
+function readPluginMapManifest(manifestFile: string): PluginMapManifest | null {
+  if (!fs.existsSync(manifestFile)) {
     return null;
   }
 
   try {
-    const manifest = JSON.parse(
-      fs.readFileSync(PLUGIN_MAP_MANIFEST_FILE, 'utf-8')
-    ) as PluginMapManifest;
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf-8')) as PluginMapManifest;
 
     if (
-      manifest.version !== 4 ||
+      manifest.version !== 5 ||
       !Array.isArray(manifest.plugins) ||
       manifest.plugins.some(
         (plugin) => !plugin || typeof plugin.id !== 'string' || typeof plugin.rootDir !== 'string'

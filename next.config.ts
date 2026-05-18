@@ -1,8 +1,51 @@
 import type { NextConfig } from 'next';
+import fs from 'fs';
 import path from 'path';
 import createNextIntlPlugin from 'next-intl/plugin';
+import {
+  getActivePluginMapFiles,
+  getSourcePluginMapFiles,
+  hasConfiguredRuntimePluginMapFiles,
+} from './src/lib/plugin-runtime/plugin-map-files';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+
+function ensureActivePluginMapForWebpack(): string | null {
+  const active = getActivePluginMapFiles(__dirname);
+  const source = getSourcePluginMapFiles(__dirname);
+  if (!active.runtimeArtifact || active.mapFile === source.mapFile) {
+    return null;
+  }
+
+  if (!fs.existsSync(active.mapFile)) {
+    if (hasConfiguredRuntimePluginMapFiles()) {
+      throw new Error(
+        `Active plugin map file is missing: ${path.relative(
+          __dirname,
+          active.mapFile
+        )}. Run npm run plugins:scan or update PLOYKIT_PLUGIN_MAP_FILE.`
+      );
+    }
+    fs.mkdirSync(path.dirname(active.mapFile), { recursive: true });
+    fs.copyFileSync(source.mapFile, active.mapFile);
+  }
+  if (!fs.existsSync(active.manifestFile)) {
+    if (hasConfiguredRuntimePluginMapFiles()) {
+      throw new Error(
+        `Active plugin map manifest file is missing: ${path.relative(
+          __dirname,
+          active.manifestFile
+        )}. Run npm run plugins:scan or update PLOYKIT_PLUGIN_MAP_MANIFEST_FILE.`
+      );
+    }
+    if (fs.existsSync(source.manifestFile)) {
+      fs.mkdirSync(path.dirname(active.manifestFile), { recursive: true });
+      fs.copyFileSync(source.manifestFile, active.manifestFile);
+    }
+  }
+
+  return active.mapFile;
+}
 
 const nextConfig: NextConfig = {
   typedRoutes: false,
@@ -26,6 +69,7 @@ const nextConfig: NextConfig = {
 
   // Keep webpack aliases in sync with tsconfig.json.
   webpack: (config, { isServer }) => {
+    const activePluginMap = ensureActivePluginMapForWebpack();
     const resolveModules = new Set([
       path.resolve(__dirname, './node_modules'),
       ...(config.resolve.modules || []),
@@ -47,6 +91,9 @@ const nextConfig: NextConfig = {
       // @/* -> ./src/* (Next.js default, but explicit is clearer)
       '@': path.resolve(__dirname, './src'),
     };
+    if (activePluginMap) {
+      config.resolve.alias['@/lib/plugin-map$'] = activePluginMap;
+    }
 
     // Add absolute path resolution for the default plugins directory on server side.
     if (isServer) {
@@ -64,6 +111,10 @@ const nextConfig: NextConfig = {
       {
         module: /hook-loader\.server\.ts/,
         message: /Can't resolve '@\/plugins'/,
+      },
+      {
+        module: /module-resolver\.server\.ts/,
+        message: /Critical dependency: the request of a dependency is an expression/,
       },
     ];
 

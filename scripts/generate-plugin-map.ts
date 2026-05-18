@@ -7,13 +7,19 @@ import {
   discoverPluginRootsInSourceTarget,
   formatPluginSourcePath,
   getPluginSourceTargets,
+  type PluginSourceTarget,
   type PluginSourceKind,
 } from '@/lib/plugin-runtime/plugin-source-dirs';
+import {
+  getActivePluginMapFiles,
+  getSourcePluginMapFiles,
+  hasConfiguredExternalPluginDirs,
+  type PluginMapFileSet,
+} from '@/lib/plugin-runtime/plugin-map-files';
 
 const PROJECT_ROOT = process.cwd();
-const OUTPUT_FILE = path.join(PROJECT_ROOT, 'src/lib/plugin-map.ts');
-const OUTPUT_DIR = path.dirname(OUTPUT_FILE);
-const MANIFEST_FILE = path.join(PROJECT_ROOT, 'src/lib/plugin-map.manifest.json');
+const SOURCE_FILES = getSourcePluginMapFiles(PROJECT_ROOT);
+const ACTIVE_FILES = getActivePluginMapFiles(PROJECT_ROOT);
 
 function getContentHash(content: string): string {
   return crypto.createHash('md5').update(content, 'utf-8').digest('hex');
@@ -86,10 +92,16 @@ interface PluginInfo {
   slotModules: string[];
 }
 
-function scanPlugins(): PluginInfo[] {
+function getTargetsForSourceKind(kind?: PluginSourceKind): PluginSourceTarget[] {
+  return getPluginSourceTargets({ cwd: PROJECT_ROOT }).filter(
+    (target) => !kind || target.kind === kind
+  );
+}
+
+function scanPlugins(kind?: PluginSourceKind): PluginInfo[] {
   const plugins: PluginInfo[] = [];
   const seen = new Map<string, PluginInfo>();
-  const sourceTargets = getPluginSourceTargets({ cwd: PROJECT_ROOT });
+  const sourceTargets = getTargetsForSourceKind(kind);
 
   for (const sourceTarget of sourceTargets) {
     if (!sourceTarget.exists) {
@@ -194,12 +206,12 @@ function scanPlugins(): PluginInfo[] {
   return plugins;
 }
 
-function assertSameVolumeForImport(modulePath: string): void {
+function assertSameVolumeForImport(modulePath: string, outputDir: string): void {
   if (process.platform !== 'win32') {
     return;
   }
 
-  const outputRoot = path.parse(OUTPUT_DIR).root.toLowerCase();
+  const outputRoot = path.parse(outputDir).root.toLowerCase();
   const moduleRoot = path.parse(modulePath).root.toLowerCase();
   if (outputRoot !== moduleRoot) {
     throw new Error(
@@ -209,9 +221,9 @@ function assertSameVolumeForImport(modulePath: string): void {
   }
 }
 
-function moduleSpecifier(modulePath: string): string {
-  assertSameVolumeForImport(modulePath);
-  let relativePath = path.relative(OUTPUT_DIR, modulePath).replace(/\\/g, '/');
+function moduleSpecifier(modulePath: string, outputDir: string): string {
+  assertSameVolumeForImport(modulePath, outputDir);
+  let relativePath = path.relative(outputDir, modulePath).replace(/\\/g, '/');
   if (!relativePath.startsWith('.')) {
     relativePath = `./${relativePath}`;
   }
@@ -222,7 +234,8 @@ function moduleMap(
   plugin: PluginInfo,
   modules: string[],
   keyPrefix: string,
-  importPrefix: string
+  importPrefix: string,
+  outputDir: string
 ): string | null {
   if (modules.length === 0) {
     return null;
@@ -233,64 +246,65 @@ function moduleMap(
       const key = keyPrefix ? `${keyPrefix}/${modulePath}` : modulePath;
       const importPath = importPrefix ? path.join(importPrefix, modulePath) : modulePath;
       return `      '${key}': () => import(${JSON.stringify(
-        moduleSpecifier(path.join(plugin.absoluteRootDir, importPath))
+        moduleSpecifier(path.join(plugin.absoluteRootDir, importPath), outputDir)
       )})`;
     })
     .join(',\n');
 }
 
-function generatePluginMap(plugins: PluginInfo[]): string {
+function generatePluginMap(plugins: PluginInfo[], outputFile: string): string {
+  const outputDir = path.dirname(outputFile);
   const entries = plugins.map((plugin) => {
     const parts: string[] = [
       `    rootDir: ${JSON.stringify(plugin.rootDir)},`,
       `    sourceDir: ${JSON.stringify(plugin.sourceDir)},`,
       `    sourceKind: ${JSON.stringify(plugin.sourceKind)},`,
       `    plugin: () => import(${JSON.stringify(
-        moduleSpecifier(path.join(plugin.absoluteRootDir, 'plugin'))
+        moduleSpecifier(path.join(plugin.absoluteRootDir, 'plugin'), outputDir)
       )}),`,
     ];
 
-    const components = moduleMap(plugin, plugin.components, 'components', 'components');
+    const components = moduleMap(plugin, plugin.components, 'components', 'components', outputDir);
     if (components) {
       parts.push(`    components: {\n${components}\n    },`);
     }
 
-    const pages = moduleMap(plugin, plugin.pages, 'pages', 'pages');
+    const pages = moduleMap(plugin, plugin.pages, 'pages', 'pages', outputDir);
     if (pages) {
       parts.push(`    pages: {\n${pages}\n    },`);
     }
 
-    const apis = moduleMap(plugin, plugin.apiModules, '', '');
+    const apis = moduleMap(plugin, plugin.apiModules, '', '', outputDir);
     if (apis) {
       parts.push(`    apis: {\n${apis}\n    },`);
     }
 
-    const lifecycleModules = moduleMap(plugin, plugin.lifecycleModules, '', '');
+    const lifecycleModules = moduleMap(plugin, plugin.lifecycleModules, '', '', outputDir);
     if (lifecycleModules) {
       parts.push(`    lifecycleModules: {\n${lifecycleModules}\n    },`);
     }
 
-    const jobModules = moduleMap(plugin, plugin.jobModules, '', '');
+    const jobModules = moduleMap(plugin, plugin.jobModules, '', '', outputDir);
     if (jobModules) {
       parts.push(`    jobModules: {\n${jobModules}\n    },`);
     }
 
-    const webhookModules = moduleMap(plugin, plugin.webhookModules, '', '');
+    const webhookModules = moduleMap(plugin, plugin.webhookModules, '', '', outputDir);
     if (webhookModules) {
       parts.push(`    webhookModules: {\n${webhookModules}\n    },`);
     }
 
-    const eventModules = moduleMap(plugin, plugin.eventModules, '', '');
+    const eventModules = moduleMap(plugin, plugin.eventModules, '', '', outputDir);
     if (eventModules) {
       parts.push(`    eventModules: {\n${eventModules}\n    },`);
     }
 
-    const hookModules = moduleMap(plugin, plugin.hookModules, '', '');
+    const hookModules = moduleMap(plugin, plugin.hookModules, '', '', outputDir);
     if (hookModules) {
       parts.push(`    hookModules: {\n${hookModules}\n    },`);
     }
 
-    const slotModules = moduleMap(plugin, plugin.slotModules, '', '');
+    const slotModules = moduleMap(plugin, plugin.slotModules, '', '', outputDir);
     if (slotModules) {
       parts.push(`    slotModules: {\n${slotModules}\n    },`);
     }
@@ -333,11 +347,12 @@ ${entries.join(',\n')}
 `;
 }
 
-function generatePluginManifest(plugins: PluginInfo[]): string {
+function generatePluginManifest(plugins: PluginInfo[], kind?: PluginSourceKind): string {
+  const sourceTargets = getTargetsForSourceKind(kind);
   return `${JSON.stringify(
     {
-      version: 4,
-      sourceDirs: getPluginSourceTargets({ cwd: PROJECT_ROOT }).map((target) => ({
+      version: 5,
+      sourceDirs: sourceTargets.map((target) => ({
         path: target.displayPath,
         kind: target.kind,
         directPluginRoot: target.directPluginRoot,
@@ -361,6 +376,81 @@ function generatePluginManifest(plugins: PluginInfo[]): string {
     null,
     2
   )}\n`;
+}
+
+function readExisting(file: string): string | null {
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null;
+}
+
+function checkOutput(files: PluginMapFileSet, content: string, manifestContent: string): boolean {
+  if (!fs.existsSync(files.mapFile)) {
+    console.error(
+      `Plugin map check failed: ${path.relative(PROJECT_ROOT, files.mapFile)} does not exist`
+    );
+    return false;
+  }
+
+  if (!fs.existsSync(files.manifestFile)) {
+    console.error(
+      `Plugin map check failed: ${path.relative(PROJECT_ROOT, files.manifestFile)} does not exist`
+    );
+    return false;
+  }
+
+  const existingContent = fs.readFileSync(files.mapFile, 'utf-8');
+  const existingManifestContent = fs.readFileSync(files.manifestFile, 'utf-8');
+
+  if (
+    getContentHash(content) !== getContentHash(existingContent) ||
+    getContentHash(manifestContent) !== getContentHash(existingManifestContent)
+  ) {
+    console.error(
+      `Plugin map check failed: configured plugin source directories do not match ${path.relative(
+        PROJECT_ROOT,
+        files.mapFile
+      )}`
+    );
+    return false;
+  }
+
+  return true;
+}
+
+function writeOutput(
+  files: PluginMapFileSet,
+  content: string,
+  manifestContent: string,
+  isQuiet: boolean
+): boolean {
+  const outputDir = path.dirname(files.mapFile);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  const manifestDir = path.dirname(files.manifestFile);
+  if (!fs.existsSync(manifestDir)) {
+    fs.mkdirSync(manifestDir, { recursive: true });
+  }
+
+  const contentChanged =
+    getContentHash(content) !== getContentHash(readExisting(files.mapFile) ?? '');
+  const manifestChanged =
+    getContentHash(manifestContent) !== getContentHash(readExisting(files.manifestFile) ?? '');
+
+  if (contentChanged) {
+    fs.writeFileSync(files.mapFile, content, 'utf-8');
+    if (!isQuiet) {
+      console.log(`Generated: ${path.relative(PROJECT_ROOT, files.mapFile)}`);
+    }
+  }
+
+  if (manifestChanged) {
+    fs.writeFileSync(files.manifestFile, manifestContent, 'utf-8');
+    if (!isQuiet) {
+      console.log(`Generated: ${path.relative(PROJECT_ROOT, files.manifestFile)}`);
+    }
+  }
+
+  return contentChanged || manifestChanged;
 }
 
 function printPlugins(plugins: PluginInfo[]): void {
@@ -396,45 +486,29 @@ function main() {
     console.log('Scanning plugin source directories...');
   }
 
-  const plugins = scanPlugins();
+  const sourcePlugins = scanPlugins('default');
+  const activePlugins = hasConfiguredExternalPluginDirs() ? scanPlugins() : sourcePlugins;
 
   if (!isQuiet) {
-    printPlugins(plugins);
+    printPlugins(activePlugins);
   }
 
-  const content = generatePluginMap(plugins);
-  const manifestContent = generatePluginManifest(plugins);
+  const sourceContent = generatePluginMap(sourcePlugins, SOURCE_FILES.mapFile);
+  const sourceManifestContent = generatePluginManifest(sourcePlugins, 'default');
+  const activeContent = generatePluginMap(activePlugins, ACTIVE_FILES.mapFile);
+  const activeManifestContent = generatePluginManifest(
+    activePlugins,
+    hasConfiguredExternalPluginDirs() ? undefined : 'default'
+  );
 
   if (isCheck) {
-    if (!fs.existsSync(OUTPUT_FILE)) {
-      console.error('Plugin map check failed: src/lib/plugin-map.ts does not exist');
-      console.error(
-        '   Fix: run npm run plugins:scan, then commit src/lib/plugin-map.ts and manifest'
-      );
-      process.exit(1);
-    }
-
-    if (!fs.existsSync(MANIFEST_FILE)) {
-      console.error('Plugin map check failed: src/lib/plugin-map.manifest.json does not exist');
-      console.error(
-        '   Fix: run npm run plugins:scan, then commit src/lib/plugin-map.manifest.json'
-      );
-      process.exit(1);
-    }
-
-    const existingContent = fs.readFileSync(OUTPUT_FILE, 'utf-8');
-    const existingManifestContent = fs.readFileSync(MANIFEST_FILE, 'utf-8');
-
-    if (
-      getContentHash(content) !== getContentHash(existingContent) ||
-      getContentHash(manifestContent) !== getContentHash(existingManifestContent)
-    ) {
-      console.error(
-        'Plugin map check failed: configured plugin source directories do not match src/lib/plugin-map.ts'
-      );
-      console.error(
-        '   Fix: run npm run plugins:scan, then commit src/lib/plugin-map.ts and manifest'
-      );
+    const sourceOk = checkOutput(SOURCE_FILES, sourceContent, sourceManifestContent);
+    const activeOk =
+      ACTIVE_FILES.mapFile === SOURCE_FILES.mapFile
+        ? sourceOk
+        : checkOutput(ACTIVE_FILES, activeContent, activeManifestContent);
+    if (!sourceOk || !activeOk) {
+      console.error('   Fix: run npm run plugins:scan');
       process.exit(1);
     }
 
@@ -442,37 +516,17 @@ function main() {
     return;
   }
 
-  const outputDir = path.dirname(OUTPUT_FILE);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
+  const sourceChanged = writeOutput(SOURCE_FILES, sourceContent, sourceManifestContent, isQuiet);
+  const activeChanged =
+    ACTIVE_FILES.mapFile === SOURCE_FILES.mapFile
+      ? sourceChanged
+      : writeOutput(ACTIVE_FILES, activeContent, activeManifestContent, isQuiet);
 
-  const contentChanged =
-    !fs.existsSync(OUTPUT_FILE) ||
-    getContentHash(content) !== getContentHash(fs.readFileSync(OUTPUT_FILE, 'utf-8'));
-  const manifestChanged =
-    !fs.existsSync(MANIFEST_FILE) ||
-    getContentHash(manifestContent) !== getContentHash(fs.readFileSync(MANIFEST_FILE, 'utf-8'));
-
-  if (!contentChanged && !manifestChanged) {
+  if (!sourceChanged && !activeChanged) {
     if (!isQuiet) {
       console.log('No changes detected, skipping write');
     }
     return;
-  }
-
-  if (contentChanged) {
-    fs.writeFileSync(OUTPUT_FILE, content, 'utf-8');
-    if (!isQuiet) {
-      console.log(`Generated: ${path.relative(process.cwd(), OUTPUT_FILE)}`);
-    }
-  }
-
-  if (manifestChanged) {
-    fs.writeFileSync(MANIFEST_FILE, manifestContent, 'utf-8');
-    if (!isQuiet) {
-      console.log(`Generated: ${path.relative(process.cwd(), MANIFEST_FILE)}`);
-    }
   }
 }
 

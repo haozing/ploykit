@@ -34,7 +34,7 @@ type Executor = Database | TransactionDatabase;
 const connectionScopeSchema = z.enum(['global', 'workspace']);
 const connectionStatusSchema = z.enum(['active', 'disabled']);
 const connectionAuthTypeSchema = z.enum(['none', 'bearer', 'basic', 'apiKey']);
-const connectionActorClaimsTypeSchema = z.enum(['hmac']);
+const connectionActorClaimsTypeSchema = z.enum(['hmac', 'jwt']);
 const connectionOwnerTypeSchema = z.enum(['plugin', 'suite', 'product']);
 const secretSourceSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('none') }),

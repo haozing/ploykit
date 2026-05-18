@@ -8,10 +8,11 @@ import {
   writeFileSync,
 } from 'fs';
 import { dirname, relative, resolve, isAbsolute } from 'path';
+import { getActivePluginMapFiles } from '@/lib/plugin-runtime/plugin-map-files';
 
 const root = process.cwd();
 const standaloneRoot = resolve(root, '.next', 'standalone');
-const pluginMapManifestPath = resolve(root, 'src/lib/plugin-map.manifest.json');
+const pluginMapManifestPath = getActivePluginMapFiles(root).manifestFile;
 
 interface PluginMapManifest {
   sourceDirs?: Array<{ path: string }>;

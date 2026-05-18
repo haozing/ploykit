@@ -41,8 +41,8 @@ describe('service connection admin schemas', () => {
     ).toMatchObject({ status: 'archived' });
   });
 
-  it('keeps actor claims on the hmac contract for this V1', () => {
-    expect(() =>
+  it('accepts hmac and jwt actor claims contracts', () => {
+    expect(
       serviceConnectionActionSchema.parse({
         action: 'upsert',
         pluginId: 'sample-internal',
@@ -50,7 +50,7 @@ describe('service connection admin schemas', () => {
         baseUrl: 'https://core.example.test',
         actorClaimsType: 'jwt',
       })
-    ).toThrow();
+    ).toMatchObject({ actorClaimsType: 'jwt' });
   });
 
   it('accepts service connection log retention input', () => {

@@ -32,19 +32,19 @@ $env:PLOYKIT_PLUGIN_DIRS = 'D:\work\ploykit-plugins;..\shared-plugins'
 npm run plugins:scan
 ```
 
-每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan` 并提交生成的 plugin map。
+每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.ts`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。
 
 运行 `npm run plugins:check` 可校验所有已配置来源；也可以定向运行 `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`。在 Windows 上，外部插件模块必须与项目在同一个盘符，因为生成 map 使用相对静态 import；如果源码在别的盘，可以在项目内放 symlink/junction。
 
-TypeScript 会从外部文件所在位置解析裸包 import。外部目录在项目外时，要么把它放在能解析宿主 `node_modules` 的 workspace 中，要么在外部目录安装开发依赖，要么使用项目内 symlink/junction。
+`plugin:test` 和 `plugin:doctor` 会为外部插件根目录创建临时依赖桥接，让测试能从 PloyKit 安装中解析 React 等宿主依赖，不需要复制插件或给每个插件单独安装依赖。如果依赖根不是 PloyKit 项目根，可传 `--dependency-root <host-root>`。
 
 standalone 部署时，外部目录需要在运行环境中保持构建时相同的相对路径，或通过 volume mount 挂载进去。项目内的外部来源会由 standalone asset 脚本复制；项目外目录应通过挂载提供。
 
 ## 合同入口
 
-`plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 从 `plugins/` 和 `PLOYKIT_PLUGIN_DIRS` 扫描插件合同，写入 `src/lib/plugin-map.ts`，再从生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
+`plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 从 `plugins/` 和 `PLOYKIT_PLUGIN_DIRS` 扫描插件合同，把默认 map 写入 `src/lib/plugin-map.ts`，把外部条目写入 active runtime map，再从这些生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
 
-生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。
+生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。外部产品可以通过 `PLOYKIT_RUNTIME_CATALOG_FILE` 或 `plugins:apply -- --catalog <file>` 提供归属声明。
 
 如果插件需要扩展或覆盖宿主自带页面，例如首页、关于页或定价页，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
 

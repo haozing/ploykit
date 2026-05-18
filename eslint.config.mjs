@@ -42,6 +42,7 @@ const eslintConfig = [
       'build/**',
       'dist/**',
       '.ploykit-build/**',
+      '.runtime/**',
 
       // Testing
       'coverage/**',

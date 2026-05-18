@@ -742,8 +742,8 @@ export class DbPluginServiceConnectionRegistry implements PluginServiceConnectio
     const selected = rows
       .sort(
         (left, right) =>
-          ownerRank(left, input) - ownerRank(right, input) ||
-          bindingScopeRank(left, input.workspaceId) - bindingScopeRank(right, input.workspaceId)
+          bindingScopeRank(left, input.workspaceId) - bindingScopeRank(right, input.workspaceId) ||
+          ownerRank(left, input) - ownerRank(right, input)
       )
       .at(0);
 

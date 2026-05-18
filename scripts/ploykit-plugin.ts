@@ -70,6 +70,10 @@ interface PluginTestResult {
   error?: string;
 }
 
+interface PluginTestOptions {
+  dependencyRoot?: string;
+}
+
 interface PluginInspectPluginReport {
   pluginId: string;
   pluginPath: string;
@@ -132,10 +136,10 @@ function printUsage(): void {
   console.error(`Usage:
   ploykit plugin create <name> --template <crud|tool|dashboard|connector|service> [--dir plugins]
   ploykit plugin check [path]
-  ploykit plugin test [path]
+  ploykit plugin test [path] [--dependency-root <host-root>]
   ploykit plugin build [path] [--out .ploykit-build]
   ploykit plugin inspect [path] [--out .ploykit-build]
-  ploykit plugin doctor [path] [--out .ploykit-build]
+  ploykit plugin doctor [path] [--out .ploykit-build] [--dependency-root <host-root>]
   ploykit plugin dev [path] [--watch]
   ploykit plugin service-client --service <name> --openapi <file.json> --out <generated.ts>
 `);
@@ -378,6 +382,49 @@ function discoverTestFiles(pluginRoot: string): string[] {
   return files;
 }
 
+function findNearestNodeModules(startPath: string): string | null {
+  let currentPath = startPath;
+  while (true) {
+    const candidate = path.join(currentPath, 'node_modules');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(currentPath);
+    if (parent === currentPath) {
+      return null;
+    }
+    currentPath = parent;
+  }
+}
+
+function isInsideProject(filePath: string): boolean {
+  const relativePath = path.relative(PROJECT_ROOT, filePath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+function createDependencyBridge(pluginRoot: string, dependencyRoot: string): (() => void) | null {
+  if (isInsideProject(pluginRoot) || findNearestNodeModules(pluginRoot)) {
+    return null;
+  }
+
+  const sourceNodeModules = path.join(dependencyRoot, 'node_modules');
+  if (!fs.existsSync(sourceNodeModules)) {
+    return null;
+  }
+
+  const targetNodeModules = path.join(pluginRoot, 'node_modules');
+  if (fs.existsSync(targetNodeModules)) {
+    return null;
+  }
+
+  fs.symlinkSync(sourceNodeModules, targetNodeModules, 'junction');
+  return () => {
+    if (fs.existsSync(targetNodeModules)) {
+      fs.rmSync(targetNodeModules, { recursive: true, force: true });
+    }
+  };
+}
+
 function normalizeScenarioExports(module: PluginScenarioModule): unknown[] {
   const candidates = [module.default, module.run, module.runPluginTests, module.tests].filter(
     (candidate) => candidate !== undefined
@@ -436,7 +483,8 @@ async function runPluginTestFile(
 
 async function runPluginTestsForTarget(
   targetPath: string,
-  checkReport?: Awaited<ReturnType<typeof checkPluginTargets>>
+  checkReport?: Awaited<ReturnType<typeof checkPluginTargets>>,
+  options: PluginTestOptions = {}
 ): Promise<{ success: boolean; checked: number; check?: unknown; tests: PluginTestResult[] }> {
   checkReport ??= await checkPluginTargets(targetPath);
 
@@ -446,15 +494,17 @@ async function runPluginTestsForTarget(
 
   const roots = discoverPluginRoots(targetPath);
   const tests: PluginTestResult[] = [];
+  const dependencyRoot = path.resolve(PROJECT_ROOT, options.dependencyRoot ?? PROJECT_ROOT);
 
   for (const root of roots) {
+    const cleanupDependencyBridge = createDependencyBridge(root, dependencyRoot);
     const entryFile = path.join(root, 'plugin.ts');
-    const plugin = await loadPluginDefinition(root, entryFile);
-    const testFiles = discoverTestFiles(root);
-    const host = createPluginTestHost(plugin);
     let scenarios = 0;
 
     try {
+      const plugin = await loadPluginDefinition(root, entryFile);
+      const testFiles = discoverTestFiles(root);
+      const host = createPluginTestHost(plugin);
       for (const filePath of testFiles) {
         scenarios += await runPluginTestFile(filePath, plugin, host.ctx, host);
       }
@@ -467,14 +517,19 @@ async function runPluginTestsForTarget(
         success: testFiles.length > 0 && scenarios > 0,
       });
     } catch (error) {
+      const pluginPath = toPosix(path.relative(PROJECT_ROOT, root));
       tests.push({
-        pluginId: plugin.id,
-        pluginPath: toPosix(path.relative(PROJECT_ROOT, root)),
-        testFiles: testFiles.map((filePath) => toPosix(path.relative(PROJECT_ROOT, filePath))),
+        pluginId: path.basename(root),
+        pluginPath,
+        testFiles: discoverTestFiles(root).map((filePath) =>
+          toPosix(path.relative(PROJECT_ROOT, filePath))
+        ),
         scenarios,
         success: false,
         error: error instanceof Error ? error.message : String(error),
       });
+    } finally {
+      cleanupDependencyBridge?.();
     }
   }
 
@@ -484,7 +539,9 @@ async function runPluginTestsForTarget(
 
 async function runTest(args: ParsedArgs): Promise<void> {
   const targetPath = getTargetPath(args);
-  const result = await runPluginTestsForTarget(targetPath);
+  const result = await runPluginTestsForTarget(targetPath, undefined, {
+    dependencyRoot: getFlag(args, 'dependency-root'),
+  });
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = result.success ? 0 : 1;
 }
@@ -1101,7 +1158,9 @@ async function runDoctor(args: ParsedArgs): Promise<void> {
   const targetPath = getTargetPath(args);
   const buildRoot = path.resolve(PROJECT_ROOT, getFlag(args, 'out') ?? DEFAULT_BUILD_DIR);
   const check = await checkPluginTargets(targetPath);
-  const tests = await runPluginTestsForTarget(targetPath, check);
+  const tests = await runPluginTestsForTarget(targetPath, check, {
+    dependencyRoot: getFlag(args, 'dependency-root'),
+  });
   const roots = discoverPluginRoots(targetPath);
   const plugins: PluginInspectPluginReport[] = [];
   const inspectDiagnostics: PluginDiagnostic[] = [];
