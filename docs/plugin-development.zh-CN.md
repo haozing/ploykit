@@ -32,7 +32,7 @@ $env:PLOYKIT_PLUGIN_DIRS = 'D:\work\ploykit-plugins;..\shared-plugins'
 npm run plugins:scan
 ```
 
-每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.ts`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。
+每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.ts`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。产品壳如果只需要 runtime artifact，可运行 `npm run plugins:scan:runtime`，它只更新 active runtime map，不触碰提交版默认 map。
 
 运行 `npm run plugins:check` 可校验所有已配置来源；也可以定向运行 `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`。在 Windows 上，外部插件模块必须与项目在同一个盘符，因为生成 map 使用相对静态 import；如果源码在别的盘，可以在项目内放 symlink/junction。
 
@@ -42,9 +42,9 @@ standalone 部署时，外部目录需要在运行环境中保持构建时相同
 
 ## 合同入口
 
-`plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 从 `plugins/` 和 `PLOYKIT_PLUGIN_DIRS` 扫描插件合同，把默认 map 写入 `src/lib/plugin-map.ts`，把外部条目写入 active runtime map，再从这些生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。
+`plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 从 `plugins/` 和 `PLOYKIT_PLUGIN_DIRS` 扫描插件合同，把默认 map 写入 `src/lib/plugin-map.ts`，把外部条目写入 active runtime map，再从这些生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。产品壳只准备 `.runtime/plugin-map.*` 时，使用 `--runtime-only` 或 `npm run plugins:scan:runtime`。
 
-生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。外部产品可以通过 `PLOYKIT_RUNTIME_CATALOG_FILE` 或 `plugins:apply -- --catalog <file>` 提供归属声明。
+生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。外部产品可以通过 `PLOYKIT_RUNTIME_CATALOG_FILE` 或 `plugins:apply -- --catalog <file>` 提供归属声明。只有存在 `PLOYKIT_PLUGIN_DIRS` 等插件源码输入时，`plugins:apply` 才会自动准备 runtime map；`PLOYKIT_PLUGIN_MAP_FILE` 只用于选择 active runtime map artifact 的路径。
 
 如果插件需要扩展或覆盖宿主自带页面，例如首页、关于页或定价页，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
 

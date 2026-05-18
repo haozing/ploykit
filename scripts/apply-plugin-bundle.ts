@@ -18,18 +18,19 @@ function hasFlag(name: string): boolean {
   return process.argv.includes(`--${name}`);
 }
 
-function hasRuntimeInputs(): boolean {
-  return Boolean(
-    readArg('catalog') ||
-    process.env[RUNTIME_CATALOG_FILE_ENV]?.trim() ||
-    process.env[EXTERNAL_PLUGIN_DIRS_ENV]?.trim()
-  );
+function hasPluginSourceInputs(): boolean {
+  return Boolean(process.env[EXTERNAL_PLUGIN_DIRS_ENV]?.trim());
 }
 
 function runPluginScan(): void {
   const result = spawnSync(
     process.execPath,
-    ['--import', 'tsx', path.join(process.cwd(), 'scripts/generate-plugin-map.ts')],
+    [
+      '--import',
+      'tsx',
+      path.join(process.cwd(), 'scripts/generate-plugin-map.ts'),
+      '--runtime-only',
+    ],
     {
       cwd: process.cwd(),
       stdio: 'inherit',
@@ -106,7 +107,7 @@ async function main() {
     process.env[RUNTIME_CATALOG_FILE_ENV] = catalogFile;
   }
 
-  if (!hasFlag('no-scan') && hasRuntimeInputs()) {
+  if (!hasFlag('no-scan') && hasPluginSourceInputs()) {
     runPluginScan();
   }
 

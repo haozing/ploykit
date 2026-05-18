@@ -63,6 +63,9 @@ into `src/lib/plugin-map.ts`; external plugin entries are generated into the
 active runtime artifact `.runtime/plugin-map.ts` by default, or
 `PLOYKIT_PLUGIN_MAP_FILE` when configured.
 
+Use `--runtime-only` for product shells that should prepare only the active
+runtime artifact and leave committed default map files untouched.
+
 Current plugin entrypoint:
 
 ```text
@@ -89,11 +92,18 @@ Commands:
 
 ```bash
 npm run plugins:scan
+npm run plugins:scan:runtime
 npm run plugins:check
+npm run plugins:check:runtime
 ```
 
 `npm run plugins:check` verifies the generated maps are current and then runs
 the plugin runtime checker across all configured plugin source directories.
+`npm run plugins:scan:runtime` and `npm run plugins:check:runtime` operate only
+on the active runtime map.
+`plugins:apply -- --catalog <file>` automatically runs the runtime-only scan
+only when plugin source inputs such as `PLOYKIT_PLUGIN_DIRS` are configured;
+`PLOYKIT_PLUGIN_MAP_FILE` only selects the runtime artifact path.
 
 ### `watch-plugins.ts`
 

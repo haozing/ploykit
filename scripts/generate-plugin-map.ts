@@ -480,21 +480,42 @@ function main() {
   const isCI = process.env.CI === 'true';
   const isBuild = process.argv.includes('--build');
   const isCheck = process.argv.includes('--check');
+  const isRuntimeOnly = process.argv.includes('--runtime-only');
   const isQuiet = isCI || isBuild || isCheck;
 
   if (!isQuiet) {
     console.log('Scanning plugin source directories...');
   }
 
-  const sourcePlugins = scanPlugins('default');
-  const activePlugins = hasConfiguredExternalPluginDirs() ? scanPlugins() : sourcePlugins;
+  if (isRuntimeOnly && !ACTIVE_FILES.runtimeArtifact) {
+    if (!isQuiet) {
+      console.log('No runtime plugin map is configured, skipping runtime-only scan');
+    }
+    return;
+  }
+  if (
+    isRuntimeOnly &&
+    (ACTIVE_FILES.mapFile === SOURCE_FILES.mapFile ||
+      ACTIVE_FILES.manifestFile === SOURCE_FILES.manifestFile)
+  ) {
+    throw new Error(
+      '--runtime-only cannot write to committed source plugin map files. Use .runtime paths or unset PLOYKIT_PLUGIN_MAP_FILE/PLOYKIT_PLUGIN_MAP_MANIFEST_FILE.'
+    );
+  }
+
+  const sourcePlugins = isRuntimeOnly ? null : scanPlugins('default');
+  const activePlugins = hasConfiguredExternalPluginDirs()
+    ? scanPlugins()
+    : (sourcePlugins ?? scanPlugins('default'));
 
   if (!isQuiet) {
     printPlugins(activePlugins);
   }
 
-  const sourceContent = generatePluginMap(sourcePlugins, SOURCE_FILES.mapFile);
-  const sourceManifestContent = generatePluginManifest(sourcePlugins, 'default');
+  const sourceContent = sourcePlugins ? generatePluginMap(sourcePlugins, SOURCE_FILES.mapFile) : '';
+  const sourceManifestContent = sourcePlugins
+    ? generatePluginManifest(sourcePlugins, 'default')
+    : '';
   const activeContent = generatePluginMap(activePlugins, ACTIVE_FILES.mapFile);
   const activeManifestContent = generatePluginManifest(
     activePlugins,
@@ -502,17 +523,29 @@ function main() {
   );
 
   if (isCheck) {
-    const sourceOk = checkOutput(SOURCE_FILES, sourceContent, sourceManifestContent);
+    const sourceOk = isRuntimeOnly
+      ? true
+      : checkOutput(SOURCE_FILES, sourceContent, sourceManifestContent);
     const activeOk =
-      ACTIVE_FILES.mapFile === SOURCE_FILES.mapFile
+      !isRuntimeOnly && ACTIVE_FILES.mapFile === SOURCE_FILES.mapFile
         ? sourceOk
         : checkOutput(ACTIVE_FILES, activeContent, activeManifestContent);
     if (!sourceOk || !activeOk) {
-      console.error('   Fix: run npm run plugins:scan');
+      console.error(
+        `   Fix: run npm run ${isRuntimeOnly ? 'plugins:scan:runtime' : 'plugins:scan'}`
+      );
       process.exit(1);
     }
 
     console.log('Plugin map check passed');
+    return;
+  }
+
+  if (isRuntimeOnly) {
+    const activeChanged = writeOutput(ACTIVE_FILES, activeContent, activeManifestContent, isQuiet);
+    if (!activeChanged && !isQuiet) {
+      console.log('No changes detected, skipping write');
+    }
     return;
   }
 

@@ -42,6 +42,9 @@ is always scanned as well. After changing the value, rerun `npm run
 plugins:scan`. The committed `src/lib/plugin-map.ts` tracks the default
 `plugins/` tree; external plugin entries are written to the runtime artifact
 `.runtime/plugin-map.ts` by default, or to `PLOYKIT_PLUGIN_MAP_FILE` when set.
+Product shells that only need runtime artifacts can run
+`npm run plugins:scan:runtime`; that command updates the active runtime map
+without touching the committed default map.
 
 Run `npm run plugins:check` to validate every configured source directory, or a
 targeted check such as `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`.
@@ -67,11 +70,16 @@ and `PLOYKIT_PLUGIN_DIRS` with `scripts/generate-plugin-map.ts`, writes the
 default map to `src/lib/plugin-map.ts`, writes external entries to the active
 runtime map, and loads runtime pages, APIs, jobs, events, webhooks, lifecycle
 handlers, slots, menus, assets, and capabilities from those generated maps.
+Use `--runtime-only` or `npm run plugins:scan:runtime` when a product shell
+should prepare only `.runtime/plugin-map.*`.
 
 The generated map is a module index only. It does not assign plugins to
 products, suites, or bundles; those runtime placement decisions live in
 installation/catalog state. External products can provide that placement with
 `PLOYKIT_RUNTIME_CATALOG_FILE` or `plugins:apply -- --catalog <file>`.
+`plugins:apply` automatically prepares the runtime map only when plugin source
+inputs such as `PLOYKIT_PLUGIN_DIRS` are present; `PLOYKIT_PLUGIN_MAP_FILE`
+only selects the active runtime map artifact path.
 
 For plugins that need to extend or override host-owned pages such as the home,
 about, or pricing pages, see [host page slots and overrides](host-page-overrides.md).
