@@ -732,7 +732,11 @@ describe('platform plugin capabilities', () => {
           balanceBefore: 10,
           balanceAfter: 10 - input.amount,
           meter: input.meter,
-          userId: input.userId,
+          metric: input.metric,
+          scope: input.accountScope,
+          userId:
+            input.userId ??
+            (input.accountScope.type === 'user' ? input.accountScope.id : undefined),
           idempotencyKey: input.idempotencyKey,
           metadata: input.metadata,
         }));

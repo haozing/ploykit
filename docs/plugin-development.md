@@ -41,10 +41,13 @@ or a direct plugin root containing `plugin.ts`. The default `plugins/` directory
 is always scanned as well. After changing the value, rerun `npm run
 plugins:scan`. The committed `src/lib/plugin-map.ts` tracks the default
 `plugins/` tree; external plugin entries are written to the runtime artifact
-`.runtime/plugin-map.ts` by default, or to `PLOYKIT_PLUGIN_MAP_FILE` when set.
+`.runtime/plugin-map.cjs` by default, or to `PLOYKIT_PLUGIN_MAP_FILE` when set.
 Product shells that only need runtime artifacts can run
 `npm run plugins:scan:runtime`; that command updates the active runtime map
 without touching the committed default map.
+When an active runtime map is configured, the host treats it as required.
+Missing or invalid runtime maps fail loudly instead of falling back to the
+committed default map.
 
 Run `npm run plugins:check` to validate every configured source directory, or a
 targeted check such as `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`.
@@ -80,6 +83,10 @@ installation/catalog state. External products can provide that placement with
 `plugins:apply` automatically prepares the runtime map only when plugin source
 inputs such as `PLOYKIT_PLUGIN_DIRS` are present; `PLOYKIT_PLUGIN_MAP_FILE`
 only selects the active runtime map artifact path.
+The runtime catalog is authoritative for bundle application. Pass an app bundle
+id to `plugins:apply -- --bundle <id>`; if a plugin is already listed in a
+catalog bundle, PloyKit does not also expose an implicit per-plugin bundle for
+that plugin.
 
 For plugins that need to extend or override host-owned pages such as the home,
 about, or pricing pages, see [host page slots and overrides](host-page-overrides.md).
@@ -255,6 +262,13 @@ const items = await ctx.storage.collection('sample_items').findMany({
 });
 ```
 
+For idempotent business writes, use `insertIfAbsent(data, { uniqueBy: [...] })`
+instead of doing a read followed by an insert. For queue-like work where only one
+worker should take a record, use `claim(query, patch)` to atomically update the
+first matching record and return whether it was claimed. Fields passed to
+`uniqueBy` must be present and non-null; automatic unique indexes skip nullish
+optional values.
+
 For database-shaped work beyond plugin-owned records, expose a host service and
 call it through `ctx.services`; ordinary plugins do not access the database
 directly.
@@ -265,22 +279,27 @@ Plugins should treat `ctx` as their host boundary. They should not import
 `src/lib/*`, read `process.env`, access the database directly, or call external
 services through raw `fetch()`.
 
-| Capability                               | Permissions                                              | Purpose                                                              |
-| ---------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
-| `ctx.storage`                            | `StorageRead`, `StorageWrite`                            | Plugin-owned structured collections                                  |
-| `ctx.config`, `ctx.secrets`              | `Config*`, `Secrets*`                                    | Plugin config and encrypted secrets                                  |
-| `ctx.files`                              | `FilesRead`, `FilesWrite`                                | Signed upload/download and file metadata                             |
-| `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | User-visible or internal long-running work                           |
-| `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | External service profiles, credentials, retry, redaction, call logs  |
-| `ctx.services`                           | `ServicesInvoke`                                         | Host-managed service connections for complex domain or database work |
-| `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | Workspace creation, membership, roles, invitations                   |
-| `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | Plugin API keys and scoped rate limits                               |
-| `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | Usage, action meters, audit trail                                    |
-| `ctx.artifacts`, `ctx.rag`               | `Artifacts*`, `Rag*`                                     | Text artifacts, indexing, context packs                              |
-| `ctx.ai`                                 | `AiGenerate`, `AiEmbed`                                  | Host-injected model gateway                                          |
-| `ctx.credits`, `ctx.billing`             | `Credits*`, `Billing*`                                   | Commercial entitlements, credits, redemption                         |
-| `ctx.notifications`                      | `NotificationsSend`                                      | In-app notifications                                                 |
-| `ctx.http.fetch`                         | `ExternalHttp` plus `egress`                             | External HTTP through SSRF-aware guard                               |
+| Capability                                   | Permissions                                              | Purpose                                                               |
+| -------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------- |
+| `ctx.storage`                                | `StorageRead`, `StorageWrite`                            | Plugin-owned structured collections                                   |
+| `ctx.config`, `ctx.secrets`                  | `Config*`, `Secrets*`                                    | Plugin config and encrypted secrets                                   |
+| `ctx.files`                                  | `FilesRead`, `FilesWrite`                                | Signed upload/download and file metadata                              |
+| `ctx.runs`                                   | `RunsRead`, `RunsWrite`                                  | User-visible or internal long-running work                            |
+| `ctx.connectors`                             | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | External service profiles, credentials, retry, redaction, call logs   |
+| `ctx.services`                               | `ServicesInvoke`                                         | Host-managed service connections for complex domain or database work  |
+| `ctx.workspace`                              | `WorkspaceRead`, `WorkspaceWrite`                        | Workspace creation, membership, roles, invitations                    |
+| `ctx.apiKeys`, `ctx.rateLimit`               | `ApiKeys*`, `RateLimitCheck`                             | Plugin API keys and scoped rate limits                                |
+| `ctx.metering`, `ctx.usage`, `ctx.audit`     | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | Usage, action meters, audit trail                                     |
+| `ctx.artifacts`, `ctx.rag`                   | `Artifacts*`, `Rag*`                                     | Text artifacts, indexing, context packs                               |
+| `ctx.ai`                                     | `AiGenerate`, `AiEmbed`                                  | Host-injected model gateway                                           |
+| `ctx.credits`, `ctx.commerce`, `ctx.billing` | `Credits*`, `Commerce*`, `Billing*`                      | Commercial entitlements, scoped credits, checkout, orders, redemption |
+| `ctx.notifications`                          | `NotificationsSend`                                      | In-app notifications                                                  |
+| `ctx.http.fetch`                             | `ExternalHttp` plus `egress`                             | External HTTP through SSRF-aware guard                                |
+
+`ctx.credits` supports user, workspace, product, and plugin balance scopes.
+`ctx.commerce` provides generic one-time checkout and order APIs; successful
+orders can carry credit grant or entitlement metadata so payment webhooks apply
+the result through host ledgers instead of plugin-owned payment code.
 
 Example egress declaration:
 

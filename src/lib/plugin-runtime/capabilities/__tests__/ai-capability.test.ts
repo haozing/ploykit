@@ -85,7 +85,10 @@ describe('ai capability', () => {
       balanceBefore: 10,
       balanceAfter: 10 - input.amount,
       meter: input.meter,
-      userId: input.userId,
+      metric: input.metric,
+      scope: input.accountScope,
+      userId:
+        input.userId ?? (input.accountScope.type === 'user' ? input.accountScope.id : undefined),
       idempotencyKey: input.idempotencyKey,
       metadata: input.metadata,
     }));
@@ -176,7 +179,11 @@ describe('ai capability', () => {
             balanceBefore: 3,
             balanceAfter: 2,
             meter: input.meter,
-            userId: input.userId,
+            metric: input.metric,
+            scope: input.accountScope,
+            userId:
+              input.userId ??
+              (input.accountScope.type === 'user' ? input.accountScope.id : undefined),
             idempotencyKey: input.idempotencyKey,
           };
         },
@@ -218,7 +225,11 @@ describe('ai capability', () => {
             balanceBefore: 9,
             balanceAfter: 8,
             meter: input.meter,
-            userId: input.userId,
+            metric: input.metric,
+            scope: input.accountScope,
+            userId:
+              input.userId ??
+              (input.accountScope.type === 'user' ? input.accountScope.id : undefined),
             idempotencyKey: input.idempotencyKey,
           };
         },

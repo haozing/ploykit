@@ -2,7 +2,11 @@ import fs from 'fs';
 import { createRequire } from 'module';
 import { PLUGIN_MAP } from '@/lib/plugin-map';
 import type { PluginRuntimeContract } from '../contract';
-import { getActivePluginMapFiles } from '../plugin-map-files';
+import {
+  getActivePluginMapFiles,
+  isLoadableRuntimePluginMapFile,
+  type PluginMapFileSet,
+} from '../plugin-map-files';
 import { loadRuntimeCatalogFiles } from '../catalog/runtime-catalog-file.server';
 import type {
   RuntimeAppBundle,
@@ -71,30 +75,88 @@ const DEFAULT_PLUGIN_CATALOG_OVERRIDES: Record<string, Partial<RuntimeCatalogPro
 };
 
 const requireRuntimePluginMap = createRequire(import.meta.url);
-let activePluginMapCache: Record<string, PluginRuntimeMapEntry> | undefined;
+let activePluginMapCache: { key: string; map: Record<string, PluginRuntimeMapEntry> } | undefined;
 
-function loadRuntimePluginMap(): Record<string, PluginRuntimeMapEntry> {
-  const activeFiles = getActivePluginMapFiles();
-  if (!fs.existsSync(activeFiles.mapFile)) {
+function readFileVersion(file: string): string {
+  try {
+    const stat = fs.statSync(file);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return 'missing';
+  }
+}
+
+function activePluginMapCacheKey(activeFiles: PluginMapFileSet): string {
+  return [
+    activeFiles.runtimeArtifact ? 'runtime' : 'source',
+    activeFiles.mapFile,
+    activeFiles.runtimeArtifact ? readFileVersion(activeFiles.mapFile) : 'bundled',
+  ].join('|');
+}
+
+function assertRuntimePluginMap(
+  value: unknown,
+  file: string
+): Record<string, PluginRuntimeMapEntry> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, PluginRuntimeMapEntry>;
+  }
+
+  throw new Error(`Runtime plugin map "${file}" does not export a PLUGIN_MAP object.`);
+}
+
+function loadRuntimePluginMap(
+  activeFiles: PluginMapFileSet
+): Record<string, PluginRuntimeMapEntry> {
+  if (!activeFiles.runtimeArtifact) {
     return {};
   }
 
+  if (!isLoadableRuntimePluginMapFile(activeFiles.mapFile)) {
+    throw new Error(
+      `Active runtime plugin map file must be a CommonJS .cjs or .js artifact: ${activeFiles.mapFile}. Run npm run plugins:scan:runtime or update PLOYKIT_PLUGIN_MAP_FILE.`
+    );
+  }
+
+  if (!fs.existsSync(activeFiles.mapFile)) {
+    throw new Error(
+      `Active runtime plugin map file does not exist: ${activeFiles.mapFile}. Run npm run plugins:scan:runtime before starting the app.`
+    );
+  }
+
   try {
+    const resolved = requireRuntimePluginMap.resolve(activeFiles.mapFile);
+    delete requireRuntimePluginMap.cache[resolved];
     const loaded = requireRuntimePluginMap(activeFiles.mapFile) as {
       PLUGIN_MAP?: Record<string, PluginRuntimeMapEntry>;
+      default?: { PLUGIN_MAP?: Record<string, PluginRuntimeMapEntry> };
     };
-    return loaded.PLUGIN_MAP && typeof loaded.PLUGIN_MAP === 'object' ? loaded.PLUGIN_MAP : {};
-  } catch {
-    return {};
+    return assertRuntimePluginMap(
+      loaded.PLUGIN_MAP ?? loaded.default?.PLUGIN_MAP,
+      activeFiles.mapFile
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to load runtime plugin map "${activeFiles.mapFile}": ${message}`);
   }
 }
 
 function getActivePluginMap(): Record<string, PluginRuntimeMapEntry> {
-  activePluginMapCache ??= {
-    ...(PLUGIN_MAP as Record<string, PluginRuntimeMapEntry>),
-    ...loadRuntimePluginMap(),
+  const activeFiles = getActivePluginMapFiles();
+  const cacheKey = activePluginMapCacheKey(activeFiles);
+  if (activePluginMapCache?.key === cacheKey) {
+    return activePluginMapCache.map;
+  }
+
+  const runtimePluginMap = loadRuntimePluginMap(activeFiles);
+  activePluginMapCache = {
+    key: cacheKey,
+    map: {
+      ...(PLUGIN_MAP as Record<string, PluginRuntimeMapEntry>),
+      ...runtimePluginMap,
+    },
   };
-  return activePluginMapCache;
+  return activePluginMapCache.map;
 }
 
 export function resetPluginRuntimeMapCache(): void {

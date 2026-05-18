@@ -18,6 +18,11 @@ import {
   listRuntimePluginSuites,
   listRuntimeProducts,
 } from '@/lib/plugin-runtime/loader';
+import type {
+  RuntimeAppBundle,
+  RuntimePluginSuite,
+  RuntimeProduct,
+} from '@/lib/plugin-runtime/catalog/runtime-catalog-types';
 import { sql } from 'drizzle-orm';
 
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -33,13 +38,37 @@ function scrubUndefined<T extends Record<string, unknown>>(value: T): T {
   ) as T;
 }
 
-export async function syncRuntimeCatalog(
-  executor: Executor = db,
-  options: RuntimeCatalogSyncOptions = {}
-): Promise<void> {
-  const now = new Date();
+function uniqueValues(values: readonly string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function collectRuntimeSuites(productIds?: readonly string[]): RuntimePluginSuite[] {
+  if (!productIds) {
+    return listRuntimePluginSuites();
+  }
+
+  return productIds.flatMap((productId) => listRuntimePluginSuites(productId));
+}
+
+function collectRuntimeBundles(productIds?: readonly string[]): RuntimeAppBundle[] {
+  if (!productIds) {
+    return listRuntimeAppBundles();
+  }
+
+  return productIds.flatMap((productId) => listRuntimeAppBundles(productId));
+}
+
+function collectRuntimeProducts(
+  suites: readonly RuntimePluginSuite[],
+  bundles: readonly RuntimeAppBundle[],
+  productIds?: readonly string[]
+): RuntimeProduct[] {
   const productsById = new Map(listRuntimeProducts().map((product) => [product.id, product]));
-  for (const productId of options.productIds ?? []) {
+  for (const productId of [
+    ...(productIds ?? []),
+    ...suites.map((suite) => suite.productId),
+    ...bundles.map((bundle) => bundle.productId),
+  ]) {
     if (!productsById.has(productId)) {
       productsById.set(productId, {
         id: productId,
@@ -51,7 +80,98 @@ export async function syncRuntimeCatalog(
     }
   }
 
-  const productRows = [...productsById.values()].map(
+  if (!productIds) {
+    return [...productsById.values()];
+  }
+
+  const selected = new Set(productIds);
+  return [...productsById.values()].filter((product) => selected.has(product.id));
+}
+
+function assertUniqueRuntimeIds(
+  label: string,
+  values: readonly { id: string; productId: string }[]
+): void {
+  const seen = new Map<string, string>();
+  for (const value of values) {
+    const existingProductId = seen.get(value.id);
+    if (existingProductId && existingProductId !== value.productId) {
+      throw new Error(
+        `Runtime ${label} "${value.id}" is declared for both products "${existingProductId}" and "${value.productId}". Use globally unique ${label} ids.`
+      );
+    }
+    seen.set(value.id, value.productId);
+  }
+}
+
+function validateRuntimeCatalogPlan(
+  products: readonly RuntimeProduct[],
+  suites: readonly RuntimePluginSuite[],
+  bundles: readonly RuntimeAppBundle[]
+): void {
+  assertUniqueRuntimeIds('suite', suites);
+  assertUniqueRuntimeIds('bundle', bundles);
+
+  const productIds = new Set(products.map((product) => product.id));
+  const suitesById = new Map(suites.map((suite) => [suite.id, suite]));
+  const suiteMemberOwners = new Map<string, string>();
+
+  for (const suite of suites) {
+    if (!productIds.has(suite.productId)) {
+      throw new Error(
+        `Runtime suite "${suite.id}" references missing product "${suite.productId}".`
+      );
+    }
+
+    for (const pluginId of suite.plugins) {
+      const ownerKey = `${suite.productId}:${pluginId}`;
+      const existingSuiteId = suiteMemberOwners.get(ownerKey);
+      if (existingSuiteId && existingSuiteId !== suite.id) {
+        throw new Error(
+          `Runtime plugin "${pluginId}" is assigned to both suites "${existingSuiteId}" and "${suite.id}" in product "${suite.productId}".`
+        );
+      }
+      suiteMemberOwners.set(ownerKey, suite.id);
+    }
+  }
+
+  for (const bundle of bundles) {
+    if (!productIds.has(bundle.productId)) {
+      throw new Error(
+        `Runtime bundle "${bundle.id}" references missing product "${bundle.productId}".`
+      );
+    }
+
+    if (!bundle.suiteId) {
+      continue;
+    }
+
+    const suite = suitesById.get(bundle.suiteId);
+    if (!suite) {
+      throw new Error(
+        `Runtime bundle "${bundle.id}" references missing suite "${bundle.suiteId}". Declare the suite before syncing the bundle.`
+      );
+    }
+    if (suite.productId !== bundle.productId) {
+      throw new Error(
+        `Runtime bundle "${bundle.id}" belongs to product "${bundle.productId}" but references suite "${bundle.suiteId}" from product "${suite.productId}".`
+      );
+    }
+  }
+}
+
+export async function syncRuntimeCatalog(
+  executor: Executor = db,
+  options: RuntimeCatalogSyncOptions = {}
+): Promise<void> {
+  const now = new Date();
+  const targetProductIds = options.productIds ? uniqueValues(options.productIds) : undefined;
+  const suites = collectRuntimeSuites(targetProductIds);
+  const bundles = collectRuntimeBundles(targetProductIds);
+  const products = collectRuntimeProducts(suites, bundles, targetProductIds);
+  validateRuntimeCatalogPlan(products, suites, bundles);
+
+  const productRows = products.map(
     (product) =>
       scrubUndefined({
         id: product.id,
@@ -80,7 +200,7 @@ export async function syncRuntimeCatalog(
       });
   }
 
-  const suiteRows = listRuntimePluginSuites().map(
+  const suiteRows = suites.map(
     (suite) =>
       scrubUndefined({
         id: suite.id,
@@ -115,7 +235,7 @@ export async function syncRuntimeCatalog(
       });
   }
 
-  for (const suite of listRuntimePluginSuites()) {
+  for (const suite of suites) {
     const memberRows = suite.plugins.map(
       (pluginId, index) =>
         scrubUndefined({
@@ -135,8 +255,9 @@ export async function syncRuntimeCatalog(
       .insert(pluginSuiteMembers)
       .values(memberRows)
       .onConflictDoUpdate({
-        target: [pluginSuiteMembers.suiteId, pluginSuiteMembers.pluginId],
+        target: [pluginSuiteMembers.productId, pluginSuiteMembers.pluginId],
         set: {
+          suiteId: sql`excluded.suite_id`,
           productId: sql`excluded.product_id`,
           role: sql`excluded.role`,
           sortOrder: sql`excluded.sort_order`,
@@ -146,7 +267,7 @@ export async function syncRuntimeCatalog(
       });
   }
 
-  const bundleRows = listRuntimeAppBundles().map(
+  const bundleRows = bundles.map(
     (bundle) =>
       scrubUndefined({
         id: bundle.id,
@@ -186,7 +307,7 @@ export async function syncRuntimeCatalog(
       });
   }
 
-  for (const bundle of listRuntimeAppBundles()) {
+  for (const bundle of bundles) {
     const memberRows = bundle.plugins.map(
       (plugin, index) =>
         scrubUndefined({

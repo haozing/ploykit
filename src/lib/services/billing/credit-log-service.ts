@@ -13,6 +13,11 @@ import { requireUserContext, withSystemContext } from '@/lib/db';
 import { creditLogs, creditReconciliationRuns, type CreditLogType } from '@/lib/db/schema';
 import { desc, eq, and, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
+import {
+  applyCreditChange,
+  getUserCreditLedgerBalance,
+} from '@/lib/services/billing/credit-account-service';
+import { PLATFORM_PRIMARY_CREDIT_METRIC } from '@/lib/billing/billing-metrics';
 
 // ============================================================================
 // TYPES
@@ -186,16 +191,7 @@ export async function getCreditLogsByType(userId: string, logType: CreditLogType
 }
 
 export async function getCreditLedgerBalance(userId: string): Promise<number> {
-  const [row] = await withSystemContext(async (database) => {
-    return database
-      .select({
-        balance: sql<number>`coalesce(sum(${creditLogs.changeAmount}), 0)`,
-      })
-      .from(creditLogs)
-      .where(eq(creditLogs.userId, userId));
-  });
-
-  return Number(row?.balance || 0);
+  return getUserCreditLedgerBalance(userId);
 }
 
 export async function runCreditReconciliation(): Promise<{
@@ -223,27 +219,28 @@ export async function runCreditReconciliation(): Promise<{
         ledger_balance: string | number;
         entitlement_balance: string | number;
       }>(sql`
-        WITH ledger AS (
-          SELECT user_id, COALESCE(SUM(change_amount), 0)::int AS ledger_balance
-          FROM credit_logs
-          GROUP BY user_id
+        WITH account_balance AS (
+          SELECT scope_id AS user_id, COALESCE(balance, 0)::int AS ledger_balance
+          FROM credit_accounts
+          WHERE scope_type = 'user'
+            AND metric = ${PLATFORM_PRIMARY_CREDIT_METRIC}
         ),
         active_entitlement AS (
           SELECT DISTINCT ON (user_id)
             user_id,
             id AS entitlement_id,
-            COALESCE((usage_metrics->>'platform.apiCallsRemaining')::int, 0) AS entitlement_balance
+            COALESCE((usage_metrics->>${PLATFORM_PRIMARY_CREDIT_METRIC})::int, 0) AS entitlement_balance
           FROM user_entitlements
           WHERE status = 'active'
           ORDER BY user_id, created_at DESC
         )
         SELECT
-          COALESCE(ledger.user_id, active_entitlement.user_id) AS user_id,
+          COALESCE(account_balance.user_id, active_entitlement.user_id) AS user_id,
           active_entitlement.entitlement_id,
-          COALESCE(ledger.ledger_balance, 0) AS ledger_balance,
+          COALESCE(account_balance.ledger_balance, 0) AS ledger_balance,
           COALESCE(active_entitlement.entitlement_balance, 0) AS entitlement_balance
-        FROM ledger
-        FULL OUTER JOIN active_entitlement ON active_entitlement.user_id = ledger.user_id
+        FROM account_balance
+        FULL OUTER JOIN active_entitlement ON active_entitlement.user_id = account_balance.user_id
       `);
 
       const normalizedRows = Array.isArray(rows) ? rows : rows.rows;
@@ -302,6 +299,30 @@ function buildCreditLogChecksum(input: {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
 
+function readSnapshotBalance(
+  snapshot: Record<string, unknown>,
+  metric = PLATFORM_PRIMARY_CREDIT_METRIC
+) {
+  const direct = snapshot[metric];
+  if (typeof direct === 'number' && Number.isFinite(direct)) {
+    return Math.trunc(direct);
+  }
+  if (typeof direct === 'string' && Number.isFinite(Number(direct))) {
+    return Math.trunc(Number(direct));
+  }
+
+  const firstNumeric = Object.values(snapshot).find(
+    (value) =>
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      (typeof value === 'string' && Number.isFinite(Number(value)))
+  );
+  return typeof firstNumeric === 'number'
+    ? Math.trunc(firstNumeric)
+    : typeof firstNumeric === 'string'
+      ? Math.trunc(Number(firstNumeric))
+      : 0;
+}
+
 // ============================================================================
 // CONVENIENCE FUNCTIONS
 // ============================================================================
@@ -319,14 +340,19 @@ export async function logSubscriptionCreated(params: {
 }) {
   const { userId, creditsGranted, currentBalance, planName, orderId, entitlementId } = params;
 
-  await logCreditChange({
-    userId,
-    logType: 'grant',
-    changeAmount: creditsGranted,
-    balanceAfter: currentBalance,
+  await applyCreditChange({
+    scope: { type: 'user', id: userId },
+    metric: PLATFORM_PRIMARY_CREDIT_METRIC,
+    operation: 'grant',
+    amount: creditsGranted,
     reason: `Subscription created - ${planName}`,
     relatedOrderId: orderId,
-    entitlementId,
+    metadata: {
+      planName,
+      entitlementId,
+      currentBalance,
+    },
+    visibleInCreditLog: true,
   });
 }
 
@@ -342,14 +368,19 @@ export async function logMonthlyReset(params: {
 }) {
   const { userId, resetAmount, currentBalance, entitlementId, orderId } = params;
 
-  await logCreditChange({
-    userId,
-    logType: 'reset',
-    changeAmount: resetAmount,
-    balanceAfter: currentBalance,
+  await applyCreditChange({
+    scope: { type: 'user', id: userId },
+    metric: PLATFORM_PRIMARY_CREDIT_METRIC,
+    operation: 'reset',
+    mode: 'set',
+    amount: resetAmount,
     reason: 'Monthly billing cycle reset',
-    entitlementId,
     relatedOrderId: orderId,
+    metadata: {
+      entitlementId,
+      currentBalance,
+    },
+    visibleInCreditLog: true,
   });
 }
 
@@ -365,13 +396,19 @@ export async function logRefundRevoke(params: {
 }) {
   const { userId, creditsRevoked, currentBalance, orderId, refundOrderId } = params;
 
-  await logCreditChange({
-    userId,
-    logType: 'refund_revoke',
-    changeAmount: -creditsRevoked,
-    balanceAfter: currentBalance,
+  await applyCreditChange({
+    scope: { type: 'user', id: userId },
+    metric: PLATFORM_PRIMARY_CREDIT_METRIC,
+    operation: 'revoke',
+    mode: 'set',
+    amount: readSnapshotBalance(currentBalance),
     reason: `Credits revoked due to refund`,
     relatedOrderId: refundOrderId || orderId,
+    metadata: {
+      creditsRevoked,
+      currentBalance,
+    },
+    visibleInCreditLog: true,
   });
 }
 
@@ -387,13 +424,17 @@ export async function logManualAdjustment(params: {
 }) {
   const { userId, adjustmentAmount, currentBalance, reason, adminUserId } = params;
 
-  await logCreditChange({
-    userId,
-    logType: 'manual_adjust',
-    changeAmount: adjustmentAmount,
-    balanceAfter: currentBalance,
+  await applyCreditChange({
+    scope: { type: 'user', id: userId },
+    metric: PLATFORM_PRIMARY_CREDIT_METRIC,
+    operation: 'adjust',
+    amount: adjustmentAmount,
     reason,
-    metadata: adminUserId ? { adjustedBy: adminUserId } : undefined,
+    metadata: {
+      ...(adminUserId ? { adjustedBy: adminUserId } : {}),
+      currentBalance,
+    },
+    visibleInCreditLog: true,
   });
 }
 
@@ -411,14 +452,21 @@ export async function logSubscriptionUpgrade(params: {
 }) {
   const { userId, creditsDelta, currentBalance, fromPlan, toPlan, orderId, entitlementId } = params;
 
-  await logCreditChange({
-    userId,
-    logType: 'subscription_upgrade',
-    changeAmount: creditsDelta,
-    balanceAfter: currentBalance,
+  await applyCreditChange({
+    scope: { type: 'user', id: userId },
+    metric: PLATFORM_PRIMARY_CREDIT_METRIC,
+    operation: 'adjust',
+    amount: creditsDelta,
     reason: `Upgraded from ${fromPlan} to ${toPlan}`,
     relatedOrderId: orderId,
-    entitlementId,
+    metadata: {
+      fromPlan,
+      toPlan,
+      entitlementId,
+      currentBalance,
+    },
+    visibleInCreditLog: true,
+    creditLogType: 'subscription_upgrade',
   });
 }
 
@@ -435,12 +483,19 @@ export async function logSubscriptionDowngrade(params: {
 }) {
   const { userId, creditsDelta, currentBalance, fromPlan, toPlan, entitlementId } = params;
 
-  await logCreditChange({
-    userId,
-    logType: 'subscription_downgrade',
-    changeAmount: creditsDelta,
-    balanceAfter: currentBalance,
+  await applyCreditChange({
+    scope: { type: 'user', id: userId },
+    metric: PLATFORM_PRIMARY_CREDIT_METRIC,
+    operation: 'adjust',
+    amount: creditsDelta,
     reason: `Downgraded from ${fromPlan} to ${toPlan}`,
-    entitlementId,
+    metadata: {
+      fromPlan,
+      toPlan,
+      entitlementId,
+      currentBalance,
+    },
+    visibleInCreditLog: true,
+    creditLogType: 'subscription_downgrade',
   });
 }

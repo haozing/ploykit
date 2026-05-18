@@ -17,6 +17,7 @@ import type {
   PluginConfigRepository,
   PluginConfigScope,
   PluginBillingHost,
+  PluginCommerceHost,
   PluginCreditsHost,
   PluginFilesRepository,
   PluginFilesScope,
@@ -557,9 +558,26 @@ describe('plugin capability context', () => {
             status: 'active',
           },
         }));
-        const getCreditBalance = vi.fn<PluginCreditsHost['getBalance']>(async (scope, metric) => ({
+        const createCommerceOrder = vi.fn<PluginCommerceHost['createOrder']>(
+          async (_scope, input) => ({
+            id: 'order-1',
+            orderType: input.orderType ?? 'one_time_purchase',
+            provider: input.provider ?? 'local',
+            providerOrderId: input.providerOrderId ?? 'order-1',
+            amount: input.amount === undefined ? null : String(input.amount),
+            currency: input.currency ?? 'USD',
+            status: input.status ?? 'succeeded',
+            planId: null,
+            relatedOrderId: null,
+            metadata: input.metadata,
+            createdAt: new Date('2026-05-18T00:00:00Z'),
+            updatedAt: new Date('2026-05-18T00:00:00Z'),
+          })
+        );
+        const getCreditBalance = vi.fn<PluginCreditsHost['getBalance']>(async (scope, input) => ({
           balance: 10,
-          metric,
+          metric: input.metric,
+          scope: input.accountScope,
           userId: scope.userId ?? 'user-1',
         }));
         const consumeCredits = vi.fn<PluginCreditsHost['consume']>(async (_scope, input) => ({
@@ -568,7 +586,11 @@ describe('plugin capability context', () => {
           balanceBefore: 10,
           balanceAfter: 10 - input.amount,
           meter: input.meter,
-          userId: input.userId,
+          metric: input.metric,
+          scope: input.accountScope,
+          userId:
+            input.userId ??
+            (input.accountScope.type === 'user' ? input.accountScope.id : undefined),
           idempotencyKey: input.idempotencyKey,
           metadata: input.metadata,
         }));
@@ -666,6 +688,7 @@ describe('plugin capability context', () => {
               creditsHost: { getBalance: getCreditBalance, consume: consumeCredits },
             },
             billing: { host: { getCurrentPlan, hasEntitlement, grantPlan, redeemCode } },
+            commerce: { host: { createOrder: createCommerceOrder } },
             notifications: { host: { send: sendNotification } },
             config: { repository: configRepository, auditPort },
             secrets: { repository: secretsRepository, auditPort },
@@ -762,6 +785,11 @@ describe('plugin capability context', () => {
         const entitled = await context.billing.hasEntitlement('feature.export');
         const granted = await context.billing.grantPlan({ planId: 'pro', reason: 'redeemed-code' });
         const redemption = await context.billing.redeemCode({ code: 'WELCOME-2026' });
+        const commerceOrder = await context.commerce.createOrder({
+          amount: 12,
+          currency: 'USD',
+          metadata: { source: 'test' },
+        });
         const notification = await context.notifications.send({
           message: 'Ready',
           channel: 'in-app',
@@ -819,7 +847,8 @@ describe('plugin capability context', () => {
         expect(entitled).toBe(true);
         expect(creditBalance).toEqual({
           balance: 10,
-          metric: 'platform.apiCallsRemaining',
+          metric: 'platform.credits',
+          scope: { type: 'user', id: 'user-1' },
           userId: 'user-1',
         });
         expect(creditConsumption).toEqual({
@@ -828,6 +857,8 @@ describe('plugin capability context', () => {
           balanceBefore: 10,
           balanceAfter: 8,
           meter: 'capability-test.external-api',
+          metric: 'platform.credits',
+          scope: { type: 'user', id: 'user-1' },
           userId: 'user-1',
           idempotencyKey: 'credits-1',
           metadata: { provider: 'example' },
@@ -837,7 +868,10 @@ describe('plugin capability context', () => {
             pluginId: 'capability-test',
             userId: 'user-1',
           }),
-          'platform.apiCallsRemaining'
+          {
+            accountScope: { type: 'user', id: 'user-1' },
+            metric: 'platform.credits',
+          }
         );
         expect(consumeCredits).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -899,6 +933,23 @@ describe('plugin capability context', () => {
             planId: 'pro',
           },
         });
+        expect(commerceOrder).toMatchObject({
+          id: 'order-1',
+          provider: 'local',
+          amount: '12',
+          status: 'succeeded',
+        });
+        expect(createCommerceOrder).toHaveBeenCalledWith(
+          expect.objectContaining({ pluginId: 'capability-test', userId: 'user-1' }),
+          expect.objectContaining({
+            amount: 12,
+            currency: 'USD',
+            metadata: expect.objectContaining({
+              pluginId: 'capability-test',
+              source: 'test',
+            }),
+          })
+        );
         expect(grantPlan).toHaveBeenCalledWith(
           expect.objectContaining({
             pluginId: 'capability-test',
@@ -999,7 +1050,10 @@ describe('plugin capability context', () => {
       balanceBefore: 10,
       balanceAfter: 10 - input.amount,
       meter: input.meter,
-      userId: input.userId,
+      metric: input.metric,
+      scope: input.accountScope,
+      userId:
+        input.userId ?? (input.accountScope.type === 'user' ? input.accountScope.id : undefined),
       idempotencyKey: input.idempotencyKey,
       metadata: input.metadata,
     }));
@@ -1025,9 +1079,10 @@ describe('plugin capability context', () => {
         metering: {
           usageLedger,
           creditsHost: {
-            getBalance: vi.fn(async () => ({
+            getBalance: vi.fn(async (_scope, input) => ({
               balance: 10,
-              metric: 'platform.apiCallsRemaining',
+              metric: input.metric,
+              scope: input.accountScope,
               userId: 'user-1',
             })),
             consume: consumeCredits,
@@ -1085,9 +1140,10 @@ describe('plugin capability context', () => {
   });
 
   it('rejects metering authorization when credits are insufficient', async () => {
-    const getCreditBalance = vi.fn<PluginCreditsHost['getBalance']>(async (scope, metric) => ({
+    const getCreditBalance = vi.fn<PluginCreditsHost['getBalance']>(async (scope, input) => ({
       balance: 1,
-      metric,
+      metric: input.metric,
+      scope: input.accountScope,
       userId: scope.userId ?? 'user-1',
     }));
     const context = createPluginRuntimeContext({

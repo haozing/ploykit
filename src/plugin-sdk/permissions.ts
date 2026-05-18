@@ -60,8 +60,11 @@ export const Permission = {
   MeteringWrite: 'metering.write',
   CreditsRead: 'credits.read',
   CreditsConsume: 'credits.consume',
+  CreditsWrite: 'credits.write',
   BillingRead: 'billing.read',
   BillingWrite: 'billing.write',
+  CommerceRead: 'commerce.read',
+  CommerceWrite: 'commerce.write',
   NotificationsSend: 'notifications.send',
 
   ExternalHttp: 'http.external',

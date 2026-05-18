@@ -43,7 +43,7 @@
     "plugin:inspect": "tsx scripts/ploykit-plugin.ts inspect",
     "plugin:doctor": "tsx scripts/ploykit-plugin.ts doctor",
     "plugin:dev": "tsx scripts/ploykit-plugin.ts dev",
-    "runtime:check": "tsx scripts/check-plugin-runtime.ts",
+    "runtime:check": "node --conditions=react-server --import tsx scripts/check-plugin-runtime.ts",
     "api:security-report": "tsx scripts/generate-api-security-report.ts",
     "webhooks:retry": "tsx scripts/run-webhook-retry.ts",
     "deps:check": "tsx scripts/check-dependencies.ts",

@@ -10,6 +10,7 @@ import {
   type PluginStorageScope,
   type PluginStoredRecord,
   type UpdatePluginRecordInput,
+  type UpdatePluginRecordWhereInput,
 } from '../runtime';
 
 const todoCollection: PluginCollectionDefinition = {
@@ -22,9 +23,27 @@ const todoCollection: PluginCollectionDefinition = {
   },
 };
 
+const claimCollection: PluginCollectionDefinition = {
+  fields: {
+    job_key: { type: 'string', required: true },
+    status: { type: 'string', required: true },
+    worker_id: 'string?',
+  },
+  indexes: [{ fields: ['job_key'], unique: true }],
+};
+
+const optionalUniqueCollection: PluginCollectionDefinition = {
+  fields: {
+    name: { type: 'string', required: true },
+    email: 'string?',
+  },
+  indexes: [{ fields: ['email'], unique: true }],
+};
+
 class MemoryPluginStorageRepository implements PluginStorageRepository {
   collections = new Map<string, EnsurePluginCollectionInput>();
   records = new Map<string, PluginStoredRecord>();
+  uniqueKeys = new Map<string, string>();
 
   async ensureCollection(input: EnsurePluginCollectionInput): Promise<void> {
     this.collections.set(`${input.pluginId}:${input.name}`, input);
@@ -56,6 +75,7 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
     _scope: PluginStorageScope,
     input: InsertPluginRecordInput
   ): Promise<PluginStoredRecord> {
+    this.reserveUniqueKeys(input);
     const now = new Date();
     const record: PluginStoredRecord = {
       id: input.id,
@@ -72,6 +92,21 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
     return record;
   }
 
+  async insertIfAbsent(
+    _scope: PluginStorageScope,
+    input: InsertPluginRecordInput
+  ): Promise<{ record: PluginStoredRecord; inserted: boolean }> {
+    for (const uniqueKey of input.uniqueKeys ?? []) {
+      const existingId = this.uniqueKeys.get(this.uniqueMapKey(input, uniqueKey.key));
+      const existing = existingId ? this.records.get(existingId) : undefined;
+      if (existing && !existing.deletedAt) {
+        return { record: existing, inserted: false };
+      }
+    }
+
+    return { record: await this.insert(_scope, input), inserted: true };
+  }
+
   async update(
     scope: PluginStorageScope,
     input: UpdatePluginRecordInput
@@ -81,6 +116,8 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
       throw new Error('record not found');
     }
 
+    this.releaseUniqueKeys(input);
+    this.reserveUniqueKeys(input);
     const record = {
       ...existing,
       data: input.data,
@@ -88,6 +125,28 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
     };
     this.records.set(record.id, record);
     return record;
+  }
+
+  async updateWhere(
+    scope: PluginStorageScope,
+    input: UpdatePluginRecordWhereInput
+  ): Promise<PluginStoredRecord | null> {
+    const records = await this.findMany(scope, input.collectionName, input.collection, input.query);
+    const existing = records[0];
+    if (!existing) {
+      return null;
+    }
+
+    const update = input.buildUpdatedData(existing);
+    return this.update(scope, {
+      pluginId: input.pluginId,
+      collectionName: input.collectionName,
+      userId: existing.userId,
+      id: existing.id,
+      data: update.data,
+      previousUniqueKeys: update.previousUniqueKeys,
+      uniqueKeys: update.uniqueKeys,
+    });
   }
 
   async softDelete(
@@ -106,6 +165,12 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
       updatedAt: new Date(),
     };
     this.records.set(record.id, record);
+    this.releaseUniqueKeys({
+      pluginId: record.pluginId,
+      collectionName,
+      userId: record.userId,
+      id,
+    });
     return record;
   }
 
@@ -114,12 +179,43 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
     fn: (repository: PluginStorageRepository) => Promise<T>
   ): Promise<T> {
     const snapshot = new Map(this.records);
+    const uniqueSnapshot = new Map(this.uniqueKeys);
 
     try {
       return await fn(this);
     } catch (error) {
       this.records = snapshot;
+      this.uniqueKeys = uniqueSnapshot;
       throw error;
+    }
+  }
+
+  private uniqueMapKey(input: InsertPluginRecordInput | UpdatePluginRecordInput, key: string) {
+    return `${input.pluginId}:${input.collectionName}:${input.userId ?? '__system__'}:${key}`;
+  }
+
+  private reserveUniqueKeys(input: InsertPluginRecordInput | UpdatePluginRecordInput): void {
+    for (const uniqueKey of input.uniqueKeys ?? []) {
+      const key = this.uniqueMapKey(input, uniqueKey.key);
+      const existingId = this.uniqueKeys.get(key);
+      if (existingId && existingId !== input.id) {
+        throw new Error('unique conflict');
+      }
+    }
+
+    for (const uniqueKey of input.uniqueKeys ?? []) {
+      this.uniqueKeys.set(this.uniqueMapKey(input, uniqueKey.key), input.id);
+    }
+  }
+
+  private releaseUniqueKeys(
+    input: Pick<UpdatePluginRecordInput, 'pluginId' | 'collectionName' | 'userId' | 'id'>
+  ): void {
+    const prefix = `${input.pluginId}:${input.collectionName}:${input.userId ?? '__system__'}:`;
+    for (const [key, recordId] of this.uniqueKeys.entries()) {
+      if (key.startsWith(prefix) && recordId === input.id) {
+        this.uniqueKeys.delete(key);
+      }
     }
   }
 
@@ -324,5 +420,75 @@ describe('plugin storage runtime', () => {
     ).rejects.toThrow('fail');
 
     await expect(storage.collection('todos').findMany()).resolves.toEqual([]);
+  });
+
+  it('supports unique insertIfAbsent and atomic claim-style updates', async () => {
+    const repository = new MemoryPluginStorageRepository();
+    const storage = createPluginStorage({
+      pluginId: 'todo',
+      userId: 'user-a',
+      data: { collections: { claims: claimCollection } },
+      repository,
+    });
+
+    const first = await storage
+      .collection('claims')
+      .insertIfAbsent({ job_key: 'job-1', status: 'queued' }, { uniqueBy: ['job_key'] });
+    const second = await storage
+      .collection('claims')
+      .insertIfAbsent({ job_key: 'job-1', status: 'queued' }, { uniqueBy: ['job_key'] });
+    const claim = await storage.collection('claims').claim(
+      {
+        where: { job_key: 'job-1', status: 'queued' },
+      },
+      { status: 'running', worker_id: 'worker-1' }
+    );
+    const missed = await storage.collection('claims').claim(
+      {
+        where: { job_key: 'job-1', status: 'queued' },
+      },
+      { status: 'running', worker_id: 'worker-2' }
+    );
+
+    expect(first.inserted).toBe(true);
+    expect(second.inserted).toBe(false);
+    expect(second.record.id).toBe(first.record.id);
+    expect(claim).toMatchObject({
+      claimed: true,
+      record: { status: 'running', worker_id: 'worker-1' },
+    });
+    expect(missed).toEqual({ claimed: false, record: null });
+  });
+
+  it('skips automatic unique keys for nullish optional fields', async () => {
+    const repository = new MemoryPluginStorageRepository();
+    const storage = createPluginStorage({
+      pluginId: 'todo',
+      userId: 'user-a',
+      data: { collections: { contacts: optionalUniqueCollection } },
+      repository,
+    });
+
+    const first = await storage.collection('contacts').insert({ name: 'A' });
+    const second = await storage.collection('contacts').insert({ name: 'B', email: null });
+
+    expect(first.id).not.toBe(second.id);
+    expect(await storage.collection('contacts').findMany()).toHaveLength(2);
+  });
+
+  it('requires explicit insertIfAbsent unique fields to be present', async () => {
+    const repository = new MemoryPluginStorageRepository();
+    const storage = createPluginStorage({
+      pluginId: 'todo',
+      userId: 'user-a',
+      data: { collections: { contacts: optionalUniqueCollection } },
+      repository,
+    });
+
+    await expect(
+      storage.collection('contacts').insertIfAbsent({ name: 'A' }, { uniqueBy: ['email'] })
+    ).rejects.toMatchObject({
+      code: 'PLUGIN_STORAGE_UNIQUE_FIELD_VALUE_REQUIRED',
+    });
   });
 });

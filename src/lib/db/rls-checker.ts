@@ -80,6 +80,11 @@ export const DEFAULT_RLS_REQUIREMENTS: RLSRequirement[] = [
   { table: 'plugin_settings', isolationColumns: ['user_id'], requireForce: true },
   { table: 'plugin_collections', isolationColumns: ['plugin_id'], requireForce: true },
   { table: 'plugin_records', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
+  {
+    table: 'plugin_record_unique_keys',
+    isolationColumns: ['plugin_id', 'user_id'],
+    requireForce: true,
+  },
   { table: 'plugin_config', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
   { table: 'plugin_secrets', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
   { table: 'host_secrets', isolationColumns: [], requireForce: true },
@@ -89,6 +94,8 @@ export const DEFAULT_RLS_REQUIREMENTS: RLSRequirement[] = [
   { table: 'billing_payment_methods', isolationColumns: ['user_id'], requireForce: true },
   { table: 'billing_tax_profiles', isolationColumns: ['user_id'], requireForce: true },
   { table: 'credit_logs', isolationColumns: ['user_id'], requireForce: true },
+  { table: 'credit_accounts', isolationColumns: [], requireForce: true },
+  { table: 'credit_ledger_entries', isolationColumns: [], requireForce: true },
   { table: 'notifications', isolationColumns: ['user_id'], requireForce: true },
 ];
 

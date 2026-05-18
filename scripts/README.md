@@ -60,7 +60,7 @@ npm run db:migrate
 Scans the default `plugins/` directory and any external plugin source
 directories configured with `PLOYKIT_PLUGIN_DIRS`. Default plugins are generated
 into `src/lib/plugin-map.ts`; external plugin entries are generated into the
-active runtime artifact `.runtime/plugin-map.ts` by default, or
+active runtime artifact `.runtime/plugin-map.cjs` by default, or
 `PLOYKIT_PLUGIN_MAP_FILE` when configured.
 
 Use `--runtime-only` for product shells that should prepare only the active

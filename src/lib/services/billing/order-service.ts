@@ -11,7 +11,6 @@
  */
 
 import { requireUserContext, withSystemContext } from '@/lib/db';
-import { bus } from '@/lib/bus';
 import { entitlementPlans, orders, type OrderType, type OrderStatus } from '@/lib/db/schema';
 import { and, desc, eq } from 'drizzle-orm';
 
@@ -20,6 +19,7 @@ import { and, desc, eq } from 'drizzle-orm';
 // ============================================================================
 
 export interface CreateOrderParams {
+  id?: string;
   userId: string;
   orderType: OrderType;
   provider?: string;
@@ -30,6 +30,64 @@ export interface CreateOrderParams {
   planId?: string;
   relatedOrderId?: string;
   metadata?: Record<string, unknown>;
+}
+
+function readMetadataString(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+async function emitBusEvent(
+  eventName: string,
+  payload: Record<string, unknown>,
+  metadata: { correlationId: string; idempotencyKey: string }
+) {
+  const { bus } = await import('@/lib/bus');
+  await bus.event.emit(eventName, 'billing-order-service', payload, metadata);
+}
+
+async function emitCommerceOrderEvent(
+  eventName: 'commerce.order.created' | 'commerce.order.succeeded' | 'commerce.order.refunded',
+  order: {
+    id: string;
+    userId: string;
+    orderType: OrderType;
+    provider: string;
+    providerOrderId: string;
+    amount: string | null;
+    currency: string | null;
+    status: OrderStatus;
+    planId: string | null;
+    relatedOrderId: string | null;
+    metadata: unknown;
+  }
+) {
+  const metadata = (order.metadata as Record<string, unknown> | undefined) ?? {};
+  const pluginId = readMetadataString(metadata, 'pluginId');
+  const productId = readMetadataString(metadata, 'productId');
+
+  await emitBusEvent(
+    eventName,
+    {
+      orderId: order.id,
+      userId: order.userId,
+      orderType: order.orderType,
+      provider: order.provider,
+      providerOrderId: order.providerOrderId,
+      amount: order.amount,
+      currency: order.currency,
+      status: order.status,
+      planId: order.planId,
+      relatedOrderId: order.relatedOrderId,
+      pluginId,
+      productId,
+      metadata,
+    },
+    {
+      correlationId: `${order.provider}:${order.providerOrderId}`,
+      idempotencyKey: `${order.provider}:${order.providerOrderId}:${eventName}`,
+    }
+  );
 }
 
 // ============================================================================
@@ -82,11 +140,12 @@ export async function createOrder(params: CreateOrderParams) {
     return await database
       .insert(orders)
       .values({
+        id: params.id,
         userId,
         orderType,
         provider,
         providerOrderId,
-        amount: amount ? String(amount) : undefined,
+        amount: amount === undefined || amount === null ? undefined : String(amount),
         currency,
         status,
         planId: planId || undefined,
@@ -98,9 +157,8 @@ export async function createOrder(params: CreateOrderParams) {
 
   const order = result[0];
 
-  await bus.event.emit(
+  await emitBusEvent(
     'billing.order.created',
-    'billing-order-service',
     {
       orderId: order.id,
       userId,
@@ -118,6 +176,11 @@ export async function createOrder(params: CreateOrderParams) {
       idempotencyKey: `${provider}:${providerOrderId}:order-created`,
     }
   );
+
+  await emitCommerceOrderEvent('commerce.order.created', order);
+  if (order.status === 'succeeded') {
+    await emitCommerceOrderEvent('commerce.order.succeeded', order);
+  }
 
   return order;
 }
@@ -141,6 +204,21 @@ export async function getOrderByProviderId(provider: string, providerOrderId: st
     return await database.query.orders.findFirst({
       where: and(eq(orders.provider, provider), eq(orders.providerOrderId, providerOrderId)),
     });
+  });
+}
+
+export async function updateOrderMetadata(orderId: string, metadata: Record<string, unknown>) {
+  return await withSystemContext(async (database) => {
+    const [order] = await database
+      .update(orders)
+      .set({
+        metadata,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+
+    return order;
   });
 }
 
@@ -239,6 +317,13 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
       .where(eq(orders.id, orderId))
       .returning();
   });
+
+  if (updated && status === 'succeeded') {
+    await emitCommerceOrderEvent('commerce.order.succeeded', updated);
+  }
+  if (updated && status === 'refunded') {
+    await emitCommerceOrderEvent('commerce.order.refunded', updated);
+  }
 
   return updated;
 }

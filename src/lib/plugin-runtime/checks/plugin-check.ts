@@ -51,7 +51,8 @@ const DYNAMIC_CTX_CAPABILITY_PERMISSIONS = new Map<string, readonly PermissionVa
     'connectors',
     [Permission.ConnectorsRead, Permission.ConnectorsInvoke, Permission.ConnectorsManage],
   ],
-  ['credits', [Permission.CreditsRead, Permission.CreditsConsume]],
+  ['commerce', [Permission.CommerceRead, Permission.CommerceWrite]],
+  ['credits', [Permission.CreditsRead, Permission.CreditsConsume, Permission.CreditsWrite]],
   ['events', [Permission.EventsEmit, Permission.EventsSubscribe]],
   ['files', [Permission.FilesRead, Permission.FilesWrite]],
   ['http', [Permission.ExternalHttp]],
@@ -1156,6 +1157,45 @@ function captureCapabilityPermissions(
         filePath,
         node,
         'ctx.credits.consume',
+        sourceFile
+      );
+      return;
+    }
+
+    if (method === 'grant' || method === 'adjust' || method === 'refund') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.CreditsWrite,
+        filePath,
+        node,
+        `ctx.credits.${method}`,
+        sourceFile
+      );
+      return;
+    }
+  }
+
+  if (matchesPrefix(chain, ['ctx', 'commerce'])) {
+    const method = chain[2];
+    if (method === 'createCheckout' || method === 'createOrder') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.CommerceWrite,
+        filePath,
+        node,
+        `ctx.commerce.${method}`,
+        sourceFile
+      );
+      return;
+    }
+
+    if (method === 'getOrder' || method === 'listOrders') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.CommerceRead,
+        filePath,
+        node,
+        `ctx.commerce.${method}`,
         sourceFile
       );
       return;

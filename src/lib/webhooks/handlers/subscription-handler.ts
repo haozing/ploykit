@@ -20,6 +20,7 @@ import {
 import { logger } from '@/lib/_core/logger';
 import {
   createOrder,
+  getOrderById,
   getOrderByProviderId,
   createRefundOrder,
   updateOrderStatus,
@@ -33,6 +34,11 @@ import {
   logMonthlyReset,
   logRefundRevoke,
 } from '@/lib/services/billing/credit-log-service';
+import {
+  applyCreditChange,
+  type CreditAccountScope,
+} from '@/lib/services/billing/credit-account-service';
+import { grantDigitalEntitlement } from '@/lib/services/billing/digital-entitlement-service';
 import { db } from '@/lib/db';
 import { entitlementPlans, userEntitlements } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -41,9 +47,44 @@ import { WEBHOOK_PLUGIN_IDS, BILLING_EVENTS, PAYMENT_FAILURE_CONFIG } from '../c
 import { getProductPrimaryCreditMetric } from '@/lib/billing/product-billing.server';
 
 const PLUGIN_ID = WEBHOOK_PLUGIN_IDS.STRIPE;
-const PRIMARY_CREDIT_METRIC = getProductPrimaryCreditMetric();
+
+function getPrimaryCreditMetric(): string {
+  return getProductPrimaryCreditMetric();
+}
 
 type BillingInterval = 'monthly' | 'yearly';
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readMetadataString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readMetadataNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+function readCreditScope(
+  metadata: Record<string, unknown>,
+  fallbackUserId: string
+): CreditAccountScope {
+  const type = readMetadataString(metadata.creditScopeType);
+  const id = readMetadataString(metadata.creditScopeId);
+  if ((type === 'workspace' || type === 'product' || type === 'plugin') && id) {
+    return { type, id };
+  }
+  return { type: 'user', id: fallbackUserId };
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
 
 function addMonths(date: Date, months: number): Date {
   const next = new Date(date);
@@ -71,6 +112,64 @@ function getInitialQuotaWindow(params: { currentPeriodStart?: Date | null }): {
  */
 export function initSubscriptionHandlers() {
   logger.info({ pluginId: PLUGIN_ID }, 'Registering subscription event handlers...');
+
+  bus.event.on(BILLING_EVENTS.PAYMENT_SUCCEEDED, PLUGIN_ID, async (payload: unknown) => {
+    try {
+      const { userId, data } = payload as {
+        userId: string;
+        data: {
+          orderId: string;
+          paymentIntentId: string;
+          amount: number;
+          currency?: string;
+          metadata?: Record<string, unknown>;
+        };
+      };
+
+      const order = await updateOrderStatus(data.orderId, 'succeeded');
+      const orderMetadata = metadataRecord(order?.metadata);
+      const eventMetadata = metadataRecord(data.metadata);
+      const metadata = { ...eventMetadata, ...orderMetadata };
+      const pluginId = readMetadataString(metadata.pluginId);
+      const creditAmount = readMetadataNumber(metadata.creditAmount);
+      const creditMetric = readMetadataString(metadata.creditMetric) ?? getPrimaryCreditMetric();
+      const entitlementKey = readMetadataString(metadata.entitlementKey);
+
+      if (order && creditAmount && creditAmount > 0) {
+        await applyCreditChange({
+          scope: readCreditScope(metadata, userId),
+          metric: creditMetric,
+          operation: 'grant',
+          amount: Math.trunc(creditAmount),
+          pluginId,
+          userId,
+          relatedOrderId: order.id,
+          idempotencyKey: `${data.paymentIntentId}:credits`,
+          reason: `One-time purchase ${order.id}`,
+          metadata,
+          visibleInCreditLog: true,
+        });
+      }
+
+      if (order && entitlementKey) {
+        await grantDigitalEntitlement({
+          userId,
+          pluginId,
+          entitlementKey,
+          orderId: order.id,
+          sourceType: 'one_time_purchase',
+          metadata,
+          operatorId: 'stripe_webhook',
+        });
+      }
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error), payload },
+        'Failed to handle payment.succeeded event'
+      );
+      throw error;
+    }
+  });
 
   // ============================================================================
   // SUBSCRIPTION CREATED
@@ -215,14 +314,15 @@ export function initSubscriptionHandlers() {
         if (plan) {
           const interval = resolvedBillingInterval || 'monthly';
           const creditsGranted =
-            readPlanLimitValue(plan.limits, PRIMARY_CREDIT_METRIC, interval) ?? 0;
+            readPlanLimitValue(plan.limits, getPrimaryCreditMetric(), interval) ?? 0;
 
           if (creditsGranted > 0) {
+            const primaryCreditMetric = getPrimaryCreditMetric();
             await logSubscriptionCreated({
               userId,
               creditsGranted,
               currentBalance: {
-                apiCallsRemaining: creditsGranted,
+                [primaryCreditMetric]: creditsGranted,
                 planName: plan.name,
               },
               planName: plan.name,
@@ -751,15 +851,19 @@ export function initSubscriptionHandlers() {
             );
           } else {
             const resetAmount =
-              readPlanLimitValue(userEntitlement.plan.limits, PRIMARY_CREDIT_METRIC, 'monthly') ??
-              0;
+              readPlanLimitValue(
+                userEntitlement.plan.limits,
+                getPrimaryCreditMetric(),
+                'monthly'
+              ) ?? 0;
 
             if (resetAmount > 0) {
+              const primaryCreditMetric = getPrimaryCreditMetric();
               await logMonthlyReset({
                 userId,
                 resetAmount,
                 currentBalance: {
-                  apiCallsRemaining: resetAmount,
+                  [primaryCreditMetric]: resetAmount,
                   planName: userEntitlement.plan.name,
                 },
                 entitlementId: userEntitlement.id,
@@ -892,7 +996,9 @@ export function initSubscriptionHandlers() {
       );
 
       // STEP 1: Find original order
-      const originalOrder = await getOrderByProviderId('stripe', data.orderId);
+      const originalOrder =
+        (isUuid(data.orderId) ? await getOrderById(data.orderId) : null) ??
+        (await getOrderByProviderId('stripe', data.orderId));
       if (!originalOrder) {
         logger.warn(
           { userId, orderId: data.orderId },
@@ -958,14 +1064,15 @@ export function initSubscriptionHandlers() {
 
           if (plan) {
             const creditsToRevoke =
-              readPlanLimitValue(plan.limits, PRIMARY_CREDIT_METRIC, 'monthly') ?? 0;
+              readPlanLimitValue(plan.limits, getPrimaryCreditMetric(), 'monthly') ?? 0;
 
             if (creditsToRevoke > 0) {
+              const primaryCreditMetric = getPrimaryCreditMetric();
               await logRefundRevoke({
                 userId,
                 creditsRevoked: creditsToRevoke,
                 currentBalance: {
-                  apiCallsRemaining: 0,
+                  [primaryCreditMetric]: 0,
                   refundedAt: new Date().toISOString(),
                 },
                 refundOrderId: refundOrder.id,
@@ -1000,6 +1107,7 @@ export function initSubscriptionHandlers() {
     {
       pluginId: PLUGIN_ID,
       handlers: [
+        BILLING_EVENTS.PAYMENT_SUCCEEDED,
         BILLING_EVENTS.SUBSCRIPTION_CREATED,
         BILLING_EVENTS.SUBSCRIPTION_UPDATED,
         BILLING_EVENTS.SUBSCRIPTION_CANCELLED,

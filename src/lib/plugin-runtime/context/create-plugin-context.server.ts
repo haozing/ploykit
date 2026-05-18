@@ -16,6 +16,7 @@ import {
   createPluginArtifactsCapability,
   createPluginAiCapability,
   createPluginBillingCapability,
+  createPluginCommerceCapability,
   createPluginConfigCapability,
   createPluginConnectorsCapability,
   createPluginCreditsCapability,
@@ -39,6 +40,7 @@ import {
   type CreatePluginArtifactsOptions,
   type CreatePluginAiOptions,
   type CreatePluginBillingOptions,
+  type CreatePluginCommerceOptions,
   type CreatePluginConfigOptions,
   type CreatePluginConnectorsOptions,
   type CreatePluginCreditsOptions,
@@ -88,6 +90,7 @@ export interface PluginCapabilityFactoryOptions {
   credits?: CreatePluginCreditsOptions;
   metering?: CreatePluginMeteringOptions;
   billing?: CreatePluginBillingOptions;
+  commerce?: CreatePluginCommerceOptions;
   notifications?: CreatePluginNotificationsOptions;
   rag?: CreatePluginRagOptions;
   runs?: CreatePluginRunsOptions;
@@ -238,6 +241,7 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
     credits: createPluginCreditsCapability(capabilityScope, options.capabilities?.credits),
     metering: createPluginMeteringCapability(capabilityScope, options.capabilities?.metering),
     billing: createPluginBillingCapability(capabilityScope, options.capabilities?.billing),
+    commerce: createPluginCommerceCapability(capabilityScope, options.capabilities?.commerce),
     runs: {
       ...runs,
       async create(input) {

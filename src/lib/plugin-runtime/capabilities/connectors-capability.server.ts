@@ -36,7 +36,8 @@ import { recordCapabilityAudit } from './audit-helper.server';
 import type { AuditPort } from '@/lib/audit/audit-port.server';
 import { env } from '@/lib/_core/env';
 import type { UsageCategory, UsageLedger } from '@/lib/usage/usage-ledger.server';
-import type { PluginCreditsHost } from './credits-capability.server';
+import { getDefaultCreditMetric, type PluginCreditsHost } from './credits-capability.server';
+import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
 import { createPluginFilesCapability } from './files-capability.server';
 import { DbPluginSecretsRepository } from './secrets-capability.server';
 import { assertSafeEgressTarget } from './egress-guard.server';
@@ -1323,10 +1324,13 @@ export function createPluginConnectorsCapability(
             pluginId: scope.contract.id,
             userId: connectorScope.userId,
             requestId: scope.requestId,
+            productId: getCurrentRuntimeProductId(),
             system: Boolean(scope.system),
           },
           {
             meter: request.meter ?? `${scope.contract.id}.connector.${connectorName}`,
+            metric: getDefaultCreditMetric(),
+            accountScope: { type: 'user', id: connectorScope.userId },
             amount: request.creditAmount,
             userId: connectorScope.userId,
             idempotencyKey: request.idempotencyKey ?? `${scope.requestId}:connector:${callId}`,

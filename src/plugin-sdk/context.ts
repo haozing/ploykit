@@ -18,6 +18,17 @@ export type PluginResourceScope =
       id: string;
     };
 
+export type PluginCreditScope =
+  | PluginResourceScope
+  | {
+      type: 'product';
+      id?: string;
+    }
+  | {
+      type: 'plugin';
+      id?: string;
+    };
+
 export interface PluginWorkspace {
   id: string;
   name: string;
@@ -472,17 +483,43 @@ export interface PluginUsage {
 export interface PluginCreditBalance {
   balance: number;
   metric: string;
-  userId: string;
+  scope: {
+    type: PluginCreditScope['type'];
+    id: string;
+  };
+  userId?: string;
   unlimited?: boolean;
   metadata?: Record<string, unknown>;
+}
+
+export interface PluginCreditBalanceInput {
+  metric?: string;
+  scope?: PluginCreditScope;
 }
 
 export interface PluginCreditConsumeInput {
   meter: string;
   amount?: number;
+  metric?: string;
+  scope?: PluginCreditScope;
   userId?: string;
   idempotencyKey?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface PluginCreditChangeInput {
+  amount: number;
+  metric?: string;
+  scope?: PluginCreditScope;
+  userId?: string;
+  reason?: string;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PluginCreditAdjustInput extends Omit<PluginCreditChangeInput, 'amount'> {
+  amount: number;
+  mode?: 'delta' | 'set';
 }
 
 export interface PluginCreditConsumeResult {
@@ -491,14 +528,38 @@ export interface PluginCreditConsumeResult {
   balanceBefore: number;
   balanceAfter: number;
   meter: string;
-  userId: string;
+  metric: string;
+  scope: {
+    type: PluginCreditScope['type'];
+    id: string;
+  };
+  userId?: string;
   idempotencyKey: string;
   metadata?: Record<string, unknown>;
 }
 
+export interface PluginCreditChangeResult {
+  changed: true;
+  operation: 'grant' | 'adjust' | 'refund';
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  metric: string;
+  scope: {
+    type: PluginCreditScope['type'];
+    id: string;
+  };
+  userId?: string;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface PluginCredits {
-  getBalance(metric?: string): Promise<PluginCreditBalance>;
+  getBalance(input?: string | PluginCreditBalanceInput): Promise<PluginCreditBalance>;
   consume(input: PluginCreditConsumeInput): Promise<PluginCreditConsumeResult>;
+  grant(input: PluginCreditChangeInput): Promise<PluginCreditChangeResult>;
+  adjust(input: PluginCreditAdjustInput): Promise<PluginCreditChangeResult>;
+  refund(input: PluginCreditChangeInput): Promise<PluginCreditChangeResult>;
 }
 
 export interface PluginMeteringActionInput {
@@ -596,6 +657,75 @@ export interface PluginBilling {
   hasEntitlement(feature: string): Promise<boolean>;
   grantPlan(input: PluginBillingGrantPlanInput): Promise<PluginBillingGrantPlanResult>;
   redeemCode(input: PluginBillingRedeemCodeInput): Promise<PluginBillingRedeemCodeResult>;
+}
+
+export interface PluginCommerceCheckoutInput {
+  mode?: 'payment' | 'subscription';
+  provider?: 'stripe';
+  priceId?: string;
+  amount?: number;
+  currency?: string;
+  quantity?: number;
+  name?: string;
+  successUrl: string;
+  cancelUrl: string;
+  entitlementKey?: string;
+  creditAmount?: number;
+  creditMetric?: string;
+  scope?: PluginCreditScope;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PluginCommerceCheckoutResult {
+  id: string;
+  provider: string;
+  mode: 'payment' | 'subscription';
+  url: string | null;
+  orderId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PluginCommerceOrder {
+  id: string;
+  orderType: string;
+  provider: string;
+  providerOrderId: string;
+  amount?: string | null;
+  currency?: string | null;
+  status: string;
+  planId?: string | null;
+  relatedOrderId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PluginCommerceCreateOrderInput {
+  provider?: string;
+  providerOrderId?: string;
+  orderType?: 'one_time_purchase';
+  amount?: string | number;
+  currency?: string;
+  status?: 'pending' | 'succeeded';
+  entitlementKey?: string;
+  creditAmount?: number;
+  creditMetric?: string;
+  scope?: PluginCreditScope;
+  idempotencyKey?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PluginCommerceListOrdersInput {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PluginCommerce {
+  createCheckout(input: PluginCommerceCheckoutInput): Promise<PluginCommerceCheckoutResult>;
+  createOrder(input: PluginCommerceCreateOrderInput): Promise<PluginCommerceOrder>;
+  getOrder(id: string): Promise<PluginCommerceOrder | null>;
+  listOrders(input?: PluginCommerceListOrdersInput): Promise<PluginCommerceOrder[]>;
 }
 
 export type PluginRunStatus =
@@ -1068,6 +1198,7 @@ export interface PluginContext {
   credits: PluginCredits;
   metering: PluginMetering;
   billing: PluginBilling;
+  commerce: PluginCommerce;
   runs: PluginRuns;
   connectors: PluginConnectors;
   apiKeys: PluginApiKeys;

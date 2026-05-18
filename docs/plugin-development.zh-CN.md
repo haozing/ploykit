@@ -32,7 +32,7 @@ $env:PLOYKIT_PLUGIN_DIRS = 'D:\work\ploykit-plugins;..\shared-plugins'
 npm run plugins:scan
 ```
 
-每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.ts`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。产品壳如果只需要 runtime artifact，可运行 `npm run plugins:scan:runtime`，它只更新 active runtime map，不触碰提交版默认 map。
+每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.cjs`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。产品壳如果只需要 runtime artifact，可运行 `npm run plugins:scan:runtime`，它只更新 active runtime map，不触碰提交版默认 map。配置了 active runtime map 后，宿主会把它当作必需输入；文件缺失或加载失败会直接报错，不再静默退回提交版默认 map。
 
 运行 `npm run plugins:check` 可校验所有已配置来源；也可以定向运行 `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`。在 Windows 上，外部插件模块必须与项目在同一个盘符，因为生成 map 使用相对静态 import；如果源码在别的盘，可以在项目内放 symlink/junction。
 
@@ -44,7 +44,7 @@ standalone 部署时，外部目录需要在运行环境中保持构建时相同
 
 `plugin.ts` 是插件合同。宿主通过 `scripts/generate-plugin-map.ts` 从 `plugins/` 和 `PLOYKIT_PLUGIN_DIRS` 扫描插件合同，把默认 map 写入 `src/lib/plugin-map.ts`，把外部条目写入 active runtime map，再从这些生成 map 加载运行时页面、API、jobs、events、webhooks、生命周期 handlers、slots、menus、assets 和 capabilities。产品壳只准备 `.runtime/plugin-map.*` 时，使用 `--runtime-only` 或 `npm run plugins:scan:runtime`。
 
-生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。外部产品可以通过 `PLOYKIT_RUNTIME_CATALOG_FILE` 或 `plugins:apply -- --catalog <file>` 提供归属声明。只有存在 `PLOYKIT_PLUGIN_DIRS` 等插件源码输入时，`plugins:apply` 才会自动准备 runtime map；`PLOYKIT_PLUGIN_MAP_FILE` 只用于选择 active runtime map artifact 的路径。
+生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。外部产品可以通过 `PLOYKIT_RUNTIME_CATALOG_FILE` 或 `plugins:apply -- --catalog <file>` 提供归属声明。只有存在 `PLOYKIT_PLUGIN_DIRS` 等插件源码输入时，`plugins:apply` 才会自动准备 runtime map；`PLOYKIT_PLUGIN_MAP_FILE` 只用于选择 active runtime map artifact 的路径。runtime catalog 是 apply bundle 的权威来源；`plugins:apply -- --bundle <id>` 传的是 app bundle id，不是 plugin id。如果某个插件已经被 catalog 放进显式 bundle，PloyKit 不会再为它暴露隐式的单插件 bundle。
 
 如果插件需要扩展或覆盖宿主自带页面，例如首页、关于页或定价页，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
 
@@ -204,28 +204,32 @@ const items = await ctx.storage.collection('sample_items').findMany({
 });
 ```
 
+需要按业务键幂等写入时，用 `insertIfAbsent(data, { uniqueBy: [...] })`，不要先读再写；传给 `uniqueBy` 的字段必须存在且非 null，自动唯一索引会跳过可选字段的 nullish 值。需要队列式领取记录、确保只有一个 worker 处理时，用 `claim(query, patch)` 原子更新第一个匹配记录并返回是否领取成功。
+
 超出插件私有记录的数据库形态工作，应由宿主实现 service/repository，插件通过 `ctx.services` 调用；普通插件不直接访问数据库。
 
 ## 宿主能力
 
 插件应该把 `ctx` 当作宿主边界。插件不应该导入 `src/lib/*`、读取 `process.env`、直接访问数据库，或用原始 `fetch()` 调用外部服务。
 
-| 能力                                     | 权限                                                     | 用途                                                      |
-| ---------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------- |
-| `ctx.storage`                            | `StorageRead`, `StorageWrite`                            | 插件私有结构化集合                                        |
-| `ctx.config`, `ctx.secrets`              | `Config*`, `Secrets*`                                    | 插件配置与加密 secrets                                    |
-| `ctx.files`                              | `FilesRead`, `FilesWrite`                                | 签名上传/下载与文件元数据                                 |
-| `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | 用户可见或内部长期任务                                    |
-| `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | 外部服务 profile、credential、retry、redaction、call logs |
-| `ctx.services`                           | `ServicesInvoke`                                         | 宿主管理的服务连接，用于复杂领域或数据库工作              |
-| `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | workspace 创建、成员、角色、邀请                          |
-| `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | 插件 API keys 与 scoped rate limits                       |
-| `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | 用量、action meters、审计轨迹                             |
-| `ctx.artifacts`, `ctx.rag`               | `Artifacts*`, `Rag*`                                     | 文本资产、索引、context packs                             |
-| `ctx.ai`                                 | `AiGenerate`, `AiEmbed`                                  | 宿主注入的模型网关                                        |
-| `ctx.credits`, `ctx.billing`             | `Credits*`, `Billing*`                                   | 商业权益、积分、兑换                                      |
-| `ctx.notifications`                      | `NotificationsSend`                                      | 站内通知                                                  |
-| `ctx.http.fetch`                         | `ExternalHttp` plus `egress`                             | 经过 SSRF-aware guard 的外部 HTTP                         |
+| 能力                                         | 权限                                                     | 用途                                                      |
+| -------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| `ctx.storage`                                | `StorageRead`, `StorageWrite`                            | 插件私有结构化集合                                        |
+| `ctx.config`, `ctx.secrets`                  | `Config*`, `Secrets*`                                    | 插件配置与加密 secrets                                    |
+| `ctx.files`                                  | `FilesRead`, `FilesWrite`                                | 签名上传/下载与文件元数据                                 |
+| `ctx.runs`                                   | `RunsRead`, `RunsWrite`                                  | 用户可见或内部长期任务                                    |
+| `ctx.connectors`                             | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | 外部服务 profile、credential、retry、redaction、call logs |
+| `ctx.services`                               | `ServicesInvoke`                                         | 宿主管理的服务连接，用于复杂领域或数据库工作              |
+| `ctx.workspace`                              | `WorkspaceRead`, `WorkspaceWrite`                        | workspace 创建、成员、角色、邀请                          |
+| `ctx.apiKeys`, `ctx.rateLimit`               | `ApiKeys*`, `RateLimitCheck`                             | 插件 API keys 与 scoped rate limits                       |
+| `ctx.metering`, `ctx.usage`, `ctx.audit`     | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | 用量、action meters、审计轨迹                             |
+| `ctx.artifacts`, `ctx.rag`                   | `Artifacts*`, `Rag*`                                     | 文本资产、索引、context packs                             |
+| `ctx.ai`                                     | `AiGenerate`, `AiEmbed`                                  | 宿主注入的模型网关                                        |
+| `ctx.credits`, `ctx.commerce`, `ctx.billing` | `Credits*`, `Commerce*`, `Billing*`                      | 商业权益、作用域积分、checkout、订单与兑换                |
+| `ctx.notifications`                          | `NotificationsSend`                                      | 站内通知                                                  |
+| `ctx.http.fetch`                             | `ExternalHttp` plus `egress`                             | 经过 SSRF-aware guard 的外部 HTTP                         |
+
+`ctx.credits` 支持 user、workspace、product、plugin 四类余额 scope。`ctx.commerce` 提供通用一次性 checkout 和订单 API；成功订单可以携带 credit grant 或 entitlement metadata，由宿主 webhook 和 ledger 落账，不让插件自己实现支付闭环。
 
 egress 声明示例：
 

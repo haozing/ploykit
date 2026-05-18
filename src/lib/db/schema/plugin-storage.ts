@@ -60,6 +60,32 @@ export const pluginRecords = pgTable(
   })
 );
 
+export const pluginRecordUniqueKeys = pgTable(
+  'plugin_record_unique_keys',
+  {
+    id: text('id').primaryKey(),
+    pluginId: text('plugin_id').notNull(),
+    collectionName: text('collection_name').notNull(),
+    userId: text('user_id'),
+    uniqueKey: text('unique_key').notNull(),
+    recordId: text('record_id').notNull(),
+    fieldsJson: jsonb('fields_json').$type<string[]>().notNull().default([]),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (table) => ({
+    activeKeyIdx: uniqueIndex('plugin_record_unique_keys_active_key_idx')
+      .on(table.pluginId, table.collectionName, table.userId, table.uniqueKey)
+      .where(sql`${table.deletedAt} IS NULL`),
+    recordIdx: index('plugin_record_unique_keys_record_idx').on(
+      table.pluginId,
+      table.collectionName,
+      table.recordId
+    ),
+  })
+);
+
 export const pluginArtifacts = pgTable(
   'plugin_artifacts',
   {
@@ -160,6 +186,9 @@ export type PluginCollection = typeof pluginCollections.$inferSelect;
 export type NewPluginCollection = typeof pluginCollections.$inferInsert;
 export type PluginRecord = typeof pluginRecords.$inferSelect;
 export type NewPluginRecord = typeof pluginRecords.$inferInsert;
+
+export type PluginRecordUniqueKey = typeof pluginRecordUniqueKeys.$inferSelect;
+export type NewPluginRecordUniqueKey = typeof pluginRecordUniqueKeys.$inferInsert;
 export type PluginArtifact = typeof pluginArtifacts.$inferSelect;
 export type NewPluginArtifact = typeof pluginArtifacts.$inferInsert;
 export type PluginRagChunk = typeof pluginRagChunks.$inferSelect;

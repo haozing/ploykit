@@ -57,13 +57,44 @@ export interface PluginStorageQuery {
   offset?: number;
 }
 
+export interface PluginStorageInsertOptions {
+  id?: string;
+  idempotencyKey?: string;
+  uniqueBy?: readonly string[];
+  conflict?: 'error' | 'returnExisting';
+}
+
+export interface PluginStorageInsertIfAbsentResult<
+  TRecord extends object = Record<string, unknown>,
+> {
+  record: TRecord;
+  inserted: boolean;
+}
+
+export interface PluginStorageClaimResult<TRecord extends object = Record<string, unknown>> {
+  record: TRecord | null;
+  claimed: boolean;
+}
+
 export interface PluginStorageCollection<
   TRecord extends Record<string, unknown> = Record<string, unknown>,
 > {
   findMany(query?: PluginStorageQuery): Promise<TRecord[]>;
   findById(id: string): Promise<TRecord | null>;
-  insert(data: Partial<Omit<TRecord, 'id' | 'createdAt' | 'updatedAt'>>): Promise<TRecord>;
+  insert(
+    data: Partial<Omit<TRecord, 'id' | 'createdAt' | 'updatedAt'>>,
+    options?: PluginStorageInsertOptions
+  ): Promise<TRecord>;
+  insertIfAbsent(
+    data: Partial<Omit<TRecord, 'id' | 'createdAt' | 'updatedAt'>>,
+    options: Omit<PluginStorageInsertOptions, 'conflict'> & { uniqueBy: readonly string[] }
+  ): Promise<PluginStorageInsertIfAbsentResult<TRecord>>;
   update(id: string, data: Partial<TRecord>): Promise<TRecord>;
+  updateWhere(query: PluginStorageQuery, data: Partial<TRecord>): Promise<TRecord | null>;
+  claim(
+    query: PluginStorageQuery,
+    data: Partial<TRecord>
+  ): Promise<PluginStorageClaimResult<TRecord>>;
   delete(id: string): Promise<void>;
 }
 

@@ -1073,8 +1073,11 @@ describe('plugin SDK contract helpers', () => {
       permissions: [
         Permission.CreditsRead,
         Permission.CreditsConsume,
+        Permission.CreditsWrite,
         Permission.BillingRead,
         Permission.BillingWrite,
+        Permission.CommerceRead,
+        Permission.CommerceWrite,
         Permission.NotificationsSend,
       ],
     });
@@ -1082,7 +1085,8 @@ describe('plugin SDK contract helpers', () => {
 
     await expect(host.ctx.credits.getBalance()).resolves.toEqual({
       balance: 1000,
-      metric: 'platform.apiCallsRemaining',
+      metric: 'platform.credits',
+      scope: { type: 'user', id: 'test-user' },
       userId: 'test-user',
     });
     await expect(
@@ -1098,8 +1102,29 @@ describe('plugin SDK contract helpers', () => {
       balanceBefore: 1000,
       balanceAfter: 997,
       meter: 'commercial-host-check.external-api',
+      metric: 'platform.credits',
+      scope: { type: 'user', id: 'test-user' },
       userId: 'test-user',
       idempotencyKey: 'credit-1',
+    });
+    await expect(
+      host.ctx.credits.grant({ amount: 5, idempotencyKey: 'grant-1' })
+    ).resolves.toMatchObject({
+      operation: 'grant',
+      balanceBefore: 997,
+      balanceAfter: 1002,
+    });
+    await expect(
+      host.ctx.commerce.createOrder({
+        amount: 9,
+        currency: 'USD',
+        creditAmount: 2,
+        idempotencyKey: 'order-1',
+      })
+    ).resolves.toMatchObject({
+      provider: 'local',
+      status: 'succeeded',
+      amount: '9',
     });
     await expect(host.ctx.billing.getCurrentPlan()).resolves.toBeNull();
     await expect(host.ctx.billing.hasEntitlement('feature.export')).resolves.toBe(false);
@@ -1144,19 +1169,41 @@ describe('plugin SDK contract helpers', () => {
     expect(host.state.credits).toEqual([
       {
         operation: 'getBalance',
-        metric: 'platform.apiCallsRemaining',
+        metric: 'platform.credits',
+        scope: { type: 'user', id: 'test-user' },
         userId: 'test-user',
       },
       {
         operation: 'consume',
         meter: 'commercial-host-check.external-api',
+        metric: 'platform.credits',
         amount: 3,
+        scope: { type: 'user', id: 'test-user' },
         userId: 'test-user',
         idempotencyKey: 'credit-1',
         balanceBefore: 1000,
         balanceAfter: 997,
         metadata: { provider: 'example' },
       },
+      {
+        operation: 'grant',
+        metric: 'platform.credits',
+        amount: 5,
+        scope: { type: 'user', id: 'test-user' },
+        userId: 'test-user',
+        idempotencyKey: 'grant-1',
+        balanceBefore: 997,
+        balanceAfter: 1002,
+        reason: undefined,
+        metadata: undefined,
+      },
+      expect.objectContaining({
+        operation: 'grant',
+        metric: 'platform.credits',
+        amount: 2,
+        scope: { type: 'user', id: 'test-user' },
+        userId: 'test-user',
+      }),
     ]);
     expect(host.state.notifications).toEqual([
       expect.objectContaining({

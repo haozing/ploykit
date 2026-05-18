@@ -44,6 +44,12 @@ export {
   type PluginConfigScope,
 } from './config-capability.server';
 export {
+  createPluginCommerceCapability,
+  type CreatePluginCommerceOptions,
+  type PluginCommerceHost,
+  type PluginCommerceHostScope,
+} from './commerce-capability.server';
+export {
   createPluginConnectorsCapability,
   DbPluginConnectorsRepository,
   type CreatePluginConnectorsOptions,

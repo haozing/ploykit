@@ -15,6 +15,7 @@ import {
   type UsageCategory,
   type UsageLedger,
 } from '@/lib/usage/usage-ledger.server';
+import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
 import { env } from '@/lib/_core/env';
 import {
   assertJsonSerializable,
@@ -27,6 +28,7 @@ import {
 } from './guards.server';
 import {
   createDefaultPluginCreditsHost,
+  getDefaultCreditMetric,
   type PluginCreditsHost,
   type PluginCreditsConsumeHostInput,
 } from './credits-capability.server';
@@ -132,6 +134,7 @@ function createCreditScope(scope: PluginCapabilityScope) {
     userId: scope.user?.id,
     userRole: scope.user?.role,
     requestId: scope.requestId,
+    productId: getCurrentRuntimeProductId(),
     system: Boolean(scope.system),
   };
 }
@@ -139,12 +142,15 @@ function createCreditScope(scope: PluginCapabilityScope) {
 function createCreditInput(
   userId: string,
   meter: string,
+  metric: string,
   amount: number,
   idempotencyKey: string,
   metadata: Record<string, unknown> | undefined
 ): PluginCreditsConsumeHostInput {
   return {
     meter,
+    metric,
+    accountScope: { type: 'user', id: userId },
     amount,
     userId,
     idempotencyKey,
@@ -242,7 +248,10 @@ async function enforceCreditBalance(
     return;
   }
 
-  const balance = await creditsHost.getBalance(createCreditScope(scope), balanceMetric);
+  const balance = await creditsHost.getBalance(createCreditScope(scope), {
+    accountScope: { type: 'user', id: userId },
+    metric: balanceMetric,
+  });
   if (balance.unlimited || balance.balance >= cost) {
     return;
   }
@@ -329,6 +338,7 @@ export function createPluginMeteringCapability(
 ): PluginMetering {
   const usageLedger = options.usageLedger ?? getUsageLedger();
   const creditsHost = resolveCreditsHost(options.creditsHost, options.balanceMetric);
+  const balanceMetric = options.balanceMetric ?? getDefaultCreditMetric();
 
   return {
     async authorize(input) {
@@ -339,7 +349,7 @@ export function createPluginMeteringCapability(
       await enforceCreditBalance(
         scope,
         creditsHost,
-        options.balanceMetric ?? 'platform.apiCallsRemaining',
+        balanceMetric,
         prepared.userId,
         prepared.meterId,
         cost
@@ -355,7 +365,7 @@ export function createPluginMeteringCapability(
       await enforceCreditBalance(
         scope,
         creditsHost,
-        options.balanceMetric ?? 'platform.apiCallsRemaining',
+        balanceMetric,
         prepared.userId,
         prepared.meterId,
         cost
@@ -386,6 +396,7 @@ export function createPluginMeteringCapability(
               createCreditInput(
                 prepared.userId,
                 prepared.meterId,
+                balanceMetric,
                 cost,
                 `${prepared.idempotencyKey}:credits`,
                 {

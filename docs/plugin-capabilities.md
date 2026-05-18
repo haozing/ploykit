@@ -35,7 +35,8 @@ usually live behind host capabilities instead of ordinary plugin imports.
 | `ctx.audit`         | `Permission.AuditWrite`                                                                   | Audit records for user-visible or sensitive actions.                            |
 | `ctx.usage`         | `Permission.UsageWrite`                                                                   | Usage counters and analytics.                                                   |
 | `ctx.metering`      | `Permission.MeteringWrite`                                                                | Billable action authorization, commit, refund, void, reconcile.                 |
-| `ctx.credits`       | `Permission.CreditsRead`, `Permission.CreditsConsume`                                     | User credit balances and credit consumption.                                    |
+| `ctx.credits`       | `Permission.CreditsRead`, `Permission.CreditsConsume`, `Permission.CreditsWrite`          | Scoped credit balances, consumption, grants, adjustments, and refunds.          |
+| `ctx.commerce`      | `Permission.CommerceRead`, `Permission.CommerceWrite`                                     | Generic one-time checkout, order creation, and user order reads.                |
 | `ctx.billing`       | `Permission.BillingRead`, `Permission.BillingWrite`                                       | Plans, entitlements, grants, and redemption flows.                              |
 | `ctx.notifications` | `Permission.NotificationsSend`                                                            | In-app or email notifications.                                                  |
 | `ctx.ui.toast`      | `Permission.UiToast`                                                                      | Optional user feedback from plugin UI flows.                                    |
@@ -53,6 +54,7 @@ capabilities along their boundaries:
 | Host page extension           | `hostPages.slots`; use `hostPages.overrides` for main-content replacement with SEO, i18n, shell, cache.      |
 | npm UI/runtime component      | `plugin.dependencies.json` plus a host root `package.json` runtime dependency; plugin code imports normally. |
 | Billable synchronous action   | Route/API commercial gate plus `ctx.metering.authorize()`, the work, then `ctx.metering.commit()`.           |
+| One-time purchase or top-up   | `ctx.commerce.createCheckout()` or `ctx.commerce.createOrder()` plus credit grant metadata.                  |
 | Long-running workflow         | Public/API handler creates `ctx.runs`, enqueues `ctx.jobs`, and the job updates progress and results.        |
 | External integration          | Use `ctx.http.fetch` for short no-secret calls; use `ctx.connectors` for credentials, retry, audit, logs.    |
 | Host-managed service call     | Use `ctx.services`; the host owns URL, secrets, actor claims, timeout, retry, audit, and usage.              |
@@ -66,6 +68,15 @@ Recommended async commercialization flow:
    external system work.
 5. On success, call `ctx.metering.commit()`; on failure, `refund` or `void`.
 6. Write run logs/results, then optionally emit events and send notifications.
+
+Credit accounts are addressed by a scope: user, workspace, product, or plugin.
+Use user scope for normal end-user balances, workspace scope for shared team
+budgets, and product/plugin scope only from admin or system contexts.
+
+Use `ctx.storage.collection(name).insertIfAbsent()` for idempotent writes keyed
+by business fields, and `claim()` for queue-like atomic ownership of a record.
+Unique fields used for `insertIfAbsent()` must be present and non-null; automatic
+unique indexes ignore nullish optional values.
 
 ## Rules For AI-Generated Plugins
 

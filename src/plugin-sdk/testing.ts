@@ -4,6 +4,7 @@ import type {
   PluginConnectorRedactionPolicy,
   PluginConnectorResolvedFile,
   PluginConnectorRetryPolicy,
+  PluginCommerceOrder,
   PluginContext,
   PluginServiceObjectRequest,
   PluginServiceRequest,
@@ -21,7 +22,12 @@ import type {
 import type { z } from 'zod';
 import { PluginError } from './errors';
 import { Permission, type PermissionValue } from './permissions';
-import type { PluginStorage, PluginStorageCollection, PluginStorageQuery } from './storage';
+import type {
+  PluginCollectionDefinition,
+  PluginStorage,
+  PluginStorageCollection,
+  PluginStorageQuery,
+} from './storage';
 import type { DefinedPlugin } from './types';
 import {
   isPluginRouteCatchAllSegment,
@@ -52,6 +58,9 @@ export interface PluginTestRequestOptions {
 
 export interface PluginTestHostStore {
   collections: Map<string, Map<string, Record<string, unknown>>>;
+  storageUniqueKeys: Map<string, string>;
+  creditBalances: Map<string, number>;
+  commerceOrders: Map<string, PluginCommerceOrder & { userId: string }>;
   artifacts: Map<string, Map<string, PluginTestArtifact>>;
   ragChunks: Map<string, PluginTestRagChunk[]>;
   config: Map<string, unknown>;
@@ -138,14 +147,27 @@ export interface PluginTestState {
     options?: { idempotencyKey?: string; unit?: string; metadata?: Record<string, unknown> };
   }>;
   credits: Array<{
-    operation: 'getBalance' | 'consume';
+    operation: 'getBalance' | 'consume' | 'grant' | 'adjust' | 'refund';
     meter?: string;
     metric?: string;
     amount?: number;
+    scope?: { type: string; id: string };
     userId?: string;
     idempotencyKey?: string;
     balanceBefore?: number;
     balanceAfter?: number;
+    mode?: 'delta' | 'set';
+    reason?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  commerce: Array<{
+    operation: 'createCheckout' | 'createOrder' | 'getOrder' | 'listOrders';
+    orderId?: string;
+    provider?: string;
+    providerOrderId?: string;
+    amount?: string | number;
+    currency?: string;
+    status?: string;
     metadata?: Record<string, unknown>;
   }>;
   metering: Array<{
@@ -321,6 +343,9 @@ function createDefaultUser(): PluginUser {
 export function createPluginTestHostStore(): PluginTestHostStore {
   return {
     collections: new Map(),
+    storageUniqueKeys: new Map(),
+    creditBalances: new Map(),
+    commerceOrders: new Map(),
     artifacts: new Map(),
     ragChunks: new Map(),
     config: new Map(),
@@ -343,6 +368,7 @@ function createInitialState(): PluginTestState {
     audit: [],
     usage: [],
     credits: [],
+    commerce: [],
     metering: [],
     ai: [],
     billing: [],
@@ -472,6 +498,21 @@ function byteSize(value: string): number {
 
 function fakeHash(value: string): string {
   return `sha256:${Buffer.from(value).toString('base64url')}`;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null';
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
+    .join(',')}}`;
 }
 
 function fakeBufferHash(value: Buffer): string {
@@ -799,11 +840,173 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
     return store.collections.get(key)! as Map<string, TRecord>;
   }
 
+  function collectionDefinition(name: string): PluginCollectionDefinition | undefined {
+    return plugin.data?.collections?.[name];
+  }
+
+  function declaredUniqueIndexes(name: string): readonly (readonly string[])[] {
+    return (collectionDefinition(name)?.indexes ?? [])
+      .filter((index) => index.unique)
+      .map((index) => index.fields);
+  }
+
+  function assertDeclaredUniqueFields(name: string, fields: readonly string[]): void {
+    if (fields.length === 0) {
+      throw new PluginError({
+        code: 'PLUGIN_STORAGE_UNIQUE_FIELDS_REQUIRED',
+        message: `Collection "${name}" unique operation requires at least one field.`,
+        statusCode: 400,
+      });
+    }
+
+    const definition = collectionDefinition(name);
+    for (const field of fields) {
+      if (!definition?.fields[field]) {
+        throw new PluginError({
+          code: 'PLUGIN_STORAGE_UNIQUE_FIELD_UNKNOWN',
+          message: `Collection "${name}" does not declare unique field "${field}".`,
+          statusCode: 400,
+          details: { collection: name, field },
+        });
+      }
+    }
+
+    const declared = declaredUniqueIndexes(name).some(
+      (indexFields) =>
+        indexFields.length === fields.length &&
+        indexFields.every((field, index) => field === fields[index])
+    );
+    if (!declared) {
+      throw new PluginError({
+        code: 'PLUGIN_STORAGE_UNIQUE_INDEX_UNDECLARED',
+        message: `Collection "${name}" must declare a matching unique index before using unique writes.`,
+        statusCode: 400,
+        details: { collection: name, fields },
+      });
+    }
+  }
+
+  function uniqueStorageKey(
+    name: string,
+    fields: readonly string[],
+    data: Record<string, unknown>,
+    options: { requireValues: boolean }
+  ): string | null {
+    assertDeclaredUniqueFields(name, fields);
+    const missingField = fields.find((field) => data[field] === undefined || data[field] === null);
+    if (missingField) {
+      if (options.requireValues) {
+        throw new PluginError({
+          code: 'PLUGIN_STORAGE_UNIQUE_FIELD_VALUE_REQUIRED',
+          message: `Collection "${name}" unique operation requires field "${missingField}" to be present and non-null.`,
+          statusCode: 400,
+          details: { collection: name, field: missingField },
+        });
+      }
+      return null;
+    }
+
+    return `${scopeKey(plugin.id, user, name)}:${stableStringify(
+      fields.map((field) => [field, data[field]])
+    )}`;
+  }
+
+  function uniqueStorageKeys(
+    name: string,
+    data: Record<string, unknown>,
+    uniqueBy?: readonly string[],
+    options: { requireValues?: boolean } = {}
+  ): string[] {
+    const indexes = uniqueBy ? [uniqueBy] : declaredUniqueIndexes(name);
+    return indexes.flatMap((fields) => {
+      const key = uniqueStorageKey(name, fields, data, {
+        requireValues: Boolean(options.requireValues),
+      });
+      return key ? [key] : [];
+    });
+  }
+
+  function reserveStorageUniqueKeys(
+    name: string,
+    recordId: string,
+    data: Record<string, unknown>,
+    uniqueBy?: readonly string[],
+    returnExisting = false
+  ): { inserted: true } | { inserted: false; existingId: string } {
+    for (const key of uniqueStorageKeys(name, data, uniqueBy, {
+      requireValues: Boolean(uniqueBy),
+    })) {
+      const existingId = store.storageUniqueKeys.get(key);
+      if (existingId && existingId !== recordId) {
+        if (returnExisting) {
+          return { inserted: false, existingId };
+        }
+        throw new PluginError({
+          code: 'PLUGIN_STORAGE_UNIQUE_CONFLICT',
+          message: `Unique storage key already exists in collection "${name}".`,
+          statusCode: 409,
+          details: { pluginId: plugin.id, collection: name },
+        });
+      }
+    }
+
+    for (const key of uniqueStorageKeys(name, data, uniqueBy, {
+      requireValues: Boolean(uniqueBy),
+    })) {
+      store.storageUniqueKeys.set(key, recordId);
+    }
+    return { inserted: true };
+  }
+
+  function releaseStorageUniqueKeys(name: string, recordId: string): void {
+    for (const [key, existingId] of store.storageUniqueKeys.entries()) {
+      if (key.startsWith(`${scopeKey(plugin.id, user, name)}:`) && existingId === recordId) {
+        store.storageUniqueKeys.delete(key);
+      }
+    }
+  }
+
   function normalizeScope(input?: PluginResourceScope): PluginResourceScope {
     if (!input || input.type === 'user') {
       return { type: 'user', id: input?.id ?? user?.id ?? 'system' };
     }
     return { type: 'workspace', id: input.id };
+  }
+
+  function normalizeCreditScope(input?: { type?: string; id?: string }): {
+    type: 'user' | 'workspace' | 'product' | 'plugin';
+    id: string;
+  } {
+    if (!input || input.type === 'user') {
+      return { type: 'user', id: input?.id ?? user?.id ?? 'test-user' };
+    }
+    if (input.type === 'workspace') {
+      return { type: 'workspace', id: input.id ?? 'workspace-1' };
+    }
+    if (input.type === 'product') {
+      return { type: 'product', id: input.id ?? 'default-product' };
+    }
+    return { type: 'plugin', id: input.id ?? plugin.id };
+  }
+
+  function creditBalanceKey(metric: string, scope: { type: string; id: string }): string {
+    return `${metric}:${scope.type}:${scope.id}`;
+  }
+
+  function readCreditBalance(metric: string, scope: { type: string; id: string }): number {
+    const key = creditBalanceKey(metric, scope);
+    if (!store.creditBalances.has(key)) {
+      store.creditBalances.set(key, 1000);
+    }
+    return store.creditBalances.get(key) ?? 0;
+  }
+
+  function writeCreditBalance(
+    metric: string,
+    scope: { type: string; id: string },
+    balance: number
+  ): void {
+    store.creditBalances.set(creditBalanceKey(metric, scope), balance);
   }
 
   function declaredBinding(resourceType: string, scope: PluginResourceScope) {
@@ -851,17 +1054,40 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
         enforcePermission(Permission.StorageRead, `ctx.storage.collection("${name}").findById`);
         return records.get(id) ?? null;
       },
-      async insert(data) {
+      async insert(data, options = {}) {
         enforcePermission(Permission.StorageWrite, `ctx.storage.collection("${name}").insert`);
-        const id = String(data.id ?? `${name}-${records.size + 1}`);
+        const id = String(options.id ?? data.id ?? `${name}-${records.size + 1}`);
         const record = {
           id,
           ...data,
           createdAt: new Date(),
           updatedAt: new Date(),
         } as unknown as TRecord;
+        reserveStorageUniqueKeys(name, id, record, options.uniqueBy);
         records.set(id, record);
         return record;
+      },
+      async insertIfAbsent(data, options) {
+        enforcePermission(
+          Permission.StorageWrite,
+          `ctx.storage.collection("${name}").insertIfAbsent`
+        );
+        const id = String(options.id ?? data.id ?? `${name}-${records.size + 1}`);
+        const record = {
+          id,
+          ...data,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as unknown as TRecord;
+        const reserved = reserveStorageUniqueKeys(name, id, record, options.uniqueBy, true);
+        if (!reserved.inserted) {
+          return {
+            record: records.get(reserved.existingId) as TRecord,
+            inserted: false,
+          };
+        }
+        records.set(id, record);
+        return { record, inserted: true };
       },
       async update(id, data) {
         enforcePermission(Permission.StorageWrite, `ctx.storage.collection("${name}").update`);
@@ -870,11 +1096,32 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           throw new Error(`Record not found: ${id}`);
         }
         const record = { ...existing, ...data, updatedAt: new Date() } as TRecord;
+        releaseStorageUniqueKeys(name, id);
+        reserveStorageUniqueKeys(name, id, record);
         records.set(id, record);
         return record;
       },
+      async updateWhere(query, data) {
+        enforcePermission(Permission.StorageWrite, `ctx.storage.collection("${name}").updateWhere`);
+        const existing = applyQuery(Array.from(records.values()), { ...query, limit: 1 })[0];
+        if (!existing) {
+          return null;
+        }
+        const id = String(existing.id);
+        const record = { ...existing, ...data, updatedAt: new Date() } as TRecord;
+        releaseStorageUniqueKeys(name, id);
+        reserveStorageUniqueKeys(name, id, record);
+        records.set(id, record);
+        return record;
+      },
+      async claim(query, data) {
+        enforcePermission(Permission.StorageWrite, `ctx.storage.collection("${name}").claim`);
+        const record = await this.updateWhere(query, data);
+        return { record, claimed: Boolean(record) };
+      },
       async delete(id: string) {
         enforcePermission(Permission.StorageWrite, `ctx.storage.collection("${name}").delete`);
+        releaseStorageUniqueKeys(name, id);
         records.delete(id);
       },
     };
@@ -1712,27 +1959,34 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       },
     },
     credits: {
-      async getBalance(metric = 'platform.apiCallsRemaining') {
+      async getBalance(input = 'platform.credits') {
         enforcePermission(Permission.CreditsRead, 'ctx.credits.getBalance');
-        const userId = user?.id ?? 'test-user';
-        const balance = 1000;
-        state.credits.push({ operation: 'getBalance', metric, userId });
-        return { balance, metric, userId };
+        const metric = typeof input === 'string' ? input : (input.metric ?? 'platform.credits');
+        const scope = normalizeCreditScope(typeof input === 'string' ? undefined : input.scope);
+        const balance = readCreditBalance(metric, scope);
+        const userId = scope.type === 'user' ? scope.id : (user?.id ?? 'test-user');
+        state.credits.push({ operation: 'getBalance', metric, scope, userId });
+        return { balance, metric, scope, userId };
       },
       async consume(input) {
         enforcePermission(Permission.CreditsConsume, 'ctx.credits.consume');
         const amount = input.amount ?? 1;
-        const userId = input.userId ?? user?.id ?? 'test-user';
-        const consumedTotal = state.credits
-          .filter((entry) => entry.operation === 'consume')
-          .reduce((total, entry) => total + (entry.amount ?? 0), 0);
-        const balanceBefore = 1000 - consumedTotal;
+        const metric = input.metric ?? 'platform.credits';
+        const scope = normalizeCreditScope(
+          input.scope ?? (input.userId ? { type: 'user', id: input.userId } : undefined)
+        );
+        const userId =
+          input.userId ?? (scope.type === 'user' ? scope.id : (user?.id ?? 'test-user'));
+        const balanceBefore = readCreditBalance(metric, scope);
         const balanceAfter = Math.max(0, balanceBefore - amount);
+        writeCreditBalance(metric, scope, balanceAfter);
         const idempotencyKey = input.idempotencyKey ?? `credits-${state.credits.length + 1}`;
         state.credits.push({
           operation: 'consume',
           meter: input.meter,
+          metric,
           amount,
+          scope,
           userId,
           idempotencyKey,
           balanceBefore,
@@ -1745,8 +1999,119 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           balanceBefore,
           balanceAfter,
           meter: input.meter,
+          metric,
+          scope,
           userId,
           idempotencyKey,
+          metadata: input.metadata,
+        };
+      },
+      async grant(input) {
+        enforcePermission(Permission.CreditsWrite, 'ctx.credits.grant');
+        const metric = input.metric ?? 'platform.credits';
+        const scope = normalizeCreditScope(
+          input.scope ?? (input.userId ? { type: 'user', id: input.userId } : undefined)
+        );
+        const userId =
+          input.userId ?? (scope.type === 'user' ? scope.id : (user?.id ?? 'test-user'));
+        const balanceBefore = readCreditBalance(metric, scope);
+        const balanceAfter = balanceBefore + input.amount;
+        writeCreditBalance(metric, scope, balanceAfter);
+        state.credits.push({
+          operation: 'grant',
+          metric,
+          amount: input.amount,
+          scope,
+          userId,
+          idempotencyKey: input.idempotencyKey,
+          balanceBefore,
+          balanceAfter,
+          reason: input.reason,
+          metadata: input.metadata,
+        });
+        return {
+          changed: true,
+          operation: 'grant',
+          amount: input.amount,
+          balanceBefore,
+          balanceAfter,
+          metric,
+          scope,
+          userId,
+          idempotencyKey: input.idempotencyKey,
+          metadata: input.metadata,
+        };
+      },
+      async adjust(input) {
+        enforcePermission(Permission.CreditsWrite, 'ctx.credits.adjust');
+        const metric = input.metric ?? 'platform.credits';
+        const scope = normalizeCreditScope(
+          input.scope ?? (input.userId ? { type: 'user', id: input.userId } : undefined)
+        );
+        const userId =
+          input.userId ?? (scope.type === 'user' ? scope.id : (user?.id ?? 'test-user'));
+        const balanceBefore = readCreditBalance(metric, scope);
+        const balanceAfter = input.mode === 'set' ? input.amount : balanceBefore + input.amount;
+        writeCreditBalance(metric, scope, balanceAfter);
+        state.credits.push({
+          operation: 'adjust',
+          metric,
+          amount: input.amount,
+          scope,
+          userId,
+          mode: input.mode ?? 'delta',
+          idempotencyKey: input.idempotencyKey,
+          balanceBefore,
+          balanceAfter,
+          reason: input.reason,
+          metadata: input.metadata,
+        });
+        return {
+          changed: true,
+          operation: 'adjust',
+          amount: input.amount,
+          balanceBefore,
+          balanceAfter,
+          metric,
+          scope,
+          userId,
+          idempotencyKey: input.idempotencyKey,
+          metadata: input.metadata,
+        };
+      },
+      async refund(input) {
+        enforcePermission(Permission.CreditsWrite, 'ctx.credits.refund');
+        const metric = input.metric ?? 'platform.credits';
+        const scope = normalizeCreditScope(
+          input.scope ?? (input.userId ? { type: 'user', id: input.userId } : undefined)
+        );
+        const userId =
+          input.userId ?? (scope.type === 'user' ? scope.id : (user?.id ?? 'test-user'));
+        const balanceBefore = readCreditBalance(metric, scope);
+        const balanceAfter = balanceBefore + input.amount;
+        writeCreditBalance(metric, scope, balanceAfter);
+        state.credits.push({
+          operation: 'refund',
+          metric,
+          amount: input.amount,
+          scope,
+          userId,
+          idempotencyKey: input.idempotencyKey,
+          balanceBefore,
+          balanceAfter,
+          reason: input.reason,
+          metadata: input.metadata,
+        });
+        return {
+          changed: true,
+          operation: 'refund',
+          amount: input.amount,
+          balanceBefore,
+          balanceAfter,
+          metric,
+          scope,
+          userId,
+          idempotencyKey: input.idempotencyKey,
           metadata: input.metadata,
         };
       },
@@ -1910,6 +2275,150 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           message: 'Redeemed by fake plugin host.',
           metadata: input.metadata,
         };
+      },
+    },
+    commerce: {
+      async createCheckout(input) {
+        enforcePermission(Permission.CommerceWrite, 'ctx.commerce.createCheckout');
+        const userId = user?.id ?? 'test-user';
+        const now = new Date();
+        const provider = input.provider ?? 'stripe';
+        const providerOrderId = input.idempotencyKey
+          ? `checkout:${input.idempotencyKey}`
+          : `checkout:order-${store.commerceOrders.size + 1}`;
+        const amount = input.amount === undefined ? null : String(input.amount);
+        const existingOrder = input.idempotencyKey
+          ? Array.from(store.commerceOrders.values()).find(
+              (order) => order.provider === provider && order.providerOrderId === providerOrderId
+            )
+          : undefined;
+        if (existingOrder) {
+          if (
+            existingOrder.userId !== userId ||
+            existingOrder.amount !== amount ||
+            existingOrder.currency !== (input.currency ?? 'USD')
+          ) {
+            throw new PluginError({
+              code: 'PLUGIN_COMMERCE_IDEMPOTENCY_CONFLICT',
+              message: 'ctx.commerce.createCheckout idempotency key was reused.',
+              statusCode: 409,
+            });
+          }
+          state.commerce.push({
+            operation: 'createCheckout',
+            orderId: existingOrder.id,
+            provider: existingOrder.provider,
+            providerOrderId: existingOrder.providerOrderId,
+            amount: input.amount,
+            currency: existingOrder.currency ?? undefined,
+            status: existingOrder.status,
+            metadata: input.metadata,
+          });
+          return {
+            id: `checkout-${existingOrder.id}`,
+            provider: existingOrder.provider,
+            mode: input.mode ?? 'payment',
+            url: `https://checkout.test/${existingOrder.id}`,
+            orderId: existingOrder.id,
+            metadata: input.metadata,
+          };
+        }
+
+        const orderId = `order-${store.commerceOrders.size + 1}`;
+        const order: PluginCommerceOrder & { userId: string } = {
+          id: orderId,
+          userId,
+          orderType: 'one_time_purchase',
+          provider,
+          providerOrderId,
+          amount,
+          currency: input.currency ?? 'USD',
+          status: 'pending',
+          planId: null,
+          relatedOrderId: null,
+          metadata: input.metadata ?? {},
+          createdAt: now,
+          updatedAt: now,
+        };
+        store.commerceOrders.set(order.id, order);
+        state.commerce.push({
+          operation: 'createCheckout',
+          orderId,
+          provider: order.provider,
+          providerOrderId: order.providerOrderId,
+          amount: input.amount,
+          currency: order.currency ?? undefined,
+          status: order.status,
+          metadata: input.metadata,
+        });
+        return {
+          id: `checkout-${state.commerce.length}`,
+          provider: order.provider,
+          mode: input.mode ?? 'payment',
+          url: `https://checkout.test/${orderId}`,
+          orderId,
+          metadata: input.metadata,
+        };
+      },
+      async createOrder(input) {
+        enforcePermission(Permission.CommerceWrite, 'ctx.commerce.createOrder');
+        const userId = user?.id ?? 'test-user';
+        const now = new Date();
+        const id = `order-${store.commerceOrders.size + 1}`;
+        const order: PluginCommerceOrder & { userId: string } = {
+          id,
+          userId,
+          orderType: input.orderType ?? 'one_time_purchase',
+          provider: input.provider ?? 'local',
+          providerOrderId:
+            input.providerOrderId ??
+            input.idempotencyKey ??
+            `local-${store.commerceOrders.size + 1}`,
+          amount: input.amount === undefined ? null : String(input.amount),
+          currency: input.currency ?? 'USD',
+          status: input.status ?? 'succeeded',
+          planId: null,
+          relatedOrderId: null,
+          metadata: input.metadata ?? {},
+          createdAt: now,
+          updatedAt: now,
+        };
+        store.commerceOrders.set(order.id, order);
+        state.commerce.push({
+          operation: 'createOrder',
+          orderId: order.id,
+          provider: order.provider,
+          providerOrderId: order.providerOrderId,
+          amount: input.amount,
+          currency: order.currency ?? undefined,
+          status: order.status,
+          metadata: input.metadata,
+        });
+        if (order.status === 'succeeded' && input.creditAmount) {
+          await ctx.credits.grant({
+            amount: input.creditAmount,
+            metric: input.creditMetric,
+            scope: input.scope,
+            idempotencyKey: `${order.provider}:${order.providerOrderId}:credits`,
+            reason: `Order ${order.id}`,
+            metadata: input.metadata,
+          });
+        }
+        return order;
+      },
+      async getOrder(id) {
+        enforcePermission(Permission.CommerceRead, 'ctx.commerce.getOrder');
+        state.commerce.push({ operation: 'getOrder', orderId: id });
+        const order = store.commerceOrders.get(id);
+        return order?.userId === (user?.id ?? 'test-user') ? order : null;
+      },
+      async listOrders(input = {}) {
+        enforcePermission(Permission.CommerceRead, 'ctx.commerce.listOrders');
+        state.commerce.push({ operation: 'listOrders' });
+        const userId = user?.id ?? 'test-user';
+        return Array.from(store.commerceOrders.values())
+          .filter((order) => order.userId === userId)
+          .slice(input.offset ?? 0, (input.offset ?? 0) + (input.limit ?? 50));
       },
     },
     runs: {
@@ -2397,6 +2906,9 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
     },
     reset() {
       store.collections.clear();
+      store.storageUniqueKeys.clear();
+      store.creditBalances.clear();
+      store.commerceOrders.clear();
       store.artifacts.clear();
       store.ragChunks.clear();
       store.config.clear();

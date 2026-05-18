@@ -21,6 +21,7 @@ import { getUserCreditLogs } from '@/lib/services/billing/credit-log-service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PLATFORM_PRIMARY_CREDIT_METRIC } from '@/lib/billing/billing-metrics';
 
 const PAGE_SIZE = 20;
 
@@ -36,7 +37,7 @@ const copy = {
     emptyTitle: '暂无额度变更记录',
     emptyDescription: '订阅创建、重置或人工调整后，记录会显示在这里。',
     balanceAfter: '变更后余额',
-    apiCalls: '次 API 调用',
+    apiCalls: '点额度',
     relatedOrder: '关联订单',
     exportCsv: '导出 CSV',
     previous: '上一页',
@@ -49,7 +50,7 @@ const copy = {
     emptyTitle: 'No credit records yet',
     emptyDescription: 'Subscription, reset, or manual adjustment records will appear here.',
     balanceAfter: 'Balance After',
-    apiCalls: 'API calls',
+    apiCalls: 'credits',
     relatedOrder: 'Related Order',
     exportCsv: 'Export CSV',
     previous: 'Previous',
@@ -62,6 +63,7 @@ const logTypeLabels = {
   zh: {
     grant: '授予',
     reset: '重置',
+    refund: '退回',
     refund_revoke: '退款扣回',
     manual_adjust: '人工调整',
     subscription_upgrade: '订阅升级',
@@ -70,6 +72,7 @@ const logTypeLabels = {
   en: {
     grant: 'Grant',
     reset: 'Reset',
+    refund: 'Refund',
     refund_revoke: 'Refund Revoke',
     manual_adjust: 'Manual Adjust',
     subscription_upgrade: 'Subscription Upgrade',
@@ -128,8 +131,11 @@ function formatBalance(balanceAfter: unknown): number {
     return 0;
   }
 
-  const value = (balanceAfter as { apiCallsRemaining?: unknown }).apiCallsRemaining;
-  return typeof value === 'number' ? value : 0;
+  const snapshot = balanceAfter as Record<string, unknown>;
+  const value = snapshot[PLATFORM_PRIMARY_CREDIT_METRIC] ?? snapshot.apiCallsRemaining;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && Number.isFinite(Number(value))) return Number(value);
+  return 0;
 }
 
 export default async function CreditHistoryPage({ params, searchParams }: PageProps) {

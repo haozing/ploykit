@@ -6,8 +6,11 @@ const {
   mockDb,
   createOrderMock,
   createRefundOrderMock,
+  getOrderByIdMock,
   getOrderByProviderIdMock,
   updateOrderStatusMock,
+  applyCreditChangeMock,
+  grantDigitalEntitlementMock,
   markInvoicesForOrderStatusMock,
   upsertProviderInvoiceMock,
   cancelSubscriptionMock,
@@ -50,8 +53,11 @@ const {
     },
     createOrderMock: vi.fn(),
     createRefundOrderMock: vi.fn(),
+    getOrderByIdMock: vi.fn(),
     getOrderByProviderIdMock: vi.fn(),
     updateOrderStatusMock: vi.fn(),
+    applyCreditChangeMock: vi.fn(),
+    grantDigitalEntitlementMock: vi.fn(),
     markInvoicesForOrderStatusMock: vi.fn(),
     upsertProviderInvoiceMock: vi.fn(),
     cancelSubscriptionMock: vi.fn(),
@@ -86,8 +92,17 @@ vi.mock('@/lib/services/user/user-entitlement-service', () => ({
 vi.mock('@/lib/services/billing/order-service', () => ({
   createOrder: createOrderMock,
   createRefundOrder: createRefundOrderMock,
+  getOrderById: getOrderByIdMock,
   getOrderByProviderId: getOrderByProviderIdMock,
   updateOrderStatus: updateOrderStatusMock,
+}));
+
+vi.mock('@/lib/services/billing/credit-account-service', () => ({
+  applyCreditChange: applyCreditChangeMock,
+}));
+
+vi.mock('@/lib/services/billing/digital-entitlement-service', () => ({
+  grantDigitalEntitlement: grantDigitalEntitlementMock,
 }));
 
 vi.mock('@/lib/services/billing/credit-log-service', () => ({
@@ -124,6 +139,7 @@ describe('subscription webhook handlers', () => {
     mockDb.__whereMock.mockResolvedValue([]);
     mockDb.__limitMock.mockResolvedValue([{ id: 'plan_pro', name: 'Pro', limits: {} }]);
     getOrderByProviderIdMock.mockResolvedValue(null);
+    getOrderByIdMock.mockResolvedValue(null);
     getPlanForStripePriceIdMock.mockResolvedValue(null);
     getUserEntitlementMock.mockResolvedValue(null);
     readPlanLimitValueMock.mockReturnValue(100);
@@ -136,7 +152,25 @@ describe('subscription webhook handlers', () => {
     upgradeUserPlanMock.mockResolvedValue({ id: 'ent_1' });
     upsertProviderInvoiceMock.mockResolvedValue({ id: 'invoice_1' });
     markInvoicesForOrderStatusMock.mockResolvedValue([{ id: 'invoice_1' }]);
+    applyCreditChangeMock.mockResolvedValue({ id: 'credit_1' });
+    grantDigitalEntitlementMock.mockResolvedValue({ id: 'digital_entitlement_1' });
     initSubscriptionHandlers();
+  });
+
+  it('rethrows payment succeeded side-effect failures so the event can retry', async () => {
+    updateOrderStatusMock.mockRejectedValueOnce(new Error('status failed'));
+
+    await expect(
+      handlerFor(BILLING_EVENTS.PAYMENT_SUCCEEDED)({
+        userId: 'user_1',
+        data: {
+          orderId: 'order_1',
+          paymentIntentId: 'pi_1',
+          amount: 25,
+          currency: 'usd',
+        },
+      })
+    ).rejects.toThrow('status failed');
   });
 
   it('handles subscription updates from portal price changes', async () => {
@@ -360,6 +394,44 @@ describe('subscription webhook handlers', () => {
         userId: 'user_1',
         creditsRevoked: 100,
         refundOrderId: 'refund_order_1',
+      })
+    );
+  });
+
+  it('finds checkout refund originals by internal order id before provider order id', async () => {
+    getOrderByIdMock.mockResolvedValueOnce({
+      id: '7f199ec8-9f3a-4f34-935b-dfe1f4d04d65',
+      userId: 'user_1',
+      providerOrderId: 'checkout:7f199ec8-9f3a-4f34-935b-dfe1f4d04d65',
+      planId: null,
+    });
+    getOrderByProviderIdMock.mockResolvedValueOnce(null);
+
+    await handlerFor(BILLING_EVENTS.ORDER_REFUNDED)({
+      userId: 'user_1',
+      data: {
+        orderId: '7f199ec8-9f3a-4f34-935b-dfe1f4d04d65',
+        chargeId: 'ch_1',
+        refundedAmount: 25,
+        totalAmount: 25,
+        currency: 'usd',
+        refunds: [
+          {
+            id: 're_1',
+            amount: 25,
+            reason: 'requested_by_customer',
+            status: 'succeeded',
+          },
+        ],
+      },
+    });
+
+    expect(getOrderByIdMock).toHaveBeenCalledWith('7f199ec8-9f3a-4f34-935b-dfe1f4d04d65');
+    expect(createRefundOrderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user_1',
+        providerOrderId: 're_1',
+        originalOrderId: '7f199ec8-9f3a-4f34-935b-dfe1f4d04d65',
       })
     );
   });

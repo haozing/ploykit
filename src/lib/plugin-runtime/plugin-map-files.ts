@@ -6,7 +6,7 @@ export const PLUGIN_MAP_MANIFEST_FILE_ENV = 'PLOYKIT_PLUGIN_MAP_MANIFEST_FILE';
 
 export const SOURCE_PLUGIN_MAP_FILE = 'src/lib/plugin-map.ts';
 export const SOURCE_PLUGIN_MAP_MANIFEST_FILE = 'src/lib/plugin-map.manifest.json';
-export const RUNTIME_PLUGIN_MAP_FILE = '.runtime/plugin-map.ts';
+export const RUNTIME_PLUGIN_MAP_FILE = '.runtime/plugin-map.cjs';
 export const RUNTIME_PLUGIN_MAP_MANIFEST_FILE = '.runtime/plugin-map.manifest.json';
 
 export interface PluginMapFileSet {
@@ -39,6 +39,10 @@ export function hasConfiguredRuntimePluginMapFiles(): boolean {
 
 export function resolveProjectPath(cwd: string, value: string): string {
   return path.isAbsolute(value) ? value : path.resolve(cwd, value);
+}
+
+export function isLoadableRuntimePluginMapFile(file: string): boolean {
+  return /\.(cjs|js)$/i.test(file);
 }
 
 export function getSourcePluginMapFiles(cwd = process.cwd()): PluginMapFileSet {

@@ -28,7 +28,8 @@
 | `ctx.audit`         | `Permission.AuditWrite`                                                                   | 用户可见或敏感动作的审计记录。                        |
 | `ctx.usage`         | `Permission.UsageWrite`                                                                   | 用量计数与分析。                                      |
 | `ctx.metering`      | `Permission.MeteringWrite`                                                                | 计费动作授权、提交、退款、作废和对账。                |
-| `ctx.credits`       | `Permission.CreditsRead`, `Permission.CreditsConsume`                                     | 用户积分余额与消耗。                                  |
+| `ctx.credits`       | `Permission.CreditsRead`, `Permission.CreditsConsume`, `Permission.CreditsWrite`          | 按作用域管理积分余额、消耗、授予、调整和退款。        |
+| `ctx.commerce`      | `Permission.CommerceRead`, `Permission.CommerceWrite`                                     | 通用一次性 checkout、订单创建和用户订单读取。         |
 | `ctx.billing`       | `Permission.BillingRead`, `Permission.BillingWrite`                                       | 计划、权益、授予和兑换流程。                          |
 | `ctx.notifications` | `Permission.NotificationsSend`                                                            | 站内或邮件通知。                                      |
 | `ctx.ui.toast`      | `Permission.UiToast`                                                                      | 插件 UI 流程中的可选用户反馈。                        |
@@ -45,6 +46,7 @@
 | 宿主页面扩展         | `hostPages.slots`；整页主内容替换用 `hostPages.overrides`，并声明 SEO、i18n、shell 和 cache。      |
 | npm UI/运行时组件    | `plugin.dependencies.json` + 宿主根 `package.json` 运行时依赖；插件代码正常 import。               |
 | 可计费同步动作       | route/API commercial gate + `ctx.metering.authorize()` + 业务动作 + `ctx.metering.commit()`。      |
+| 一次性购买或充值     | `ctx.commerce.createCheckout()` 或 `ctx.commerce.createOrder()` + credit grant metadata。          |
 | 长任务或工作流       | public/API handler 创建 `ctx.runs`，再 enqueue `ctx.jobs`，job 更新进度、结果，并按需 emit event。 |
 | 外部系统集成         | 无凭据短调用用 `ctx.http.fetch`；有凭据、重试、审计或脱敏要求用 `ctx.connectors`。                 |
 | 宿主管理服务调用     | 走 `ctx.services`，由宿主管理 URL、凭据、actor claims、超时、重试、审计和用量。                    |
@@ -57,6 +59,10 @@
 4. job 内调用 `ctx.services` 或 `ctx.connectors` 完成复杂数据库或外部系统工作。
 5. 成功后 `ctx.metering.commit()`，失败时 `refund` 或 `void`。
 6. 写入 run log/result，必要时 `ctx.events.emit()` 和 `ctx.notifications.send()`。
+
+Credit account 通过 scope 定位：`user`、`workspace`、`product` 或 `plugin`。普通用户余额优先用 user scope，团队共享预算用 workspace scope；product/plugin scope 只应由 admin 或 system context 使用。
+
+需要幂等写入时使用 `ctx.storage.collection(name).insertIfAbsent()`，用业务字段组成唯一键；需要队列式抢占记录时使用 `claim()` 做原子领取。`insertIfAbsent()` 使用的唯一字段必须存在且非 null；自动唯一索引会忽略可选字段的 nullish 值。
 
 ## AI 生成插件的规则
 

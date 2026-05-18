@@ -67,6 +67,7 @@ export type CreditLogType =
   | 'grant' // Credits granted (subscription created/renewed)
   | 'reset' // Monthly/billing cycle reset
   | 'refund_revoke' // Credits revoked due to refund
+  | 'refund' // Credits returned to an account
   | 'manual_adjust' // Manual adjustment by admin
   | 'subscription_upgrade' // Plan upgrade
   | 'subscription_downgrade'; // Plan downgrade
@@ -80,6 +81,8 @@ export type TaxProfileStatus = 'active' | 'archived';
 export type DigitalEntitlementStatus = 'active' | 'revoked' | 'expired';
 
 export type DigitalEntitlementSourceType = 'one_time_purchase' | 'manual' | 'refund' | 'import';
+export type CreditAccountScopeType = 'user' | 'workspace' | 'product' | 'plugin';
+export type CreditLedgerOperation = 'grant' | 'consume' | 'adjust' | 'refund' | 'reset' | 'revoke';
 
 // ============================================================================
 // ORDERS TABLE
@@ -401,6 +404,72 @@ export const creditReconciliationRuns = pgTable(
   })
 );
 
+export const creditAccounts = pgTable(
+  'credit_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scopeType: text('scope_type').$type<CreditAccountScopeType>().notNull(),
+    scopeId: text('scope_id').notNull(),
+    metric: text('metric').notNull(),
+    balance: integer('balance').notNull().default(0),
+    unlimited: boolean('unlimited').notNull().default(false),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    scopeMetricIdx: uniqueIndex('credit_accounts_scope_metric_idx').on(
+      table.scopeType,
+      table.scopeId,
+      table.metric
+    ),
+    scopeIdx: index('credit_accounts_scope_idx').on(table.scopeType, table.scopeId),
+    metricIdx: index('credit_accounts_metric_idx').on(table.metric),
+  })
+);
+
+export const creditLedgerEntries = pgTable(
+  'credit_ledger_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => creditAccounts.id, { onDelete: 'cascade' }),
+    scopeType: text('scope_type').$type<CreditAccountScopeType>().notNull(),
+    scopeId: text('scope_id').notNull(),
+    metric: text('metric').notNull(),
+    pluginId: text('plugin_id'),
+    userId: text('user_id').references(() => betterAuthuser.id, { onDelete: 'set null' }),
+    operation: text('operation').$type<CreditLedgerOperation>().notNull(),
+    amount: integer('amount').notNull(),
+    balanceBefore: integer('balance_before').notNull(),
+    balanceAfter: integer('balance_after').notNull(),
+    idempotencyKey: text('idempotency_key'),
+    idempotencyFingerprint: text('idempotency_fingerprint'),
+    relatedOrderId: uuid('related_order_id').references(() => orders.id, { onDelete: 'set null' }),
+    relatedUsageId: text('related_usage_id'),
+    reason: text('reason'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    checksum: text('checksum'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    accountCreatedAtIdx: index('credit_ledger_entries_account_created_at_idx').on(
+      table.accountId,
+      table.createdAt.desc()
+    ),
+    scopeMetricIdx: index('credit_ledger_entries_scope_metric_idx').on(
+      table.scopeType,
+      table.scopeId,
+      table.metric
+    ),
+    idempotencyIdx: uniqueIndex('credit_ledger_entries_idempotency_idx').on(table.idempotencyKey),
+    orderIdx: index('credit_ledger_entries_order_idx').on(table.relatedOrderId),
+    userIdx: index('credit_ledger_entries_user_idx').on(table.userId),
+    pluginIdx: index('credit_ledger_entries_plugin_idx').on(table.pluginId),
+  })
+);
+
 export const digitalEntitlements = pgTable(
   'digital_entitlements',
   {
@@ -544,6 +613,12 @@ export type NewCreditLog = typeof creditLogs.$inferInsert;
 
 export type CreditReconciliationRun = typeof creditReconciliationRuns.$inferSelect;
 export type NewCreditReconciliationRun = typeof creditReconciliationRuns.$inferInsert;
+
+export type CreditAccount = typeof creditAccounts.$inferSelect;
+export type NewCreditAccount = typeof creditAccounts.$inferInsert;
+
+export type CreditLedgerEntry = typeof creditLedgerEntries.$inferSelect;
+export type NewCreditLedgerEntry = typeof creditLedgerEntries.$inferInsert;
 
 export type DigitalEntitlement = typeof digitalEntitlements.$inferSelect;
 export type NewDigitalEntitlement = typeof digitalEntitlements.$inferInsert;

@@ -340,14 +340,45 @@ export async function run(ctx) {
     amount: 1,
     idempotencyKey: 'credit-call-1',
   });
-  return ctx.json({ balance, consumed });
+  const granted = await ctx.credits.grant({ amount: 1, idempotencyKey: 'grant-1' });
+  return ctx.json({ balance, consumed, granted });
 }
 `
     );
 
     const report = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) =>
-        createContract(root, [Permission.CreditsRead, Permission.CreditsConsume]),
+        createContract(root, [
+          Permission.CreditsRead,
+          Permission.CreditsConsume,
+          Permission.CreditsWrite,
+        ]),
+    });
+
+    expect(report.success).toBe(true);
+    expect(
+      report.diagnostics.filter((diagnostic) => diagnostic.code === 'PLUGIN_PERMISSION_UNUSED')
+    ).toEqual([]);
+  });
+
+  it('captures commerce capability permissions from ctx usage', async () => {
+    const pluginRoot = createPluginRoot('commerce-permissions');
+    writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
+    writePluginFile(
+      pluginRoot,
+      'api/commerce.ts',
+      `
+export async function run(ctx) {
+  const order = await ctx.commerce.createOrder({ amount: 5, currency: 'USD' });
+  const fetched = await ctx.commerce.getOrder(order.id);
+  return ctx.json({ order, fetched });
+}
+`
+    );
+
+    const report = await checkPluginTargets(pluginRoot, {
+      loadContract: async (root) =>
+        createContract(root, [Permission.CommerceRead, Permission.CommerceWrite]),
     });
 
     expect(report.success).toBe(true);

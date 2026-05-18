@@ -24,8 +24,10 @@ import { recordCapabilityAudit } from './audit-helper.server';
 import type { AuditPort } from '@/lib/audit/audit-port.server';
 import {
   createDefaultPluginCreditsHost,
+  getDefaultCreditMetric,
   type PluginCreditsHost,
 } from './credits-capability.server';
+import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
 
 const DEFAULT_GENERATE_MODEL = 'host.default.generate';
 const DEFAULT_EMBED_MODEL = 'host.default.embed';
@@ -353,10 +355,13 @@ async function consumeCredits(
       userId: user.id,
       userRole: user.role,
       requestId: scope.requestId,
+      productId: getCurrentRuntimeProductId(),
       system: Boolean(scope.system),
     },
     {
       meter,
+      metric: getDefaultCreditMetric(),
+      accountScope: { type: 'user', id: user.id },
       amount,
       userId: user.id,
       idempotencyKey: `${idempotencyKey}:credits`,

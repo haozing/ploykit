@@ -1,15 +1,10 @@
 import 'server-only';
 
-import { asc, and, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/client.server';
+import { pluginInstallations } from '@/lib/db/schema/plugins';
 import {
-  appBundleMembers,
-  appBundles,
-  pluginInstallations,
-  type AppBundle,
-  type AppBundleMember,
-} from '@/lib/db/schema/plugins';
-import {
+  getPluginRuntimeBundleIds,
   getPluginRuntimeMapEntry,
   getRuntimeAppBundle,
   type RuntimeAppBundle,
@@ -119,46 +114,6 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function recordArray(value: unknown): Array<Record<string, unknown>> | undefined {
-  return Array.isArray(value)
-    ? value.filter((item) => Object.keys(asRecord(item)).length > 0).map(asRecord)
-    : undefined;
-}
-
-function bundleMetadata(bundle: AppBundle) {
-  return asRecord(bundle.metadata);
-}
-
-function toRuntimeBundle(bundle: AppBundle, members: AppBundleMember[]): RuntimeAppBundle {
-  const metadata = bundleMetadata(bundle);
-  const seeds = asRecord(metadata.seeds);
-
-  return {
-    id: bundle.id,
-    productId: bundle.productId,
-    suiteId: bundle.suiteId ?? undefined,
-    name: bundle.name,
-    version: bundle.version,
-    sourceType: bundle.sourceType,
-    sourceRef: bundle.sourceRef ?? undefined,
-    plugins: members.map((member) => ({
-      pluginId: member.pluginId,
-      enableByDefault: member.enableByDefault,
-      required: member.required,
-    })),
-    seeds:
-      Object.keys(seeds).length > 0
-        ? {
-            serviceConnections: recordArray(seeds.serviceConnections),
-            resourceBindings: recordArray(seeds.resourceBindings),
-          }
-        : undefined,
-    healthChecks: recordArray(metadata.healthChecks),
-    dependencies: asRecord(metadata.dependencies),
-    metadata,
-  };
-}
-
 type InstalledPlugin = NonNullable<Awaited<ReturnType<typeof pluginQueryService.getInstallation>>>;
 
 function resolveCatalogAttachment(
@@ -179,35 +134,25 @@ function resolveCatalogAttachment(
   return needsSuiteAttach || needsBundleAttach ? { suiteId, bundleId } : null;
 }
 
-async function getCatalogBundle(
-  bundleId: string,
-  productId?: string
-): Promise<RuntimeAppBundle | null> {
-  const conditions = [eq(appBundles.id, bundleId)];
-  if (productId) {
-    conditions.push(eq(appBundles.productId, productId));
+function getCatalogBundle(bundleId: string, productId?: string): RuntimeAppBundle | null {
+  const runtimeBundle = getRuntimeAppBundle(bundleId, productId);
+  if (runtimeBundle && (!productId || runtimeBundle.productId === productId)) {
+    return runtimeBundle;
+  }
+  return null;
+}
+
+function createBundleNotDeclaredMessage(bundleId: string, productId?: string): string {
+  const bundleIds = getPluginRuntimeMapEntry(bundleId)
+    ? [...getPluginRuntimeBundleIds(bundleId)]
+    : [];
+  if (bundleIds.length > 0) {
+    return `Bundle "${bundleId}" is not installable because "${bundleId}" is a plugin id. Use --bundle ${bundleIds.map((id) => `"${id}"`).join(' or --bundle ')}.`;
   }
 
-  const [bundle] = await db
-    .select()
-    .from(appBundles)
-    .where(and(...conditions))
-    .limit(1);
-  if (!bundle) {
-    const runtimeBundle = getRuntimeAppBundle(bundleId, productId);
-    if (runtimeBundle && (!productId || runtimeBundle.productId === productId)) {
-      return runtimeBundle;
-    }
-    return null;
-  }
-
-  const members = await db
-    .select()
-    .from(appBundleMembers)
-    .where(eq(appBundleMembers.bundleId, bundle.id))
-    .orderBy(asc(appBundleMembers.sortOrder));
-
-  return toRuntimeBundle(bundle, members);
+  return `Bundle "${bundleId}" is not declared in the active runtime catalog${
+    productId ? ` for product "${productId}"` : ''
+  }.`;
 }
 
 async function assertPluginDeclaresService(pluginId: string, serviceName: string): Promise<void> {
@@ -245,9 +190,9 @@ async function resolveSeedPluginId(
 
 export class PluginBundleInstallerService {
   async planBundle(options: PluginBundleApplyOptions): Promise<PluginBundleApplyResult> {
-    const bundle = await getCatalogBundle(options.bundleId, options.productId);
+    const bundle = getCatalogBundle(options.bundleId, options.productId);
     if (!bundle) {
-      throw new Error(`Bundle "${options.bundleId}" is not declared in the runtime catalog.`);
+      throw new Error(createBundleNotDeclaredMessage(options.bundleId, options.productId));
     }
     const productId = options.productId ?? bundle.productId;
     if (bundle.productId !== productId) {
@@ -319,9 +264,9 @@ export class PluginBundleInstallerService {
       return this.planBundle(options);
     }
 
-    const bundle = await getCatalogBundle(options.bundleId, options.productId);
+    const bundle = getCatalogBundle(options.bundleId, options.productId);
     if (!bundle) {
-      throw new Error(`Bundle "${options.bundleId}" is not declared in the runtime catalog.`);
+      throw new Error(createBundleNotDeclaredMessage(options.bundleId, options.productId));
     }
     const productId = options.productId ?? bundle.productId;
 

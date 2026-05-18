@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   and,
   asc,
@@ -18,10 +19,15 @@ import {
 import { db, type Database } from '@/lib/db/client.server';
 import {
   pluginCollections,
+  pluginRecordUniqueKeys,
   pluginRecords,
   type PluginRecord,
 } from '@/lib/db/schema/plugin-storage';
-import type { PluginCollectionDefinition, PluginStorageScalar } from '@ploykit/plugin-sdk';
+import {
+  PluginError,
+  type PluginCollectionDefinition,
+  type PluginStorageScalar,
+} from '@ploykit/plugin-sdk';
 import { normalizePluginStorageQuery } from './query';
 import { normalizeCollectionDefinition, type NormalizedPluginCollectionFieldType } from './schema';
 import {
@@ -29,10 +35,12 @@ import {
   type CreatePluginStorageOptions,
   type EnsurePluginCollectionInput,
   type InsertPluginRecordInput,
+  type PluginRecordUniqueKeyInput,
   type PluginStorageRepository,
   type PluginStorageScope,
   type PluginStoredRecord,
   type UpdatePluginRecordInput,
+  type UpdatePluginRecordWhereInput,
 } from './runtime';
 
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -270,6 +278,10 @@ function scopeContextUserId(scope: PluginStorageScope): string {
   return scope.system ? 'system' : (scope.userId ?? '');
 }
 
+function uniqueKeyUserId(userId: string | null | undefined): string {
+  return userId ?? '__system__';
+}
+
 function baseRecordWhere(scope: PluginStorageScope, collectionName: string) {
   const filters = [
     eq(pluginRecords.pluginId, scope.pluginId),
@@ -288,6 +300,137 @@ function baseRecordWhere(scope: PluginStorageScope, collectionName: string) {
 
 export class DbPluginStorageRepository implements PluginStorageRepository {
   constructor(private readonly executor: Executor = db) {}
+
+  private createUniqueConflictError(
+    input: InsertPluginRecordInput | UpdatePluginRecordInput,
+    uniqueKey: PluginRecordUniqueKeyInput
+  ): PluginError {
+    return new PluginError({
+      code: 'PLUGIN_STORAGE_UNIQUE_CONFLICT',
+      message: `Unique storage key already exists in collection "${input.collectionName}".`,
+      statusCode: 409,
+      details: {
+        pluginId: input.pluginId,
+        collection: input.collectionName,
+        fields: uniqueKey.fields,
+      },
+    });
+  }
+
+  private async findExistingByUniqueKey(
+    executor: Executor,
+    input: InsertPluginRecordInput | UpdatePluginRecordInput
+  ): Promise<PluginStoredRecord | null> {
+    for (const uniqueKey of input.uniqueKeys ?? []) {
+      const [keyRow] = await executor
+        .select()
+        .from(pluginRecordUniqueKeys)
+        .where(
+          and(
+            eq(pluginRecordUniqueKeys.pluginId, input.pluginId),
+            eq(pluginRecordUniqueKeys.collectionName, input.collectionName),
+            eq(pluginRecordUniqueKeys.userId, uniqueKeyUserId(input.userId)),
+            eq(pluginRecordUniqueKeys.uniqueKey, uniqueKey.key),
+            isNull(pluginRecordUniqueKeys.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!keyRow) {
+        continue;
+      }
+
+      const [record] = await executor
+        .select()
+        .from(pluginRecords)
+        .where(
+          and(
+            eq(pluginRecords.pluginId, input.pluginId),
+            eq(pluginRecords.collectionName, input.collectionName),
+            eq(pluginRecords.id, keyRow.recordId),
+            isNull(pluginRecords.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (record) {
+        return mapRecord(record);
+      }
+    }
+
+    return null;
+  }
+
+  private async reserveUniqueKeys(
+    executor: Executor,
+    input: InsertPluginRecordInput | UpdatePluginRecordInput,
+    uniqueKeys: PluginRecordUniqueKeyInput[],
+    returnExisting = false
+  ): Promise<PluginStoredRecord | null> {
+    for (const uniqueKey of uniqueKeys) {
+      const [inserted] = await executor
+        .insert(pluginRecordUniqueKeys)
+        .values({
+          id: `${input.pluginId}:${input.collectionName}:${input.id}:${uniqueKey.key}:${randomUUID()}`,
+          pluginId: input.pluginId,
+          collectionName: input.collectionName,
+          userId: uniqueKeyUserId(input.userId),
+          uniqueKey: uniqueKey.key,
+          recordId: input.id,
+          fieldsJson: uniqueKey.fields,
+        })
+        .onConflictDoNothing({
+          target: [
+            pluginRecordUniqueKeys.pluginId,
+            pluginRecordUniqueKeys.collectionName,
+            pluginRecordUniqueKeys.userId,
+            pluginRecordUniqueKeys.uniqueKey,
+          ],
+          where: sql`${pluginRecordUniqueKeys.deletedAt} IS NULL`,
+        })
+        .returning();
+
+      if (inserted) {
+        continue;
+      }
+
+      const existing = await this.findExistingByUniqueKey(executor, {
+        ...input,
+        uniqueKeys: [uniqueKey],
+      });
+      if (returnExisting && existing) {
+        return existing;
+      }
+      throw this.createUniqueConflictError(input, uniqueKey);
+    }
+
+    return null;
+  }
+
+  private async replaceUniqueKeys(
+    executor: Executor,
+    input: UpdatePluginRecordInput
+  ): Promise<void> {
+    const previousKeys = input.previousUniqueKeys ?? [];
+    if (previousKeys.length > 0) {
+      await executor
+        .update(pluginRecordUniqueKeys)
+        .set({
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(pluginRecordUniqueKeys.pluginId, input.pluginId),
+            eq(pluginRecordUniqueKeys.collectionName, input.collectionName),
+            eq(pluginRecordUniqueKeys.recordId, input.id),
+            isNull(pluginRecordUniqueKeys.deletedAt)
+          )
+        );
+    }
+
+    await this.reserveUniqueKeys(executor, input, input.uniqueKeys ?? []);
+  }
 
   private async inContext<T>(
     scope: PluginStorageScope,
@@ -383,6 +526,7 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
     input: InsertPluginRecordInput
   ): Promise<PluginStoredRecord> {
     return this.inContext(scope, async (executor) => {
+      await this.reserveUniqueKeys(executor, input, input.uniqueKeys ?? []);
       const rows = await executor
         .insert(pluginRecords)
         .values({
@@ -398,11 +542,46 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
     });
   }
 
+  async insertIfAbsent(
+    scope: PluginStorageScope,
+    input: InsertPluginRecordInput
+  ): Promise<{ record: PluginStoredRecord; inserted: boolean }> {
+    return this.inContext(scope, async (executor) => {
+      const existing = await this.findExistingByUniqueKey(executor, input);
+      if (existing) {
+        return { record: existing, inserted: false };
+      }
+
+      const racedExisting = await this.reserveUniqueKeys(
+        executor,
+        input,
+        input.uniqueKeys ?? [],
+        true
+      );
+      if (racedExisting) {
+        return { record: racedExisting, inserted: false };
+      }
+      const rows = await executor
+        .insert(pluginRecords)
+        .values({
+          id: input.id,
+          pluginId: input.pluginId,
+          collectionName: input.collectionName,
+          userId: input.userId,
+          data: input.data,
+        })
+        .returning();
+
+      return { record: mapRecord(rows[0]), inserted: true };
+    });
+  }
+
   async update(
     scope: PluginStorageScope,
     input: UpdatePluginRecordInput
   ): Promise<PluginStoredRecord> {
     return this.inContext(scope, async (executor) => {
+      await this.replaceUniqueKeys(executor, input);
       const rows = await executor
         .update(pluginRecords)
         .set({
@@ -413,6 +592,49 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
         .returning();
 
       return mapRecord(rows[0]);
+    });
+  }
+
+  async updateWhere(
+    scope: PluginStorageScope,
+    input: UpdatePluginRecordWhereInput
+  ): Promise<PluginStoredRecord | null> {
+    return this.inContext(scope, async (executor) => {
+      const queryPredicates = storageQueryPredicates(input.collection, input.query);
+      const [existingRow] = await executor
+        .select()
+        .from(pluginRecords)
+        .where(and(baseRecordWhere(scope, input.collectionName), ...queryPredicates))
+        .orderBy(...storageQueryOrderBy(input.collection, input.query))
+        .for('update')
+        .limit(1);
+
+      if (!existingRow) {
+        return null;
+      }
+
+      const existing = mapRecord(existingRow);
+      const update = input.buildUpdatedData(existing);
+      await this.replaceUniqueKeys(executor, {
+        pluginId: input.pluginId,
+        collectionName: input.collectionName,
+        userId: existing.userId,
+        id: existing.id,
+        data: update.data,
+        previousUniqueKeys: update.previousUniqueKeys,
+        uniqueKeys: update.uniqueKeys,
+      });
+
+      const rows = await executor
+        .update(pluginRecords)
+        .set({
+          data: update.data,
+          updatedAt: new Date(),
+        })
+        .where(and(baseRecordWhere(scope, input.collectionName), eq(pluginRecords.id, existing.id)))
+        .returning();
+
+      return rows[0] ? mapRecord(rows[0]) : null;
     });
   }
 
@@ -430,6 +652,23 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
         })
         .where(and(baseRecordWhere(scope, collectionName), eq(pluginRecords.id, id)))
         .returning();
+
+      if (rows[0]) {
+        await executor
+          .update(pluginRecordUniqueKeys)
+          .set({
+            deletedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(pluginRecordUniqueKeys.pluginId, scope.pluginId),
+              eq(pluginRecordUniqueKeys.collectionName, collectionName),
+              eq(pluginRecordUniqueKeys.recordId, id),
+              isNull(pluginRecordUniqueKeys.deletedAt)
+            )
+          );
+      }
 
       return rows[0] ? mapRecord(rows[0]) : null;
     });

@@ -5,7 +5,6 @@ import createNextIntlPlugin from 'next-intl/plugin';
 import {
   getActivePluginMapFiles,
   getSourcePluginMapFiles,
-  hasConfiguredRuntimePluginMapFiles,
 } from './src/lib/plugin-runtime/plugin-map-files';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
@@ -18,30 +17,20 @@ function ensureActivePluginMapForWebpack(): string | null {
   }
 
   if (!fs.existsSync(active.mapFile)) {
-    if (hasConfiguredRuntimePluginMapFiles()) {
-      throw new Error(
-        `Active plugin map file is missing: ${path.relative(
-          __dirname,
-          active.mapFile
-        )}. Run npm run plugins:scan or update PLOYKIT_PLUGIN_MAP_FILE.`
-      );
-    }
-    fs.mkdirSync(path.dirname(active.mapFile), { recursive: true });
-    fs.copyFileSync(source.mapFile, active.mapFile);
+    throw new Error(
+      `Active plugin map file is missing: ${path.relative(
+        __dirname,
+        active.mapFile
+      )}. Run npm run plugins:scan:runtime or update PLOYKIT_PLUGIN_MAP_FILE.`
+    );
   }
   if (!fs.existsSync(active.manifestFile)) {
-    if (hasConfiguredRuntimePluginMapFiles()) {
-      throw new Error(
-        `Active plugin map manifest file is missing: ${path.relative(
-          __dirname,
-          active.manifestFile
-        )}. Run npm run plugins:scan or update PLOYKIT_PLUGIN_MAP_MANIFEST_FILE.`
-      );
-    }
-    if (fs.existsSync(source.manifestFile)) {
-      fs.mkdirSync(path.dirname(active.manifestFile), { recursive: true });
-      fs.copyFileSync(source.manifestFile, active.manifestFile);
-    }
+    throw new Error(
+      `Active plugin map manifest file is missing: ${path.relative(
+        __dirname,
+        active.manifestFile
+      )}. Run npm run plugins:scan:runtime or update PLOYKIT_PLUGIN_MAP_MANIFEST_FILE.`
+    );
   }
 
   return active.mapFile;
