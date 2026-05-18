@@ -17,7 +17,7 @@ import {
 import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 import { syncRuntimeCatalog } from '@/lib/plugin-runtime/catalog/runtime-catalog-sync.server';
 import { pluginRuntimeInstallerService } from './plugin-runtime-installer.server';
-import { handleInternalServiceBindingAction } from '@/lib/plugin-runtime/admin/internal-services.server';
+import { handleServiceConnectionAction } from '@/lib/plugin-runtime/admin/service-connections.server';
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
 
 export interface PluginBundleApplyOptions {
@@ -25,13 +25,13 @@ export interface PluginBundleApplyOptions {
   bundleId: string;
   environment?: string;
   enable?: boolean;
-  seedInternalServices?: boolean;
+  seedServiceConnections?: boolean;
   dryRun?: boolean;
   userId?: string;
 }
 
 export interface PluginBundleApplyStep {
-  type: 'catalog' | 'install' | 'attach' | 'enable' | 'seedInternalService' | 'skip';
+  type: 'catalog' | 'install' | 'attach' | 'enable' | 'seedServiceConnection' | 'skip';
   pluginId?: string;
   serviceName?: string;
   ownerType?: string;
@@ -65,6 +65,37 @@ function resolveEnvRef(ref: string | undefined): string | undefined {
 
 function seedOwnerType(value: unknown): 'plugin' | 'suite' | 'product' {
   return value === 'suite' || value === 'product' ? value : 'plugin';
+}
+
+function seedAuthType(
+  value: unknown,
+  refs: {
+    authSecretRef?: string;
+    authUsernameRef?: string;
+    authPasswordRef?: string;
+  }
+): 'none' | 'bearer' | 'basic' | 'apiKey' {
+  if (value === 'bearer' || value === 'basic' || value === 'apiKey') {
+    return value;
+  }
+  if (refs.authUsernameRef || refs.authPasswordRef) {
+    return 'basic';
+  }
+  if (refs.authSecretRef) {
+    return 'bearer';
+  }
+  return 'none';
+}
+
+function seedSecretSource(ref: unknown) {
+  const value = readSeedString(ref);
+  if (!value) {
+    return { type: 'none' as const };
+  }
+  if (value.startsWith('dbsec:')) {
+    return { type: 'encrypted' as const, ref: value };
+  }
+  return { type: 'env' as const, name: value.replace(/^env:/, '') };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -103,7 +134,7 @@ function toRuntimeBundle(bundle: AppBundle, members: AppBundleMember[]): Runtime
     seeds:
       Object.keys(seeds).length > 0
         ? {
-            internalServices: recordArray(seeds.internalServices),
+            serviceConnections: recordArray(seeds.serviceConnections),
             resourceBindings: recordArray(seeds.resourceBindings),
           }
         : undefined,
@@ -171,7 +202,7 @@ async function findSeedPluginId(
   for (const plugin of bundlePlugins) {
     const entry = getPluginRuntimeMapEntry(plugin.pluginId);
     const contract = await pluginRuntimeRegistry.getOrLoad(plugin.pluginId, entry);
-    if (contract.services.some((service) => service.name === serviceName)) {
+    if (contract.serviceRequirements.some((service) => service.name === serviceName)) {
       return plugin.pluginId;
     }
   }
@@ -215,7 +246,7 @@ export class PluginBundleInstallerService {
       });
     }
 
-    for (const seed of bundle.seeds?.internalServices ?? []) {
+    for (const seed of bundle.seeds?.serviceConnections ?? []) {
       const serviceName = readSeedString(seed.serviceName);
       if (!serviceName) {
         continue;
@@ -224,14 +255,14 @@ export class PluginBundleInstallerService {
         readSeedString(seed.baseUrlRef) ?? readSeedString(seed.baseUrl)
       );
       steps.push({
-        type: 'seedInternalService',
+        type: 'seedServiceConnection',
         serviceName,
         ownerType: readSeedString(seed.ownerType) ?? 'plugin',
         ownerId: readSeedString(seed.ownerId),
         status: 'planned',
         message: baseUrl
-          ? `Seed internal service "${serviceName}".`
-          : `Internal service "${serviceName}" seed is missing baseUrl/baseUrlRef.`,
+          ? `Seed service connection "${serviceName}".`
+          : `Service connection "${serviceName}" seed is missing baseUrl/baseUrlRef.`,
       });
     }
 
@@ -326,8 +357,8 @@ export class PluginBundleInstallerService {
       installations.set(plugin.pluginId, installation);
     }
 
-    if (options.seedInternalServices ?? true) {
-      for (const seed of bundle.seeds?.internalServices ?? []) {
+    if (options.seedServiceConnections ?? true) {
+      for (const seed of bundle.seeds?.serviceConnections ?? []) {
         const serviceName = readSeedString(seed.serviceName);
         if (!serviceName) {
           continue;
@@ -336,20 +367,30 @@ export class PluginBundleInstallerService {
           readSeedString(seed.baseUrlRef) ?? readSeedString(seed.baseUrl)
         );
         if (!baseUrl) {
-          throw new Error(`Internal service seed "${serviceName}" is missing baseUrl/baseUrlRef.`);
+          throw new Error(
+            `Service connection seed "${serviceName}" is missing baseUrl/baseUrlRef.`
+          );
         }
 
         const ownerType = seedOwnerType(seed.ownerType);
         const ownerId = readSeedString(seed.ownerId);
+        const authSecretRef = readSeedString(seed.authSecretRef);
+        const authUsernameRef = readSeedString(seed.authUsernameRef);
+        const authPasswordRef = readSeedString(seed.authPasswordRef);
+        const authType = seedAuthType(seed.authType, {
+          authSecretRef,
+          authUsernameRef,
+          authPasswordRef,
+        });
         const pluginId =
           readSeedString(seed.pluginId) ?? (await findSeedPluginId(bundle.plugins, serviceName));
         if (!pluginId) {
           throw new Error(
-            `Internal service seed "${serviceName}" has no plugin to validate against.`
+            `Service connection seed "${serviceName}" has no plugin to validate against.`
           );
         }
 
-        await handleInternalServiceBindingAction(
+        await handleServiceConnectionAction(
           {
             action: 'upsert',
             productId,
@@ -361,10 +402,14 @@ export class PluginBundleInstallerService {
             scopeId: null,
             environment: options.environment ?? null,
             baseUrl,
-            authType: 'none',
+            authType,
+            authSecretSource: seedSecretSource(authSecretRef),
+            authUsernameSource: seedSecretSource(authUsernameRef),
+            authPasswordSource: seedSecretSource(authPasswordRef),
+            authHeaderName: readSeedString(seed.authHeaderName) ?? null,
             actorClaimsEnabled: Boolean(seed.actorClaimsSecretRef),
             actorClaimsType: 'hmac',
-            actorClaimsSecretRef: readSeedString(seed.actorClaimsSecretRef),
+            actorClaimsSecretSource: seedSecretSource(seed.actorClaimsSecretRef),
             actorClaimsTtlSeconds: 60,
             timeoutMs: 30000,
             retryAttempts: 0,
@@ -378,12 +423,12 @@ export class PluginBundleInstallerService {
           options.userId
         );
         result.steps.push({
-          type: 'seedInternalService',
+          type: 'seedServiceConnection',
           serviceName,
           ownerType,
           ownerId,
           status: 'applied',
-          message: `Seeded internal service "${serviceName}".`,
+          message: `Seeded service connection "${serviceName}".`,
         });
       }
     }

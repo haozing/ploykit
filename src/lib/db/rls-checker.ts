@@ -82,6 +82,7 @@ export const DEFAULT_RLS_REQUIREMENTS: RLSRequirement[] = [
   { table: 'plugin_records', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
   { table: 'plugin_config', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
   { table: 'plugin_secrets', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
+  { table: 'host_secrets', isolationColumns: [], requireForce: true },
   { table: 'plugin_job_runs', isolationColumns: ['plugin_id'], requireForce: true },
   { table: 'orders', isolationColumns: ['user_id'], requireForce: true },
   { table: 'billing_invoices', isolationColumns: ['user_id'], requireForce: true },

@@ -275,7 +275,7 @@ export interface PluginMenuDefinition {
     permissions?: readonly PermissionValue[];
     workspaceRoles?: readonly ('owner' | 'admin' | 'editor' | 'viewer')[];
     entitlements?: readonly string[];
-    servicesBound?: readonly string[];
+    serviceConnections?: readonly string[];
     resourceBindings?: readonly string[];
   };
 }
@@ -539,11 +539,12 @@ export interface PluginMeterDefinition {
   description?: string;
 }
 
-export interface PluginServiceDefinition {
+export interface PluginServiceRequirementDefinition {
   name: string;
   methods: readonly PluginHttpMethod[];
   paths: readonly string[];
   actorClaims?: boolean;
+  required?: boolean;
 }
 
 export type PluginResourceBindingScopeType = 'user' | 'workspace';
@@ -574,7 +575,7 @@ export interface PluginDependencyDefinition {
     type:
       | 'plugin'
       | 'suite'
-      | 'internalService'
+      | 'serviceConnection'
       | 'storageCollection'
       | 'resourceBinding'
       | 'worker'
@@ -605,7 +606,7 @@ export interface PluginDefinition {
   resources?: PluginResourcesDefinition;
   theme?: PluginThemeDefinition;
   meters?: readonly PluginMeterDefinition[];
-  services?: readonly PluginServiceDefinition[];
+  serviceRequirements?: readonly PluginServiceRequirementDefinition[];
   resourceBindings?: readonly PluginResourceBindingDefinition[];
   dependencies?: PluginDependencyDefinition;
   config?: PluginConfigDefinition;

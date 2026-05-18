@@ -82,10 +82,10 @@ export default testPlugin(plugin, async ({ ctx, plugin }) => {
   }
 
   if (!serviceHost.state.services.some((call) => call.service === 'core-api')) {
-    throw new Error('Internal service calls must be recorded by the test host.');
+    throw new Error('Service connection calls must be recorded by the test host.');
   }
 
-  if (!plugin.services?.some((service) => service.name === 'core-api')) {
-    throw new Error('Internal sample plugin must declare its internal service contract.');
+  if (!plugin.serviceRequirements?.some((service) => service.name === 'core-api')) {
+    throw new Error('Internal sample plugin must declare its service connection contract.');
   }
 });

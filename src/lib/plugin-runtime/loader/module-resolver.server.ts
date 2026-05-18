@@ -45,7 +45,7 @@ export interface RuntimePluginSuite {
     namespace: string;
     primaryCreditMetric?: string;
   };
-  sharedServices?: Array<Record<string, unknown>>;
+  sharedServiceConnections?: Array<Record<string, unknown>>;
   sharedResourceBindings?: Array<Record<string, unknown>>;
   metadata?: Record<string, unknown>;
 }
@@ -66,7 +66,7 @@ export interface RuntimeAppBundle {
   sourceRef?: string;
   plugins: RuntimeBundlePlugin[];
   seeds?: {
-    internalServices?: Array<Record<string, unknown>>;
+    serviceConnections?: Array<Record<string, unknown>>;
     resourceBindings?: Array<Record<string, unknown>>;
   };
   healthChecks?: Array<Record<string, unknown>>;

@@ -145,9 +145,9 @@ export const OPERATIONS_ITEMS: DashboardMenuItem[] = [
     showInMenu: true,
   },
   {
-    id: 'system-plugin-internal-services',
-    i18nKey: 'dashboard.nav.pluginInternalServices',
-    href: '/admin/plugin-internal-services',
+    id: 'system-service-connections',
+    i18nKey: 'dashboard.nav.serviceConnections',
+    href: '/admin/service-connections',
     icon: 'Network',
     weight: 28,
     guard: 'admin',

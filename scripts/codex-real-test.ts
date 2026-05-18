@@ -317,11 +317,8 @@ function samplePluginNotesUrl(appUrl: string): string {
   return `${appUrl}/api/plugins/${SAMPLE_PLUGIN_ID}/notes/${SAMPLE_PLUGIN_PROJECT_ID}`;
 }
 
-async function ensureSampleInternalServiceBinding(
-  appUrl: string,
-  cookie: string
-): Promise<Response> {
-  return fetch(`${appUrl}/api/admin/plugin-internal-services`, {
+async function ensureSampleServiceConnection(appUrl: string, cookie: string): Promise<Response> {
+  return fetch(`${appUrl}/api/admin/service-connections`, {
     method: 'POST',
     headers: jsonHeaders(appUrl, cookie),
     body: JSON.stringify({
@@ -336,7 +333,7 @@ async function ensureSampleInternalServiceBinding(
       actorClaimsEnabled: false,
       actorClaimsType: 'hmac',
       actorClaimsAudience: null,
-      actorClaimsSecretRef: null,
+      actorClaimsSecretSource: { type: 'none' },
       actorClaimsTtlSeconds: 60,
       timeoutMs: 30000,
       retryAttempts: 0,
@@ -1028,10 +1025,10 @@ async function ensureSamplePluginEnabled(appUrl: string, cookie: string): Promis
   }
 
   if (!sample?.enabled) {
-    const bindingResponse = await ensureSampleInternalServiceBinding(appUrl, cookie);
-    if (!bindingResponse.ok) {
+    const connectionResponse = await ensureSampleServiceConnection(appUrl, cookie);
+    if (!connectionResponse.ok) {
       throw new Error(
-        `Sample internal service binding failed with status ${bindingResponse.status}: ${await bindingResponse.text()}`
+        `Sample service connection failed with status ${connectionResponse.status}: ${await connectionResponse.text()}`
       );
     }
     await postAdminAction(appUrl, cookie, 'enable');
@@ -5068,13 +5065,13 @@ async function runPluginLifecycleSmoke(
     { plugin: installed }
   );
 
-  const bindingResponse = await ensureSampleInternalServiceBinding(appUrl, admin.cookie);
+  const connectionResponse = await ensureSampleServiceConnection(appUrl, admin.cookie);
   recordSmoke(
     summary,
-    'plugin reinstall recreates required internal service binding',
-    bindingResponse.ok,
+    'plugin reinstall recreates required service connection',
+    connectionResponse.ok,
     {
-      status: bindingResponse.status,
+      status: connectionResponse.status,
     }
   );
 

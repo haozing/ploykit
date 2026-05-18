@@ -299,6 +299,20 @@ export class PluginLifecycleError extends InternalServerError {
   }
 }
 
+export class PluginServiceConnectionsMissingError extends ValidationError {
+  constructor(pluginId: string, missing: Array<{ pluginId: string; serviceName: string }>) {
+    super(
+      `Plugin "${pluginId}" cannot be enabled until required service connections are configured.`,
+      {
+        pluginId,
+        missing,
+      }
+    );
+    this.name = 'PluginServiceConnectionsMissingError';
+    this.code = 'SERVICE_CONNECTIONS_MISSING';
+  }
+}
+
 /**
  * Type guard to check if error is an AppError
  */

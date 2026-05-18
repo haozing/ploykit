@@ -28,17 +28,17 @@ import {
   PluginLifecycleError,
   PluginNotFoundError,
   PluginNotInstalledError,
+  PluginServiceConnectionsMissingError,
 } from '@/lib/_core/errors';
 import { runPluginLifecycle } from '../adapters';
 import { pluginRuntimeRegistry } from '../registry';
 import { assertNoPluginPublicAliasConflicts } from '../public-routes/public-route-conflicts.server';
 import { and, eq } from 'drizzle-orm';
-import { env } from '@/lib/_core/env';
 import {
   createPluginStorageRuntime,
   DbPluginStorageRepository,
 } from '../storage/db-storage.server';
-import { listInternalServiceRequirements } from '../admin/internal-services.server';
+import { listServiceConnectionRequirements } from '../admin/service-connections.server';
 import { resolvePluginRuntimeOwnership } from '../product-context.server';
 import { syncRuntimeCatalog } from '../catalog/runtime-catalog-sync.server';
 
@@ -230,28 +230,17 @@ export class PluginRuntimeInstallerService {
         };
       }
 
-      const serviceRequirements = await listInternalServiceRequirements({ productId, pluginId });
+      const serviceRequirements = await listServiceConnectionRequirements({ productId, pluginId });
       const missingServices = serviceRequirements.filter(
-        (requirement) => requirement.bindingStatus !== 'bound'
+        (requirement) => requirement.required && requirement.connectionStatus !== 'bound'
       );
-      const strictServices =
-        env.NODE_ENV === 'production' || env.PLUGIN_INTERNAL_SERVICE_STRICT_MODE === 'true';
-      if (strictServices && missingServices.length > 0) {
-        throw new PluginLifecycleError(
-          pluginId,
-          'enable',
-          `Internal service binding missing: ${missingServices
-            .map((requirement) => requirement.serviceName)
-            .join(', ')}`
-        );
-      }
       if (missingServices.length > 0) {
-        logger.warn(
-          {
-            pluginId,
-            services: missingServices.map((requirement) => requirement.serviceName),
-          },
-          'Plugin enabled with unbound internal services'
+        throw new PluginServiceConnectionsMissingError(
+          pluginId,
+          missingServices.map((requirement) => ({
+            pluginId: requirement.pluginId,
+            serviceName: requirement.serviceName,
+          }))
         );
       }
 
@@ -326,7 +315,11 @@ export class PluginRuntimeInstallerService {
     } catch (error) {
       logger.error({ pluginId, error }, 'Failed to enable runtime plugin');
 
-      if (error instanceof PluginNotInstalledError || error instanceof PluginLifecycleError) {
+      if (
+        error instanceof PluginNotInstalledError ||
+        error instanceof PluginLifecycleError ||
+        error instanceof PluginServiceConnectionsMissingError
+      ) {
         throw error;
       }
 

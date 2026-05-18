@@ -71,7 +71,7 @@ export interface BaseMenuItem {
     permissions?: readonly string[];
     workspaceRoles?: readonly ('owner' | 'admin' | 'editor' | 'viewer')[];
     entitlements?: readonly string[];
-    servicesBound?: readonly string[];
+    serviceConnections?: readonly string[];
     resourceBindings?: readonly string[];
   };
   showInMenu?: boolean; // Whether to show in menu (default: true)

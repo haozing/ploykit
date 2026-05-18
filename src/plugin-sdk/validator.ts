@@ -206,7 +206,7 @@ export function validatePluginDefinition(definition: PluginDefinition): PluginDi
   validateResources(definition.resources, diagnostics);
   validateTheme(definition.theme, diagnostics);
   validateMeters(definition, diagnostics);
-  validateServices(definition, diagnostics);
+  validateServiceRequirements(definition, diagnostics);
   validateResourceBindings(definition, diagnostics);
   validateConfig(definition.config, diagnostics);
   validateEgress(definition, diagnostics);
@@ -1210,14 +1210,14 @@ function validateMenu(
     }
   }
 
-  for (const [serviceIndex, serviceName] of (menu.requires?.servicesBound ?? []).entries()) {
-    if (!definition.services?.some((service) => service.name === serviceName)) {
+  for (const [serviceIndex, serviceName] of (menu.requires?.serviceConnections ?? []).entries()) {
+    if (!definition.serviceRequirements?.some((service) => service.name === serviceName)) {
       addError(
         diagnostics,
         'PLUGIN_MENU_SERVICE_REQUIREMENT_UNKNOWN',
-        `Menu requires service "${serviceName}" but the plugin does not declare that internal service.`,
-        `${basePath}.requires.servicesBound.${serviceIndex}`,
-        `Declare services: [{ name: "${serviceName}", ... }] or remove the menu requirement.`
+        `Menu requires service "${serviceName}" but the plugin does not declare that service connection.`,
+        `${basePath}.requires.serviceConnections.${serviceIndex}`,
+        `Declare serviceRequirements: [{ name: "${serviceName}", ... }] or remove the menu requirement.`
       );
     }
   }
@@ -2368,22 +2368,28 @@ function validateMeters(definition: PluginDefinition, diagnostics: PluginDiagnos
   }
 }
 
-function validateServices(definition: PluginDefinition, diagnostics: PluginDiagnostic[]): void {
-  const services = definition.services ?? [];
+function validateServiceRequirements(
+  definition: PluginDefinition,
+  diagnostics: PluginDiagnostic[]
+): void {
+  const serviceRequirements = definition.serviceRequirements ?? [];
   const seen = new Set<string>();
 
-  if (services.length > 0 && !hasDeclaredPermission(definition, Permission.ServicesInvoke)) {
+  if (
+    serviceRequirements.length > 0 &&
+    !hasDeclaredPermission(definition, Permission.ServicesInvoke)
+  ) {
     addError(
       diagnostics,
       'PLUGIN_SERVICE_PERMISSION_MISSING',
-      'Declaring internal services requires Permission.ServicesInvoke.',
+      'Declaring service connections requires Permission.ServicesInvoke.',
       'permissions',
-      'Add Permission.ServicesInvoke to plugin.ts permissions or remove services.'
+      'Add Permission.ServicesInvoke to plugin.ts permissions or remove serviceRequirements.'
     );
   }
 
-  for (const [index, service] of services.entries()) {
-    const basePath = `services.${index}`;
+  for (const [index, service] of serviceRequirements.entries()) {
+    const basePath = `serviceRequirements.${index}`;
     if (!SERVICE_NAME_PATTERN.test(service.name)) {
       addError(
         diagnostics,
@@ -2403,6 +2409,15 @@ function validateServices(definition: PluginDefinition, diagnostics: PluginDiagn
       );
     }
     seen.add(service.name);
+
+    if (service.required !== undefined && typeof service.required !== 'boolean') {
+      addError(
+        diagnostics,
+        'PLUGIN_SERVICE_REQUIRED_INVALID',
+        `Service "${service.name}" required must be a boolean when provided.`,
+        `${basePath}.required`
+      );
+    }
 
     if (!service.methods?.length) {
       addError(

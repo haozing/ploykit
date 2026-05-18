@@ -121,18 +121,18 @@ export {
   type PluginRunsScope,
 } from './runs-capability.server';
 export {
-  applyInternalServiceRequestHeaders,
+  applyServiceConnectionRequestHeaders,
   createPluginServicesCapability,
-  DbPluginInternalServiceRegistry,
-  getDefaultPluginInternalServiceRegistry,
-  setDefaultPluginInternalServiceRegistry,
+  DbPluginServiceConnectionRegistry,
+  getDefaultPluginServiceConnectionRegistry,
+  setDefaultPluginServiceConnectionRegistry,
   type CreatePluginServicesOptions,
-  type PluginInternalServiceActorClaimsConfig,
-  type PluginInternalServiceAuth,
-  type PluginInternalServiceDefinition,
-  type PluginInternalServiceLookup,
-  type PluginInternalServiceRegistry,
-  type PluginServiceCallLogRepository,
+  type PluginServiceConnectionActorClaimsConfig,
+  type PluginServiceConnectionAuth,
+  type PluginServiceConnectionDefinition,
+  type PluginServiceConnectionLookup,
+  type PluginServiceConnectionRegistry,
+  type PluginServiceConnectionLogRepository,
   type PluginServicesHttpHost,
 } from './services-capability.server';
 export {

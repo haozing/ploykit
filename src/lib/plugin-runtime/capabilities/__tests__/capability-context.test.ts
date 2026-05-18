@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { definePlugin, Permission, PluginError, type PermissionValue } from '@ploykit/plugin-sdk';
 import { normalizePluginRuntimeContract } from '../../contract';
 import { createPluginRuntimeContext } from '../../context';
-import { setDefaultPluginInternalServiceRegistry } from '..';
+import { setDefaultPluginServiceConnectionRegistry } from '..';
 import type { AuditEvent, AuditPort } from '@/lib/audit/audit-port.server';
 import type { UsageLedger, UsageRecord } from '@/lib/usage/usage-ledger.server';
 import type { PluginArtifact } from '@/lib/db/schema/plugin-storage';
@@ -22,10 +22,10 @@ import type {
   PluginFilesScope,
   PluginHttpHost,
   PluginNotificationsHost,
-  PluginInternalServiceRegistry,
+  PluginServiceConnectionRegistry,
   PluginResourceBindingsRepository,
   PluginResourceBindingsScope,
-  PluginServiceCallLogRepository,
+  PluginServiceConnectionLogRepository,
   PluginSecretScope,
   PluginSecretsRepository,
 } from '..';
@@ -509,7 +509,7 @@ describe('plugin capability context', () => {
     eventHandlers.clear();
     registeredJobs.clear();
     webhookReceipts.length = 0;
-    setDefaultPluginInternalServiceRegistry(undefined);
+    setDefaultPluginServiceConnectionRegistry(undefined);
   });
 
   it('wires files, events, jobs, audit, usage, credits, billing, notifications, config, secrets, and webhooks with gates', async () => {
@@ -1291,7 +1291,7 @@ describe('plugin capability context', () => {
     });
   });
 
-  it('invokes host internal services with declared paths and signed actor claims', async () => {
+  it('invokes host service connections with declared paths and signed actor claims', async () => {
     const serviceLogs: unknown[] = [];
     const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async (_url, init) => {
       const headers = new Headers(init?.headers);
@@ -1303,7 +1303,7 @@ describe('plugin capability context', () => {
         spoofed: headers.get('ploykit-actor-jwt'),
       });
     });
-    const registry: PluginInternalServiceRegistry = {
+    const registry: PluginServiceConnectionRegistry = {
       get({ serviceName }) {
         return {
           name: serviceName,
@@ -1313,7 +1313,7 @@ describe('plugin capability context', () => {
         };
       },
     };
-    const logRepository: PluginServiceCallLogRepository = {
+    const logRepository: PluginServiceConnectionLogRepository = {
       async record(input) {
         serviceLogs.push(input);
       },
@@ -1324,7 +1324,7 @@ describe('plugin capability context', () => {
         name: 'Capability Test',
         version: '1.0.0',
         permissions: [Permission.ServicesInvoke],
-        services: [
+        serviceRequirements: [
           {
             name: 'core-api',
             methods: ['GET'],
@@ -1388,7 +1388,7 @@ describe('plugin capability context', () => {
     const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async (url) =>
       Response.json({ message: 'not found', url }, { status: 404 })
     );
-    const registry: PluginInternalServiceRegistry = {
+    const registry: PluginServiceConnectionRegistry = {
       get({ serviceName }) {
         return {
           name: serviceName,
@@ -1402,7 +1402,7 @@ describe('plugin capability context', () => {
         name: 'Capability Test',
         version: '1.0.0',
         permissions: [Permission.ServicesInvoke],
-        services: [
+        serviceRequirements: [
           {
             name: 'core-api',
             methods: ['GET'],
@@ -1438,11 +1438,11 @@ describe('plugin capability context', () => {
     );
   });
 
-  it('uses the host default internal service registry when no per-context registry is passed', async () => {
+  it('uses the host default service connection registry when no per-context registry is passed', async () => {
     const serviceFetch = vi.fn<PluginHttpHost['fetch']>(async () =>
       Response.json({ ok: true, source: 'default-registry' })
     );
-    setDefaultPluginInternalServiceRegistry({
+    setDefaultPluginServiceConnectionRegistry({
       get({ serviceName }) {
         return {
           name: serviceName,
@@ -1456,7 +1456,7 @@ describe('plugin capability context', () => {
         name: 'Capability Test',
         version: '1.0.0',
         permissions: [Permission.ServicesInvoke],
-        services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects'] }],
+        serviceRequirements: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects'] }],
       })
     );
     const context = createPluginRuntimeContext({

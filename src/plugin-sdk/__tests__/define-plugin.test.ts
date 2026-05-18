@@ -99,6 +99,44 @@ describe('plugin SDK contract helpers', () => {
     expect(todoPlugin.webhooks?.import.signature).toBe('hmac-sha256');
   });
 
+  it('validates optional service requirement metadata', () => {
+    expect(
+      validatePluginDefinition({
+        id: 'service-optional',
+        name: 'Service Optional',
+        version: '1.0.0',
+        permissions: [Permission.ServicesInvoke],
+        serviceRequirements: [
+          {
+            name: 'core-api',
+            methods: ['GET'],
+            paths: ['/v1/projects'],
+            required: false,
+          },
+        ],
+      })
+    ).toEqual([]);
+
+    const diagnostics = validatePluginDefinition({
+      id: 'service-invalid',
+      name: 'Service Invalid',
+      version: '1.0.0',
+      permissions: [Permission.ServicesInvoke],
+      serviceRequirements: [
+        {
+          name: 'core-api',
+          methods: ['GET'],
+          paths: ['/v1/projects'],
+          required: 'yes',
+        },
+      ],
+    } as unknown as Parameters<typeof validatePluginDefinition>[0]);
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      'PLUGIN_SERVICE_REQUIRED_INVALID'
+    );
+  });
+
   it('rejects invalid plugin identity and ambiguous API methods early', () => {
     expect(() =>
       definePlugin({

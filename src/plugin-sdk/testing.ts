@@ -2251,7 +2251,7 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
         init: PluginServiceRequestInit = {}
       ): Promise<Response> {
         enforcePermission(Permission.ServicesInvoke, 'ctx.services.fetch');
-        const declaration = plugin.services?.find((entry) => entry.name === service);
+        const declaration = plugin.serviceRequirements?.find((entry) => entry.name === service);
         const request =
           typeof servicePathOrRequest === 'string'
             ? { path: servicePathOrRequest, ...init }

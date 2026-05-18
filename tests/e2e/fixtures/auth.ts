@@ -143,7 +143,7 @@ export async function loginAsAdmin(page: Page, lang = 'zh') {
     data: {
       email: ADMIN_EMAIL,
       password: ADMIN_PASSWORD,
-      callbackURL: new URL(`/${lang}`, BASE_URL).toString(),
+      callbackURL: `/${lang}`,
     },
   });
   const responseText = response.ok() ? '' : await response.text();
@@ -178,6 +178,24 @@ export async function ensureSamplePluginEnabled(page: Page) {
     response = await list();
     sample = response.body.plugins?.find((plugin) => plugin.id === SAMPLE_PLUGIN_ID);
   }
+
+  const connection = await browserFetchJson(page, '/api/admin/service-connections', {
+    method: 'POST',
+    body: {
+      action: 'upsert',
+      pluginId: SAMPLE_PLUGIN_ID,
+      serviceName: 'core-api',
+      baseUrl: BASE_URL,
+      authType: 'none',
+      healthPath: '/',
+      healthMethod: 'GET',
+      healthExpectedStatus: 200,
+    },
+  });
+  expect(
+    connection.ok,
+    `POST /api/admin/service-connections returned ${connection.status}: ${JSON.stringify(connection.body)}`
+  ).toBe(true);
 
   if (!sample?.enabled) {
     const enable = await browserFetchJson(page, `/api/admin/plugins/${SAMPLE_PLUGIN_ID}/enable`, {

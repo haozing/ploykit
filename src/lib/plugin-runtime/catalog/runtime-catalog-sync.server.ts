@@ -91,7 +91,7 @@ export async function syncRuntimeCatalog(
         metadata: {
           menu: suite.menu,
           billing: suite.billing,
-          sharedServices: suite.sharedServices,
+          sharedServiceConnections: suite.sharedServiceConnections,
           sharedResourceBindings: suite.sharedResourceBindings,
           ...(suite.metadata ?? {}),
         },

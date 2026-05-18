@@ -4,7 +4,7 @@ import { Permission } from '../permissions';
 import { createPluginTestHost } from '../testing';
 
 describe('createPluginTestHost platform helpers', () => {
-  it('supports request params, query, resource bindings, and internal services', async () => {
+  it('supports request params, query, resource bindings, and service connections', async () => {
     const plugin = definePlugin({
       id: 'testing-host',
       name: 'Testing Host',
@@ -15,7 +15,9 @@ describe('createPluginTestHost platform helpers', () => {
         Permission.ServicesInvoke,
       ],
       resourceBindings: [{ type: 'project', scope: 'workspace', cardinality: 'one' }],
-      services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] }],
+      serviceRequirements: [
+        { name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] },
+      ],
     });
     const host = createPluginTestHost(plugin, {
       params: { projectId: 'project-1' },

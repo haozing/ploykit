@@ -27,7 +27,7 @@ import type {
   PluginAnonymousPolicy,
   PluginThemeDefinition,
   PluginToolRouteRuntimeMetadata,
-  PluginServiceDefinition,
+  PluginServiceRequirementDefinition,
   PluginSlotsDefinition,
   PluginTrustLevel,
   PluginWebhookDefinition,
@@ -115,7 +115,7 @@ export interface PluginRuntimeContract {
   webhooks: Readonly<Record<string, PluginWebhookDefinition>>;
   hooks: PluginHooksDefinition;
   meters: readonly PluginMeterDefinition[];
-  services: readonly PluginServiceDefinition[];
+  serviceRequirements: readonly PluginServiceRequirementDefinition[];
   resourceBindings: readonly PluginResourceBindingDefinition[];
   dependencies?: PluginDependencyDefinition;
   egress: readonly string[];

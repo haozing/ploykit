@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
     installPlugin: vi.fn(),
     enablePlugin: vi.fn(),
   },
-  handleInternalServiceBindingAction: vi.fn(),
+  handleServiceConnectionAction: vi.fn(),
   getPluginRuntimeMapEntry: vi.fn(),
   getRuntimeAppBundle: vi.fn(),
   pluginRuntimeRegistry: {
@@ -61,8 +61,8 @@ vi.mock('../plugin-runtime-installer.server', () => ({
   pluginRuntimeInstallerService: mocks.pluginRuntimeInstallerService,
 }));
 
-vi.mock('@/lib/plugin-runtime/admin/internal-services.server', () => ({
-  handleInternalServiceBindingAction: mocks.handleInternalServiceBindingAction,
+vi.mock('@/lib/plugin-runtime/admin/service-connections.server', () => ({
+  handleServiceConnectionAction: mocks.handleServiceConnectionAction,
 }));
 
 vi.mock('@/lib/plugin-runtime/loader', () => ({
@@ -86,12 +86,13 @@ const bundleRow = {
   sourceRef: null,
   metadata: {
     seeds: {
-      internalServices: [
+      serviceConnections: [
         {
           pluginId: 'runlynk-product',
           serviceName: 'run-api',
           ownerType: 'suite',
           baseUrl: 'https://runlynk.example.test',
+          authSecretRef: 'env:RUNLYNK_SERVICE_TOKEN',
         },
       ],
     },
@@ -140,7 +141,7 @@ describe('PluginBundleInstallerService', () => {
     mocks.syncRuntimeCatalog.mockResolvedValue(undefined);
     mocks.pluginRuntimeInstallerService.installPlugin.mockResolvedValue({ success: true });
     mocks.pluginRuntimeInstallerService.enablePlugin.mockResolvedValue({ success: true });
-    mocks.handleInternalServiceBindingAction.mockResolvedValue({ success: true });
+    mocks.handleServiceConnectionAction.mockResolvedValue({ success: true });
     mocks.getRuntimeAppBundle.mockReturnValue(null);
   });
 
@@ -163,7 +164,7 @@ describe('PluginBundleInstallerService', () => {
         expect.objectContaining({ type: 'catalog', status: 'planned' }),
         expect.objectContaining({ type: 'install', pluginId: 'runlynk-product' }),
         expect.objectContaining({ type: 'install', pluginId: 'runlynk-suite' }),
-        expect.objectContaining({ type: 'seedInternalService', serviceName: 'run-api' }),
+        expect.objectContaining({ type: 'seedServiceConnection', serviceName: 'run-api' }),
         expect.objectContaining({ type: 'enable', pluginId: 'runlynk-product' }),
       ])
     );
@@ -238,13 +239,15 @@ describe('PluginBundleInstallerService', () => {
         bundleId: 'runlynk-bundle',
       }
     );
-    expect(mocks.handleInternalServiceBindingAction).toHaveBeenCalledWith(
+    expect(mocks.handleServiceConnectionAction).toHaveBeenCalledWith(
       expect.objectContaining({
         productId: 'runlynk',
         pluginId: 'runlynk-product',
         ownerType: 'suite',
         serviceName: 'run-api',
         baseUrl: 'https://runlynk.example.test',
+        authType: 'bearer',
+        authSecretSource: { type: 'env', name: 'RUNLYNK_SERVICE_TOKEN' },
       }),
       'system'
     );
@@ -256,7 +259,7 @@ describe('PluginBundleInstallerService', () => {
     expect(result.steps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'install', status: 'applied' }),
-        expect.objectContaining({ type: 'seedInternalService', status: 'applied' }),
+        expect.objectContaining({ type: 'seedServiceConnection', status: 'applied' }),
         expect.objectContaining({ type: 'enable', status: 'applied' }),
       ])
     );
@@ -306,7 +309,7 @@ describe('PluginBundleInstallerService', () => {
     expect(result.steps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'attach', status: 'applied' }),
-        expect.objectContaining({ type: 'seedInternalService', status: 'applied' }),
+        expect.objectContaining({ type: 'seedServiceConnection', status: 'applied' }),
         expect.objectContaining({ type: 'enable', status: 'applied' }),
       ])
     );

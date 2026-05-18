@@ -23,7 +23,7 @@ export default definePlugin({
       cardinality: 'one',
     },
   ],
-  services: [
+  serviceRequirements: [
     {
       name: 'core-api',
       methods: ['GET'],

@@ -181,7 +181,7 @@
       "idx": 25,
       "version": "7",
       "when": 1778824200000,
-      "tag": "0025_internal_service_bindings",
+      "tag": "0025_service_connections",
       "breakpoints": true
     },
     {

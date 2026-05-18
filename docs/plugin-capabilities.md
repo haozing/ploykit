@@ -24,7 +24,7 @@ usually live behind host capabilities instead of ordinary plugin imports.
 | `ctx.ai`            | `Permission.AiGenerate`, `Permission.AiEmbed`                                             | Host-injected text generation, streaming, and embeddings.                       |
 | `ctx.runs`          | `Permission.RunsRead`, `Permission.RunsWrite`                                             | Long-running work, progress, logs, and results.                                 |
 | `ctx.connectors`    | `Permission.ConnectorsRead`, `Permission.ConnectorsInvoke`, `Permission.ConnectorsManage` | Managed external service profiles and calls.                                    |
-| `ctx.services`      | `Permission.ServicesInvoke`                                                               | Host-bound internal APIs for complex domain or database work.                   |
+| `ctx.services`      | `Permission.ServicesInvoke`                                                               | Host-managed service connections for complex domain or database work.           |
 | `ctx.http.fetch`    | `Permission.ExternalHttp` plus `egress`                                                   | Direct external HTTP through the SSRF-aware egress guard.                       |
 | `ctx.workspace`     | `Permission.WorkspaceRead`, `Permission.WorkspaceWrite`                                   | Workspace lookup, membership, roles, and invitations.                           |
 | `ctx.events`        | `Permission.EventsEmit`, `Permission.EventsSubscribe`                                     | Plugin and platform event flows.                                                |
@@ -55,7 +55,7 @@ capabilities along their boundaries:
 | Billable synchronous action   | Route/API commercial gate plus `ctx.metering.authorize()`, the work, then `ctx.metering.commit()`.           |
 | Long-running workflow         | Public/API handler creates `ctx.runs`, enqueues `ctx.jobs`, and the job updates progress and results.        |
 | External integration          | Use `ctx.http.fetch` for short no-secret calls; use `ctx.connectors` for credentials, retry, audit, logs.    |
-| Host internal complex ability | Use `ctx.services`; the host owns URL binding, secrets, actor claims, timeout, retry, audit, and usage.      |
+| Host-managed service call     | Use `ctx.services`; the host owns URL, secrets, actor claims, timeout, retry, audit, and usage.              |
 
 Recommended async commercialization flow:
 

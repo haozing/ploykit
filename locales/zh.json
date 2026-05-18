@@ -648,7 +648,7 @@
       "plugins": "插件管理",
       "pluginDevConsole": "开发控制台",
       "pluginOperations": "插件运营",
-      "pluginInternalServices": "内部服务",
+      "serviceConnections": "服务连接",
       "revenue": "收入管理",
       "operationsCenter": "运维中心",
       "systemSettings": "系统设置",
@@ -840,9 +840,9 @@
       },
       "loadedUsageRows": "已加载 {count} 条最近使用记录。"
     },
-    "pluginInternalServices": {
-      "title": "内部服务",
-      "description": "宿主管理的服务绑定、健康检查、调用日志和资源绑定。",
+    "serviceConnections": {
+      "title": "服务连接",
+      "description": "宿主管理的插件服务连接、健康检查和调用日志。",
       "actions": {
         "refresh": "刷新",
         "bind": "绑定",
@@ -858,12 +858,12 @@
       "stats": {
         "declaredServices": "声明的服务",
         "missing": "缺失",
-        "bindings": "绑定",
+        "bindings": "连接",
         "recentCalls": "最近调用"
       },
       "tabs": {
         "requirements": "需求",
-        "bindings": "绑定",
+        "bindings": "连接",
         "editor": "编辑器",
         "logs": "日志",
         "resources": "资源"
@@ -882,11 +882,11 @@
         }
       },
       "bindings": {
-        "title": "宿主绑定",
+        "title": "宿主连接",
         "description": "基础 URL、认证、参与者声明和健康状态。",
-        "empty": "暂无内部服务绑定。",
+        "empty": "暂无服务连接。",
         "headers": {
-          "binding": "绑定",
+          "binding": "连接",
           "baseUrl": "基础 URL",
           "auth": "认证",
           "actor": "参与者",
@@ -895,7 +895,7 @@
         }
       },
       "editor": {
-        "title": "绑定编辑器",
+        "title": "连接编辑器",
         "description": "密钥以引用形式保存，页面不会显示密钥值。",
         "fields": {
           "pluginId": "插件 ID",
@@ -921,7 +921,7 @@
           "maxResponseBytes": "最大响应字节数",
           "healthPath": "健康检查路径"
         },
-        "saveBinding": "保存绑定"
+        "saveBinding": "保存连接"
       },
       "logs": {
         "title": "服务调用日志",
@@ -2944,6 +2944,9 @@
       "list": {
         "loading": "加载插件中...",
         "retry": "重试",
+        "actions": {
+          "configureServiceConnections": "配置服务连接"
+        },
         "empty": {
           "title": "未找到插件",
           "description": "安装插件以扩展平台功能"

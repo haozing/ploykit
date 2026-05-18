@@ -27,6 +27,22 @@ export class FetchError extends Error {
   }
 }
 
+function errorMessageFromInfo(info: unknown, fallback: string): string {
+  if (info && typeof info === 'object') {
+    const error = (info as { error?: unknown }).error;
+    if (error && typeof error === 'object') {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === 'string' && message.length > 0) {
+        return message;
+      }
+    }
+    if (typeof error === 'string' && error.length > 0) {
+      return error;
+    }
+  }
+  return fallback;
+}
+
 /**
  * Standard fetcher for GET requests
  *
@@ -47,7 +63,7 @@ export async function fetcher<T>(url: string): Promise<T> {
   if (!response.ok) {
     const info = await response.json().catch(() => null);
     throw new FetchError(
-      info?.error || `Request failed: ${response.statusText}`,
+      errorMessageFromInfo(info, `Request failed: ${response.statusText}`),
       response.status,
       info
     );
@@ -77,7 +93,7 @@ export async function postFetcher<T, A = unknown>(url: string, { arg }: { arg: A
   if (!response.ok) {
     const info = await response.json().catch(() => null);
     throw new FetchError(
-      info?.error || `Request failed: ${response.statusText}`,
+      errorMessageFromInfo(info, `Request failed: ${response.statusText}`),
       response.status,
       info
     );
@@ -107,7 +123,7 @@ export async function patchFetcher<T, A = unknown>(url: string, { arg }: { arg: 
   if (!response.ok) {
     const info = await response.json().catch(() => null);
     throw new FetchError(
-      info?.error || `Request failed: ${response.statusText}`,
+      errorMessageFromInfo(info, `Request failed: ${response.statusText}`),
       response.status,
       info
     );
@@ -131,7 +147,7 @@ export async function putFetcher<T, A = unknown>(url: string, { arg }: { arg: A 
   if (!response.ok) {
     const info = await response.json().catch(() => null);
     throw new FetchError(
-      info?.error || `Request failed: ${response.statusText}`,
+      errorMessageFromInfo(info, `Request failed: ${response.statusText}`),
       response.status,
       info
     );
@@ -159,7 +175,7 @@ export async function deleteFetcher<T>(url: string): Promise<T> {
   if (!response.ok) {
     const info = await response.json().catch(() => null);
     throw new FetchError(
-      info?.error || `Request failed: ${response.statusText}`,
+      errorMessageFromInfo(info, `Request failed: ${response.statusText}`),
       response.status,
       info
     );

@@ -26,7 +26,7 @@ function createContract(
   permissions: readonly PermissionValue[],
   options: {
     egress?: readonly string[];
-    services?: Parameters<typeof definePlugin>[0]['services'];
+    serviceRequirements?: Parameters<typeof definePlugin>[0]['serviceRequirements'];
     resourceBindings?: Parameters<typeof definePlugin>[0]['resourceBindings'];
   } = {}
 ) {
@@ -36,7 +36,7 @@ function createContract(
     version: '1.0.0',
     permissions,
     egress: options.egress,
-    services: options.services,
+    serviceRequirements: options.serviceRequirements,
     resourceBindings: options.resourceBindings,
   });
 }
@@ -1316,7 +1316,7 @@ export async function sync(ctx) {
     );
   });
 
-  it('checks internal service declarations against static ctx.services calls', async () => {
+  it('checks service connection declarations against static ctx.services calls', async () => {
     const pluginRoot = createPluginRoot('service-check');
     writePluginFile(pluginRoot, 'plugin.ts', `export default {};`);
     writePluginFile(
@@ -1332,7 +1332,9 @@ export async function project(ctx) {
     const failed = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) =>
         createContract(root, [Permission.ServicesInvoke], {
-          services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] }],
+          serviceRequirements: [
+            { name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] },
+          ],
         }),
     });
 
@@ -1349,7 +1351,9 @@ export async function project(ctx) {
     const passed = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) =>
         createContract(root, [Permission.ServicesInvoke], {
-          services: [{ name: 'core-api', methods: ['POST'], paths: ['/v1/projects/:projectId'] }],
+          serviceRequirements: [
+            { name: 'core-api', methods: ['POST'], paths: ['/v1/projects/:projectId'] },
+          ],
         }),
     });
 
@@ -1373,7 +1377,9 @@ export async function project(ctx) {
     const report = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) =>
         createContract(root, [Permission.ServicesInvoke], {
-          services: [{ name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] }],
+          serviceRequirements: [
+            { name: 'core-api', methods: ['GET'], paths: ['/v1/projects/:projectId'] },
+          ],
         }),
     });
 
@@ -1401,7 +1407,7 @@ export async function project(ctx) {
     const report = await checkPluginTargets(pluginRoot, {
       loadContract: async (root) =>
         createContract(root, [Permission.ServicesInvoke], {
-          services: [
+          serviceRequirements: [
             {
               name: 'core-api',
               methods: ['POST'],

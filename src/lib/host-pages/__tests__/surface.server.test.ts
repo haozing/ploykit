@@ -123,7 +123,7 @@ function createContract(): PluginRuntimeContract {
     webhooks: {},
     hooks: {},
     meters: [],
-    services: [],
+    serviceRequirements: [],
     resourceBindings: [],
     egress: [],
     definition: {} as PluginRuntimeContract['definition'],

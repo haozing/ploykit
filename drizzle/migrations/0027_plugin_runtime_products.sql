@@ -5,7 +5,7 @@ TRUNCATE TABLE
   plugin_installations,
   plugin_models,
   plugin_resource_bindings,
-  plugin_internal_service_bindings,
+  plugin_service_connections,
   plugin_host_page_overrides
 RESTART IDENTITY CASCADE;
 --> statement-breakpoint
@@ -260,29 +260,29 @@ CREATE INDEX IF NOT EXISTS plugin_resource_bindings_status_idx
   ON plugin_resource_bindings (product_id, owner_type, owner_id, status);
 --> statement-breakpoint
 
-DROP INDEX IF EXISTS plugin_internal_service_bindings_global_default_idx;
+DROP INDEX IF EXISTS plugin_service_connections_global_default_idx;
 --> statement-breakpoint
-DROP INDEX IF EXISTS plugin_internal_service_bindings_global_environment_idx;
+DROP INDEX IF EXISTS plugin_service_connections_global_environment_idx;
 --> statement-breakpoint
-DROP INDEX IF EXISTS plugin_internal_service_bindings_workspace_default_idx;
+DROP INDEX IF EXISTS plugin_service_connections_workspace_default_idx;
 --> statement-breakpoint
-DROP INDEX IF EXISTS plugin_internal_service_bindings_workspace_environment_idx;
+DROP INDEX IF EXISTS plugin_service_connections_workspace_environment_idx;
 --> statement-breakpoint
-DROP INDEX IF EXISTS plugin_internal_service_bindings_plugin_service_idx;
+DROP INDEX IF EXISTS plugin_service_connections_plugin_service_idx;
 --> statement-breakpoint
 
-ALTER TABLE plugin_internal_service_bindings
+ALTER TABLE plugin_service_connections
   ADD COLUMN IF NOT EXISTS product_id text NOT NULL,
   ADD COLUMN IF NOT EXISTS owner_type text NOT NULL DEFAULT 'plugin',
   ADD COLUMN IF NOT EXISTS owner_id text NOT NULL;
 --> statement-breakpoint
 
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_global_default_idx
-  ON plugin_internal_service_bindings (product_id, owner_type, owner_id, service_name)
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_service_connections_global_default_idx
+  ON plugin_service_connections (product_id, owner_type, owner_id, service_name)
   WHERE scope_type = 'global' AND environment IS NULL;
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_global_environment_idx
-  ON plugin_internal_service_bindings (
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_service_connections_global_environment_idx
+  ON plugin_service_connections (
     product_id,
     owner_type,
     owner_id,
@@ -291,8 +291,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_global_enviro
   )
   WHERE scope_type = 'global' AND environment IS NOT NULL;
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_workspace_default_idx
-  ON plugin_internal_service_bindings (
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_service_connections_workspace_default_idx
+  ON plugin_service_connections (
     product_id,
     owner_type,
     owner_id,
@@ -301,8 +301,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_workspace_def
   )
   WHERE scope_type = 'workspace' AND environment IS NULL;
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_workspace_environment_idx
-  ON plugin_internal_service_bindings (
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_service_connections_workspace_environment_idx
+  ON plugin_service_connections (
     product_id,
     owner_type,
     owner_id,
@@ -312,11 +312,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_internal_service_bindings_workspace_env
   )
   WHERE scope_type = 'workspace' AND environment IS NOT NULL;
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS plugin_internal_service_bindings_plugin_service_idx
-  ON plugin_internal_service_bindings (plugin_id, service_name, status);
+CREATE INDEX IF NOT EXISTS plugin_service_connections_plugin_service_idx
+  ON plugin_service_connections (plugin_id, service_name, status);
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS plugin_internal_service_bindings_owner_service_idx
-  ON plugin_internal_service_bindings (
+CREATE INDEX IF NOT EXISTS plugin_service_connections_owner_service_idx
+  ON plugin_service_connections (
     product_id,
     owner_type,
     owner_id,

@@ -11,10 +11,10 @@ import {
 } from '@ploykit/plugin-sdk';
 import { db, type Database } from '@/lib/db/client.server';
 import {
-  pluginInternalServiceBindings,
-  pluginServiceCallLogs,
-  type PluginInternalServiceBinding,
-  type NewPluginServiceCallLog,
+  pluginServiceConnections,
+  pluginServiceConnectionLogs,
+  type PluginServiceConnection,
+  type NewPluginServiceConnectionLog,
 } from '@/lib/db/schema/plugin-platform';
 import { env } from '@/lib/_core/env';
 import { matchRuntimePathWithParams, normalizeRuntimePath } from '../contract';
@@ -26,7 +26,7 @@ import {
   type PluginCapabilityScope,
 } from './guards.server';
 import { recordCapabilityAudit } from './audit-helper.server';
-import { DbPluginSecretsRepository } from './secrets-capability.server';
+import { DbHostSecretStore } from '../secrets/host-secret-store.server';
 import type { AuditPort } from '@/lib/audit/audit-port.server';
 import { getUsageLedger, type UsageLedger } from '@/lib/usage/usage-ledger.server';
 import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
@@ -35,7 +35,7 @@ import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Database | TransactionDatabase;
 
-export interface PluginInternalServiceAuth {
+export interface PluginServiceConnectionAuth {
   type: 'none' | 'bearer' | 'basic' | 'apiKey';
   token?: string;
   username?: string;
@@ -43,7 +43,7 @@ export interface PluginInternalServiceAuth {
   headerName?: string;
 }
 
-export interface PluginInternalServiceActorClaimsConfig {
+export interface PluginServiceConnectionActorClaimsConfig {
   enabled?: boolean;
   secret?: string;
   header?: 'jwt' | 'hmac';
@@ -52,11 +52,11 @@ export interface PluginInternalServiceActorClaimsConfig {
   ttlSeconds?: number;
 }
 
-export interface PluginInternalServiceDefinition {
+export interface PluginServiceConnectionDefinition {
   name: string;
   baseUrl: string;
-  auth?: PluginInternalServiceAuth;
-  actorClaims?: PluginInternalServiceActorClaimsConfig;
+  auth?: PluginServiceConnectionAuth;
+  actorClaims?: PluginServiceConnectionActorClaimsConfig;
   timeoutMs?: number;
   retry?: {
     attempts?: number;
@@ -65,13 +65,13 @@ export interface PluginInternalServiceDefinition {
   maxResponseBytes?: number;
 }
 
-export interface PluginInternalServiceRegistry {
+export interface PluginServiceConnectionRegistry {
   get(
-    input: PluginInternalServiceLookup
-  ): PluginInternalServiceDefinition | Promise<PluginInternalServiceDefinition | null> | null;
+    input: PluginServiceConnectionLookup
+  ): PluginServiceConnectionDefinition | Promise<PluginServiceConnectionDefinition | null> | null;
 }
 
-export interface PluginInternalServiceLookup {
+export interface PluginServiceConnectionLookup {
   pluginId: string;
   productId?: string;
   suiteId?: string;
@@ -80,31 +80,28 @@ export interface PluginInternalServiceLookup {
   environment?: string;
 }
 
-export interface PluginInternalServiceBindingLookup extends PluginInternalServiceLookup {
-  status?: PluginInternalServiceBinding['status'];
+export interface PluginServiceConnectionBindingLookup extends PluginServiceConnectionLookup {
+  status?: PluginServiceConnection['status'];
 }
 
 export interface PluginServicesHttpHost {
   fetch(url: string, init?: RequestInit): Promise<Response>;
 }
 
-export interface PluginServiceCallLogRepository {
-  record(input: NewPluginServiceCallLog): Promise<void>;
+export interface PluginServiceConnectionLogRepository {
+  record(input: NewPluginServiceConnectionLog): Promise<void>;
 }
 
 export interface CreatePluginServicesOptions {
-  registry?: PluginInternalServiceRegistry;
+  registry?: PluginServiceConnectionRegistry;
   httpHost?: PluginServicesHttpHost;
-  logRepository?: PluginServiceCallLogRepository;
+  logRepository?: PluginServiceConnectionLogRepository;
   auditPort?: AuditPort;
   usageLedger?: UsageLedger;
 }
 
-type InternalServiceSecretRepository = {
-  get(
-    scope: { pluginId: string; userId: string; system: true },
-    name: string
-  ): Promise<string | null>;
+type ServiceConnectionSecretRepository = {
+  get(name: string): Promise<string | null>;
 };
 
 interface ServicePathGuard {
@@ -155,7 +152,7 @@ function normalizeTemplatePath(path: string): string {
 }
 
 function getServiceDeclaration(scope: PluginCapabilityScope, name: string) {
-  return scope.contract.services.find((service) => service.name === name);
+  return scope.contract.serviceRequirements.find((service) => service.name === name);
 }
 
 function assertServiceAllowed(
@@ -169,9 +166,9 @@ function assertServiceAllowed(
   if (!declaration) {
     throw new PluginError({
       code: 'PLUGIN_SERVICE_UNDECLARED',
-      message: `Plugin "${scope.contract.id}" did not declare internal service "${name}".`,
+      message: `Plugin "${scope.contract.id}" did not declare service connection "${name}".`,
       statusCode: 403,
-      fix: `Declare services: [{ name: "${name}", methods: ["${method}"], paths: ["${path}"] }] in plugin.ts.`,
+      fix: `Declare serviceRequirements: [{ name: "${name}", methods: ["${method}"], paths: ["${path}"] }] in plugin.ts.`,
       details: { pluginId: scope.contract.id, service: name },
     });
   }
@@ -303,7 +300,7 @@ function sanitizeHeaders(headers: HeadersInit | undefined): Headers {
   return output;
 }
 
-function applyServiceAuth(headers: Headers, auth: PluginInternalServiceAuth | undefined): void {
+function applyServiceAuth(headers: Headers, auth: PluginServiceConnectionAuth | undefined): void {
   if (!auth || auth.type === 'none') {
     return;
   }
@@ -353,7 +350,7 @@ function encodeBase64Url(value: string | Buffer): string {
 
 function signActorClaims(
   scope: PluginCapabilityScope,
-  service: PluginInternalServiceDefinition,
+  service: PluginServiceConnectionDefinition,
   resourceScope: NormalizedPluginResourceScope | undefined
 ): { kind: 'jwt'; jwt: string } | { kind: 'hmac'; claims: string; signature: string } | null {
   const actorClaims = service.actorClaims;
@@ -405,7 +402,7 @@ function signActorClaims(
 function applyActorClaims(
   headers: Headers,
   scope: PluginCapabilityScope,
-  service: PluginInternalServiceDefinition,
+  service: PluginServiceConnectionDefinition,
   resourceScope: NormalizedPluginResourceScope | undefined
 ): void {
   const claims = signActorClaims(scope, service, resourceScope);
@@ -457,7 +454,7 @@ async function readBoundedResponse(response: Response, maxBytes: number): Promis
   if (buffer.byteLength > maxBytes) {
     throw new PluginError({
       code: 'PLUGIN_SERVICE_RESPONSE_TOO_LARGE',
-      message: 'Internal service response exceeded the configured size limit.',
+      message: 'Service connection response exceeded the configured size limit.',
       statusCode: 502,
       details: { maxBytes, responseBytes: buffer.byteLength },
     });
@@ -473,7 +470,7 @@ async function fetchWithRetry(
   host: PluginServicesHttpHost,
   url: string,
   init: RequestInit,
-  retry: PluginInternalServiceDefinition['retry'] | undefined
+  retry: PluginServiceConnectionDefinition['retry'] | undefined
 ): Promise<Response> {
   const attempts = Math.min(Math.max(retry?.attempts ?? 0, 0), 5);
   let lastError: unknown;
@@ -505,7 +502,7 @@ function environmentCandidates(environment: string | undefined): Array<string | 
   return [normalized, null];
 }
 
-function bindingScopeRank(row: PluginInternalServiceBinding, workspaceId?: string): number {
+function bindingScopeRank(row: PluginServiceConnection, workspaceId?: string): number {
   if (workspaceId && row.scopeType === 'workspace' && row.scopeId === workspaceId) {
     return row.environment ? 0 : 1;
   }
@@ -515,7 +512,7 @@ function bindingScopeRank(row: PluginInternalServiceBinding, workspaceId?: strin
   return 99;
 }
 
-function ownerRank(row: PluginInternalServiceBinding, input: PluginInternalServiceLookup): number {
+function ownerRank(row: PluginServiceConnection, input: PluginServiceConnectionLookup): number {
   if (row.ownerType === 'plugin' && row.ownerId === input.pluginId) {
     return 0;
   }
@@ -529,31 +526,31 @@ function ownerRank(row: PluginInternalServiceBinding, input: PluginInternalServi
 }
 
 function ownerConditions(
-  input: PluginInternalServiceLookup,
+  input: PluginServiceConnectionLookup,
   productId: string,
   suiteId?: string
 ): SQL[] {
   const candidates: SQL[] = [
     and(
-      eq(pluginInternalServiceBindings.ownerType, 'plugin'),
-      eq(pluginInternalServiceBindings.ownerId, input.pluginId)
+      eq(pluginServiceConnections.ownerType, 'plugin'),
+      eq(pluginServiceConnections.ownerId, input.pluginId)
     )!,
     and(
-      eq(pluginInternalServiceBindings.ownerType, 'product'),
-      eq(pluginInternalServiceBindings.ownerId, productId)
+      eq(pluginServiceConnections.ownerType, 'product'),
+      eq(pluginServiceConnections.ownerId, productId)
     )!,
   ];
 
   if (suiteId) {
     candidates.push(
       and(
-        eq(pluginInternalServiceBindings.ownerType, 'suite'),
-        eq(pluginInternalServiceBindings.ownerId, suiteId)
+        eq(pluginServiceConnections.ownerType, 'suite'),
+        eq(pluginServiceConnections.ownerId, suiteId)
       )!
     );
   }
 
-  return [eq(pluginInternalServiceBindings.productId, productId), or(...candidates)!];
+  return [eq(pluginServiceConnections.productId, productId), or(...candidates)!];
 }
 
 function parseSecretRef(
@@ -568,7 +565,7 @@ function parseSecretRef(
   if (!name || (kind !== 'env' && kind !== 'dbsec')) {
     throw new PluginError({
       code: 'PLUGIN_SERVICE_SECRET_REF_INVALID',
-      message: `Internal service secret ref "${ref}" is invalid.`,
+      message: `Service connection secret ref "${ref}" is invalid.`,
       statusCode: 500,
       details: { ref },
     });
@@ -585,8 +582,7 @@ function readDynamicSecretEnv(name: string): string | undefined {
 
 async function resolveSecretRef(
   ref: string | null | undefined,
-  pluginId: string,
-  repository: InternalServiceSecretRepository
+  repository: ServiceConnectionSecretRepository
 ): Promise<string | undefined> {
   const parsed = parseSecretRef(ref);
   if (!parsed) {
@@ -598,7 +594,7 @@ async function resolveSecretRef(
     if (!value) {
       throw new PluginError({
         code: 'PLUGIN_SERVICE_SECRET_MISSING',
-        message: `Internal service secret "${ref}" was not found.`,
+        message: `Service connection secret "${ref}" was not found.`,
         statusCode: 500,
         details: { ref },
       });
@@ -606,11 +602,11 @@ async function resolveSecretRef(
     return value;
   }
 
-  const value = await repository.get({ pluginId, userId: '', system: true }, parsed.name);
+  const value = await repository.get(parsed.name);
   if (!value) {
     throw new PluginError({
       code: 'PLUGIN_SERVICE_SECRET_MISSING',
-      message: `Internal service secret "${ref}" was not found.`,
+      message: `Service connection secret "${ref}" was not found.`,
       statusCode: 500,
       details: { ref },
     });
@@ -623,7 +619,7 @@ function normalizeBindingBaseUrl(baseUrl: string): string {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new PluginError({
       code: 'PLUGIN_SERVICE_BASE_URL_INVALID',
-      message: 'Internal service base URL must be http or https.',
+      message: 'Service connection base URL must be http or https.',
       statusCode: 500,
     });
   }
@@ -639,7 +635,7 @@ function normalizeBindingBaseUrl(baseUrl: string): string {
       throw new PluginError({
         code: 'PLUGIN_SERVICE_BASE_URL_HTTPS_REQUIRED',
         message:
-          'Production internal service base URLs must use https unless they target private network hosts.',
+          'Production service connection base URLs must use https unless they target private network hosts.',
         statusCode: 500,
       });
     }
@@ -648,24 +644,24 @@ function normalizeBindingBaseUrl(baseUrl: string): string {
 }
 
 async function toServiceDefinition(
-  row: PluginInternalServiceBinding,
-  secretRepository: InternalServiceSecretRepository
-): Promise<PluginInternalServiceDefinition> {
-  const authType = row.authType as PluginInternalServiceAuth['type'];
+  row: PluginServiceConnection,
+  secretRepository: ServiceConnectionSecretRepository
+): Promise<PluginServiceConnectionDefinition> {
+  const authType = row.authType as PluginServiceConnectionAuth['type'];
   const token =
     authType === 'bearer' || authType === 'apiKey'
-      ? await resolveSecretRef(row.authSecretRef, row.pluginId, secretRepository)
+      ? await resolveSecretRef(row.authSecretRef, secretRepository)
       : undefined;
   const username =
     authType === 'basic'
-      ? await resolveSecretRef(row.authUsernameRef, row.pluginId, secretRepository)
+      ? await resolveSecretRef(row.authUsernameRef, secretRepository)
       : undefined;
   const password =
     authType === 'basic'
-      ? await resolveSecretRef(row.authPasswordRef, row.pluginId, secretRepository)
+      ? await resolveSecretRef(row.authPasswordRef, secretRepository)
       : undefined;
   const actorSecret = row.actorClaimsEnabled
-    ? await resolveSecretRef(row.actorClaimsSecretRef, row.pluginId, secretRepository)
+    ? await resolveSecretRef(row.actorClaimsSecretRef, secretRepository)
     : undefined;
 
   return {
@@ -698,50 +694,50 @@ async function toServiceDefinition(
   };
 }
 
-export class DbPluginInternalServiceRegistry implements PluginInternalServiceRegistry {
+export class DbPluginServiceConnectionRegistry implements PluginServiceConnectionRegistry {
   constructor(
     private readonly executor: Executor = db,
-    private readonly secretRepository: InternalServiceSecretRepository = new DbPluginSecretsRepository(
+    private readonly secretRepository: ServiceConnectionSecretRepository = new DbHostSecretStore(
       executor
     )
   ) {}
 
   async resolveBinding(
-    input: PluginInternalServiceBindingLookup
-  ): Promise<PluginInternalServiceBinding | null> {
+    input: PluginServiceConnectionBindingLookup
+  ): Promise<PluginServiceConnection | null> {
     const productId = input.productId ?? getRuntimeProductId();
     const suiteId =
       input.suiteId ??
       (await pluginQueryService.getInstallation(input.pluginId, { productId }))?.suiteId;
     const environmentValues = environmentCandidates(input.environment);
-    const scopeConditions: SQL[] = [eq(pluginInternalServiceBindings.scopeType, 'global')];
+    const scopeConditions: SQL[] = [eq(pluginServiceConnections.scopeType, 'global')];
     if (input.workspaceId) {
       scopeConditions.push(
         and(
-          eq(pluginInternalServiceBindings.scopeType, 'workspace'),
-          eq(pluginInternalServiceBindings.scopeId, input.workspaceId)
+          eq(pluginServiceConnections.scopeType, 'workspace'),
+          eq(pluginServiceConnections.scopeId, input.workspaceId)
         )!
       );
     }
     const conditions: SQL[] = [
       ...ownerConditions(input, productId, suiteId),
-      eq(pluginInternalServiceBindings.serviceName, input.serviceName),
+      eq(pluginServiceConnections.serviceName, input.serviceName),
       or(...scopeConditions)!,
       or(
         ...environmentValues.map((value) =>
           value === null
-            ? isNull(pluginInternalServiceBindings.environment)
-            : eq(pluginInternalServiceBindings.environment, value)
+            ? isNull(pluginServiceConnections.environment)
+            : eq(pluginServiceConnections.environment, value)
         )
       )!,
     ];
     if (input.status) {
-      conditions.push(eq(pluginInternalServiceBindings.status, input.status));
+      conditions.push(eq(pluginServiceConnections.status, input.status));
     }
 
     const rows = await this.executor
       .select()
-      .from(pluginInternalServiceBindings)
+      .from(pluginServiceConnections)
       .where(and(...conditions));
     const selected = rows
       .sort(
@@ -754,16 +750,18 @@ export class DbPluginInternalServiceRegistry implements PluginInternalServiceReg
     return selected ?? null;
   }
 
-  async get(input: PluginInternalServiceLookup): Promise<PluginInternalServiceDefinition | null> {
+  async get(
+    input: PluginServiceConnectionLookup
+  ): Promise<PluginServiceConnectionDefinition | null> {
     const selected = await this.resolveBinding({ ...input, status: 'active' });
     return selected ? toServiceDefinition(selected, this.secretRepository) : null;
   }
 }
 
-export function applyInternalServiceRequestHeaders(
+export function applyServiceConnectionRequestHeaders(
   headers: Headers,
   input: {
-    service: PluginInternalServiceDefinition;
+    service: PluginServiceConnectionDefinition;
     scope: PluginCapabilityScope;
     resourceScope?: NormalizedPluginResourceScope;
     requestId?: string;
@@ -775,44 +773,44 @@ export function applyInternalServiceRequestHeaders(
   applyActorClaims(headers, input.scope, input.service, input.resourceScope);
 }
 
-class DbPluginServiceCallLogRepository implements PluginServiceCallLogRepository {
+class DbPluginServiceConnectionLogRepository implements PluginServiceConnectionLogRepository {
   constructor(private readonly executor: Executor = db) {}
 
-  async record(input: NewPluginServiceCallLog): Promise<void> {
+  async record(input: NewPluginServiceConnectionLog): Promise<void> {
     if (this.executor !== db) {
-      await this.executor.insert(pluginServiceCallLogs).values(input);
+      await this.executor.insert(pluginServiceConnectionLogs).values(input);
       return;
     }
 
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT set_config('app.current_user_id', 'system', true)`);
-      await tx.insert(pluginServiceCallLogs).values(input);
+      await tx.insert(pluginServiceConnectionLogs).values(input);
     });
   }
 }
 
-class EmptyServiceRegistry implements PluginInternalServiceRegistry {
+class EmptyServiceRegistry implements PluginServiceConnectionRegistry {
   get(): null {
     return null;
   }
 }
 
 const EMPTY_SERVICE_REGISTRY = new EmptyServiceRegistry();
-let explicitDefaultServiceRegistry: PluginInternalServiceRegistry | undefined;
-let defaultDbServiceRegistry: PluginInternalServiceRegistry | undefined;
+let explicitDefaultServiceRegistry: PluginServiceConnectionRegistry | undefined;
+let defaultDbServiceRegistry: PluginServiceConnectionRegistry | undefined;
 
-export function setDefaultPluginInternalServiceRegistry(
-  registry: PluginInternalServiceRegistry | undefined
+export function setDefaultPluginServiceConnectionRegistry(
+  registry: PluginServiceConnectionRegistry | undefined
 ): void {
   explicitDefaultServiceRegistry = registry;
 }
 
-export function getDefaultPluginInternalServiceRegistry(): PluginInternalServiceRegistry {
+export function getDefaultPluginServiceConnectionRegistry(): PluginServiceConnectionRegistry {
   if (explicitDefaultServiceRegistry) {
     return explicitDefaultServiceRegistry;
   }
 
-  defaultDbServiceRegistry ??= new DbPluginInternalServiceRegistry();
+  defaultDbServiceRegistry ??= new DbPluginServiceConnectionRegistry();
   return defaultDbServiceRegistry ?? EMPTY_SERVICE_REGISTRY;
 }
 
@@ -824,9 +822,9 @@ export function createPluginServicesCapability(
   scope: PluginCapabilityScope,
   options: CreatePluginServicesOptions = {}
 ): PluginServices {
-  const registry = options.registry ?? getDefaultPluginInternalServiceRegistry();
+  const registry = options.registry ?? getDefaultPluginServiceConnectionRegistry();
   const httpHost = options.httpHost ?? { fetch };
-  const logRepository = options.logRepository ?? new DbPluginServiceCallLogRepository();
+  const logRepository = options.logRepository ?? new DbPluginServiceConnectionLogRepository();
   const usageLedger = options.usageLedger ?? getUsageLedger();
 
   async function invoke(
@@ -863,14 +861,14 @@ export function createPluginServicesCapability(
     if (!service) {
       throw new PluginError({
         code: 'PLUGIN_SERVICE_NOT_REGISTERED',
-        message: `Internal service "${serviceName}" is not registered by the host.`,
+        message: `Service connection "${serviceName}" is not registered by the host.`,
         statusCode: 502,
         details: { pluginId: scope.contract.id, service: serviceName },
       });
     }
 
     const headers = sanitizeHeaders(requestInit.headers);
-    applyInternalServiceRequestHeaders(headers, { service, scope, resourceScope });
+    applyServiceConnectionRequestHeaders(headers, { service, scope, resourceScope });
     const body = normalizeBody(headers, requestInit);
     const url = joinUrl(service.baseUrl, path, requestInit.query);
     const callId = randomUUID();
@@ -902,7 +900,7 @@ export function createPluginServicesCapability(
       }
       throw new PluginError({
         code: 'SERVICE_REQUEST_FAILED',
-        message: error instanceof Error ? error.message : 'Internal service request failed.',
+        message: error instanceof Error ? error.message : 'Service connection request failed.',
         statusCode: 502,
         details: { service: serviceName, requestId: scope.requestId },
       });
@@ -968,7 +966,7 @@ export function createPluginServicesCapability(
       if (!response.ok) {
         throw new PluginError({
           code: 'SERVICE_REQUEST_FAILED',
-          message: `Internal service "${service}" returned ${response.status}.`,
+          message: `Service connection "${service}" returned ${response.status}.`,
           statusCode: 502,
           details: {
             service,
@@ -1000,7 +998,7 @@ export function createPluginServicesCapability(
       if (request.errorMode === 'throw') {
         throw new PluginError({
           code: 'SERVICE_REQUEST_FAILED',
-          message: `Internal service "${service}" returned ${response.status}.`,
+          message: `Service connection "${service}" returned ${response.status}.`,
           statusCode: 502,
           details: {
             service,

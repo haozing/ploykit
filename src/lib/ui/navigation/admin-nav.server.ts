@@ -16,7 +16,7 @@ import { logger } from '@/lib/_core/logger';
 import { SYSTEM_DASHBOARD_MENUS } from '@/config/system-dashboard-menus';
 import {
   listAdminResourceBindings,
-  listInternalServiceRequirements,
+  listServiceConnectionRequirements,
 } from '@/lib/plugin-runtime/admin';
 import { getPluginRuntimeMapEntry } from '@/lib/plugin-runtime/loader';
 import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
@@ -97,10 +97,10 @@ async function servicesAreBound(pluginId: string, services: readonly string[]): 
     return true;
   }
 
-  const requirements = await listInternalServiceRequirements({ pluginId });
+  const requirements = await listServiceConnectionRequirements({ pluginId });
   const boundServices = new Set(
     requirements
-      .filter((requirement) => requirement.bindingStatus === 'bound')
+      .filter((requirement) => requirement.connectionStatus === 'bound')
       .map((requirement) => requirement.serviceName)
   );
   return services.every((service) => boundServices.has(service));
@@ -172,7 +172,7 @@ async function resourceBindingsAreBound(
 }
 
 async function areRuntimeMenuRequirementsSatisfied(item: DashboardMenuItem): Promise<boolean> {
-  const services = item.requires?.servicesBound ?? [];
+  const services = item.requires?.serviceConnections ?? [];
   const resources = item.requires?.resourceBindings ?? [];
   if (services.length === 0 && resources.length === 0) {
     return true;

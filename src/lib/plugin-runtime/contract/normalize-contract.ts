@@ -242,7 +242,7 @@ export function normalizePluginRuntimeContract(
     webhooks: definition.webhooks ?? {},
     hooks: definition.hooks ?? {},
     meters: definition.meters ?? [],
-    services: definition.services ?? [],
+    serviceRequirements: definition.serviceRequirements ?? [],
     resourceBindings: definition.resourceBindings ?? [],
     dependencies: definition.dependencies,
     egress: definition.egress ?? [],

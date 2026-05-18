@@ -26,7 +26,7 @@ async function main() {
     productId: readArg('product'),
     environment: readArg('env') ?? readArg('environment'),
     enable: hasFlag('no-enable') ? false : undefined,
-    seedInternalServices: hasFlag('no-seed-internal-services') ? false : undefined,
+    seedServiceConnections: hasFlag('no-seed-service-connections') ? false : undefined,
     dryRun: hasFlag('dry-run'),
     userId: readArg('user') ?? 'system',
   });

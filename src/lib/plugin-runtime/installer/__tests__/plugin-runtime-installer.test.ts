@@ -183,7 +183,7 @@ function createContract(overrides: Partial<PluginRuntimeContract> = {}): PluginR
     webhooks: {},
     hooks: {},
     meters: [],
-    services: [],
+    serviceRequirements: [],
     resourceBindings: [],
     egress: [],
     definition: {} as PluginRuntimeContract['definition'],

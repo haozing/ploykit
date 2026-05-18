@@ -1,1 +1,1 @@
-export * from './internal-services.server';
+export * from './service-connections.server';

@@ -217,7 +217,7 @@ const items = await ctx.storage.collection('sample_items').findMany({
 | `ctx.files`                              | `FilesRead`, `FilesWrite`                                | 签名上传/下载与文件元数据                                 |
 | `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | 用户可见或内部长期任务                                    |
 | `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | 外部服务 profile、credential、retry、redaction、call logs |
-| `ctx.services`                           | `ServicesInvoke`                                         | 宿主绑定的内部 API，用于复杂领域或数据库工作              |
+| `ctx.services`                           | `ServicesInvoke`                                         | 宿主管理的服务连接，用于复杂领域或数据库工作              |
 | `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | workspace 创建、成员、角色、邀请                          |
 | `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | 插件 API keys 与 scoped rate limits                       |
 | `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | 用量、action meters、审计轨迹                             |

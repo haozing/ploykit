@@ -73,7 +73,7 @@ export interface HookExecutionContext<TPayload = unknown> {
    * Provides complete DI capabilities for plugins, including:
    * - Database access (plugin.db)
    * - Event publish/subscribe (plugin.events)
-   * - Service invocation (plugin.services)
+   * - Service invocation (ctx.services)
    * - Logging (plugin.logger)
    * - Configuration access (plugin.config)
    *

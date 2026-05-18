@@ -13,6 +13,9 @@ function createStatus(
       return `${column} = ${functionName}`;
     })
     .join(' AND ');
+  const policyExpression = isolationExpression
+    ? `((${isolationExpression}) OR (current_app_user_id() = 'system'))`
+    : `(current_app_user_id() = 'system')`;
 
   return {
     table,
@@ -22,8 +25,8 @@ function createStatus(
       {
         name: `${table}_user_isolation`,
         command: 'ALL',
-        qual: `((${isolationExpression}) OR (current_app_user_id() = 'system'))`,
-        withCheck: `((${isolationExpression}) OR (current_app_user_id() = 'system'))`,
+        qual: policyExpression,
+        withCheck: policyExpression,
       },
     ],
     ...overrides,
@@ -81,6 +84,15 @@ describe('RLS checker', () => {
     const result = validateRLSStatuses(
       [createStatus('plugin_export_export_history')],
       [{ table: 'plugin_export_export_history', isolationColumns: ['user_id'], requireForce: true }]
+    );
+
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts system-only host secret policies', () => {
+    const result = validateRLSStatuses(
+      [createStatus('host_secrets', undefined, [])],
+      [{ table: 'host_secrets', isolationColumns: [], requireForce: true }]
     );
 
     expect(result.valid).toBe(true);

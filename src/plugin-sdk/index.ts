@@ -55,7 +55,7 @@ export type {
   PluginResourceBindingRole,
   PluginResourceBindingScopeType,
   PluginResourceBindingVisibility,
-  PluginServiceDefinition,
+  PluginServiceRequirementDefinition,
   PluginAssetDeclaration,
   PluginAssetKind,
   PluginRenderHeadPayload,

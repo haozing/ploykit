@@ -95,7 +95,7 @@ export const COMMON_ADMIN_ACTIONS: readonly AdminActionDefinition[] = [
     exact('link', 'Operations Center'),
     exact('link', 'Plugin Dev Console'),
     exact('link', 'Plugin Operations'),
-    exact('link', 'Internal Services'),
+    exact('link', 'Service Connections'),
     exact('link', 'Plugins'),
     exact('link', 'Revenue'),
     exact('link', 'Subscription Plans'),
@@ -115,7 +115,11 @@ export const COMMON_ADMIN_ACTIONS: readonly AdminActionDefinition[] = [
 export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
   {
     pageId: 'admin.dashboard',
-    actions: [],
+    actions: [
+      action('dashboard.loading-state', 'Surface dashboard loading controls while data hydrates.', [
+        exact('button', 'ULoading...'),
+      ]),
+    ],
     apiRoutes: [
       api('dashboard.stats', 'GET', '/api/admin/dashboard/stats'),
       api('dashboard.recent-users', 'GET', '/api/admin/dashboard/recent-users'),
@@ -238,6 +242,10 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
         exact('menuitem', 'Download'),
         exact('menuitem', 'Delete'),
       ]),
+      action('files.pagination', 'Page through platform files.', [
+        exact('button', 'Next'),
+        exact('button', 'Previous'),
+      ]),
     ],
     apiRoutes: [api('files.list', 'GET', '/api/admin/files')],
   },
@@ -274,11 +282,16 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
     actions: [
       action('plugins.lifecycle-entry', 'Open plugin lifecycle actions.', [
         exact('button', 'Disable'),
+        exact('button', 'Enable'),
+        exact('button', ''),
       ]),
       action('plugins.disable-dialog', 'Confirm or cancel plugin lifecycle changes.', [
         pattern('alertdialog', '^Disable Plugin'),
+        pattern('alertdialog', '^Enable Plugin'),
+        pattern('alertdialog', '^Uninstall Plugin'),
         exact('button', 'Cancel'),
         exact('button', 'Confirm'),
+        exact('button', 'Confirm Uninstall'),
       ]),
     ],
     apiRoutes: [api('plugins.list', 'GET', '/api/admin/plugins')],
@@ -308,40 +321,47 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
     ],
   },
   {
-    pageId: 'admin.plugin-internal-services',
+    pageId: 'admin.service-connections',
     actions: [
-      action('plugin-internal-services.refresh', 'Refresh internal service requirements.', [
+      action('service-connections.refresh', 'Refresh service connection requirements.', [
         exact('button', 'Refresh'),
       ]),
-      action('plugin-internal-services.requirements', 'Bind missing service requirements.', [
-        exact('button', 'Bind'),
+      action('service-connections.requirements', 'Configure missing service requirements.', [
+        exact('button', 'Configure'),
       ]),
-      action('plugin-internal-services.bindings', 'Operate existing internal service bindings.', [
+      action('service-connections.bindings', 'Operate existing service connections.', [
         exact('button', 'Disable'),
         exact('button', 'Edit'),
+        exact('button', 'Rotate'),
         exact('button', 'Test'),
       ]),
-      action('plugin-internal-services.editor', 'Edit and save a service binding.', [
-        exact('button', 'Save Binding'),
+      action('service-connections.editor', 'Edit and save a service connection.', [
+        exact('button', 'Save Connection'),
         exact('combobox', 'global'),
         exact('combobox', 'none'),
+        exact('combobox', 'plugin'),
+        exact('combobox', 'None'),
+        exact('combobox', 'GET'),
+        exact('combobox', 'active'),
         exact('switch', ''),
         exact('textbox', ''),
       ]),
-      action('plugin-internal-services.logs', 'Apply call log retention settings.', [
+      filters(
+        exact('combobox', 'All statuses'),
+        exact('option', 'All statuses'),
+        exact('option', 'Active'),
+        exact('option', 'Disabled')
+      ),
+      action('service-connections.logs', 'Apply call log retention settings.', [
         exact('button', 'Apply Retention'),
       ]),
-      tabs('Requirements', 'Bindings', 'Editor', 'Logs', 'Resources'),
+      tabs('Requirements', 'Connections', 'Editor', 'Logs'),
     ],
     apiRoutes: [
-      api(
-        'plugin-internal-services.requirements',
-        'GET',
-        '/api/admin/plugin-internal-services/requirements'
-      ),
-      api('plugin-internal-services.bindings', 'GET', '/api/admin/plugin-internal-services'),
-      api('plugin-internal-services.logs', 'GET', '/api/admin/plugin-internal-services/logs'),
-      api('plugin-internal-services.resources', 'GET', '/api/admin/plugin-resource-bindings'),
+      api('service-connections.requirements', 'GET', '/api/admin/service-connections/requirements'),
+      api('service-connections.bindings', 'GET', '/api/admin/service-connections'),
+      api('service-connections.logs', 'GET', '/api/admin/service-connections/logs'),
+      api('service-connections.upsert', 'POST', '/api/admin/service-connections'),
     ],
   },
   {
@@ -351,7 +371,11 @@ export const ADMIN_ACTION_SPECS: readonly AdminPageActionSpec[] = [
         exact('button', 'Create note'),
       ]),
     ],
-    apiRoutes: [api('plugin-runtime.plugins-list', 'GET', '/api/admin/plugins')],
+    apiRoutes: [
+      api('plugin-runtime.plugins-list', 'GET', '/api/admin/plugins'),
+      api('plugin-runtime.service-connection', 'POST', '/api/admin/service-connections'),
+      api('plugin-runtime.enable-sample', 'POST', '/api/admin/plugins/sample-internal/enable'),
+    ],
   },
   {
     pageId: 'admin.rbac.redirect',

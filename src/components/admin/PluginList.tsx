@@ -14,13 +14,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { PluginCard } from './PluginCard';
-import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, Loader2, PlugZap, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { useTranslations } from 'next-intl';
-import { API_KEYS, fetcher, postFetcher, deleteFetcher } from '@/lib/swr';
+import { useLocale, useTranslations } from 'next-intl';
+import { API_KEYS, fetcher, postFetcher, deleteFetcher, FetchError } from '@/lib/swr';
 
 /**
  * ============================================================================
@@ -42,6 +43,12 @@ interface PluginsResponse {
   plugins: Plugin[];
 }
 
+interface PluginActionError {
+  message: string;
+  code?: string;
+  details?: Record<string, unknown>;
+}
+
 /**
  * ============================================================================
  * PluginList Component
@@ -49,8 +56,9 @@ interface PluginsResponse {
  */
 export function PluginList() {
   const t = useTranslations('dashboard.plugins.list');
+  const locale = useLocale();
   const router = useRouter();
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<PluginActionError | null>(null);
 
   // Fetch plugins using SWR
   const {
@@ -61,7 +69,25 @@ export function PluginList() {
   } = useSWR<PluginsResponse>(API_KEYS.PLUGINS.LIST, fetcher);
 
   const plugins = data?.plugins || [];
-  const error = actionError || (fetchError ? fetchError.message || t('errors.fetchFailed') : null);
+  const error: PluginActionError | null =
+    actionError ?? (fetchError ? { message: fetchError.message || t('errors.fetchFailed') } : null);
+
+  function normalizeActionError(error: unknown, fallback: string): PluginActionError {
+    if (error instanceof FetchError) {
+      const info = error.info as
+        | {
+            code?: string;
+            error?: { code?: string; message?: string; details?: Record<string, unknown> };
+          }
+        | undefined;
+      return {
+        message: info?.error?.message ?? error.message ?? fallback,
+        code: info?.error?.code ?? info?.code,
+        details: info?.error?.details,
+      };
+    }
+    return { message: error instanceof Error ? error.message : fallback };
+  }
 
   //
   // Enable plugin
@@ -73,7 +99,7 @@ export function PluginList() {
       await mutate();
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.enableFailed'));
+      setActionError(normalizeActionError(error, t('errors.enableFailed')));
     }
   }
 
@@ -87,7 +113,7 @@ export function PluginList() {
       await mutate();
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.disableFailed'));
+      setActionError(normalizeActionError(error, t('errors.disableFailed')));
     }
   }
 
@@ -101,7 +127,7 @@ export function PluginList() {
       await mutate();
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.uninstallFailed'));
+      setActionError(normalizeActionError(error, t('errors.uninstallFailed')));
     }
   }
 
@@ -115,7 +141,7 @@ export function PluginList() {
       await mutate();
       router.refresh();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : t('errors.installFailed'));
+      setActionError(normalizeActionError(error, t('errors.installFailed')));
     }
   }
 
@@ -135,23 +161,33 @@ export function PluginList() {
   // Error state
   //
   if (error) {
+    const serviceConnectionsMissing = error.code === 'SERVICE_CONNECTIONS_MISSING';
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription className="flex items-center justify-between">
-          <span>{error}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setActionError(null);
-              void mutate();
-            }}
-            className="ml-4"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            {t('retry')}
-          </Button>
+        <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span>{error.message}</span>
+          <div className="flex flex-wrap gap-2">
+            {serviceConnectionsMissing && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/${locale}/admin/service-connections`}>
+                  <PlugZap className="h-4 w-4" />
+                  {t('actions.configureServiceConnections')}
+                </Link>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setActionError(null);
+                void mutate();
+              }}
+            >
+              <RefreshCw className="h-4 w-4" />
+              {t('retry')}
+            </Button>
+          </div>
         </AlertDescription>
       </Alert>
     );

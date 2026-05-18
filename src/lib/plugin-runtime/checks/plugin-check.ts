@@ -157,7 +157,7 @@ type PluginCheckContract = { id: string } & Partial<
     | 'resources'
     | 'theme'
     | 'egress'
-    | 'services'
+    | 'serviceRequirements'
     | 'resourceBindings'
   >
 >;
@@ -2178,8 +2178,13 @@ function buildDeclaredPermissionUses(
     recordDeclaredPermissionUse(permissionUses, Permission.ExternalHttp, entryFile, 'egress');
   }
 
-  if ((contract.services ?? []).length > 0) {
-    recordDeclaredPermissionUse(permissionUses, Permission.ServicesInvoke, entryFile, 'services');
+  if ((contract.serviceRequirements ?? []).length > 0) {
+    recordDeclaredPermissionUse(
+      permissionUses,
+      Permission.ServicesInvoke,
+      entryFile,
+      'serviceRequirements'
+    );
   }
 
   if (getContractMenus(contract).length > 0) {
@@ -2963,7 +2968,7 @@ function buildServiceDiagnostics(
   const diagnostics: PluginDiagnostic[] = [];
   const entryFile = path.join(pluginRoot, 'plugin.ts');
   const serviceDeclarations = new Map(
-    (contract.services ?? []).map((service) => [service.name, service])
+    (contract.serviceRequirements ?? []).map((service) => [service.name, service])
   );
   const staticUses = new Set<string>();
 
@@ -2975,8 +2980,8 @@ function buildServiceDiagnostics(
           'warning',
           `ctx.services use in ${use.file}:${use.line}:${use.column} is dynamic; plugin check cannot prove service/path coverage.`,
           relativeToCwd(entryFile),
-          'services',
-          'Prefer static service name and path literals when possible; runtime guards will still enforce plugin.ts services.',
+          'serviceRequirements',
+          'Prefer static service name and path literals when possible; runtime guards will still enforce plugin.ts serviceRequirements.',
           {
             usedIn: use.file,
             line: use.line,
@@ -3000,8 +3005,8 @@ function buildServiceDiagnostics(
           'error',
           `ctx.services uses service "${serviceName}" in ${use.file}:${use.line}:${use.column}, but plugin.ts does not declare it.`,
           relativeToCwd(entryFile),
-          'services',
-          `Add a services entry for "${serviceName}" with method "${method}" and path "${servicePath}".`,
+          'serviceRequirements',
+          `Add a serviceRequirements entry for "${serviceName}" with method "${method}" and path "${servicePath}".`,
           {
             service: serviceName,
             path: servicePath,
@@ -3021,8 +3026,8 @@ function buildServiceDiagnostics(
           'error',
           `ctx.services uses "${method}" for service "${serviceName}", but plugin.ts does not allow that method.`,
           relativeToCwd(entryFile),
-          'services',
-          `Add "${method}" to services[].methods for "${serviceName}" or change the call method.`,
+          'serviceRequirements',
+          `Add "${method}" to serviceRequirements[].methods for "${serviceName}" or change the call method.`,
           {
             service: serviceName,
             path: servicePath,
@@ -3043,8 +3048,8 @@ function buildServiceDiagnostics(
           'error',
           `ctx.services uses "${servicePath}" for service "${serviceName}", but plugin.ts does not allow that path.`,
           relativeToCwd(entryFile),
-          'services',
-          `Add "${servicePath}" or a matching template to services[].paths for "${serviceName}".`,
+          'serviceRequirements',
+          `Add "${servicePath}" or a matching template to serviceRequirements[].paths for "${serviceName}".`,
           {
             service: serviceName,
             path: servicePath,
@@ -3056,7 +3061,7 @@ function buildServiceDiagnostics(
     }
   }
 
-  for (const declaration of contract.services ?? []) {
+  for (const declaration of contract.serviceRequirements ?? []) {
     const used = [...staticUses].some((key) => key.startsWith(`${declaration.name}:`));
     if (!used && serviceUses.every((use) => !use.dynamic)) {
       diagnostics.push(
@@ -3065,7 +3070,7 @@ function buildServiceDiagnostics(
           'warning',
           `plugin.ts declares service "${declaration.name}", but no static ctx.services call uses it.`,
           relativeToCwd(entryFile),
-          'services',
+          'serviceRequirements',
           `Remove service "${declaration.name}" if it is not needed.`,
           { service: declaration.name }
         )

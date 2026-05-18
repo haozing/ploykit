@@ -97,7 +97,7 @@ interface PluginInspectPluginReport {
     overrides: number;
   };
   egress: readonly string[];
-  services: number;
+  serviceRequirements: number;
   resourceBindings: number;
   files: {
     scanned: number;
@@ -892,7 +892,7 @@ async function inspectPluginRoot(
       overrides: plugin.hostPages?.overrides?.length ?? 0,
     },
     egress: plugin.egress ?? [],
-    services: plugin.services?.length ?? 0,
+    serviceRequirements: plugin.serviceRequirements?.length ?? 0,
     resourceBindings: plugin.resourceBindings?.length ?? 0,
     files: {
       scanned: sourceFiles.length,

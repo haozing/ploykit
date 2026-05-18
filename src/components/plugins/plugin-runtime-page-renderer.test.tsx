@@ -73,7 +73,7 @@ function createRuntimeResult(
       webhooks: {},
       hooks: {},
       meters: [],
-      services: [],
+      serviceRequirements: [],
       resourceBindings: [],
       egress: [],
       definition: {

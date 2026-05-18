@@ -345,8 +345,29 @@ export const pluginResourceBindings = pgTable(
   })
 );
 
-export const pluginServiceCallLogs = pgTable(
-  'plugin_service_call_logs',
+export const hostSecrets = pgTable(
+  'host_secrets',
+  {
+    id: text('id').primaryKey(),
+    namespace: text('namespace').notNull().default('default'),
+    name: text('name').notNull(),
+    valueCiphertext: text('value_ciphertext').notNull(),
+    encoding: text('encoding').notNull().default('aes-256-gcm-v1'),
+    createdByUserId: text('created_by_user_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    namespaceNameIdx: uniqueIndex('host_secrets_namespace_name_idx').on(
+      table.namespace,
+      table.name
+    ),
+    namespaceIdx: index('host_secrets_namespace_idx').on(table.namespace),
+  })
+);
+
+export const pluginServiceConnectionLogs = pgTable(
+  'plugin_service_connection_logs',
   {
     id: text('id').primaryKey(),
     pluginId: text('plugin_id').notNull(),
@@ -365,17 +386,17 @@ export const pluginServiceCallLogs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pluginServiceIdx: index('plugin_service_call_logs_plugin_service_idx').on(
+    pluginServiceIdx: index('plugin_service_connection_logs_plugin_service_idx').on(
       table.pluginId,
       table.serviceName,
       table.createdAt
     ),
-    requestIdx: index('plugin_service_call_logs_request_idx').on(table.requestId),
+    requestIdx: index('plugin_service_connection_logs_request_idx').on(table.requestId),
   })
 );
 
-export const pluginInternalServiceBindings = pgTable(
-  'plugin_internal_service_bindings',
+export const pluginServiceConnections = pgTable(
+  'plugin_service_connections',
   {
     id: text('id').primaryKey(),
     productId: text('product_id').notNull(),
@@ -417,21 +438,17 @@ export const pluginInternalServiceBindings = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    bindingGlobalDefaultIdx: uniqueIndex('plugin_internal_service_bindings_global_default_idx')
+    bindingGlobalDefaultIdx: uniqueIndex('plugin_service_connections_global_default_idx')
       .on(table.productId, table.ownerType, table.ownerId, table.serviceName)
       .where(sql`${table.scopeType} = 'global' AND ${table.environment} IS NULL`),
-    bindingGlobalEnvironmentIdx: uniqueIndex(
-      'plugin_internal_service_bindings_global_environment_idx'
-    )
+    bindingGlobalEnvironmentIdx: uniqueIndex('plugin_service_connections_global_environment_idx')
       .on(table.productId, table.ownerType, table.ownerId, table.serviceName, table.environment)
       .where(sql`${table.scopeType} = 'global' AND ${table.environment} IS NOT NULL`),
-    bindingWorkspaceDefaultIdx: uniqueIndex(
-      'plugin_internal_service_bindings_workspace_default_idx'
-    )
+    bindingWorkspaceDefaultIdx: uniqueIndex('plugin_service_connections_workspace_default_idx')
       .on(table.productId, table.ownerType, table.ownerId, table.serviceName, table.scopeId)
       .where(sql`${table.scopeType} = 'workspace' AND ${table.environment} IS NULL`),
     bindingWorkspaceEnvironmentIdx: uniqueIndex(
-      'plugin_internal_service_bindings_workspace_environment_idx'
+      'plugin_service_connections_workspace_environment_idx'
     )
       .on(
         table.productId,
@@ -442,19 +459,19 @@ export const pluginInternalServiceBindings = pgTable(
         table.environment
       )
       .where(sql`${table.scopeType} = 'workspace' AND ${table.environment} IS NOT NULL`),
-    pluginServiceIdx: index('plugin_internal_service_bindings_plugin_service_idx').on(
+    pluginServiceIdx: index('plugin_service_connections_plugin_service_idx').on(
       table.pluginId,
       table.serviceName,
       table.status
     ),
-    ownerServiceIdx: index('plugin_internal_service_bindings_owner_service_idx').on(
+    ownerServiceIdx: index('plugin_service_connections_owner_service_idx').on(
       table.productId,
       table.ownerType,
       table.ownerId,
       table.serviceName,
       table.status
     ),
-    scopeIdx: index('plugin_internal_service_bindings_scope_lookup_idx').on(
+    scopeIdx: index('plugin_service_connections_scope_lookup_idx').on(
       table.scopeType,
       table.scopeId,
       table.environment
@@ -534,10 +551,12 @@ export type PluginConnectorCallLog = typeof pluginConnectorCallLogs.$inferSelect
 export type NewPluginConnectorCallLog = typeof pluginConnectorCallLogs.$inferInsert;
 export type PluginResourceBinding = typeof pluginResourceBindings.$inferSelect;
 export type NewPluginResourceBinding = typeof pluginResourceBindings.$inferInsert;
-export type PluginServiceCallLog = typeof pluginServiceCallLogs.$inferSelect;
-export type NewPluginServiceCallLog = typeof pluginServiceCallLogs.$inferInsert;
-export type PluginInternalServiceBinding = typeof pluginInternalServiceBindings.$inferSelect;
-export type NewPluginInternalServiceBinding = typeof pluginInternalServiceBindings.$inferInsert;
+export type HostSecret = typeof hostSecrets.$inferSelect;
+export type NewHostSecret = typeof hostSecrets.$inferInsert;
+export type PluginServiceConnectionLog = typeof pluginServiceConnectionLogs.$inferSelect;
+export type NewPluginServiceConnectionLog = typeof pluginServiceConnectionLogs.$inferInsert;
+export type PluginServiceConnection = typeof pluginServiceConnections.$inferSelect;
+export type NewPluginServiceConnection = typeof pluginServiceConnections.$inferInsert;
 export type PluginApiKey = typeof pluginApiKeys.$inferSelect;
 export type NewPluginApiKey = typeof pluginApiKeys.$inferInsert;
 export type PluginRateLimitBucket = typeof pluginRateLimitBuckets.$inferSelect;

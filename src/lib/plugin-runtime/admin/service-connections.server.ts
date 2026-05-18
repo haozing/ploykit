@@ -2,28 +2,28 @@ import { randomUUID } from 'crypto';
 import { and, desc, eq, ilike, lt, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { Permission } from '@ploykit/plugin-sdk';
-import type { PluginServiceDefinition } from '@ploykit/plugin-sdk';
+import type { PluginServiceRequirementDefinition } from '@ploykit/plugin-sdk';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/lib/_core/errors';
 import { env } from '@/lib/_core/env';
 import { db, withSystemContext, type Database } from '@/lib/db/client.server';
 import {
-  pluginInternalServiceBindings,
+  pluginServiceConnections,
   pluginResourceBindings,
-  pluginServiceCallLogs,
-  type NewPluginInternalServiceBinding,
-  type PluginInternalServiceBinding,
+  pluginServiceConnectionLogs,
+  type NewPluginServiceConnection,
+  type PluginServiceConnection,
   type PluginResourceBinding,
-  type PluginServiceCallLog,
+  type PluginServiceConnectionLog,
 } from '@/lib/db/schema/plugin-platform';
 import { getPluginRuntimeMapEntry } from '../loader';
 import { getCurrentRuntimeProductId } from '../product-context.server';
 import { pluginRuntimeRegistry } from '../registry';
 import { pluginQueryService } from '@/lib/plugins/plugin-query.server';
-import { DbPluginSecretsRepository } from '../capabilities/secrets-capability.server';
+import { DbHostSecretStore } from '../secrets/host-secret-store.server';
 import {
-  applyInternalServiceRequestHeaders,
-  DbPluginInternalServiceRegistry,
-  type PluginInternalServiceRegistry,
+  applyServiceConnectionRequestHeaders,
+  DbPluginServiceConnectionRegistry,
+  type PluginServiceConnectionRegistry,
   type PluginServicesHttpHost,
 } from '../capabilities/services-capability.server';
 import type { NormalizedPluginResourceScope, PluginCapabilityScope } from '../capabilities';
@@ -31,31 +31,42 @@ import type { NormalizedPluginResourceScope, PluginCapabilityScope } from '../ca
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Database | TransactionDatabase;
 
-const bindingScopeSchema = z.enum(['global', 'workspace']);
-const bindingStatusSchema = z.enum(['active', 'disabled']);
-const bindingAuthTypeSchema = z.enum(['none', 'bearer', 'basic', 'apiKey']);
-const bindingActorClaimsTypeSchema = z.enum(['hmac']);
-const bindingOwnerTypeSchema = z.enum(['plugin', 'suite', 'product']);
+const connectionScopeSchema = z.enum(['global', 'workspace']);
+const connectionStatusSchema = z.enum(['active', 'disabled']);
+const connectionAuthTypeSchema = z.enum(['none', 'bearer', 'basic', 'apiKey']);
+const connectionActorClaimsTypeSchema = z.enum(['hmac']);
+const connectionOwnerTypeSchema = z.enum(['plugin', 'suite', 'product']);
+const secretSourceSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('none') }),
+  z.object({ type: z.literal('env'), name: z.string().min(1).max(300) }),
+  z.object({
+    type: z.literal('encrypted'),
+    ref: z.string().max(500).optional().nullable(),
+    value: z.string().max(10000).optional(),
+  }),
+]);
 
-export const internalServiceBindingListQuerySchema = z.object({
+export const serviceConnectionListQuerySchema = z.object({
   productId: z.string().min(1).max(120).optional(),
   pluginId: z.string().min(1).max(120).optional(),
-  ownerType: bindingOwnerTypeSchema.optional(),
+  ownerType: connectionOwnerTypeSchema.optional(),
   ownerId: z.string().min(1).max(120).optional(),
   serviceName: z.string().min(1).max(120).optional(),
   status: z.enum(['active', 'disabled']).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
+  environment: z.string().min(1).max(80).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 
-export const internalServiceRequirementsQuerySchema = z.object({
+export const serviceConnectionRequirementsQuerySchema = z.object({
   productId: z.string().min(1).max(120).optional(),
   pluginId: z.string().min(1).max(120).optional(),
+  serviceName: z.string().min(1).max(120).optional(),
   environment: z.string().min(1).max(80).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
 });
 
-export const internalServiceLogsQuerySchema = z.object({
+export const serviceConnectionLogsQuerySchema = z.object({
   pluginId: z.string().min(1).max(120).optional(),
   serviceName: z.string().min(1).max(120).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
@@ -65,19 +76,19 @@ export const internalServiceLogsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 
-export const internalServiceLogsRetentionSchema = z.object({
+export const serviceConnectionLogsRetentionSchema = z.object({
   retentionDays: z
     .number()
     .int()
     .min(1)
     .max(3650)
-    .default(env.PLUGIN_SERVICE_CALL_LOG_RETENTION_DAYS),
+    .default(env.PLUGIN_SERVICE_CONNECTION_LOG_RETENTION_DAYS),
 });
 
 export const resourceBindingAdminListQuerySchema = z.object({
   productId: z.string().min(1).max(120).optional(),
   pluginId: z.string().min(1).max(120).optional(),
-  ownerType: bindingOwnerTypeSchema.optional(),
+  ownerType: connectionOwnerTypeSchema.optional(),
   ownerId: z.string().min(1).max(120).optional(),
   workspaceId: z.string().min(1).max(200).optional(),
   scopeType: z.enum(['user', 'workspace']).optional(),
@@ -94,32 +105,28 @@ export const resourceBindingAdminActionSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-export const internalServiceBindingActionSchema = z.discriminatedUnion('action', [
+export const serviceConnectionActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('upsert'),
     id: z.string().min(1).max(200).optional(),
     productId: z.string().min(1).max(120).optional(),
     pluginId: z.string().min(1).max(120),
-    ownerType: bindingOwnerTypeSchema.default('plugin'),
+    ownerType: connectionOwnerTypeSchema.default('plugin'),
     ownerId: z.string().min(1).max(120).optional(),
     serviceName: z.string().min(1).max(120),
-    scopeType: bindingScopeSchema.default('global'),
+    scopeType: connectionScopeSchema.default('global'),
     scopeId: z.string().max(200).optional().nullable(),
     environment: z.string().max(80).optional().nullable(),
     baseUrl: z.string().url(),
-    authType: bindingAuthTypeSchema.default('none'),
-    authSecretRef: z.string().max(500).optional().nullable(),
-    authSecretValue: z.string().max(10000).optional(),
-    authUsernameRef: z.string().max(500).optional().nullable(),
-    authUsernameValue: z.string().max(10000).optional(),
-    authPasswordRef: z.string().max(500).optional().nullable(),
-    authPasswordValue: z.string().max(10000).optional(),
+    authType: connectionAuthTypeSchema.default('none'),
+    authSecretSource: secretSourceSchema.optional(),
+    authUsernameSource: secretSourceSchema.optional(),
+    authPasswordSource: secretSourceSchema.optional(),
     authHeaderName: z.string().max(120).optional().nullable(),
     actorClaimsEnabled: z.boolean().default(false),
-    actorClaimsType: bindingActorClaimsTypeSchema.default('hmac'),
+    actorClaimsType: connectionActorClaimsTypeSchema.default('hmac'),
     actorClaimsAudience: z.string().max(200).optional().nullable(),
-    actorClaimsSecretRef: z.string().max(500).optional().nullable(),
-    actorClaimsSecretValue: z.string().max(10000).optional(),
+    actorClaimsSecretSource: secretSourceSchema.optional(),
     actorClaimsKeyId: z.string().max(120).optional().nullable(),
     actorClaimsTtlSeconds: z.number().int().min(10).max(300).default(60),
     timeoutMs: z.number().int().min(100).max(300000).default(30000),
@@ -129,13 +136,13 @@ export const internalServiceBindingActionSchema = z.discriminatedUnion('action',
     healthPath: z.string().max(500).optional().nullable(),
     healthMethod: z.string().max(20).default('GET'),
     healthExpectedStatus: z.number().int().min(100).max(599).default(200),
-    status: bindingStatusSchema.default('active'),
+    status: connectionStatusSchema.default('active'),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   z.object({
     action: z.literal('setStatus'),
     id: z.string().min(1).max(200),
-    status: bindingStatusSchema,
+    status: connectionStatusSchema,
   }),
   z.object({
     action: z.literal('rotateSecret'),
@@ -151,9 +158,15 @@ export const internalServiceBindingActionSchema = z.discriminatedUnion('action',
   }),
 ]);
 
-export type InternalServiceBindingActionInput = z.infer<typeof internalServiceBindingActionSchema>;
+export type ServiceConnectionActionInput = z.infer<typeof serviceConnectionActionSchema>;
 
-export interface AdminInternalServiceBindingSummary {
+export type AdminSecretSourceSummary =
+  | { type: 'none'; label: string }
+  | { type: 'env'; name: string; label: string }
+  | { type: 'encrypted'; name: string; label: string }
+  | { type: 'invalid'; ref: string; label: string };
+
+export interface AdminServiceConnectionSummary {
   id: string;
   productId: string;
   pluginId: string;
@@ -165,14 +178,14 @@ export interface AdminInternalServiceBindingSummary {
   environment?: string;
   baseUrl: string;
   authType: string;
-  authSecretRef?: string;
-  authUsernameRef?: string;
-  authPasswordRef?: string;
+  authSecretSource: AdminSecretSourceSummary;
+  authUsernameSource: AdminSecretSourceSummary;
+  authPasswordSource: AdminSecretSourceSummary;
   authHeaderName?: string;
   actorClaimsEnabled: boolean;
   actorClaimsType: string;
   actorClaimsAudience?: string;
-  actorClaimsSecretRef?: string;
+  actorClaimsSecretSource: AdminSecretSourceSummary;
   actorClaimsKeyId?: string;
   actorClaimsTtlSeconds: number;
   timeoutMs: number;
@@ -191,7 +204,7 @@ export interface AdminInternalServiceBindingSummary {
   updatedAt: string;
 }
 
-export interface AdminInternalServiceRequirement {
+export interface AdminServiceConnectionRequirement {
   productId: string;
   pluginId: string;
   ownerType: 'plugin' | 'suite' | 'product';
@@ -200,11 +213,12 @@ export interface AdminInternalServiceRequirement {
   methods: readonly string[];
   paths: readonly string[];
   actorClaims: boolean;
-  bindingStatus: 'bound' | 'missing' | 'disabled';
-  binding?: AdminInternalServiceBindingSummary;
+  required: boolean;
+  connectionStatus: 'bound' | 'missing' | 'disabled';
+  connection?: AdminServiceConnectionSummary;
 }
 
-export interface AdminServiceCallLogSummary {
+export interface AdminServiceConnectionLogSummary {
   id: string;
   pluginId: string;
   serviceName: string;
@@ -222,7 +236,7 @@ export interface AdminServiceCallLogSummary {
   createdAt: string;
 }
 
-export interface AdminServiceCallLogRetentionResult {
+export interface AdminServiceConnectionLogRetentionResult {
   retentionDays: number;
   cutoff: string;
   deleted: number;
@@ -263,7 +277,7 @@ function normalizeNullable(value: string | null | undefined): string | null {
 function normalizePath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed.startsWith('/')) {
-    throw new ValidationError('Internal service paths must start with "/".');
+    throw new ValidationError('Service connection paths must start with "/".');
   }
   return trimmed;
 }
@@ -271,7 +285,7 @@ function normalizePath(value: string): string {
 function validateServiceName(name: string): string {
   const normalized = name.trim();
   if (!/^[a-zA-Z0-9._:-]+$/.test(normalized)) {
-    throw new ValidationError('Internal service name is invalid.');
+    throw new ValidationError('Service connection name is invalid.');
   }
   return normalized;
 }
@@ -302,18 +316,16 @@ async function resolveRuntimeOwner(input: {
     );
   }
   if (ownerType === 'plugin' && ownerId !== input.pluginId) {
-    throw new ValidationError(
-      'Plugin-owned internal service bindings must use the plugin id as owner.'
-    );
+    throw new ValidationError('Plugin-owned service connections must use the plugin id as owner.');
   }
   if (ownerType === 'product' && ownerId !== productId) {
     throw new ValidationError(
-      'Product-owned internal service bindings must use the product id as owner.'
+      'Product-owned service connections must use the product id as owner.'
     );
   }
   if (ownerType === 'suite' && installation?.suiteId && ownerId !== installation.suiteId) {
     throw new ValidationError(
-      `Suite-owned internal service bindings for "${input.pluginId}" must use suite "${installation.suiteId}".`
+      `Suite-owned service connections for "${input.pluginId}" must use suite "${installation.suiteId}".`
     );
   }
 
@@ -328,49 +340,125 @@ function resolveServiceRequirementOwner(input: {
   return { productId: input.productId, ownerType: 'plugin', ownerId: input.pluginId };
 }
 
-function assertNoUnsafeSecretRef(ref: string | null | undefined): void {
-  if (!ref) return;
-  if (!ref.startsWith('env:') && !ref.startsWith('dbsec:')) {
-    throw new ValidationError('Secret refs must use env: or dbsec:.');
+type SecretSourceInput = z.infer<typeof secretSourceSchema>;
+
+function toSecretSourceSummary(ref: string | null | undefined): AdminSecretSourceSummary {
+  if (!ref) {
+    return { type: 'none', label: 'none' };
+  }
+  if (ref.startsWith('env:')) {
+    const name = ref.slice('env:'.length);
+    return { type: 'env', name, label: `Environment variable (${name})` };
+  }
+  if (ref.startsWith('dbsec:')) {
+    const name = ref.slice('dbsec:'.length);
+    return { type: 'encrypted', name, label: 'Encrypted database secret' };
+  }
+  return { type: 'invalid', ref, label: 'Invalid secret source' };
+}
+
+function validateEnvSecretName(name: string): string {
+  const normalized = name.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
+    throw new ValidationError('Environment secret names must look like ENV_VAR_NAME.');
+  }
+  return normalized;
+}
+
+function normalizeDbSecretRef(ref: string | null | undefined): string | null {
+  const normalized = normalizeNullable(ref);
+  if (!normalized) return null;
+  if (!normalized.startsWith('dbsec:')) {
+    throw new ValidationError('Encrypted secret refs must use dbsec:.');
+  }
+  return normalized;
+}
+
+async function resolveSecretSource(
+  executor: Executor,
+  source: SecretSourceInput | undefined,
+  existingRef: string | null | undefined,
+  createdByUserId?: string
+): Promise<string | null> {
+  if (!source) {
+    return existingRef ?? null;
+  }
+  if (source.type === 'none') {
+    return null;
+  }
+  if (source.type === 'env') {
+    return `env:${validateEnvSecretName(source.name)}`;
+  }
+
+  const existingDbRef = normalizeDbSecretRef(source.ref ?? existingRef);
+  if (source.value === undefined) {
+    return existingDbRef;
+  }
+
+  const store = new DbHostSecretStore(executor);
+  const name = await store.set({
+    name: existingDbRef?.slice('dbsec:'.length),
+    value: source.value,
+    createdByUserId,
+  });
+  return `dbsec:${name}`;
+}
+
+function assertResolvedBindingSecrets(
+  input: Extract<ServiceConnectionActionInput, { action: 'upsert' }>,
+  refs: {
+    authSecretRef: string | null;
+    authUsernameRef: string | null;
+    authPasswordRef: string | null;
+    actorClaimsSecretRef: string | null;
+  }
+) {
+  if ((input.authType === 'bearer' || input.authType === 'apiKey') && !refs.authSecretRef) {
+    throw new ValidationError('Bearer and API key service auth require a secret source.');
+  }
+
+  if (input.authType === 'basic' && (!refs.authUsernameRef || !refs.authPasswordRef)) {
+    throw new ValidationError('Basic service auth requires username and password secret sources.');
+  }
+
+  if (input.actorClaimsEnabled && !refs.actorClaimsSecretRef) {
+    throw new ValidationError('Actor claims require a signing secret source.');
   }
 }
 
-function assertBindingSecrets(
-  input: Extract<InternalServiceBindingActionInput, { action: 'upsert' }>
+function assertCreateSecretSources(
+  input: Extract<ServiceConnectionActionInput, { action: 'upsert' }>
 ) {
-  assertNoUnsafeSecretRef(input.authSecretRef);
-  assertNoUnsafeSecretRef(input.authUsernameRef);
-  assertNoUnsafeSecretRef(input.authPasswordRef);
-  assertNoUnsafeSecretRef(input.actorClaimsSecretRef);
+  if (input.id) {
+    return;
+  }
 
   if (
     (input.authType === 'bearer' || input.authType === 'apiKey') &&
-    !normalizeNullable(input.authSecretRef) &&
-    !input.authSecretValue
+    (!input.authSecretSource || input.authSecretSource.type === 'none')
   ) {
-    throw new ValidationError(
-      'Bearer and API key service auth require a secret ref or new secret.'
-    );
+    throw new ValidationError('Bearer and API key service auth require a secret source.');
   }
 
   if (
     input.authType === 'basic' &&
-    ((!normalizeNullable(input.authUsernameRef) && !input.authUsernameValue) ||
-      (!normalizeNullable(input.authPasswordRef) && !input.authPasswordValue))
+    (!input.authUsernameSource ||
+      input.authUsernameSource.type === 'none' ||
+      !input.authPasswordSource ||
+      input.authPasswordSource.type === 'none')
   ) {
-    throw new ValidationError('Basic service auth requires username and password secrets.');
+    throw new ValidationError('Basic service auth requires username and password secret sources.');
   }
 
   if (
     input.actorClaimsEnabled &&
-    !normalizeNullable(input.actorClaimsSecretRef) &&
-    !input.actorClaimsSecretValue
+    (!input.actorClaimsSecretSource || input.actorClaimsSecretSource.type === 'none')
   ) {
-    throw new ValidationError('Actor claims require a signing secret ref or new secret.');
+    throw new ValidationError('Actor claims require a signing secret source.');
   }
 }
 
-function toBindingSummary(row: PluginInternalServiceBinding): AdminInternalServiceBindingSummary {
+function toConnectionSummary(row: PluginServiceConnection): AdminServiceConnectionSummary {
   return {
     id: row.id,
     productId: row.productId,
@@ -383,14 +471,14 @@ function toBindingSummary(row: PluginInternalServiceBinding): AdminInternalServi
     environment: row.environment ?? undefined,
     baseUrl: row.baseUrl,
     authType: row.authType,
-    authSecretRef: row.authSecretRef ?? undefined,
-    authUsernameRef: row.authUsernameRef ?? undefined,
-    authPasswordRef: row.authPasswordRef ?? undefined,
+    authSecretSource: toSecretSourceSummary(row.authSecretRef),
+    authUsernameSource: toSecretSourceSummary(row.authUsernameRef),
+    authPasswordSource: toSecretSourceSummary(row.authPasswordRef),
     authHeaderName: row.authHeaderName ?? undefined,
     actorClaimsEnabled: row.actorClaimsEnabled,
     actorClaimsType: row.actorClaimsType,
     actorClaimsAudience: row.actorClaimsAudience ?? undefined,
-    actorClaimsSecretRef: row.actorClaimsSecretRef ?? undefined,
+    actorClaimsSecretSource: toSecretSourceSummary(row.actorClaimsSecretRef),
     actorClaimsKeyId: row.actorClaimsKeyId ?? undefined,
     actorClaimsTtlSeconds: row.actorClaimsTtlSeconds,
     timeoutMs: row.timeoutMs,
@@ -410,7 +498,7 @@ function toBindingSummary(row: PluginInternalServiceBinding): AdminInternalServi
   };
 }
 
-function toCallLogSummary(row: PluginServiceCallLog): AdminServiceCallLogSummary {
+function toCallLogSummary(row: PluginServiceConnectionLog): AdminServiceConnectionLogSummary {
   return {
     id: row.id,
     pluginId: row.pluginId,
@@ -456,13 +544,13 @@ function toResourceBindingSummary(row: PluginResourceBinding): AdminResourceBind
 async function assertServiceDeclared(
   pluginId: string,
   serviceName: string
-): Promise<PluginServiceDefinition> {
+): Promise<PluginServiceRequirementDefinition> {
   const entry = getPluginRuntimeMapEntry(pluginId);
   if (!entry?.plugin && !entry?.runtimeContract) {
     throw new NotFoundError('Plugin', pluginId);
   }
   const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
-  const service = contract.services.find((candidate) => candidate.name === serviceName);
+  const service = contract.serviceRequirements.find((candidate) => candidate.name === serviceName);
   if (!service) {
     throw new ValidationError(`Plugin "${pluginId}" does not declare service "${serviceName}".`, {
       pluginId,
@@ -472,39 +560,19 @@ async function assertServiceDeclared(
   return service;
 }
 
-async function writeDbSecret(
-  executor: Executor,
-  pluginId: string,
-  ref: string | null | undefined,
-  value: string | undefined
-): Promise<string | null | undefined> {
-  if (value === undefined) {
-    return ref;
-  }
-  const name = ref?.startsWith('dbsec:')
-    ? ref.slice('dbsec:'.length)
-    : `internal-services/${randomUUID()}`;
-  const repository = new DbPluginSecretsRepository(executor);
-  await repository.set({ pluginId, userId: '', system: true }, name, value);
-  return `dbsec:${name}`;
-}
-
-async function getBindingOrThrow(
-  executor: Executor,
-  id: string
-): Promise<PluginInternalServiceBinding> {
+async function getBindingOrThrow(executor: Executor, id: string): Promise<PluginServiceConnection> {
   const [row] = await executor
     .select()
-    .from(pluginInternalServiceBindings)
-    .where(eq(pluginInternalServiceBindings.id, id))
+    .from(pluginServiceConnections)
+    .where(eq(pluginServiceConnections.id, id))
     .limit(1);
   if (!row) {
-    throw new NotFoundError('Internal service binding', id);
+    throw new NotFoundError('Service connection', id);
   }
   return row;
 }
 
-async function findInternalServiceBindingForUpsert(
+async function findServiceConnectionForUpsert(
   executor: Executor,
   input: {
     productId: string;
@@ -516,54 +584,56 @@ async function findInternalServiceBindingForUpsert(
     scopeId: string | null;
     environment: string | null;
   }
-): Promise<PluginInternalServiceBinding | null> {
+): Promise<PluginServiceConnection | null> {
   const conditions: SQL[] = [
-    eq(pluginInternalServiceBindings.productId, input.productId),
-    eq(pluginInternalServiceBindings.ownerType, input.ownerType),
-    eq(pluginInternalServiceBindings.ownerId, input.ownerId),
-    eq(pluginInternalServiceBindings.serviceName, input.serviceName),
-    eq(pluginInternalServiceBindings.scopeType, input.scopeType),
+    eq(pluginServiceConnections.productId, input.productId),
+    eq(pluginServiceConnections.ownerType, input.ownerType),
+    eq(pluginServiceConnections.ownerId, input.ownerId),
+    eq(pluginServiceConnections.serviceName, input.serviceName),
+    eq(pluginServiceConnections.scopeType, input.scopeType),
   ];
 
   if (input.scopeId) {
-    conditions.push(eq(pluginInternalServiceBindings.scopeId, input.scopeId));
+    conditions.push(eq(pluginServiceConnections.scopeId, input.scopeId));
   } else {
-    conditions.push(sql`${pluginInternalServiceBindings.scopeId} IS NULL`);
+    conditions.push(sql`${pluginServiceConnections.scopeId} IS NULL`);
   }
 
   if (input.environment) {
-    conditions.push(eq(pluginInternalServiceBindings.environment, input.environment));
+    conditions.push(eq(pluginServiceConnections.environment, input.environment));
   } else {
-    conditions.push(sql`${pluginInternalServiceBindings.environment} IS NULL`);
+    conditions.push(sql`${pluginServiceConnections.environment} IS NULL`);
   }
 
   const [row] = await executor
     .select()
-    .from(pluginInternalServiceBindings)
+    .from(pluginServiceConnections)
     .where(and(...conditions))
     .limit(1);
   return row ?? null;
 }
 
-export async function listInternalServiceBindings(
-  input: z.infer<typeof internalServiceBindingListQuerySchema>
+export async function listServiceConnections(
+  input: z.infer<typeof serviceConnectionListQuerySchema>
 ) {
   const productId = input.productId ?? getCurrentRuntimeProductId();
-  const conditions: SQL[] = [eq(pluginInternalServiceBindings.productId, productId)];
-  if (input.pluginId) conditions.push(eq(pluginInternalServiceBindings.pluginId, input.pluginId));
-  if (input.ownerType)
-    conditions.push(eq(pluginInternalServiceBindings.ownerType, input.ownerType));
-  if (input.ownerId) conditions.push(eq(pluginInternalServiceBindings.ownerId, input.ownerId));
+  const conditions: SQL[] = [eq(pluginServiceConnections.productId, productId)];
+  if (input.pluginId) conditions.push(eq(pluginServiceConnections.pluginId, input.pluginId));
+  if (input.ownerType) conditions.push(eq(pluginServiceConnections.ownerType, input.ownerType));
+  if (input.ownerId) conditions.push(eq(pluginServiceConnections.ownerId, input.ownerId));
   if (input.serviceName)
-    conditions.push(eq(pluginInternalServiceBindings.serviceName, input.serviceName));
-  if (input.status) conditions.push(eq(pluginInternalServiceBindings.status, input.status));
+    conditions.push(eq(pluginServiceConnections.serviceName, input.serviceName));
+  if (input.status) conditions.push(eq(pluginServiceConnections.status, input.status));
+  if (input.environment) {
+    conditions.push(eq(pluginServiceConnections.environment, input.environment));
+  }
   if (input.workspaceId) {
     conditions.push(
       or(
-        eq(pluginInternalServiceBindings.scopeType, 'global'),
+        eq(pluginServiceConnections.scopeType, 'global'),
         and(
-          eq(pluginInternalServiceBindings.scopeType, 'workspace'),
-          eq(pluginInternalServiceBindings.scopeId, input.workspaceId)
+          eq(pluginServiceConnections.scopeType, 'workspace'),
+          eq(pluginServiceConnections.scopeId, input.workspaceId)
         )
       )!
     );
@@ -572,17 +642,17 @@ export async function listInternalServiceBindings(
   const rows = await withSystemContext((database) =>
     database
       .select()
-      .from(pluginInternalServiceBindings)
+      .from(pluginServiceConnections)
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(desc(pluginInternalServiceBindings.updatedAt))
+      .orderBy(desc(pluginServiceConnections.updatedAt))
       .limit(input.limit)
   );
-  return rows.map(toBindingSummary);
+  return rows.map(toConnectionSummary);
 }
 
-export async function listInternalServiceRequirements(
-  input: z.infer<typeof internalServiceRequirementsQuerySchema>
-): Promise<AdminInternalServiceRequirement[]> {
+export async function listServiceConnectionRequirements(
+  input: z.infer<typeof serviceConnectionRequirementsQuerySchema>
+): Promise<AdminServiceConnectionRequirement[]> {
   const productId = input.productId ?? getCurrentRuntimeProductId();
   const pluginIds = input.pluginId
     ? [input.pluginId]
@@ -593,8 +663,8 @@ export async function listInternalServiceRequirements(
             .map((installation) => installation.pluginId)
         ),
       ];
-  const registry = new DbPluginInternalServiceRegistry();
-  const requirements: AdminInternalServiceRequirement[] = [];
+  const registry = new DbPluginServiceConnectionRegistry();
+  const requirements: AdminServiceConnectionRequirement[] = [];
 
   for (const pluginId of pluginIds) {
     const entry = getPluginRuntimeMapEntry(pluginId);
@@ -602,7 +672,10 @@ export async function listInternalServiceRequirements(
       continue;
     }
     const contract = await pluginRuntimeRegistry.getOrLoad(pluginId, entry);
-    for (const service of contract.services) {
+    for (const service of contract.serviceRequirements) {
+      if (input.serviceName && service.name !== input.serviceName) {
+        continue;
+      }
       const owner = resolveServiceRequirementOwner({
         productId,
         pluginId,
@@ -626,21 +699,22 @@ export async function listInternalServiceRequirements(
           environment: input.environment,
           status: 'disabled',
         }));
-      const binding = inactiveBinding ? toBindingSummary(inactiveBinding) : undefined;
+      const connection = inactiveBinding ? toConnectionSummary(inactiveBinding) : undefined;
       requirements.push({
         productId,
         pluginId,
         ownerType:
-          binding?.ownerType === 'suite' || binding?.ownerType === 'product'
-            ? binding.ownerType
+          connection?.ownerType === 'suite' || connection?.ownerType === 'product'
+            ? connection.ownerType
             : owner.ownerType,
-        ownerId: binding?.ownerId ?? owner.ownerId,
+        ownerId: connection?.ownerId ?? owner.ownerId,
         serviceName: service.name,
         methods: service.methods,
         paths: service.paths,
         actorClaims: service.actorClaims === true,
-        bindingStatus: activeBinding ? 'bound' : inactiveBinding ? 'disabled' : 'missing',
-        binding,
+        required: service.required !== false,
+        connectionStatus: activeBinding ? 'bound' : inactiveBinding ? 'disabled' : 'missing',
+        connection,
       });
     }
   }
@@ -648,25 +722,25 @@ export async function listInternalServiceRequirements(
   return requirements;
 }
 
-export async function handleInternalServiceBindingAction(
-  input: InternalServiceBindingActionInput,
+export async function handleServiceConnectionAction(
+  input: ServiceConnectionActionInput,
   userId?: string,
-  options: { registry?: PluginInternalServiceRegistry; httpHost?: PluginServicesHttpHost } = {}
+  options: { registry?: PluginServiceConnectionRegistry; httpHost?: PluginServicesHttpHost } = {}
 ): Promise<{
   success: true;
-  binding?: AdminInternalServiceBindingSummary;
+  connection?: AdminServiceConnectionSummary;
   test?: Record<string, unknown>;
 }> {
   if (input.action === 'setStatus') {
     const [row] = await withSystemContext((database) =>
       database
-        .update(pluginInternalServiceBindings)
+        .update(pluginServiceConnections)
         .set({ status: input.status, updatedAt: new Date() })
-        .where(eq(pluginInternalServiceBindings.id, input.id))
+        .where(eq(pluginServiceConnections.id, input.id))
         .returning()
     );
-    if (!row) throw new NotFoundError('Internal service binding', input.id);
-    return { success: true, binding: toBindingSummary(row) };
+    if (!row) throw new NotFoundError('Service connection', input.id);
+    return { success: true, connection: toConnectionSummary(row) };
   }
 
   if (input.action === 'rotateSecret') {
@@ -680,7 +754,16 @@ export async function handleInternalServiceBindingAction(
             : input.field === 'authPassword'
               ? existing.authPasswordRef
               : existing.actorClaimsSecretRef;
-      const nextRef = await writeDbSecret(database, existing.pluginId, currentRef, input.value);
+      const nextRef = await resolveSecretSource(
+        database,
+        {
+          type: 'encrypted',
+          ref: currentRef?.startsWith('dbsec:') ? currentRef : undefined,
+          value: input.value,
+        },
+        currentRef,
+        userId
+      );
       const update =
         input.field === 'auth'
           ? { authSecretRef: nextRef }
@@ -695,21 +778,22 @@ export async function handleInternalServiceBindingAction(
                   actorClaimsKeyId: `kid-${Date.now()}`,
                 };
       const [updated] = await database
-        .update(pluginInternalServiceBindings)
+        .update(pluginServiceConnections)
         .set({ ...update, updatedAt: new Date() })
-        .where(eq(pluginInternalServiceBindings.id, input.id))
+        .where(eq(pluginServiceConnections.id, input.id))
         .returning();
       return updated;
     });
-    return { success: true, binding: toBindingSummary(row) };
+    return { success: true, connection: toConnectionSummary(row) };
   }
 
   if (input.action === 'test') {
-    const result = await testInternalServiceBinding(input.id, input.path, input.method, options);
+    const result = await testServiceConnection(input.id, input.path, input.method, options);
     return { success: true, test: result };
   }
 
   const serviceName = validateServiceName(input.serviceName);
+  assertCreateSecretSources(input);
   await assertServiceDeclared(input.pluginId, serviceName);
   const owner = await resolveRuntimeOwner({
     productId: input.productId,
@@ -717,39 +801,14 @@ export async function handleInternalServiceBindingAction(
     ownerType: input.ownerType,
     ownerId: input.ownerId,
   });
-  assertBindingSecrets(input);
   const now = new Date();
   const row = await withSystemContext(async (database) => {
-    const authSecretRef = await writeDbSecret(
-      database,
-      input.pluginId,
-      input.authSecretRef,
-      input.authSecretValue
-    );
-    const authUsernameRef = await writeDbSecret(
-      database,
-      input.pluginId,
-      input.authUsernameRef,
-      input.authUsernameValue
-    );
-    const authPasswordRef = await writeDbSecret(
-      database,
-      input.pluginId,
-      input.authPasswordRef,
-      input.authPasswordValue
-    );
-    const actorClaimsSecretRef = await writeDbSecret(
-      database,
-      input.pluginId,
-      input.actorClaimsSecretRef,
-      input.actorClaimsSecretValue
-    );
     const scopeId = input.scopeType === 'workspace' ? normalizeNullable(input.scopeId) : null;
     const environment = normalizeNullable(input.environment);
     const existing =
       input.id !== undefined
         ? await getBindingOrThrow(database, input.id)
-        : await findInternalServiceBindingForUpsert(database, {
+        : await findServiceConnectionForUpsert(database, {
             productId: owner.productId,
             pluginId: input.pluginId,
             ownerType: owner.ownerType,
@@ -770,10 +829,38 @@ export async function handleInternalServiceBindingAction(
         existing.scopeId !== scopeId ||
         existing.environment !== environment)
     ) {
-      throw new ValidationError(
-        'Existing internal service binding identity cannot be changed by id.'
-      );
+      throw new ValidationError('Existing service connection identity cannot be changed by id.');
     }
+    const authSecretRef = await resolveSecretSource(
+      database,
+      input.authSecretSource,
+      existing?.authSecretRef,
+      userId
+    );
+    const authUsernameRef = await resolveSecretSource(
+      database,
+      input.authUsernameSource,
+      existing?.authUsernameRef,
+      userId
+    );
+    const authPasswordRef = await resolveSecretSource(
+      database,
+      input.authPasswordSource,
+      existing?.authPasswordRef,
+      userId
+    );
+    const actorClaimsSecretRef = await resolveSecretSource(
+      database,
+      input.actorClaimsSecretSource,
+      existing?.actorClaimsSecretRef,
+      userId
+    );
+    assertResolvedBindingSecrets(input, {
+      authSecretRef,
+      authUsernameRef,
+      authPasswordRef,
+      actorClaimsSecretRef,
+    });
     const id = existing?.id ?? randomUUID();
     const values = {
       id,
@@ -812,11 +899,11 @@ export async function handleInternalServiceBindingAction(
       metadata: record(input.metadata),
       createdByUserId: userId,
       updatedAt: now,
-    } satisfies NewPluginInternalServiceBinding;
+    } satisfies NewPluginServiceConnection;
 
     if (existing) {
       const [updated] = await database
-        .update(pluginInternalServiceBindings)
+        .update(pluginServiceConnections)
         .set({
           baseUrl: values.baseUrl,
           authType: values.authType,
@@ -843,24 +930,21 @@ export async function handleInternalServiceBindingAction(
           metadata: values.metadata,
           updatedAt: now,
         })
-        .where(eq(pluginInternalServiceBindings.id, existing.id))
+        .where(eq(pluginServiceConnections.id, existing.id))
         .returning();
       return updated;
     }
 
-    const [created] = await database
-      .insert(pluginInternalServiceBindings)
-      .values(values)
-      .returning();
+    const [created] = await database.insert(pluginServiceConnections).values(values).returning();
     return created;
   });
 
-  return { success: true, binding: toBindingSummary(row) };
+  return { success: true, connection: toConnectionSummary(row) };
 }
 
 function contractForServiceTest(
   pluginId: string,
-  service: PluginServiceDefinition
+  service: PluginServiceRequirementDefinition
 ): PluginCapabilityScope['contract'] {
   return {
     id: pluginId,
@@ -878,7 +962,7 @@ function contractForServiceTest(
     webhooks: {},
     hooks: {},
     meters: [],
-    services: [service],
+    serviceRequirements: [service],
     resourceBindings: [],
     egress: [],
     definition: {
@@ -888,22 +972,22 @@ function contractForServiceTest(
       kind: 'app',
       trustLevel: 'trusted',
       permissions: [Permission.ServicesInvoke],
-      services: [service],
+      serviceRequirements: [service],
     },
     routes: { pages: [], apis: [], all: [] },
     lifecycle: {},
   };
 }
 
-export async function testInternalServiceBinding(
+export async function testServiceConnection(
   id: string,
   path?: string,
   method?: string,
-  options: { registry?: PluginInternalServiceRegistry; httpHost?: PluginServicesHttpHost } = {}
+  options: { registry?: PluginServiceConnectionRegistry; httpHost?: PluginServicesHttpHost } = {}
 ) {
   const row = await withSystemContext((database) => getBindingOrThrow(database, id));
   if (row.status === 'disabled') {
-    throw new ForbiddenError('Disabled internal service bindings cannot be tested.');
+    throw new ForbiddenError('Disabled service connections cannot be tested.');
   }
   const serviceDeclaration = await assertServiceDeclared(row.pluginId, row.serviceName);
   const testPath = normalizePath(normalizeNullable(path) ?? row.healthPath ?? '/');
@@ -914,15 +998,16 @@ export async function testInternalServiceBinding(
   let httpStatus: number | null = null;
 
   try {
-    const registry = options.registry ?? new DbPluginInternalServiceRegistry();
+    const registry = options.registry ?? new DbPluginServiceConnectionRegistry();
     const service = await registry.get({
       pluginId: row.pluginId,
+      productId: row.productId,
       serviceName: row.serviceName,
       workspaceId: row.scopeType === 'workspace' ? (row.scopeId ?? undefined) : undefined,
       environment: row.environment ?? undefined,
     });
     if (!service) {
-      throw new ValidationError('Internal service binding could not be resolved.');
+      throw new ValidationError('Service connection could not be resolved.');
     }
     const url = new URL(testPath, service.baseUrl);
     const headers = new Headers();
@@ -930,7 +1015,7 @@ export async function testInternalServiceBinding(
       row.scopeType === 'workspace' && row.scopeId
         ? { type: 'workspace', id: row.scopeId }
         : undefined;
-    applyInternalServiceRequestHeaders(headers, {
+    applyServiceConnectionRequestHeaders(headers, {
       service,
       resourceScope,
       scope: {
@@ -955,18 +1040,18 @@ export async function testInternalServiceBinding(
 
   await withSystemContext(async (database) => {
     await database
-      .update(pluginInternalServiceBindings)
+      .update(pluginServiceConnections)
       .set({
         lastCheckedAt: new Date(),
         lastCheckStatus: status,
         lastCheckError: error,
         updatedAt: new Date(),
       })
-      .where(eq(pluginInternalServiceBindings.id, id));
+      .where(eq(pluginServiceConnections.id, id));
   });
 
   return {
-    bindingId: id,
+    connectionId: id,
     pluginId: row.pluginId,
     serviceName: row.serviceName,
     method: testMethod,
@@ -979,36 +1064,40 @@ export async function testInternalServiceBinding(
   };
 }
 
-export async function listInternalServiceCallLogs(
-  input: z.infer<typeof internalServiceLogsQuerySchema>
+export async function listServiceConnectionCallLogs(
+  input: z.infer<typeof serviceConnectionLogsQuerySchema>
 ) {
   const conditions: SQL[] = [];
-  if (input.pluginId) conditions.push(eq(pluginServiceCallLogs.pluginId, input.pluginId));
-  if (input.serviceName) conditions.push(eq(pluginServiceCallLogs.serviceName, input.serviceName));
-  if (input.workspaceId) conditions.push(eq(pluginServiceCallLogs.workspaceId, input.workspaceId));
-  if (input.requestId) conditions.push(eq(pluginServiceCallLogs.requestId, input.requestId));
-  if (input.status !== undefined) conditions.push(eq(pluginServiceCallLogs.status, input.status));
-  if (input.errorCode) conditions.push(ilike(pluginServiceCallLogs.errorCode, input.errorCode));
+  if (input.pluginId) conditions.push(eq(pluginServiceConnectionLogs.pluginId, input.pluginId));
+  if (input.serviceName)
+    conditions.push(eq(pluginServiceConnectionLogs.serviceName, input.serviceName));
+  if (input.workspaceId)
+    conditions.push(eq(pluginServiceConnectionLogs.workspaceId, input.workspaceId));
+  if (input.requestId) conditions.push(eq(pluginServiceConnectionLogs.requestId, input.requestId));
+  if (input.status !== undefined)
+    conditions.push(eq(pluginServiceConnectionLogs.status, input.status));
+  if (input.errorCode)
+    conditions.push(ilike(pluginServiceConnectionLogs.errorCode, input.errorCode));
 
   const rows = await withSystemContext((database) =>
     database
       .select()
-      .from(pluginServiceCallLogs)
+      .from(pluginServiceConnectionLogs)
       .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(desc(pluginServiceCallLogs.createdAt))
+      .orderBy(desc(pluginServiceConnectionLogs.createdAt))
       .limit(input.limit)
   );
   return rows.map(toCallLogSummary);
 }
 
-export async function applyInternalServiceCallLogRetention(
-  input: z.infer<typeof internalServiceLogsRetentionSchema>
-): Promise<AdminServiceCallLogRetentionResult> {
+export async function applyServiceConnectionCallLogRetention(
+  input: z.infer<typeof serviceConnectionLogsRetentionSchema>
+): Promise<AdminServiceConnectionLogRetentionResult> {
   const cutoff = new Date(Date.now() - input.retentionDays * 24 * 60 * 60 * 1000);
   const deleted = await withSystemContext(async (database) => {
     const rows = await database
-      .delete(pluginServiceCallLogs)
-      .where(lt(pluginServiceCallLogs.createdAt, cutoff))
+      .delete(pluginServiceConnectionLogs)
+      .where(lt(pluginServiceConnectionLogs.createdAt, cutoff))
       .returning();
     return rows.length;
   });

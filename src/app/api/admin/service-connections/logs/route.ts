@@ -2,24 +2,24 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { withAdminGuard } from '@/lib/middleware';
 import {
-  applyInternalServiceCallLogRetention,
-  internalServiceLogsRetentionSchema,
-  internalServiceLogsQuerySchema,
-  listInternalServiceCallLogs,
+  applyServiceConnectionCallLogRetention,
+  serviceConnectionLogsRetentionSchema,
+  serviceConnectionLogsQuerySchema,
+  listServiceConnectionCallLogs,
 } from '@/lib/plugin-runtime/admin';
 
 export const dynamic = 'force-dynamic';
 
 export const GET = withAdminGuard(async (request: NextRequest) => {
-  const query = internalServiceLogsQuerySchema.parse(
+  const query = serviceConnectionLogsQuerySchema.parse(
     Object.fromEntries(request.nextUrl.searchParams.entries())
   );
-  const logs = await listInternalServiceCallLogs(query);
+  const logs = await listServiceConnectionCallLogs(query);
   return NextResponse.json({ success: true, logs });
 });
 
 export const POST = withAdminGuard(async (request: NextRequest) => {
-  const body = internalServiceLogsRetentionSchema.parse(await request.json());
-  const result = await applyInternalServiceCallLogRetention(body);
+  const body = serviceConnectionLogsRetentionSchema.parse(await request.json());
+  const result = await applyServiceConnectionCallLogRetention(body);
   return NextResponse.json({ success: true, ...result });
 });

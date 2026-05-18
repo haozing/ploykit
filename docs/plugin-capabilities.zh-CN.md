@@ -17,7 +17,7 @@
 | `ctx.ai`            | `Permission.AiGenerate`, `Permission.AiEmbed`                                             | 宿主注入的文本生成、流式生成和 embeddings。           |
 | `ctx.runs`          | `Permission.RunsRead`, `Permission.RunsWrite`                                             | 长任务、进度、日志和结果。                            |
 | `ctx.connectors`    | `Permission.ConnectorsRead`, `Permission.ConnectorsInvoke`, `Permission.ConnectorsManage` | 托管外部服务 profile 与调用。                         |
-| `ctx.services`      | `Permission.ServicesInvoke`                                                               | 宿主绑定的内部 API，用于复杂领域或数据库工作。        |
+| `ctx.services`      | `Permission.ServicesInvoke`                                                               | 宿主管理的服务连接，用于复杂领域或数据库工作。        |
 | `ctx.http.fetch`    | `Permission.ExternalHttp` plus `egress`                                                   | 经过 SSRF-aware egress guard 的直接外部 HTTP。        |
 | `ctx.workspace`     | `Permission.WorkspaceRead`, `Permission.WorkspaceWrite`                                   | workspace 查询、成员、角色和邀请。                    |
 | `ctx.events`        | `Permission.EventsEmit`, `Permission.EventsSubscribe`                                     | 插件与平台事件流。                                    |
@@ -47,7 +47,7 @@
 | 可计费同步动作       | route/API commercial gate + `ctx.metering.authorize()` + 业务动作 + `ctx.metering.commit()`。      |
 | 长任务或工作流       | public/API handler 创建 `ctx.runs`，再 enqueue `ctx.jobs`，job 更新进度、结果，并按需 emit event。 |
 | 外部系统集成         | 无凭据短调用用 `ctx.http.fetch`；有凭据、重试、审计或脱敏要求用 `ctx.connectors`。                 |
-| 宿主内部复杂能力     | 走 `ctx.services`，由宿主绑定 URL、凭据、actor claims、超时、重试、审计和用量。                    |
+| 宿主管理服务调用     | 走 `ctx.services`，由宿主管理 URL、凭据、actor claims、超时、重试、审计和用量。                    |
 
 推荐的异步商业化流程：
 

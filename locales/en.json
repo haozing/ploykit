@@ -648,7 +648,7 @@
       "plugins": "Plugins",
       "pluginDevConsole": "Plugin Dev Console",
       "pluginOperations": "Plugin Operations",
-      "pluginInternalServices": "Internal Services",
+      "serviceConnections": "Service Connections",
       "revenue": "Revenue",
       "operationsCenter": "Operations Center",
       "systemSettings": "System Settings",
@@ -840,9 +840,9 @@
       },
       "loadedUsageRows": "{count} recent usage rows loaded."
     },
-    "pluginInternalServices": {
-      "title": "Internal Services",
-      "description": "Host-managed service bindings, health checks, call logs, and resource bindings.",
+    "serviceConnections": {
+      "title": "Service Connections",
+      "description": "Host-managed plugin service connections, health checks, and call logs.",
       "actions": {
         "refresh": "Refresh",
         "bind": "Bind",
@@ -858,12 +858,12 @@
       "stats": {
         "declaredServices": "Declared Services",
         "missing": "Missing",
-        "bindings": "Bindings",
+        "bindings": "Connections",
         "recentCalls": "Recent Calls"
       },
       "tabs": {
         "requirements": "Requirements",
-        "bindings": "Bindings",
+        "bindings": "Connections",
         "editor": "Editor",
         "logs": "Logs",
         "resources": "Resources"
@@ -882,11 +882,11 @@
         }
       },
       "bindings": {
-        "title": "Host Bindings",
+        "title": "Host Connections",
         "description": "Base URL, auth, actor claims, and health status.",
-        "empty": "No internal service bindings.",
+        "empty": "No service connections.",
         "headers": {
-          "binding": "Binding",
+          "binding": "Connection",
           "baseUrl": "Base URL",
           "auth": "Auth",
           "actor": "Actor",
@@ -895,7 +895,7 @@
         }
       },
       "editor": {
-        "title": "Binding Editor",
+        "title": "Connection Editor",
         "description": "Secrets are stored as refs and never displayed.",
         "fields": {
           "pluginId": "Plugin ID",
@@ -921,10 +921,10 @@
           "maxResponseBytes": "Max Response Bytes",
           "healthPath": "Health Path"
         },
-        "saveBinding": "Save Binding"
+        "saveBinding": "Save Connection"
       },
       "logs": {
-        "title": "Service Call Logs",
+        "title": "Service Connection Logs",
         "description": "Redacted host-side service invocation records.",
         "empty": "No service calls.",
         "headers": {
@@ -2944,6 +2944,9 @@
       "list": {
         "loading": "Loading plugins...",
         "retry": "Retry",
+        "actions": {
+          "configureServiceConnections": "Configure Service Connections"
+        },
         "empty": {
           "title": "No plugins found",
           "description": "Install plugins to extend platform functionality"

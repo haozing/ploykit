@@ -253,22 +253,22 @@ Plugins should treat `ctx` as their host boundary. They should not import
 `src/lib/*`, read `process.env`, access the database directly, or call external
 services through raw `fetch()`.
 
-| Capability                               | Permissions                                              | Purpose                                                             |
-| ---------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `ctx.storage`                            | `StorageRead`, `StorageWrite`                            | Plugin-owned structured collections                                 |
-| `ctx.config`, `ctx.secrets`              | `Config*`, `Secrets*`                                    | Plugin config and encrypted secrets                                 |
-| `ctx.files`                              | `FilesRead`, `FilesWrite`                                | Signed upload/download and file metadata                            |
-| `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | User-visible or internal long-running work                          |
-| `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | External service profiles, credentials, retry, redaction, call logs |
-| `ctx.services`                           | `ServicesInvoke`                                         | Host-bound internal APIs for complex domain or database work        |
-| `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | Workspace creation, membership, roles, invitations                  |
-| `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | Plugin API keys and scoped rate limits                              |
-| `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | Usage, action meters, audit trail                                   |
-| `ctx.artifacts`, `ctx.rag`               | `Artifacts*`, `Rag*`                                     | Text artifacts, indexing, context packs                             |
-| `ctx.ai`                                 | `AiGenerate`, `AiEmbed`                                  | Host-injected model gateway                                         |
-| `ctx.credits`, `ctx.billing`             | `Credits*`, `Billing*`                                   | Commercial entitlements, credits, redemption                        |
-| `ctx.notifications`                      | `NotificationsSend`                                      | In-app notifications                                                |
-| `ctx.http.fetch`                         | `ExternalHttp` plus `egress`                             | External HTTP through SSRF-aware guard                              |
+| Capability                               | Permissions                                              | Purpose                                                              |
+| ---------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
+| `ctx.storage`                            | `StorageRead`, `StorageWrite`                            | Plugin-owned structured collections                                  |
+| `ctx.config`, `ctx.secrets`              | `Config*`, `Secrets*`                                    | Plugin config and encrypted secrets                                  |
+| `ctx.files`                              | `FilesRead`, `FilesWrite`                                | Signed upload/download and file metadata                             |
+| `ctx.runs`                               | `RunsRead`, `RunsWrite`                                  | User-visible or internal long-running work                           |
+| `ctx.connectors`                         | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | External service profiles, credentials, retry, redaction, call logs  |
+| `ctx.services`                           | `ServicesInvoke`                                         | Host-managed service connections for complex domain or database work |
+| `ctx.workspace`                          | `WorkspaceRead`, `WorkspaceWrite`                        | Workspace creation, membership, roles, invitations                   |
+| `ctx.apiKeys`, `ctx.rateLimit`           | `ApiKeys*`, `RateLimitCheck`                             | Plugin API keys and scoped rate limits                               |
+| `ctx.metering`, `ctx.usage`, `ctx.audit` | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | Usage, action meters, audit trail                                    |
+| `ctx.artifacts`, `ctx.rag`               | `Artifacts*`, `Rag*`                                     | Text artifacts, indexing, context packs                              |
+| `ctx.ai`                                 | `AiGenerate`, `AiEmbed`                                  | Host-injected model gateway                                          |
+| `ctx.credits`, `ctx.billing`             | `Credits*`, `Billing*`                                   | Commercial entitlements, credits, redemption                         |
+| `ctx.notifications`                      | `NotificationsSend`                                      | In-app notifications                                                 |
+| `ctx.http.fetch`                         | `ExternalHttp` plus `egress`                             | External HTTP through SSRF-aware guard                               |
 
 Example egress declaration:
 

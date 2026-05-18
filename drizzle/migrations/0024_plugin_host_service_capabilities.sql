@@ -1,7 +1,7 @@
 -- Migration: Plugin Host Service Capabilities
 -- Date: 2026-05-15
 --
--- Adds generic resource bindings plus internal service call logs for host-owned
+-- Adds generic resource bindings plus service connection call logs for host-owned
 -- plugin service integration.
 
 CREATE TABLE IF NOT EXISTS "plugin_resource_bindings" (
@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS "plugin_resource_bindings_scope_idx"
 CREATE INDEX IF NOT EXISTS "plugin_resource_bindings_status_idx"
   ON "plugin_resource_bindings" ("plugin_id", "status");
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "plugin_service_call_logs" (
+CREATE TABLE IF NOT EXISTS "plugin_service_connection_logs" (
   "id" text PRIMARY KEY,
   "plugin_id" text NOT NULL,
   "service_name" text NOT NULL,
@@ -47,8 +47,8 @@ CREATE TABLE IF NOT EXISTS "plugin_service_call_logs" (
   "created_at" timestamptz NOT NULL DEFAULT now()
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "plugin_service_call_logs_plugin_service_idx"
-  ON "plugin_service_call_logs" ("plugin_id", "service_name", "created_at");
+CREATE INDEX IF NOT EXISTS "plugin_service_connection_logs_plugin_service_idx"
+  ON "plugin_service_connection_logs" ("plugin_id", "service_name", "created_at");
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "plugin_service_call_logs_request_idx"
-  ON "plugin_service_call_logs" ("request_id");
+CREATE INDEX IF NOT EXISTS "plugin_service_connection_logs_request_idx"
+  ON "plugin_service_connection_logs" ("request_id");
