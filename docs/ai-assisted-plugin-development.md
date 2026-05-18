@@ -24,7 +24,7 @@ The codebase already has several AI-friendly properties.
 | Templates               | `templates/plugins/{tool,crud,dashboard,connector,service}`                             | The model can start from a known file layout and modify local files only.                                                                     |
 | Fake host tests         | `src/plugin-sdk/testing.ts`                                                             | Plugin tests can exercise API handlers, storage, audit, usage, files, AI, RAG, runs, connectors, billing, and more without a full deployment. |
 | JSON CLI loop           | `scripts/ploykit-plugin.ts`                                                             | `create`, `check`, `test`, `build`, `inspect`, and `dev` produce structured output that an AI agent can parse.                                |
-| Generated runtime map   | `scripts/generate-plugin-map.ts`                                                        | The host can reconcile declarations into runtime state after plugin edits.                                                                    |
+| Generated runtime map   | `scripts/generate-plugin-map.ts`                                                        | The host can reconcile declarations into runtime state; product shells can use `--runtime-only` for active runtime artifacts.                 |
 
 The short description:
 
@@ -117,10 +117,18 @@ npm run plugin:build -- plugins/invoice-helper
 npm run plugins:scan
 ```
 
+For external product shells that should not touch committed host map files, set
+`PLOYKIT_PLUGIN_DIRS` and use:
+
+```bash
+npm run plugins:scan:runtime
+```
+
 7. Run broader gates only when the change crosses runtime boundaries.
 
 ```bash
 npm run plugins:check
+npm run plugins:check:runtime
 npm run test:real
 npm run verify:runtime
 ```

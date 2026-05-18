@@ -271,7 +271,9 @@ anonymousPolicy: {
 
 ```bash
 npm run plugins:scan
+npm run plugins:scan:runtime
 npm run plugins:check
+npm run plugins:check:runtime
 npm run plugins:templates
 npm run plugin:create -- my-plugin --template crud
 npm run plugin:check -- plugins/my-plugin

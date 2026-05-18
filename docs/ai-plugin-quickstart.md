@@ -72,6 +72,11 @@ npm run plugin:doctor -- plugins/invoice-helper
 npm run plugins:scan
 ```
 
+`plugins:scan` is the right command for repository-local plugins. Product shells
+that keep plugins outside this repository should set `PLOYKIT_PLUGIN_DIRS` to
+the external plugin source first, then prepare only runtime artifacts with
+`npm run plugins:scan:runtime`.
+
 ## Expected Files
 
 ```text

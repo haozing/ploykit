@@ -64,6 +64,8 @@ npm run plugin:doctor -- plugins/invoice-helper
 npm run plugins:scan
 ```
 
+仓库内插件使用 `plugins:scan`。如果产品壳把插件放在宿主仓库外，先用 `PLOYKIT_PLUGIN_DIRS` 指向外部插件源码，再用 `npm run plugins:scan:runtime` 只准备 runtime artifact。
+
 ## 预期文件
 
 ```text

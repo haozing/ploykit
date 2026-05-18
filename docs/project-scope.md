@@ -11,9 +11,11 @@ that are important for open-source users and deployers.
   remote marketplace, uploaded plugin package installation, or license
   distribution flow yet.
 - Plugin source discovery is local and code-only: configured plugin roots with
-  `plugin.ts` are scanned into a generated module map. Product, suite, and app
-  bundle placement belongs to installation/catalog state, not plugin source
-  discovery.
+  `plugin.ts` are scanned into generated module maps. The committed default map
+  tracks `plugins/`; external product shells can prepare ignored runtime map
+  artifacts under `.runtime/` or a `PLOYKIT_PLUGIN_MAP_FILE` path. Product,
+  suite, and app bundle placement belongs to installation/catalog state, not
+  plugin source discovery.
 - Plugin installation records are scoped by product, optional suite or app
   bundle, and plugin for admin visibility and audit. Runtime-facing surfaces
   use installed/enabled plugin state in production; development can load local

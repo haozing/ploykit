@@ -1,7 +1,7 @@
 /**
  * Plugin directory watcher.
  *
- * Watches definePlugin-based plugin roots and regenerates src/lib/plugin-map.ts
+ * Watches definePlugin-based plugin roots and regenerates generated plugin map files
  * during local development.
  */
 

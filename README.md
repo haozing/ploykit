@@ -233,8 +233,10 @@ npm run start             # Start the standalone production server
 npm run verify            # Main repository verification gate
 npm run verify:runtime    # Database and runtime verification
 npm run db:init           # Run migrations and seed local data
-npm run plugins:scan      # Regenerate the plugin map
-npm run plugins:check     # Check plugin contracts
+npm run plugins:scan          # Regenerate committed default and active plugin maps
+npm run plugins:scan:runtime  # Regenerate only the active runtime plugin map
+npm run plugins:check         # Check generated maps and plugin contracts
+npm run plugins:check:runtime # Check only active runtime map and plugin contracts
 npm run test:run          # Run Vitest
 npm run test:human        # Run browser E2E flow
 ```

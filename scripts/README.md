@@ -107,8 +107,8 @@ only when plugin source inputs such as `PLOYKIT_PLUGIN_DIRS` are configured;
 
 ### `watch-plugins.ts`
 
-Watches runtime plugin files in development and regenerates the active plugin
-map files.
+Watches runtime plugin files in development and regenerates generated plugin map
+files.
 
 ```bash
 npm run dev:watch
