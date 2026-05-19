@@ -34,6 +34,24 @@ export interface PluginDataDefinition {
   collections?: Record<string, PluginCollectionDefinition>;
 }
 
+export type PluginStorageScopeInput =
+  | {
+      type: 'user';
+      id?: string;
+    }
+  | {
+      type: 'workspace';
+      id: string;
+    }
+  | {
+      type: 'plugin';
+      id?: string;
+    }
+  | {
+      type: 'product';
+      id?: string;
+    };
+
 export type PluginStorageScalar = string | number | boolean | null | Date;
 
 export interface PluginStorageFieldOperators {
@@ -102,6 +120,7 @@ export interface PluginStorage {
   collection<TRecord extends Record<string, unknown> = Record<string, unknown>>(
     name: string
   ): PluginStorageCollection<TRecord>;
+  scope(scope: PluginStorageScopeInput): PluginStorage;
   ensureCollections(): Promise<void>;
   transaction<T>(fn: (storage: PluginStorage) => Promise<T>): Promise<T>;
 }

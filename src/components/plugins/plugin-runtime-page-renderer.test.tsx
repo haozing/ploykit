@@ -8,6 +8,9 @@ vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('notFound');
   }),
+  redirect: vi.fn((location: string) => {
+    throw new Error(`redirect:${location}`);
+  }),
 }));
 
 vi.mock('@/lib/_core/logger', () => ({
@@ -34,6 +37,7 @@ describe('PluginRuntimePageRenderer', () => {
       requestPath: '/plugins/runtime-props/reports/weekly',
       params: { period: 'weekly' },
       query: { tab: 'summary' },
+      data: { title: 'Weekly report' },
       i18n: {
         locale: 'zh',
         messages: {},
@@ -106,6 +110,7 @@ function createRuntimeResult(
     locale: 'zh',
     params: { period: 'weekly' },
     query: { tab: 'summary' },
+    data: { title: 'Weekly report' },
     module: {
       componentPath: './pages/Report',
       load: async () => ({ default: PluginPage }),

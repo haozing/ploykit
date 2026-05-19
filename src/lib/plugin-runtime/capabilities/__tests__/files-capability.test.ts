@@ -33,12 +33,18 @@ class MemoryFilesRepository implements PluginFilesRepository {
       hash: null,
       purpose: input.purpose,
       status: 'pending_upload',
+      visibility: 'private',
+      publicId: null,
+      publicFileName: null,
+      publicCacheControl: null,
+      contentDisposition: 'attachment',
       storageKey: input.storageKey,
       storageProvider: 'local',
       runId: input.runId ?? null,
       metadata: input.metadata,
       expiresAt: input.expiresAt ?? null,
       uploadedAt: null,
+      publishedAt: null,
       archivedAt: null,
       deletedAt: null,
       createdAt: now,
@@ -116,6 +122,48 @@ class MemoryFilesRepository implements PluginFilesRepository {
       ...existing,
       status: 'archived',
       archivedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.values.set(id, row);
+    return row;
+  }
+
+  async publish(
+    _scope: PluginFilesScope,
+    id: string,
+    input: Parameters<PluginFilesRepository['publish']>[2]
+  ) {
+    const existing = this.values.get(id);
+    if (!existing) {
+      throw new Error('missing file');
+    }
+    const row: PluginFile = {
+      ...existing,
+      visibility: 'public',
+      publicId: input.publicId,
+      publicFileName: input.fileName,
+      publicCacheControl: input.cacheControl,
+      contentDisposition: input.contentDisposition,
+      publishedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.values.set(id, row);
+    return row;
+  }
+
+  async unpublish(_scope: PluginFilesScope, id: string) {
+    const existing = this.values.get(id);
+    if (!existing) {
+      throw new Error('missing file');
+    }
+    const row: PluginFile = {
+      ...existing,
+      visibility: 'private',
+      publicId: null,
+      publicFileName: null,
+      publicCacheControl: null,
+      contentDisposition: 'attachment',
+      publishedAt: null,
       updatedAt: new Date(),
     };
     this.values.set(id, row);
@@ -464,5 +512,35 @@ describe('files capability', () => {
     ).rejects.toMatchObject({
       code: 'PLUGIN_FILE_COUNT_LIMIT_EXCEEDED',
     });
+  });
+
+  it('publishes and unpublishes ready files with a stable public URL', async () => {
+    const repository = new MemoryFilesRepository();
+    const files = createPluginFilesCapability(
+      createScope([Permission.FilesRead, Permission.FilesWrite, Permission.FilesPublish]),
+      { repository, host: createHost() }
+    );
+    const uploaded = await files.createUpload({
+      scope: { type: 'user', id: 'user-1' },
+      fileName: 'cover.png',
+      contentType: 'image/png',
+      size: 5,
+      purpose: 'media',
+      body: Buffer.from('image'),
+    });
+
+    const published = await files.publish({
+      id: uploaded.id,
+      disposition: 'inline',
+      cache: { maxAgeSeconds: 60 },
+    });
+
+    expect(published.visibility).toBe('public');
+    expect(published.publicUrl).toContain('/api/plugin-media/files-test/');
+    expect(published.contentDisposition).toBe('inline');
+
+    const unpublished = await files.unpublish(uploaded.id);
+    expect(unpublished.visibility).toBe('private');
+    expect(unpublished.publicUrl).toBeUndefined();
   });
 });

@@ -9,6 +9,7 @@ import {
   type PluginStorageInsertIfAbsentResult,
   type PluginStorageInsertOptions,
   type PluginStorageQuery,
+  type PluginStorageScopeInput,
 } from '@ploykit/plugin-sdk';
 import type { PluginCollectionIndexes, PluginRecordData } from '@/lib/db/schema/plugin-storage';
 import { validatePluginRecordData, validatePluginStorageQuery } from './schema';
@@ -16,14 +17,20 @@ import { validatePluginRecordData, validatePluginStorageQuery } from './schema';
 export interface PluginStorageScope {
   pluginId: string;
   userId?: string;
+  scopeType: 'user' | 'workspace' | 'plugin' | 'product';
+  scopeId: string;
   system?: boolean;
 }
+
+export type PluginStorageScopeAccessAction = 'read' | 'write' | 'delete';
 
 export interface PluginStoredRecord {
   id: string;
   pluginId: string;
   collectionName: string;
   userId: string | null;
+  scopeType: PluginStorageScope['scopeType'];
+  scopeId: string;
   data: PluginRecordData;
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +51,8 @@ export interface InsertPluginRecordInput {
   pluginId: string;
   collectionName: string;
   userId: string | null;
+  scopeType: PluginStorageScope['scopeType'];
+  scopeId: string;
   data: PluginRecordData;
   uniqueKeys?: PluginRecordUniqueKeyInput[];
 }
@@ -52,6 +61,8 @@ export interface UpdatePluginRecordInput {
   pluginId: string;
   collectionName: string;
   userId: string | null;
+  scopeType: PluginStorageScope['scopeType'];
+  scopeId: string;
   id: string;
   data: PluginRecordData;
   previousUniqueKeys?: PluginRecordUniqueKeyInput[];
@@ -63,6 +74,8 @@ export interface UpdatePluginRecordWhereInput {
   collectionName: string;
   collection: PluginCollectionDefinition;
   userId: string | null;
+  scopeType: PluginStorageScope['scopeType'];
+  scopeId: string;
   query: PluginStorageQuery;
   data: PluginRecordData;
   buildUpdatedData: (record: PluginStoredRecord) => {
@@ -114,11 +127,18 @@ export interface PluginStorageRepository {
 export interface CreatePluginStorageOptions {
   pluginId: string;
   userId?: string;
+  productId?: string;
   system?: boolean;
+  scope?: PluginStorageScope;
   data?: PluginDataDefinition;
   repository: PluginStorageRepository;
   enforceRead?: (capability: string) => void;
   enforceWrite?: (capability: string) => void;
+  authorizeScope?: (
+    scope: PluginStorageScope,
+    action: PluginStorageScopeAccessAction,
+    capability: string
+  ) => Promise<void> | void;
 }
 
 type OutputRecord = Record<string, unknown>;
@@ -253,6 +273,10 @@ function mapRecord(record: PluginStoredRecord): OutputRecord {
   };
 }
 
+function recordUserId(scope: PluginStorageScope): string | null {
+  return scope.scopeType === 'user' ? scope.scopeId : (scope.userId ?? null);
+}
+
 function ensureScope(scope: PluginStorageScope): void {
   if (!scope.pluginId.trim()) {
     throw createStorageError(
@@ -261,12 +285,94 @@ function ensureScope(scope: PluginStorageScope): void {
     );
   }
 
-  if (!scope.system && !scope.userId) {
+  if (!scope.scopeType || !scope.scopeId.trim()) {
     throw createStorageError(
-      'PLUGIN_STORAGE_USER_REQUIRED',
-      'Plugin storage requires userId outside system context.'
+      'PLUGIN_STORAGE_SCOPE_REQUIRED',
+      'Plugin storage requires a concrete scope.'
     );
   }
+
+  if (scope.scopeType === 'user' && !scope.userId && !scope.system) {
+    throw createStorageError(
+      'PLUGIN_STORAGE_USER_REQUIRED',
+      'User-scoped plugin storage requires userId outside system context.'
+    );
+  }
+}
+
+function resolveDefaultScope(options: CreatePluginStorageOptions): PluginStorageScope {
+  if (options.scope) {
+    return options.scope;
+  }
+
+  if (options.userId) {
+    return {
+      pluginId: options.pluginId,
+      userId: options.userId,
+      scopeType: 'user',
+      scopeId: options.userId,
+      system: options.system,
+    };
+  }
+
+  return {
+    pluginId: options.pluginId,
+    userId: options.userId,
+    scopeType: 'plugin',
+    scopeId: options.pluginId,
+    system: options.system,
+  };
+}
+
+function resolveStorageScope(
+  current: PluginStorageScope,
+  input: PluginStorageScopeInput,
+  productId?: string
+): PluginStorageScope {
+  if (input.type === 'user') {
+    const id = input.id ?? current.userId;
+    if (!id) {
+      throw createStorageError(
+        'PLUGIN_STORAGE_USER_REQUIRED',
+        'User-scoped plugin storage requires a user id.'
+      );
+    }
+    return {
+      pluginId: current.pluginId,
+      userId: current.userId,
+      scopeType: 'user',
+      scopeId: id,
+      system: current.system,
+    };
+  }
+
+  if (input.type === 'workspace') {
+    return {
+      pluginId: current.pluginId,
+      userId: current.userId,
+      scopeType: 'workspace',
+      scopeId: input.id,
+      system: current.system,
+    };
+  }
+
+  if (input.type === 'plugin') {
+    return {
+      pluginId: current.pluginId,
+      userId: current.userId,
+      scopeType: 'plugin',
+      scopeId: input.id ?? current.pluginId,
+      system: current.system,
+    };
+  }
+
+  return {
+    pluginId: current.pluginId,
+    userId: current.userId,
+    scopeType: 'product',
+    scopeId: input.id ?? productId ?? 'default',
+    system: current.system,
+  };
 }
 
 class RuntimePluginStorageCollection<
@@ -278,12 +384,15 @@ class RuntimePluginStorageCollection<
     private readonly definition: PluginCollectionDefinition,
     private readonly repository: PluginStorageRepository,
     private readonly enforceReadPermission?: (capability: string) => void,
-    private readonly enforceWritePermission?: (capability: string) => void
+    private readonly enforceWritePermission?: (capability: string) => void,
+    private readonly authorizeScope?: CreatePluginStorageOptions['authorizeScope']
   ) {}
 
   async findMany(query?: PluginStorageQuery): Promise<TRecord[]> {
     ensureScope(this.scope);
-    this.enforceRead('findMany');
+    const capability = this.capability('findMany');
+    this.enforceRead(capability);
+    await this.authorize('read', capability);
 
     validatePluginStorageQuery(this.definition, query, { collectionName: this.name });
     const records = await this.repository.findMany(this.scope, this.name, this.definition, query);
@@ -292,7 +401,9 @@ class RuntimePluginStorageCollection<
 
   async findById(id: string): Promise<TRecord | null> {
     ensureScope(this.scope);
-    this.enforceRead('findById');
+    const capability = this.capability('findById');
+    this.enforceRead(capability);
+    await this.authorize('read', capability);
 
     const record = await this.repository.findById(this.scope, this.name, id);
     return record ? (mapRecord(record) as TRecord) : null;
@@ -303,7 +414,9 @@ class RuntimePluginStorageCollection<
     options: PluginStorageInsertOptions = {}
   ): Promise<TRecord> {
     ensureScope(this.scope);
-    this.enforceWrite('insert');
+    const capability = this.capability('insert');
+    this.enforceWrite(capability);
+    await this.authorize('write', capability);
 
     const normalizedData = validatePluginRecordData(
       this.definition,
@@ -317,7 +430,9 @@ class RuntimePluginStorageCollection<
       id: options.id ?? randomUUID(),
       pluginId: this.scope.pluginId,
       collectionName: this.name,
-      userId: this.scope.system ? (this.scope.userId ?? null) : (this.scope.userId ?? null),
+      userId: recordUserId(this.scope),
+      scopeType: this.scope.scopeType,
+      scopeId: this.scope.scopeId,
       data: normalizedData,
       uniqueKeys: buildUniqueKeys(this.definition, normalizedData, this.name, options.uniqueBy, {
         requireValues: Boolean(options.uniqueBy),
@@ -332,7 +447,9 @@ class RuntimePluginStorageCollection<
     options: Omit<PluginStorageInsertOptions, 'conflict'> & { uniqueBy: readonly string[] }
   ): Promise<PluginStorageInsertIfAbsentResult<TRecord>> {
     ensureScope(this.scope);
-    this.enforceWrite('insertIfAbsent');
+    const capability = this.capability('insertIfAbsent');
+    this.enforceWrite(capability);
+    await this.authorize('write', capability);
 
     const normalizedData = validatePluginRecordData(
       this.definition,
@@ -346,7 +463,9 @@ class RuntimePluginStorageCollection<
       id: options.id ?? randomUUID(),
       pluginId: this.scope.pluginId,
       collectionName: this.name,
-      userId: this.scope.system ? (this.scope.userId ?? null) : (this.scope.userId ?? null),
+      userId: recordUserId(this.scope),
+      scopeType: this.scope.scopeType,
+      scopeId: this.scope.scopeId,
       data: normalizedData,
       uniqueKeys: buildUniqueKeys(this.definition, normalizedData, this.name, options.uniqueBy, {
         requireValues: true,
@@ -361,7 +480,9 @@ class RuntimePluginStorageCollection<
 
   async update(id: string, data: Partial<TRecord>): Promise<TRecord> {
     ensureScope(this.scope);
-    this.enforceWrite('update');
+    const capability = this.capability('update');
+    this.enforceWrite(capability);
+    await this.authorize('write', capability);
 
     const existing = await this.repository.findById(this.scope, this.name, id);
     if (!existing) {
@@ -390,6 +511,8 @@ class RuntimePluginStorageCollection<
       pluginId: this.scope.pluginId,
       collectionName: this.name,
       userId: existing.userId,
+      scopeType: existing.scopeType,
+      scopeId: existing.scopeId,
       id,
       data: mergedData,
       previousUniqueKeys: buildUniqueKeys(this.definition, existing.data, this.name),
@@ -401,7 +524,9 @@ class RuntimePluginStorageCollection<
 
   async updateWhere(query: PluginStorageQuery, data: Partial<TRecord>): Promise<TRecord | null> {
     ensureScope(this.scope);
-    this.enforceWrite('updateWhere');
+    const capability = this.capability('updateWhere');
+    this.enforceWrite(capability);
+    await this.authorize('write', capability);
     validatePluginStorageQuery(this.definition, query, { collectionName: this.name });
 
     const normalizedPatch = validatePluginRecordData(
@@ -417,7 +542,9 @@ class RuntimePluginStorageCollection<
       pluginId: this.scope.pluginId,
       collectionName: this.name,
       collection: this.definition,
-      userId: this.scope.system ? (this.scope.userId ?? null) : (this.scope.userId ?? null),
+      userId: recordUserId(this.scope),
+      scopeType: this.scope.scopeType,
+      scopeId: this.scope.scopeId,
       query,
       data: normalizedPatch,
       buildUpdatedData: (existing) => {
@@ -449,7 +576,9 @@ class RuntimePluginStorageCollection<
 
   async delete(id: string): Promise<void> {
     ensureScope(this.scope);
-    this.enforceWrite('delete');
+    const capability = this.capability('delete');
+    this.enforceWrite(capability);
+    await this.authorize('delete', capability);
 
     const deleted = await this.repository.softDelete(this.scope, this.name, id);
     if (!deleted) {
@@ -462,25 +591,32 @@ class RuntimePluginStorageCollection<
     }
   }
 
-  private enforceRead(operation: string): void {
-    this.enforceReadPermission?.(`ctx.storage.collection("${this.name}").${operation}`);
+  private capability(operation: string): string {
+    return `ctx.storage.collection("${this.name}").${operation}`;
   }
 
-  private enforceWrite(operation: string): void {
-    this.enforceWritePermission?.(`ctx.storage.collection("${this.name}").${operation}`);
+  private enforceRead(capability: string): void {
+    this.enforceReadPermission?.(capability);
+  }
+
+  private enforceWrite(capability: string): void {
+    this.enforceWritePermission?.(capability);
+  }
+
+  private async authorize(
+    action: PluginStorageScopeAccessAction,
+    capability: string
+  ): Promise<void> {
+    await this.authorizeScope?.(this.scope, action, capability);
   }
 }
 
 class RuntimePluginStorage implements PluginStorage {
-  private readonly scope: PluginStorageScope;
+  private readonly currentScope: PluginStorageScope;
   private readonly collections: Record<string, PluginCollectionDefinition>;
 
   constructor(private readonly options: CreatePluginStorageOptions) {
-    this.scope = {
-      pluginId: options.pluginId,
-      userId: options.userId,
-      system: options.system,
-    };
+    this.currentScope = resolveDefaultScope(options);
     this.collections = options.data?.collections ?? {};
   }
 
@@ -491,29 +627,37 @@ class RuntimePluginStorage implements PluginStorage {
     if (!definition) {
       throw createStorageError(
         'PLUGIN_STORAGE_COLLECTION_UNKNOWN',
-        `Collection "${name}" is not declared by plugin "${this.scope.pluginId}".`,
-        { pluginId: this.scope.pluginId, collection: name },
+        `Collection "${name}" is not declared by plugin "${this.currentScope.pluginId}".`,
+        { pluginId: this.currentScope.pluginId, collection: name },
         404
       );
     }
 
     return new RuntimePluginStorageCollection<TRecord>(
-      this.scope,
+      this.currentScope,
       name,
       definition,
       this.options.repository,
       this.options.enforceRead,
-      this.options.enforceWrite
+      this.options.enforceWrite,
+      this.options.authorizeScope
     );
   }
 
+  scope(scopeInput: PluginStorageScopeInput): PluginStorage {
+    return new RuntimePluginStorage({
+      ...this.options,
+      scope: resolveStorageScope(this.currentScope, scopeInput, this.options.productId),
+    });
+  }
+
   async ensureCollections(): Promise<void> {
-    ensureScope(this.scope);
+    ensureScope(this.currentScope);
     this.options.enforceWrite?.('ctx.storage.ensureCollections');
 
     for (const [name, definition] of Object.entries(this.collections)) {
       await this.options.repository.ensureCollection({
-        pluginId: this.scope.pluginId,
+        pluginId: this.currentScope.pluginId,
         name,
         schemaVersion: this.options.data?.version ?? 1,
         schemaJson: definition,
@@ -524,14 +668,15 @@ class RuntimePluginStorage implements PluginStorage {
   }
 
   async transaction<T>(fn: (storage: PluginStorage) => Promise<T>): Promise<T> {
-    ensureScope(this.scope);
+    ensureScope(this.currentScope);
     this.options.enforceWrite?.('ctx.storage.transaction');
 
-    return this.options.repository.transaction(this.scope, async (repository) =>
+    return this.options.repository.transaction(this.currentScope, async (repository) =>
       fn(
         new RuntimePluginStorage({
           ...this.options,
           repository,
+          scope: this.currentScope,
         })
       )
     );

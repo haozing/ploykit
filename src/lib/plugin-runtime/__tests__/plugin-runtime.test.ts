@@ -16,6 +16,7 @@ import {
   listPluginToolSitemapEntries,
   resolvePluginToolRoute,
 } from '../tools';
+import { resolvePluginRouteMetadata } from '../metadata';
 import { clearAnonymousRateLimitStore } from '../anonymous';
 import {
   createPluginPublicAliasStructuredDataScripts,
@@ -381,6 +382,225 @@ describe('plugin runtime', () => {
     expect(result.localPath).toBe('/');
     expect(result.requestPath).toBe('/plugins/runtime-todo');
     expect(loadedModule.default).toEqual(expect.any(Function));
+  });
+
+  it('runs page route loaders and exposes their data on runtime results', async () => {
+    const plugin = definePlugin({
+      id: 'runtime-loader',
+      name: 'Runtime Loader',
+      version: '1.0.0',
+      routes: {
+        pages: [
+          {
+            path: '/posts/:slug',
+            component: './pages/Post',
+            loader: './loaders/post',
+            auth: 'public',
+            anonymousPolicy: {
+              captcha: 'never',
+              allowHighCostActions: false,
+            },
+          },
+        ],
+      },
+    });
+    const entry: PluginRuntimeMapEntry = {
+      plugin: async () => ({ default: plugin }),
+      pages: {
+        'pages/Post': async () => ({ default: function PostPage() {} }),
+      },
+      loaderModules: {
+        'loaders/post': async () => ({
+          default: (_ctx: unknown, input: { params: Record<string, string> }) => ({
+            kind: 'data',
+            data: { slug: input.params.slug },
+            cache: { strategy: 'public', maxAgeSeconds: 60 },
+          }),
+        }),
+      },
+    };
+
+    const result = await resolvePluginPageRuntime(
+      'runtime-loader',
+      ['posts', 'hello-world'],
+      new Headers(),
+      { entry }
+    );
+
+    expect(result.data).toEqual({ slug: 'hello-world' });
+    expect(result.cache).toEqual({ strategy: 'public', maxAgeSeconds: 60 });
+  });
+
+  it('applies anonymous policy to public page route loaders', async () => {
+    const plugin = definePlugin({
+      id: 'runtime-loader-policy',
+      name: 'Runtime Loader Policy',
+      version: '1.0.0',
+      routes: {
+        pages: [
+          {
+            path: '/posts/:slug',
+            component: './pages/Post',
+            loader: './loaders/post',
+            auth: 'public',
+            anonymousPolicy: {
+              rateLimit: { bucket: ['ip', 'route'], limit: 1, window: '1m' },
+              captcha: 'never',
+              allowHighCostActions: false,
+            },
+          },
+        ],
+      },
+    });
+    let loaderRuns = 0;
+    const entry: PluginRuntimeMapEntry = {
+      plugin: async () => ({ default: plugin }),
+      pages: {
+        'pages/Post': async () => ({ default: function PostPage() {} }),
+      },
+      loaderModules: {
+        'loaders/post': async () => ({
+          default: () => {
+            loaderRuns += 1;
+            return {
+              kind: 'data',
+              data: { ok: true },
+            };
+          },
+        }),
+      },
+    };
+    const headers = new Headers({ 'x-forwarded-for': '203.0.113.10' });
+
+    await expect(
+      resolvePluginPageRuntime('runtime-loader-policy', ['posts', 'first'], headers, { entry })
+    ).resolves.toMatchObject({ data: { ok: true } });
+    await expect(
+      resolvePluginPageRuntime('runtime-loader-policy', ['posts', 'second'], headers, { entry })
+    ).rejects.toMatchObject({ code: 'PLUGIN_ANONYMOUS_RATE_LIMITED' });
+    expect(loaderRuns).toBe(1);
+  });
+
+  it('blocks anonymous public page loaders from high-cost actions without policy opt-in', async () => {
+    const plugin = definePlugin({
+      id: 'runtime-loader-high-cost',
+      name: 'Runtime Loader High Cost',
+      version: '1.0.0',
+      permissions: [Permission.AiGenerate],
+      routes: {
+        pages: [
+          {
+            path: '/ai',
+            component: './pages/Ai',
+            loader: './loaders/ai',
+            auth: 'public',
+            anonymousPolicy: {
+              captcha: 'never',
+              allowHighCostActions: false,
+            },
+          },
+        ],
+      },
+    });
+    const entry: PluginRuntimeMapEntry = {
+      plugin: async () => ({ default: plugin }),
+      pages: {
+        'pages/Ai': async () => ({ default: function AiPage() {} }),
+      },
+      loaderModules: {
+        'loaders/ai': async () => ({
+          default: async (ctx: {
+            ai: { generateText(input: { prompt: string }): Promise<unknown> };
+          }) => ctx.ai.generateText({ prompt: 'hello' }),
+        }),
+      },
+    };
+
+    await expect(
+      resolvePluginPageRuntime('runtime-loader-high-cost', ['ai'], new Headers(), { entry })
+    ).rejects.toMatchObject({ code: 'PLUGIN_ANONYMOUS_HIGH_COST_FORBIDDEN' });
+  });
+
+  it('runs dynamic route metadata handlers', async () => {
+    const plugin = definePlugin({
+      id: 'runtime-metadata',
+      name: 'Runtime Metadata',
+      version: '1.0.0',
+      routes: {
+        pages: [
+          {
+            path: '/docs/:slug',
+            component: './pages/Doc',
+            metadata: './metadata/doc',
+            auth: 'public',
+            anonymousPolicy: {
+              captcha: 'never',
+              allowHighCostActions: false,
+            },
+          },
+        ],
+      },
+    });
+    const entry: PluginRuntimeMapEntry = {
+      plugin: async () => ({ default: plugin }),
+      pages: {
+        'pages/Doc': async () => ({ default: function DocPage() {} }),
+      },
+      metadataModules: {
+        'metadata/doc': async () => ({
+          default: (_ctx: unknown, input: { params: Record<string, string> }) => ({
+            title: `Doc ${input.params.slug}`,
+            description: 'Dynamic doc metadata',
+            canonical: `/docs/${input.params.slug}`,
+          }),
+        }),
+      },
+    };
+    const contract = normalizePluginRuntimeContract(plugin);
+    const route = contract.routes.pages[0]!;
+
+    const result = await resolvePluginRouteMetadata({
+      pluginId: 'runtime-metadata',
+      contract,
+      route,
+      entry,
+      localPath: '/docs/intro',
+      requestPath: '/docs/intro',
+      params: { slug: 'intro' },
+      locale: 'en',
+      pathname: '/en/docs/intro',
+    });
+
+    expect(result.metadata.title).toBe('Doc intro');
+    expect(result.metadata.description).toBe('Dynamic doc metadata');
+  });
+
+  it('uses public alias SEO and structured data when resolving alias metadata', async () => {
+    const entry = createToolRuntimeEntry();
+    const match = await resolvePluginPublicRouteAlias('/json', {
+      entries: { 'runtime-tools': entry },
+      enforceInstallation: false,
+    });
+
+    const result = await resolvePluginRouteMetadata({
+      pluginId: match!.pluginId,
+      contract: match!.contract,
+      route: match!.route,
+      entry,
+      localPath: match!.route.path,
+      requestPath: match!.requestPath,
+      params: match!.params,
+      locale: 'en',
+      pathname: '/en/json',
+    });
+
+    expect(result.metadata.description).toBe('Format JSON through a plugin-owned alias.');
+    expect(result.structuredDataScripts).toMatchObject([
+      {
+        id: 'plugin-public-alias-structured-data-0',
+        json: expect.stringContaining('JSON Alias'),
+      },
+    ]);
   });
 
   it('mirrors runtime contracts into the shared plugin contract cache', async () => {

@@ -11,6 +11,8 @@ export type HostCapabilityId =
   | 'externalHttp'
   | 'connectors'
   | 'services'
+  | 'files'
+  | 'cache'
   | 'async'
   | 'commercialization';
 
@@ -139,6 +141,28 @@ export const HOST_CAPABILITIES = {
     adminActivation: true,
     doctorChecks: ['service-binding-policy', 'service-path-policy'],
     affects: ['database', 'security', 'audit'],
+    dependsOn: [],
+  },
+  files: {
+    id: 'files',
+    contractKeys: ['ctx.files'],
+    permissions: [Permission.FilesRead, Permission.FilesWrite, Permission.FilesPublish],
+    runtime: ['ctx.files', 'plugin media routes'],
+    minTrust: 'untrusted',
+    adminActivation: false,
+    doctorChecks: ['file-scope-policy', 'file-quota-policy', 'public-media-policy'],
+    affects: ['storage', 'public-routes', 'cache', 'audit'],
+    dependsOn: [],
+  },
+  cache: {
+    id: 'cache',
+    contractKeys: ['routes.*.cache', 'ctx.cache'],
+    permissions: [Permission.CacheRevalidate],
+    runtime: ['ctx.cache', 'route cache metadata'],
+    minTrust: 'untrusted',
+    adminActivation: false,
+    doctorChecks: ['cache-tag-policy', 'revalidation-policy'],
+    affects: ['public-routes', 'seo', 'cms'],
     dependsOn: [],
   },
   async: {

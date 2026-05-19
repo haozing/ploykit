@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { PluginProvider } from '@ploykit/plugin-sdk/react';
 import { logger } from '@/lib/_core/logger';
 import type { PluginPageRuntimeResult } from '@/lib/plugin-runtime/adapters';
@@ -12,6 +12,10 @@ interface PluginRuntimePageRendererProps {
 }
 
 export async function PluginRuntimePageRenderer({ result }: PluginRuntimePageRendererProps) {
+  if (result.redirect) {
+    redirect(result.redirect.location);
+  }
+
   let loadedModule: { default?: ComponentType<PluginRuntimePageProps> };
 
   try {
@@ -61,6 +65,7 @@ export async function PluginRuntimePageRenderer({ result }: PluginRuntimePageRen
     requestPath: result.requestPath,
     params: result.params,
     query: result.query,
+    data: result.data,
     i18n,
     assets,
     route: {

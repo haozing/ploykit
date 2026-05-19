@@ -13,6 +13,7 @@ import {
   type PluginHostPageSlotPosition,
   type PluginMenuDefinition,
   type PluginMeterDefinition,
+  type PluginPageRoute,
   type PluginPublicRouteAliasDeclaration,
   type PluginResourceBindingCardinality,
   type PluginResourceBindingRole,
@@ -357,6 +358,12 @@ function validateRoutes(
       'Page component',
       diagnostics
     );
+    if (page.loader) {
+      validatePluginModulePath(page.loader, `${basePath}.loader`, 'Page loader', diagnostics);
+    }
+    if (page.metadata) {
+      validatePluginModulePath(page.metadata, `${basePath}.metadata`, 'Page metadata', diagnostics);
+    }
     validateAuth(page.auth, `${basePath}.auth`, diagnostics);
     validateLayout(page.layout, `${basePath}.layout`, diagnostics);
     validateRoutePermissions(
@@ -366,6 +373,16 @@ function validateRoutes(
       diagnostics
     );
     validateCommercialRequirement(page.commercial, `${basePath}.commercial`, diagnostics);
+    validateToolCache(page.cache, `${basePath}.cache`, diagnostics);
+    validateAnonymousPolicy(page.anonymousPolicy, `${basePath}.anonymousPolicy`, diagnostics);
+    validatePublicExecutableAnonymousPolicy({
+      auth: effectivePageAuth(page),
+      hasExecutableModule: Boolean(page.loader || page.metadata),
+      anonymousPolicy: page.anonymousPolicy,
+      basePath,
+      label: 'page route',
+      diagnostics,
+    });
     validatePublicAliases(
       page.publicAliases,
       {
@@ -419,6 +436,12 @@ function validateRoutes(
       'Tool component',
       diagnostics
     );
+    if (tool.loader) {
+      validatePluginModulePath(tool.loader, `${basePath}.loader`, 'Tool loader', diagnostics);
+    }
+    if (tool.metadata) {
+      validatePluginModulePath(tool.metadata, `${basePath}.metadata`, 'Tool metadata', diagnostics);
+    }
     if (tool.auth && tool.auth !== 'public' && tool.auth !== 'auth') {
       addError(
         diagnostics,
@@ -439,6 +462,14 @@ function validateRoutes(
     validateToolSitemap(tool.sitemap, `${basePath}.sitemap`, diagnostics);
     validateToolCache(tool.cache, `${basePath}.cache`, diagnostics);
     validateAnonymousPolicy(tool.anonymousPolicy, `${basePath}.anonymousPolicy`, diagnostics);
+    validatePublicExecutableAnonymousPolicy({
+      auth: tool.auth ?? 'public',
+      hasExecutableModule: Boolean(tool.loader || tool.metadata),
+      anonymousPolicy: tool.anonymousPolicy,
+      basePath,
+      label: 'tool route',
+      diagnostics,
+    });
     validatePublicAliases(
       tool.publicAliases,
       {
@@ -909,6 +940,40 @@ function validateAnonymousPolicy(
 
 function pageRouteArea(layout: PluginRouteLayout | undefined): 'admin' | 'public' {
   return layout === 'dashboard-admin' ? 'admin' : 'public';
+}
+
+function effectivePageAuth(page: PluginPageRoute): PluginRouteAuth {
+  if (page.auth) {
+    return page.auth;
+  }
+  if (page.layout === 'dashboard-admin') {
+    return 'admin';
+  }
+  if (page.layout === 'dashboard') {
+    return 'auth';
+  }
+  return 'public';
+}
+
+function validatePublicExecutableAnonymousPolicy(input: {
+  auth: PluginRouteAuth;
+  hasExecutableModule: boolean;
+  anonymousPolicy: PluginAnonymousPolicy | undefined;
+  basePath: string;
+  label: string;
+  diagnostics: PluginDiagnostic[];
+}): void {
+  if (input.auth !== 'public' || !input.hasExecutableModule || input.anonymousPolicy) {
+    return;
+  }
+
+  addError(
+    input.diagnostics,
+    'PLUGIN_PUBLIC_EXECUTABLE_ANONYMOUS_POLICY_REQUIRED',
+    `Public ${input.label} with a server loader or metadata module must declare anonymousPolicy.`,
+    `${input.basePath}.anonymousPolicy`,
+    'Declare anonymousPolicy for the public server execution boundary, or require authentication.'
+  );
 }
 
 interface PublicAliasValidationContext {
@@ -1461,6 +1526,23 @@ function validateHostPageSlots(
       'Host page slot component',
       diagnostics
     );
+    if (slot.loader) {
+      validatePluginModulePath(
+        slot.loader,
+        `${basePath}.loader`,
+        'Host page slot loader',
+        diagnostics
+      );
+    }
+    validateAnonymousPolicy(slot.anonymousPolicy, `${basePath}.anonymousPolicy`, diagnostics);
+    validatePublicExecutableAnonymousPolicy({
+      auth: 'public',
+      hasExecutableModule: Boolean(slot.loader),
+      anonymousPolicy: slot.anonymousPolicy,
+      basePath,
+      label: 'host page slot',
+      diagnostics,
+    });
     validateHostPagePriority(slot.priority, `${basePath}.priority`, diagnostics);
 
     if (slot.position === 'main.replace') {
@@ -1535,6 +1617,31 @@ function validateHostPageOverrides(
       'Host page override component',
       diagnostics
     );
+    if (override.loader) {
+      validatePluginModulePath(
+        override.loader,
+        `${basePath}.loader`,
+        'Host page override loader',
+        diagnostics
+      );
+    }
+    if (override.metadata) {
+      validatePluginModulePath(
+        override.metadata,
+        `${basePath}.metadata`,
+        'Host page override metadata',
+        diagnostics
+      );
+    }
+    validateAnonymousPolicy(override.anonymousPolicy, `${basePath}.anonymousPolicy`, diagnostics);
+    validatePublicExecutableAnonymousPolicy({
+      auth: 'public',
+      hasExecutableModule: Boolean(override.loader || override.metadata),
+      anonymousPolicy: override.anonymousPolicy,
+      basePath,
+      label: 'host page override',
+      diagnostics,
+    });
     validateHostPagePriority(override.priority, `${basePath}.priority`, diagnostics);
     validateHostPageShell(override.shell, `${basePath}.shell`, diagnostics);
     validateHostPageSeo(override.seo, `${basePath}.seo`, diagnostics);

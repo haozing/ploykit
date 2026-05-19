@@ -32,6 +32,8 @@ export const pluginRecords = pgTable(
     pluginId: text('plugin_id').notNull(),
     collectionName: text('collection_name').notNull(),
     userId: text('user_id'),
+    scopeType: text('scope_type').notNull().default('user'),
+    scopeId: text('scope_id').notNull().default(''),
     data: jsonb('data').$type<PluginRecordData>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -41,6 +43,8 @@ export const pluginRecords = pgTable(
     pluginCollectionRecordIdx: uniqueIndex('plugin_records_plugin_collection_record_idx').on(
       table.pluginId,
       table.collectionName,
+      table.scopeType,
+      table.scopeId,
       table.id
     ),
     pluginCollectionIdx: index('plugin_records_plugin_collection_idx').on(
@@ -51,8 +55,15 @@ export const pluginRecords = pgTable(
     activeIdx: index('plugin_records_active_idx').on(
       table.pluginId,
       table.collectionName,
-      table.userId,
+      table.scopeType,
+      table.scopeId,
       table.deletedAt
+    ),
+    scopeIdx: index('plugin_records_scope_idx').on(
+      table.pluginId,
+      table.collectionName,
+      table.scopeType,
+      table.scopeId
     ),
     createdAtIdx: index('plugin_records_created_at_idx').on(table.createdAt),
     updatedAtIdx: index('plugin_records_updated_at_idx').on(table.updatedAt),
@@ -67,6 +78,8 @@ export const pluginRecordUniqueKeys = pgTable(
     pluginId: text('plugin_id').notNull(),
     collectionName: text('collection_name').notNull(),
     userId: text('user_id'),
+    scopeType: text('scope_type').notNull().default('user'),
+    scopeId: text('scope_id').notNull().default(''),
     uniqueKey: text('unique_key').notNull(),
     recordId: text('record_id').notNull(),
     fieldsJson: jsonb('fields_json').$type<string[]>().notNull().default([]),
@@ -76,7 +89,7 @@ export const pluginRecordUniqueKeys = pgTable(
   },
   (table) => ({
     activeKeyIdx: uniqueIndex('plugin_record_unique_keys_active_key_idx')
-      .on(table.pluginId, table.collectionName, table.userId, table.uniqueKey)
+      .on(table.pluginId, table.collectionName, table.scopeType, table.scopeId, table.uniqueKey)
       .where(sql`${table.deletedAt} IS NULL`),
     recordIdx: index('plugin_record_unique_keys_record_idx').on(
       table.pluginId,

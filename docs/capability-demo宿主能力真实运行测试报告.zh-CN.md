@@ -1,12 +1,12 @@
 # Capability Demo 宿主能力真实运行测试报告
 
-生成时间：2026-05-17T14:02:36.169Z
+生成时间：2026-05-19T02:00:57.637Z
 
 测试对象：`plugins/capability-demo`
 
 运行入口：`http://127.0.0.1:3100/api/plugins/capability-demo/self-test`
 
-测试用户：`K3uxp6ZZ20XO3XR0LxFl6gpvooXvgmS6`
+测试用户：`5YIQXBzeFUnsNmlsQFCIJjmAZQyRJ7d3`
 
 ## 总结
 
@@ -14,9 +14,9 @@
 - passed：16
 - skipped：3
 - failed：0
-- seed：`mp9uh2ow-t08oz6`
-- workspace：`6b641cf3-c4be-4429-a9dc-88a620035cb3`
-- run：`0d2b541e-3f55-47be-9539-ef11fbdd7efa`
+- seed：`mpbzkuqw-k0445b`
+- workspace：`705d3887-2f10-438b-94ff-efda5e15b978`
+- run：`5ca5f43a-1df2-4d1f-9b00-281b65d4daec`
 - API key echo：HTTP 200
 - invalid API key：HTTP 401
 - expired API key：HTTP 401
@@ -71,19 +71,19 @@
   "echoStatus": 200,
   "echoBody": {
     "ok": true,
-    "userId": "K3uxp6ZZ20XO3XR0LxFl6gpvooXvgmS6",
+    "userId": "5YIQXBzeFUnsNmlsQFCIJjmAZQyRJ7d3",
     "apiKey": {
-      "id": "7fa371fc-fd0c-4673-b69f-cbc466f32d26",
+      "id": "8c552504-e205-46dc-a2cb-e21222bd6ebe",
       "scope": {
         "type": "workspace",
-        "id": "6b641cf3-c4be-4429-a9dc-88a620035cb3"
+        "id": "705d3887-2f10-438b-94ff-efda5e15b978"
       },
       "permissions": ["POST:/api-key-echo", "route:POST:/api-key-echo"]
     },
     "metering": {
       "meter": "capability-demo.selftest.request",
-      "usageId": "528bd26c-3ef3-41b5-a450-28c7b67d601d",
-      "apiKeyId": "7fa371fc-fd0c-4673-b69f-cbc466f32d26"
+      "usageId": "042f1195-5bcd-4365-838f-d52d43807652",
+      "apiKeyId": "8c552504-e205-46dc-a2cb-e21222bd6ebe"
     }
   },
   "invalidKeyStatus": 401,
@@ -109,18 +109,13 @@
     "status": "succeeded",
     "visibility": "user-visible",
     "scope_type": "workspace",
-    "scope_id": "6b641cf3-c4be-4429-a9dc-88a620035cb3"
+    "scope_id": "705d3887-2f10-438b-94ff-efda5e15b978"
   },
   "pluginFileRows": 2,
-  "usageMetrics": [
-    {
-      "metric": "credit",
-      "count": 1
-    }
-  ],
+  "usageMetrics": [],
   "apiKey": {
-    "last_used_at": "2026-05-17T14:02:36.027Z",
-    "revoked_at": "2026-05-17T14:02:36.049Z",
+    "last_used_at": "2026-05-19T02:00:57.464Z",
+    "revoked_at": "2026-05-19T02:00:57.627Z",
     "scope_type": "workspace"
   },
   "notificationCount": 1,

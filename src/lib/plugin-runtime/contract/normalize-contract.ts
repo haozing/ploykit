@@ -73,11 +73,15 @@ function normalizePageRoutes(definition: PluginDefinition): RuntimePageRoute[] {
       kind: 'page',
       path: normalizeRuntimePath(route.path),
       component: route.component,
+      loader: route.loader,
+      metadata: route.metadata,
       auth: routeAuth(route.auth, layout),
       layout,
       area: routeArea(layout),
       permissions: route.permissions ?? [],
       commercial: route.commercial,
+      cache: route.cache,
+      anonymousPolicy: route.anonymousPolicy,
       publicAliases: normalizePublicAliases(route.publicAliases),
     };
   });
@@ -100,11 +104,15 @@ function normalizeToolRoutes(definition: PluginDefinition): RuntimePageRoute[] {
       kind: 'page',
       path,
       component: route.component,
+      loader: route.loader,
+      metadata: route.metadata,
       auth: route.auth ?? 'public',
       layout: 'site',
       area: 'public',
       permissions: route.permissions ?? [],
       commercial: route.commercial,
+      cache: route.cache,
+      anonymousPolicy: route.anonymousPolicy,
       publicAliases: normalizePublicAliases(route.publicAliases),
       tool: {
         path,
@@ -159,6 +167,8 @@ function normalizeHostPageSlots(definition: PluginDefinition): RuntimeHostPageSl
       page: normalizeRuntimePath(slot.page),
       position: slot.position,
       component: slot.component,
+      loader: slot.loader,
+      anonymousPolicy: slot.anonymousPolicy,
       priority: slot.priority ?? 100,
     }));
 }
@@ -172,6 +182,9 @@ function normalizeHostPageOverride(
     page,
     mode: override.mode,
     component: override.component,
+    loader: override.loader,
+    metadata: override.metadata,
+    anonymousPolicy: override.anonymousPolicy,
     priority: override.priority ?? 100,
     shell: {
       layout: override.shell?.layout ?? 'site',

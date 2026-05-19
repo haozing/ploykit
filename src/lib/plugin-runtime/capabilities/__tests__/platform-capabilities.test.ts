@@ -349,6 +349,12 @@ class MemoryFilesRepository implements PluginFilesRepository {
       createdAt: now,
       updatedAt: now,
       ...input,
+      visibility: input.visibility ?? 'private',
+      publicId: input.publicId ?? null,
+      publicFileName: input.publicFileName ?? null,
+      publicCacheControl: input.publicCacheControl ?? null,
+      contentDisposition: input.contentDisposition ?? 'attachment',
+      publishedAt: input.publishedAt ?? null,
       runId: input.runId ?? null,
     };
     this.files.set(row.id, row);
@@ -426,6 +432,44 @@ class MemoryFilesRepository implements PluginFilesRepository {
     const existing = this.files.get(id);
     if (!existing) throw new Error('missing file');
     const row = { ...existing, status: 'archived', archivedAt: new Date() } satisfies PluginFile;
+    this.files.set(id, row);
+    return row;
+  }
+
+  async publish(
+    _scope: PluginFilesScope,
+    id: string,
+    input: Parameters<PluginFilesRepository['publish']>[2]
+  ) {
+    const existing = this.files.get(id);
+    if (!existing) throw new Error('missing file');
+    const row = {
+      ...existing,
+      visibility: 'public',
+      publicId: input.publicId,
+      publicFileName: input.fileName,
+      publicCacheControl: input.cacheControl,
+      contentDisposition: input.contentDisposition,
+      publishedAt: new Date(),
+      updatedAt: new Date(),
+    } satisfies PluginFile;
+    this.files.set(id, row);
+    return row;
+  }
+
+  async unpublish(_scope: PluginFilesScope, id: string) {
+    const existing = this.files.get(id);
+    if (!existing) throw new Error('missing file');
+    const row = {
+      ...existing,
+      visibility: 'private',
+      publicId: null,
+      publicFileName: null,
+      publicCacheControl: null,
+      contentDisposition: 'attachment',
+      publishedAt: null,
+      updatedAt: new Date(),
+    } satisfies PluginFile;
     this.files.set(id, row);
     return row;
   }

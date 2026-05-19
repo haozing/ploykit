@@ -22,6 +22,7 @@ import type {
   PluginPublicRouteAlias,
   PluginResourcesDefinition,
   PluginRouteAuth,
+  PluginRouteCacheDefinition,
   PluginRouteLayout,
   PluginRouteMachineAuth,
   PluginAnonymousPolicy,
@@ -45,11 +46,15 @@ export interface RuntimeRouteBase {
   layout: PluginRouteLayout;
   permissions: readonly PermissionValue[];
   commercial?: PluginCommercialRequirement;
+  anonymousPolicy?: PluginAnonymousPolicy;
 }
 
 export interface RuntimePageRoute extends RuntimeRouteBase {
   kind: 'page';
   component: string;
+  loader?: string;
+  metadata?: string;
+  cache?: PluginRouteCacheDefinition;
   area: RuntimeRouteArea;
   publicAliases: readonly PluginPublicRouteAlias[];
   tool?: PluginToolRouteRuntimeMetadata;
@@ -60,7 +65,6 @@ export interface RuntimeApiRoute extends RuntimeRouteBase {
   handler: string;
   method: PluginHttpMethod;
   machineAuth?: PluginRouteMachineAuth;
-  anonymousPolicy?: PluginAnonymousPolicy;
 }
 
 export type RuntimeRoute = RuntimePageRoute | RuntimeApiRoute;
@@ -69,6 +73,8 @@ export interface RuntimeHostPageSlot {
   page: string;
   position: Exclude<PluginHostPageSlotPosition, 'main.replace'>;
   component: string;
+  loader?: string;
+  anonymousPolicy?: PluginAnonymousPolicy;
   priority: number;
 }
 
@@ -76,6 +82,9 @@ export interface RuntimeHostPageOverride {
   page: string;
   mode: PluginHostPageOverrideMode;
   component: string;
+  loader?: string;
+  metadata?: string;
+  anonymousPolicy?: PluginAnonymousPolicy;
   priority: number;
   shell: Required<
     Pick<PluginHostPageShellDefinition, 'layout' | 'header' | 'footer' | 'container'>

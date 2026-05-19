@@ -332,10 +332,17 @@ function toFileRecord(row: PluginFile): PluginFileRecord {
     hash: row.hash ?? undefined,
     purpose: row.purpose as PluginFilePurpose,
     status: row.status as PluginFileRecord['status'],
+    visibility: row.visibility as PluginFileRecord['visibility'],
+    publicUrl:
+      row.visibility === 'public' && row.publicId
+        ? `/api/plugin-media/${encodeURIComponent(row.pluginId)}/${encodeURIComponent(row.publicId)}/${encodeURIComponent(row.publicFileName || row.fileName)}`
+        : undefined,
+    contentDisposition: row.contentDisposition as PluginFileRecord['contentDisposition'],
     runId: row.runId ?? undefined,
     metadata: row.metadata,
     expiresAt: row.expiresAt ?? undefined,
     uploadedAt: row.uploadedAt ?? undefined,
+    publishedAt: row.publishedAt ?? undefined,
     archivedAt: row.archivedAt ?? undefined,
     deletedAt: row.deletedAt ?? undefined,
     createdAt: row.createdAt,

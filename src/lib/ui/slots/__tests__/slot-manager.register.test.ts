@@ -14,6 +14,15 @@ import { createMockRegistration } from './helpers';
 import { isValidSlotName, VALID_SLOT_NAMES } from '../types';
 
 const mockGetOrLoad = vi.hoisted(() => vi.fn());
+const pluginMapMock = vi.hoisted(() => ({
+  welcome: {
+    productId: 'ploykit',
+    suiteId: 'default',
+    bundleIds: [],
+    plugin: () => Promise.resolve({}),
+    components: {},
+  },
+}));
 
 // Mock dependencies
 vi.mock('@/lib/_core/logger', () => ({
@@ -32,14 +41,11 @@ vi.mock('@/lib/plugin-map', () => ({
   },
   PLUGIN_SUITES: {},
   APP_BUNDLES: {},
-  PLUGIN_MAP: {
-    welcome: {
-      productId: 'ploykit',
-      suiteId: 'default',
-      bundleIds: [],
-      plugin: vi.fn(),
-      components: {},
-    },
+  PLUGIN_MAP: pluginMapMock,
+  PLUGIN_MAP_ARTIFACT: { kind: 'source', plugins: pluginMapMock },
+  default: {
+    PLUGIN_MAP: pluginMapMock,
+    PLUGIN_MAP_ARTIFACT: { kind: 'source', plugins: pluginMapMock },
   },
 }));
 

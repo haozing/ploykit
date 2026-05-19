@@ -22,6 +22,8 @@ export interface PluginRuntimeMapEntry {
   eventModules?: Record<string, PluginModuleLoader>;
   hookModules?: Record<string, PluginModuleLoader>;
   slotModules?: Record<string, PluginModuleLoader>;
+  loaderModules?: Record<string, PluginModuleLoader>;
+  metadataModules?: Record<string, PluginModuleLoader>;
   runtimeContract?: PluginRuntimeContract;
 }
 

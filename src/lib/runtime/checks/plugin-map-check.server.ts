@@ -12,7 +12,10 @@ import {
   formatPluginSourcePath,
   getPluginSourceTargets,
 } from '@/lib/plugin-runtime/plugin-source-dirs';
-import { getActivePluginMapFiles } from '@/lib/plugin-runtime/plugin-map-files';
+import {
+  PLUGIN_MAP_MANIFEST_VERSION,
+  getActivePluginMapFiles,
+} from '@/lib/plugin-runtime/plugin-map-files';
 
 interface PluginMapManifest {
   version: number;
@@ -111,7 +114,7 @@ function readPluginMapManifest(manifestFile: string): PluginMapManifest | null {
     const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf-8')) as PluginMapManifest;
 
     if (
-      manifest.version !== 5 ||
+      manifest.version !== PLUGIN_MAP_MANIFEST_VERSION ||
       !Array.isArray(manifest.plugins) ||
       manifest.plugins.some(
         (plugin) => !plugin || typeof plugin.id !== 'string' || typeof plugin.rootDir !== 'string'

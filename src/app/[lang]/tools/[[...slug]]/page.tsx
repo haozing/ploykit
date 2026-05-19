@@ -4,10 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 import { PluginError } from '@ploykit/plugin-sdk';
 import {
   createPluginCommercialRedirectPath,
-  createPluginToolMetadata,
-  createPluginToolStructuredDataScripts,
   isPluginCommercialError,
   resolvePluginPageRuntime,
+  resolvePluginRouteMetadata,
   resolvePluginToolRoute,
 } from '@/lib/plugin-runtime';
 import { PluginRuntimePageRenderer } from '@/components/plugins/plugin-runtime-page-renderer';
@@ -38,12 +37,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const route = match.contract.routes.pages.find((candidate) => candidate.path === match.localPath);
-  return route?.tool
-    ? createPluginToolMetadata(route.tool, {
-        locale: lang,
-        pathname: `/${lang}/${localToolPath(slug)}`,
-      })
-    : {};
+  if (!route) {
+    return {};
+  }
+
+  const requestHeaders = needsRequestHeaders(route) ? await headers() : new Headers();
+  const resolved = await resolvePluginRouteMetadata({
+    pluginId: match.pluginId,
+    contract: match.contract,
+    route,
+    entry: match.entry,
+    localPath: match.localPath,
+    requestPath: `/${localToolPath(slug)}`,
+    locale: lang,
+    pathname: `/${lang}/${localToolPath(slug)}`,
+    requestHeaders,
+  });
+  return resolved.metadata;
 }
 
 export default async function PluginToolPage({ params, searchParams }: Props) {
@@ -66,14 +76,25 @@ export default async function PluginToolPage({ params, searchParams }: Props) {
     match.entry,
     query
   );
-  const structuredDataScripts = runtimeResult.route.tool
-    ? createPluginToolStructuredDataScripts(runtimeResult.route.tool, { locale: lang })
-    : [];
+  const metadata = await resolvePluginRouteMetadata({
+    pluginId: match.pluginId,
+    contract: match.contract,
+    route: runtimeResult.route,
+    entry: match.entry,
+    localPath: runtimeResult.localPath,
+    requestPath: runtimeResult.requestPath,
+    params: runtimeResult.params,
+    query: runtimeResult.query,
+    locale: lang,
+    pathname: `/${lang}/${localToolPath(slug)}`,
+    requestHeaders,
+    data: runtimeResult.data,
+  });
 
   return (
     <IntlMessagesProvider scope="site">
       <ShellLayout pathname={`/${localToolPath(slug)}`} locale={lang}>
-        {structuredDataScripts.map((script) => (
+        {metadata.structuredDataScripts.map((script) => (
           <script
             key={script.id}
             id={script.id}

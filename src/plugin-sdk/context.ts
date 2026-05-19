@@ -139,7 +139,9 @@ export interface PluginJobs {
   ): void;
 }
 
-export type PluginFilePurpose = 'source' | 'result' | 'temp';
+export type PluginFilePurpose = 'source' | 'result' | 'temp' | 'media';
+export type PluginFileVisibility = 'private' | 'public';
+export type PluginFileContentDisposition = 'attachment' | 'inline';
 export type PluginFileStatus = 'pending_upload' | 'ready' | 'archived' | 'deleted';
 
 export interface PluginFileRecord {
@@ -151,10 +153,14 @@ export interface PluginFileRecord {
   hash?: string;
   purpose: PluginFilePurpose;
   status: PluginFileStatus;
+  visibility: PluginFileVisibility;
+  publicUrl?: string;
+  contentDisposition?: PluginFileContentDisposition;
   runId?: string;
   metadata: Record<string, unknown>;
   expiresAt?: Date;
   uploadedAt?: Date;
+  publishedAt?: Date;
   archivedAt?: Date;
   deletedAt?: Date;
   createdAt: Date;
@@ -187,8 +193,11 @@ export interface PluginFileCreateUploadResult {
   size: number;
   purpose: PluginFilePurpose;
   status: PluginFileStatus;
+  visibility: PluginFileVisibility;
   storageRef: string;
   uploadUrl?: string;
+  publicUrl?: string;
+  contentDisposition?: PluginFileContentDisposition;
   metadata: Record<string, unknown>;
   expiresAt?: Date;
   createdAt: Date;
@@ -216,6 +225,19 @@ export interface PluginFileSignedUrlOptions {
   expiresInSeconds?: number;
 }
 
+export interface PluginFilePublicCacheOptions {
+  maxAgeSeconds?: number;
+  staleWhileRevalidateSeconds?: number;
+  immutable?: boolean;
+}
+
+export interface PluginFilePublishInput {
+  id: string;
+  disposition?: PluginFileContentDisposition;
+  cache?: PluginFilePublicCacheOptions;
+  fileName?: string;
+}
+
 export interface PluginFiles {
   createUpload(input: PluginFileCreateUploadInput): Promise<PluginFileCreateUploadResult>;
   completeUpload(input: PluginFileCompleteUploadInput): Promise<PluginFileRecord>;
@@ -224,6 +246,8 @@ export interface PluginFiles {
   list(input: PluginFileListInput): Promise<PluginFileRecord[]>;
   createSignedUploadUrl(id: string, options?: PluginFileSignedUrlOptions): Promise<string>;
   createSignedDownloadUrl(id: string, options?: PluginFileSignedUrlOptions): Promise<string>;
+  publish(input: string | PluginFilePublishInput): Promise<PluginFileRecord>;
+  unpublish(id: string): Promise<PluginFileRecord>;
   archive(id: string): Promise<PluginFileRecord>;
   delete(id: string): Promise<void>;
 }
@@ -1163,6 +1187,16 @@ export interface PluginServices {
   ): Promise<PluginServiceJsonResult<T>>;
 }
 
+export interface PluginCacheRevalidatePathInput {
+  path: string;
+  type?: 'page' | 'layout';
+}
+
+export interface PluginCache {
+  revalidatePath(input: string | PluginCacheRevalidatePathInput): Promise<void>;
+  revalidateTag(tag: string): Promise<void>;
+}
+
 export interface PluginAuthContext {
   apiKey?: {
     id: string;
@@ -1207,5 +1241,6 @@ export interface PluginContext {
   webhooks: PluginWebhooks;
   http: PluginHttp;
   services: PluginServices;
+  cache: PluginCache;
   json(data: unknown, init?: ResponseInit): Response;
 }

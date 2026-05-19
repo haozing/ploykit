@@ -4,6 +4,7 @@ export {
   verifyAnonymousCaptcha,
   type AnonymousHighCostAction,
   type AnonymousRuntimePolicyState,
+  type AnonymousRuntimeRoute,
 } from './anonymous-policy.server';
 export {
   checkAnonymousRateLimit,

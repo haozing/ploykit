@@ -188,12 +188,18 @@ export const pluginFiles = pgTable(
     hash: text('hash'),
     purpose: text('purpose').notNull().default('source'),
     status: text('status').notNull().default('pending_upload'),
+    visibility: text('visibility').notNull().default('private'),
+    publicId: text('public_id'),
+    publicFileName: text('public_file_name'),
+    publicCacheControl: text('public_cache_control'),
+    contentDisposition: text('content_disposition').notNull().default('attachment'),
     storageKey: text('storage_key').notNull(),
     storageProvider: text('storage_provider').notNull().default('local'),
     runId: text('run_id'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     uploadedAt: timestamp('uploaded_at', { withTimezone: true }),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -209,6 +215,9 @@ export const pluginFiles = pgTable(
     ownerIdx: index('plugin_files_owner_idx').on(table.ownerUserId),
     runIdx: index('plugin_files_run_idx').on(table.runId),
     expiresIdx: index('plugin_files_expires_idx').on(table.expiresAt),
+    publicIdx: uniqueIndex('plugin_files_public_idx')
+      .on(table.pluginId, table.publicId)
+      .where(sql`${table.publicId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     storageKeyIdx: uniqueIndex('plugin_files_storage_key_idx').on(table.storageKey),
   })
 );

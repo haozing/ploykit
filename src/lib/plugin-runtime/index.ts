@@ -11,6 +11,7 @@ export * from './hooks';
 export * from './i18n';
 export * from './jobs';
 export * from './loader';
+export * from './metadata';
 export * from './public-routes';
 export * from './registry';
 export * from './seo';

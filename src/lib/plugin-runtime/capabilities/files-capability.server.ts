@@ -4,6 +4,8 @@ import {
   Permission,
   PluginError,
   type PluginFileCreateUploadInput,
+  type PluginFileContentDisposition,
+  type PluginFilePublishInput,
   type PluginFilePurpose,
   type PluginFileRecord,
   type PluginFileStatus,
@@ -91,6 +93,17 @@ export interface PluginFilesRepository {
     }
   ): Promise<PluginFilesUsage>;
   archive(scope: PluginFilesScope, id: string): Promise<PluginFile>;
+  publish(
+    scope: PluginFilesScope,
+    id: string,
+    input: {
+      publicId: string;
+      fileName: string;
+      contentDisposition: PluginFileContentDisposition;
+      cacheControl: string;
+    }
+  ): Promise<PluginFile>;
+  unpublish(scope: PluginFilesScope, id: string): Promise<PluginFile>;
   softDelete(scope: PluginFilesScope, id: string): Promise<PluginFile>;
 }
 
@@ -125,13 +138,14 @@ export interface CreatePluginFilesOptions {
   auditPort?: AuditPort;
 }
 
-const VALID_PURPOSES = new Set<PluginFilePurpose>(['source', 'result', 'temp']);
+const VALID_PURPOSES = new Set<PluginFilePurpose>(['source', 'result', 'temp', 'media']);
 const VALID_STATUSES = new Set<PluginFileStatus>([
   'pending_upload',
   'ready',
   'archived',
   'deleted',
 ]);
+const VALID_CONTENT_DISPOSITIONS = new Set<PluginFileContentDisposition>(['attachment', 'inline']);
 const DEFAULT_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_FILE_NAME_LENGTH = 255;
 const DAILY_UPLOAD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -266,6 +280,36 @@ function normalizeStatus(status: PluginFileStatus | undefined): PluginFileStatus
   return status;
 }
 
+function normalizeContentDisposition(
+  disposition: PluginFileContentDisposition | undefined
+): PluginFileContentDisposition {
+  const normalized = disposition ?? 'inline';
+  if (!VALID_CONTENT_DISPOSITIONS.has(normalized)) {
+    throw new PluginError({
+      code: 'PLUGIN_FILE_CONTENT_DISPOSITION_INVALID',
+      message: `File content disposition "${String(disposition)}" is invalid.`,
+      statusCode: 400,
+    });
+  }
+  return normalized;
+}
+
+function normalizePublicCacheControl(input: PluginFilePublishInput['cache'] | undefined): string {
+  const maxAge = Math.max(0, Math.floor(input?.maxAgeSeconds ?? 3600));
+  const stale = input?.staleWhileRevalidateSeconds;
+  const parts = ['public', `max-age=${maxAge}`];
+
+  if (typeof stale === 'number' && Number.isFinite(stale) && stale > 0) {
+    parts.push(`stale-while-revalidate=${Math.floor(stale)}`);
+  }
+
+  if (input?.immutable) {
+    parts.push('immutable');
+  }
+
+  return parts.join(', ');
+}
+
 function normalizeSize(size: number): number {
   if (!Number.isFinite(size) || size < 0 || !Number.isInteger(size)) {
     throw new PluginError({
@@ -306,6 +350,17 @@ function buildStorageKey(input: {
   ].join('/');
 }
 
+function createPublicFileUrl(row: PluginFile): string | undefined {
+  if (row.visibility !== 'public' || !row.publicId) {
+    return undefined;
+  }
+
+  const fileName = row.publicFileName || row.fileName;
+  return `/api/plugin-media/${encodeURIComponent(row.pluginId)}/${encodeURIComponent(
+    row.publicId
+  )}/${encodeURIComponent(fileName)}`;
+}
+
 async function toBuffer(body: Buffer | Uint8Array | ReadableStream): Promise<Buffer> {
   if (Buffer.isBuffer(body)) return body;
   if (body instanceof Uint8Array) return Buffer.from(body);
@@ -330,10 +385,14 @@ function toRecord(row: PluginFile): PluginFileRecord {
     hash: row.hash ?? undefined,
     purpose: row.purpose as PluginFilePurpose,
     status: row.status as PluginFileStatus,
+    visibility: row.visibility as PluginFileRecord['visibility'],
+    publicUrl: createPublicFileUrl(row),
+    contentDisposition: row.contentDisposition as PluginFileRecord['contentDisposition'],
     runId: row.runId ?? undefined,
     metadata: row.metadata,
     expiresAt: row.expiresAt ?? undefined,
     uploadedAt: row.uploadedAt ?? undefined,
+    publishedAt: row.publishedAt ?? undefined,
     archivedAt: row.archivedAt ?? undefined,
     deletedAt: row.deletedAt ?? undefined,
     createdAt: row.createdAt,
@@ -635,6 +694,85 @@ export class DbPluginFilesRepository implements PluginFilesRepository {
     return this.updateLifecycle(scope, id, 'archived');
   }
 
+  async publish(
+    scope: PluginFilesScope,
+    id: string,
+    input: {
+      publicId: string;
+      fileName: string;
+      contentDisposition: PluginFileContentDisposition;
+      cacheControl: string;
+    }
+  ) {
+    return this.inPlugin(scope, async (executor) => {
+      const now = new Date();
+      const [row] = await executor
+        .update(pluginFiles)
+        .set({
+          visibility: 'public',
+          publicId: input.publicId,
+          publicFileName: input.fileName,
+          publicCacheControl: input.cacheControl,
+          contentDisposition: input.contentDisposition,
+          publishedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(pluginFiles.pluginId, scope.pluginId),
+            eq(pluginFiles.id, id),
+            eq(pluginFiles.status, 'ready'),
+            isNull(pluginFiles.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!row) {
+        throw new PluginError({
+          code: 'PLUGIN_FILE_NOT_FOUND',
+          message: `Ready file "${id}" was not found.`,
+          statusCode: 404,
+        });
+      }
+
+      return row;
+    });
+  }
+
+  async unpublish(scope: PluginFilesScope, id: string) {
+    return this.inPlugin(scope, async (executor) => {
+      const [row] = await executor
+        .update(pluginFiles)
+        .set({
+          visibility: 'private',
+          publicId: null,
+          publicFileName: null,
+          publicCacheControl: null,
+          contentDisposition: 'attachment',
+          publishedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(pluginFiles.pluginId, scope.pluginId),
+            eq(pluginFiles.id, id),
+            isNull(pluginFiles.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!row) {
+        throw new PluginError({
+          code: 'PLUGIN_FILE_NOT_FOUND',
+          message: `File "${id}" was not found.`,
+          statusCode: 404,
+        });
+      }
+
+      return row;
+    });
+  }
+
   async softDelete(scope: PluginFilesScope, id: string) {
     return this.updateLifecycle(scope, id, 'deleted');
   }
@@ -650,6 +788,12 @@ export class DbPluginFilesRepository implements PluginFilesRepository {
         .update(pluginFiles)
         .set({
           status,
+          visibility: 'private',
+          publicId: null,
+          publicFileName: null,
+          publicCacheControl: null,
+          contentDisposition: 'attachment',
+          publishedAt: null,
           archivedAt: status === 'archived' ? now : undefined,
           deletedAt: status === 'deleted' ? now : undefined,
           updatedAt: now,
@@ -765,7 +909,10 @@ export function createPluginFilesCapability(
         size: row.size,
         purpose: row.purpose as PluginFilePurpose,
         status: row.status as PluginFileStatus,
+        visibility: row.visibility as PluginFileRecord['visibility'],
         storageRef: row.storageKey,
+        publicUrl: createPublicFileUrl(row),
+        contentDisposition: row.contentDisposition as PluginFileRecord['contentDisposition'],
         metadata: row.metadata,
         expiresAt: row.expiresAt ?? undefined,
         createdAt: row.createdAt,
@@ -896,6 +1043,59 @@ export function createPluginFilesCapability(
         operation: 'download',
         expiresInSeconds: options?.expiresInSeconds ?? 300,
       });
+    },
+
+    async publish(input) {
+      enforceCapabilityPermission(scope, Permission.FilesPublish, 'ctx.files.publish');
+      const normalizedInput: PluginFilePublishInput =
+        typeof input === 'string' ? { id: input } : input;
+      const fileScope = resolveScope(scope, 'ctx.files.publish');
+      const existing = await repository.get(fileScope, normalizedInput.id);
+      if (!existing || existing.status !== 'ready') {
+        throw new PluginError({
+          code: 'PLUGIN_FILE_NOT_FOUND',
+          message: `Ready file "${normalizedInput.id}" was not found.`,
+          statusCode: 404,
+        });
+      }
+
+      const resourceScope = await assertFileScopeAccess(host, fileScope, existing, 'write');
+      const fileName = normalizeFileName(normalizedInput.fileName ?? existing.fileName);
+      const row = await repository.publish(fileScope, existing.id, {
+        publicId: existing.publicId ?? randomUUID(),
+        fileName,
+        contentDisposition: normalizeContentDisposition(normalizedInput.disposition),
+        cacheControl: normalizePublicCacheControl(normalizedInput.cache),
+      });
+      await recordCapabilityAudit(
+        scope,
+        `${scope.contract.id}.files.publish`,
+        { fileId: row.id, scope: resourceScope, publicUrl: createPublicFileUrl(row) },
+        options.auditPort
+      );
+      return toRecord(row);
+    },
+
+    async unpublish(id) {
+      enforceCapabilityPermission(scope, Permission.FilesPublish, 'ctx.files.unpublish');
+      const fileScope = resolveScope(scope, 'ctx.files.unpublish');
+      const existing = await repository.get(fileScope, id);
+      if (!existing) {
+        throw new PluginError({
+          code: 'PLUGIN_FILE_NOT_FOUND',
+          message: `File "${id}" was not found.`,
+          statusCode: 404,
+        });
+      }
+      const resourceScope = await assertFileScopeAccess(host, fileScope, existing, 'write');
+      const row = await repository.unpublish(fileScope, id);
+      await recordCapabilityAudit(
+        scope,
+        `${scope.contract.id}.files.unpublish`,
+        { fileId: row.id, scope: resourceScope },
+        options.auditPort
+      );
+      return toRecord(row);
     },
 
     async archive(id) {

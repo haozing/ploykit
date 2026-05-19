@@ -37,6 +37,11 @@ export {
   type PluginBillingRedeemCodeHostInput,
 } from './billing-capability.server';
 export {
+  createPluginCacheCapability,
+  type CreatePluginCacheOptions,
+  type PluginCacheHost,
+} from './cache-capability.server';
+export {
   createPluginConfigCapability,
   DbPluginConfigRepository,
   type CreatePluginConfigOptions,

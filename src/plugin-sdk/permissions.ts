@@ -22,6 +22,7 @@ export const Permission = {
 
   FilesRead: 'files.read',
   FilesWrite: 'files.write',
+  FilesPublish: 'files.publish',
 
   WorkspaceRead: 'workspace.read',
   WorkspaceWrite: 'workspace.write',
@@ -45,6 +46,7 @@ export const Permission = {
   ApiKeysRead: 'apiKeys.read',
   ApiKeysWrite: 'apiKeys.write',
   RateLimitCheck: 'rateLimit.check',
+  CacheRevalidate: 'cache.revalidate',
 
   AiGenerate: 'ai.generate',
   AiEmbed: 'ai.embed',

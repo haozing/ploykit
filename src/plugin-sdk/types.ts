@@ -58,6 +58,7 @@ export interface PluginRuntimeSlotProps {
   slotName?: string;
   page?: string;
   position?: PluginRouteSlotPosition | PluginHostPageSlotPosition;
+  data?: unknown;
   i18n: PluginI18nRuntime;
   assets: Record<string, string>;
 }
@@ -68,19 +69,54 @@ export interface PluginRuntimePageProps {
   requestPath: string;
   params: Record<string, string>;
   query: Record<string, string | string[]>;
+  data?: unknown;
   i18n: PluginI18nRuntime;
   assets: Record<string, string>;
   route: PluginRuntimePageRouteProps;
 }
 
+export interface PluginRuntimeLoaderInput {
+  localPath: string;
+  requestPath: string;
+  params: Record<string, string>;
+  query: Record<string, string | string[]>;
+  locale: string;
+  route: PluginRuntimePageRouteProps;
+}
+
+export type PluginRuntimeLoaderResult<TData = unknown> =
+  | TData
+  | {
+      kind: 'data';
+      data: TData;
+      cache?: PluginRouteCacheDefinition;
+    }
+  | {
+      kind: 'notFound';
+    }
+  | {
+      kind: 'redirect';
+      location: string;
+      status?: 301 | 302 | 303 | 307 | 308;
+    };
+
+export type PluginRuntimeLoader<TData = unknown> = (
+  ctx: PluginContext,
+  input: PluginRuntimeLoaderInput
+) => PluginRuntimeLoaderResult<TData> | Promise<PluginRuntimeLoaderResult<TData>>;
+
 export interface PluginPageRoute {
   path: string;
   component: string;
+  loader?: string;
+  metadata?: string;
   auth?: PluginRouteAuth;
   layout?: PluginRouteLayout;
   permissions?: readonly PermissionValue[];
   commercial?: PluginCommercialRequirement;
   publicAliases?: readonly PluginPublicRouteAliasDeclaration[];
+  cache?: PluginRouteCacheDefinition;
+  anonymousPolicy?: PluginAnonymousPolicy;
 }
 
 export interface PluginOpenGraphMetadata {
@@ -106,6 +142,25 @@ export interface PluginToolSeoMetadata extends PluginToolSeoLocalizedMetadata {
   locales?: Record<string, PluginToolSeoLocalizedMetadata>;
 }
 
+export type PluginRouteSeoMetadata = PluginToolSeoMetadata;
+
+export type PluginRouteMetadataResult =
+  | PluginRouteSeoMetadata
+  | {
+      kind: 'metadata';
+      metadata: PluginRouteSeoMetadata;
+    }
+  | {
+      kind: 'notFound';
+    }
+  | null
+  | undefined;
+
+export type PluginRouteMetadataHandler = (
+  ctx: PluginContext,
+  input: PluginRuntimeLoaderInput & { data?: unknown }
+) => PluginRouteMetadataResult | Promise<PluginRouteMetadataResult>;
+
 export interface PluginToolSitemapDefinition {
   include?: boolean;
   lastModified?: string | Date;
@@ -117,6 +172,11 @@ export interface PluginToolCacheDefinition {
   strategy: PluginToolCacheStrategy;
   maxAgeSeconds?: number;
   staleWhileRevalidateSeconds?: number;
+}
+
+export interface PluginRouteCacheDefinition extends PluginToolCacheDefinition {
+  revalidateSeconds?: number;
+  tags?: readonly string[];
 }
 
 export interface PluginAnonymousRateLimitDefinition {
@@ -143,13 +203,15 @@ export type PluginPublicRouteAliasDeclaration = string | PluginPublicRouteAlias;
 export interface PluginToolRoute {
   path: string;
   component: string;
+  loader?: string;
+  metadata?: string;
   auth?: Extract<PluginRouteAuth, 'public' | 'auth'>;
   permissions?: readonly PermissionValue[];
   commercial?: PluginCommercialRequirement;
   publicAliases?: readonly PluginPublicRouteAliasDeclaration[];
   seo: PluginToolSeoMetadata;
   sitemap?: PluginToolSitemapDefinition;
-  cache?: PluginToolCacheDefinition;
+  cache?: PluginRouteCacheDefinition;
   anonymousPolicy?: PluginAnonymousPolicy;
 }
 
@@ -157,7 +219,7 @@ export interface PluginToolRouteRuntimeMetadata {
   path: string;
   seo: PluginToolSeoMetadata;
   sitemap?: PluginToolSitemapDefinition;
-  cache?: PluginToolCacheDefinition;
+  cache?: PluginRouteCacheDefinition;
   anonymousPolicy?: PluginAnonymousPolicy;
 }
 
@@ -218,6 +280,8 @@ export interface PluginHostPageSlotDefinition {
   page: string;
   position: PluginHostPageSlotPosition;
   component: string;
+  loader?: string;
+  anonymousPolicy?: PluginAnonymousPolicy;
   priority?: number;
 }
 
@@ -225,6 +289,9 @@ export interface PluginHostPageOverrideDefinition {
   page: string;
   mode: PluginHostPageOverrideMode;
   component: string;
+  loader?: string;
+  metadata?: string;
+  anonymousPolicy?: PluginAnonymousPolicy;
   priority?: number;
   shell?: PluginHostPageShellDefinition;
   seo: PluginHostPageSeoDefinition;

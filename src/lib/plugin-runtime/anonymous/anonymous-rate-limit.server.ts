@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { PluginError, type PluginAnonymousPolicy } from '@ploykit/plugin-sdk';
-import type { RuntimeApiRoute } from '../contract';
+import type { AnonymousRuntimeRoute } from './anonymous-policy.server';
 
 interface AnonymousLimitRecord {
   count: number;
@@ -45,7 +45,7 @@ function getBuckets(policy: NonNullable<PluginAnonymousPolicy['rateLimit']>) {
 function buildKey(input: {
   request: Request;
   pluginId: string;
-  route: RuntimeApiRoute;
+  route: AnonymousRuntimeRoute & { method?: string };
   policy: NonNullable<PluginAnonymousPolicy['rateLimit']>;
 }): string {
   const url = new URL(input.request.url);
@@ -57,7 +57,7 @@ function buildKey(input: {
       case 'userAgent':
         return `ua:${userAgent.slice(0, 120)}`;
       case 'route':
-        return `route:${input.route.method}:${input.route.path}`;
+        return `route:${input.route.method ?? input.request.method.toUpperCase()}:${input.route.path}`;
       case 'plugin':
         return `plugin:${input.pluginId}`;
       case 'method':
@@ -90,7 +90,7 @@ function headers(input: {
 export function checkAnonymousRateLimit(input: {
   request: Request;
   pluginId: string;
-  route: RuntimeApiRoute;
+  route: AnonymousRuntimeRoute & { method?: string };
   policy?: PluginAnonymousPolicy;
   now?: number;
 }): AnonymousRateLimitDecision {

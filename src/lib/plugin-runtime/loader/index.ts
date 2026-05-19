@@ -26,6 +26,8 @@ export {
   resolvePluginHookModule,
   resolvePluginJobModule,
   resolvePluginLifecycleModule,
+  resolvePluginLoaderModule,
+  resolvePluginMetadataModule,
   resolvePluginPageModule,
   resolvePluginSlotModule,
   resolvePluginWebhookModule,

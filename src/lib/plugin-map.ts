@@ -25,6 +25,8 @@ export interface PluginMapEntry {
   eventModules?: Record<string, PluginModuleLoader>;
   hookModules?: Record<string, PluginModuleLoader>;
   slotModules?: Record<string, PluginModuleLoader>;
+  loaderModules?: Record<string, PluginModuleLoader>;
+  metadataModules?: Record<string, PluginModuleLoader>;
 }
 
 export interface PluginMapArtifact {

@@ -222,7 +222,7 @@ class MemoryFilesRepository implements PluginFilesRepository {
       fileName: string;
       contentType: string;
       size: number;
-      purpose: 'source' | 'result' | 'temp';
+      purpose: 'source' | 'result' | 'temp' | 'media';
       storageKey: string;
       runId?: string;
       expiresAt?: Date;
@@ -243,12 +243,18 @@ class MemoryFilesRepository implements PluginFilesRepository {
       hash: null,
       purpose: input.purpose,
       status: 'pending_upload',
+      visibility: 'private',
+      publicId: null,
+      publicFileName: null,
+      publicCacheControl: null,
+      contentDisposition: 'attachment',
       storageKey: input.storageKey,
       storageProvider: 'local',
       runId: input.runId ?? null,
       metadata: input.metadata,
       expiresAt: input.expiresAt ?? null,
       uploadedAt: null,
+      publishedAt: null,
       archivedAt: null,
       deletedAt: null,
       createdAt: now,
@@ -338,6 +344,44 @@ class MemoryFilesRepository implements PluginFilesRepository {
     const existing = this.values.get(id);
     if (!existing) throw new Error('not found');
     const row = { ...existing, status: 'archived', archivedAt: new Date(), updatedAt: new Date() };
+    this.values.set(id, row);
+    return row;
+  }
+
+  async publish(
+    _scope: PluginFilesScope,
+    id: string,
+    input: Parameters<PluginFilesRepository['publish']>[2]
+  ) {
+    const existing = this.values.get(id);
+    if (!existing) throw new Error('not found');
+    const row = {
+      ...existing,
+      visibility: 'public',
+      publicId: input.publicId,
+      publicFileName: input.fileName,
+      publicCacheControl: input.cacheControl,
+      contentDisposition: input.contentDisposition,
+      publishedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.values.set(id, row);
+    return row;
+  }
+
+  async unpublish(_scope: PluginFilesScope, id: string) {
+    const existing = this.values.get(id);
+    if (!existing) throw new Error('not found');
+    const row = {
+      ...existing,
+      visibility: 'private',
+      publicId: null,
+      publicFileName: null,
+      publicCacheControl: null,
+      contentDisposition: 'attachment',
+      publishedAt: null,
+      updatedAt: new Date(),
+    };
     this.values.set(id, row);
     return row;
   }

@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "sourceDirs": [
     {
       "path": "plugins",
@@ -42,7 +42,9 @@
       "hookModules": [],
       "slotModules": [
         "slots/JsonAliasBanner"
-      ]
+      ],
+      "loaderModules": [],
+      "metadataModules": []
     },
     {
       "id": "host-capability-lab",
@@ -70,7 +72,9 @@
         "slots/HomeHeroBefore",
         "slots/PricingMainAfter",
         "slots/PricingMainBefore"
-      ]
+      ],
+      "loaderModules": [],
+      "metadataModules": []
     },
     {
       "id": "sample-internal",
@@ -89,7 +93,9 @@
       "webhookModules": [],
       "eventModules": [],
       "hookModules": [],
-      "slotModules": []
+      "slotModules": [],
+      "loaderModules": [],
+      "metadataModules": []
     }
   ]
 }

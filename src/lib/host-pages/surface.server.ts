@@ -10,6 +10,7 @@ import type { PluginHostPageOverride as PluginHostPageOverrideRow } from '@/lib/
 import { pluginRuntimeRegistry } from '@/lib/plugin-runtime/registry';
 import {
   getPluginRuntimeMapEntry,
+  resolvePluginLoaderModule,
   resolvePluginComponentModule,
   resolvePluginPageModule,
   type PluginModuleLoader,
@@ -27,12 +28,14 @@ export interface HostPageSlotRegistration extends RuntimeHostPageSlot {
   pluginId: string;
   contract: PluginRuntimeContract;
   load: PluginModuleLoader;
+  loadData?: PluginModuleLoader;
 }
 
 export interface HostPageOverrideRegistration extends RuntimeHostPageOverride {
   pluginId: string;
   contract: PluginRuntimeContract;
   load: PluginModuleLoader;
+  loadData?: PluginModuleLoader;
   activatedAt?: Date;
 }
 
@@ -55,6 +58,17 @@ async function loadEnabledContracts(): Promise<PluginRuntimeContract[]> {
 function resolveSlotLoader(pluginId: string, component: string): PluginModuleLoader | null {
   const entry = getPluginRuntimeMapEntry(pluginId) ?? pluginRuntimeRegistry.getEntry(pluginId);
   return entry ? resolvePluginComponentModule(entry, component) : null;
+}
+
+function resolveRouteLoader(
+  pluginId: string,
+  loader: string | undefined
+): PluginModuleLoader | null {
+  if (!loader) {
+    return null;
+  }
+  const entry = getPluginRuntimeMapEntry(pluginId) ?? pluginRuntimeRegistry.getEntry(pluginId);
+  return entry ? resolvePluginLoaderModule(entry, loader) : null;
 }
 
 function resolveOverrideLoader(pluginId: string, component: string): PluginModuleLoader | null {
@@ -80,7 +94,15 @@ function contractSlotsForPage(
         return [];
       }
 
-      return [{ ...slot, pluginId: contract.id, contract, load }];
+      const loadData = resolveRouteLoader(contract.id, slot.loader);
+      if (slot.loader && !loadData) {
+        logger.warn(
+          { pluginId: contract.id, loader: slot.loader, page: page.path },
+          'Host page slot loader is missing from plugin map'
+        );
+      }
+
+      return [{ ...slot, pluginId: contract.id, contract, load, loadData: loadData ?? undefined }];
     });
 }
 
@@ -171,6 +193,7 @@ async function resolveActiveOverride(
     pluginId: selected.contract.id,
     contract: selected.contract,
     load,
+    loadData: resolveRouteLoader(selected.contract.id, selected.override.loader) ?? undefined,
     activatedAt: activeRecord.activatedAt,
   };
 }

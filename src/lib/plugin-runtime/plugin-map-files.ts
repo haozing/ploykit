@@ -4,6 +4,8 @@ import { EXTERNAL_PLUGIN_DIRS_ENV } from './plugin-source-dirs';
 export const PLUGIN_MAP_FILE_ENV = 'PLOYKIT_PLUGIN_MAP_FILE';
 export const PLUGIN_MAP_MANIFEST_FILE_ENV = 'PLOYKIT_PLUGIN_MAP_MANIFEST_FILE';
 
+export const PLUGIN_MAP_MANIFEST_VERSION = 6;
+
 export const SOURCE_PLUGIN_MAP_FILE = 'src/lib/plugin-map.ts';
 export const SOURCE_PLUGIN_MAP_MANIFEST_FILE = 'src/lib/plugin-map.manifest.json';
 export const RUNTIME_PLUGIN_MAP_FILE = '.runtime/plugin-map.cjs';

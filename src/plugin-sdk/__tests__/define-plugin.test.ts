@@ -376,6 +376,54 @@ describe('plugin SDK contract helpers', () => {
     );
   });
 
+  it('requires anonymousPolicy on public server-executed routes', () => {
+    const diagnostics = validatePluginDefinition({
+      id: 'public-server-routes',
+      name: 'Public Server Routes',
+      version: '1.0.0',
+      permissions: [Permission.HostPageExtend],
+      routes: {
+        pages: [
+          {
+            path: '/posts/:slug',
+            component: './pages/Post',
+            loader: './loaders/post',
+            auth: 'public',
+          },
+        ],
+        tools: [
+          {
+            path: '/json',
+            component: './pages/Json',
+            loader: './loaders/json',
+            auth: 'public',
+            seo: {
+              title: 'JSON',
+              description: 'JSON tool',
+              canonical: '/tools/json',
+            },
+          },
+        ],
+      },
+      hostPages: {
+        slots: [
+          {
+            page: '/',
+            position: 'main.after',
+            component: './slots/Home',
+            loader: './loaders/home',
+          },
+        ],
+      },
+    });
+
+    expect(
+      diagnostics.filter(
+        (diagnostic) => diagnostic.code === 'PLUGIN_PUBLIC_EXECUTABLE_ANONYMOUS_POLICY_REQUIRED'
+      )
+    ).toHaveLength(3);
+  });
+
   it('validates declared action meters', () => {
     const valid = definePlugin({
       id: 'meter-contract-check',

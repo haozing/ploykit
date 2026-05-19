@@ -4,10 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 import { PluginError } from '@ploykit/plugin-sdk';
 import {
   createPluginCommercialRedirectPath,
-  createPluginPublicAliasMetadata,
-  createPluginPublicAliasStructuredDataScripts,
   isPluginCommercialError,
   resolvePluginPageRuntime,
+  resolvePluginRouteMetadata,
   resolvePluginPublicRouteAlias,
 } from '@/lib/plugin-runtime';
 import { PluginRuntimePageRenderer } from '@/components/plugins/plugin-runtime-page-renderer';
@@ -37,13 +36,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {};
   }
 
-  const alias = match.route.publicAliases.find((candidate) => candidate.path === match.aliasPath);
-  return alias
-    ? createPluginPublicAliasMetadata(alias, {
-        locale: lang,
-        pathname: `/${lang}${path === '/' ? '' : path}`,
-      })
-    : {};
+  const requestHeaders =
+    match.route.auth === 'public' && !match.route.commercial ? new Headers() : await headers();
+  const resolved = await resolvePluginRouteMetadata({
+    pluginId: match.pluginId,
+    contract: match.contract,
+    route: match.route,
+    entry: match.entry,
+    localPath: match.route.path,
+    requestPath: match.requestPath,
+    params: match.params,
+    locale: lang,
+    pathname: `/${lang}${path === '/' ? '' : path}`,
+    requestHeaders,
+  });
+  return resolved.metadata;
 }
 
 export default async function PluginPublicAliasPage({ params, searchParams }: Props) {
@@ -58,15 +65,25 @@ export default async function PluginPublicAliasPage({ params, searchParams }: Pr
   const requestHeaders =
     match.route.auth === 'public' && !match.route.commercial ? new Headers() : await headers();
   const runtimeResult = await resolveAliasRuntimePageOrNotFound(match, requestHeaders, lang, query);
-  const alias = match.route.publicAliases.find((candidate) => candidate.path === match.aliasPath);
-  const structuredDataScripts = alias
-    ? createPluginPublicAliasStructuredDataScripts(alias, { locale: lang })
-    : [];
+  const metadata = await resolvePluginRouteMetadata({
+    pluginId: match.pluginId,
+    contract: match.contract,
+    route: match.route,
+    entry: match.entry,
+    localPath: runtimeResult.localPath,
+    requestPath: match.requestPath,
+    params: match.params,
+    query: runtimeResult.query,
+    locale: lang,
+    pathname: `/${lang}${match.requestPath === '/' ? '' : match.requestPath}`,
+    requestHeaders,
+    data: runtimeResult.data,
+  });
 
   return (
     <IntlMessagesProvider scope="site">
       <ShellLayout pathname={match.requestPath} locale={lang}>
-        {structuredDataScripts.map((script) => (
+        {metadata.structuredDataScripts.map((script) => (
           <script
             key={script.id}
             id={script.id}

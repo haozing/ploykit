@@ -11,6 +11,7 @@ import {
   type PluginSourceKind,
 } from '@/lib/plugin-runtime/plugin-source-dirs';
 import {
+  PLUGIN_MAP_MANIFEST_VERSION,
   getActivePluginMapFiles,
   getSourcePluginMapFiles,
   hasConfiguredExternalPluginDirs,
@@ -91,6 +92,8 @@ interface PluginInfo {
   eventModules: string[];
   hookModules: string[];
   slotModules: string[];
+  loaderModules: string[];
+  metadataModules: string[];
 }
 
 function getTargetsForSourceKind(kind?: PluginSourceKind): PluginSourceTarget[] {
@@ -183,6 +186,18 @@ function scanPlugins(kind?: PluginSourceKind): PluginInfo[] {
         scanModuleDirectory(slotsDir, pluginPath, slotModules);
       }
 
+      const loaderModules: string[] = [];
+      const loadersDir = path.join(pluginPath, 'loaders');
+      if (fs.existsSync(loadersDir)) {
+        scanModuleDirectory(loadersDir, pluginPath, loaderModules, ['.ts', '.js']);
+      }
+
+      const metadataModules: string[] = [];
+      const metadataDir = path.join(pluginPath, 'metadata');
+      if (fs.existsSync(metadataDir)) {
+        scanModuleDirectory(metadataDir, pluginPath, metadataModules, ['.ts', '.js']);
+      }
+
       plugins.push({
         id: pluginId,
         rootDir: formatPluginSourcePath(pluginPath, PROJECT_ROOT),
@@ -198,6 +213,8 @@ function scanPlugins(kind?: PluginSourceKind): PluginInfo[] {
         eventModules: eventModules.sort(),
         hookModules: hookModules.sort(),
         slotModules: slotModules.sort(),
+        loaderModules: loaderModules.sort(),
+        metadataModules: metadataModules.sort(),
       });
 
       seen.set(pluginId, plugins.at(-1)!);
@@ -328,6 +345,16 @@ function generatePluginMap(
       parts.push(`    slotModules: {\n${slotModules}\n    },`);
     }
 
+    const loaderModules = moduleMap(plugin, plugin.loaderModules, '', '', outputDir);
+    if (loaderModules) {
+      parts.push(`    loaderModules: {\n${loaderModules}\n    },`);
+    }
+
+    const metadataModules = moduleMap(plugin, plugin.metadataModules, '', '', outputDir);
+    if (metadataModules) {
+      parts.push(`    metadataModules: {\n${metadataModules}\n    },`);
+    }
+
     return `  '${plugin.id}': {\n${parts.join('\n')}\n  }`;
   });
 
@@ -365,6 +392,8 @@ export interface PluginMapEntry {
   eventModules?: Record<string, PluginModuleLoader>;
   hookModules?: Record<string, PluginModuleLoader>;
   slotModules?: Record<string, PluginModuleLoader>;
+  loaderModules?: Record<string, PluginModuleLoader>;
+  metadataModules?: Record<string, PluginModuleLoader>;
 }
 
 export interface PluginMapArtifact {
@@ -387,7 +416,7 @@ function generatePluginManifest(plugins: PluginInfo[], kind?: PluginSourceKind):
   const sourceTargets = getTargetsForSourceKind(kind);
   return `${JSON.stringify(
     {
-      version: 5,
+      version: PLUGIN_MAP_MANIFEST_VERSION,
       sourceDirs: sourceTargets.map((target) => ({
         path: target.displayPath,
         kind: target.kind,
@@ -407,6 +436,8 @@ function generatePluginManifest(plugins: PluginInfo[], kind?: PluginSourceKind):
         eventModules: plugin.eventModules,
         hookModules: plugin.hookModules,
         slotModules: plugin.slotModules,
+        loaderModules: plugin.loaderModules,
+        metadataModules: plugin.metadataModules,
       })),
     },
     null,
@@ -521,6 +552,12 @@ function printPlugins(plugins: PluginInfo[]): void {
     }
     if (plugin.hookModules.length > 0) features.push(`${plugin.hookModules.length} hook modules`);
     if (plugin.slotModules.length > 0) features.push(`${plugin.slotModules.length} slot modules`);
+    if (plugin.loaderModules.length > 0) {
+      features.push(`${plugin.loaderModules.length} loader modules`);
+    }
+    if (plugin.metadataModules.length > 0) {
+      features.push(`${plugin.metadataModules.length} metadata modules`);
+    }
     console.log(`   - ${plugin.id} (${features.join(', ')})`);
   });
 }

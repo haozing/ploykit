@@ -60,6 +60,15 @@ describe('API route catalog', () => {
     });
   });
 
+  it('classifies published plugin media as public read-only routes', () => {
+    expect(resolveApiRoutePolicy('/api/plugin-media/demo/public-1/cover.png', 'GET')).toMatchObject(
+      {
+        access: 'public',
+        mutationProtection: 'none',
+      }
+    );
+  });
+
   it('classifies declared plugin assets as plugin contract routes', () => {
     expect(resolveApiRoutePolicy('/api/plugin-assets/demo/assets/icon.png', 'GET')).toMatchObject({
       access: 'plugin-gateway',

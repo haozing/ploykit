@@ -8,12 +8,14 @@ import {
 } from '../contract';
 import {
   getPluginRuntimeMapEntry,
+  resolvePluginLoaderModule,
   resolvePluginPageModule,
   type PluginRuntimeMapEntry,
 } from '../loader';
 import { enforcePluginPermissions, enforcePluginRuntimeAuth } from '../context';
 import { enforcePluginRuntimeEnabled, pluginRuntimeRegistry } from '../registry';
 import { enforcePluginCommercialGate } from './commercial-gate.server';
+import { runPluginRouteLoader } from './route-loader.server';
 
 export interface PluginPageRuntimeOptions {
   entry?: PluginRuntimeMapEntry;
@@ -36,6 +38,12 @@ export interface PluginPageRuntimeResult {
   module: {
     componentPath: string;
     load: () => Promise<unknown>;
+  };
+  data?: unknown;
+  cache?: RuntimePageRoute['cache'];
+  redirect?: {
+    location: string;
+    status?: 301 | 302 | 303 | 307 | 308;
   };
 }
 
@@ -110,8 +118,8 @@ async function resolvePluginPageRuntimeInternal(
   }
 
   enforcePluginPermissions(contract, route.permissions);
-  const { user } = await enforcePluginRuntimeAuth(contract, route, requestHeaders);
-  await enforcePluginCommercialGate(contract, route, user);
+  const auth = await enforcePluginRuntimeAuth(contract, route, requestHeaders);
+  await enforcePluginCommercialGate(contract, route, auth.user);
 
   const moduleLoader = entry ? resolvePluginPageModule(entry, route.component) : null;
   if (!moduleLoader) {
@@ -123,20 +131,59 @@ async function resolvePluginPageRuntimeInternal(
     });
   }
 
+  const requestPath =
+    options.requestPathOverride ??
+    createRequestPath(pluginId, slug, admin, options.publicPathPrefix);
+  const normalizedQuery = normalizeQuery(options.query);
+  const routeLoader = entry && route.loader ? resolvePluginLoaderModule(entry, route.loader) : null;
+  if (route.loader && !routeLoader) {
+    throw new PluginError({
+      code: 'PLUGIN_PAGE_LOADER_NOT_FOUND',
+      message: `Page loader "${route.loader}" was not found for plugin "${pluginId}".`,
+      statusCode: 500,
+      fix: 'Run npm run plugins:scan and ensure the loader path exists inside the plugin.',
+    });
+  }
+
+  const loaderResult = await runPluginRouteLoader(routeLoader, route.loader, {
+    contract,
+    route,
+    localPath,
+    locale: options.locale ?? 'en',
+    params: matched?.params ?? {},
+    query: normalizedQuery,
+    requestPath,
+    requestHeaders,
+    auth,
+  });
+
+  if (loaderResult.notFound) {
+    throw new PluginError({
+      code: 'PLUGIN_PAGE_LOADER_NOT_FOUND',
+      message: `Page loader returned notFound for ${localPath}.`,
+      statusCode: 404,
+      details: {
+        pluginId,
+        localPath,
+      },
+    });
+  }
+
   return {
     contract,
     route,
     localPath,
     locale: options.locale ?? 'en',
     params: matched?.params ?? {},
-    query: normalizeQuery(options.query),
-    requestPath:
-      options.requestPathOverride ??
-      createRequestPath(pluginId, slug, admin, options.publicPathPrefix),
+    query: normalizedQuery,
+    requestPath,
     module: {
       componentPath: route.component,
       load: moduleLoader,
     },
+    data: loaderResult.data,
+    cache: loaderResult.cache ?? route.cache,
+    redirect: loaderResult.redirect,
   };
 }
 

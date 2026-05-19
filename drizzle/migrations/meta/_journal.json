@@ -204,6 +204,13 @@
       "when": 1779080400000,
       "tag": "0028_credit_accounts_storage_unique_commerce",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1779166800000,
+      "tag": "0029_plugin_public_content_runtime",
+      "breakpoints": true
     }
   ]
 }

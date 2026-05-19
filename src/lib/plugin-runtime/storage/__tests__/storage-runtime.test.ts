@@ -82,6 +82,8 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
       pluginId: input.pluginId,
       collectionName: input.collectionName,
       userId: input.userId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
       data: input.data,
       createdAt: now,
       updatedAt: now,
@@ -142,6 +144,8 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
       pluginId: input.pluginId,
       collectionName: input.collectionName,
       userId: existing.userId,
+      scopeType: existing.scopeType,
+      scopeId: existing.scopeId,
       id: existing.id,
       data: update.data,
       previousUniqueKeys: update.previousUniqueKeys,
@@ -168,7 +172,8 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
     this.releaseUniqueKeys({
       pluginId: record.pluginId,
       collectionName,
-      userId: record.userId,
+      scopeType: record.scopeType,
+      scopeId: record.scopeId,
       id,
     });
     return record;
@@ -191,7 +196,7 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
   }
 
   private uniqueMapKey(input: InsertPluginRecordInput | UpdatePluginRecordInput, key: string) {
-    return `${input.pluginId}:${input.collectionName}:${input.userId ?? '__system__'}:${key}`;
+    return `${input.pluginId}:${input.collectionName}:${input.scopeType}:${input.scopeId}:${key}`;
   }
 
   private reserveUniqueKeys(input: InsertPluginRecordInput | UpdatePluginRecordInput): void {
@@ -209,9 +214,12 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
   }
 
   private releaseUniqueKeys(
-    input: Pick<UpdatePluginRecordInput, 'pluginId' | 'collectionName' | 'userId' | 'id'>
+    input: Pick<
+      UpdatePluginRecordInput,
+      'pluginId' | 'collectionName' | 'scopeType' | 'scopeId' | 'id'
+    >
   ): void {
-    const prefix = `${input.pluginId}:${input.collectionName}:${input.userId ?? '__system__'}:`;
+    const prefix = `${input.pluginId}:${input.collectionName}:${input.scopeType}:${input.scopeId}:`;
     for (const [key, recordId] of this.uniqueKeys.entries()) {
       if (key.startsWith(prefix) && recordId === input.id) {
         this.uniqueKeys.delete(key);
@@ -232,11 +240,7 @@ class MemoryPluginStorageRepository implements PluginStorageRepository {
       return false;
     }
 
-    if (scope.system) {
-      return scope.userId ? record.userId === scope.userId : true;
-    }
-
-    return record.userId === scope.userId;
+    return record.scopeType === scope.scopeType && record.scopeId === scope.scopeId;
   }
 }
 
@@ -370,6 +374,76 @@ describe('plugin storage runtime', () => {
       'write denied'
     );
     expect(repository.records.size).toBe(0);
+  });
+
+  it('authorizes user and workspace scopes before repository access', async () => {
+    const repository = new MemoryPluginStorageRepository();
+    const authorizations: Array<{
+      scopeType: PluginStorageScope['scopeType'];
+      scopeId: string;
+      userId?: string;
+      action: string;
+      capability: string;
+    }> = [];
+    const storage = createPluginStorage({
+      pluginId: 'todo',
+      userId: 'user-a',
+      data: { collections: { todos: todoCollection } },
+      repository,
+      authorizeScope: (scope, action, capability) => {
+        authorizations.push({
+          scopeType: scope.scopeType,
+          scopeId: scope.scopeId,
+          userId: scope.userId,
+          action,
+          capability,
+        });
+        if (scope.scopeType === 'workspace' && scope.scopeId === 'workspace-denied') {
+          throw new Error('workspace denied');
+        }
+      },
+    });
+
+    const delegated = await storage
+      .scope({ type: 'user', id: 'user-b' })
+      .collection('todos')
+      .insert({ title: 'delegated' });
+    await storage.scope({ type: 'workspace', id: 'workspace-a' }).collection('todos').findMany();
+    await expect(
+      storage
+        .scope({ type: 'workspace', id: 'workspace-denied' })
+        .collection('todos')
+        .insert({ title: 'blocked' })
+    ).rejects.toThrow('workspace denied');
+
+    const rawDelegated = repository.records.get(delegated.id as string);
+    expect(rawDelegated?.userId).toBe('user-b');
+    expect(authorizations).toEqual([
+      {
+        scopeType: 'user',
+        scopeId: 'user-b',
+        userId: 'user-a',
+        action: 'write',
+        capability: 'ctx.storage.collection("todos").insert',
+      },
+      {
+        scopeType: 'workspace',
+        scopeId: 'workspace-a',
+        userId: 'user-a',
+        action: 'read',
+        capability: 'ctx.storage.collection("todos").findMany',
+      },
+      {
+        scopeType: 'workspace',
+        scopeId: 'workspace-denied',
+        userId: 'user-a',
+        action: 'write',
+        capability: 'ctx.storage.collection("todos").insert',
+      },
+    ]);
+    expect([...repository.records.values()].map((record) => record.data.title)).not.toContain(
+      'blocked'
+    );
   });
 
   it('enforces plugin and user isolation at the repository boundary', async () => {

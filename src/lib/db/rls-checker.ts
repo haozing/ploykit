@@ -79,10 +79,14 @@ export const DEFAULT_RLS_REQUIREMENTS: RLSRequirement[] = [
   { table: 'usage_history', isolationColumns: ['user_id'], requireForce: true },
   { table: 'plugin_settings', isolationColumns: ['user_id'], requireForce: true },
   { table: 'plugin_collections', isolationColumns: ['plugin_id'], requireForce: true },
-  { table: 'plugin_records', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },
+  {
+    table: 'plugin_records',
+    isolationColumns: ['plugin_id', 'scope_type', 'scope_id'],
+    requireForce: true,
+  },
   {
     table: 'plugin_record_unique_keys',
-    isolationColumns: ['plugin_id', 'user_id'],
+    isolationColumns: ['plugin_id', 'scope_type', 'scope_id'],
     requireForce: true,
   },
   { table: 'plugin_config', isolationColumns: ['plugin_id', 'user_id'], requireForce: true },

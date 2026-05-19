@@ -1,13 +1,17 @@
 import 'server-only';
 
-import { PluginError, type PluginAnonymousPolicy } from '@ploykit/plugin-sdk';
+import { PluginError, type PluginAnonymousPolicy, type PluginRouteAuth } from '@ploykit/plugin-sdk';
 import { env } from '@/lib/_core/env';
-import type { RuntimeApiRoute } from '../contract';
 
 export type AnonymousHighCostAction = 'ai' | 'connector' | 'files.upload' | 'runs.create';
 
+export interface AnonymousRuntimeRoute {
+  path: string;
+  auth: PluginRouteAuth;
+}
+
 export interface AnonymousRuntimePolicyState {
-  route: RuntimeApiRoute;
+  route: AnonymousRuntimeRoute;
   policy?: PluginAnonymousPolicy;
   anonymous: boolean;
 }
@@ -21,7 +25,7 @@ export function createAnonymousPolicyError(input: {
     code: 'PLUGIN_ANONYMOUS_HIGH_COST_FORBIDDEN',
     message: `Anonymous public route cannot perform high-cost action "${input.action}".`,
     statusCode: 403,
-    fix: 'Declare anonymousPolicy.allowHighCostActions: true for this public API route, or require auth.',
+    fix: 'Declare anonymousPolicy.allowHighCostActions: true for this public route, or require auth.',
     details: {
       pluginId: input.pluginId,
       routePath: input.routePath,
@@ -103,7 +107,7 @@ async function verifyTurnstileToken(token: string, request: Request): Promise<bo
 export async function verifyAnonymousCaptcha(input: {
   request: Request;
   pluginId: string;
-  route: RuntimeApiRoute;
+  route: AnonymousRuntimeRoute;
   policy?: PluginAnonymousPolicy;
 }): Promise<void> {
   if (input.policy?.captcha !== 'always') {

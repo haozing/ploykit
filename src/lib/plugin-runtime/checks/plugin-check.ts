@@ -709,6 +709,18 @@ function captureCapabilityPermissions(
       return;
     }
 
+    if (method === 'publish' || method === 'unpublish') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.FilesPublish,
+        filePath,
+        node,
+        `ctx.files.${method}`,
+        sourceFile
+      );
+      return;
+    }
+
     if (
       method === 'read' ||
       method === 'get' ||
@@ -721,6 +733,21 @@ function captureCapabilityPermissions(
         filePath,
         node,
         `ctx.files.${method}`,
+        sourceFile
+      );
+      return;
+    }
+  }
+
+  if (matchesPrefix(chain, ['ctx', 'cache'])) {
+    const method = chain[2];
+    if (method === 'revalidatePath' || method === 'revalidateTag') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.CacheRevalidate,
+        filePath,
+        node,
+        `ctx.cache.${method}`,
         sourceFile
       );
       return;
@@ -2394,6 +2421,24 @@ function buildDeclaredHandlerDiagnostics(
       page.component,
       `routes.pages.${index}.component`
     );
+    if (page.loader) {
+      checkHandler(
+        'PLUGIN_PAGE_LOADER_NOT_FOUND',
+        'Page loader',
+        page.path,
+        page.loader,
+        `routes.pages.${index}.loader`
+      );
+    }
+    if (page.metadata) {
+      checkHandler(
+        'PLUGIN_PAGE_METADATA_NOT_FOUND',
+        'Page metadata',
+        page.path,
+        page.metadata,
+        `routes.pages.${index}.metadata`
+      );
+    }
   }
 
   for (const [index, tool] of (contract.routes?.tools ?? []).entries()) {
@@ -2404,6 +2449,24 @@ function buildDeclaredHandlerDiagnostics(
       tool.component,
       `routes.tools.${index}.component`
     );
+    if (tool.loader) {
+      checkHandler(
+        'PLUGIN_PAGE_LOADER_NOT_FOUND',
+        'Tool loader',
+        tool.path,
+        tool.loader,
+        `routes.tools.${index}.loader`
+      );
+    }
+    if (tool.metadata) {
+      checkHandler(
+        'PLUGIN_PAGE_METADATA_NOT_FOUND',
+        'Tool metadata',
+        tool.path,
+        tool.metadata,
+        `routes.tools.${index}.metadata`
+      );
+    }
   }
 
   for (const [index, api] of (contract.routes?.apis ?? []).entries()) {
@@ -2463,6 +2526,15 @@ function buildDeclaredHandlerDiagnostics(
       slot.component,
       `hostPages.slots.${index}.component`
     );
+    if (slot.loader) {
+      checkHandler(
+        'PLUGIN_HOST_PAGE_SLOT_LOADER_NOT_FOUND',
+        'Host page slot loader',
+        `${slot.page}:${slot.position}`,
+        slot.loader,
+        `hostPages.slots.${index}.loader`
+      );
+    }
   }
 
   for (const [index, override] of (contract.hostPages?.overrides ?? []).entries()) {
@@ -2473,6 +2545,24 @@ function buildDeclaredHandlerDiagnostics(
       override.component,
       `hostPages.overrides.${index}.component`
     );
+    if (override.loader) {
+      checkHandler(
+        'PLUGIN_HOST_PAGE_OVERRIDE_LOADER_NOT_FOUND',
+        'Host page override loader',
+        override.page,
+        override.loader,
+        `hostPages.overrides.${index}.loader`
+      );
+    }
+    if (override.metadata) {
+      checkHandler(
+        'PLUGIN_HOST_PAGE_OVERRIDE_METADATA_NOT_FOUND',
+        'Host page override metadata',
+        override.page,
+        override.metadata,
+        `hostPages.overrides.${index}.metadata`
+      );
+    }
   }
 
   if (contract.hooks?.renderHead) {

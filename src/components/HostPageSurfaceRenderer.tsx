@@ -1,6 +1,8 @@
 import { PluginProvider } from '@ploykit/plugin-sdk/react';
 import { logger } from '@/lib/_core/logger';
+import { runPluginRouteLoader } from '@/lib/plugin-runtime/adapters/route-loader.server';
 import { listPluginRuntimeAssets } from '@/lib/plugin-runtime/assets';
+import type { RuntimePageRoute } from '@/lib/plugin-runtime/contract';
 import { resolvePluginI18nRuntimeForContract } from '@/lib/plugin-runtime/i18n';
 import {
   resolveHostPageSurface,
@@ -8,7 +10,12 @@ import {
   HostPageOverrideRegistration,
   HostPageSlotRegistration,
 } from '@/lib/host-pages/surface.server';
-import type { PluginRuntimePageProps, PluginRuntimeSlotProps } from '@ploykit/plugin-sdk';
+import type {
+  PermissionValue,
+  PluginAnonymousPolicy,
+  PluginRuntimePageProps,
+  PluginRuntimeSlotProps,
+} from '@ploykit/plugin-sdk';
 import type { ComponentType, ReactNode } from 'react';
 
 interface HostPageSlotListProps {
@@ -37,6 +44,56 @@ function runtimeAssets(contract: HostPageSlotRegistration['contract']) {
   );
 }
 
+function hostPageRoute(input: {
+  page: string;
+  component: string;
+  loader?: string;
+  anonymousPolicy?: PluginAnonymousPolicy;
+  permissions?: readonly PermissionValue[];
+}): RuntimePageRoute {
+  return {
+    kind: 'page',
+    path: input.page,
+    component: input.component,
+    loader: input.loader,
+    anonymousPolicy: input.anonymousPolicy,
+    auth: 'public',
+    layout: 'site',
+    area: 'public',
+    permissions: input.permissions ?? [],
+    publicAliases: [],
+  };
+}
+
+async function loadHostPageData(
+  registration: HostPageSlotRegistration | HostPageOverrideRegistration,
+  locale: string
+): Promise<unknown> {
+  if (!registration.loadData || !registration.loader) {
+    return undefined;
+  }
+
+  const route = hostPageRoute({
+    page: registration.page,
+    component: registration.component,
+    loader: registration.loader,
+    anonymousPolicy: registration.anonymousPolicy,
+  });
+  const result = await runPluginRouteLoader(registration.loadData, registration.loader, {
+    contract: registration.contract,
+    route,
+    localPath: registration.page,
+    requestPath: registration.page,
+    params: {},
+    query: {},
+    locale,
+    requestHeaders: new Headers(),
+    auth: { user: null },
+  });
+
+  return result.data;
+}
+
 export async function HostPageSlotList({ slots, className, locale }: HostPageSlotListProps) {
   const rendered = await Promise.all(
     slots.map(async (slot) => {
@@ -47,11 +104,15 @@ export async function HostPageSlotList({ slots, className, locale }: HostPageSlo
           throw new Error(`Missing default export for ${slot.component}`);
         }
 
-        const i18n = await resolvePluginI18nRuntimeForContract(slot.contract, locale);
+        const [i18n, data] = await Promise.all([
+          resolvePluginI18nRuntimeForContract(slot.contract, locale),
+          loadHostPageData(slot, locale),
+        ]);
         const slotProps: PluginRuntimeSlotProps = {
           pluginId: slot.pluginId,
           page: slot.page,
           position: slot.position,
+          data,
           i18n,
           assets: runtimeAssets(slot.contract),
         };
@@ -118,7 +179,10 @@ export async function HostPageOverride({
     return fallback;
   }
 
-  const i18n = await resolvePluginI18nRuntimeForContract(override.contract, locale);
+  const [i18n, data] = await Promise.all([
+    resolvePluginI18nRuntimeForContract(override.contract, locale),
+    loadHostPageData(override, locale),
+  ]);
 
   return (
     <PluginProvider pluginId={override.pluginId} i18n={i18n}>
@@ -128,6 +192,7 @@ export async function HostPageOverride({
         requestPath={override.page}
         params={{}}
         query={{}}
+        data={data}
         i18n={i18n}
         assets={runtimeAssets(override.contract)}
         route={{

@@ -16,6 +16,7 @@ import {
   createPluginArtifactsCapability,
   createPluginAiCapability,
   createPluginBillingCapability,
+  createPluginCacheCapability,
   createPluginCommerceCapability,
   createPluginConfigCapability,
   createPluginConnectorsCapability,
@@ -40,6 +41,7 @@ import {
   type CreatePluginArtifactsOptions,
   type CreatePluginAiOptions,
   type CreatePluginBillingOptions,
+  type CreatePluginCacheOptions,
   type CreatePluginCommerceOptions,
   type CreatePluginConfigOptions,
   type CreatePluginConnectorsOptions,
@@ -61,9 +63,11 @@ import {
   type CreatePluginWorkspaceOptions,
   type PluginCapabilityScope,
   type PluginRuntimeApiKeyContext,
+  assertResourceScopeAccess,
   enforceCapabilityPermission,
 } from '../capabilities';
 import { assertAnonymousHighCostAllowed, type AnonymousRuntimePolicyState } from '../anonymous';
+import { getCurrentRuntimeProductId } from '../product-context.server';
 
 export interface CreatePluginContextOptions {
   contract: PluginRuntimeContract;
@@ -90,6 +94,7 @@ export interface PluginCapabilityFactoryOptions {
   credits?: CreatePluginCreditsOptions;
   metering?: CreatePluginMeteringOptions;
   billing?: CreatePluginBillingOptions;
+  cache?: CreatePluginCacheOptions;
   commerce?: CreatePluginCommerceOptions;
   notifications?: CreatePluginNotificationsOptions;
   rag?: CreatePluginRagOptions;
@@ -152,12 +157,25 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
   const storage = createPluginStorageRuntime({
     pluginId: options.contract.id,
     userId: options.user?.id,
+    productId: getCurrentRuntimeProductId(),
     system: options.system,
     data: options.contract.data,
     enforceRead: (capability) =>
       enforceCapabilityPermission(capabilityScope, Permission.StorageRead, capability),
     enforceWrite: (capability) =>
       enforceCapabilityPermission(capabilityScope, Permission.StorageWrite, capability),
+    authorizeScope: async (storageScope, action, capability) => {
+      if (storageScope.scopeType !== 'user' && storageScope.scopeType !== 'workspace') {
+        return;
+      }
+
+      await assertResourceScopeAccess(
+        capabilityScope,
+        { type: storageScope.scopeType, id: storageScope.scopeId },
+        action,
+        capability
+      );
+    },
   });
   const assertHighCostAllowed = (action: 'ai' | 'connector' | 'files.upload' | 'runs.create') =>
     assertAnonymousHighCostAllowed(options.anonymousPolicyState, {
@@ -241,6 +259,7 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
     credits: createPluginCreditsCapability(capabilityScope, options.capabilities?.credits),
     metering: createPluginMeteringCapability(capabilityScope, options.capabilities?.metering),
     billing: createPluginBillingCapability(capabilityScope, options.capabilities?.billing),
+    cache: createPluginCacheCapability(capabilityScope, options.capabilities?.cache),
     commerce: createPluginCommerceCapability(capabilityScope, options.capabilities?.commerce),
     runs: {
       ...runs,

@@ -264,6 +264,19 @@ export const API_ROUTE_CATALOG: readonly ApiRouteCatalogEntry[] = [
     },
   },
   {
+    id: 'plugin-public-media',
+    pattern: '/api/plugin-media/[pluginId]/[publicId]/**',
+    owner: 'plugins',
+    methods: {
+      GET: {
+        access: 'public',
+        mutationProtection: 'none',
+        guard: 'published plugin file visibility + ready status',
+        notes: 'Serves only plugin files explicitly published through ctx.files.publish().',
+      },
+    },
+  },
+  {
     id: 'plugin-assets',
     pattern: '/api/plugin-assets/[pluginId]/**',
     owner: 'plugins',

@@ -217,6 +217,8 @@ export interface PluginTestState {
       | 'list'
       | 'createSignedUploadUrl'
       | 'createSignedDownloadUrl'
+      | 'publish'
+      | 'unpublish'
       | 'archive'
       | 'delete';
     id?: string;
@@ -249,6 +251,7 @@ export interface PluginTestState {
   rateLimit: Array<{ bucket: string; limit: number; window: string }>;
   resourceBindings: Array<{ operation: string; id?: string; resourceType?: string }>;
   services: Array<{ service: string; path: string; method: string; status: number }>;
+  cache: Array<{ operation: 'revalidatePath' | 'revalidateTag'; path?: string; tag?: string }>;
 }
 
 export type PluginTestServiceHandler = (request: {
@@ -323,13 +326,17 @@ interface PluginTestFile {
   contentType: string;
   size: number;
   hash?: string;
-  purpose: 'source' | 'result' | 'temp';
+  purpose: 'source' | 'result' | 'temp' | 'media';
   status: 'pending_upload' | 'ready' | 'archived' | 'deleted';
+  visibility: 'private' | 'public';
+  publicUrl?: string;
+  contentDisposition?: 'attachment' | 'inline';
   body?: Buffer;
   runId?: string;
   metadata: Record<string, unknown>;
   expiresAt?: Date;
   uploadedAt?: Date;
+  publishedAt?: Date;
   archivedAt?: Date;
   deletedAt?: Date;
   createdAt: Date;
@@ -386,6 +393,7 @@ function createInitialState(): PluginTestState {
     rateLimit: [],
     resourceBindings: [],
     services: [],
+    cache: [],
   };
 }
 
@@ -1129,6 +1137,9 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
 
   const storage: PluginStorage = {
     collection,
+    scope() {
+      return storage;
+    },
     async ensureCollections() {
       enforcePermission(Permission.StorageWrite, 'ctx.storage.ensureCollections');
       return undefined;
@@ -1364,6 +1375,8 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           hash,
           purpose: input.purpose,
           status,
+          visibility: 'private',
+          contentDisposition: 'attachment',
           body,
           runId: input.runId,
           metadata: input.metadata ?? {},
@@ -1390,7 +1403,10 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           size: file.size,
           purpose: file.purpose,
           status: file.status,
+          visibility: file.visibility,
           storageRef: `memory://${plugin.id}/${id}/${file.fileName}`,
+          publicUrl: file.publicUrl,
+          contentDisposition: file.contentDisposition,
           metadata: file.metadata,
           expiresAt: file.expiresAt,
           createdAt: file.createdAt,
@@ -1467,6 +1483,54 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
         enforcePermission(Permission.FilesRead, 'ctx.files.createSignedDownloadUrl');
         state.files.push({ operation: 'createSignedDownloadUrl', id });
         return `https://ploykit.test/plugin-files/${id}/download`;
+      },
+      async publish(input) {
+        enforcePermission(Permission.FilesPublish, 'ctx.files.publish');
+        const normalized = typeof input === 'string' ? { id: input } : input;
+        const existing = store.files.get(normalized.id);
+        if (!existing || existing.status !== 'ready') {
+          throw new PluginError({
+            code: 'PLUGIN_FILE_NOT_FOUND',
+            message: 'File not found.',
+            statusCode: 404,
+          });
+        }
+        const updated = {
+          ...existing,
+          fileName: normalized.fileName ?? existing.fileName,
+          visibility: 'public' as const,
+          publicUrl: `https://ploykit.test/plugin-media/${plugin.id}/${existing.id}/${encodeURIComponent(
+            normalized.fileName ?? existing.fileName
+          )}`,
+          contentDisposition: normalized.disposition ?? 'inline',
+          publishedAt: new Date(),
+          updatedAt: new Date(),
+        };
+        store.files.set(existing.id, updated);
+        state.files.push({ operation: 'publish', id: existing.id, scope: existing.scope });
+        return updated;
+      },
+      async unpublish(id: string) {
+        enforcePermission(Permission.FilesPublish, 'ctx.files.unpublish');
+        const existing = store.files.get(id);
+        if (!existing) {
+          throw new PluginError({
+            code: 'PLUGIN_FILE_NOT_FOUND',
+            message: 'File not found.',
+            statusCode: 404,
+          });
+        }
+        const updated = {
+          ...existing,
+          visibility: 'private' as const,
+          publicUrl: undefined,
+          contentDisposition: 'attachment' as const,
+          publishedAt: undefined,
+          updatedAt: new Date(),
+        };
+        store.files.set(id, updated);
+        state.files.push({ operation: 'unpublish', id, scope: existing.scope });
+        return updated;
       },
       async archive(id: string) {
         enforcePermission(Permission.FilesWrite, 'ctx.files.archive');
@@ -2866,6 +2930,17 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
           });
         }
         return { ok: false, status: response.status, error: payload, headers };
+      },
+    },
+    cache: {
+      async revalidatePath(input) {
+        enforcePermission(Permission.CacheRevalidate, 'ctx.cache.revalidatePath');
+        const path = typeof input === 'string' ? input : input.path;
+        state.cache.push({ operation: 'revalidatePath', path });
+      },
+      async revalidateTag(tag) {
+        enforcePermission(Permission.CacheRevalidate, 'ctx.cache.revalidateTag');
+        state.cache.push({ operation: 'revalidateTag', tag: `plugin:${plugin.id}:${tag}` });
       },
     },
     json(data: unknown, init?: ResponseInit) {

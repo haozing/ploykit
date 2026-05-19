@@ -53,6 +53,8 @@ function mapRecord(row: PluginRecord): PluginStoredRecord {
     pluginId: row.pluginId,
     collectionName: row.collectionName,
     userId: row.userId,
+    scopeType: row.scopeType as PluginStorageScope['scopeType'],
+    scopeId: row.scopeId,
     data: row.data,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -278,22 +280,14 @@ function scopeContextUserId(scope: PluginStorageScope): string {
   return scope.system ? 'system' : (scope.userId ?? '');
 }
 
-function uniqueKeyUserId(userId: string | null | undefined): string {
-  return userId ?? '__system__';
-}
-
 function baseRecordWhere(scope: PluginStorageScope, collectionName: string) {
   const filters = [
     eq(pluginRecords.pluginId, scope.pluginId),
     eq(pluginRecords.collectionName, collectionName),
+    eq(pluginRecords.scopeType, scope.scopeType),
+    eq(pluginRecords.scopeId, scope.scopeId),
     isNull(pluginRecords.deletedAt),
   ];
-
-  if (!scope.system) {
-    filters.push(eq(pluginRecords.userId, scope.userId ?? ''));
-  } else if (scope.userId) {
-    filters.push(eq(pluginRecords.userId, scope.userId));
-  }
 
   return and(...filters);
 }
@@ -329,7 +323,8 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
           and(
             eq(pluginRecordUniqueKeys.pluginId, input.pluginId),
             eq(pluginRecordUniqueKeys.collectionName, input.collectionName),
-            eq(pluginRecordUniqueKeys.userId, uniqueKeyUserId(input.userId)),
+            eq(pluginRecordUniqueKeys.scopeType, input.scopeType),
+            eq(pluginRecordUniqueKeys.scopeId, input.scopeId),
             eq(pluginRecordUniqueKeys.uniqueKey, uniqueKey.key),
             isNull(pluginRecordUniqueKeys.deletedAt)
           )
@@ -347,6 +342,8 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
           and(
             eq(pluginRecords.pluginId, input.pluginId),
             eq(pluginRecords.collectionName, input.collectionName),
+            eq(pluginRecords.scopeType, input.scopeType),
+            eq(pluginRecords.scopeId, input.scopeId),
             eq(pluginRecords.id, keyRow.recordId),
             isNull(pluginRecords.deletedAt)
           )
@@ -374,7 +371,9 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
           id: `${input.pluginId}:${input.collectionName}:${input.id}:${uniqueKey.key}:${randomUUID()}`,
           pluginId: input.pluginId,
           collectionName: input.collectionName,
-          userId: uniqueKeyUserId(input.userId),
+          userId: input.userId,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
           uniqueKey: uniqueKey.key,
           recordId: input.id,
           fieldsJson: uniqueKey.fields,
@@ -383,7 +382,8 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
           target: [
             pluginRecordUniqueKeys.pluginId,
             pluginRecordUniqueKeys.collectionName,
-            pluginRecordUniqueKeys.userId,
+            pluginRecordUniqueKeys.scopeType,
+            pluginRecordUniqueKeys.scopeId,
             pluginRecordUniqueKeys.uniqueKey,
           ],
           where: sql`${pluginRecordUniqueKeys.deletedAt} IS NULL`,
@@ -458,30 +458,38 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
   async ensureCollection(input: EnsurePluginCollectionInput): Promise<void> {
     const now = new Date();
 
-    await this.inContext({ pluginId: input.pluginId, system: true }, async (executor) => {
-      await executor
-        .insert(pluginCollections)
-        .values({
-          id: `${input.pluginId}:${input.name}`,
-          pluginId: input.pluginId,
-          name: input.name,
-          schemaVersion: input.schemaVersion,
-          schemaJson: input.schemaJson as unknown as Record<string, unknown>,
-          schemaHash: input.schemaHash,
-          indexesJson: input.indexesJson as Array<Record<string, unknown>>,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [pluginCollections.pluginId, pluginCollections.name],
-          set: {
-            schemaJson: input.schemaJson as unknown as Record<string, unknown>,
+    await this.inContext(
+      {
+        pluginId: input.pluginId,
+        scopeType: 'plugin',
+        scopeId: input.pluginId,
+        system: true,
+      },
+      async (executor) => {
+        await executor
+          .insert(pluginCollections)
+          .values({
+            id: `${input.pluginId}:${input.name}`,
+            pluginId: input.pluginId,
+            name: input.name,
             schemaVersion: input.schemaVersion,
+            schemaJson: input.schemaJson as unknown as Record<string, unknown>,
             schemaHash: input.schemaHash,
             indexesJson: input.indexesJson as Array<Record<string, unknown>>,
             updatedAt: now,
-          },
-        });
-    });
+          })
+          .onConflictDoUpdate({
+            target: [pluginCollections.pluginId, pluginCollections.name],
+            set: {
+              schemaJson: input.schemaJson as unknown as Record<string, unknown>,
+              schemaVersion: input.schemaVersion,
+              schemaHash: input.schemaHash,
+              indexesJson: input.indexesJson as Array<Record<string, unknown>>,
+              updatedAt: now,
+            },
+          });
+      }
+    );
   }
 
   async findMany(
@@ -534,6 +542,8 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
           pluginId: input.pluginId,
           collectionName: input.collectionName,
           userId: input.userId,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
           data: input.data,
         })
         .returning();
@@ -568,6 +578,8 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
           pluginId: input.pluginId,
           collectionName: input.collectionName,
           userId: input.userId,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
           data: input.data,
         })
         .returning();
@@ -619,6 +631,8 @@ export class DbPluginStorageRepository implements PluginStorageRepository {
         pluginId: input.pluginId,
         collectionName: input.collectionName,
         userId: existing.userId,
+        scopeType: existing.scopeType,
+        scopeId: existing.scopeId,
         id: existing.id,
         data: update.data,
         previousUniqueKeys: update.previousUniqueKeys,
@@ -706,8 +720,8 @@ export function createPluginStorageRuntime(
 export function describePluginStorageRuntime() {
   return {
     driver: 'postgres',
-    tables: ['plugin_collections', 'plugin_records'],
-    rls: ['plugin_id', 'user_id'],
+    tables: ['plugin_collections', 'plugin_records', 'plugin_record_unique_keys'],
+    rls: ['plugin_id', 'scope_type', 'scope_id'],
     queryMode: 'database-filtered-jsonb',
   };
 }

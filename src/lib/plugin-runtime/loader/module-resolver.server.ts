@@ -397,3 +397,17 @@ export function resolvePluginSlotModule(
 ): PluginModuleLoader | null {
   return entry.slotModules?.[normalizePluginModulePath(componentPath)] ?? null;
 }
+
+export function resolvePluginLoaderModule(
+  entry: PluginRuntimeMapEntry,
+  loaderPath: string
+): PluginModuleLoader | null {
+  return entry.loaderModules?.[normalizePluginModulePath(loaderPath)] ?? null;
+}
+
+export function resolvePluginMetadataModule(
+  entry: PluginRuntimeMapEntry,
+  metadataPath: string
+): PluginModuleLoader | null {
+  return entry.metadataModules?.[normalizePluginModulePath(metadataPath)] ?? null;
+}

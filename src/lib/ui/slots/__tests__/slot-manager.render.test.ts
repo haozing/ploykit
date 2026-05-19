@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SlotManager } from '../slot-manager';
-import { createMockRegistration, createMockComponent } from './helpers';
+import { createMockRegistration } from './helpers';
 
 // Mock React
 vi.mock('react', async () => {
@@ -29,10 +29,37 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Create mock components for testing
-const MockComponent1 = createMockComponent('Component1');
-const MockComponent2 = createMockComponent('Component2');
-const MockComponent3 = createMockComponent('Component3');
+const slotTestMocks = vi.hoisted(() => {
+  const createComponent = (name: string) => {
+    const MockComponent = () => null;
+    MockComponent.displayName = name;
+    return MockComponent;
+  };
+
+  return {
+    MockComponent1: createComponent('Component1'),
+    MockComponent2: createComponent('Component2'),
+    MockComponent3: createComponent('Component3'),
+  };
+});
+
+const pluginMapMock = vi.hoisted(() => ({
+  welcome: {
+    productId: 'ploykit',
+    suiteId: 'default',
+    bundleIds: [],
+    plugin: () => Promise.resolve({}),
+    components: {
+      'components/Component1': () => Promise.resolve({ default: slotTestMocks.MockComponent1 }),
+      'components/Component2': () => Promise.resolve({ default: slotTestMocks.MockComponent2 }),
+      'components/Component3': () => Promise.resolve({ default: slotTestMocks.MockComponent3 }),
+      'components/FailingComponent': () => Promise.reject(new Error('Component load failed')),
+    },
+    slotModules: {
+      'slots/SlotComponent': () => Promise.resolve({ default: slotTestMocks.MockComponent1 }),
+    },
+  },
+}));
 
 vi.mock('@/lib/plugin-map', () => ({
   DEFAULT_RUNTIME_PRODUCT_ID: 'ploykit',
@@ -41,22 +68,11 @@ vi.mock('@/lib/plugin-map', () => ({
   },
   PLUGIN_SUITES: {},
   APP_BUNDLES: {},
-  PLUGIN_MAP: {
-    welcome: {
-      productId: 'ploykit',
-      suiteId: 'default',
-      bundleIds: [],
-      plugin: vi.fn(),
-      components: {
-        'components/Component1': () => Promise.resolve({ default: MockComponent1 }),
-        'components/Component2': () => Promise.resolve({ default: MockComponent2 }),
-        'components/Component3': () => Promise.resolve({ default: MockComponent3 }),
-        'components/FailingComponent': () => Promise.reject(new Error('Component load failed')),
-      },
-      slotModules: {
-        'slots/SlotComponent': () => Promise.resolve({ default: MockComponent1 }),
-      },
-    },
+  PLUGIN_MAP: pluginMapMock,
+  PLUGIN_MAP_ARTIFACT: { kind: 'source', plugins: pluginMapMock },
+  default: {
+    PLUGIN_MAP: pluginMapMock,
+    PLUGIN_MAP_ARTIFACT: { kind: 'source', plugins: pluginMapMock },
   },
 }));
 

@@ -9,6 +9,8 @@ import {
   type HostPageOverrideRegistration,
 } from '@/lib/host-pages/surface.server';
 import { translatePluginMessage } from '../i18n/plugin-i18n-registry.server';
+import { resolvePluginRouteMetadata } from '../metadata';
+import type { RuntimePageRoute } from '../contract';
 
 function robotValue(value: boolean | string | undefined): boolean | undefined {
   if (value === undefined) return undefined;
@@ -46,6 +48,34 @@ export async function createHostPageOverrideMetadata(input: {
   const override = surface?.override;
   if (!override) {
     return null;
+  }
+
+  if (override.metadata) {
+    const route: RuntimePageRoute = {
+      kind: 'page',
+      path: override.page,
+      component: override.component,
+      loader: override.loader,
+      metadata: override.metadata,
+      auth: 'public',
+      layout: 'site',
+      area: 'public',
+      permissions: [],
+      publicAliases: [],
+    };
+    const resolved = await resolvePluginRouteMetadata({
+      pluginId: override.pluginId,
+      contract: override.contract,
+      route,
+      localPath: override.page,
+      requestPath: override.page,
+      locale: input.locale,
+      pathname: `/${input.locale}${override.page === '/' ? '' : override.page}`,
+      requestHeaders: new Headers(),
+    });
+    if (Object.keys(resolved.metadata).length > 0) {
+      return resolved.metadata;
+    }
   }
 
   const { title, description } = await hostPageOverrideText(override, input.locale);
