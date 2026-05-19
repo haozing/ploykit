@@ -317,6 +317,7 @@ services through raw `fetch()`.
 | `ctx.runs`                                   | `RunsRead`, `RunsWrite`                                  | User-visible or internal long-running work                            |
 | `ctx.connectors`                             | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | External service profiles, credentials, retry, redaction, call logs   |
 | `ctx.services`                               | `ServicesInvoke`                                         | Host-managed service connections for complex domain or database work  |
+| `ctx.scope`                                  | `WorkspaceRead`                                          | Current product scope with profile labels, workspace id, and role     |
 | `ctx.workspace`                              | `WorkspaceRead`, `WorkspaceWrite`                        | Workspace creation, membership, roles, invitations                    |
 | `ctx.apiKeys`, `ctx.rateLimit`               | `ApiKeys*`, `RateLimitCheck`                             | Plugin API keys and scoped rate limits                                |
 | `ctx.metering`, `ctx.usage`, `ctx.audit`     | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | Usage, action meters, audit trail                                     |
@@ -325,6 +326,11 @@ services through raw `fetch()`.
 | `ctx.credits`, `ctx.commerce`, `ctx.billing` | `Credits*`, `Commerce*`, `Billing*`                      | Commercial entitlements, scoped credits, checkout, orders, redemption |
 | `ctx.notifications`                          | `NotificationsSend`                                      | In-app notifications                                                  |
 | `ctx.http.fetch`                             | `ExternalHttp` plus `egress`                             | External HTTP through SSRF-aware guard                                |
+
+Plugin UI should prefer `ctx.scope.current()` or `ctx.scope.require()` for the
+current product scope. `ctx.workspace` is the lower-level workspace lifecycle
+API for creation, membership, invitations, and roles; ordinary plugins should
+not guess the current workspace themselves.
 
 `ctx.credits` supports user, workspace, product, and plugin balance scopes.
 `ctx.commerce` provides generic one-time checkout and order APIs; successful

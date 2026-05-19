@@ -76,6 +76,17 @@ describe('API route catalog', () => {
     });
   });
 
+  it('classifies product scope APIs as authenticated host routes', () => {
+    expect(resolveApiRoutePolicy('/api/product-scope/current', 'GET')).toMatchObject({
+      access: 'authenticated',
+      mutationProtection: 'none',
+    });
+    expect(resolveApiRoutePolicy('/api/product-scope/switch', 'POST')).toMatchObject({
+      access: 'authenticated',
+      mutationProtection: 'csrf-origin',
+    });
+  });
+
   it('covers all current app API route handlers', async () => {
     const routes = await discoverAppApiRoutes();
     const result = validateApiRouteCatalog(routes);

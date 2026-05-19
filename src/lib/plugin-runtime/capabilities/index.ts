@@ -194,6 +194,11 @@ export {
   type PluginRuntimeApiKeyContext,
 } from './guards.server';
 export {
+  createPluginScopeCapability,
+  requestedWorkspaceIdFromRequest,
+  type CreatePluginScopeOptions,
+} from './scope-capability.server';
+export {
   createPluginWorkspaceCapability,
   DbPluginWorkspaceRepository,
   type CreatePluginWorkspaceOptions,

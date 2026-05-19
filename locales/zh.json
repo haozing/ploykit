@@ -668,7 +668,18 @@
       "logout": "退出登录",
       "loggingOut": "退出中...",
       "loading": "加载中...",
-      "unknownUser": "未知用户"
+      "unknownUser": "未知用户",
+      "productScope": {
+        "create": "新建{label}",
+        "createTitle": "新建{label}",
+        "createAction": "创建",
+        "cancel": "取消",
+        "namePlaceholder": "{label}名称",
+        "nameAriaLabel": "{label}名称",
+        "empty": "暂无{label}",
+        "createFailed": "创建失败",
+        "switchFailed": "切换失败"
+      }
     },
     "admin": {
       "title": "仪表板",

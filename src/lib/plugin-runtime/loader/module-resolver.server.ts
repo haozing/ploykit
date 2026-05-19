@@ -135,6 +135,15 @@ function implicitProduct(productId = DEFAULT_PRODUCT_ID): RuntimeProduct {
     runtimeKey: productId,
     defaultLocale: 'en',
     status: 'active',
+    scopeProfile: {
+      mode: 'hidden-default',
+      label: 'Workspace',
+      pluralLabel: 'Workspaces',
+      allowCreate: false,
+      allowSwitch: false,
+      allowMembers: false,
+      defaultNameTemplate: '{userName} Workspace',
+    },
   };
 }
 

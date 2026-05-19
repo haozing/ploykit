@@ -218,6 +218,13 @@
       "when": 1779167400000,
       "tag": "0030_entitlement_plan_product_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1779171000000,
+      "tag": "0031_product_scope_workspace",
+      "breakpoints": true
     }
   ]
 }

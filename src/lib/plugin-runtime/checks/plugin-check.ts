@@ -862,6 +862,21 @@ function captureCapabilityPermissions(
     }
   }
 
+  if (matchesPrefix(chain, ['ctx', 'scope'])) {
+    const method = chain[2];
+    if (method === 'current' || method === 'require' || method === 'hasRole') {
+      recordPermissionUse(
+        permissionUses,
+        Permission.WorkspaceRead,
+        filePath,
+        node,
+        `ctx.scope.${method}`,
+        sourceFile
+      );
+      return;
+    }
+  }
+
   if (matchesPrefix(chain, ['ctx', 'runs'])) {
     const method = chain[2];
     if (method === 'get' || method === 'list') {

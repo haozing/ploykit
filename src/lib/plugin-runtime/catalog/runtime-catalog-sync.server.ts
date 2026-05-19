@@ -181,6 +181,7 @@ export async function syncRuntimeCatalog(
         status: product.status ?? 'active',
         metadata: {
           ...(product.metadata ?? {}),
+          ...(product.scopeProfile ? { scopeProfile: product.scopeProfile } : {}),
           ...(product.planCapabilities ? { planCapabilities: product.planCapabilities } : {}),
         },
         updatedAt: now,

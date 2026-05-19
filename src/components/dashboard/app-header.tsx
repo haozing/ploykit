@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ProductScopeSwitcher } from '@/components/product-scope/ProductScopeSwitcher';
 import { signOut, useSession } from '@/lib/auth/client';
 import { useUserRole } from '@/hooks/use-user-role';
 
@@ -119,6 +120,8 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
 
       {/* Right Side Actions */}
       <div className="flex items-center gap-2">
+        <ProductScopeSwitcher />
+
         {/* Language Switcher */}
         <LanguageSwitcher />
 

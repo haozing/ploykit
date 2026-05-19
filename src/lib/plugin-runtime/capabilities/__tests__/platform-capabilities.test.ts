@@ -69,6 +69,7 @@ function buildWorkspaceRow(input: Partial<Workspace> & Pick<Workspace, 'id' | 'o
   const now = new Date('2026-05-12T00:00:00.000Z');
   return {
     id: input.id,
+    productId: input.productId ?? 'ploykit',
     name: input.name ?? input.id,
     slug: input.slug ?? null,
     ownerUserId: input.ownerUserId,
@@ -101,15 +102,24 @@ class MemoryWorkspaceRepository implements PluginWorkspaceRepository {
   readonly membersByWorkspace = new Map<string, WorkspaceMember[]>();
   readonly invitations: WorkspaceInvitation[] = [];
 
+  private isWorkspaceInProduct(
+    scope: Parameters<PluginWorkspaceRepository['list']>[0],
+    workspaceId: string
+  ) {
+    return this.workspaces.get(workspaceId)?.productId === scope.productId;
+  }
+
   async current(scope: Parameters<PluginWorkspaceRepository['current']>[0]) {
     return (await this.list(scope))[0] ?? null;
   }
 
   async list(scope: Parameters<PluginWorkspaceRepository['list']>[0]) {
-    return Array.from(this.workspaces.values()).filter((workspace) =>
-      (this.membersByWorkspace.get(workspace.id) ?? []).some(
-        (member) => member.userId === scope.userId && member.status === 'active'
-      )
+    return Array.from(this.workspaces.values()).filter(
+      (workspace) =>
+        workspace.productId === scope.productId &&
+        (this.membersByWorkspace.get(workspace.id) ?? []).some(
+          (member) => member.userId === scope.userId && member.status === 'active'
+        )
     );
   }
 
@@ -120,6 +130,7 @@ class MemoryWorkspaceRepository implements PluginWorkspaceRepository {
     const now = new Date();
     const workspace: Workspace = {
       id: `workspace-${this.workspaces.size + 1}`,
+      productId: scope.productId,
       name: input.name,
       slug: input.slug ?? null,
       ownerUserId: scope.userId,
@@ -144,7 +155,10 @@ class MemoryWorkspaceRepository implements PluginWorkspaceRepository {
     return workspace;
   }
 
-  async members(_scope: Parameters<PluginWorkspaceRepository['members']>[0], workspaceId: string) {
+  async members(scope: Parameters<PluginWorkspaceRepository['members']>[0], workspaceId: string) {
+    if (!this.isWorkspaceInProduct(scope, workspaceId)) {
+      return [];
+    }
     return this.membersByWorkspace.get(workspaceId) ?? [];
   }
 
@@ -153,8 +167,14 @@ class MemoryWorkspaceRepository implements PluginWorkspaceRepository {
     workspaceId: string,
     roles: Parameters<PluginWorkspaceRepository['hasRole']>[2]
   ) {
+    if (!this.isWorkspaceInProduct(scope, workspaceId)) {
+      return false;
+    }
     return (this.membersByWorkspace.get(workspaceId) ?? []).some(
-      (member) => member.userId === scope.userId && roles.includes(member.role as never)
+      (member) =>
+        member.userId === scope.userId &&
+        member.status === 'active' &&
+        roles.includes(member.role as never)
     );
   }
 
@@ -162,6 +182,13 @@ class MemoryWorkspaceRepository implements PluginWorkspaceRepository {
     scope: Parameters<PluginWorkspaceRepository['invite']>[0],
     input: Parameters<PluginWorkspaceRepository['invite']>[1]
   ) {
+    if (!this.isWorkspaceInProduct(scope, input.workspaceId)) {
+      throw new PluginError({
+        code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+        message: 'Workspace is outside the current product scope.',
+        statusCode: 403,
+      });
+    }
     const invitation: WorkspaceInvitation = {
       id: `invitation-${this.invitations.length + 1}`,
       workspaceId: input.workspaceId,
@@ -1110,6 +1137,46 @@ describe('platform plugin capabilities', () => {
     ).rejects.toMatchObject({
       code: 'PLUGIN_WORKSPACE_ID_INVALID',
       statusCode: 400,
+    });
+  });
+
+  it('keeps workspace capability access inside the current product', async () => {
+    const repository = new MemoryWorkspaceRepository();
+    repository.workspaces.set(
+      'workspace-runlynk',
+      buildWorkspaceRow({
+        id: 'workspace-runlynk',
+        ownerUserId: 'user-1',
+        productId: 'runlynk',
+      })
+    );
+    repository.membersByWorkspace.set('workspace-runlynk', [
+      buildWorkspaceMemberRow({
+        id: 'member-runlynk',
+        workspaceId: 'workspace-runlynk',
+        userId: 'user-1',
+        role: 'owner',
+      }),
+    ]);
+    const workspace = createPluginWorkspaceCapability(
+      createScope([Permission.WorkspaceRead, Permission.WorkspaceWrite]),
+      { repository }
+    );
+
+    await expect(workspace.hasRole('owner', 'workspace-runlynk')).resolves.toBe(false);
+    await expect(workspace.members('workspace-runlynk')).rejects.toMatchObject({
+      code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+      statusCode: 403,
+    });
+    await expect(
+      workspace.invite({
+        workspaceId: 'workspace-runlynk',
+        email: 'editor@example.test',
+        role: 'editor',
+      })
+    ).rejects.toMatchObject({
+      code: 'PLUGIN_WORKSPACE_ADMIN_REQUIRED',
+      statusCode: 403,
     });
   });
 

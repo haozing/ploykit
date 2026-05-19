@@ -9,6 +9,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { appProducts } from './plugins';
 
 export type ResourceScopeType = 'user' | 'workspace';
 export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
@@ -19,6 +20,9 @@ export const workspaces = pgTable(
   'workspaces',
   {
     id: text('id').primaryKey(),
+    productId: text('product_id')
+      .notNull()
+      .references(() => appProducts.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     slug: text('slug'),
     ownerUserId: text('owner_user_id').notNull(),
@@ -28,7 +32,9 @@ export const workspaces = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    slugIdx: uniqueIndex('workspaces_slug_idx').on(table.slug),
+    productSlugIdx: uniqueIndex('workspaces_product_slug_idx').on(table.productId, table.slug),
+    productOwnerIdx: index('workspaces_product_owner_idx').on(table.productId, table.ownerUserId),
+    productStatusIdx: index('workspaces_product_status_idx').on(table.productId, table.status),
     ownerIdx: index('workspaces_owner_idx').on(table.ownerUserId),
     statusIdx: index('workspaces_status_idx').on(table.status),
   })

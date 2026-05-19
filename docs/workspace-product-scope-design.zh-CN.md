@@ -1,7 +1,7 @@
 # PloyKit Workspace / Product Scope 架构设计
 
-日期：2026-05-19  
-状态：设计稿  
+日期：2026-05-19
+状态：P0-P2 宿主能力已落地，P3/P4 产品接入待继续
 适用阶段：开发阶段，可破坏兼容性，优先保证架构和代码干净
 
 ## 结论
@@ -560,6 +560,21 @@ POST   /api/product-scope/:workspaceId/invitations
 
 UI 文案由 product scope profile 决定。API 仍使用 `workspaceId`，避免后端出现 `siteId/teamSpaceId/projectSpaceId` 多套字段。
 
+`GET /api/product-scope/current` 返回产品描述和当前作用域：
+
+```ts
+{
+  product: {
+    productId: 'runlynk',
+    productName: 'RunLynk',
+    profile: ProductScopeProfile,
+  },
+  current: CurrentProductScope | null,
+}
+```
+
+显式模式下没有任何 workspace 时，`current` 为 `null`，但仍会返回 profile，header 可以显示“新建团队空间/站点”。隐式模式会自动创建 hidden default workspace，并且 header 不渲染切换器。
+
 ## 错误码
 
 建议宿主统一提供结构化错误：
@@ -658,6 +673,25 @@ src/app/api/product-scope/
 ```
 
 不要把这些逻辑塞进单个插件，也不要散落在 dashboard header 和插件 runtime 中。
+
+## 当前落地状态
+
+已落地：
+
+- `src/lib/product-scope/*`：profile 解析、服务、仓储、错误码。
+- `workspaces.product_id` 与 `product_scope_preferences`：workspace 归属 product，用户最近选择按 product 保存。
+- runtime catalog 支持 `products[].scopeProfile`，同步到 `app_products.metadata.scopeProfile`。
+- `ctx.scope.current()` / `ctx.scope.require()` / `ctx.scope.hasRole()`。
+- `ctx.workspace.current()` 改为通过 product scope 解析，不再取第一个 workspace。
+- `/api/product-scope/*`：当前 scope、列表、创建、切换、成员读取、邀请。
+- Dashboard header 的 `ProductScopeSwitcher`：`hidden-default` 不显示，显式/别名模式显示 profile 驱动文案。
+
+待产品侧继续：
+
+- RunLynk runtime catalog 声明 `explicit-workspace` 和中文“团队空间”文案。
+- RunLynk 页面只消费当前 `ctx.scope`，移除自建 workspace 入口。
+- CMS 单站点声明 `hidden-default`，多站点声明 `domain-alias`。
+- 真实页面截图验收：首次进入、创建、切换、成员权限、插件 API 作用域一致性。
 
 ## 设计原则
 

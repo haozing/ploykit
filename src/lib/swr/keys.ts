@@ -118,6 +118,15 @@ export const API_KEYS = {
   },
 
   // ──────────────────────────────────────────────────────────
+  // Product Scope
+  // ──────────────────────────────────────────────────────────
+  PRODUCT_SCOPE: {
+    CURRENT: '/api/product-scope/current',
+    LIST: (params?: string) => `/api/product-scope${params ? `?${params}` : ''}`,
+    SWITCH: '/api/product-scope/switch',
+  },
+
+  // ──────────────────────────────────────────────────────────
   // User APIs (Current User)
   // ──────────────────────────────────────────────────────────
   USER: {

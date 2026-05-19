@@ -8,6 +8,7 @@ import type {
   RuntimeProduct,
 } from './runtime-catalog-types';
 import { normalizePlanCapabilityDefinitions } from '@/lib/entitlements/plan-capability-types';
+import { normalizeProductScopeProfile } from '@/lib/product-scope/product-scope-profile';
 
 export const RUNTIME_CATALOG_FILE_ENV = 'PLOYKIT_RUNTIME_CATALOG_FILE';
 
@@ -62,6 +63,7 @@ function normalizeProduct(value: unknown, file: string): RuntimeProduct {
     runtimeKey: readString(record, 'runtimeKey'),
     defaultLocale: readString(record, 'defaultLocale'),
     status: readString(record, 'status') ?? 'active',
+    scopeProfile: normalizeProductScopeProfile(record.scopeProfile, `${file}:products.${id}`),
     planCapabilities: normalizePlanCapabilityDefinitions(record.planCapabilities, {
       ownerType: 'product',
       ownerId: id,

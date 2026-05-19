@@ -1227,6 +1227,45 @@ export function createPluginTestHost<TContext extends PluginContext = PluginCont
       },
     },
     storage,
+    scope: {
+      async current() {
+        enforcePermission(Permission.WorkspaceRead, 'ctx.scope.current');
+        const current = await ctx.workspace.current();
+        state.workspace.push({ operation: 'scope.current', workspaceId: current?.id });
+        return current
+          ? {
+              type: 'workspace' as const,
+              id: current.id,
+              productId: 'test-product',
+              label: 'Workspace',
+              pluralLabel: 'Workspaces',
+              displayName: current.name,
+              role: 'owner' as const,
+              hidden: false,
+              mode: 'explicit-workspace' as const,
+              resourceScope: { type: 'workspace' as const, id: current.id },
+            }
+          : null;
+      },
+      async require() {
+        enforcePermission(Permission.WorkspaceRead, 'ctx.scope.require');
+        const current = await this.current();
+        if (!current) {
+          throw new PluginError({
+            code: 'PRODUCT_SCOPE_REQUIRED',
+            message: 'A product scope must be selected before continuing.',
+            statusCode: 409,
+          });
+        }
+        return current;
+      },
+      async hasRole(roles) {
+        enforcePermission(Permission.WorkspaceRead, 'ctx.scope.hasRole');
+        const roleList = Array.isArray(roles) ? roles : [roles];
+        state.workspace.push({ operation: 'scope.hasRole' });
+        return roleList.includes('owner');
+      },
+    },
     workspace: {
       async current() {
         enforcePermission(Permission.WorkspaceRead, 'ctx.workspace.current');

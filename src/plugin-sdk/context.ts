@@ -18,6 +18,21 @@ export type PluginResourceScope =
       id: string;
     };
 
+export type PluginProductScopeMode = 'hidden-default' | 'explicit-workspace' | 'domain-alias';
+
+export interface PluginProductScope {
+  type: 'workspace';
+  id: string;
+  productId: string;
+  label: string;
+  pluralLabel: string;
+  displayName: string;
+  role: PluginWorkspaceRole;
+  hidden: boolean;
+  mode: PluginProductScopeMode;
+  resourceScope: Extract<PluginResourceScope, { type: 'workspace' }>;
+}
+
 export type PluginCreditScope =
   | PluginResourceScope
   | {
@@ -83,6 +98,12 @@ export interface PluginWorkspaceApi {
     workspaceId?: string
   ): Promise<boolean>;
   invite(input: PluginWorkspaceInviteInput): Promise<PluginWorkspaceInvitation>;
+}
+
+export interface PluginProductScopeApi {
+  current(): Promise<PluginProductScope | null>;
+  require(): Promise<PluginProductScope>;
+  hasRole(roles: PluginWorkspaceRole | PluginWorkspaceRole[]): Promise<boolean>;
 }
 
 export interface PluginRequest {
@@ -1216,6 +1237,7 @@ export interface PluginContext {
   request: PluginRequest;
   response: PluginResponseFactory;
   storage: PluginStorage;
+  scope: PluginProductScopeApi;
   workspace: PluginWorkspaceApi;
   ui: PluginUi;
   events: PluginEvents;

@@ -21,6 +21,8 @@ import {
   type WorkspaceInvitation,
   type WorkspaceMember,
 } from '@/lib/db/schema/plugin-platform';
+import { productScopeService, type ProductScopeService } from '@/lib/product-scope';
+import { getCurrentRuntimeProductId } from '@/lib/plugin-runtime/product-context.server';
 import {
   assertJsonSerializable,
   enforceCapabilityPermission,
@@ -29,14 +31,17 @@ import {
 } from './guards.server';
 import { recordCapabilityAudit } from './audit-helper.server';
 import type { AuditPort } from '@/lib/audit/audit-port.server';
+import { requestedWorkspaceIdFromRequest, toPluginScopeError } from './scope-capability.server';
 
 type TransactionDatabase = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = Database | TransactionDatabase;
 
 export interface PluginWorkspaceScope {
   pluginId: string;
+  productId: string;
   userId: string;
   userEmail?: string;
+  requestedWorkspaceId?: string;
 }
 
 export interface PluginWorkspaceRepository {
@@ -60,6 +65,7 @@ export interface PluginWorkspaceRepository {
 
 export interface CreatePluginWorkspaceOptions {
   repository?: PluginWorkspaceRepository;
+  productScope?: ProductScopeService;
   auditPort?: AuditPort;
 }
 
@@ -148,8 +154,10 @@ function resolveScope(scope: PluginCapabilityScope, capability: string): PluginW
   const user = requireUser(scope, capability);
   return {
     pluginId: scope.contract.id,
+    productId: getCurrentRuntimeProductId(),
     userId: user.id,
     userEmail: user.email,
+    requestedWorkspaceId: requestedWorkspaceIdFromRequest(scope.request),
   };
 }
 
@@ -179,7 +187,11 @@ export class DbPluginWorkspaceRepository implements PluginWorkspaceRepository {
         .from(workspaceMembers)
         .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
         .where(
-          and(eq(workspaceMembers.userId, scope.userId), eq(workspaceMembers.status, 'active'))
+          and(
+            eq(workspaces.productId, scope.productId),
+            eq(workspaceMembers.userId, scope.userId),
+            eq(workspaceMembers.status, 'active')
+          )
         );
 
       return rows.map((row) => row.workspace);
@@ -196,6 +208,7 @@ export class DbPluginWorkspaceRepository implements PluginWorkspaceRepository {
         .insert(workspaces)
         .values({
           id: randomUUID(),
+          productId: scope.productId,
           name: input.name,
           slug: input.slug,
           ownerUserId: scope.userId,
@@ -219,15 +232,22 @@ export class DbPluginWorkspaceRepository implements PluginWorkspaceRepository {
     });
   }
 
-  async members(_scope: PluginWorkspaceScope, workspaceId: string) {
-    return this.inSystem((executor) =>
-      executor
-        .select()
+  async members(scope: PluginWorkspaceScope, workspaceId: string) {
+    return this.inSystem(async (executor) => {
+      const rows = await executor
+        .select({ member: workspaceMembers })
         .from(workspaceMembers)
+        .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
         .where(
-          and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.status, 'active'))
-        )
-    );
+          and(
+            eq(workspaces.productId, scope.productId),
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.status, 'active')
+          )
+        );
+
+      return rows.map((row) => row.member);
+    });
   }
 
   async hasRole(
@@ -237,10 +257,12 @@ export class DbPluginWorkspaceRepository implements PluginWorkspaceRepository {
   ) {
     return this.inSystem(async (executor) => {
       const rows = await executor
-        .select()
+        .select({ id: workspaceMembers.id })
         .from(workspaceMembers)
+        .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
         .where(
           and(
+            eq(workspaces.productId, scope.productId),
             eq(workspaceMembers.workspaceId, workspaceId),
             eq(workspaceMembers.userId, scope.userId),
             eq(workspaceMembers.status, 'active'),
@@ -258,6 +280,28 @@ export class DbPluginWorkspaceRepository implements PluginWorkspaceRepository {
     input: { workspaceId: string; email: string; role: Exclude<PluginWorkspaceRole, 'owner'> }
   ) {
     return this.inSystem(async (executor) => {
+      const [workspace] = await executor
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(and(eq(workspaces.id, input.workspaceId), eq(workspaces.productId, scope.productId)))
+        .limit(1);
+
+      if (!workspace) {
+        throw new PluginError({
+          code: 'PLUGIN_WORKSPACE_SCOPE_FORBIDDEN',
+          message: `ctx.workspace.invite cannot write workspace "${input.workspaceId}" from this product context.`,
+          statusCode: 403,
+          details: {
+            pluginId: scope.pluginId,
+            capability: 'ctx.workspace.invite',
+            action: 'write',
+            productId: scope.productId,
+            requestedScope: { type: 'workspace', id: input.workspaceId },
+            userId: scope.userId,
+          },
+        });
+      }
+
       const [invitation] = await executor
         .insert(workspaceInvitations)
         .values({
@@ -281,12 +325,44 @@ export function createPluginWorkspaceCapability(
   options: CreatePluginWorkspaceOptions = {}
 ): PluginWorkspaceApi {
   const repository = options.repository ?? new DbPluginWorkspaceRepository();
+  const productScope = options.repository ? undefined : (options.productScope ?? productScopeService);
+
+  async function resolveCurrentWorkspaceId(
+    workspaceScope: PluginWorkspaceScope,
+    capability: string
+  ): Promise<string | undefined> {
+    if (!productScope) {
+      return (await repository.current(workspaceScope))?.id ?? undefined;
+    }
+
+    try {
+      return (
+        await productScope.getCurrent({
+          productId: workspaceScope.productId,
+          userId: workspaceScope.userId,
+          userEmail: workspaceScope.userEmail,
+          requestedWorkspaceId: workspaceScope.requestedWorkspaceId,
+        })
+      )?.workspaceId;
+    } catch (error) {
+      toPluginScopeError(error, capability);
+    }
+  }
 
   return {
     async current() {
       enforceCapabilityPermission(scope, Permission.WorkspaceRead, 'ctx.workspace.current');
       const workspaceScope = resolveScope(scope, 'ctx.workspace.current');
-      const workspace = await repository.current(workspaceScope);
+      const currentWorkspaceId = await resolveCurrentWorkspaceId(
+        workspaceScope,
+        'ctx.workspace.current'
+      );
+      if (!currentWorkspaceId) {
+        return null;
+      }
+      const workspace = (await repository.list(workspaceScope)).find(
+        (candidate) => candidate.id === currentWorkspaceId
+      );
       return workspace ? toWorkspace(workspace) : null;
     },
 
@@ -300,6 +376,13 @@ export function createPluginWorkspaceCapability(
     async create(input) {
       enforceCapabilityPermission(scope, Permission.WorkspaceWrite, 'ctx.workspace.create');
       const workspaceScope = resolveScope(scope, 'ctx.workspace.create');
+      if (productScope) {
+        await productScope.list({
+          productId: workspaceScope.productId,
+          userId: workspaceScope.userId,
+          userEmail: workspaceScope.userEmail,
+        });
+      }
       const metadata = input.metadata ?? {};
       assertJsonSerializable(metadata, 'Workspace metadata');
       const workspace = await repository.create(workspaceScope, {
@@ -320,7 +403,9 @@ export function createPluginWorkspaceCapability(
       enforceCapabilityPermission(scope, Permission.WorkspaceRead, 'ctx.workspace.members');
       const workspaceScope = resolveScope(scope, 'ctx.workspace.members');
       const targetWorkspaceId =
-        workspaceId ?? (await repository.current(workspaceScope))?.id ?? undefined;
+        workspaceId ??
+        (await resolveCurrentWorkspaceId(workspaceScope, 'ctx.workspace.members')) ??
+        undefined;
       if (!targetWorkspaceId) {
         return [];
       }
@@ -354,7 +439,9 @@ export function createPluginWorkspaceCapability(
       enforceCapabilityPermission(scope, Permission.WorkspaceRead, 'ctx.workspace.hasRole');
       const workspaceScope = resolveScope(scope, 'ctx.workspace.hasRole');
       const targetWorkspaceId =
-        workspaceId ?? (await repository.current(workspaceScope))?.id ?? undefined;
+        workspaceId ??
+        (await resolveCurrentWorkspaceId(workspaceScope, 'ctx.workspace.hasRole')) ??
+        undefined;
       if (!targetWorkspaceId) {
         return false;
       }

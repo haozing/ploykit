@@ -243,6 +243,7 @@ const items = await ctx.storage.collection('sample_items').findMany({
 | `ctx.runs`                                   | `RunsRead`, `RunsWrite`                                  | 用户可见或内部长期任务                                    |
 | `ctx.connectors`                             | `ConnectorsRead`, `ConnectorsInvoke`, `ConnectorsManage` | 外部服务 profile、credential、retry、redaction、call logs |
 | `ctx.services`                               | `ServicesInvoke`                                         | 宿主管理的服务连接，用于复杂领域或数据库工作              |
+| `ctx.scope`                                  | `WorkspaceRead`                                          | 当前产品作用域，返回 profile 文案、workspace id 和角色    |
 | `ctx.workspace`                              | `WorkspaceRead`, `WorkspaceWrite`                        | workspace 创建、成员、角色、邀请                          |
 | `ctx.apiKeys`, `ctx.rateLimit`               | `ApiKeys*`, `RateLimitCheck`                             | 插件 API keys 与 scoped rate limits                       |
 | `ctx.metering`, `ctx.usage`, `ctx.audit`     | `MeteringWrite`, `UsageWrite`, `AuditWrite`              | 用量、action meters、审计轨迹                             |
@@ -251,6 +252,8 @@ const items = await ctx.storage.collection('sample_items').findMany({
 | `ctx.credits`, `ctx.commerce`, `ctx.billing` | `Credits*`, `Commerce*`, `Billing*`                      | 商业权益、作用域积分、checkout、订单与兑换                |
 | `ctx.notifications`                          | `NotificationsSend`                                      | 站内通知                                                  |
 | `ctx.http.fetch`                             | `ExternalHttp` plus `egress`                             | 经过 SSRF-aware guard 的外部 HTTP                         |
+
+插件 UI 优先使用 `ctx.scope.current()` 或 `ctx.scope.require()` 读取当前产品作用域。`ctx.workspace` 是底层 workspace API，适合成员、邀请、创建等宿主生命周期操作；普通插件不要自己猜当前 workspace。
 
 `ctx.credits` 支持 user、workspace、product、plugin 四类余额 scope。`ctx.commerce` 提供通用一次性 checkout 和订单 API；成功订单可以携带 credit grant 或 entitlement metadata，由宿主 webhook 和 ledger 落账，不让插件自己实现支付闭环。
 

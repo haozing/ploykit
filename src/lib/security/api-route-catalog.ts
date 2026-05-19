@@ -324,6 +324,72 @@ export const API_ROUTE_CATALOG: readonly ApiRouteCatalogEntry[] = [
     },
   },
   {
+    id: 'product-scope',
+    pattern: '/api/product-scope',
+    owner: 'platform',
+    methods: {
+      GET: {
+        access: 'authenticated',
+        mutationProtection: 'none',
+        guard: 'withAuth',
+        notes: 'Lists product scopes available to the current user.',
+      },
+      POST: {
+        ...authenticatedMutation,
+        notes: 'Creates a new product scope backed by a workspace.',
+      },
+    },
+  },
+  {
+    id: 'product-scope-current',
+    pattern: '/api/product-scope/current',
+    owner: 'platform',
+    methods: {
+      GET: {
+        access: 'authenticated',
+        mutationProtection: 'none',
+        guard: 'withAuth',
+        notes: 'Returns the product scope profile and current selected workspace.',
+      },
+    },
+  },
+  {
+    id: 'product-scope-switch',
+    pattern: '/api/product-scope/switch',
+    owner: 'platform',
+    methods: {
+      POST: {
+        ...authenticatedMutation,
+        notes: 'Stores the current user preferred workspace for a product scope.',
+      },
+    },
+  },
+  {
+    id: 'product-scope-members',
+    pattern: '/api/product-scope/[workspaceId]/members',
+    owner: 'platform',
+    methods: {
+      GET: {
+        access: 'authenticated',
+        mutationProtection: 'none',
+        guard: 'withAuth + product scope role check',
+        notes: 'Lists active members for a product scope workspace.',
+      },
+    },
+  },
+  {
+    id: 'product-scope-invitations',
+    pattern: '/api/product-scope/[workspaceId]/invitations',
+    owner: 'platform',
+    methods: {
+      POST: {
+        ...authenticatedMutation,
+        guard: 'withAuth + product scope admin role check + global api security middleware',
+        notes: 'Invites a user to a product scope workspace.',
+      },
+    },
+  },
+  {
     id: 'admin-plugin-operations',
     pattern: '/api/admin/plugin-operations/**',
     owner: 'plugins',

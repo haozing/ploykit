@@ -668,7 +668,18 @@
       "logout": "Logout",
       "loggingOut": "Logging out...",
       "loading": "Loading...",
-      "unknownUser": "Unknown User"
+      "unknownUser": "Unknown User",
+      "productScope": {
+        "create": "New {label}",
+        "createTitle": "New {label}",
+        "createAction": "Create",
+        "cancel": "Cancel",
+        "namePlaceholder": "{label} name",
+        "nameAriaLabel": "{label} name",
+        "empty": "No {label}",
+        "createFailed": "Create failed",
+        "switchFailed": "Switch failed"
+      }
     },
     "admin": {
       "title": "Dashboard",

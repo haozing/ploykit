@@ -31,6 +31,7 @@ import {
   createPluginRateLimitCapability,
   createPluginResourceBindingsCapability,
   createPluginRunsCapability,
+  createPluginScopeCapability,
   createPluginSecretsCapability,
   createPluginServicesCapability,
   createPluginUsageCapability,
@@ -56,6 +57,7 @@ import {
   type CreatePluginRateLimitOptions,
   type CreatePluginResourceBindingsOptions,
   type CreatePluginRunsOptions,
+  type CreatePluginScopeOptions,
   type CreatePluginSecretsOptions,
   type CreatePluginServicesOptions,
   type CreatePluginUsageOptions,
@@ -103,6 +105,7 @@ export interface PluginCapabilityFactoryOptions {
   apiKeys?: CreatePluginApiKeysOptions;
   rateLimit?: CreatePluginRateLimitOptions;
   resourceBindings?: CreatePluginResourceBindingsOptions;
+  scope?: CreatePluginScopeOptions;
   config?: CreatePluginConfigOptions;
   secrets?: CreatePluginSecretsOptions;
   services?: CreatePluginServicesOptions;
@@ -212,6 +215,7 @@ export function createPluginRuntimeContext(options: CreatePluginContextOptions):
     request: createPluginRequest(options.request, options.routeParams),
     response,
     storage,
+    scope: createPluginScopeCapability(capabilityScope, options.capabilities?.scope),
     workspace: createPluginWorkspaceCapability(capabilityScope, options.capabilities?.workspace),
     ui: {
       toast: {

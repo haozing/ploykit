@@ -1,4 +1,5 @@
 import type { PlanCapabilityDefinition } from '@/lib/entitlements/plan-capability-types';
+import type { ProductScopeProfile } from '@/lib/product-scope/product-scope-types';
 
 export interface RuntimeProduct {
   id: string;
@@ -6,6 +7,7 @@ export interface RuntimeProduct {
   runtimeKey?: string;
   defaultLocale?: string;
   status?: string;
+  scopeProfile?: ProductScopeProfile;
   planCapabilities?: PlanCapabilityDefinition[];
   metadata?: Record<string, unknown>;
 }

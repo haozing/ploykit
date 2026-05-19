@@ -11,6 +11,7 @@ export * from './plugin-models';
 export * from './plugin-storage';
 export * from './plugin-capabilities';
 export * from './plugin-platform';
+export * from './product-scope';
 export * from './rbac';
 export * from './entitlement';
 export * from './audit-logs';
@@ -96,6 +97,8 @@ import {
   workspaces,
 } from './plugin-platform';
 
+import { productScopePreferences } from './product-scope';
+
 import { roles, userroles, permissions, rolesRelations, userrolesRelations } from './rbac';
 
 import {
@@ -169,6 +172,7 @@ export const schema = {
   workspaces,
   workspaceMembers,
   workspaceInvitations,
+  productScopePreferences,
   pluginRuns,
   pluginRunSteps,
   pluginRunLogs,
@@ -340,6 +344,8 @@ export type {
   PluginRateLimitBucket,
   NewPluginRateLimitBucket,
 } from './plugin-platform';
+
+export type { ProductScopePreference, NewProductScopePreference } from './product-scope';
 
 export type {
   role,
