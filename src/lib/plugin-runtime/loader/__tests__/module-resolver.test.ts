@@ -43,7 +43,7 @@ describe('module resolver runtime plugin map loading', () => {
     }
   });
 
-  it('merges an explicitly configured runtime plugin map into the active map', () => {
+  it('loads an explicitly configured runtime plugin map as the active map', () => {
     const file = writeRuntimeMap(`
 module.exports.PLUGIN_MAP = {
   'external-runtime-plugin': {
@@ -60,9 +60,7 @@ console.log(JSON.stringify(listPluginRuntimeIds()));
 `);
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual(
-      expect.arrayContaining(['capability-demo', 'external-runtime-plugin'])
-    );
+    expect(JSON.parse(result.stdout)).toEqual(['external-runtime-plugin']);
   });
 
   it('fails loudly when an explicitly configured runtime plugin map is missing', () => {

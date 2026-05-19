@@ -8,6 +8,15 @@ import {
 } from './src/lib/plugin-runtime/plugin-map-files';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+const pluginMapNodeProvider = path.resolve(
+  __dirname,
+  './src/lib/plugin-runtime/loader/plugin-map-provider.server.ts'
+);
+const pluginMapBundledProvider = path.resolve(
+  __dirname,
+  './src/lib/plugin-runtime/loader/plugin-map-bundled-provider.server.ts'
+);
+const pluginMapLoaderDir = path.dirname(pluginMapNodeProvider);
 
 function ensureActivePluginMapForWebpack(): string | null {
   const active = getActivePluginMapFiles(__dirname);
@@ -57,15 +66,17 @@ const nextConfig: NextConfig = {
   // No need for experimental flag
 
   // Keep webpack aliases in sync with tsconfig.json.
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     const activePluginMap = ensureActivePluginMapForWebpack();
     const resolveModules = new Set([
       path.resolve(__dirname, './node_modules'),
       ...(config.resolve.modules || []),
     ]);
+    const existingAliases = { ...(config.resolve.alias ?? {}) };
+    delete existingAliases['@'];
 
     config.resolve.alias = {
-      ...config.resolve.alias,
+      ...existingAliases,
 
       // Public plugin SDK entrypoints used by generated/plugin author code.
       '@ploykit/plugin-sdk/react$': path.resolve(__dirname, './src/plugin-sdk/react.ts'),
@@ -80,13 +91,30 @@ const nextConfig: NextConfig = {
       // @/* -> ./src/* (Next.js default, but explicit is clearer)
       '@': path.resolve(__dirname, './src'),
     };
-    if (activePluginMap) {
-      config.resolve.alias['@/lib/plugin-map$'] = activePluginMap;
-    }
 
     // Add absolute path resolution for the default plugins directory on server side.
     if (isServer) {
       resolveModules.add(path.resolve(__dirname, './plugins'));
+      config.plugins = [
+        ...(config.plugins || []),
+        new webpack.NormalModuleReplacementPlugin(
+          /plugin-map-provider\.server$/,
+          (resource: { context: string; request: string }) => {
+            if (path.resolve(resource.context) === pluginMapLoaderDir) {
+              resource.request = pluginMapBundledProvider;
+            }
+          }
+        ),
+        new webpack.NormalModuleReplacementPlugin(
+          /plugin-map-runtime-placeholder$/,
+          (resource: { context: string; request: string }) => {
+            if (path.resolve(resource.context) === pluginMapLoaderDir) {
+              resource.request =
+                activePluginMap ?? path.resolve(__dirname, './src/lib/plugin-map.ts');
+            }
+          }
+        ),
+      ];
     }
     config.resolve.modules = [...resolveModules];
 

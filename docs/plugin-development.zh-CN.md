@@ -32,7 +32,7 @@ $env:PLOYKIT_PLUGIN_DIRS = 'D:\work\ploykit-plugins;..\shared-plugins'
 npm run plugins:scan
 ```
 
-每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.cjs`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。产品壳如果只需要 runtime artifact，可运行 `npm run plugins:scan:runtime`，它只更新 active runtime map，不触碰提交版默认 map。配置了 active runtime map 后，宿主会把它当作必需输入；文件缺失或加载失败会直接报错，不再静默退回提交版默认 map。
+每个外部来源既可以是“包含多个插件子目录”的目录，也可以是直接包含 `plugin.ts` 的单个插件根目录。默认的 `plugins/` 仍会一起扫描。修改该配置后，重新运行 `npm run plugins:scan`。提交版 `src/lib/plugin-map.ts` 只跟踪默认 `plugins/` 树；外部插件条目默认写入 `.runtime/plugin-map.cjs`，也可通过 `PLOYKIT_PLUGIN_MAP_FILE` 指定。active runtime artifact 是当前配置来源的完整模块索引；请求期代码把它当作权威 map，不再和提交版 source map 临时合并。产品壳如果只需要 runtime artifact，可运行 `npm run plugins:scan:runtime`，它只更新 active runtime map，不触碰提交版默认 map。配置了 active runtime map 后，宿主会把它当作必需输入；文件缺失或加载失败会直接报错，不再静默退回提交版默认 map。
 
 运行 `npm run plugins:check` 可校验所有已配置来源；也可以定向运行 `npm run plugin:doctor -- ../my-ploykit-plugins/invoices`。在 Windows 上，外部插件模块必须与项目在同一个盘符，因为生成 map 使用相对静态 import；如果源码在别的盘，可以在项目内放 symlink/junction。
 

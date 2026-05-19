@@ -42,6 +42,9 @@ is always scanned as well. After changing the value, rerun `npm run
 plugins:scan`. The committed `src/lib/plugin-map.ts` tracks the default
 `plugins/` tree; external plugin entries are written to the runtime artifact
 `.runtime/plugin-map.cjs` by default, or to `PLOYKIT_PLUGIN_MAP_FILE` when set.
+That active runtime artifact is a complete module index for the configured
+sources; request-time code treats it as authoritative instead of merging it with
+the committed source map.
 Product shells that only need runtime artifacts can run
 `npm run plugins:scan:runtime`; that command updates the active runtime map
 without touching the committed default map.

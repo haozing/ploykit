@@ -337,8 +337,14 @@ const PLUGIN_MAP = {
 ${entries.join(',\n')}
 };
 
+const PLUGIN_MAP_ARTIFACT = {
+  kind: 'runtime',
+  plugins: PLUGIN_MAP
+};
+
 exports.PLUGIN_MAP = PLUGIN_MAP;
-exports.default = { PLUGIN_MAP };
+exports.PLUGIN_MAP_ARTIFACT = PLUGIN_MAP_ARTIFACT;
+exports.default = { PLUGIN_MAP, PLUGIN_MAP_ARTIFACT };
 `;
   }
 
@@ -361,8 +367,18 @@ export interface PluginMapEntry {
   slotModules?: Record<string, PluginModuleLoader>;
 }
 
+export interface PluginMapArtifact {
+  kind: 'source' | 'runtime';
+  plugins: Record<string, PluginMapEntry>;
+}
+
 export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
 ${entries.join(',\n')}
+};
+
+export const PLUGIN_MAP_ARTIFACT: PluginMapArtifact = {
+  kind: 'source',
+  plugins: PLUGIN_MAP,
 };
 `;
 }

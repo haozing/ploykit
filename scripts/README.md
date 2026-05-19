@@ -61,7 +61,9 @@ Scans the default `plugins/` directory and any external plugin source
 directories configured with `PLOYKIT_PLUGIN_DIRS`. Default plugins are generated
 into `src/lib/plugin-map.ts`; external plugin entries are generated into the
 active runtime artifact `.runtime/plugin-map.cjs` by default, or
-`PLOYKIT_PLUGIN_MAP_FILE` when configured.
+`PLOYKIT_PLUGIN_MAP_FILE` when configured. The active runtime artifact is the
+complete active plugin map for the configured sources; the host does not merge
+it with the committed source map at request time.
 
 Use `--runtime-only` for product shells that should prepare only the active
 runtime artifact and leave committed default map files untouched.

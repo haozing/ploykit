@@ -27,6 +27,11 @@ export interface PluginMapEntry {
   slotModules?: Record<string, PluginModuleLoader>;
 }
 
+export interface PluginMapArtifact {
+  kind: 'source' | 'runtime';
+  plugins: Record<string, PluginMapEntry>;
+}
+
 export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
   'capability-demo': {
     rootDir: "plugins/capability-demo",
@@ -96,4 +101,9 @@ export const PLUGIN_MAP: Record<string, PluginMapEntry> = {
       'api/notes': () => import("../../plugins/sample-internal/api/notes")
     },
   }
+};
+
+export const PLUGIN_MAP_ARTIFACT: PluginMapArtifact = {
+  kind: 'source',
+  plugins: PLUGIN_MAP,
 };
