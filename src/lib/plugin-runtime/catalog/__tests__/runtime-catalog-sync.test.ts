@@ -149,7 +149,21 @@ describe('syncRuntimeCatalog', () => {
     vi.clearAllMocks();
     mocks.listRuntimeProducts.mockReturnValue([
       { id: 'ploykit', name: 'PloyKit' },
-      { id: 'runlynk', name: 'RunLynk' },
+      {
+        id: 'runlynk',
+        name: 'RunLynk',
+        planCapabilities: [
+          {
+            key: 'runlynk.outputQuality',
+            valueType: 'enum',
+            ownerType: 'product',
+            ownerId: 'runlynk',
+            required: true,
+            sortOrder: 100,
+            options: [{ value: '1080p' }],
+          },
+        ],
+      },
     ]);
     mocks.listRuntimePluginSuites.mockImplementation((productId?: string) =>
       productId ? suites.filter((suite) => suite.productId === productId) : suites
@@ -178,6 +192,20 @@ describe('syncRuntimeCatalog', () => {
         productId: 'runlynk',
         bundleId: 'runlynk',
         pluginId: 'runlynk-core-console',
+      }),
+    ]);
+    expect(findInsert(insertCalls, tables.appProducts).rows).toEqual([
+      expect.objectContaining({
+        id: 'runlynk',
+        metadata: {
+          planCapabilities: [
+            expect.objectContaining({
+              key: 'runlynk.outputQuality',
+              ownerType: 'product',
+              ownerId: 'runlynk',
+            }),
+          ],
+        },
       }),
     ]);
   });

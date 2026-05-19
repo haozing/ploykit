@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PLATFORM_PRIMARY_CREDIT_METRIC } from '@/lib/billing/billing-metrics';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 
 const PAGE_SIZE = 20;
 
@@ -161,20 +162,20 @@ export default async function CreditHistoryPage({ params, searchParams }: PagePr
   const localeCode = lang === 'zh' ? 'zh-CN' : 'en-US';
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">{text.title}</h1>
-          <p className="mt-2 text-muted-foreground">{text.subtitle}</p>
-        </div>
-        <Button asChild variant="outline">
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Export endpoint returns a CSV download, not an app navigation. */}
-          <a href="/api/user/credit-history?limit=100&format=csv">
-            <Download className="mr-2 h-4 w-4" />
-            {text.exportCsv}
-          </a>
-        </Button>
-      </div>
+    <DashboardPageShell>
+      <DashboardPageHeader
+        title={text.title}
+        description={text.subtitle}
+        actions={
+          <Button asChild variant="outline">
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Export endpoint returns a CSV download, not an app navigation. */}
+            <a href="/api/user/credit-history?limit=100&format=csv">
+              <Download className="mr-2 h-4 w-4" />
+              {text.exportCsv}
+            </a>
+          </Button>
+        }
+      />
 
       {visibleLogs.length === 0 ? (
         <Card>
@@ -285,6 +286,6 @@ export default async function CreditHistoryPage({ params, searchParams }: PagePr
           </Button>
         )}
       </div>
-    </div>
+    </DashboardPageShell>
   );
 }

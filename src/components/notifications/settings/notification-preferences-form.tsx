@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTranslations } from 'next-intl';
 import { Bell, Mail, Webhook, CheckCircle2, AlertCircle, Loader2, Send } from 'lucide-react';
 import { apiFetch } from '@/lib/shared/auth-client';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 
 interface NotificationPreferences {
   id: string;
@@ -140,30 +141,27 @@ export function NotificationPreferencesForm() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6 flex items-center justify-center">
+      <DashboardPageShell className="flex min-h-[240px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      </DashboardPageShell>
     );
   }
 
   if (!preferences) {
     return (
-      <div className="container mx-auto py-6">
+      <DashboardPageShell>
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{t('errors.loadFailed')}</AlertDescription>
         </Alert>
-      </div>
+      </DashboardPageShell>
     );
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <DashboardPageShell>
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">{t('title')}</h1>
-        <p className="text-muted-foreground mt-2">{t('description')}</p>
-      </div>
+      <DashboardPageHeader title={t('title')} description={t('description')} />
 
       {/* Save Message */}
       {saveMessage && (
@@ -496,6 +494,6 @@ export function NotificationPreferencesForm() {
           )}
         </Button>
       </div>
-    </div>
+    </DashboardPageShell>
   );
 }

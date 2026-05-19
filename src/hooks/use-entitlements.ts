@@ -60,6 +60,7 @@ export interface PlanStripeConfig {
  */
 export interface PlanWithSubscribers {
   id: string;
+  productId: string;
   name: string;
   slug: string;
   features: PlanFeatures;

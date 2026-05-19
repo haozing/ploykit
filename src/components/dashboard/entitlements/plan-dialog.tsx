@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm, useFieldArray, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import useSWR from 'swr';
 import { useToast } from '@/hooks/use-toast';
 import type { PlanWithSubscribers } from '@/hooks/use-entitlements';
+import { API_KEYS, fetcher } from '@/lib/swr';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,10 +30,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PLATFORM_PRIMARY_CREDIT_METRIC } from '@/lib/billing/billing-metrics';
 import {
-  PLATFORM_OUTPUT_QUALITY_CAPABILITY,
-  PLATFORM_PRIMARY_CREDIT_METRIC,
-} from '@/lib/billing/billing-metrics';
+  getLocalizedPlanCapabilityText,
+  getPlanCapabilityLabel,
+  getPlanCapabilityOptionLabel,
+  parsePlanCapabilityValue,
+  type PlanCapabilityDefinition,
+} from '@/lib/entitlements/plan-capability-types';
 import {
   Select,
   SelectContent,
@@ -40,6 +46,55 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
+
+type PlanCapabilitiesResponse = {
+  success?: boolean;
+  data?: PlanCapabilityDefinition[];
+};
+
+function capabilityInputValue(
+  definition: PlanCapabilityDefinition,
+  capabilities: Record<string, unknown>
+): string | boolean | undefined {
+  const rawValue = capabilities[definition.key] ?? definition.defaultValue;
+
+  if (definition.valueType === 'boolean') {
+    return rawValue === true || rawValue === 'true';
+  }
+
+  if (rawValue === undefined || rawValue === null) {
+    return '';
+  }
+
+  return String(rawValue);
+}
+
+function buildCapabilityFormValues(
+  definitions: readonly PlanCapabilityDefinition[],
+  capabilities: Record<string, unknown>
+): Array<{ key: string; value?: string | boolean }> {
+  return definitions.map((definition) => ({
+    key: definition.key,
+    value: capabilityInputValue(definition, capabilities),
+  }));
+}
+
+function readApiErrorMessage(json: unknown, fallback: string): string {
+  if (!json || typeof json !== 'object') {
+    return fallback;
+  }
+  const record = json as Record<string, unknown>;
+  if (typeof record.error === 'string') {
+    return record.error;
+  }
+  if (record.error && typeof record.error === 'object') {
+    const error = record.error as Record<string, unknown>;
+    if (typeof error.message === 'string') {
+      return error.message;
+    }
+  }
+  return fallback;
+}
 
 function parseJsonObject(value: string): Record<string, unknown> {
   const parsed = JSON.parse(value) as unknown;
@@ -101,7 +156,11 @@ const quotaItemSchema = z.object({
   yearly: quotaValueSchema,
 });
 
-const resolutionSchema = z.enum(['480p', '720p', '1080p', '4k', 'original']);
+const capabilityValueSchema = z.union([z.string(), z.boolean()]).optional();
+const capabilityItemSchema = z.object({
+  key: quotaKeySchema,
+  value: capabilityValueSchema,
+});
 
 const planFormSchema = z.object({
   name: z.string().min(2).max(100),
@@ -124,10 +183,7 @@ const planFormSchema = z.object({
 
   // Machine-enforced capabilities (JSON) + common structured fields
   capabilitiesJson: jsonObjectSchema,
-  platformOutputQuality: z.preprocess(
-    (value) => (value === '' || value === null ? undefined : value),
-    resolutionSchema.optional()
-  ),
+  capabilityValues: z.array(capabilityItemSchema).default([]),
 
   // Quotas (per-month, split by billing interval)
   quotaItems: z.array(quotaItemSchema).default([]),
@@ -142,15 +198,37 @@ interface PlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   plan?: PlanWithSubscribers | null;
+  productId?: string;
   onSuccess?: () => void;
 }
 
-export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogProps) {
+export function PlanDialog({ open, onOpenChange, plan, productId, onSuccess }: PlanDialogProps) {
   const { toast } = useToast();
+  const locale = useLocale();
   const t = useTranslations('dashboard.entitlements.planDialogV2');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!plan;
   const [slugDirty, setSlugDirty] = useState(false);
+  const planCapabilityProductId = plan?.productId ?? productId;
+  const planCapabilitiesKey = useMemo(() => {
+    if (!open) {
+      return null;
+    }
+    if (!planCapabilityProductId) {
+      return API_KEYS.ENTITLEMENTS.PLAN_CAPABILITIES;
+    }
+    const params = new URLSearchParams({ productId: planCapabilityProductId });
+    return `${API_KEYS.ENTITLEMENTS.PLAN_CAPABILITIES}?${params.toString()}`;
+  }, [open, planCapabilityProductId]);
+  const {
+    data: planCapabilitiesData,
+    error: planCapabilitiesError,
+    isLoading: planCapabilitiesLoading,
+  } = useSWR<PlanCapabilitiesResponse>(planCapabilitiesKey, fetcher);
+  const planCapabilityDefinitions = useMemo(
+    () => planCapabilitiesData?.data ?? [],
+    [planCapabilitiesData?.data]
+  );
 
   const defaults = useMemo<PlanFormValues>(() => {
     const pricing = (plan?.pricing as Record<string, unknown> | undefined) || {};
@@ -178,11 +256,6 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
     const stripeProductId = (stripe.productId as string | undefined) || '';
 
     const capabilities = (plan?.features as Record<string, unknown> | undefined) || {};
-    const platformOutputQuality = capabilities[PLATFORM_OUTPUT_QUALITY_CAPABILITY] as
-      | string
-      | undefined;
-    const parsedResolution = resolutionSchema.safeParse(platformOutputQuality);
-
     const allQuotaKeys = Array.from(
       new Set([...Object.keys(limitsMonthly), ...Object.keys(limitsYearly)])
     ).sort();
@@ -207,7 +280,7 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
       yearly: yearly ?? undefined,
 
       capabilitiesJson: JSON.stringify(capabilities, null, 2),
-      platformOutputQuality: parsedResolution.success ? parsedResolution.data : undefined,
+      capabilityValues: [],
       quotaItems,
 
       stripeProductId,
@@ -232,13 +305,67 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
     }
   }, [open, defaults, form]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (planCapabilityDefinitions.length === 0) {
+      form.setValue('capabilityValues', [], {
+        shouldDirty: false,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+      return;
+    }
+
+    let capabilities: Record<string, unknown>;
+    try {
+      capabilities = parseJsonObject(form.getValues('capabilitiesJson') || '{}');
+    } catch {
+      capabilities = (plan?.features as Record<string, unknown> | undefined) || {};
+    }
+
+    form.setValue(
+      'capabilityValues',
+      buildCapabilityFormValues(planCapabilityDefinitions, capabilities),
+      {
+        shouldDirty: false,
+        shouldTouch: false,
+        shouldValidate: false,
+      }
+    );
+  }, [open, form, plan?.features, planCapabilityDefinitions]);
+
   const onSubmit = async (values: PlanFormValues) => {
     setIsSubmitting(true);
     try {
       const capabilities = parseJsonObject(values.capabilitiesJson || '{}');
+      const capabilityValuesByKey = new Map(
+        values.capabilityValues.map((item) => [item.key, item.value] as const)
+      );
+      const capabilityIssues: string[] = [];
 
-      if (values.platformOutputQuality) {
-        capabilities[PLATFORM_OUTPUT_QUALITY_CAPABILITY] = values.platformOutputQuality;
+      for (const definition of planCapabilityDefinitions) {
+        delete capabilities[definition.key];
+        const parsed = parsePlanCapabilityValue(
+          definition,
+          capabilityValuesByKey.get(definition.key)
+        );
+
+        if (!parsed.success) {
+          const label = getPlanCapabilityLabel(definition, locale);
+          capabilityIssues.push(t(`capabilities.errors.${parsed.issue.code}`, { label }));
+          continue;
+        }
+
+        if (parsed.value !== undefined) {
+          capabilities[definition.key] = parsed.value;
+        }
+      }
+
+      if (capabilityIssues.length > 0) {
+        throw new Error(capabilityIssues.join('; '));
       }
 
       const monthlyLimits: Record<string, number> = {};
@@ -291,6 +418,10 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
         stripe: values.stripeProductId ? { productId: values.stripeProductId } : undefined,
       };
 
+      if (!isEditing && productId) {
+        payload.productId = productId;
+      }
+
       const response = await fetch(
         isEditing ? `/api/admin/entitlements/plans/${plan.id}` : '/api/admin/entitlements/plans',
         {
@@ -303,10 +434,10 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
       const json = (await response.json()) as {
         success?: boolean;
         data?: { id: string };
-        error?: string;
+        error?: string | { message?: string };
       };
       if (!response.ok || !json.success) {
-        throw new Error(json.error || 'Failed to save plan');
+        throw new Error(readApiErrorMessage(json, 'Failed to save plan'));
       }
 
       const savedPlanId = isEditing ? plan.id : json.data!.id;
@@ -317,7 +448,7 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
         });
         const syncJson = (await syncRes.json()) as { success?: boolean; error?: string };
         if (!syncRes.ok || !syncJson.success) {
-          throw new Error(syncJson.error || 'Saved, but Stripe sync failed');
+          throw new Error(readApiErrorMessage(syncJson, 'Saved, but Stripe sync failed'));
         }
       }
 
@@ -679,32 +810,132 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
               </TabsContent>
 
               <TabsContent value="capabilities" className="space-y-4 mt-4">
-                <FormField
-                  control={form.control}
-                  name="platformOutputQuality"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('capabilities.outputResolution.label')}</FormLabel>
-                      <FormControl>
-                        <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue
-                              placeholder={t('capabilities.outputResolution.placeholder')}
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div>
+                    <div className="font-medium">{t('capabilities.schema.title')}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {t('capabilities.schema.help')}
+                    </div>
+                  </div>
+
+                  {planCapabilitiesLoading ? (
+                    <div className="text-sm text-muted-foreground">
+                      {t('capabilities.schema.loading')}
+                    </div>
+                  ) : planCapabilitiesError ? (
+                    <div className="text-sm text-destructive">
+                      {t('capabilities.schema.loadFailed')}
+                    </div>
+                  ) : planCapabilityDefinitions.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      {t('capabilities.schema.empty')}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {planCapabilityDefinitions.map((definition, index) => {
+                        const label = getPlanCapabilityLabel(definition, locale);
+                        const description = getLocalizedPlanCapabilityText(
+                          definition.description,
+                          locale
+                        );
+
+                        if (definition.valueType === 'boolean') {
+                          return (
+                            <FormField
+                              key={definition.key}
+                              control={form.control}
+                              name={`capabilityValues.${index}.value`}
+                              render={({ field }) => (
+                                <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                                  <div className="min-w-0 space-y-1">
+                                    <FormLabel className="mb-0">
+                                      {label}
+                                      {definition.required && (
+                                        <span className="ml-2 text-xs text-muted-foreground">
+                                          {t('capabilities.schema.required')}
+                                        </span>
+                                      )}
+                                    </FormLabel>
+                                    {description && (
+                                      <div className="text-sm text-muted-foreground">
+                                        {description}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      checked={field.value === true}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
                             />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="480p">480p</SelectItem>
-                            <SelectItem value="720p">720p</SelectItem>
-                            <SelectItem value="1080p">1080p</SelectItem>
-                            <SelectItem value="4k">4k</SelectItem>
-                            <SelectItem value="original">original</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                          );
+                        }
+
+                        return (
+                          <FormField
+                            key={definition.key}
+                            control={form.control}
+                            name={`capabilityValues.${index}.value`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>
+                                  {label}
+                                  {definition.required && (
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      {t('capabilities.schema.required')}
+                                    </span>
+                                  )}
+                                </FormLabel>
+                                <FormControl>
+                                  {definition.valueType === 'enum' ? (
+                                    <Select
+                                      value={typeof field.value === 'string' ? field.value : ''}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue
+                                          placeholder={t('capabilities.schema.selectPlaceholder')}
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {(definition.options ?? []).map((option) => (
+                                          <SelectItem
+                                            key={String(option.value)}
+                                            value={String(option.value)}
+                                          >
+                                            {getPlanCapabilityOptionLabel(option, locale)}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Input
+                                      type={definition.valueType === 'number' ? 'number' : 'text'}
+                                      value={
+                                        typeof field.value === 'boolean' ||
+                                        field.value === undefined
+                                          ? ''
+                                          : field.value
+                                      }
+                                      onChange={(event) => field.onChange(event.target.value)}
+                                    />
+                                  )}
+                                </FormControl>
+                                {description && (
+                                  <div className="text-sm text-muted-foreground">{description}</div>
+                                )}
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
                   )}
-                />
+                </div>
 
                 <FormField
                   control={form.control}
@@ -712,6 +943,9 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('capabilities.json.label')}</FormLabel>
+                      <div className="text-sm text-muted-foreground">
+                        {t('capabilities.json.help')}
+                      </div>
                       <FormControl>
                         <Textarea rows={14} {...field} />
                       </FormControl>
@@ -757,7 +991,7 @@ export function PlanDialog({ open, onOpenChange, plan, onSuccess }: PlanDialogPr
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {t('actions.cancel')}
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || planCapabilitiesLoading}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEditing ? t('actions.update') : t('actions.create')}
               </Button>

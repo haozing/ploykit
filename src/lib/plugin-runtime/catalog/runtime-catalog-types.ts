@@ -1,9 +1,12 @@
+import type { PlanCapabilityDefinition } from '@/lib/entitlements/plan-capability-types';
+
 export interface RuntimeProduct {
   id: string;
   name: string;
   runtimeKey?: string;
   defaultLocale?: string;
   status?: string;
+  planCapabilities?: PlanCapabilityDefinition[];
   metadata?: Record<string, unknown>;
 }
 

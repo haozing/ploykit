@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +26,7 @@ interface UserEditDialogProps {
 }
 
 export function UserEditDialog({ user, open, onOpenChange, onSuccess }: UserEditDialogProps) {
+  const t = useTranslations('dashboard.users.editDialog');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [image, setImage] = useState('');
@@ -63,14 +65,14 @@ export function UserEditDialog({ user, open, onOpenChange, onSuccess }: UserEdit
       });
 
       if (!result.success) {
-        throw new Error('Failed to update user');
+        throw new Error(t('errors.updateFailed'));
       }
 
-      toast.success('User updated');
+      toast.success(t('success.updated'));
       onSuccess?.();
       onOpenChange(false);
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Failed to update user';
+      const message = submitError instanceof Error ? submitError.message : t('errors.updateFailed');
       setError(message);
       toast.error(message);
     }
@@ -80,15 +82,13 @@ export function UserEditDialog({ user, open, onOpenChange, onSuccess }: UserEdit
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Edit User</DialogTitle>
-          <DialogDescription>
-            Update the user&apos;s profile fields stored by the platform.
-          </DialogDescription>
+          <DialogTitle>{t('title')}</DialogTitle>
+          <DialogDescription>{t('description')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="admin-user-edit-name">Name</Label>
+            <Label htmlFor="admin-user-edit-name">{t('fields.name')}</Label>
             <Input
               id="admin-user-edit-name"
               value={name}
@@ -100,7 +100,7 @@ export function UserEditDialog({ user, open, onOpenChange, onSuccess }: UserEdit
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="admin-user-edit-email">Email</Label>
+            <Label htmlFor="admin-user-edit-email">{t('fields.email')}</Label>
             <Input
               id="admin-user-edit-email"
               type="email"
@@ -113,7 +113,7 @@ export function UserEditDialog({ user, open, onOpenChange, onSuccess }: UserEdit
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="admin-user-edit-image">Avatar URL</Label>
+            <Label htmlFor="admin-user-edit-image">{t('fields.avatarUrl')}</Label>
             <Input
               id="admin-user-edit-image"
               type="url"
@@ -137,11 +137,11 @@ export function UserEditDialog({ user, open, onOpenChange, onSuccess }: UserEdit
               onClick={() => onOpenChange(false)}
               disabled={updateUserMutation.isMutating}
             >
-              Cancel
+              {t('actions.cancel')}
             </Button>
             <Button type="submit" disabled={updateUserMutation.isMutating || !user}>
               {updateUserMutation.isMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save
+              {t('actions.save')}
             </Button>
           </DialogFooter>
         </form>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getPlanStats } from '@/lib/services/entitlement/plan-service';
 import { getUserEntitlementStats } from '@/lib/services/user/user-entitlement-service';
 import { withAdminGuard, withErrorHandling } from '@/lib/middleware';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
 
 /**
  * GET /api/admin/entitlements/stats
@@ -15,10 +16,13 @@ import { withAdminGuard, withErrorHandling } from '@/lib/middleware';
  * - Requires admin role
  */
 export const GET = withAdminGuard(
-  withErrorHandling(async () => {
+  withErrorHandling(async (request) => {
+    const url = new URL(request.url);
+    const productId = getRuntimeProductId({ productId: url.searchParams.get('productId') });
+
     // Fetch plan stats and user entitlement stats
     const [planStats, entitlementStats] = await Promise.all([
-      getPlanStats(),
+      getPlanStats(productId),
       getUserEntitlementStats(),
     ]);
 

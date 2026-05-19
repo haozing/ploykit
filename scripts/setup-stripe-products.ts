@@ -12,7 +12,7 @@ import { config } from 'dotenv';
 import { resolve } from 'path';
 import { db } from '../src/lib/db/client.server';
 import { entitlementPlans } from '../src/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 // Load environment variables
 const envPath = resolve(__dirname, '../.env');
@@ -40,6 +40,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-04-22.dahlia',
   typescript: true,
 });
+
+const HOST_PRODUCT_ID = 'ploykit';
 
 async function setupProducts() {
   console.log('🚀 Starting Stripe product and price creation...\n');
@@ -169,7 +171,9 @@ async function setupProducts() {
           priceIdYearly: null,
         },
       })
-      .where(eq(entitlementPlans.slug, 'free'));
+      .where(
+        and(eq(entitlementPlans.productId, HOST_PRODUCT_ID), eq(entitlementPlans.slug, 'free'))
+      );
     console.log(`✅ Updated Free Plan with Price ID: ${freePrice.id}`);
 
     // Update Pro Plan
@@ -182,7 +186,9 @@ async function setupProducts() {
           priceIdYearly: proYearly.id,
         },
       })
-      .where(eq(entitlementPlans.slug, 'pro'));
+      .where(
+        and(eq(entitlementPlans.productId, HOST_PRODUCT_ID), eq(entitlementPlans.slug, 'pro'))
+      );
     console.log(`✅ Updated Pro Plan with Monthly: ${proMonthly.id}, Yearly: ${proYearly.id}`);
 
     // Update Enterprise Plan
@@ -195,7 +201,12 @@ async function setupProducts() {
           priceIdYearly: enterpriseYearly.id,
         },
       })
-      .where(eq(entitlementPlans.slug, 'enterprise'));
+      .where(
+        and(
+          eq(entitlementPlans.productId, HOST_PRODUCT_ID),
+          eq(entitlementPlans.slug, 'enterprise')
+        )
+      );
     console.log(
       `✅ Updated Enterprise Plan with Monthly: ${enterpriseMonthly.id}, Yearly: ${enterpriseYearly.id}`
     );

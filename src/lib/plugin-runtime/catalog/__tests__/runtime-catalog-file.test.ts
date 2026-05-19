@@ -33,7 +33,25 @@ describe('external runtime catalog files', () => {
   it('merges external products, suites, and bundles without source changes', () => {
     const file = writeCatalog({
       version: 1,
-      products: [{ id: 'external-product', name: 'External Product' }],
+      products: [
+        {
+          id: 'external-product',
+          name: 'External Product',
+          planCapabilities: [
+            {
+              key: 'external.outputQuality',
+              valueType: 'enum',
+              required: true,
+              defaultValue: 'hd',
+              label: { en: 'Output Quality', zh: '输出质量' },
+              options: [
+                { value: 'sd', label: { en: 'SD' } },
+                { value: 'hd', label: { en: 'HD' } },
+              ],
+            },
+          ],
+        },
+      ],
       suites: [{ id: 'external-suite', productId: 'external-product', name: 'External Suite' }],
       bundles: [
         {
@@ -50,7 +68,20 @@ describe('external runtime catalog files', () => {
     resetRuntimeCatalogFileCache();
 
     expect(listRuntimeProducts()).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: 'external-product' })])
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'external-product',
+          planCapabilities: [
+            expect.objectContaining({
+              key: 'external.outputQuality',
+              ownerType: 'product',
+              ownerId: 'external-product',
+              valueType: 'enum',
+              required: true,
+            }),
+          ],
+        }),
+      ])
     );
     expect(listRuntimePluginSuites('external-product')).toEqual([
       expect.objectContaining({

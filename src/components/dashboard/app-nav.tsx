@@ -59,10 +59,14 @@ export function AppNav({ navGroups }: AppNavProps) {
 
     for (const group of navGroups) {
       for (const item of group.items) {
-        const fullPath = getLangPath(item.href);
-        if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
-          if (!bestMatch || fullPath.length > bestMatch.length) {
-            bestMatch = { id: item.id, length: fullPath.length };
+        const candidateHrefs = [item.href, ...(item.activeHrefs ?? [])];
+
+        for (const href of candidateHrefs) {
+          const fullPath = getLangPath(href);
+          if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
+            if (!bestMatch || fullPath.length > bestMatch.length) {
+              bestMatch = { id: item.id, length: fullPath.length };
+            }
           }
         }
       }

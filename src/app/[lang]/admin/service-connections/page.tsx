@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, KeyRound, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiFetch } from '@/lib/shared/auth-client';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 import type {
   AdminSecretSourceSummary,
   AdminServiceConnectionLogSummary,
@@ -127,8 +128,8 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   return 'secondary';
 }
 
-function formatDate(value?: string) {
-  return value ? new Date(value).toLocaleString() : 'Never';
+function formatDate(value: string | undefined, locale: string, emptyLabel: string) {
+  return value ? new Date(value).toLocaleString(locale) : emptyLabel;
 }
 
 function secretDraftFromSummary(source: AdminSecretSourceSummary): SecretDraft {
@@ -151,10 +152,6 @@ function secretPayload(source: SecretDraft) {
   };
 }
 
-function sourceLabel(source: AdminSecretSourceSummary) {
-  return source.label;
-}
-
 function makeQuery(filters: Record<string, string>) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
@@ -166,6 +163,8 @@ function makeQuery(filters: Record<string, string>) {
 
 export default function AdminServiceConnectionsPage() {
   const t = useTranslations('dashboard.serviceConnections');
+  const locale = useLocale().startsWith('zh') ? 'zh-CN' : 'en-US';
+  const loadFailedLabel = t('errors.loadFailed');
   const [requirements, setRequirements] = React.useState<AdminServiceConnectionRequirement[]>([]);
   const [connections, setConnections] = React.useState<AdminServiceConnectionSummary[]>([]);
   const [logs, setLogs] = React.useState<AdminServiceConnectionLogSummary[]>([]);
@@ -212,7 +211,7 @@ export default function AdminServiceConnectionsPage() {
         apiFetch(`/api/admin/service-connections/logs${logsQuery}`),
       ]);
       if (!requirementsResponse.ok || !connectionsResponse.ok || !logsResponse.ok) {
-        throw new Error('Failed to load service connection data');
+        throw new Error(loadFailedLabel);
       }
       setRequirements(
         ((await requirementsResponse.json()) as RequirementsResponse).requirements ?? []
@@ -220,11 +219,11 @@ export default function AdminServiceConnectionsPage() {
       setConnections(((await connectionsResponse.json()) as ConnectionsResponse).connections ?? []);
       setLogs(((await logsResponse.json()) as LogsResponse).logs ?? []);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to load data');
+      setError(caught instanceof Error ? caught.message : loadFailedLabel);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, loadFailedLabel]);
 
   React.useEffect(() => {
     void refresh();
@@ -320,11 +319,11 @@ export default function AdminServiceConnectionsPage() {
         }),
       });
       if (!response.ok) throw new Error(await response.text());
-      setMessage('Service connection saved.');
+      setMessage(t('messages.saved'));
       setDraft(emptyDraft);
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Save failed');
+      setError(caught instanceof Error ? caught.message : t('errors.saveFailed'));
     } finally {
       setActing(null);
     }
@@ -366,10 +365,10 @@ export default function AdminServiceConnectionsPage() {
         body: JSON.stringify({ retentionDays: Number(retentionDays) }),
       });
       if (!response.ok) throw new Error(await response.text());
-      setMessage('Retention cleanup finished.');
+      setMessage(t('messages.retentionFinished'));
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Retention cleanup failed');
+      setError(caught instanceof Error ? caught.message : t('errors.retentionFailed'));
     } finally {
       setActing(null);
     }
@@ -384,23 +383,51 @@ export default function AdminServiceConnectionsPage() {
         field: rotation.field,
         value: rotation.value,
       },
-      'Secret rotated.'
+      t('messages.secretRotated')
     );
     setRotation({ id: '', field: 'auth', value: '' });
   }
 
+  const formatStatusLabel = (status: string) => {
+    const key = `statuses.${status}`;
+    return t.has(key) ? t(key) : status;
+  };
+
+  const formatSecretSource = (source: AdminSecretSourceSummary) => {
+    if (source.type === 'none') return t('secretSources.none');
+    if (source.type === 'env') return t('secretSources.env', { name: source.name });
+    if (source.type === 'encrypted') return t('secretSources.encrypted', { name: source.name });
+    if (source.type === 'invalid') return t('secretSources.invalid', { ref: source.ref });
+    return t('secretSources.none');
+  };
+
+  const formatOwner = (ownerType: string, ownerId: string) => {
+    const key = `ownerTypes.${ownerType}`;
+    const label = t.has(key) ? t(key) : ownerType;
+    return `${label}:${ownerId}`;
+  };
+
+  const formatScope = (scopeType: string) => {
+    const key = `scopes.${scopeType}`;
+    return t.has(key) ? t(key) : scopeType;
+  };
+
+  const formatEnvironment = (environment: string | null | undefined) => {
+    return environment || t('empty.defaultEnvironment');
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">{t('title')}</h1>
-          <p className="text-muted-foreground">{t('description')}</p>
-        </div>
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => void refresh()}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          {t('actions.refresh')}
-        </Button>
-      </div>
+    <DashboardPageShell>
+      <DashboardPageHeader
+        title={t('title')}
+        description={t('description')}
+        actions={
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => void refresh()}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {t('actions.refresh')}
+          </Button>
+        }
+      />
 
       {error && (
         <Alert variant="destructive">
@@ -430,25 +457,25 @@ export default function AdminServiceConnectionsPage() {
         <StatCard label={t('stats.recentCalls')} value={logs.length} />
       </div>
 
-      <Panel title="Filters" description="Narrow requirements, connections, and logs.">
+      <Panel title={t('filters.title')} description={t('filters.description')}>
         <div className="grid gap-3 md:grid-cols-5">
           <Field
-            label="Plugin"
+            label={t('filters.fields.plugin')}
             value={filters.pluginId}
             onChange={(pluginId) => setFilters({ ...filters, pluginId })}
           />
           <Field
-            label="Service"
+            label={t('filters.fields.service')}
             value={filters.serviceName}
             onChange={(serviceName) => setFilters({ ...filters, serviceName })}
           />
           <Field
-            label="Workspace"
+            label={t('filters.fields.workspace')}
             value={filters.workspaceId}
             onChange={(workspaceId) => setFilters({ ...filters, workspaceId })}
           />
           <Field
-            label="Environment"
+            label={t('filters.fields.environment')}
             value={filters.environment}
             onChange={(environment) => setFilters({ ...filters, environment })}
           />
@@ -460,9 +487,9 @@ export default function AdminServiceConnectionsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="disabled">Disabled</SelectItem>
+              <SelectItem value="all">{t('filters.status.all')}</SelectItem>
+              <SelectItem value="active">{t('statuses.active')}</SelectItem>
+              <SelectItem value="disabled">{t('statuses.disabled')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -482,24 +509,24 @@ export default function AdminServiceConnectionsPage() {
               loading={loading}
               empty={t('requirements.empty')}
               headers={[
-                'Plugin',
-                'Service',
-                'Required',
-                'Methods',
-                'Paths',
-                'Actor claims',
-                'Status',
-                '',
+                t('requirements.headers.plugin'),
+                t('requirements.headers.service'),
+                t('requirements.headers.required'),
+                t('requirements.headers.methods'),
+                t('requirements.headers.paths'),
+                t('requirements.headers.actorClaims'),
+                t('requirements.headers.status'),
+                t('requirements.headers.action'),
               ]}
               rows={requirements.map((item) => [
                 item.pluginId,
                 item.serviceName,
-                item.required ? 'required' : 'optional',
+                item.required ? t('requirement.required') : t('requirement.optional'),
                 item.methods.join(', '),
                 item.paths.join(', '),
-                item.actorClaims ? 'required' : 'off',
+                item.actorClaims ? t('requirement.required') : t('requirement.off'),
                 <Badge key="status" variant={statusVariant(item.connectionStatus)}>
-                  {item.connectionStatus}
+                  {formatStatusLabel(item.connectionStatus)}
                 </Badge>,
                 <Button
                   key="action"
@@ -507,7 +534,7 @@ export default function AdminServiceConnectionsPage() {
                   size="sm"
                   onClick={() => configureRequirement(item)}
                 >
-                  Configure
+                  {t('actions.configure')}
                 </Button>,
               ])}
             />
@@ -519,34 +546,42 @@ export default function AdminServiceConnectionsPage() {
             <DataTable
               loading={loading}
               empty={t('bindings.empty')}
-              headers={['Connection', 'Endpoint', 'Auth', 'Actor', 'Health', 'Actions']}
+              headers={[
+                t('bindings.headers.binding'),
+                t('bindings.headers.baseUrl'),
+                t('bindings.headers.auth'),
+                t('bindings.headers.actor'),
+                t('bindings.headers.health'),
+                t('bindings.headers.action'),
+              ]}
               rows={connections.map((connection) => [
                 <Identity
                   key="id"
                   title={`${connection.pluginId}:${connection.serviceName}`}
-                  detail={`${connection.ownerType}:${connection.ownerId}`}
+                  detail={formatOwner(connection.ownerType, connection.ownerId)}
                 />,
                 <div key="endpoint" className="max-w-[320px] truncate">
                   {connection.baseUrl}
                   <div className="text-xs text-muted-foreground">
-                    {connection.environment ?? 'default'} / {connection.scopeType}
+                    {formatEnvironment(connection.environment)} /{' '}
+                    {formatScope(connection.scopeType)}
                   </div>
                 </div>,
                 <div key="auth" className="space-y-1 text-xs">
                   <div>{connection.authType}</div>
                   <div className="text-muted-foreground">
-                    {sourceLabel(connection.authSecretSource)}
+                    {formatSecretSource(connection.authSecretSource)}
                   </div>
                 </div>,
                 connection.actorClaimsEnabled
-                  ? sourceLabel(connection.actorClaimsSecretSource)
-                  : 'off',
+                  ? formatSecretSource(connection.actorClaimsSecretSource)
+                  : t('requirement.off'),
                 <div key="health" className="space-y-1">
                   <Badge variant={statusVariant(connection.lastCheckStatus ?? connection.status)}>
-                    {connection.lastCheckStatus ?? connection.status}
+                    {formatStatusLabel(connection.lastCheckStatus ?? connection.status)}
                   </Badge>
                   <div className="text-xs text-muted-foreground">
-                    {formatDate(connection.lastCheckedAt)}
+                    {formatDate(connection.lastCheckedAt, locale, t('empty.never'))}
                   </div>
                 </div>,
                 <div key="action" className="flex flex-wrap justify-end gap-2">
@@ -560,7 +595,7 @@ export default function AdminServiceConnectionsPage() {
                     onClick={() =>
                       void postAction(
                         { action: 'test', id: connection.id },
-                        `Test finished for ${connection.serviceName}.`
+                        t('messages.testFinished', { serviceName: connection.serviceName })
                       )
                     }
                   >
@@ -573,7 +608,7 @@ export default function AdminServiceConnectionsPage() {
                     onClick={() => setRotation({ id: connection.id, field: 'auth', value: '' })}
                   >
                     <KeyRound className="h-4 w-4" />
-                    Rotate
+                    {t('actions.rotate')}
                   </Button>
                   <Button
                     variant="outline"
@@ -586,7 +621,9 @@ export default function AdminServiceConnectionsPage() {
                           id: connection.id,
                           status: connection.status === 'active' ? 'disabled' : 'active',
                         },
-                        `Connection ${connection.status === 'active' ? 'disabled' : 'enabled'}.`
+                        connection.status === 'active'
+                          ? t('messages.connectionDisabled')
+                          : t('messages.connectionEnabled')
                       )
                     }
                   >
@@ -595,7 +632,7 @@ export default function AdminServiceConnectionsPage() {
                 </div>,
               ])}
             />
-            {testResult && <ResultPanel title="Last test result" value={testResult} />}
+            {testResult && <ResultPanel title={t('bindings.lastTestResult')} value={testResult} />}
             {rotation.id && (
               <div className="mt-4 grid gap-3 rounded-md border p-4 md:grid-cols-[180px_1fr_auto]">
                 <Select
@@ -608,20 +645,24 @@ export default function AdminServiceConnectionsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auth">Auth token</SelectItem>
-                    <SelectItem value="authUsername">Basic username</SelectItem>
-                    <SelectItem value="authPassword">Basic password</SelectItem>
-                    <SelectItem value="actorClaims">Actor claims</SelectItem>
+                    <SelectItem value="auth">{t('rotation.fields.auth')}</SelectItem>
+                    <SelectItem value="authUsername">
+                      {t('rotation.fields.authUsername')}
+                    </SelectItem>
+                    <SelectItem value="authPassword">
+                      {t('rotation.fields.authPassword')}
+                    </SelectItem>
+                    <SelectItem value="actorClaims">{t('rotation.fields.actorClaims')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input
                   type="password"
                   value={rotation.value}
                   onChange={(event) => setRotation({ ...rotation, value: event.target.value })}
-                  placeholder="New secret value"
+                  placeholder={t('rotation.newSecretPlaceholder')}
                 />
                 <Button disabled={!rotation.value} onClick={() => void rotateSecret()}>
-                  Rotate
+                  {t('actions.rotate')}
                 </Button>
               </div>
             )}
@@ -630,128 +671,147 @@ export default function AdminServiceConnectionsPage() {
 
         <TabsContent value="editor">
           <Panel title={t('editor.title')} description={t('editor.description')}>
-            <EditorSection title="Identity">
+            <EditorSection title={t('editor.sections.identity')}>
               <Field
-                label="Plugin"
+                label={t('editor.fields.pluginId')}
                 value={draft.pluginId}
                 onChange={(pluginId) => setDraft({ ...draft, pluginId })}
               />
               <Field
-                label="Service"
+                label={t('editor.fields.serviceName')}
                 value={draft.serviceName}
                 onChange={(serviceName) => setDraft({ ...draft, serviceName })}
               />
               <SelectField
-                label="Owner"
+                label={t('editor.fields.owner')}
                 value={draft.ownerType}
                 values={['plugin', 'suite', 'product']}
+                optionLabels={{
+                  plugin: t('ownerTypes.plugin'),
+                  suite: t('ownerTypes.suite'),
+                  product: t('ownerTypes.product'),
+                }}
                 onChange={(ownerType) =>
                   setDraft({ ...draft, ownerType: ownerType as ConnectionDraft['ownerType'] })
                 }
               />
               <Field
-                label="Owner id"
+                label={t('editor.fields.ownerId')}
                 value={draft.ownerId}
                 onChange={(ownerId) => setDraft({ ...draft, ownerId })}
               />
               <SelectField
-                label="Scope"
+                label={t('editor.fields.scope')}
                 value={draft.scopeType}
                 values={['global', 'workspace']}
+                optionLabels={{
+                  global: t('scopes.global'),
+                  workspace: t('scopes.workspace'),
+                }}
                 onChange={(scopeType) =>
                   setDraft({ ...draft, scopeType: scopeType as ConnectionDraft['scopeType'] })
                 }
               />
               <Field
-                label="Workspace id"
+                label={t('editor.fields.workspaceId')}
                 value={draft.scopeId}
                 onChange={(scopeId) => setDraft({ ...draft, scopeId })}
               />
               <Field
-                label="Environment"
+                label={t('editor.fields.environment')}
                 value={draft.environment}
                 onChange={(environment) => setDraft({ ...draft, environment })}
               />
               <SelectField
-                label="Status"
+                label={t('editor.fields.status')}
                 value={draft.status}
                 values={['active', 'disabled']}
+                optionLabels={{
+                  active: t('statuses.active'),
+                  disabled: t('statuses.disabled'),
+                }}
                 onChange={(status) =>
                   setDraft({ ...draft, status: status as ConnectionDraft['status'] })
                 }
               />
             </EditorSection>
 
-            <EditorSection title="Endpoint">
+            <EditorSection title={t('editor.sections.endpoint')}>
               <Field
-                label="Base URL"
+                label={t('editor.fields.baseUrl')}
                 value={draft.baseUrl}
                 onChange={(baseUrl) => setDraft({ ...draft, baseUrl })}
               />
               <Field
-                label="Timeout ms"
+                label={t('editor.fields.timeoutMs')}
                 type="number"
                 value={draft.timeoutMs}
                 onChange={(timeoutMs) => setDraft({ ...draft, timeoutMs })}
               />
               <Field
-                label="Retry attempts"
+                label={t('editor.fields.retryAttempts')}
                 type="number"
                 value={draft.retryAttempts}
                 onChange={(retryAttempts) => setDraft({ ...draft, retryAttempts })}
               />
               <Field
-                label="Retry backoff ms"
+                label={t('editor.fields.retryBackoffMs')}
                 type="number"
                 value={draft.retryBackoffMs}
                 onChange={(retryBackoffMs) => setDraft({ ...draft, retryBackoffMs })}
               />
               <Field
-                label="Max response bytes"
+                label={t('editor.fields.maxResponseBytes')}
                 type="number"
                 value={draft.maxResponseBytes}
                 onChange={(maxResponseBytes) => setDraft({ ...draft, maxResponseBytes })}
               />
             </EditorSection>
 
-            <EditorSection title="Authentication">
+            <EditorSection title={t('editor.sections.authentication')}>
               <SelectField
-                label="Auth type"
+                label={t('editor.fields.authType')}
                 value={draft.authType}
                 values={['none', 'bearer', 'basic', 'apiKey']}
+                optionLabels={{
+                  none: t('authTypes.none'),
+                  bearer: t('authTypes.bearer'),
+                  basic: t('authTypes.basic'),
+                  apiKey: t('authTypes.apiKey'),
+                }}
                 onChange={(authType) =>
                   setDraft({ ...draft, authType: authType as ConnectionDraft['authType'] })
                 }
               />
               <SecretSourceField
-                label="Auth secret"
+                label={t('editor.fields.authSecret')}
                 value={draft.authSecretSource}
                 onChange={(authSecretSource) => setDraft({ ...draft, authSecretSource })}
               />
               {draft.authType === 'basic' && (
                 <>
                   <SecretSourceField
-                    label="Basic username"
+                    label={t('editor.fields.basicUsername')}
                     value={draft.authUsernameSource}
                     onChange={(authUsernameSource) => setDraft({ ...draft, authUsernameSource })}
                   />
                   <SecretSourceField
-                    label="Basic password"
+                    label={t('editor.fields.basicPassword')}
                     value={draft.authPasswordSource}
                     onChange={(authPasswordSource) => setDraft({ ...draft, authPasswordSource })}
                   />
                 </>
               )}
               <Field
-                label="API key header"
+                label={t('editor.fields.authHeader')}
                 value={draft.authHeaderName}
                 onChange={(authHeaderName) => setDraft({ ...draft, authHeaderName })}
               />
             </EditorSection>
 
-            <EditorSection title="Actor Claims">
+            <EditorSection title={t('editor.sections.actorClaims')}>
               <div className="flex h-10 items-center justify-between rounded-md border px-3">
-                <Label>Enabled</Label>
+                <Label>{t('editor.fields.enabled')}</Label>
                 <Switch
                   checked={draft.actorClaimsEnabled}
                   onCheckedChange={(actorClaimsEnabled) =>
@@ -760,7 +820,7 @@ export default function AdminServiceConnectionsPage() {
                 />
               </div>
               <Field
-                label="Audience"
+                label={t('editor.fields.actorAudience')}
                 value={draft.actorClaimsAudience}
                 onChange={(actorClaimsAudience) =>
                   setDraft({
@@ -771,39 +831,39 @@ export default function AdminServiceConnectionsPage() {
                 }
               />
               <SecretSourceField
-                label="Signing secret"
+                label={t('editor.fields.signingSecret')}
                 value={draft.actorClaimsSecretSource}
                 onChange={(actorClaimsSecretSource) =>
                   setDraft({ ...draft, actorClaimsSecretSource })
                 }
               />
               <Field
-                label="Key id"
+                label={t('editor.fields.keyId')}
                 value={draft.actorClaimsKeyId}
                 onChange={(actorClaimsKeyId) => setDraft({ ...draft, actorClaimsKeyId })}
               />
               <Field
-                label="TTL seconds"
+                label={t('editor.fields.ttlSeconds')}
                 type="number"
                 value={draft.actorClaimsTtlSeconds}
                 onChange={(actorClaimsTtlSeconds) => setDraft({ ...draft, actorClaimsTtlSeconds })}
               />
             </EditorSection>
 
-            <EditorSection title="Health Check">
+            <EditorSection title={t('editor.sections.healthCheck')}>
               <Field
-                label="Path"
+                label={t('editor.fields.healthPath')}
                 value={draft.healthPath}
                 onChange={(healthPath) => setDraft({ ...draft, healthPath })}
               />
               <SelectField
-                label="Method"
+                label={t('editor.fields.healthMethod')}
                 value={draft.healthMethod}
                 values={['GET', 'POST', 'HEAD']}
                 onChange={(healthMethod) => setDraft({ ...draft, healthMethod })}
               />
               <Field
-                label="Expected status"
+                label={t('editor.fields.expectedStatus')}
                 type="number"
                 value={draft.healthExpectedStatus}
                 onChange={(healthExpectedStatus) => setDraft({ ...draft, healthExpectedStatus })}
@@ -824,22 +884,22 @@ export default function AdminServiceConnectionsPage() {
               loading={loading}
               empty={t('logs.empty')}
               headers={[
-                'Service',
-                'Method',
-                'Path template',
-                'Status',
-                'Duration',
-                'Request',
-                'Created',
+                t('logs.headers.service'),
+                t('logs.headers.method'),
+                t('logs.headers.pathTemplate'),
+                t('logs.headers.status'),
+                t('logs.headers.duration'),
+                t('logs.headers.request'),
+                t('logs.headers.created'),
               ]}
               rows={logs.map((log) => [
                 `${log.pluginId}:${log.serviceName}`,
                 log.method,
                 log.pathTemplate ?? log.path,
-                log.status ?? log.errorCode ?? 'error',
+                formatStatusLabel(String(log.status ?? log.errorCode ?? 'error')),
                 log.durationMs == null ? '-' : `${log.durationMs} ms`,
                 log.requestId ?? '-',
-                formatDate(log.createdAt),
+                formatDate(log.createdAt, locale, t('empty.never')),
               ])}
             />
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end">
@@ -862,7 +922,7 @@ export default function AdminServiceConnectionsPage() {
           </Panel>
         </TabsContent>
       </Tabs>
-    </div>
+    </DashboardPageShell>
   );
 }
 
@@ -931,11 +991,13 @@ function SelectField({
   label,
   value,
   values,
+  optionLabels,
   onChange,
 }: {
   label: string;
   value: string;
   values: string[];
+  optionLabels?: Record<string, string>;
   onChange: (value: string) => void;
 }) {
   return (
@@ -948,7 +1010,7 @@ function SelectField({
         <SelectContent>
           {values.map((item) => (
             <SelectItem key={item} value={item}>
-              {item}
+              {optionLabels?.[item] ?? item}
             </SelectItem>
           ))}
         </SelectContent>
@@ -966,6 +1028,8 @@ function SecretSourceField({
   value: SecretDraft;
   onChange: (value: SecretDraft) => void;
 }) {
+  const t = useTranslations('dashboard.serviceConnections');
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
@@ -979,16 +1043,16 @@ function SecretSourceField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">None</SelectItem>
-          <SelectItem value="env">Environment variable</SelectItem>
-          <SelectItem value="encrypted">Encrypted database secret</SelectItem>
+          <SelectItem value="none">{t('secretSourceOptions.none')}</SelectItem>
+          <SelectItem value="env">{t('secretSourceOptions.env')}</SelectItem>
+          <SelectItem value="encrypted">{t('secretSourceOptions.encrypted')}</SelectItem>
         </SelectContent>
       </Select>
       {value.type === 'env' && (
         <Input
           value={value.name}
           onChange={(event) => onChange({ ...value, name: event.target.value })}
-          placeholder="ENV_VAR_NAME"
+          placeholder={t('secretSourceOptions.envPlaceholder')}
         />
       )}
       {value.type === 'encrypted' && (
@@ -996,7 +1060,11 @@ function SecretSourceField({
           type="password"
           value={value.value}
           onChange={(event) => onChange({ ...value, value: event.target.value })}
-          placeholder={value.ref ? 'Leave blank to keep existing secret' : 'Secret value'}
+          placeholder={
+            value.ref
+              ? t('secretSourceOptions.keepExistingPlaceholder')
+              : t('secretSourceOptions.secretPlaceholder')
+          }
         />
       )}
     </div>
@@ -1033,6 +1101,8 @@ function DataTable({
   empty: string;
   loading: boolean;
 }) {
+  const t = useTranslations('dashboard.serviceConnections');
+
   return (
     <div className="overflow-x-auto rounded-md border">
       <Table>
@@ -1046,7 +1116,7 @@ function DataTable({
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={headers.length}>Loading...</TableCell>
+              <TableCell colSpan={headers.length}>{t('loading')}</TableCell>
             </TableRow>
           ) : rows.length === 0 ? (
             <TableRow>

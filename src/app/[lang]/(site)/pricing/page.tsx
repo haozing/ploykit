@@ -15,9 +15,8 @@ import { HostPageSlotBoundary } from '@/components/HostPageSurfaceRenderer';
 import { getTranslations } from 'next-intl/server';
 import { createSitePageMetadata } from '@/lib/seo/site-metadata';
 import { createHostPageOverrideMetadata } from '@/lib/plugin-runtime/seo';
-import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { entitlementPlans } from '@/lib/db/schema';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
 import PricingContent, { type PricingPlan } from './PricingContent';
 
 export const dynamic = 'force-dynamic';
@@ -44,8 +43,9 @@ export async function generateMetadata({ params }: PricingPageProps) {
 }
 
 async function getPricingPlans(): Promise<PricingPlan[]> {
+  const productId = getRuntimeProductId();
   const plans = await db.query.entitlementPlans.findMany({
-    where: eq(entitlementPlans.isActive, true),
+    where: (plans, { and, eq }) => and(eq(plans.productId, productId), eq(plans.isActive, true)),
     orderBy: (plans, { asc }) => [asc(plans.sortOrder)],
   });
 

@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { createPlan } from '@/lib/services/entitlement/plan-service';
 import { withAdminGuard, withErrorHandling, withBodyValidation } from '@/lib/middleware';
 import { createPlanSchema, type CreatePlanInput } from '@/lib/validations/plan';
 import { db } from '@/lib/db';
-import { entitlementPlans } from '@/lib/db/schema';
 import { DatabaseError } from '@/lib/_core/errors';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
 
 /**
  * GET /api/plans
@@ -15,10 +14,11 @@ import { DatabaseError } from '@/lib/_core/errors';
  */
 export const GET = withErrorHandling(async () => {
   let plans;
+  const productId = getRuntimeProductId();
 
   try {
     plans = await db.query.entitlementPlans.findMany({
-      where: eq(entitlementPlans.isActive, true),
+      where: (plans, { and, eq }) => and(eq(plans.productId, productId), eq(plans.isActive, true)),
       orderBy: (plans, { asc }) => [asc(plans.sortOrder)],
     });
   } catch (error) {

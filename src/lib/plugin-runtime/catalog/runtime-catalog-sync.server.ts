@@ -179,7 +179,10 @@ export async function syncRuntimeCatalog(
         runtimeKey: product.runtimeKey ?? product.id,
         defaultLocale: product.defaultLocale ?? 'en',
         status: product.status ?? 'active',
-        metadata: product.metadata ?? {},
+        metadata: {
+          ...(product.metadata ?? {}),
+          ...(product.planCapabilities ? { planCapabilities: product.planCapabilities } : {}),
+        },
         updatedAt: now,
       }) satisfies NewAppProduct
   );

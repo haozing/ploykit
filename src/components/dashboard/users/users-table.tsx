@@ -102,7 +102,7 @@ export function UsersTable({
   };
 
   const handleSuspend = async (userId: string, userName: string) => {
-    const reason = window.prompt(`Suspend ${userName}? Optional reason:`);
+    const reason = window.prompt(t('suspendPrompt', { userName }));
     if (reason === null) {
       return;
     }
@@ -115,13 +115,13 @@ export function UsersTable({
       });
 
       if (!result.success) {
-        throw new Error('Failed to suspend user');
+        throw new Error(t('suspendFailed'));
       }
 
-      toast.success(`${userName} suspended`);
+      toast.success(t('suspendSuccess', { userName }));
       onRefresh?.();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to suspend user';
+      const message = error instanceof Error ? error.message : t('suspendFailed');
       toast.error(message);
     } finally {
       setActingId(null);
@@ -134,13 +134,13 @@ export function UsersTable({
       const result = await restoreUserMutation.trigger(userId);
 
       if (!result.success) {
-        throw new Error('Failed to restore user');
+        throw new Error(t('restoreFailed'));
       }
 
-      toast.success(`${userName} restored`);
+      toast.success(t('restoreSuccess', { userName }));
       onRefresh?.();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to restore user';
+      const message = error instanceof Error ? error.message : t('restoreFailed');
       toast.error(message);
     } finally {
       setActingId(null);
@@ -148,7 +148,7 @@ export function UsersTable({
   };
 
   const handleResetPassword = async (userId: string, userName: string) => {
-    if (!window.confirm(`Reset password for ${userName}? Existing sessions will be revoked.`)) {
+    if (!window.confirm(t('resetPasswordConfirm', { userName }))) {
       return;
     }
 
@@ -157,17 +157,17 @@ export function UsersTable({
       const result = await resetPasswordMutation.trigger(userId);
 
       if (!result.success || !result.temporaryPassword) {
-        throw new Error('Failed to reset password');
+        throw new Error(t('resetPasswordFailed'));
       }
 
       setTemporaryPassword({
         userName,
         value: result.temporaryPassword,
       });
-      toast.success(`Temporary password generated for ${userName}`);
+      toast.success(t('resetPasswordSuccess', { userName }));
       onRefresh?.();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to reset password';
+      const message = error instanceof Error ? error.message : t('resetPasswordFailed');
       toast.error(message);
     } finally {
       setActingId(null);
@@ -236,6 +236,20 @@ export function UsersTable({
     return 'secondary';
   };
 
+  const formatStatus = (status: UserWithDetails['status'] | null | undefined) => {
+    switch (status) {
+      case 'pending':
+        return t('status.pending');
+      case 'suspended':
+        return t('status.suspended');
+      case 'deleted':
+        return t('status.deleted');
+      case 'active':
+      default:
+        return t('status.active');
+    }
+  };
+
   return (
     <>
       <div className="min-w-0 rounded-lg border border-border/30">
@@ -244,7 +258,7 @@ export function UsersTable({
             <TableRow className="border-border/30">
               <TableHead>{t('columns.user')}</TableHead>
               <TableHead>{t('columns.email')}</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>{t('columns.status')}</TableHead>
               <TableHead>{t('columns.role')}</TableHead>
               <TableHead>{t('columns.plan')}</TableHead>
               <TableHead>{t('columns.subscriptionEnd')}</TableHead>
@@ -279,7 +293,9 @@ export function UsersTable({
                   </TableCell>
 
                   <TableCell className="text-sm">
-                    <Badge variant={getStatusVariant(user.status)}>{user.status || 'active'}</Badge>
+                    <Badge variant={getStatusVariant(user.status)}>
+                      {formatStatus(user.status)}
+                    </Badge>
                   </TableCell>
 
                   <TableCell className="text-sm">{resolveRoleLabel(user)}</TableCell>
@@ -325,17 +341,17 @@ export function UsersTable({
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleResetPassword(user.id, user.name)}>
                           <KeyRound className="mr-2 h-4 w-4" />
-                          Reset Password
+                          {t('actions.resetPassword')}
                         </DropdownMenuItem>
                         {user.status === 'suspended' ? (
                           <DropdownMenuItem onClick={() => handleRestore(user.id, user.name)}>
                             <Undo2 className="mr-2 h-4 w-4" />
-                            Restore User
+                            {t('actions.restoreUser')}
                           </DropdownMenuItem>
                         ) : (
                           <DropdownMenuItem onClick={() => handleSuspend(user.id, user.name)}>
                             <Ban className="mr-2 h-4 w-4" />
-                            Suspend User
+                            {t('actions.suspendUser')}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem asChild>
@@ -420,10 +436,9 @@ export function UsersTable({
           className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
         >
           <div className="w-full max-w-md rounded-lg border bg-background p-6 shadow-lg">
-            <h2 className="text-lg font-semibold">Temporary Password</h2>
+            <h2 className="text-lg font-semibold">{t('temporaryPassword.title')}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              This password for {temporaryPassword.userName} is shown once. Ask the user to change
-              it after login.
+              {t('temporaryPassword.description', { userName: temporaryPassword.userName })}
             </p>
             <div className="mt-4 rounded-md border bg-muted p-3 font-mono text-sm break-all">
               {temporaryPassword.value}
@@ -433,9 +448,11 @@ export function UsersTable({
                 variant="outline"
                 onClick={() => navigator.clipboard.writeText(temporaryPassword.value)}
               >
-                Copy
+                {t('temporaryPassword.copy')}
               </Button>
-              <Button onClick={() => setTemporaryPassword(null)}>Done</Button>
+              <Button onClick={() => setTemporaryPassword(null)}>
+                {t('temporaryPassword.done')}
+              </Button>
             </div>
           </div>
         </div>

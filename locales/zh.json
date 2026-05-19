@@ -677,18 +677,33 @@
         "totalUsers": "总用户数",
         "activeRoles": "活跃角色",
         "apiRequests": "用量事件",
+        "activeAssignments": "{count} 个活跃分配",
+        "activeEntitlements": "{count} 个活跃权益",
+        "enabledPlugins": "{count} 个已启用插件",
         "fromLastMonth": "较上月",
         "fromYesterday": "较昨日"
       },
       "recentUsers": {
         "title": "最近用户",
         "description": "新用户注册",
-        "noData": "暂无最近用户"
+        "noData": "暂无最近用户",
+        "status": {
+          "active": "活跃",
+          "pending": "待处理"
+        }
       },
       "systemStatus": {
         "title": "系统状态",
         "description": "平台服务的当前健康状况",
-        "noData": "暂无系统状态数据"
+        "noData": "暂无系统状态数据",
+        "latencyAvg": "平均 {latency}",
+        "latencyBackground": "后台检查",
+        "latencyUnavailable": "不可用",
+        "status": {
+          "operational": "运行正常",
+          "degraded": "性能下降",
+          "down": "不可用"
+        }
       }
     },
     "files": {
@@ -848,12 +863,97 @@
         "bind": "绑定",
         "edit": "编辑",
         "test": "测试",
+        "configure": "配置",
+        "rotate": "轮换",
         "disable": "禁用",
         "enable": "启用"
       },
       "alerts": {
         "failed": "操作失败",
         "done": "已完成"
+      },
+      "loading": "加载中...",
+      "empty": {
+        "never": "从未",
+        "defaultEnvironment": "默认"
+      },
+      "errors": {
+        "loadFailed": "加载服务连接数据失败",
+        "saveFailed": "保存失败",
+        "retentionFailed": "保留策略清理失败"
+      },
+      "messages": {
+        "saved": "服务连接已保存。",
+        "retentionFinished": "保留策略清理已完成。",
+        "secretRotated": "密钥已轮换。",
+        "testFinished": "{serviceName} 测试已完成。",
+        "connectionDisabled": "连接已禁用。",
+        "connectionEnabled": "连接已启用。"
+      },
+      "filters": {
+        "title": "筛选",
+        "description": "缩小服务需求、连接和日志范围。",
+        "fields": {
+          "plugin": "插件",
+          "service": "服务",
+          "workspace": "工作区",
+          "environment": "环境"
+        },
+        "status": {
+          "all": "所有状态"
+        }
+      },
+      "statuses": {
+        "active": "活跃",
+        "disabled": "已禁用",
+        "bound": "已绑定",
+        "missing": "缺失",
+        "ok": "正常",
+        "error": "错误",
+        "unexpected_status": "状态不符合预期"
+      },
+      "requirement": {
+        "required": "必需",
+        "optional": "可选",
+        "off": "关闭"
+      },
+      "secretSources": {
+        "none": "无",
+        "env": "环境变量：{name}",
+        "encrypted": "加密密钥：{name}",
+        "invalid": "无效引用：{ref}"
+      },
+      "secretSourceOptions": {
+        "none": "无",
+        "env": "环境变量",
+        "encrypted": "加密数据库密钥",
+        "envPlaceholder": "ENV_VAR_NAME",
+        "keepExistingPlaceholder": "留空则保留现有密钥",
+        "secretPlaceholder": "密钥值"
+      },
+      "ownerTypes": {
+        "plugin": "插件",
+        "suite": "套件",
+        "product": "产品"
+      },
+      "scopes": {
+        "global": "全局",
+        "workspace": "工作区"
+      },
+      "authTypes": {
+        "none": "无",
+        "bearer": "Bearer token",
+        "basic": "Basic 认证",
+        "apiKey": "API key"
+      },
+      "rotation": {
+        "fields": {
+          "auth": "认证 token",
+          "authUsername": "Basic 用户名",
+          "authPassword": "Basic 密码",
+          "actorClaims": "参与者声明"
+        },
+        "newSecretPlaceholder": "新的密钥值"
       },
       "stats": {
         "declaredServices": "声明的服务",
@@ -875,8 +975,10 @@
         "headers": {
           "plugin": "插件",
           "service": "服务",
+          "required": "是否必需",
           "methods": "方法",
           "paths": "路径",
+          "actorClaims": "参与者声明",
           "status": "状态",
           "action": "操作"
         }
@@ -892,34 +994,55 @@
           "actor": "参与者",
           "health": "健康",
           "action": "操作"
-        }
+        },
+        "lastTestResult": "最近一次测试结果"
       },
       "editor": {
         "title": "连接编辑器",
         "description": "密钥以引用形式保存，页面不会显示密钥值。",
+        "sections": {
+          "identity": "身份信息",
+          "endpoint": "端点",
+          "authentication": "认证",
+          "actorClaims": "参与者声明",
+          "healthCheck": "健康检查"
+        },
         "fields": {
           "pluginId": "插件 ID",
           "serviceName": "服务名称",
+          "owner": "归属方",
+          "ownerId": "归属方 ID",
+          "status": "状态",
           "baseUrl": "基础 URL",
           "environment": "环境",
           "scope": "作用域",
           "workspaceId": "工作区 ID",
           "authType": "认证类型",
+          "authSecret": "认证密钥",
           "authSecretRef": "认证密钥引用",
           "newAuthSecret": "新认证密钥",
+          "basicUsername": "Basic 用户名",
           "basicUsernameRef": "Basic 用户名引用",
           "newBasicUsername": "新 Basic 用户名",
+          "basicPassword": "Basic 密码",
           "basicPasswordRef": "Basic 密码引用",
           "newBasicPassword": "新 Basic 密码",
           "authHeader": "认证 Header",
+          "enabled": "启用",
           "actorClaims": "参与者声明",
           "actorAudience": "参与者 Audience",
+          "signingSecret": "签名密钥",
           "actorSecretRef": "参与者密钥引用",
           "newActorSecret": "新参与者密钥",
+          "keyId": "Key ID",
+          "ttlSeconds": "TTL 秒数",
           "timeoutMs": "超时毫秒",
           "retryAttempts": "重试次数",
+          "retryBackoffMs": "重试退避毫秒",
           "maxResponseBytes": "最大响应字节数",
-          "healthPath": "健康检查路径"
+          "healthPath": "健康检查路径",
+          "healthMethod": "健康检查方法",
+          "expectedStatus": "期望状态码"
         },
         "saveBinding": "保存连接"
       },
@@ -933,6 +1056,7 @@
           "pathTemplate": "路径模板",
           "status": "状态",
           "duration": "耗时",
+          "request": "请求",
           "created": "创建时间"
         },
         "retentionDays": "保留天数",
@@ -1955,6 +2079,7 @@
         "columns": {
           "user": "用户",
           "email": "邮箱",
+          "status": "状态",
           "role": "角色",
           "plan": "订阅计划",
           "subscriptionEnd": "订阅到期时间",
@@ -1983,8 +2108,25 @@
           "openMenu": "打开菜单",
           "viewDetails": "查看详情",
           "editUser": "编辑用户",
+          "resetPassword": "重置密码",
+          "restoreUser": "恢复用户",
+          "suspendUser": "暂停用户",
           "manageRoles": "管理角色",
           "deleteUser": "删除用户"
+        },
+        "suspendPrompt": "暂停 {userName}？可填写原因：",
+        "suspendSuccess": "已暂停 {userName}",
+        "suspendFailed": "暂停用户失败",
+        "restoreSuccess": "已恢复 {userName}",
+        "restoreFailed": "恢复用户失败",
+        "resetPasswordConfirm": "确定重置 {userName} 的密码吗？现有会话将被撤销。",
+        "resetPasswordSuccess": "已为 {userName} 生成临时密码",
+        "resetPasswordFailed": "重置密码失败",
+        "temporaryPassword": {
+          "title": "临时密码",
+          "description": "{userName} 的临时密码只显示一次。请提醒用户登录后立即修改。",
+          "copy": "复制",
+          "done": "完成"
         },
         "deleteConfirm": "确定要删除用户 \"{userName}\" 吗？此操作无法撤销。",
         "deleteSuccess": "用户 \"{userName}\" 删除成功",
@@ -1995,6 +2137,25 @@
           "previous": "上一页",
           "next": "下一页",
           "page": "第 {current} 页，共 {total} 页"
+        }
+      },
+      "editDialog": {
+        "title": "编辑用户",
+        "description": "更新平台保存的用户资料字段。",
+        "fields": {
+          "name": "姓名",
+          "email": "邮箱",
+          "avatarUrl": "头像 URL"
+        },
+        "actions": {
+          "cancel": "取消",
+          "save": "保存"
+        },
+        "success": {
+          "updated": "用户已更新"
+        },
+        "errors": {
+          "updateFailed": "更新用户失败"
         }
       },
       "tab": {
@@ -2064,6 +2225,16 @@
     "rbac": {
       "redirect": {
         "redirecting": "正在跳转到用户与角色..."
+      },
+      "systemRoles": {
+        "admin": {
+          "name": "管理员",
+          "description": "拥有完整的平台管理权限。"
+        },
+        "user": {
+          "name": "普通用户",
+          "description": "默认登录用户权限。"
+        }
       },
       "rolesTable": {
         "columns": {
@@ -2161,6 +2332,10 @@
         "roleNotFound": "未找到角色",
         "returnToRoles": "返回角色列表",
         "editRole": "编辑角色",
+        "copyName": "{roleName}（副本）",
+        "slug": "标识符：",
+        "users": "{count} 个用户",
+        "created": "创建于 {date}",
         "tabs": {
           "permissions": "权限",
           "permissionsWithCount": "权限（{count}）",
@@ -2174,6 +2349,9 @@
         "settings": {
           "title": "角色设置",
           "description": "角色元数据和系统设置",
+          "defaultAssignment": {
+            "label": "默认分配"
+          },
           "roleType": {
             "label": "角色类型",
             "default": "系统默认角色",
@@ -2361,12 +2539,26 @@
           }
         },
         "capabilities": {
-          "outputResolution": {
-            "label": "RunLynk 输出分辨率（强制）",
-            "placeholder": "请选择..."
+          "schema": {
+            "title": "结构化能力",
+            "help": "这些字段来自产品 catalog 的 planCapabilities 声明，保存时会写入下面的能力 JSON。",
+            "loading": "正在加载能力定义...",
+            "loadFailed": "能力定义加载失败，保存时仍会由服务端校验。",
+            "empty": "当前没有产品声明结构化能力。",
+            "required": "必填",
+            "selectPlaceholder": "请选择..."
+          },
+          "errors": {
+            "required": "{label} 是必填项。",
+            "invalidBoolean": "{label} 必须为 true 或 false。",
+            "invalidNumber": "{label} 必须是有效数字。",
+            "invalidString": "{label} 必须是文本。",
+            "invalidOption": "{label} 必须选择已声明的选项。",
+            "missingOptions": "{label} 缺少选项定义。"
           },
           "json": {
-            "label": "能力（JSON）"
+            "label": "能力（JSON）",
+            "help": "可继续填写未声明为结构化字段的命名空间能力；结构化字段会覆盖同名 JSON key。"
           }
         },
         "stripe": {
@@ -3213,6 +3405,17 @@
               "decreasing": "下降",
               "stable": "稳定"
             }
+          },
+          "metricLabels": {
+            "platformHooksCreated": "已创建 Hook",
+            "platformApiCalls": "API 调用"
+          },
+          "distribution": {
+            "lte25": "0-25%",
+            "lte50": "26-50%",
+            "lte75": "51-75%",
+            "lte100": "76-100%",
+            "gt100": "超过 100%"
           }
         },
         "reliability": {

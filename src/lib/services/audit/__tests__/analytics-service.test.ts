@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockDb, queryQueue } = vi.hoisted(() => {
-  const queryQueue: Array<{ terminal: 'groupBy' | 'where'; result: unknown }> = [];
+  const queryQueue: Array<{ terminal: 'groupBy' | 'where' | 'orderBy'; result: unknown }> = [];
   const mockDb = {
     select: vi.fn(),
   };
@@ -15,9 +15,10 @@ import {
   calculateMrrSnapshot,
   collectUsageAndLimitValues,
   getRevenueMetrics,
+  getUsagePatterns,
 } from '../analytics-service';
 
-function queueQuery(terminal: 'groupBy' | 'where', result: unknown): void {
+function queueQuery(terminal: 'groupBy' | 'where' | 'orderBy', result: unknown): void {
   queryQueue.push({ terminal, result });
 }
 
@@ -35,6 +36,7 @@ beforeEach(() => {
     chain.leftJoin = vi.fn(() => chain);
     chain.where = vi.fn(() => (queued.terminal === 'where' ? queued.result : chain));
     chain.groupBy = vi.fn(() => queued.result);
+    chain.orderBy = vi.fn(() => queued.result);
 
     return chain;
   });
@@ -167,5 +169,58 @@ describe('getRevenueMetrics', () => {
     });
     expect(metrics.revenueGrowth).toBe(0);
     expect(mockDb.select).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('getUsagePatterns', () => {
+  it('returns semantic utilization bucket codes instead of display labels', async () => {
+    queueQuery('where', [
+      {
+        usage: { 'platform.apiCalls': 10 },
+        planLimits: { monthly: { 'platform.apiCalls': 100 } },
+        billingInterval: 'monthly',
+      },
+      {
+        usage: { 'platform.apiCalls': 40 },
+        planLimits: { monthly: { 'platform.apiCalls': 100 } },
+        billingInterval: 'monthly',
+      },
+      {
+        usage: { 'platform.apiCalls': 60 },
+        planLimits: { monthly: { 'platform.apiCalls': 100 } },
+        billingInterval: 'monthly',
+      },
+      {
+        usage: { 'platform.apiCalls': 90 },
+        planLimits: { monthly: { 'platform.apiCalls': 100 } },
+        billingInterval: 'monthly',
+      },
+      {
+        usage: { 'platform.apiCalls': 125 },
+        planLimits: { monthly: { 'platform.apiCalls': 100 } },
+        billingInterval: 'monthly',
+      },
+    ]);
+    queueQuery(
+      'orderBy',
+      Array.from({ length: 14 }, (_, index) => ({
+        value: index < 7 ? 10 : 10,
+        recordedAt: new Date(`2026-05-${String(index + 1).padStart(2, '0')}T00:00:00Z`),
+      }))
+    );
+
+    const pattern = await getUsagePatterns('platform.apiCalls', {
+      startDate: new Date('2026-05-01T00:00:00Z'),
+      endDate: new Date('2026-05-31T23:59:59Z'),
+    });
+
+    expect(pattern.distribution).toEqual({
+      lte25: 1,
+      lte50: 1,
+      lte75: 1,
+      lte100: 1,
+      gt100: 1,
+    });
+    expect(pattern.distribution).not.toHaveProperty('Over 100%');
   });
 });

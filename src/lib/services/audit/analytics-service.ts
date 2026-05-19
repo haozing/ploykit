@@ -594,11 +594,11 @@ export async function getUsagePatterns(
 
     // Calculate distribution
     const distribution: Record<string, number> = {
-      '0-25%': 0,
-      '26-50%': 0,
-      '51-75%': 0,
-      '76-100%': 0,
-      'Over 100%': 0,
+      lte25: 0,
+      lte50: 0,
+      lte75: 0,
+      lte100: 0,
+      gt100: 0,
     };
 
     for (let i = 0; i < usageValues.length; i++) {
@@ -607,11 +607,11 @@ export async function getUsagePatterns(
 
       if (limit > 0) {
         const percentage = (usage / limit) * 100;
-        if (percentage <= 25) distribution['0-25%']++;
-        else if (percentage <= 50) distribution['26-50%']++;
-        else if (percentage <= 75) distribution['51-75%']++;
-        else if (percentage <= 100) distribution['76-100%']++;
-        else distribution['Over 100%']++;
+        if (percentage <= 25) distribution.lte25++;
+        else if (percentage <= 50) distribution.lte50++;
+        else if (percentage <= 75) distribution.lte75++;
+        else if (percentage <= 100) distribution.lte100++;
+        else distribution.gt100++;
       }
     }
 

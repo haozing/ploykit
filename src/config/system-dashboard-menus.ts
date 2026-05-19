@@ -87,6 +87,7 @@ export const MANAGEMENT_ITEMS: DashboardMenuItem[] = [
     id: 'system-users',
     i18nKey: 'dashboard.nav.users',
     href: '/admin/users',
+    activeHrefs: ['/admin/users', '/admin/rbac'],
     icon: 'Users',
     weight: 10,
     guard: 'admin',

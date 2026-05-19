@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslations } from 'next-intl';
 import { API_KEYS, fetcher, postFetcher } from '@/lib/swr';
 import { useToast } from '@/hooks/use-toast';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 
 type PlanTranslation = {
   name?: string;
@@ -113,13 +114,13 @@ export default function BillingPage() {
   //
   if (fetchLoading) {
     return (
-      <div className="container mx-auto max-w-5xl px-4 py-8">
+      <DashboardPageShell>
         <div className="animate-pulse">
           <div className="h-8 bg-accent rounded w-1/4 mb-8"></div>
           <div className="h-32 bg-accent rounded mb-6"></div>
           <div className="h-32 bg-accent rounded mb-6"></div>
         </div>
-      </div>
+      </DashboardPageShell>
     );
   }
 
@@ -128,8 +129,8 @@ export default function BillingPage() {
   //
   if (error) {
     return (
-      <div className="container mx-auto max-w-5xl px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">{t('title')}</h1>
+      <DashboardPageShell>
+        <DashboardPageHeader title={t('title')} />
         <div className="bg-destructive-50 border border-destructive rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-2 text-destructive-foreground">
             {t('error.title')}
@@ -142,7 +143,7 @@ export default function BillingPage() {
             {t('error.reload')}
           </button>
         </div>
-      </div>
+      </DashboardPageShell>
     );
   }
 
@@ -151,8 +152,8 @@ export default function BillingPage() {
   //
   if (!subscription) {
     return (
-      <div className="container mx-auto max-w-5xl px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">{t('title')}</h1>
+      <DashboardPageShell>
+        <DashboardPageHeader title={t('title')} />
         <div className="bg-warning-50 border border-warning rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-2">{t('noSubscription.title')}</h2>
           <p className="text-foreground mb-4">{t('noSubscription.description')}</p>
@@ -163,7 +164,7 @@ export default function BillingPage() {
             {t('noSubscription.button')}
           </Link>
         </div>
-      </div>
+      </DashboardPageShell>
     );
   }
 
@@ -185,8 +186,8 @@ export default function BillingPage() {
   //
   //
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">{t('title')}</h1>
+    <DashboardPageShell>
+      <DashboardPageHeader title={t('title')} />
 
       {/* Current Plan */}
       <Card className="mb-6">
@@ -272,6 +273,6 @@ export default function BillingPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </DashboardPageShell>
   );
 }

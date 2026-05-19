@@ -55,6 +55,7 @@ console.warn('');
 
 import { db } from '../src/lib/db/client.server';
 import {
+  appProducts,
   roles,
   entitlementPlans,
   user,
@@ -63,12 +64,11 @@ import {
   userroles,
   userEntitlements,
 } from '../src/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { hashPassword } from 'better-auth/crypto';
-import {
-  PLATFORM_OUTPUT_QUALITY_CAPABILITY,
-  PLATFORM_PRIMARY_CREDIT_METRIC,
-} from '../src/lib/billing/billing-metrics';
+import { PLATFORM_PRIMARY_CREDIT_METRIC } from '../src/lib/billing/billing-metrics';
+
+const HOST_PRODUCT_ID = 'ploykit';
 
 // ═══════════════════════════════════════════════════════════════
 // 配置
@@ -114,17 +114,15 @@ const CONFIG = {
         en: {
           name: 'Free',
           description: 'Basic access for trying PloyKit',
-          featuresList: ['10 credits/month', 'Basic output quality', 'Community support'],
+          featuresList: ['10 credits/month', 'Community support'],
         },
         zh: {
           name: '免费版',
           description: '适合试用与轻度使用',
-          featuresList: ['每月 10 点额度', '基础输出质量', '社区支持'],
+          featuresList: ['每月 10 点额度', '社区支持'],
         },
       },
-      features: {
-        [PLATFORM_OUTPUT_QUALITY_CAPABILITY]: '480p' as const,
-      },
+      features: {},
       limits: {
         monthly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 10 },
         yearly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 10 },
@@ -150,17 +148,15 @@ const CONFIG = {
         en: {
           name: 'Pro',
           description: 'For creators and pros who need more capacity',
-          featuresList: ['100 credits/month', 'High output quality', 'Priority support'],
+          featuresList: ['100 credits/month', 'Priority support'],
         },
         zh: {
           name: '专业版',
           description: '适合高频使用与更高质量输出',
-          featuresList: ['每月 100 点额度', '高质量输出', '优先支持'],
+          featuresList: ['每月 100 点额度', '优先支持'],
         },
       },
-      features: {
-        [PLATFORM_OUTPUT_QUALITY_CAPABILITY]: '1080p' as const,
-      },
+      features: {},
       limits: {
         monthly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 100 },
         yearly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: 100 },
@@ -185,18 +181,16 @@ const CONFIG = {
       langJsonb: {
         en: {
           name: 'Enterprise',
-          description: 'Unlimited usage and full-quality output',
-          featuresList: ['Unlimited credits', 'Original output quality', 'SLA / dedicated support'],
+          description: 'Unlimited usage and dedicated support',
+          featuresList: ['Unlimited credits', 'SLA / dedicated support'],
         },
         zh: {
           name: '企业版',
-          description: '不限额度，解锁全部能力',
-          featuresList: ['不限额度', '原始输出质量', 'SLA / 专属支持'],
+          description: '不限额度，配套专属支持',
+          featuresList: ['不限额度', 'SLA / 专属支持'],
         },
       },
-      features: {
-        [PLATFORM_OUTPUT_QUALITY_CAPABILITY]: 'original' as const,
-      },
+      features: {},
       limits: {
         monthly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: -1 },
         yearly: { [PLATFORM_PRIMARY_CREDIT_METRIC]: -1 },
@@ -283,6 +277,38 @@ async function seedRoles() {
 }
 
 /**
+ * Ensure the host runtime product exists before product-scoped plans are seeded.
+ */
+async function seedProducts() {
+  logSection('Creating Runtime Products');
+
+  await db
+    .insert(appProducts)
+    .values({
+      id: HOST_PRODUCT_ID,
+      name: 'PloyKit',
+      runtimeKey: HOST_PRODUCT_ID,
+      defaultLocale: 'en',
+      status: 'active',
+      metadata: {},
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: appProducts.id,
+      set: {
+        name: sql`excluded.name`,
+        runtimeKey: sql`excluded.runtime_key`,
+        defaultLocale: sql`excluded.default_locale`,
+        status: sql`excluded.status`,
+        metadata: sql`excluded.metadata`,
+        updatedAt: new Date(),
+      },
+    });
+
+  log(`Runtime product "${HOST_PRODUCT_ID}" is ready`, 'success');
+}
+
+/**
  * Create subscription plans
  */
 async function seedPlans() {
@@ -298,7 +324,10 @@ async function seedPlans() {
     try {
       // Check if plan already exists
       const existing = await db.query.entitlementPlans.findFirst({
-        where: eq(entitlementPlans.slug, planData.slug),
+        where: and(
+          eq(entitlementPlans.productId, HOST_PRODUCT_ID),
+          eq(entitlementPlans.slug, planData.slug)
+        ),
       });
 
       if (existing) {
@@ -310,6 +339,7 @@ async function seedPlans() {
       const [_newPlan] = await db
         .insert(entitlementPlans)
         .values({
+          productId: HOST_PRODUCT_ID,
           name: planData.name,
           slug: planData.slug,
           langJsonb: (planData as any).langJsonb,
@@ -328,12 +358,10 @@ async function seedPlans() {
       const monthlyAmount = (planData as any).pricing?.monthly ?? 0;
       const credits = (planData.limits as any).monthly?.[PLATFORM_PRIMARY_CREDIT_METRIC];
       const creditsLabel = credits === -1 ? 'Unlimited' : `${credits} credits/month`;
-      const outputQuality = (planData.features as any)[PLATFORM_OUTPUT_QUALITY_CAPABILITY];
 
       log(`Plan "${planData.name}" (${planData.slug}) created successfully`, 'success');
       log(`  ├─ Price: $${monthlyAmount}/month`, 'info');
       log(`  ├─ Credits: ${creditsLabel}`, 'info');
-      log(`  ├─ Output quality: ${outputQuality}`, 'info');
       if (planData.isDefault) {
         log(`  └─ Default plan`, 'info');
       }
@@ -471,7 +499,10 @@ async function assignEnterprisePlan(adminUserId: string) {
   try {
     // Find Enterprise Plan
     const enterprisePlan = await db.query.entitlementPlans.findFirst({
-      where: eq(entitlementPlans.slug, 'enterprise'),
+      where: and(
+        eq(entitlementPlans.productId, HOST_PRODUCT_ID),
+        eq(entitlementPlans.slug, 'enterprise')
+      ),
     });
 
     if (!enterprisePlan) {
@@ -529,16 +560,19 @@ async function main() {
     // 1. Create global roles
     await seedRoles();
 
-    // 2. Create entitlement plans
+    // 2. Ensure runtime products exist
+    await seedProducts();
+
+    // 3. Create entitlement plans
     await seedPlans();
 
-    // 3. Create system administrator
+    // 4. Create system administrator
     const adminUserId = await seedAdminUser();
 
-    // 4. Assign admin role
+    // 5. Assign admin role
     await assignAdminRole(adminUserId);
 
-    // 5. Assign enterprise entitlements
+    // 6. Assign enterprise entitlements
     await assignEnterprisePlan(adminUserId);
 
     // Complete

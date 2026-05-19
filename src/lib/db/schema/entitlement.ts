@@ -15,24 +15,21 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { betterAuthuser } from './core';
+import { appProducts } from './plugins';
 
 // ============================================================================
 // Type Definition
 // ============================================================================
 
-export type OutputResolution = '480p' | '720p' | '1080p' | '4k' | 'original';
-
 /**
  * Plan features (machine-enforced capabilities/constraints).
  *
  * Conventions:
- * - Prefer namespaced keys: `${namespace}.xxx` (e.g. `platform.outputQuality`)
+ * - Prefer namespaced keys: `${namespace}.xxx` (e.g. `platform.apiAccess`)
  * - For boolean gated capabilities, use true/false
- * - For parameterized capabilities, use string/number (e.g. resolution enum)
+ * - For parameterized capabilities, use string/number values declared by product catalogs
  */
 export interface PlanFeatures {
-  'platform.outputQuality'?: OutputResolution;
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Required for JSONB field flexibility in Drizzle ORM
   [key: string]: any;
 }
@@ -97,6 +94,11 @@ export const entitlementPlans = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
 
+    productId: text('product_id')
+      .notNull()
+      .default('ploykit')
+      .references(() => appProducts.id, { onDelete: 'cascade' }),
+
     name: text('name').notNull(),
     slug: text('slug').notNull(),
 
@@ -127,7 +129,18 @@ export const entitlementPlans = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    slugIdx: uniqueIndex('entitlement_plans_slug_idx').on(table.slug),
+    productSlugIdx: uniqueIndex('entitlement_plans_product_slug_idx').on(
+      table.productId,
+      table.slug
+    ),
+    productActiveIdx: index('entitlement_plans_product_active_idx').on(
+      table.productId,
+      table.isActive
+    ),
+    productSortIdx: index('entitlement_plans_product_sort_idx').on(
+      table.productId,
+      table.sortOrder
+    ),
     activeIdx: index('entitlement_plans_active_idx').on(table.isActive),
     sortIdx: index('entitlement_plans_sort_idx').on(table.sortOrder),
   })
@@ -231,7 +244,11 @@ export const usageHistory = pgTable(
 // Relations
 // ============================================================================
 
-export const entitlementPlansRelations = relations(entitlementPlans, ({ many }) => ({
+export const entitlementPlansRelations = relations(entitlementPlans, ({ many, one }) => ({
+  product: one(appProducts, {
+    fields: [entitlementPlans.productId],
+    references: [appProducts.id],
+  }),
   userEntitlements: many(userEntitlements),
 }));
 

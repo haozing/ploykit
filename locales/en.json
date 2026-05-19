@@ -677,18 +677,33 @@
         "totalUsers": "Total Users",
         "activeRoles": "Active Roles",
         "apiRequests": "Usage Events",
+        "activeAssignments": "{count, plural, =0 {No active assignments} =1 {1 active assignment} other {# active assignments}}",
+        "activeEntitlements": "{count, plural, =0 {No active entitlements} =1 {1 active entitlement} other {# active entitlements}}",
+        "enabledPlugins": "{count, plural, =0 {No enabled plugins} =1 {1 enabled plugin} other {# enabled plugins}}",
         "fromLastMonth": "from last month",
         "fromYesterday": "from yesterday"
       },
       "recentUsers": {
         "title": "Recent Users",
         "description": "New user registrations",
-        "noData": "No recent users found"
+        "noData": "No recent users found",
+        "status": {
+          "active": "Active",
+          "pending": "Pending"
+        }
       },
       "systemStatus": {
         "title": "System Status",
         "description": "Current health of platform services",
-        "noData": "No system status data available"
+        "noData": "No system status data available",
+        "latencyAvg": "{latency} avg",
+        "latencyBackground": "background",
+        "latencyUnavailable": "unavailable",
+        "status": {
+          "operational": "Operational",
+          "degraded": "Degraded",
+          "down": "Down"
+        }
       }
     },
     "files": {
@@ -848,12 +863,97 @@
         "bind": "Bind",
         "edit": "Edit",
         "test": "Test",
+        "configure": "Configure",
+        "rotate": "Rotate",
         "disable": "Disable",
         "enable": "Enable"
       },
       "alerts": {
         "failed": "Action failed",
         "done": "Done"
+      },
+      "loading": "Loading...",
+      "empty": {
+        "never": "Never",
+        "defaultEnvironment": "default"
+      },
+      "errors": {
+        "loadFailed": "Failed to load service connection data",
+        "saveFailed": "Save failed",
+        "retentionFailed": "Retention cleanup failed"
+      },
+      "messages": {
+        "saved": "Service connection saved.",
+        "retentionFinished": "Retention cleanup finished.",
+        "secretRotated": "Secret rotated.",
+        "testFinished": "Test finished for {serviceName}.",
+        "connectionDisabled": "Connection disabled.",
+        "connectionEnabled": "Connection enabled."
+      },
+      "filters": {
+        "title": "Filters",
+        "description": "Narrow requirements, connections, and logs.",
+        "fields": {
+          "plugin": "Plugin",
+          "service": "Service",
+          "workspace": "Workspace",
+          "environment": "Environment"
+        },
+        "status": {
+          "all": "All statuses"
+        }
+      },
+      "statuses": {
+        "active": "Active",
+        "disabled": "Disabled",
+        "bound": "Bound",
+        "missing": "Missing",
+        "ok": "OK",
+        "error": "Error",
+        "unexpected_status": "Unexpected status"
+      },
+      "requirement": {
+        "required": "Required",
+        "optional": "Optional",
+        "off": "Off"
+      },
+      "secretSources": {
+        "none": "None",
+        "env": "Env: {name}",
+        "encrypted": "Encrypted: {name}",
+        "invalid": "Invalid: {ref}"
+      },
+      "secretSourceOptions": {
+        "none": "None",
+        "env": "Environment variable",
+        "encrypted": "Encrypted database secret",
+        "envPlaceholder": "ENV_VAR_NAME",
+        "keepExistingPlaceholder": "Leave blank to keep existing secret",
+        "secretPlaceholder": "Secret value"
+      },
+      "ownerTypes": {
+        "plugin": "Plugin",
+        "suite": "Suite",
+        "product": "Product"
+      },
+      "scopes": {
+        "global": "Global",
+        "workspace": "Workspace"
+      },
+      "authTypes": {
+        "none": "None",
+        "bearer": "Bearer token",
+        "basic": "Basic auth",
+        "apiKey": "API key"
+      },
+      "rotation": {
+        "fields": {
+          "auth": "Auth token",
+          "authUsername": "Basic username",
+          "authPassword": "Basic password",
+          "actorClaims": "Actor claims"
+        },
+        "newSecretPlaceholder": "New secret value"
       },
       "stats": {
         "declaredServices": "Declared Services",
@@ -875,8 +975,10 @@
         "headers": {
           "plugin": "Plugin",
           "service": "Service",
+          "required": "Required",
           "methods": "Methods",
           "paths": "Paths",
+          "actorClaims": "Actor claims",
           "status": "Status",
           "action": "Action"
         }
@@ -892,34 +994,55 @@
           "actor": "Actor",
           "health": "Health",
           "action": "Action"
-        }
+        },
+        "lastTestResult": "Last test result"
       },
       "editor": {
         "title": "Connection Editor",
         "description": "Secrets are stored as refs and never displayed.",
+        "sections": {
+          "identity": "Identity",
+          "endpoint": "Endpoint",
+          "authentication": "Authentication",
+          "actorClaims": "Actor Claims",
+          "healthCheck": "Health Check"
+        },
         "fields": {
           "pluginId": "Plugin ID",
           "serviceName": "Service Name",
+          "owner": "Owner",
+          "ownerId": "Owner ID",
+          "status": "Status",
           "baseUrl": "Base URL",
           "environment": "Environment",
           "scope": "Scope",
           "workspaceId": "Workspace ID",
           "authType": "Auth Type",
+          "authSecret": "Auth Secret",
           "authSecretRef": "Auth Secret Ref",
           "newAuthSecret": "New Auth Secret",
+          "basicUsername": "Basic Username",
           "basicUsernameRef": "Basic Username Ref",
           "newBasicUsername": "New Basic Username",
+          "basicPassword": "Basic Password",
           "basicPasswordRef": "Basic Password Ref",
           "newBasicPassword": "New Basic Password",
           "authHeader": "Auth Header",
+          "enabled": "Enabled",
           "actorClaims": "Actor Claims",
           "actorAudience": "Actor Audience",
+          "signingSecret": "Signing Secret",
           "actorSecretRef": "Actor Secret Ref",
           "newActorSecret": "New Actor Secret",
+          "keyId": "Key ID",
+          "ttlSeconds": "TTL seconds",
           "timeoutMs": "Timeout ms",
           "retryAttempts": "Retry Attempts",
+          "retryBackoffMs": "Retry Backoff ms",
           "maxResponseBytes": "Max Response Bytes",
-          "healthPath": "Health Path"
+          "healthPath": "Health Path",
+          "healthMethod": "Health Method",
+          "expectedStatus": "Expected Status"
         },
         "saveBinding": "Save Connection"
       },
@@ -933,6 +1056,7 @@
           "pathTemplate": "Path Template",
           "status": "Status",
           "duration": "Duration",
+          "request": "Request",
           "created": "Created"
         },
         "retentionDays": "Retention Days",
@@ -1955,6 +2079,7 @@
         "columns": {
           "user": "User",
           "email": "Email",
+          "status": "Status",
           "role": "Role",
           "plan": "Plan",
           "subscriptionEnd": "Subscription End",
@@ -1983,8 +2108,25 @@
           "openMenu": "Open menu",
           "viewDetails": "View Details",
           "editUser": "Edit User",
+          "resetPassword": "Reset Password",
+          "restoreUser": "Restore User",
+          "suspendUser": "Suspend User",
           "manageRoles": "Manage Roles",
           "deleteUser": "Delete User"
+        },
+        "suspendPrompt": "Suspend {userName}? Optional reason:",
+        "suspendSuccess": "{userName} suspended",
+        "suspendFailed": "Failed to suspend user",
+        "restoreSuccess": "{userName} restored",
+        "restoreFailed": "Failed to restore user",
+        "resetPasswordConfirm": "Reset password for {userName}? Existing sessions will be revoked.",
+        "resetPasswordSuccess": "Temporary password generated for {userName}",
+        "resetPasswordFailed": "Failed to reset password",
+        "temporaryPassword": {
+          "title": "Temporary Password",
+          "description": "This password for {userName} is shown once. Ask the user to change it after login.",
+          "copy": "Copy",
+          "done": "Done"
         },
         "deleteConfirm": "Are you sure you want to delete user \"{userName}\"? This action cannot be undone.",
         "deleteSuccess": "User \"{userName}\" deleted successfully",
@@ -1995,6 +2137,25 @@
           "previous": "Previous",
           "next": "Next",
           "page": "Page {current} of {total}"
+        }
+      },
+      "editDialog": {
+        "title": "Edit User",
+        "description": "Update the user's profile fields stored by the platform.",
+        "fields": {
+          "name": "Name",
+          "email": "Email",
+          "avatarUrl": "Avatar URL"
+        },
+        "actions": {
+          "cancel": "Cancel",
+          "save": "Save"
+        },
+        "success": {
+          "updated": "User updated"
+        },
+        "errors": {
+          "updateFailed": "Failed to update user"
         }
       },
       "tab": {
@@ -2064,6 +2225,16 @@
     "rbac": {
       "redirect": {
         "redirecting": "Redirecting to Users & Roles..."
+      },
+      "systemRoles": {
+        "admin": {
+          "name": "Administrator",
+          "description": "Full platform administration access."
+        },
+        "user": {
+          "name": "Regular User",
+          "description": "Default signed-in user access."
+        }
       },
       "rolesTable": {
         "columns": {
@@ -2161,6 +2332,10 @@
         "roleNotFound": "Role not found",
         "returnToRoles": "Return to Roles",
         "editRole": "Edit Role",
+        "copyName": "{roleName} (Copy)",
+        "slug": "Slug:",
+        "users": "{count, plural, =0 {0 users} =1 {1 user} other {# users}}",
+        "created": "Created {date}",
         "tabs": {
           "permissions": "Permissions",
           "permissionsWithCount": "Permissions ({count})",
@@ -2174,6 +2349,9 @@
         "settings": {
           "title": "Role Settings",
           "description": "Role metadata and system settings",
+          "defaultAssignment": {
+            "label": "Default Assignment"
+          },
           "roleType": {
             "label": "Role Type",
             "default": "System default role",
@@ -2361,12 +2539,26 @@
           }
         },
         "capabilities": {
-          "outputResolution": {
-            "label": "RunLynk Output Resolution (enforced)",
-            "placeholder": "Select..."
+          "schema": {
+            "title": "Structured Capabilities",
+            "help": "These fields come from product catalog planCapabilities declarations and are saved into the capability JSON below.",
+            "loading": "Loading capability definitions...",
+            "loadFailed": "Capability definitions failed to load. The server will still validate on save.",
+            "empty": "No product has declared structured capabilities.",
+            "required": "Required",
+            "selectPlaceholder": "Select..."
+          },
+          "errors": {
+            "required": "{label} is required.",
+            "invalidBoolean": "{label} must be true or false.",
+            "invalidNumber": "{label} must be a valid number.",
+            "invalidString": "{label} must be text.",
+            "invalidOption": "{label} must use one of the declared options.",
+            "missingOptions": "{label} has no declared options."
           },
           "json": {
-            "label": "Capabilities (JSON)"
+            "label": "Capabilities (JSON)",
+            "help": "You can still add namespaced capabilities that are not declared as structured fields. Structured fields override JSON keys with the same name."
           }
         },
         "stripe": {
@@ -3213,6 +3405,17 @@
               "decreasing": "decreasing",
               "stable": "stable"
             }
+          },
+          "metricLabels": {
+            "platformHooksCreated": "Hooks Created",
+            "platformApiCalls": "API Calls"
+          },
+          "distribution": {
+            "lte25": "0-25%",
+            "lte50": "26-50%",
+            "lte75": "51-75%",
+            "lte100": "76-100%",
+            "gt100": "Over 100%"
           }
         },
         "reliability": {

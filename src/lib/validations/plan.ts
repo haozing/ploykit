@@ -26,6 +26,16 @@ const featureKeySchema = z
   .max(120, 'Feature key is too long')
   .refine((key) => key.includes('.'), 'Feature key must use the ${namespace}.xxx convention');
 
+const productIdSchema = z
+  .string()
+  .trim()
+  .min(1, 'Product id is required')
+  .max(80, 'Product id is too long')
+  .regex(
+    /^[a-z0-9._-]+$/i,
+    'Product id may only contain letters, numbers, dots, underscores, and hyphens'
+  );
+
 // Plan features schema (machine-enforced capabilities/constraints)
 const planFeaturesSchema = z
   .record(featureKeySchema, z.union([z.boolean(), z.string(), z.number()]))
@@ -80,6 +90,7 @@ const planStripeSchema = z
 
 // Create plan schema
 export const createPlanSchema = z.object({
+  productId: productIdSchema.optional(),
   name: z
     .string()
     .min(2, 'Plan name must be at least 2 characters')
@@ -119,6 +130,7 @@ export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 
 // Plan filters schema
 export const planFiltersSchema = z.object({
+  productId: productIdSchema.optional(),
   isActive: z.boolean().optional(),
 });
 

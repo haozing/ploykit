@@ -2,6 +2,8 @@ import { db, withSystemContext } from '@/lib/db';
 import { entitlementPlans, userEntitlements, type EntitlementPlan } from '@/lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { NotFoundError, ConflictError, ForbiddenError } from '@/lib/_core/errors';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
+import { normalizePlanFeaturesForStorage } from '@/lib/entitlements/plan-capability-registry.server';
 import {
   createPlanSchema,
   updatePlanSchema,
@@ -83,10 +85,13 @@ export async function listPlans(filters: PlanFiltersInput = {}): Promise<PlanWit
   // Validate input
   const validatedFilters = planFiltersSchema.parse(filters);
   const { isActive } = validatedFilters;
+  const productId = validatedFilters.productId ?? getRuntimeProductId();
 
   // Build where clause
-  const whereClause =
-    typeof isActive === 'boolean' ? eq(entitlementPlans.isActive, isActive) : undefined;
+  const whereClause = and(
+    eq(entitlementPlans.productId, productId),
+    typeof isActive === 'boolean' ? eq(entitlementPlans.isActive, isActive) : undefined
+  );
 
   // Execute queries in parallel
   const [plans, subscriberCounts] = await Promise.all([
@@ -122,8 +127,18 @@ export async function getPlanById(planId: string): Promise<PlanWithDetails | nul
  * Get plan by slug
  */
 export async function getPlanBySlug(slug: string): Promise<PlanWithDetails | null> {
+  return getPlanBySlugForProduct(slug, getRuntimeProductId());
+}
+
+/**
+ * Get plan by slug within a runtime product
+ */
+export async function getPlanBySlugForProduct(
+  slug: string,
+  productId: string
+): Promise<PlanWithDetails | null> {
   const plan = await db.query.entitlementPlans.findFirst({
-    where: eq(entitlementPlans.slug, slug),
+    where: and(eq(entitlementPlans.productId, productId), eq(entitlementPlans.slug, slug)),
   });
 
   if (!plan) {
@@ -138,8 +153,15 @@ export async function getPlanBySlug(slug: string): Promise<PlanWithDetails | nul
  * Get default plan
  */
 export async function getDefaultPlan(): Promise<PlanWithDetails | null> {
+  return getDefaultPlanForProduct(getRuntimeProductId());
+}
+
+/**
+ * Get default plan within a runtime product
+ */
+export async function getDefaultPlanForProduct(productId: string): Promise<PlanWithDetails | null> {
   const plan = await db.query.entitlementPlans.findFirst({
-    where: eq(entitlementPlans.isDefault, true),
+    where: and(eq(entitlementPlans.productId, productId), eq(entitlementPlans.isDefault, true)),
   });
 
   if (!plan) {
@@ -156,8 +178,12 @@ export async function getDefaultPlan(): Promise<PlanWithDetails | null> {
 export async function createPlan(data: CreatePlanInput) {
   // Validate input
   const validatedData = createPlanSchema.parse(data);
+  const productId = validatedData.productId ?? getRuntimeProductId();
 
   const limitsToStore = normalizePlanLimits(validatedData.limits);
+  const featuresToStore = normalizePlanFeaturesForStorage(validatedData.features ?? {}, {
+    productId,
+  });
 
   const pricingInput = (validatedData.pricing || {}) as Record<string, unknown>;
   const pricingToStore = {
@@ -167,7 +193,7 @@ export async function createPlan(data: CreatePlanInput) {
   } as Record<string, unknown>;
 
   // Check if slug already exists
-  const existing = await getPlanBySlug(validatedData.slug);
+  const existing = await getPlanBySlugForProduct(validatedData.slug, productId);
 
   if (existing) {
     throw new ConflictError('Plan slug already exists', {
@@ -180,8 +206,9 @@ export async function createPlan(data: CreatePlanInput) {
     .insert(entitlementPlans)
     .values({
       name: validatedData.name,
+      productId,
       slug: validatedData.slug,
-      features: validatedData.features,
+      features: featuresToStore,
       limits: limitsToStore,
       pricing: pricingToStore,
       stripe: validatedData.stripe ?? {},
@@ -213,7 +240,7 @@ export async function updatePlan(planId: string, data: UpdatePlanInput) {
 
   // If slug is being changed, check for conflicts
   if (validatedData.slug && validatedData.slug !== existingPlan.slug) {
-    const slugExists = await getPlanBySlug(validatedData.slug);
+    const slugExists = await getPlanBySlugForProduct(validatedData.slug, existingPlan.productId);
 
     if (slugExists) {
       throw new ConflictError('Plan slug already exists', {
@@ -223,7 +250,7 @@ export async function updatePlan(planId: string, data: UpdatePlanInput) {
     }
   }
 
-  const { limits, pricing, stripe, langJsonb, ...restData } = validatedData;
+  const { limits, pricing, stripe, langJsonb, features, ...restData } = validatedData;
 
   const updateData: Record<string, unknown> = {
     ...restData,
@@ -232,6 +259,12 @@ export async function updatePlan(planId: string, data: UpdatePlanInput) {
 
   if (limits !== undefined) {
     updateData.limits = normalizePlanLimits(limits);
+  }
+
+  if (features !== undefined) {
+    updateData.features = normalizePlanFeaturesForStorage(features, {
+      productId: existingPlan.productId,
+    });
   }
 
   if (pricing !== undefined) {
@@ -310,11 +343,27 @@ export async function deletePlan(planId: string) {
 export async function setDefaultPlan(planId: string) {
   const updatedPlan = await withSystemContext(async (db) => {
     return db.transaction(async (tx) => {
-      // ?Step 1: Remove default from all plans
+      const targetPlan = await tx
+        .select()
+        .from(entitlementPlans)
+        .where(eq(entitlementPlans.id, planId))
+        .for('update')
+        .limit(1);
+
+      if (!targetPlan[0]) {
+        throw new NotFoundError('Plan', planId);
+      }
+
+      // ?Step 1: Remove default from sibling plans in the same product
       await tx
         .update(entitlementPlans)
         .set({ isDefault: false, updatedAt: new Date() })
-        .where(eq(entitlementPlans.isDefault, true));
+        .where(
+          and(
+            eq(entitlementPlans.productId, targetPlan[0].productId),
+            eq(entitlementPlans.isDefault, true)
+          )
+        );
 
       // ?Step 2: Set this plan as default
       const [updated] = await tx
@@ -338,11 +387,14 @@ export async function setDefaultPlan(planId: string) {
 /**
  * Get plan statistics
  */
-export async function getPlanStats() {
+export async function getPlanStats(productId = getRuntimeProductId()) {
   // Execute counts in parallel using helpers
   const [total, active] = await Promise.all([
-    countAll(entitlementPlans),
-    countWhere(entitlementPlans, eq(entitlementPlans.isActive, true)),
+    countAll(entitlementPlans, eq(entitlementPlans.productId, productId)),
+    countWhere(
+      entitlementPlans,
+      and(eq(entitlementPlans.productId, productId), eq(entitlementPlans.isActive, true))!
+    ),
   ]);
 
   return {

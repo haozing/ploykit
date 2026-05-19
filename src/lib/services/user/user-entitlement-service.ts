@@ -23,6 +23,7 @@ import { CACHE_TTL } from '@/lib/_core/constants';
 import { userEntitlementCache, CACHE_KEYS, invalidateUserEntitlementCache } from '@/lib/cache';
 import { auditLogDurable } from '../audit/audit-service';
 import { logger } from '@/lib/_core/logger';
+import { getRuntimeProductId } from '@/lib/plugin-runtime/product-id';
 
 export type EntitlementFeatureValue = boolean | string | number | Record<string, unknown> | null;
 export type EntitlementLimitInterval = 'monthly' | 'yearly';
@@ -720,7 +721,13 @@ async function executeCreateDefaultEntitlement(
   const freePlan = await client
     .select()
     .from(entitlementPlans)
-    .where(and(eq(entitlementPlans.isDefault, true), eq(entitlementPlans.isActive, true)))
+    .where(
+      and(
+        eq(entitlementPlans.productId, getRuntimeProductId()),
+        eq(entitlementPlans.isDefault, true),
+        eq(entitlementPlans.isActive, true)
+      )
+    )
     .limit(1);
 
   if (!freePlan || freePlan.length === 0) {
@@ -1174,9 +1181,13 @@ export async function hasRequiredPlanTier(
 
   // No entitlement = check if required is the default/free plan
   if (!entitlement) {
+    const productId = getRuntimeProductId();
     // User without entitlement can only access plans with sortOrder 0 (default/free)
     const requiredPlan = await db.query.entitlementPlans.findFirst({
-      where: eq(entitlementPlans.slug, requiredPlanSlug),
+      where: and(
+        eq(entitlementPlans.productId, productId),
+        eq(entitlementPlans.slug, requiredPlanSlug)
+      ),
       columns: { sortOrder: true, isDefault: true },
     });
     return requiredPlan?.isDefault === true || requiredPlan?.sortOrder === 0;
@@ -1184,7 +1195,10 @@ export async function hasRequiredPlanTier(
 
   // Get required plan's sortOrder from database
   const requiredPlan = await db.query.entitlementPlans.findFirst({
-    where: eq(entitlementPlans.slug, requiredPlanSlug),
+    where: and(
+      eq(entitlementPlans.productId, entitlement.plan.productId),
+      eq(entitlementPlans.slug, requiredPlanSlug)
+    ),
     columns: { sortOrder: true },
   });
 

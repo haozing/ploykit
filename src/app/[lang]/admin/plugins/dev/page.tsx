@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, CheckCircle2, FileCode2, Route, ServerCog } fr
 import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
 import { Badge } from '@/components/ui/badge';
+import { DashboardPageShell } from '@/components/dashboard/page-shell';
 import { PluginDevCopyButton } from '@/components/admin/plugin-dev-copy-button';
 import { requireAdmin } from '@/lib/shared/role-check';
 import {
@@ -132,7 +133,7 @@ function SummaryTile({
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-80 overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-relaxed">
+    <pre className="max-h-80 max-w-full overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-relaxed">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -149,7 +150,7 @@ function DiagnosticFields({ fields }: { fields: PluginDiagnosticDisplayField[] }
         const values = Array.isArray(field.value) ? field.value : [field.value];
 
         return (
-          <div key={field.label} className="rounded-md bg-muted/40 p-2">
+          <div key={field.label} className="min-w-0 rounded-md bg-muted/40 p-2">
             <dt className="font-medium text-muted-foreground">{field.label}</dt>
             <dd className="mt-1">
               {values.length > 1 ? (
@@ -224,8 +225,8 @@ function RuntimeChecks({
   messageLabels: PluginDevConsoleLabels['runtimeCheckMessages'];
 }) {
   return (
-    <div className="overflow-hidden rounded-md border">
-      <div className="grid grid-cols-[160px_120px_1fr] border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
+    <div className="overflow-x-auto rounded-md border">
+      <div className="grid min-w-[720px] grid-cols-[160px_120px_minmax(0,1fr)] border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
         <span>{labels.check}</span>
         <span>{labels.status}</span>
         <span>{labels.message}</span>
@@ -233,15 +234,17 @@ function RuntimeChecks({
       {checks.map((check) => (
         <div
           key={check.key}
-          className="grid grid-cols-[160px_120px_1fr] gap-3 border-b px-3 py-3 text-sm last:border-b-0"
+          className="grid min-w-[720px] grid-cols-[160px_120px_minmax(0,1fr)] gap-3 border-b px-3 py-3 text-sm last:border-b-0"
         >
-          <span className="font-mono">{check.key}</span>
+          <span className="break-all font-mono">{check.key}</span>
           <span>
             <Badge variant={statusVariant(check.status)}>
               {translatedValue(check.status, statusLabels)}
             </Badge>
           </span>
-          <span className="text-muted-foreground">{runtimeCheckMessage(check, messageLabels)}</span>
+          <span className="min-w-0 break-words text-muted-foreground">
+            {runtimeCheckMessage(check, messageLabels)}
+          </span>
         </div>
       ))}
     </div>
@@ -254,9 +257,9 @@ function TinyList({ items, emptyLabel }: { items: unknown[]; emptyLabel: string 
   }
 
   return (
-    <ul className="space-y-1">
+    <ul className="min-w-0 space-y-1">
       {items.map((item, index) => (
-        <li key={index} className="font-mono text-xs">
+        <li key={index} className="break-all font-mono text-xs">
           {typeof item === 'string' ? item : JSON.stringify(item)}
         </li>
       ))}
@@ -270,7 +273,7 @@ function shortDate(value: string | undefined, pendingLabel: string) {
 
 function RuntimeDetailList({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-md border p-3">
+    <div className="min-w-0 rounded-md border p-3">
       <div className="mb-3 text-xs font-medium uppercase text-muted-foreground">{title}</div>
       {children}
     </div>
@@ -423,9 +426,9 @@ function PluginPanel({
   const contract = plugin.contract;
 
   return (
-    <article className="rounded-md border bg-background">
+    <article className="min-w-0 rounded-md border bg-background">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold">{contract?.name ?? plugin.pluginId}</h2>
             <Badge variant={plugin.success ? 'default' : 'destructive'}>
@@ -439,7 +442,9 @@ function PluginPanel({
             </Badge>
             <Badge variant="outline">{plugin.sourceTarget}</Badge>
           </div>
-          <p className="mt-1 font-mono text-xs text-muted-foreground">{plugin.pluginPath}</p>
+          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+            {plugin.pluginPath}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">{plugin.installation.message}</p>
         </div>
         <PluginDevCopyButton
@@ -460,17 +465,17 @@ function PluginPanel({
         />
       </div>
 
-      <div className="grid gap-5 p-5 xl:grid-cols-[1fr_1fr]">
-        <section className="space-y-3">
+      <div className="grid min-w-0 gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section className="min-w-0 space-y-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <FileCode2 className="h-4 w-4" />
             {labels.sections.contract}
           </h3>
           {contract ? (
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs text-muted-foreground">ID</div>
-                <div className="font-mono">{contract.id}</div>
+                <div className="break-all font-mono">{contract.id}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">{labels.fields.version}</div>
@@ -490,7 +495,7 @@ function PluginPanel({
           )}
         </section>
 
-        <section className="space-y-3">
+        <section className="min-w-0 space-y-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <AlertTriangle className="h-4 w-4" />
             {labels.sections.diagnostics}
@@ -500,7 +505,7 @@ function PluginPanel({
 
         {contract && (
           <>
-            <section className="space-y-3">
+            <section className="min-w-0 space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <Route className="h-4 w-4" />
                 {labels.sections.routesAndMenus}
@@ -527,7 +532,7 @@ function PluginPanel({
               </div>
             </section>
 
-            <section className="space-y-3">
+            <section className="min-w-0 space-y-3">
               <h3 className="text-sm font-semibold">{labels.sections.permissions}</h3>
               <div className="flex flex-wrap gap-2">
                 {contract.permissions.length > 0 ? (
@@ -542,7 +547,7 @@ function PluginPanel({
               </div>
             </section>
 
-            <section className="space-y-3">
+            <section className="min-w-0 space-y-3">
               <h3 className="text-sm font-semibold">{labels.sections.dataAndResources}</h3>
               <div className="grid gap-3 text-sm md:grid-cols-2">
                 <div>
@@ -568,7 +573,7 @@ function PluginPanel({
               </div>
             </section>
 
-            <section className="space-y-3">
+            <section className="min-w-0 space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <ServerCog className="h-4 w-4" />
                 {labels.sections.runtimeSurface}
@@ -605,7 +610,7 @@ function PluginPanel({
           </>
         )}
 
-        <section className="space-y-3 xl:col-span-2">
+        <section className="min-w-0 space-y-3 xl:col-span-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <Activity className="h-4 w-4" />
             {labels.sections.activity}
@@ -618,7 +623,7 @@ function PluginPanel({
               events: plugin.activity.events,
               webhooks: plugin.activity.webhooks,
             }).map(([name, section]) => (
-              <div key={name} className="rounded-md border p-3">
+              <div key={name} className="min-w-0 rounded-md border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">
                     {translatedValue(name, labels.activityNames)}
@@ -627,7 +632,7 @@ function PluginPanel({
                     {translatedValue(section.status, labels.statuses)}
                   </Badge>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">{section.message}</p>
+                <p className="mt-2 break-words text-xs text-muted-foreground">{section.message}</p>
               </div>
             ))}
           </div>
@@ -635,7 +640,7 @@ function PluginPanel({
 
         <RuntimeActivityDetails plugin={plugin} labels={labels} />
 
-        <section className="space-y-3 xl:col-span-2">
+        <section className="min-w-0 space-y-3 xl:col-span-2">
           <h3 className="text-sm font-semibold">{labels.sections.rawContract}</h3>
           <JsonBlock value={contract?.raw ?? null} />
         </section>
@@ -754,7 +759,7 @@ export default async function PluginDevConsolePage() {
   );
 
   return (
-    <div className="container mx-auto max-w-7xl space-y-6 p-8">
+    <DashboardPageShell>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -827,7 +832,7 @@ export default async function PluginDevConsolePage() {
         </section>
       )}
 
-      <section className="space-y-5">
+      <section className="min-w-0 space-y-5">
         {report.plugins.length > 0 ? (
           report.plugins.map((plugin) => (
             <PluginPanel key={plugin.pluginPath} plugin={plugin} labels={labels} />
@@ -838,6 +843,6 @@ export default async function PluginDevConsolePage() {
           </div>
         )}
       </section>
-    </div>
+    </DashboardPageShell>
   );
 }

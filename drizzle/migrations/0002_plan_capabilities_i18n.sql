@@ -1,15 +1,4 @@
--- Plan capabilities + i18n normalization
-
--- Migrate legacy `features.outputResolution` to namespaced `features['runlynk.outputResolution']`
-UPDATE "entitlement_plans"
-SET "features" = jsonb_set(
-  COALESCE("features", '{}'::jsonb) - 'outputResolution',
-  '{runlynk.outputResolution}',
-  COALESCE("features"->'outputResolution', 'null'::jsonb),
-  true
-)
-WHERE ("features" ? 'outputResolution')
-  AND NOT ("features" ? 'runlynk.outputResolution');--> statement-breakpoint
+-- Plan i18n normalization
 
 -- Normalize language key from zh-CN to zh (keep original key for safety)
 UPDATE "entitlement_plans"

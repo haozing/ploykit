@@ -1,5 +1,4 @@
 export const PLATFORM_PRIMARY_CREDIT_METRIC = 'platform.credits';
-export const PLATFORM_OUTPUT_QUALITY_CAPABILITY = 'platform.outputQuality';
 
 const METRIC_LABELS: Record<string, string> = {
   'platform.users': 'Users',

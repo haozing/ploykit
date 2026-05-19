@@ -33,6 +33,7 @@ export default function RoleDetailPage() {
   const { role, loading, refetch } = useRole(roleId);
   const createRoleMutation = useCreateRole();
   const deleteRoleMutation = useDeleteRole();
+  const locale = lang?.startsWith('zh') ? 'zh-CN' : 'en-US';
 
   // Dialog states
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -52,7 +53,7 @@ export default function RoleDetailPage() {
   const handleDuplicate = async () => {
     if (!role) return;
 
-    if (!confirm(`Duplicate "${role.name}"? This will create a copy with "-copy" suffix.`)) {
+    if (!confirm(t('rolesTable.duplicateConfirm', { roleName: role.name }))) {
       return;
     }
 
@@ -60,7 +61,7 @@ export default function RoleDetailPage() {
 
     try {
       const result = await createRoleMutation.trigger({
-        name: `${role.name} (Copy)`,
+        name: t('detail.copyName', { roleName: role.name }),
         slug: `${role.slug}-copy-${Date.now()}`,
         description: role.description || null,
         isDefault: false,
@@ -69,14 +70,14 @@ export default function RoleDetailPage() {
 
       const createdRole = result.role || result.data;
       if (result.success && createdRole) {
-        toast.success(`Role "${role.name}" duplicated successfully`);
+        toast.success(t('rolesTable.duplicateSuccess', { roleName: role.name }));
         router.push(`/${lang}/admin/rbac/${createdRole.id}`);
       } else {
-        toast.error(result.error || 'Failed to duplicate role');
+        toast.error(result.error || t('rolesTable.duplicateFailed'));
       }
     } catch (error) {
       console.error('Duplicate error:', error);
-      toast.error('An unexpected error occurred');
+      toast.error(t('rolesTable.duplicateError'));
     } finally {
       setDuplicating(false);
     }
@@ -88,7 +89,7 @@ export default function RoleDetailPage() {
   const handleDelete = async () => {
     if (!role) return;
 
-    if (!confirm(`Are you sure you want to delete "${role.name}"? This action cannot be undone.`)) {
+    if (!confirm(t('rolesTable.deleteConfirm', { roleName: role.name }))) {
       return;
     }
 
@@ -98,14 +99,14 @@ export default function RoleDetailPage() {
       const result = await deleteRoleMutation.trigger(role.id);
 
       if (result.success) {
-        toast.success(`Role "${role.name}" deleted successfully`);
+        toast.success(t('rolesTable.deleteSuccess', { roleName: role.name }));
         router.push(`/${lang}/admin/rbac`);
       } else {
-        toast.error(result.error || 'Failed to delete role');
+        toast.error(result.error || t('rolesTable.deleteFailed'));
       }
     } catch (error) {
       console.error('Delete error:', error);
-      toast.error('An unexpected error occurred');
+      toast.error(t('rolesTable.deleteError'));
     } finally {
       setDeleting(false);
     }
@@ -119,6 +120,18 @@ export default function RoleDetailPage() {
     router.push(
       `/${lang}/admin/users?tab=users&roleId=${role.id}&roleName=${encodeURIComponent(role.name)}`
     );
+  };
+
+  const formatRoleName = () => {
+    if (!role) return '';
+    const key = `systemRoles.${role.slug}.name`;
+    return t.has(key) ? t(key) : role.name;
+  };
+
+  const formatRoleDescription = () => {
+    if (!role?.description) return null;
+    const key = `systemRoles.${role.slug}.description`;
+    return t.has(key) ? t(key) : role.description;
   };
 
   // Loading state
@@ -180,24 +193,28 @@ export default function RoleDetailPage() {
             <div className="flex-1 space-y-4">
               <div>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-3xl font-bold">{role.name}</h1>
-                  {role.isDefault && <Badge variant="outline">Default</Badge>}
+                  <h1 className="text-3xl font-bold">{formatRoleName()}</h1>
+                  {role.isDefault && (
+                    <Badge variant="outline">{t('rolesTable.badges.default')}</Badge>
+                  )}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    Slug: <strong className="font-mono">{role.slug}</strong>
+                    {t('detail.slug')} <strong className="font-mono">{role.slug}</strong>
                   </span>
                   <span className="flex items-center gap-1">
                     <Users className="h-4 w-4" />
-                    {role.userCount || 0} users
+                    {t('detail.users', { count: role.userCount || 0 })}
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    Created {new Date(role.createdAt).toLocaleDateString()}
+                    {t('detail.created', {
+                      date: new Date(role.createdAt).toLocaleDateString(locale),
+                    })}
                   </span>
                 </div>
-                {role.description && (
-                  <p className="mt-2 text-sm text-muted-foreground">{role.description}</p>
+                {formatRoleDescription() && (
+                  <p className="mt-2 text-sm text-muted-foreground">{formatRoleDescription()}</p>
                 )}
               </div>
 
@@ -307,7 +324,9 @@ export default function RoleDetailPage() {
               <Separator />
 
               <div className="space-y-2">
-                <h4 className="text-sm font-medium">{t('detail.settings.roleType.label')}</h4>
+                <h4 className="text-sm font-medium">
+                  {t('detail.settings.defaultAssignment.label')}
+                </h4>
                 <p className="text-sm text-muted-foreground">
                   {t(`detail.settings.isDefault.${role.isDefault ? 'true' : 'false'}`)}
                 </p>
@@ -318,7 +337,7 @@ export default function RoleDetailPage() {
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">{t('detail.settings.created')}</h4>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(role.createdAt).toLocaleString()}
+                  {new Date(role.createdAt).toLocaleString(locale)}
                 </p>
               </div>
 
@@ -327,7 +346,7 @@ export default function RoleDetailPage() {
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">{t('detail.settings.lastUpdated')}</h4>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(role.updatedAt).toLocaleString()}
+                  {new Date(role.updatedAt).toLocaleString(locale)}
                 </p>
               </div>
             </CardContent>

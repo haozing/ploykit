@@ -46,6 +46,29 @@ standalone 部署时，外部目录需要在运行环境中保持构建时相同
 
 生成 map 只做模块索引，不把插件分配到 product、suite 或 bundle；这些运行时归属属于安装/catalog 状态。外部产品可以通过 `PLOYKIT_RUNTIME_CATALOG_FILE` 或 `plugins:apply -- --catalog <file>` 提供归属声明。只有存在 `PLOYKIT_PLUGIN_DIRS` 等插件源码输入时，`plugins:apply` 才会自动准备 runtime map；`PLOYKIT_PLUGIN_MAP_FILE` 只用于选择 active runtime map artifact 的路径。runtime catalog 是 apply bundle 的权威来源；`plugins:apply -- --bundle <id>` 传的是 app bundle id，不是 plugin id。如果某个插件已经被 catalog 放进显式 bundle，PloyKit 不会再为它暴露隐式的单插件 bundle。
 
+产品也可以在同一个 runtime catalog 的 `products[].planCapabilities` 中声明订阅计划能力 schema。管理端计划编辑器会动态渲染这些字段，计划 API 会在写入 `entitlement_plans.features` 前校验必填、基础类型和 enum 选项。产品专属的计划字段应该放在产品 catalog，不写进宿主通用 UI。
+
+```json
+{
+  "products": [
+    {
+      "id": "sample-product",
+      "name": "Sample Product",
+      "planCapabilities": [
+        {
+          "key": "sample.outputQuality",
+          "valueType": "enum",
+          "required": true,
+          "defaultValue": "hd",
+          "label": { "zh": "输出质量", "en": "Output Quality" },
+          "options": [{ "value": "sd" }, { "value": "hd" }]
+        }
+      ]
+    }
+  ]
+}
+```
+
 如果插件需要扩展或覆盖宿主自带页面，例如首页、关于页或定价页，见 [宿主页面插槽与覆盖](host-page-overrides.zh-CN.md)。
 
 最小插件：

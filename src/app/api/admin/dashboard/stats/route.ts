@@ -42,17 +42,26 @@ export const GET = withAdminGuard(
       subscriptions: {
         total: subscriptionStats.total,
         active: subscriptionStats.active,
-        description: `${subscriptionStats.active} active entitlements`,
+        summary: {
+          code: 'activeEntitlements',
+          count: subscriptionStats.active,
+        },
       },
       roles: {
         total: roleStats.total || 0,
         active: roleStats.assigned || 0,
-        description: `${roleStats.assigned || 0} active assignments`,
+        summary: {
+          code: 'activeAssignments',
+          count: roleStats.assigned || 0,
+        },
       },
       plugins: {
         total: pluginStats.total,
         enabled: pluginStats.enabled,
-        description: `${pluginStats.enabled} enabled plugins`,
+        summary: {
+          code: 'enabledPlugins',
+          count: pluginStats.enabled,
+        },
       },
       apiRequests: {
         total: formatCompactNumber(usageEventStats.current),

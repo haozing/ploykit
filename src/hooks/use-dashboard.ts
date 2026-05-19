@@ -17,17 +17,26 @@ export interface DashboardStats {
   subscriptions: {
     total: number;
     active: number;
-    description: string;
+    summary: {
+      code: 'activeEntitlements';
+      count: number;
+    };
   };
   roles: {
     total: number;
     active: number;
-    description: string;
+    summary: {
+      code: 'activeAssignments';
+      count: number;
+    };
   };
   plugins: {
     total: number;
     enabled: number;
-    description: string;
+    summary: {
+      code: 'enabledPlugins';
+      count: number;
+    };
   };
   apiRequests: {
     total: string;

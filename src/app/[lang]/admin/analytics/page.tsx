@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -45,6 +46,7 @@ import {
   RefreshCw,
   Calendar,
 } from 'lucide-react';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 import { apiFetch } from '@/lib/shared/auth-client';
 
 interface RevenueMetrics {
@@ -163,6 +165,8 @@ const KNOWN_EDGE_FAILURE_TYPES = ['auth', 'client', 'not_found', 'rate_limited',
 
 export default function AnalyticsPage() {
   const t = useTranslations('dashboard.analytics.page');
+  const params = useParams();
+  const locale = params.lang === 'zh' ? 'zh-CN' : 'en-US';
   const [timeframe, setTimeframe] = React.useState('30days');
   const [loading, setLoading] = React.useState(true);
   const [reliabilityFailureType, setReliabilityFailureType] = React.useState('all');
@@ -289,7 +293,7 @@ export default function AnalyticsPage() {
   }, [reliability, reliabilityFailureType]);
 
   const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
@@ -302,7 +306,7 @@ export default function AnalyticsPage() {
   };
 
   const formatNumber = (value: number): string => {
-    return new Intl.NumberFormat('en-US').format(value);
+    return new Intl.NumberFormat(locale).format(value);
   };
 
   const formatDateTime = (value: string | null): string => {
@@ -310,7 +314,7 @@ export default function AnalyticsPage() {
       return t('reliability.emptyValue');
     }
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(locale, {
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
@@ -324,33 +328,66 @@ export default function AnalyticsPage() {
     return null;
   };
 
+  const formatUsageMetric = (metric: string) => {
+    const key =
+      {
+        'Platform.HooksCreated': 'usage.metricLabels.platformHooksCreated',
+        'Platform.ApiCalls': 'usage.metricLabels.platformApiCalls',
+      }[metric] ?? '';
+
+    if (key && t.has(key)) return t(key);
+
+    return metric
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[._-]+/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const formatDistributionRange = (range: string) => {
+    const key =
+      {
+        lte25: 'usage.distribution.lte25',
+        lte50: 'usage.distribution.lte50',
+        lte75: 'usage.distribution.lte75',
+        lte100: 'usage.distribution.lte100',
+        gt100: 'usage.distribution.gt100',
+        '0-25%': 'usage.distribution.lte25',
+        '26-50%': 'usage.distribution.lte50',
+        '51-75%': 'usage.distribution.lte75',
+        '76-100%': 'usage.distribution.lte100',
+        'Over 100%': 'usage.distribution.gt100',
+      }[range] ?? '';
+
+    return key && t.has(key) ? t(key) : range;
+  };
+
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <DashboardPageShell>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">{t('title')}</h1>
-          <p className="text-muted-foreground mt-2">{t('description')}</p>
-        </div>
-        <div className="flex gap-4">
-          <Select value={timeframe} onValueChange={setTimeframe}>
-            <SelectTrigger className="w-[150px]">
-              <Calendar className="mr-2 h-4 w-4" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7days">{t('timeframes.7days')}</SelectItem>
-              <SelectItem value="30days">{t('timeframes.30days')}</SelectItem>
-              <SelectItem value="90days">{t('timeframes.90days')}</SelectItem>
-              <SelectItem value="12months">{t('timeframes.12months')}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={fetchAnalytics} variant="outline" size="sm">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            {t('actions.refresh')}
-          </Button>
-        </div>
-      </div>
+      <DashboardPageHeader
+        title={t('title')}
+        description={t('description')}
+        actions={
+          <>
+            <Select value={timeframe} onValueChange={setTimeframe}>
+              <SelectTrigger className="w-[150px]">
+                <Calendar className="mr-2 h-4 w-4" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7days">{t('timeframes.7days')}</SelectItem>
+                <SelectItem value="30days">{t('timeframes.30days')}</SelectItem>
+                <SelectItem value="90days">{t('timeframes.90days')}</SelectItem>
+                <SelectItem value="12months">{t('timeframes.12months')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={fetchAnalytics} variant="outline" size="sm">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              {t('actions.refresh')}
+            </Button>
+          </>
+        }
+      />
 
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
@@ -861,7 +898,7 @@ export default function AnalyticsPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="capitalize">{pattern.metric}</CardTitle>
+                        <CardTitle>{formatUsageMetric(pattern.metric)}</CardTitle>
                         <CardDescription>
                           {t('usage.metrics.average')}: {pattern.averageUsage.toFixed(1)} ·{' '}
                           {t('usage.metrics.peak')}: {pattern.peakUsage}
@@ -891,7 +928,9 @@ export default function AnalyticsPage() {
                         {Object.entries(pattern.distribution).map(([range, count]) => (
                           <div key={range} className="text-center">
                             <div className="text-2xl font-bold">{count}</div>
-                            <div className="text-xs text-muted-foreground">{range}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDistributionRange(range)}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1285,7 +1324,7 @@ export default function AnalyticsPage() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+    </DashboardPageShell>
   );
 }
 

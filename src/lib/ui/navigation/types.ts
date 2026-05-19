@@ -63,6 +63,7 @@ export interface BaseMenuItem {
   label?: string; // Optional direct label for menu items
   fallbackLabel?: string; // Fallback when i18nKey is missing
   href: string; // Link path
+  activeHrefs?: string[]; // Additional paths that should activate this item
   icon?: string; // Icon name (Lucide)
   weight?: number; // Sort weight (lower = higher priority, default: 100)
   guard?: 'public' | 'auth' | 'admin'; // Menu visibility control (public/auth/admin)

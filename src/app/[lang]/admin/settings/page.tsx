@@ -19,6 +19,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { apiFetch } from '@/lib/shared/auth-client';
 import type { SystemSettingsPayload } from '@/lib/validations/system-settings';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 
 interface SystemSettingsResponse {
   success?: boolean;
@@ -103,7 +104,7 @@ export default function AdminSettingsPage() {
 
   if (isLoading || !form) {
     return (
-      <div className="space-y-6 p-6">
+      <DashboardPageShell>
         <div className="space-y-2">
           <div className="h-8 w-56 animate-pulse rounded bg-muted" />
           <div className="h-4 w-96 animate-pulse rounded bg-muted" />
@@ -113,22 +114,22 @@ export default function AdminSettingsPage() {
             <div key={index} className="h-56 animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
-      </div>
+      </DashboardPageShell>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('description')}</p>
-        </div>
-        <Button onClick={handleSave} disabled={saving}>
-          <Save className="mr-2 h-4 w-4" />
-          {t('actions.save')}
-        </Button>
-      </div>
+    <DashboardPageShell>
+      <DashboardPageHeader
+        title={t('title')}
+        description={t('description')}
+        actions={
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />
+            {t('actions.save')}
+          </Button>
+        }
+      />
 
       {error ? (
         <Card className="border-destructive">
@@ -346,7 +347,7 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </DashboardPageShell>
   );
 }
 

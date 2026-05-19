@@ -5,6 +5,7 @@ import { Users, Shield, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useDashboard } from '@/hooks/use-dashboard';
 import { useTranslations } from 'next-intl';
+import { DashboardPageHeader, DashboardPageShell } from '@/components/dashboard/page-shell';
 
 /**
  * Dashboard Home Page
@@ -19,13 +20,38 @@ export default function DashboardPage() {
   const { stats, recentUsers, systemStatus, statsLoading, usersLoading, statusLoading } =
     useDashboard();
 
+  const formatUserStatus = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return t('recentUsers.status.pending');
+      case 'active':
+      default:
+        return t('recentUsers.status.active');
+    }
+  };
+
+  const formatServiceStatus = (status: string) => {
+    switch (status) {
+      case 'degraded':
+        return t('systemStatus.status.degraded');
+      case 'down':
+        return t('systemStatus.status.down');
+      case 'operational':
+      default:
+        return t('systemStatus.status.operational');
+    }
+  };
+
+  const formatLatency = (latency: string) => {
+    if (latency === 'background') return t('systemStatus.latencyBackground');
+    if (latency === 'N/A') return t('systemStatus.latencyUnavailable');
+    return t('systemStatus.latencyAvg', { latency });
+  };
+
   return (
-    <div className="space-y-6">
+    <DashboardPageShell>
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('description')}</p>
-      </div>
+      <DashboardPageHeader title={t('title')} description={t('description')} />
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -68,7 +94,9 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-bold">{stats?.roles.active || 0}</div>
-                <p className="text-xs text-muted-foreground">{stats?.roles.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('stats.activeAssignments', { count: stats?.roles.active || 0 })}
+                </p>
               </>
             )}
           </CardContent>
@@ -143,7 +171,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
-                      {user.status}
+                      {formatUserStatus(user.status)}
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">{user.time}</p>
                   </div>
@@ -205,11 +233,13 @@ export default function DashboardPage() {
                       <div className={`h-2 w-2 rounded-full ${statusColor}`} />
                       <div>
                         <p className="text-sm font-medium">{service.name}</p>
-                        <p className="text-xs text-muted-foreground">{service.latency} avg</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatLatency(service.latency)}
+                        </p>
                       </div>
                     </div>
                     <Badge variant="outline" className={statusTextColor}>
-                      {service.status}
+                      {formatServiceStatus(service.status)}
                     </Badge>
                   </div>
                 );
@@ -218,6 +248,6 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </DashboardPageShell>
   );
 }

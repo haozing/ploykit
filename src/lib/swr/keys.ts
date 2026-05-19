@@ -77,6 +77,7 @@ export const API_KEYS = {
   ENTITLEMENTS: {
     STATS: '/api/admin/entitlements/stats',
     PLANS: '/api/admin/entitlements/plans',
+    PLAN_CAPABILITIES: '/api/admin/entitlements/plan-capabilities',
     PLAN_DETAIL: (planId: string) => `/api/admin/entitlements/plans/${planId}`,
     USERS: (params?: string) => `/api/admin/entitlements/users${params ? `?${params}` : ''}`,
     USER_DETAIL: (userId: string) => `/api/admin/entitlements/${userId}`,

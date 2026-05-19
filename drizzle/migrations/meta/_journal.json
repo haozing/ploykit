@@ -211,6 +211,13 @@
       "when": 1779166800000,
       "tag": "0029_plugin_public_content_runtime",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1779167400000,
+      "tag": "0030_entitlement_plan_product_scope",
+      "breakpoints": true
     }
   ]
 }

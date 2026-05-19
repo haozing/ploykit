@@ -91,6 +91,33 @@ id to `plugins:apply -- --bundle <id>`; if a plugin is already listed in a
 catalog bundle, PloyKit does not also expose an implicit per-plugin bundle for
 that plugin.
 
+Products can declare subscription plan capability schemas in the same runtime
+catalog with `products[].planCapabilities`. The admin plan editor renders those
+definitions dynamically, and the plan API validates required fields, primitive
+types, and enum options before storing values in `entitlement_plans.features`.
+Keep product-specific plan fields in the product catalog, not in host UI code.
+
+```json
+{
+  "products": [
+    {
+      "id": "sample-product",
+      "name": "Sample Product",
+      "planCapabilities": [
+        {
+          "key": "sample.outputQuality",
+          "valueType": "enum",
+          "required": true,
+          "defaultValue": "hd",
+          "label": { "en": "Output Quality" },
+          "options": [{ "value": "sd" }, { "value": "hd" }]
+        }
+      ]
+    }
+  ]
+}
+```
+
 For plugins that need to extend or override host-owned pages such as the home,
 about, or pricing pages, see [host page slots and overrides](host-page-overrides.md).
 
