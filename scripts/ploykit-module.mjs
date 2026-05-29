@@ -5,10 +5,17 @@ import crypto from 'node:crypto';
 import { builtinModules } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { register } from 'tsx/esm/api';
+import {
+  discoverModuleRoots as discoverConfiguredModuleRoots,
+  getModuleSources,
+  resolveModuleRoot as resolveConfiguredModuleRoot,
+} from './lib/module-sources.mjs';
+import './lib/module-sdk-alias.cjs';
 
 const PROJECT_ROOT = process.cwd();
 const CLI_FILE = fileURLToPath(import.meta.url);
-const tsx = register({ namespace: 'ploykit-module-doctor' });
+const TSX_TSCONFIG = path.join(PROJECT_ROOT, 'tsconfig.json');
+const tsx = register({ namespace: 'ploykit-module-doctor', tsconfig: TSX_TSCONFIG });
 const CONTRACT_VALIDATION_TIMEOUT_MS = 10_000;
 const MODULE_ID_PATTERN = /^[a-z0-9-]+$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/;
@@ -168,29 +175,11 @@ function dedupeDiagnostics(diagnostics) {
 }
 
 function resolveModuleRoot(inputPath) {
-  const resolved = path.resolve(PROJECT_ROOT, inputPath ?? '.');
-  if (fs.existsSync(path.join(resolved, 'module.ts'))) {
-    return resolved;
-  }
-  if (fs.existsSync(path.join(resolved, 'modules'))) {
-    return path.join(resolved, 'modules');
-  }
-  return resolved;
+  return resolveConfiguredModuleRoot(PROJECT_ROOT, inputPath ?? '.');
 }
 
-function discoverModuleRoots(inputPath = 'modules') {
-  const root = resolveModuleRoot(inputPath);
-  if (!fs.existsSync(root)) {
-    return [];
-  }
-  if (fs.existsSync(path.join(root, 'module.ts'))) {
-    return [root];
-  }
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(root, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, 'module.ts')));
+function discoverModuleRoots(inputPath) {
+  return discoverConfiguredModuleRoots(PROJECT_ROOT, inputPath);
 }
 
 function extractString(source, key) {
@@ -245,10 +234,14 @@ function readPackageManifest() {
 }
 
 function readDefaultExport(value) {
-  if (value && typeof value === 'object' && 'default' in value) {
-    return value.default;
+  let current = value;
+  for (let index = 0; index < 5; index += 1) {
+    if (!current || typeof current !== 'object' || !('default' in current)) {
+      return current;
+    }
+    current = current.default;
   }
-  return value;
+  return current;
 }
 
 async function loadSdkValidator() {
@@ -2040,7 +2033,7 @@ function printJson(value) {
 }
 
 async function commandDoctor(args) {
-  const target = args[0] ?? 'modules';
+  const target = args[0];
   const roots = discoverModuleRoots(target);
   const result =
     roots.length === 1
@@ -2052,8 +2045,8 @@ async function commandDoctor(args) {
               'error',
               'MODULE_DOCTOR_TARGET_AMBIGUOUS',
               `Expected one module root, found ${roots.length}.`,
-              target,
-              'Pass a specific module directory such as modules/hello.'
+              target ?? 'all',
+              'Pass a specific module id or module root path.'
             ),
           ],
         };
@@ -2064,7 +2057,7 @@ async function commandDoctor(args) {
 }
 
 async function commandCheck(args) {
-  const target = args[0] ?? 'modules';
+  const target = args[0];
   const roots = discoverModuleRoots(target);
   const results = await Promise.all(roots.map(doctorModule));
   const success = results.every((result) => result.success);
@@ -2084,7 +2077,7 @@ async function commandValidateContractInternal(args) {
 }
 
 function commandInspect(args) {
-  const target = args[0] ?? 'modules';
+  const target = args[0];
   const roots = discoverModuleRoots(target);
   const results = roots.map((root) => {
     const source = fs.readFileSync(path.join(root, 'module.ts'), 'utf8');
@@ -2193,7 +2186,12 @@ function commandCreate(args) {
     );
   }
 
-  const moduleRoot = path.join(PROJECT_ROOT, 'modules', moduleId);
+  const sources = getModuleSources(PROJECT_ROOT).sources;
+  const defaultSource = sources[0];
+  if (!defaultSource) {
+    throw new Error('No module source is configured in ploykit.config.json.');
+  }
+  const moduleRoot = path.join(defaultSource.dir, moduleId);
   if (fs.existsSync(moduleRoot)) {
     throw new Error(`Module already exists: ${toProjectPath(moduleRoot)}`);
   }
@@ -2252,7 +2250,7 @@ function commandTemplates() {
 }
 
 function commandDev(args) {
-  const target = args[0] ?? 'modules';
+  const target = args[0] ?? 'all';
   runLocalScript(path.join('scripts', 'generate-module-map.mjs'), ['--check']);
   runLocalScript(path.join('scripts', 'ploykit-module.mjs'), ['check', target]);
   printJson({

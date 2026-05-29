@@ -9,8 +9,9 @@ import type { ModuleMapArtifact, ModuleRuntimeMapEntry } from './module-runtime'
 export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   "ai-rag-demo": {
     rootDir: "modules/ai-rag-demo",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"05a7f4f92693ce9b8a679b85b924d994cb307ad5ca6b1b6f494fa588d21a1b5a","contractDigest":"44f53eacecba1c7403f838fab0f9e448012ac4dac95dd2efb08be1cd871ad7c7","sourceFiles":["actions/ask.ts","api/ask.ts","lib/run-ai-rag.ts","module.ts","pages/AiRagPage.ts"],"capabilitySummary":{"routes":2,"dataModels":0,"permissions":8,"backgroundHandlers":0,"providerRequirements":0,"commercialRequirements":1,"presentationContributions":1}},
     module: () => import("../../modules/ai-rag-demo/module"),
     pages: {
@@ -25,8 +26,9 @@ export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   },
   "capability-demo": {
     rootDir: "modules/capability-demo",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"991df4595462fbae02ae08809e50df6373b90fac4835dfabea5b1c0bc2b86ec9","contractDigest":"6d437861bc5cdd3520770de63cc4770234b052edbce1728d0805b3a69060fa41","sourceFiles":[".ploykit/generated/data-plan.json",".ploykit/generated/data-types.ts","actions/ask.ts","actions/enqueue-report.ts","api/ask.ts","api/workflow-status.ts","events/indexed.ts","events/reported.ts","jobs/generate-report.ts","jobs/reindex.ts","loaders/public-tool-metadata.ts","migrations/0001_generated.sql","module.ts","pages/DashboardPage.ts","pages/JobPage.ts","pages/PublicToolPage.ts","webhooks/ingest.ts","webhooks/workflow-ingest.ts"],"capabilitySummary":{"routes":5,"dataModels":1,"permissions":20,"backgroundHandlers":6,"providerRequirements":0,"commercialRequirements":1,"presentationContributions":1}},
     module: () => import("../../modules/capability-demo/module"),
     pages: {
@@ -60,8 +62,9 @@ export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   },
   "cms-demo": {
     rootDir: "modules/cms-demo",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"e3b2310c8be82753e2632be229044c42eb0ac5e3998a6e002181c6d1220c4620","contractDigest":"1bc7a2a456e5825d486676b3a265fe93f028794700720c335470839c1a5c6e54","sourceFiles":[".ploykit/generated/data-plan.json",".ploykit/generated/data-types.ts","actions/create-note.ts","actions/publish-post.ts","api/notes.ts","api/posts.ts","loaders/cms-metadata.ts","loaders/notes.ts","loaders/public-posts.ts","loaders/studio.ts","migrations/0001_generated.sql","module.ts","pages/CmsStudioPage.ts","pages/NotesPage.ts","pages/PublicCmsPage.ts","surfaces/AdminSummary.ts"],"capabilitySummary":{"routes":5,"dataModels":3,"permissions":10,"backgroundHandlers":0,"providerRequirements":0,"commercialRequirements":0,"presentationContributions":2}},
     module: () => import("../../modules/cms-demo/module"),
     pages: {
@@ -89,8 +92,9 @@ export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   },
   "hello": {
     rootDir: "modules/hello",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"3e2b05b9ca08501107c7b359a34261f3b3e10a0c7f374c23e90c3a0086f1ca4a","contractDigest":"7b5506c1356f813ce227caa95e6268997d2db9f902261eb77ec92516f9e41784","sourceFiles":[".ploykit/generated/data-plan.json",".ploykit/generated/data-types.ts","actions/ping.ts","api/hello.ts","events/hello-greeted.ts","jobs/say-hello.ts","lifecycle/install.ts","migrations/0001_generated.sql","module.ts","pages/HelloPage.ts","surfaces/HelloWidget.ts","webhooks/echo.ts"],"capabilitySummary":{"routes":2,"dataModels":2,"permissions":13,"backgroundHandlers":3,"providerRequirements":0,"commercialRequirements":0,"presentationContributions":2}},
     module: () => import("../../modules/hello/module"),
     pages: {
@@ -120,8 +124,9 @@ export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   },
   "public-tools-demo": {
     rootDir: "modules/public-tools-demo",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"2425443e60d3839b51ef5e71e15bcf00082a7b003b4a2b89cff28e11640bcf58","contractDigest":"bb60da6883b62cd1c2fd21cea8837d000a2f386087b3976a187cfac01c82dddd","sourceFiles":["actions/format-sample.ts","api/csv-to-json.ts","api/format-json.ts","api/json-to-csv.ts","api/text-utils.ts","components/PublicToolsWorkbench.tsx","lib/csv.ts","loaders/public-tools-metadata.ts","module.ts","pages/PublicToolsPage.tsx"],"capabilitySummary":{"routes":5,"dataModels":0,"permissions":2,"backgroundHandlers":0,"providerRequirements":0,"commercialRequirements":1,"presentationContributions":0}},
     module: () => import("../../modules/public-tools-demo/module"),
     pages: {
@@ -145,8 +150,9 @@ export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   },
   "shop-demo": {
     rootDir: "modules/shop-demo",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"8cfc073470895ffebd245beaf06a84d5326c753c058566e8a3c05fd1601eb502","contractDigest":"904d67b046b1e0cf0352279d3509c960c6dadd2acee0888bd772571d15401563","sourceFiles":[".ploykit/generated/data-plan.json",".ploykit/generated/data-types.ts","actions/checkout-cart.ts","actions/run-paid-tool.ts","api/billing-status.ts","api/orders.ts","api/products.ts","loaders/ops.ts","loaders/shop-metadata.ts","loaders/shopfront.ts","migrations/0001_generated.sql","module.ts","pages/BillingToolPage.ts","pages/ShopfrontPage.ts","pages/ShopOpsPage.ts","surfaces/AdminSummary.ts"],"capabilitySummary":{"routes":6,"dataModels":3,"permissions":14,"backgroundHandlers":0,"providerRequirements":0,"commercialRequirements":3,"presentationContributions":3}},
     module: () => import("../../modules/shop-demo/module"),
     pages: {
@@ -174,8 +180,9 @@ export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
   },
   "white-label-site-demo": {
     rootDir: "modules/white-label-site-demo",
+    sourceId: "workspace",
     sourceDir: "modules",
-    sourceKind: "default",
+    sourceKind: "workspace",
     release: {"generatedAt":"1970-01-01T00:00:00.000Z","buildId":"local-dev","sourceHash":"589070d6a721a8c3bbd62cf77f9958f1977428f332bebb014a683458ab4a1932","contractDigest":"0b72b2604a45c8832642fe874d797e198edf88aa92e6dfbe7219e58fcf8651b9","sourceFiles":["loaders/about-meta.ts","loaders/auth-forgot-password-meta.ts","loaders/auth-login-meta.ts","loaders/auth-register-meta.ts","loaders/auth-reset-password-meta.ts","loaders/contact-meta.ts","loaders/dashboard-home-meta.ts","loaders/docs-meta.ts","loaders/home-meta.ts","loaders/page-meta.ts","loaders/pricing-meta.ts","loaders/privacy-meta.ts","loaders/terms-meta.ts","locales.ts","locales/en.json","locales/zh.json","module.ts","surfaces/AboutPage.ts","surfaces/AdminModulesActions.ts","surfaces/auth-view.ts","surfaces/ContactPage.ts","surfaces/content-view.ts","surfaces/DashboardHomePage.ts","surfaces/DocsPage.ts","surfaces/ForgotPasswordPage.ts","surfaces/HomeHero.ts","surfaces/HomePage.ts","surfaces/LoginPage.ts","surfaces/PricingPage.ts","surfaces/PrivacyPage.ts","surfaces/RegisterPage.ts","surfaces/ResetPasswordPage.ts","surfaces/TermsPage.ts"],"capabilitySummary":{"routes":0,"dataModels":0,"permissions":4,"backgroundHandlers":0,"providerRequirements":0,"commercialRequirements":0,"presentationContributions":33}},
     module: () => import("../../modules/white-label-site-demo/module"),
     loaders: {

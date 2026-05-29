@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { readModuleMapManifest, readModuleIdFromSource } from './lib/module-sources.mjs';
 
 const PROJECT_ROOT = process.cwd();
 const CODE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
@@ -49,7 +50,18 @@ function relativePath(filePath) {
   return normalizePath(path.relative(PROJECT_ROOT, filePath));
 }
 
-function readModuleIds() {
+function readModuleRecords() {
+  const manifest = readModuleMapManifest(PROJECT_ROOT);
+  if (!manifest.error && manifest.modules.length > 0) {
+    return manifest.modules
+      .filter((moduleInfo) => typeof moduleInfo.id === 'string' && moduleInfo.id.length > 0)
+      .map((moduleInfo) => ({
+        id: moduleInfo.id,
+        rootDir: typeof moduleInfo.rootDir === 'string' ? normalizePath(moduleInfo.rootDir) : '',
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+  }
+
   const modulesDir = path.join(PROJECT_ROOT, 'modules');
   if (!fs.existsSync(modulesDir)) {
     return [];
@@ -58,9 +70,13 @@ function readModuleIds() {
   return fs
     .readdirSync(modulesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((moduleId) => fs.existsSync(path.join(modulesDir, moduleId, 'module.ts')))
-    .sort();
+    .map((entry) => path.join(modulesDir, entry.name))
+    .filter((dir) => fs.existsSync(path.join(dir, 'module.ts')))
+    .map((dir) => ({
+      id: readModuleIdFromSource(dir),
+      rootDir: relativePath(dir),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function collectFiles(target) {
@@ -113,34 +129,48 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function moduleImportViolation(specifier, moduleIds) {
+function moduleImportViolation(specifier, modules) {
   const normalized = specifier.replace(/\\/g, '/');
-  return moduleIds.some((moduleId) =>
-    new RegExp(`(^|/)modules/${escapeRegex(moduleId)}($|/)`).test(normalized)
-  );
-}
-
-function moduleLiteralViolation(value, moduleIds) {
-  const normalized = value.replace(/\\/g, '/');
-  return moduleIds.find((moduleId) => {
-    if (normalized === moduleId) {
+  return modules.some((moduleInfo) => {
+    if (moduleInfo.rootDir && new RegExp(`(^|/)${escapeRegex(moduleInfo.rootDir)}($|/)`).test(normalized)) {
       return true;
     }
-    const escaped = escapeRegex(moduleId);
-    return new RegExp(`(^|/)${escaped}($|[/?#])`).test(normalized);
+    return new RegExp(`(^|/)modules/${escapeRegex(moduleInfo.id)}($|/)`).test(normalized);
   });
 }
 
-function concreteModuleReference(value, moduleIds) {
+function moduleLiteralViolation(value, modules) {
   const normalized = value.replace(/\\/g, '/');
-  return moduleIds.find((moduleId) => {
-    const escaped = escapeRegex(moduleId);
+  return modules.find((moduleInfo) => {
+    if (normalized === moduleInfo.id) {
+      return moduleInfo.id;
+    }
+    const escaped = escapeRegex(moduleInfo.id);
+    if (new RegExp(`(^|/)${escaped}($|[/?#])`).test(normalized)) {
+      return moduleInfo.id;
+    }
+    if (
+      moduleInfo.rootDir &&
+      new RegExp(`(^|/)${escapeRegex(moduleInfo.rootDir)}($|[/?#])`).test(normalized)
+    ) {
+      return moduleInfo.id;
+    }
+    return undefined;
+  });
+}
+
+function concreteModuleReference(value, modules) {
+  const normalized = value.replace(/\\/g, '/');
+  return modules.find((moduleInfo) => {
+    const escaped = escapeRegex(moduleInfo.id);
     return (
+      (moduleInfo.rootDir &&
+        new RegExp(`(^|/)${escapeRegex(moduleInfo.rootDir)}($|[/?#])`).test(normalized)) ||
       new RegExp(`(^|/)modules/${escaped}($|[/?#])`).test(normalized) ||
       new RegExp(`(^|/)dashboard/${escaped}($|[/?#])`).test(normalized) ||
       new RegExp(`^module:${escaped}($|[-:])`).test(normalized)
     );
-  });
+  })?.id;
 }
 
 function allowedRootScriptLiteral(value) {
@@ -160,7 +190,7 @@ function collectStringLiterals(source) {
   return literals;
 }
 
-function scanImports(source, file, moduleIds) {
+function scanImports(source, file, modules) {
   const violations = [];
   const patterns = [
     /\bimport\s+(?:[^'"`]*?\s+from\s*)?["']([^"']+)["']/g,
@@ -172,7 +202,7 @@ function scanImports(source, file, moduleIds) {
   for (const pattern of patterns) {
     for (const match of source.matchAll(pattern)) {
       const specifier = match[1] ?? '';
-      if (moduleImportViolation(specifier, moduleIds)) {
+      if (moduleImportViolation(specifier, modules)) {
         violations.push({
           type: 'concrete-module-import',
           file,
@@ -186,10 +216,10 @@ function scanImports(source, file, moduleIds) {
   return violations;
 }
 
-function scanModuleLiterals(source, file, moduleIds) {
+function scanModuleLiterals(source, file, modules) {
   const violations = [];
   for (const literal of collectStringLiterals(source)) {
-    const moduleId = moduleLiteralViolation(literal.value, moduleIds);
+    const moduleId = moduleLiteralViolation(literal.value, modules);
     if (!moduleId) {
       continue;
     }
@@ -203,20 +233,20 @@ function scanModuleLiterals(source, file, moduleIds) {
   return violations;
 }
 
-function scanFile(filePath, moduleIds) {
+function scanFile(filePath, modules) {
   const source = fs.readFileSync(filePath, 'utf8');
   const file = relativePath(filePath);
-  return [...scanImports(source, file, moduleIds), ...scanModuleLiterals(source, file, moduleIds)];
+  return [...scanImports(source, file, modules), ...scanModuleLiterals(source, file, modules)];
 }
 
-function scanRootScriptFile(filePath, moduleIds) {
+function scanRootScriptFile(filePath, modules) {
   const source = fs.readFileSync(filePath, 'utf8');
   const file = relativePath(filePath);
   const violations = [];
   const basename = path.basename(file);
-  const filenameModuleId = moduleIds.find((moduleId) =>
-    new RegExp(`(^|[-_.])${escapeRegex(moduleId)}($|[-_.])`).test(basename)
-  );
+  const filenameModuleId = modules.find((moduleInfo) =>
+    new RegExp(`(^|[-_.])${escapeRegex(moduleInfo.id)}($|[-_.])`).test(basename)
+  )?.id;
   if (filenameModuleId) {
     violations.push({
       type: 'root-script-concrete-module-filename',
@@ -230,7 +260,7 @@ function scanRootScriptFile(filePath, moduleIds) {
     if (allowedRootScriptLiteral(literal.value)) {
       continue;
     }
-    const moduleId = concreteModuleReference(literal.value, moduleIds);
+    const moduleId = concreteModuleReference(literal.value, modules);
     if (!moduleId) {
       continue;
     }
@@ -245,7 +275,7 @@ function scanRootScriptFile(filePath, moduleIds) {
   return violations;
 }
 
-function scanPackageScripts(moduleIds) {
+function scanPackageScripts(modules) {
   const packagePath = path.join(PROJECT_ROOT, 'package.json');
   if (!fs.existsSync(packagePath)) {
     return [];
@@ -270,9 +300,9 @@ function scanPackageScripts(moduleIds) {
     ? packageJson.scripts
     : {};
   for (const [scriptName, command] of Object.entries(scripts)) {
-    const scriptModuleId = concreteModuleReference(scriptName, moduleIds);
+    const scriptModuleId = concreteModuleReference(scriptName, modules);
     const commandModuleId =
-      typeof command === 'string' ? concreteModuleReference(command, moduleIds) : undefined;
+      typeof command === 'string' ? concreteModuleReference(command, modules) : undefined;
     if (scriptModuleId || commandModuleId) {
       const needle = scriptModuleId ? `"${scriptName}"` : String(command);
       violations.push({
@@ -286,13 +316,13 @@ function scanPackageScripts(moduleIds) {
   return violations;
 }
 
-const moduleIds = readModuleIds();
+const modules = readModuleRecords();
 const hostFiles = [...new Set(HOST_TARGETS.flatMap(collectFiles))].sort();
 const rootScriptFiles = collectFiles(ROOT_SCRIPT_TARGET).filter(shouldScanRootScriptFile).sort();
 const violations = [
-  ...hostFiles.flatMap((file) => scanFile(file, moduleIds)),
-  ...rootScriptFiles.flatMap((file) => scanRootScriptFile(file, moduleIds)),
-  ...scanPackageScripts(moduleIds),
+  ...hostFiles.flatMap((file) => scanFile(file, modules)),
+  ...rootScriptFiles.flatMap((file) => scanRootScriptFile(file, modules)),
+  ...scanPackageScripts(modules),
 ];
 
 if (violations.length > 0) {
@@ -310,7 +340,7 @@ if (violations.length > 0) {
       {
         ok: true,
         files: hostFiles.length + rootScriptFiles.length + 1,
-        modules: moduleIds.length,
+        modules: modules.length,
         targets: [...HOST_TARGETS, ROOT_SCRIPT_TARGET, 'package.json'],
       },
       null,

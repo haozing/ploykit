@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,47 +11,134 @@ function writeExternalModule(): string {
   fs.writeFileSync(
     path.join(moduleRoot, 'module.ts'),
     `
-      export default {
+      import { defineModule } from '@ploykit/module-sdk';
+
+      export default defineModule({
         id: 'external-map-fixture',
         name: 'External Map Fixture',
         version: '0.1.0',
-      };
+      });
     `,
     'utf8'
   );
   return moduleRoot;
 }
 
-function runModuleMapCheck(env: Record<string, string | undefined>) {
+function writeExternalModuleWithTests(): string {
+  const moduleRoot = writeExternalModule();
+  fs.mkdirSync(path.join(moduleRoot, 'tests'), { recursive: true });
+  fs.writeFileSync(
+    path.join(moduleRoot, 'tests', 'smoke.test.ts'),
+    `
+      import assert from 'node:assert/strict';
+      import test from 'node:test';
+      import moduleDefinition from '../module';
+
+      test('external module fixture loads through sdk alias', () => {
+        assert.equal(moduleDefinition.id, 'external-map-fixture');
+      });
+    `,
+    'utf8'
+  );
+  return moduleRoot;
+}
+
+function writeConfig(moduleRoot: string, trustedRoots: string[], workspace = process.cwd()): string {
+  const configFile = path.join(os.tmpdir(), `ploykit-config-${crypto.randomUUID()}.json`);
+  fs.writeFileSync(
+    configFile,
+    `${JSON.stringify(
+      {
+        moduleSources: [
+          { id: 'workspace', path: path.join(workspace, 'modules') },
+          { id: 'external-fixtures', path: moduleRoot },
+        ],
+        trustedModuleRoots: trustedRoots,
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+  return configFile;
+}
+
+function runModuleMapCheck(configFile: string) {
   return childProcess.spawnSync(process.execPath, ['scripts/generate-module-map.mjs', '--check'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: {
       ...process.env,
-      ...env,
+      PLOYKIT_CONFIG: configFile,
     },
   });
 }
 
-test('module map rejects external module dirs outside the allowlist', () => {
-  const moduleRoot = writeExternalModule();
-  const result = runModuleMapCheck({
-    PLOYKIT_MODULE_DIRS: moduleRoot,
-    PLOYKIT_MODULE_DIR_ALLOWLIST: '',
+function runPloyKitCommand(configFile: string, args: string[]) {
+  return childProcess.spawnSync(process.execPath, args, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PLOYKIT_CONFIG: configFile,
+    },
   });
+}
+
+function withGeneratedModuleMapRestore<T>(run: () => T): T {
+  const files = [
+    path.join(process.cwd(), 'src', 'lib', 'module-map.ts'),
+    path.join(process.cwd(), 'src', 'lib', 'module-map.manifest.json'),
+  ];
+  const originals = files.map((file) => fs.readFileSync(file, 'utf8'));
+  try {
+    return run();
+  } finally {
+    for (const [index, file] of files.entries()) {
+      fs.writeFileSync(file, originals[index], 'utf8');
+    }
+  }
+}
+
+test('module map rejects module sources outside trusted roots', () => {
+  const moduleRoot = writeExternalModule();
+  const result = runModuleMapCheck(writeConfig(moduleRoot, [process.cwd()]));
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /PLOYKIT_MODULE_DIR_ALLOWLIST/);
+  assert.match(result.stderr, /trustedModuleRoots/);
 });
 
-test('module map accepts allowlisted external module dirs before drift check', () => {
+test('module map accepts trusted external module sources before drift check', () => {
   const moduleRoot = writeExternalModule();
-  const result = runModuleMapCheck({
-    PLOYKIT_MODULE_DIRS: moduleRoot,
-    PLOYKIT_MODULE_DIR_ALLOWLIST: path.dirname(moduleRoot),
-  });
+  const result = runModuleMapCheck(writeConfig(moduleRoot, [path.dirname(moduleRoot)]));
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Module map check failed/);
-  assert.doesNotMatch(result.stderr, /resolves outside the allowed module roots/);
+  assert.doesNotMatch(result.stderr, /outside trusted module roots/);
+});
+
+test('module doctor and module test resolve trusted external modules by id', () => {
+  withGeneratedModuleMapRestore(() => {
+    const moduleRoot = writeExternalModuleWithTests();
+    const configFile = writeConfig(moduleRoot, [process.cwd(), path.dirname(moduleRoot)]);
+
+    const scan = runPloyKitCommand(configFile, ['scripts/generate-module-map.mjs']);
+    assert.equal(scan.status, 0, scan.stderr);
+
+    const doctor = runPloyKitCommand(configFile, [
+      'scripts/ploykit-module.mjs',
+      'doctor',
+      'external-map-fixture',
+    ]);
+    assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
+    assert.match(doctor.stdout, /"success": true/);
+    assert.match(doctor.stdout, /"moduleRoot":/);
+
+    const moduleTest = runPloyKitCommand(configFile, [
+      'scripts/module-test.mjs',
+      'external-map-fixture',
+    ]);
+    assert.equal(moduleTest.status, 0, moduleTest.stderr || moduleTest.stdout);
+    assert.match(moduleTest.stdout, /"success": true/);
+  });
 });

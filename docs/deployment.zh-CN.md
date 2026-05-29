@@ -31,8 +31,8 @@ npm run data:verify-db -- --database-url postgres://ploykit:ploykit@127.0.0.1:55
 这些门禁用于宿主 / 产品发布。模块本地开发不要为了单个模块把模块路由或模块专属 E2E 写进全局 RC、browser matrix 或 accessibility smoke；模块自有外部链路先记录在模块 README 中，说明前置条件、命令和证据路径。
 
 ```bash
-npm run module:doctor -- modules/<module-id>
-npm run module:test -- modules/<module-id>
+npm run module:doctor -- <module-id>
+npm run module:test -- <module-id>
 npm run modules:scan
 npm run modules:check
 npm run host:boundary-check

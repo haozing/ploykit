@@ -6,6 +6,8 @@ export interface ModuleBundleManifestModule {
   name?: string;
   version?: string;
   rootDir?: string;
+  sourceId?: string;
+  sourceDir?: string;
   sourceKind?: ModuleRuntimeMapEntry['sourceKind'];
   files: {
     pages: readonly string[];
@@ -77,6 +79,8 @@ export function createModuleBundleManifest(
         name: contract?.name,
         version: contract?.version,
         rootDir: entry.rootDir,
+        sourceId: entry.sourceId,
+        sourceDir: entry.sourceDir,
         sourceKind: entry.sourceKind,
         files: {
           pages: keys(entry.pages),

@@ -156,15 +156,15 @@ npm run typecheck
 单模块开发必须运行：
 
 ```bash
-npm run module:doctor -- modules/<module-id>
-npm run module:test -- modules/<module-id>
+npm run module:doctor -- <module-id>
+npm run module:test -- <module-id>
 ```
 
 Data v2 模块还必须运行：
 
 ```bash
-npm run data:generate -- modules/<module-id>
-npm run data:types -- modules/<module-id>
+npm run data:generate -- <module-id>
+npm run data:types -- <module-id>
 npm run data:verify -- --module <module-id>
 ```
 

@@ -39,7 +39,7 @@ function diagnose(manifest, catalog) {
             'MODULE_CATALOG_BUNDLE_MODULE_MISSING',
             `Bundle "${bundle.id}" references missing module "${moduleInfo.moduleId}".`,
             `bundles.${bundleIndex}.modules.${moduleIndex}.moduleId`,
-            'Add the module to modules/ or remove it from the bundle.'
+            'Add the module to a configured module source or remove it from the bundle.'
           )
         );
       }
@@ -69,7 +69,7 @@ function diagnose(manifest, catalog) {
           'MODULE_CATALOG_STATE_MODULE_MISSING',
           `Catalog state references missing module "${state.moduleId}".`,
           `moduleStates.${index}.moduleId`,
-          'Remove the state entry or add the module to modules/.'
+          'Remove the state entry or add the module to a configured module source.'
         )
       );
     }

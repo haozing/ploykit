@@ -1,13 +1,11 @@
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readModuleIdFromSource, resolveModuleRoot, slash } from './lib/module-sources.mjs';
 
 const PROJECT_ROOT = process.cwd();
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
-
-function slash(value) {
-  return value.replace(/\\/g, '/');
-}
+const SDK_ALIAS_REGISTER = path.join(PROJECT_ROOT, 'scripts', 'lib', 'module-sdk-alias.cjs');
 
 function toProjectPath(file) {
   return slash(path.relative(PROJECT_ROOT, file));
@@ -63,13 +61,29 @@ function run(command, args) {
 function runTsxTest(testFiles) {
   const localTsxCli = path.join(PROJECT_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
   if (fs.existsSync(localTsxCli)) {
-    return run(process.execPath, [localTsxCli, '--test', ...testFiles.map(toProjectPath)]);
+    return run(process.execPath, [
+      localTsxCli,
+      '--tsconfig',
+      path.join(PROJECT_ROOT, 'tsconfig.json'),
+      '--require',
+      SDK_ALIAS_REGISTER,
+      '--test',
+      ...testFiles.map(toProjectPath),
+    ]);
   }
-  return run('npx', ['tsx', '--test', ...testFiles.map(toProjectPath)]);
+  return run('npx', [
+    'tsx',
+    '--tsconfig',
+    path.join(PROJECT_ROOT, 'tsconfig.json'),
+    '--require',
+    SDK_ALIAS_REGISTER,
+    '--test',
+    ...testFiles.map(toProjectPath),
+  ]);
 }
 
 function parseArgs(args) {
-  let target = 'modules/hello';
+  let target = '';
   let real = false;
 
   for (const arg of args) {
@@ -88,7 +102,7 @@ function printJson(value) {
 }
 
 function reportFileFor(moduleRoot) {
-  const moduleId = path.basename(moduleRoot);
+  const moduleId = readModuleIdFromSource(moduleRoot);
   return path.join(PROJECT_ROOT, '.runtime', 'module-test-reports', `${moduleId}.json`);
 }
 
@@ -101,7 +115,25 @@ function saveReport(moduleRoot, report) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const moduleRoot = path.resolve(PROJECT_ROOT, options.target);
+  let moduleRoot;
+  try {
+    moduleRoot = resolveModuleRoot(PROJECT_ROOT, options.target);
+  } catch (error) {
+    printJson({
+      success: false,
+      diagnostics: [
+        {
+          severity: 'error',
+          code: 'MODULE_TEST_TARGET_INVALID',
+          message: error instanceof Error ? error.message : String(error),
+          path: options.target,
+          fix: 'Pass a module id or module root path from ploykit.config.json.',
+        },
+      ],
+    });
+    process.exitCode = 1;
+    return;
+  }
   const steps = [];
 
   if (!fs.existsSync(path.join(moduleRoot, 'module.ts'))) {
@@ -113,7 +145,7 @@ function main() {
           code: 'MODULE_TEST_TARGET_INVALID',
           message: `Target "${options.target}" is not a module root.`,
           path: options.target,
-          fix: 'Pass a module directory such as modules/hello.',
+          fix: 'Pass a module id or module root path from ploykit.config.json.',
         },
       ],
     });

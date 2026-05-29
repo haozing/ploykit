@@ -406,6 +406,9 @@ function buildAdminModuleRows(input: {
         },
         contractMeta: {
           rootDir: mapEntry?.rootDir,
+          sourceId: mapEntry?.sourceId,
+          sourceDir: mapEntry?.sourceDir,
+          sourceKind: mapEntry?.sourceKind,
           sourceHash: release?.sourceHash,
           contractDigest: release?.contractDigest,
           buildId: release?.buildId,
@@ -647,6 +650,9 @@ export interface AdminModuleOperationsRow {
   };
   contractMeta: {
     rootDir?: string;
+    sourceId?: string;
+    sourceDir?: string;
+    sourceKind?: string;
     sourceHash?: string;
     contractDigest?: string;
     buildId?: string;
@@ -674,6 +680,9 @@ export interface AdminModuleDetailView {
   contract:
     | {
         rootDir?: string;
+        sourceId?: string;
+        sourceDir?: string;
+        sourceKind?: string;
         navigation: readonly { location: string; label: string; path: string }[];
         actions: readonly { name: string; handler: string; auth: string; timeoutMs?: number }[];
         jobs: readonly { name: string; handler: string; schedule?: string; retries?: number }[];
@@ -1876,6 +1885,9 @@ export async function getAdminModuleDetail(moduleId: string): Promise<AdminModul
     contract: contract
       ? {
           rootDir: entry?.rootDir,
+          sourceId: entry?.sourceId,
+          sourceDir: entry?.sourceDir,
+          sourceKind: entry?.sourceKind,
           navigation: contract.navigation.map((item) => ({
             location: item.location,
             label: item.labelKey ?? item.path,

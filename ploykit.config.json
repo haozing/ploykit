@@ -1,0 +1,9 @@
+{
+  "moduleSources": [
+    {
+      "id": "workspace",
+      "path": "modules"
+    }
+  ],
+  "trustedModuleRoots": ["."]
+}

@@ -479,10 +479,9 @@ function moduleEscalation(
 }
 
 function moduleRepairCommands(module: DevConsoleModuleRow): string[] {
-  const root = moduleRoot(module).replace(/\\/g, '/');
   return [
-    `npm run module:doctor -- ${root}`,
-    `npm run module:test -- ${root}`,
+    `npm run module:doctor -- ${module.id}`,
+    `npm run module:test -- ${module.id}`,
     'npm run modules:scan',
   ];
 }
@@ -622,7 +621,7 @@ export function AdminModuleDevConsoleOperationsPage({
         <StatCard
           label={adminInlineText(lang, 'Bundle')}
           value={String(view.bundle.modules.length)}
-          helper={adminInlineText(lang, 'Scanned local modules')}
+          helper={adminInlineText(lang, 'Scanned module sources')}
           icon={FileCode2}
         />
         <StatCard
@@ -714,7 +713,7 @@ export function AdminModuleDevConsoleOperationsPage({
                 'Module tests',
                 testedModules.size === view.snapshot.moduleCount ? 'covered' : 'partial',
                 `${testedModules.size}/${view.snapshot.moduleCount} modules have passing module:test reports`,
-                'npm run module:test -- modules/<module-id>',
+                'npm run module:test -- <module-id>',
               ],
               [
                 'Production target',
@@ -1000,7 +999,7 @@ export function AdminModuleDevConsoleOperationsPage({
                   `${capabilities?.jobs ?? 0} jobs / ${capabilities?.webhooks ?? 0} webhooks`,
                   testReport
                     ? `${testReport.success ? 'pass' : 'fail'} · ${testReport.checkedAt}`
-                    : `npm run module:test -- ${module.rootDir ?? `modules/${module.id}`}`,
+                    : `npm run module:test -- ${module.id}`,
                 ];
               })}
             />
@@ -1026,7 +1025,7 @@ export function AdminModuleDevConsoleOperationsPage({
             columns={adminInlineColumns(lang, ['Bundle Module', 'Source', 'Files'])}
             rows={view.bundle.modules.map((module) => [
               module.id,
-              module.rootDir ?? 'unknown',
+              [module.sourceId, module.rootDir ?? 'unknown'].filter(Boolean).join(' / '),
               [
                 module.files.pages.length ? `${module.files.pages.length} pages` : null,
                 module.files.apis.length ? `${module.files.apis.length} apis` : null,

@@ -3,107 +3,35 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { register } from 'tsx/esm/api';
+import {
+  findModuleRootsInSource,
+  getModuleSources,
+  portableProjectPath,
+  slash,
+} from './lib/module-sources.mjs';
+import './lib/module-sdk-alias.cjs';
 
 const PROJECT_ROOT = process.cwd();
-const MODULE_DIRS_ENV = 'PLOYKIT_MODULE_DIRS';
-const MODULE_DIR_ALLOWLIST_ENV = 'PLOYKIT_MODULE_DIR_ALLOWLIST';
 const SOURCE_MAP_FILE = path.join(PROJECT_ROOT, 'src', 'lib', 'module-map.ts');
 const SOURCE_MANIFEST_FILE = path.join(PROJECT_ROOT, 'src', 'lib', 'module-map.manifest.json');
 const BUILD_ID = process.env.PLOYKIT_MODULE_BUILD_ID ?? 'local-dev';
 const GENERATED_AT = '1970-01-01T00:00:00.000Z';
-const tsx = register({ namespace: 'ploykit-module-map' });
-
-function splitExternalDirs(value) {
-  return value
-    .split(/[;,]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function slash(value) {
-  return value.replace(/\\/g, '/');
-}
-
-function canonicalPath(value) {
-  const resolved = path.resolve(PROJECT_ROOT, value);
-  try {
-    return fs.realpathSync.native(resolved);
-  } catch {
-    return resolved;
-  }
-}
-
-function isPathInsideDirectory(parent, candidate) {
-  const relative = path.relative(parent, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function externalDirAllowlist() {
-  return [
-    canonicalPath(PROJECT_ROOT),
-    ...splitExternalDirs(process.env[MODULE_DIR_ALLOWLIST_ENV] ?? '').map(canonicalPath),
-  ];
-}
-
-function assertExternalDirAllowed(configuredValue, dir) {
-  const candidate = canonicalPath(dir);
-  if (externalDirAllowlist().some((allowed) => isPathInsideDirectory(allowed, candidate))) {
-    return;
-  }
-
-  throw new Error(
-    `External module directory "${configuredValue}" resolves outside the allowed module roots. ` +
-      `Move it under the project root or add its parent directory to ${MODULE_DIR_ALLOWLIST_ENV}.`
-  );
-}
+const TSX_TSCONFIG = path.join(PROJECT_ROOT, 'tsconfig.json');
+const tsx = register({ namespace: 'ploykit-module-map', tsconfig: TSX_TSCONFIG });
 
 function getSourceTargets() {
-  const targets = [
-    {
-      kind: 'default',
-      configuredValue: 'modules',
-      dir: path.join(PROJECT_ROOT, 'modules'),
-    },
-  ];
-
-  for (const configuredValue of splitExternalDirs(process.env[MODULE_DIRS_ENV] ?? '')) {
-    const dir = path.resolve(PROJECT_ROOT, configuredValue);
-    assertExternalDirAllowed(configuredValue, dir);
-    targets.push({
-      kind: 'external',
-      configuredValue,
-      dir,
-    });
-  }
-
-  return targets;
-}
-
-function findModuleRoots(target) {
-  if (!fs.existsSync(target.dir)) {
-    if (target.kind === 'external') {
-      throw new Error(`Configured module directory not found: ${target.configuredValue}`);
-    }
-    return [];
-  }
-
-  if (fs.existsSync(path.join(target.dir, 'module.ts'))) {
-    return [target.dir];
-  }
-
-  return fs
-    .readdirSync(target.dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(target.dir, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, 'module.ts')));
+  return getModuleSources(PROJECT_ROOT);
 }
 
 function relativeToProject(file) {
-  return slash(path.relative(PROJECT_ROOT, file));
+  return portableProjectPath(PROJECT_ROOT, file);
 }
 
 function moduleSpecifier(modulePath, outputDir) {
   let relativePath = slash(path.relative(outputDir, modulePath));
+  if (path.isAbsolute(relativePath)) {
+    return pathToFileURL(modulePath).href.replace(/\.(ts|tsx|js|jsx)$/, '');
+  }
   if (!relativePath.startsWith('.')) {
     relativePath = `./${relativePath}`;
   }
@@ -164,7 +92,14 @@ function scanFiles(root, dirName) {
 }
 
 function readDefaultExport(value) {
-  return value && typeof value === 'object' && 'default' in value ? value.default : value;
+  let current = value;
+  for (let index = 0; index < 5; index += 1) {
+    if (!current || typeof current !== 'object' || !('default' in current)) {
+      return current;
+    }
+    current = current.default;
+  }
+  return current;
 }
 
 async function readModuleDefinition(root) {
@@ -334,9 +269,10 @@ function normalizeProductDefinition(definition) {
 async function scanModules() {
   const modules = [];
   const seen = new Map();
+  const sourceConfig = getSourceTargets();
 
-  for (const target of getSourceTargets()) {
-    for (const root of findModuleRoots(target)) {
+  for (const target of sourceConfig.sources) {
+    for (const root of findModuleRootsInSource(target)) {
       const definition = await readModuleDefinition(root);
       const summary = readModuleSummary(root, definition);
       if (seen.has(summary.id)) {
@@ -349,7 +285,8 @@ async function scanModules() {
         ...summary,
         root,
         rootDir: relativeToProject(root),
-        sourceDir: relativeToProject(target.dir),
+        sourceId: target.id,
+        sourceDir: target.path,
         sourceKind: target.kind,
         pages: scanDirectory(root, 'pages'),
         apis: scanDirectory(root, 'api', ['.ts', '.js']),
@@ -419,6 +356,7 @@ function generateModuleMap(modules) {
     const runtimeInfo = runtimeModuleInfo(moduleInfo);
     const parts = [
       `    rootDir: ${JSON.stringify(runtimeInfo.rootDir)},`,
+      `    sourceId: ${JSON.stringify(runtimeInfo.sourceId)},`,
       `    sourceDir: ${JSON.stringify(runtimeInfo.sourceDir)},`,
       `    sourceKind: ${JSON.stringify(runtimeInfo.sourceKind)},`,
       `    release: ${JSON.stringify(runtimeInfo.release)},`,
@@ -473,11 +411,15 @@ export const MODULE_MAP_ARTIFACT: ModuleMapArtifact = {
 }
 
 function generateManifest(modules) {
+  const sourceConfig = getSourceTargets();
   return `${JSON.stringify(
     {
       version: 1,
-      sourceDirs: getSourceTargets().map((target) => ({
-        path: relativeToProject(target.dir),
+      config: relativeToProject(sourceConfig.configPath),
+      trustedModuleRoots: sourceConfig.trustedRoots,
+      moduleSources: sourceConfig.sources.map((target) => ({
+        id: target.id,
+        path: target.path,
         kind: target.kind,
       })),
       buildId: BUILD_ID,

@@ -3,11 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { register } from 'tsx/esm/api';
+import {
+  discoverModuleRoots as discoverConfiguredModuleRoots,
+  findModuleRootsInSource,
+  getModuleSources,
+  slash,
+} from './lib/module-sources.mjs';
+import './lib/module-sdk-alias.cjs';
 
 const PROJECT_ROOT = process.cwd();
-const MODULE_DIRS_ENV = 'PLOYKIT_MODULE_DIRS';
-const MODULE_DIR_ALLOWLIST_ENV = 'PLOYKIT_MODULE_DIR_ALLOWLIST';
-const tsx = register({ namespace: 'ploykit-module-data' });
+const TSX_TSCONFIG = path.join(PROJECT_ROOT, 'tsconfig.json');
+const tsx = register({ namespace: 'ploykit-module-data', tsconfig: TSX_TSCONFIG });
 const STANDARD_COLUMNS = [
   { name: 'id', sql: 'uuid primary key default gen_random_uuid()', ts: 'string' },
   { name: 'product_id', sql: 'text not null', ts: 'string' },
@@ -38,10 +44,6 @@ function moduleDataPhysicalTableName(moduleId, tableName) {
   return `mod_${moduleId.replace(/-/g, '_')}__${tableName}`;
 }
 
-function slash(value) {
-  return value.replace(/\\/g, '/');
-}
-
 function toProjectPath(file) {
   return slash(path.relative(PROJECT_ROOT, file));
 }
@@ -61,104 +63,15 @@ function printJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function splitExternalDirs(value) {
-  return value
-    .split(/[;,]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function canonicalPath(value) {
-  const resolved = path.resolve(PROJECT_ROOT, value);
-  try {
-    return fs.realpathSync.native(resolved);
-  } catch {
-    return resolved;
+function discoverModuleRoots(targetPath) {
+  if (!targetPath || targetPath === 'all') {
+    return getModuleSources(PROJECT_ROOT).sources.flatMap(findModuleRootsInSource);
   }
-}
-
-function isPathInsideDirectory(parent, candidate) {
-  const relative = path.relative(parent, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function externalDirAllowlist() {
-  return [
-    canonicalPath(PROJECT_ROOT),
-    ...splitExternalDirs(process.env[MODULE_DIR_ALLOWLIST_ENV] ?? '').map(canonicalPath),
-  ];
-}
-
-function assertExternalDirAllowed(configuredValue, dir) {
-  const candidate = canonicalPath(dir);
-  if (externalDirAllowlist().some((allowed) => isPathInsideDirectory(allowed, candidate))) {
-    return;
-  }
-
-  throw new Error(
-    `External module directory "${configuredValue}" resolves outside the allowed module roots. ` +
-      `Move it under the project root or add its parent directory to ${MODULE_DIR_ALLOWLIST_ENV}.`
-  );
-}
-
-function getSourceTargets() {
-  const targets = [
-    {
-      kind: 'default',
-      configuredValue: 'modules',
-      dir: path.join(PROJECT_ROOT, 'modules'),
-    },
-  ];
-
-  for (const configuredValue of splitExternalDirs(process.env[MODULE_DIRS_ENV] ?? '')) {
-    const dir = path.resolve(PROJECT_ROOT, configuredValue);
-    assertExternalDirAllowed(configuredValue, dir);
-    targets.push({
-      kind: 'external',
-      configuredValue,
-      dir,
-    });
-  }
-
-  return targets;
-}
-
-function findModuleRoots(target) {
-  if (!fs.existsSync(target.dir)) {
-    if (target.kind === 'external') {
-      throw new Error(`Configured module directory not found: ${target.configuredValue}`);
-    }
-    return [];
-  }
-
-  if (fs.existsSync(path.join(target.dir, 'module.ts'))) {
-    return [target.dir];
-  }
-
-  return fs
-    .readdirSync(target.dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(target.dir, entry.name))
-    .filter((dir) => fs.existsSync(path.join(dir, 'module.ts')));
-}
-
-function discoverModuleRoots(targetPath = 'modules') {
-  const resolved = path.resolve(PROJECT_ROOT, targetPath);
-  let roots;
-
-  if (fs.existsSync(path.join(resolved, 'module.ts'))) {
-    roots = [resolved];
-  } else if (targetPath === 'modules') {
-    roots = getSourceTargets().flatMap(findModuleRoots);
-  } else {
-    const target = { kind: 'explicit', configuredValue: targetPath, dir: resolved };
-    roots = findModuleRoots(target);
-  }
-  return roots;
+  return discoverConfiguredModuleRoots(PROJECT_ROOT, targetPath);
 }
 
 function parseCommandArgs(args) {
-  let targetPath = 'modules';
+  let targetPath;
   const moduleFilter = new Set();
   const flags = new Set();
   const values = new Map();
@@ -228,7 +141,14 @@ function stableHash(value) {
 }
 
 function readDefaultExport(value) {
-  return value && typeof value === 'object' && 'default' in value ? value.default : value;
+  let current = value;
+  for (let index = 0; index < 5; index += 1) {
+    if (!current || typeof current !== 'object' || !('default' in current)) {
+      return current;
+    }
+    current = current.default;
+  }
+  return current;
 }
 
 async function readModuleDefinition(moduleRoot) {

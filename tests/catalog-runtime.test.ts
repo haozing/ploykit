@@ -47,8 +47,9 @@ const artifact: ModuleMapArtifact = {
   modules: {
     enabled: {
       rootDir: 'modules/enabled',
+      sourceId: 'workspace',
       sourceDir: 'modules',
-      sourceKind: 'default',
+      sourceKind: 'workspace',
       module: async () => ({ default: enabledModule }),
       pages: {
         'pages/EnabledPage': async () => ({ default: () => 'enabled' }),
@@ -63,8 +64,9 @@ const artifact: ModuleMapArtifact = {
     },
     disabled: {
       rootDir: 'modules/disabled',
+      sourceId: 'workspace',
       sourceDir: 'modules',
-      sourceKind: 'default',
+      sourceKind: 'workspace',
       module: async () => ({ default: disabledModule }),
       pages: {
         'pages/DisabledPage': async () => ({ default: () => 'disabled' }),

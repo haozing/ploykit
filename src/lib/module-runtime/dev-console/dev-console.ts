@@ -28,6 +28,8 @@ export interface ModuleDevConsoleModule {
   name?: string;
   version?: string;
   rootDir?: string;
+  sourceId?: string;
+  sourceDir?: string;
   sourceKind?: ModuleRuntimeMapEntry['sourceKind'];
   map: {
     pages: number;
@@ -117,6 +119,8 @@ export function createModuleDevConsoleSnapshot(
         name: contract?.name,
         version: contract?.version,
         rootDir: entry.rootDir,
+        sourceId: entry.sourceId,
+        sourceDir: entry.sourceDir,
         sourceKind: entry.sourceKind,
         map: {
           pages: countRecord(entry.pages),

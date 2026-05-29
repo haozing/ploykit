@@ -12,6 +12,26 @@
 - [部署说明](deployment.zh-CN.md)
 - [产品模块指南](ploykit-product-module-guide.zh-CN.md)
 
+## 模块源
+
+PloyKit 通过根目录 `ploykit.config.json` 配置模块源：
+
+```json
+{
+  "moduleSources": [
+    { "id": "workspace", "path": "modules" },
+    { "id": "client-a", "path": "../client-a-ploykit-modules" }
+  ],
+  "trustedModuleRoots": [".", ".."]
+}
+```
+
+`moduleSources` 可以指向仓库内目录，也可以指向仓库外的可信本地源码目录。仓库外目录必须被 `trustedModuleRoots` 覆盖。修改配置或模块入口后运行：
+
+```bash
+npm run modules:scan
+```
+
 ## 阅读建议
 
 - 模块作者优先阅读 `module-development.zh-CN.md` 和 `module-contract-spec.zh-CN.md`。

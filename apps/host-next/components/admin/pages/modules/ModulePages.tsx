@@ -1671,6 +1671,13 @@ export function AdminModuleDetailOperationsPage({
                   columns={adminInlineColumns(lang, ['Field', 'Value', 'Evidence'])}
                   rows={[
                     [
+                      'Module source',
+                      [module.contractMeta.sourceId, module.contractMeta.sourceKind]
+                        .filter(Boolean)
+                        .join(' / ') || 'workspace',
+                      module.contractMeta.sourceDir ?? 'unknown',
+                    ],
+                    [
                       'Build ID',
                       module.contractMeta.buildId ?? 'missing',
                       contract?.release?.generatedAt ?? 'no generatedAt',
@@ -1959,6 +1966,11 @@ export function AdminModuleDetailOperationsPage({
                 { label: 'Version', value: module.version },
                 { label: 'Installed', value: module.installed ? 'yes' : 'no' },
                 { label: 'Required', value: module.required ? 'yes' : 'no' },
+                {
+                  label: 'Source',
+                  value: [contract?.sourceId, contract?.sourceKind].filter(Boolean).join(' / ') || 'unknown',
+                  mono: true,
+                },
                 { label: 'Root', value: contract?.rootDir ?? 'unknown', mono: true },
                 { label: 'Permissions', value: module.permissions.join(', ') || 'none' },
                 { label: 'Catalog', value: compactJson(detail.catalogState ?? {}), mono: true },

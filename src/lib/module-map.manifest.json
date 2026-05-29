@@ -1,9 +1,14 @@
 {
   "version": 1,
-  "sourceDirs": [
+  "config": "ploykit.config.json",
+  "trustedModuleRoots": [
+    "."
+  ],
+  "moduleSources": [
     {
+      "id": "workspace",
       "path": "modules",
-      "kind": "default"
+      "kind": "workspace"
     }
   ],
   "buildId": "local-dev",
@@ -14,8 +19,9 @@
       "name": "AI RAG Demo",
       "version": "0.1.0",
       "rootDir": "modules/ai-rag-demo",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [
         "pages/AiRagPage"
       ],
@@ -62,8 +68,9 @@
       "name": "Capability Demo",
       "version": "0.1.0",
       "rootDir": "modules/capability-demo",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [
         "pages/DashboardPage",
         "pages/JobPage",
@@ -138,8 +145,9 @@
       "name": "CMS Demo",
       "version": "0.1.0",
       "rootDir": "modules/cms-demo",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [
         "pages/CmsStudioPage",
         "pages/NotesPage",
@@ -208,8 +216,9 @@
       "name": "Hello Module",
       "version": "0.1.0",
       "rootDir": "modules/hello",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [
         "pages/HelloPage"
       ],
@@ -273,8 +282,9 @@
       "name": "Public Tools Demo",
       "version": "0.1.0",
       "rootDir": "modules/public-tools-demo",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [
         "pages/PublicToolsPage"
       ],
@@ -333,8 +343,9 @@
       "name": "Shop Demo",
       "version": "0.1.0",
       "rootDir": "modules/shop-demo",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [
         "pages/BillingToolPage",
         "pages/ShopOpsPage",
@@ -403,8 +414,9 @@
       "name": "White Label Site Demo",
       "version": "0.1.0",
       "rootDir": "modules/white-label-site-demo",
+      "sourceId": "workspace",
       "sourceDir": "modules",
-      "sourceKind": "default",
+      "sourceKind": "workspace",
       "pages": [],
       "apis": [],
       "loaders": [

@@ -24,8 +24,9 @@ const artifact: ModuleMapArtifact = {
   modules: {
     'admin-test': {
       rootDir: 'modules/admin-test',
+      sourceId: 'workspace',
       sourceDir: 'modules',
-      sourceKind: 'default',
+      sourceKind: 'workspace',
       module: async () => ({ default: moduleDefinition }),
       pages: { 'pages/Home': async () => ({ default: () => 'home' }) },
       apis: {},

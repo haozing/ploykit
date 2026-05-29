@@ -40,8 +40,8 @@ npm run modules:templates
 ## 开发循环
 
 ```bash
-npm run module:doctor -- modules/my-module
-npm run module:test -- modules/my-module
+npm run module:doctor -- my-module
+npm run module:test -- my-module
 npm run modules:check
 npm run typecheck
 ```
@@ -49,8 +49,8 @@ npm run typecheck
 有 Data v2 声明的模块还需要：
 
 ```bash
-npm run data:generate -- modules/my-module
-npm run data:types -- modules/my-module
+npm run data:generate -- my-module
+npm run data:types -- my-module
 npm run data:verify -- --module my-module
 ```
 
@@ -133,7 +133,7 @@ await ctx.metering.charge({
 
 ## 宿主文件边界
 
-模块开发默认只修改 `modules/<id>/`。允许因为模块契约同步而变更的宿主外文件只有：
+模块开发默认只修改配置的模块根目录，例如 `modules/<id>/` 或仓库外可信 source 中的模块目录。允许因为模块契约同步而变更的宿主外文件只有：
 
 - `src/lib/module-map.ts`
 - `src/lib/module-map.manifest.json`
@@ -141,7 +141,7 @@ await ctx.metering.charge({
 
 只有用户明确要求补宿主能力、SDK、模板、文档或共享测试基础设施时，才修改 `src/lib/module-runtime/*`、`src/module-sdk/*`、`templates/modules/*`、`docs/*`、`skills/*` 或共享测试。
 
-模块自己的验收不能升格为宿主全局政策。模块开发中不要把模块路由硬写进 `scripts/host-browser-matrix.mjs`、`scripts/host-accessibility-smoke.mjs` 或其他宿主质量脚本，不要给 `src/lib/module-runtime/release/rc-gate.ts` 增加模块专属必过检查，也不要新增模块专属 `host:*` package script。需要真实外部链路时，把 E2E 脚本放在模块目录内（例如 `modules/<id>/scripts/e2e.ts`），在模块 README 里记录前置条件、命令和证据路径，并通过通用入口运行：
+模块自己的验收不能升格为宿主全局政策。模块开发中不要把模块路由硬写进 `scripts/host-browser-matrix.mjs`、`scripts/host-accessibility-smoke.mjs` 或其他宿主质量脚本，不要给 `src/lib/module-runtime/release/rc-gate.ts` 增加模块专属必过检查，也不要新增模块专属 `host:*` package script。需要真实外部链路时，把 E2E 脚本放在模块目录内（例如 `<module-root>/scripts/e2e.ts`），在模块 README 里记录前置条件、命令和证据路径，并通过通用入口运行：
 
 ```bash
 npm run module:evidence -- --module <id> --file ./scripts/e2e.ts --runner tsx -- --required
@@ -149,12 +149,12 @@ npm run module:evidence -- --module <id> --file ./scripts/e2e.ts --runner tsx --
 
 模块 `quality.evidence` 需要自动执行模块自有脚本时，也应指向通用 `module:evidence` 入口，而不是新增 `module:<id>-*` package script。只有在确认宿主已有通用质量入口后，再接入通用入口。
 
-宿主和共享层禁止感知具体模块实现：不要在 `apps/host-next/*`、`src/lib/module-runtime/*` 或宿主质量脚本里写 `moduleId === '<id>'`、`import modules/<id>`、`/dashboard/<id>` 这类特例。需要宿主渲染、路由、质量证据或发布门禁配合时，先补通用 registry、catalog、manifest 或 contribution seam，再由模块声明贡献。`npm run host:boundary-check` 会阻止宿主 import 具体模块或硬编码模块 id。
+宿主和共享层禁止感知具体模块实现：不要在 `apps/host-next/*`、`src/lib/module-runtime/*` 或宿主质量脚本里写 `moduleId === '<id>'`、`import modules/<id>`、`/dashboard/<id>`、`<module-root>` 这类特例。需要宿主渲染、路由、质量证据或发布门禁配合时，先补通用 registry、catalog、manifest 或 contribution seam，再由模块声明贡献。`npm run host:boundary-check` 会阻止宿主 import 具体模块或硬编码模块 id/rootDir。
 
 ## 测试
 
-模块内可以放 `tests/*.test.ts`。`npm run module:test -- modules/my-module` 会先运行 doctor，再运行模块自己的 fake-host tests。需要宿主真实入口时：
+模块内可以放 `tests/*.test.ts`。`npm run module:test -- my-module` 会先运行 doctor，再运行模块自己的 fake-host tests。需要宿主真实入口时：
 
 ```bash
-npm run module:test -- modules/my-module --real
+npm run module:test -- my-module --real
 ```
