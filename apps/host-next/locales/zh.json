@@ -1,0 +1,1720 @@
+{
+  "brand": {
+    "productName": "PloyKit"
+  },
+  "site": {
+    "nav": {
+      "home": "首页",
+      "pricing": "价格",
+      "docs": "文档",
+      "about": "关于",
+      "contact": "联系",
+      "privacy": "隐私",
+      "terms": "条款",
+      "aria": "公共导航",
+      "mobileAria": "移动公共导航",
+      "login": "登录",
+      "register": "开始使用"
+    },
+    "footerBrand": "PloyKit 平台",
+    "home": {
+      "eyebrow": "Local Module Host",
+      "title": "PloyKit",
+      "subtitle": "一个开源应用底座，先把公开页、认证、工作台和后台跑起来，再按场景接入你的业务模块。",
+      "dashboard": "进入工作台",
+      "admin": "查看 Admin",
+      "snapshotLabel": "宿主能力状态",
+      "stats": [
+        ["Runtime", "ready"],
+        ["Modules", "first-party"],
+        ["Host", "operational"]
+      ],
+      "cards": [
+        ["模块化扩展", "把页面、API、任务和数据计划放进同一个模块契约。"],
+        ["产品底座", "认证、工作台、后台、账单和文件都有默认流程。"],
+        ["开箱可用", "没有业务模块时也能先展示、登录和进入用户中心。"]
+      ]
+    },
+    "pages": {
+      "about": {
+        "title": "关于 PloyKit",
+        "subtitle": "PloyKit 是给开源产品、工具站和内部系统准备的应用底座。",
+        "body": "它先提供公开页、认证、用户中心和后台框架，让团队从可运行的产品开始，再把真正差异化的业务能力接进去。",
+        "highlights": [
+          {
+            "title": "开源起步",
+            "body": "公开页面、认证和工作台可以先跑起来，再逐步替换成你的产品。"
+          },
+          {
+            "title": "按场景扩展",
+            "body": "CMS、CRM、工具站或内部系统都可以从小模块开始组合。"
+          },
+          {
+            "title": "少做重复工程",
+            "body": "常见产品基础能力已经存在，团队可以把时间留给核心业务。"
+          }
+        ]
+      },
+      "privacy": {
+        "title": "隐私",
+        "subtitle": "PloyKit 默认按产品、工作区和模块边界隔离数据。",
+        "body": "生产化前需要补齐真实数据收集、文件存储、日志和审计保留策略。"
+      },
+      "terms": {
+        "title": "条款",
+        "subtitle": "使用 PloyKit 宿主时，模块、数据和外部 provider 都应遵守部署方的服务边界。",
+        "body": "这里会记录账号、点数、文件、公开工具、模块能力和服务连接的使用边界。"
+      },
+      "success": {
+        "title": "操作成功",
+        "subtitle": "你的请求已经完成。",
+        "body": "你可以返回工作台继续查看任务、文件、账单或模块运行状态。"
+      },
+      "docs": {
+        "title": "文档",
+        "subtitle": "按搭建产品、开发模块和准备上线三条路径阅读。",
+        "cards": [
+          ["模块开发", "声明页面、API、任务、数据表和宿主能力权限。"],
+          ["页面覆盖", "通过 product presentation 替换前台、认证和工作台首页。"],
+          ["运行验证", "使用模块诊断、浏览器矩阵和发布候选门禁验证交付质量。"]
+        ],
+        "start": {
+          "title": "按你当前的目标开始阅读",
+          "body": "想搭产品、写模块或准备上线，都可以从对应章节进入，不必先读完整套架构。"
+        }
+      },
+      "pricing": {
+        "title": "价格",
+        "subtitle": "选择套餐，开发阶段可先用本地结账跑通流程。",
+        "billingProvider": "计费模式",
+        "checkout": "结账状态",
+        "plans": "套餐数量",
+        "ready": "已接入",
+        "localFallback": "本地结账",
+        "included": "包含",
+        "entitlements": "权益",
+        "start": "开始使用",
+        "providerModes": {
+          "local": "本地模式"
+        },
+        "flow": {
+          "title": "先跑通流程，再接入收款",
+          "body": "开发和演示阶段可以使用本地结账。准备收费时，再把同一套套餐接到 Stripe。"
+        }
+      },
+      "contact": {
+        "title": "联系",
+        "subtitle": "告诉我们你要接入的模块、部署计划或产品问题。",
+        "received": "已收到你的消息，我们会通过邮件继续处理。",
+        "failed": "消息提交失败，请检查必填字段后再试。",
+        "name": "姓名",
+        "namePlaceholder": "你的名字",
+        "email": "邮箱",
+        "emailPlaceholder": "you@example.com",
+        "company": "公司 / 团队",
+        "optional": "可选",
+        "message": "需求",
+        "messagePlaceholder": "简单说说你的模块、部署环境或产品计划。",
+        "submit": "发送",
+        "aside": {
+          "title": "告诉我们你想做什么",
+          "body": "适合咨询模块接入、部署计划或商业化路径。提交后我们会记录请求并通过邮件处理。",
+          "topics": ["产品咨询", "部署支持", "商业路径"]
+        }
+      }
+    },
+    "homeExperience": {
+      "hero": {
+        "titleLines": ["用模块契约", "让 AI 高效开发", "可部署应用"],
+        "subtitle": "PloyKit使用模块契约约束边界，宿主能力承接通用逻辑。AI 只需要聚焦当前模块，就能生成页面、API、任务和数据结构，减少上下文消耗。",
+        "primaryCta": "免费开始使用",
+        "docsCta": "查看文档",
+        "githubCta": "GitHub",
+        "codeFilename": "cms.module.ts",
+        "stackIntro": "现代 Web 技术栈配合模块运行时，适合从本地开发一路推进到可部署产品。"
+      },
+      "stackItems": [
+        "Next.js / React",
+        "TypeScript",
+        "Tailwind CSS",
+        "Postgres / Memory Store",
+        "Outbox Worker",
+        "Event Queue"
+      ],
+      "trustItems": [
+        {
+          "title": "模块化扩展",
+          "body": "页面、API、任务和数据按模块接入，业务边界更清楚。"
+        },
+        {
+          "title": "内置能力",
+          "body": "认证、工作台、文件、计费、通知和后台运行时默认可用。"
+        },
+        {
+          "title": "便捷部署",
+          "body": "本地开发、模块组合、运行时存储和部署路径保持一致。"
+        },
+        {
+          "title": "开源可控",
+          "body": "代码、模块和产品页面都在仓库内版本化，便于审计和二开。"
+        }
+      ],
+      "features": {
+        "title": "为什么 PloyKit 更适合 AI 协作开发",
+        "body": "模块契约和宿主能力让上下文聚焦当前任务。",
+        "cards": [
+          {
+            "title": "模块契约先行",
+            "body": "页面、API、数据、任务、权限与事件写在同一份声明里，AI 不需要猜项目结构。"
+          },
+          {
+            "title": "上下文更小",
+            "body": "每次只阅读当前模块和契约，减少全局代码扫描，提示词更短，产出更稳定。"
+          },
+          {
+            "title": "交付路径清晰",
+            "body": "生成的模块直接接入宿主能力，再沿同一套运行时完成验证和部署。"
+          }
+        ]
+      },
+      "capabilities": {
+        "title": "宿主能力已经铺好，模块只写业务增量",
+        "body": "认证、路由、数据、文件、任务、事件和诊断都由宿主承接。模块通过契约声明需要什么，接入后就能被统一运行、追踪和部署。",
+        "cards": [
+          {
+            "title": "数据与 Schema",
+            "body": "声明数据模型、迁移和访问边界，宿主负责落库与运行时适配。"
+          },
+          {
+            "title": "页面与路由",
+            "body": "公开页、用户中心和后台入口由模块声明，宿主统一挂载。"
+          },
+          {
+            "title": "任务与事件",
+            "body": "定时任务、Webhook、业务事件和结果追踪统一进入运行时。"
+          },
+          {
+            "title": "文件与产物",
+            "body": "上传、存储、权限和模块生成文件由宿主统一管理。"
+          },
+          {
+            "title": "服务连接器",
+            "body": "AI、邮件、支付和外部 API 作为宿主能力接入模块。"
+          },
+          {
+            "title": "Module Doctor",
+            "body": "扫描契约、权限、路由和依赖，提前发现接入风险。"
+          }
+        ]
+      },
+      "composition": {
+        "title": "从一个模块开始，组合成完整应用",
+        "body": "先声明一个模块，再选择需要的宿主能力，最后按业务场景组合成 CMS、CRM、商城或内部工具。",
+        "steps": [
+          {
+            "title": "声明模块",
+            "body": "用契约声明页面、API、Schema、任务和权限。"
+          },
+          {
+            "title": "接入宿主",
+            "body": "选择认证、工作区、文件、计费或事件能力。"
+          },
+          {
+            "title": "组合交付",
+            "body": "按 CMS、CRM、商城或内部工具组织上线。"
+          }
+        ]
+      },
+      "buildCards": [
+        {
+          "title": "CMS",
+          "body": "内容建模、编辑流和发布。"
+        },
+        {
+          "title": "Shop",
+          "body": "目录、订单、支付和文件。"
+        },
+        {
+          "title": "CRM",
+          "body": "客户、线索、活动和管道。"
+        },
+        {
+          "title": "Workflow",
+          "body": "连接应用、作业和任务。"
+        },
+        {
+          "title": "Automation",
+          "body": "后台任务、触发器和工作流。"
+        },
+        {
+          "title": "Reports",
+          "body": "仪表盘、分析和导出。"
+        }
+      ],
+      "final": {
+        "title": "从模块契约开始，把产品交给宿主运行。",
+        "body": "阅读文档，查看模块契约，把业务能力接入 PloyKit。通用能力由宿主托底，模块专注自己的产品逻辑。",
+        "githubCta": "在 GitHub 查看",
+        "startCta": "开始使用"
+      }
+    }
+  },
+  "auth": {
+    "notices": {
+      "registered": "账号已创建，请先完成邮箱验证后登录。",
+      "verified": "邮箱已验证，可以登录。",
+      "resetSent": "重置链接已生成，请查看邮件日志。",
+      "resetDone": "密码已重置，可以使用新密码登录。"
+    },
+    "shell": {
+      "badge": "账户访问",
+      "detail": "PloyKit 账户"
+    },
+    "page": {
+      "modes": {
+        "login": ["登录", "进入你的工作区，继续查看项目、账单和通知。", "登录"],
+        "register": ["创建账号", "创建账号后即可进入工作区开始体验。", "创建"],
+        "forgot-password": ["找回密码", "输入邮箱后，我们会发送安全的重置链接。", "发送链接"],
+        "reset-password": ["重置密码", "设置一个新的账号密码。", "重置"]
+      },
+      "email": "邮箱",
+      "emailPlaceholder": "admin@example.com",
+      "displayName": "显示名称",
+      "displayNamePlaceholder": "PloyKit User",
+      "resetToken": "重置 Token",
+      "resetTokenPlaceholder": "从邮件日志中获取的 token",
+      "password": "密码",
+      "passwordPlaceholder": "Admin@123456",
+      "error": "账号或密码不正确。请检查邮箱、密码或账号状态。",
+      "login": "登录",
+      "register": "注册",
+      "forgotPassword": "忘记密码"
+    },
+    "shellExperience": {
+      "heroTitle": "回到 PloyKit",
+      "heroHighlight": "模块工作流",
+      "heroBody": "PloyKit 使用模块契约约束边界，宿主能力承接通用逻辑。登录后继续管理模块、工作区、任务和部署状态，让开发者和 AI 都只聚焦当前模块。",
+      "principles": [
+        {
+          "title": "模块契约",
+          "body": "页面、API、任务和数据结构都围绕当前模块声明。"
+        },
+        {
+          "title": "宿主能力",
+          "body": "认证、文件、计费、事件和后台运行时交给底座承接。"
+        },
+        {
+          "title": "统一入口",
+          "body": "登录、注册和找回密码共用同一套入口，回到工作区继续交付。"
+        }
+      ]
+    }
+  },
+  "shell": {
+    "dashboardNav": [
+      {
+        "href": "/dashboard",
+        "label": "概览"
+      },
+      {
+        "href": "/dashboard/workspaces",
+        "label": "工作区"
+      },
+      {
+        "href": "/dashboard/profile",
+        "label": "个人资料"
+      },
+      {
+        "href": "/dashboard/billing",
+        "label": "账单"
+      },
+      {
+        "href": "/dashboard/orders",
+        "label": "订单"
+      },
+      {
+        "href": "/dashboard/credit-history",
+        "label": "点数记录"
+      },
+      {
+        "href": "/dashboard/files",
+        "label": "文件"
+      },
+      {
+        "href": "/dashboard/notifications",
+        "label": "通知"
+      },
+      {
+        "href": "/dashboard/settings/notifications",
+        "label": "通知设置"
+      },
+      {
+        "href": "/dashboard/tasks",
+        "label": "任务中心"
+      }
+    ],
+    "adminNav": [
+      {
+        "href": "/admin",
+        "label": "运营概览",
+        "detail": "用户、收入和风险",
+        "group": "概览",
+        "icon": "layoutDashboard",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.access"]
+        }
+      },
+      {
+        "href": "/admin/analytics",
+        "label": "分析",
+        "detail": "增长指标和运营趋势",
+        "group": "概览",
+        "icon": "barChart3",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/search",
+        "label": "高级搜索",
+        "detail": "跨对象检索和跳转",
+        "group": "概览",
+        "icon": "search",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.access"]
+        }
+      },
+      {
+        "href": "/admin/users",
+        "label": "用户",
+        "detail": "账号、状态和生命周期",
+        "group": "用户与权限",
+        "icon": "users",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.users.manage"]
+        }
+      },
+      {
+        "href": "/admin/rbac",
+        "label": "角色",
+        "detail": "角色、权限和访问范围",
+        "group": "用户与权限",
+        "icon": "shieldCheck",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.rbac.read"]
+        }
+      },
+      {
+        "href": "/admin/entitlements",
+        "label": "权益",
+        "detail": "套餐权益和人工授予",
+        "group": "用户与权限",
+        "icon": "badgeDollarSign",
+        "source": "host",
+        "requires": {
+          "capabilities": ["billing.read", "admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/revenue",
+        "label": "收入",
+        "detail": "订单账本和对账",
+        "group": "计费",
+        "icon": "circleDollarSign",
+        "source": "host",
+        "requires": {
+          "capabilities": ["billing.read"]
+        }
+      },
+      {
+        "href": "/admin/billing",
+        "label": "账单",
+        "detail": "订单、点数和订阅",
+        "group": "计费",
+        "icon": "creditCard",
+        "source": "host",
+        "requires": {
+          "capabilities": ["billing.read"]
+        }
+      },
+      {
+        "href": "/admin/usage",
+        "label": "用量计量",
+        "detail": "计量、额度和异常",
+        "group": "计费",
+        "icon": "gauge",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/files",
+        "label": "文件",
+        "detail": "文件目录和存储治理",
+        "group": "资源",
+        "icon": "folderOpen",
+        "source": "host",
+        "requires": {
+          "capabilities": ["files.read"]
+        }
+      },
+      {
+        "href": "/admin/service-connections",
+        "label": "服务连接",
+        "detail": "供应商、密钥和调用",
+        "group": "集成",
+        "icon": "cable",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/webhooks",
+        "label": "Webhook",
+        "detail": "回执、重放和签名",
+        "group": "集成",
+        "icon": "cable",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/modules",
+        "label": "模块运行",
+        "detail": "安装、启停和运行状态",
+        "group": "运行",
+        "icon": "package",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/runs",
+        "label": "任务运行",
+        "detail": "作业、执行和失败重试",
+        "group": "运行",
+        "icon": "activity",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/module-dev-console",
+        "label": "开发控制台",
+        "detail": "Doctor、修复和发布门禁",
+        "group": "运行",
+        "icon": "squareTerminal",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/audit",
+        "label": "审计",
+        "detail": "轨迹、导出和证据",
+        "group": "安全",
+        "icon": "fileText",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/settings",
+        "label": "设置",
+        "detail": "产品配置和运维开关",
+        "group": "系统",
+        "icon": "settings",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      }
+    ],
+    "adminScope": {
+      "label": "后台",
+      "detail": "运营"
+    },
+    "workspaceScope": {
+      "label": "工作区",
+      "detail": "工作台"
+    },
+    "dashboardGroups": {
+      "workspace": "工作区",
+      "account": "账号",
+      "work": "工作"
+    },
+    "userNames": {
+      "admin": "系统管理员",
+      "user": "工作区用户"
+    },
+    "toolsGroup": "工具",
+    "header": {
+      "adminArea": "后台",
+      "workspaceArea": "工作区",
+      "search": "搜索",
+      "notifications": "通知",
+      "searchPlaceholder": "搜索你的工作区..."
+    },
+    "userMenu": {
+      "profile": "个人资料",
+      "notifications": "通知",
+      "logout": "退出登录",
+      "menu": "账号菜单"
+    },
+    "languageSwitch": {
+      "label": "Switch to English",
+      "targetShort": "EN"
+    },
+    "layout": {
+      "brandName": "PloyKit",
+      "consoleLabel": "产品控制台",
+      "platformLabel": "平台",
+      "platformFullName": "PloyKit 平台",
+      "version": "v2.1.0",
+      "navigation": "导航",
+      "areaNavigation": {
+        "admin": "后台导航",
+        "dashboard": "工作台导航"
+      },
+      "mobileNavigation": "移动端导航",
+      "closeNavigation": "关闭导航",
+      "menu": "菜单",
+      "overview": "概览"
+    }
+  },
+  "dashboard": {
+    "landing": {
+      "title": "工作台",
+      "subtitle": "查看工作区状态和最近动态。",
+      "profile": "资料",
+      "workspace": "工作区",
+      "billing": "账单",
+      "tools": "工具",
+      "baseEntitlement": "当前工作区使用基础能力。",
+      "taskColumns": ["任务", "状态", "进度"],
+      "notificationColumns": ["通知", "状态", "时间"],
+      "orderColumns": ["订单", "状态", "金额"],
+      "noTasks": "暂无任务",
+      "noNotifications": "暂无通知"
+    },
+    "workspaces": {
+      "title": "工作区",
+      "subtitle": "管理当前团队空间、成员、邀请和访问地址。",
+      "switchWorkspace": "切换工作区",
+      "createWorkspace": "新建工作区",
+      "name": "名称",
+      "switch": "切换",
+      "create": "创建",
+      "use": "使用",
+      "members": "成员",
+      "invite": "邀请",
+      "email": "邮箱",
+      "role": "角色",
+      "sendInvite": "发送邀请",
+      "revoke": "撤销",
+      "revokeConfirm": "确认撤销 {email} 的邀请？",
+      "aliases": "域名别名",
+      "bindDomain": "绑定域名",
+      "save": "保存",
+      "workspaceColumns": ["工作区", "状态", "操作"],
+      "memberColumns": ["邮箱", "角色", "状态"],
+      "inviteColumns": ["邮箱", "角色", "状态", "操作"],
+      "aliasColumns": ["访问地址", "工作区"]
+    },
+    "simple": {
+      "emptyTitle": "暂无数据",
+      "emptyBody": "当前工作区还没有可展示的记录。完成相关操作后，这里会显示最新状态。"
+    },
+    "profile": {
+      "title": "个人资料",
+      "subtitle": "维护你的账号资料、密码、通知偏好和登录设备。",
+      "basic": "基础资料",
+      "displayName": "显示名称",
+      "avatarUrl": "头像 URL",
+      "language": "语言",
+      "chinese": "中文",
+      "timezone": "时区",
+      "saveProfile": "保存资料",
+      "password": "密码",
+      "currentPassword": "当前密码",
+      "newPassword": "新密码",
+      "changePassword": "修改密码",
+      "changePasswordConfirm": "确认修改当前账号密码？其他设备会话仍可在下方撤销。",
+      "notificationPrefs": "通知偏好",
+      "inApp": "站内通知",
+      "emailDelivery": "邮件投递",
+      "billingEvents": "账单事件",
+      "fileEvents": "文件事件",
+      "workspaceAdminEvents": "工作区和管理事件",
+      "savePrefs": "保存偏好",
+      "sessionColumns": ["设备", "创建时间", "过期时间", "操作"],
+      "noSessions": "当前没有其他设备登录",
+      "revoke": "撤销",
+      "revokeSessionConfirm": "确认撤销会话 {id}？"
+    },
+    "billing": {
+      "title": "账单",
+      "subtitle": "查看当前套餐、点数、发票、支付方式和账单资料。",
+      "checkoutNote": "当前是演示环境，提交后会生成一笔演示订单。",
+      "skuColumns": ["套餐", "金额", "点数"],
+      "subscriptionColumns": ["订阅", "套餐", "状态", "续费"],
+      "invoiceColumns": ["发票", "订单", "金额", "状态"],
+      "paymentColumns": ["支付方式", "状态"],
+      "taxProfile": "税务资料",
+      "taxNote": "用于账单抬头和税务信息。",
+      "company": "公司",
+      "save": "保存",
+      "entitlementColumns": ["权益", "状态"]
+    },
+    "orders": {
+      "title": "订单",
+      "subtitle": "查看购买记录、付款状态和收据。",
+      "columns": ["订单", "状态", "金额"]
+    },
+    "files": {
+      "title": "文件",
+      "subtitle": "上传、查找、下载和删除当前工作区的文件。",
+      "uploadFile": "上传文件",
+      "upload": "上传",
+      "searchPlaceholder": "搜索文件名、用途或类型",
+      "columns": ["名称", "用途", "状态", "大小", "操作"],
+      "open": "打开",
+      "download": "下载",
+      "pending": "处理中",
+      "archive": "归档",
+      "delete": "删除",
+      "archiveConfirm": "确认归档文件 {name}？",
+      "deleteConfirm": "确认删除文件 {name}？"
+    },
+    "credits": {
+      "title": "点数记录",
+      "subtitle": "查看点数余额，以及点数为什么增加或减少。",
+      "columns": ["原因", "数量", "状态"]
+    },
+    "tasks": {
+      "title": "任务中心",
+      "subtitle": "查看后台任务进度、结果和需要处理的问题。",
+      "columns": ["任务", "状态", "进度"]
+    },
+    "taskDetail": {
+      "title": "任务详情",
+      "subtitle": "查看任务进度、结果和下一步操作。",
+      "fieldColumns": ["字段", "值"],
+      "fields": ["状态", "进度", "时间", "结果"],
+      "missingTitle": "任务不存在",
+      "missingBody": "这个任务可能已过期、被清理，或者你当前没有查看权限。"
+    },
+    "notifications": {
+      "title": "通知",
+      "subtitle": "查看任务、账单、文件和团队协作的最新消息。",
+      "readAll": "全部已读",
+      "readAllBody": "把当前工作区内已投递的通知全部标记为已读。",
+      "readAllConfirm": "确认把全部通知标记为已读？",
+      "markRead": "标为已读",
+      "columns": ["标题", "状态", "分类", "时间", "操作"],
+      "markOneConfirm": "确认标记通知 {title} 为已读？"
+    },
+    "notificationSettings": {
+      "title": "通知设置",
+      "subtitle": "管理任务、账单、文件和工作区事件的通知偏好。",
+      "save": "保存"
+    },
+    "common": {
+      "noRecords": "暂无记录",
+      "filterResult": "当前筛选显示 {visible} / {total} 条记录"
+    },
+    "inline": {
+      "workspace_name_default_1f9f0d11": "默认工作区",
+      "workspace_name_team_main_93a67cf4": "主团队",
+      "workspace_name_team_lab_7d9f2c0a": "实验团队",
+      "task_notification_failed_b5c4f1f1": "{value1}执行失败",
+      "task_notification_completed_2cb56f8c": "{value1}已完成",
+      "billing_notification_failed_1cf0efad": "{value1}账单失败",
+      "billing_notification_completed_75f33eb0": "{value1}账单已完成",
+      "file_notification_needs_review_a46e97cc": "文件需要检查：{value1}",
+      "file_notification_ready_0a3f5d22": "文件可用：{value1}",
+      "member_email_placeholder_1aefb764": "member@example.com",
+      "team_domain_placeholder_0f966e50": "team.example.com",
+      "free_42f97715": "免费版",
+      "current_plan_45e3ad53": "当前套餐",
+      "active_e8a4041b": "正常",
+      "accepted_d6eaf321": "已接受",
+      "available_e21a3cf6": "可用",
+      "archived_797d98cb": "已归档",
+      "canceled_63d8fe18": "已取消",
+      "canceling_fccaf875": "正在取消",
+      "created_d8278ec8": "已创建",
+      "deleted_152a0ec4": "已删除",
+      "disabled_475ec81f": "已停用",
+      "draft_061b35fb": "草稿",
+      "expired_b75ba2e1": "已过期",
+      "failed_1dad4921": "失败",
+      "inactive_84e2b542": "未启用",
+      "needs_attention_7cc748e2": "需要处理",
+      "open_c7300fb7": "待处理",
+      "completed_58782c56": "已完成",
+      "pending_a85c6ad6": "等待中",
+      "pending_verification_0436cf10": "待验证",
+      "published_416cccb7": "已发布",
+      "needs_review_edd7a2ee": "需检查",
+      "queued_61a7726c": "排队中",
+      "read_19b1eb84": "已读",
+      "ready_0db0c52c": "可用",
+      "refunded_bfcf17a1": "已退款",
+      "revoked_5c4ad67e": "已撤销",
+      "running_9a4f6603": "进行中",
+      "suspended_9b234ede": "已暂停",
+      "trialing_f2df1495": "试用中",
+      "unread_7a7f2db0": "未读",
+      "uploading_06ae9013": "上传中",
+      "voided_3352f2b4": "已失效",
+      "viewer_869788c4": "查看者",
+      "editor_53d607ba": "编辑者",
+      "admin_f22d5ee6": "管理员",
+      "owner_11c4ab29": "所有者",
+      "user_b9e95558": "用户",
+      "recorded_0a4c2f96": "状态已记录",
+      "not_scheduled_3c7cc321": "未安排",
+      "chinese_5fd94fbf": "中文",
+      "use_current_language_7df097e0": "跟随当前语言",
+      "base_access_d18b0eb4": "基础权益",
+      "pro_tools_access_d232c1dd": "专业版工具权益",
+      "enabled_access_74eac6f9": "已开通权益",
+      "credits_8c75616f": "点",
+      "welcome_bonus_0439221e": "欢迎赠送",
+      "public_tool_usage_485b0697": "使用公开工具",
+      "credit_adjustment_5ca70ea2": "点数调整",
+      "export_public_tools_data_201afecb": "导出公开工具数据",
+      "user_task_f874d779": "用户任务",
+      "exported_value_row_value_210f20bf": "已导出 {value1} 条数据。",
+      "the_task_is_complete_bed21f2c": "任务已完成。",
+      "free_demo_order_5fc6871d": "免费演示订单",
+      "free_b34fd7a2": "免费",
+      "demo_payment_ee7b8c01": "演示支付",
+      "cloud_storage_fb0bba0d": "云端存储",
+      "local_storage_3974f971": "本地存储",
+      "source_file_73f2562b": "源文件",
+      "generated_result_4bba5c2e": "生成结果",
+      "attachment_60724b1b": "附件",
+      "avatar_8f6f49e2": "头像",
+      "document_b79f4255": "文档",
+      "file_873b4b0f": "文件",
+      "image_af0beeca": "图片",
+      "video_ed08debe": "视频",
+      "audio_c00f635b": "音频",
+      "text_a07b8bd6": "文本",
+      "team_dbaabef7": "团队协作",
+      "billing_32ee28d7": "账单",
+      "files_de86c79a": "文件",
+      "system_5b103db0": "系统",
+      "tasks_9350ae8a": "任务",
+      "workspace_7f1bc761": "工作区",
+      "notification_d41b6f05": "通知",
+      "workspace_update_edfee6a6": "工作区有新动态",
+      "payment_completed_5ab2736a": "支付已完成",
+      "payment_failed_b67c0bb5": "支付失败",
+      "new_notification_32c0d12f": "新通知",
+      "the_task_is_ready_open_the_task_center_to_view_t_ac7cfbbc": "任务已完成，可以打开任务中心查看结果。",
+      "free_demo_order_be134cb6": "免费演示订单。",
+      "the_file_status_has_been_updated_3e59fe25": "文件处理结果已更新。",
+      "workspace_information_has_been_updated_b03017e9": "工作区信息已更新。",
+      "no_details_available_36541c46": "无详细说明",
+      "value_complete_c3f68502": "已完成 {value1}%",
+      "close_panel_89b65434": "关闭面板",
+      "close_fbd8cee0": "关闭",
+      "welcome_back_start_with_what_needs_attention_tod_0e1c25b9": "欢迎回来，先看今天最需要处理的事项。",
+      "current_workspace_325f034a": "当前工作区",
+      "credits_70d04d46": "可用点数",
+      "plan_90212e66": "当前套餐",
+      "unread_45848609": "未读通知",
+      "needs_review_ab1a4a04": "需要查看",
+      "needs_your_attention_b25ac3ea": "今天需要关注",
+      "only_reminders_that_affect_your_next_step_are_sh_4b3d4d47": "只保留会影响继续使用的提醒。",
+      "review_notifications_d32c0109": "查看通知",
+      "you_have_value_unread_notification_value_90d2cb19": "你有 {value1} 条未读通知。",
+      "no_new_notifications_right_now_d6dcf247": "目前没有新的通知。",
+      "open_notifications_f70313dc": "打开通知",
+      "continue_tasks_1c1eeb4b": "继续任务",
+      "value_task_value_in_progress_1b82dbb6": "{value1} 个任务正在进行。",
+      "no_task_is_waiting_on_you_2010c145": "最近没有需要等待的任务。",
+      "view_tasks_5f74b4a8": "查看任务",
+      "check_billing_c05b2b93": "确认账单",
+      "recent_notifications_2517e7e3": "最近通知",
+      "the_latest_updates_related_to_you_ed4010f1": "最新与你相关的消息。",
+      "task_billing_and_team_updates_will_appear_here_090333a7": "有新的任务、账单或团队消息时，会出现在这里。",
+      "recent_orders_2e151682": "最近订单",
+      "your_latest_purchases_and_receipts_11a7f2ae": "查看最近的购买和收据记录。",
+      "view_order_88c88f23": "查看订单",
+      "no_orders_yet_b6d57cb8": "还没有订单",
+      "after_checkout_orders_and_receipts_will_appear_h_8192f0e3": "完成订购后，你可以在这里查看订单和收据。",
+      "team_workspace_overview_50189f0b": "团队空间概览",
+      "not_selected_2cc5db14": "未选择",
+      "members_a4462f09": "成员",
+      "pending_invites_fcc3f8cc": "待处理邀请",
+      "access_points_c1792555": "访问入口",
+      "files_billing_and_tasks_will_switch_with_the_wor_83b77dfa": "切换后，文件、账单和任务会显示对应工作区的内容。",
+      "choose_workspace_354952b1": "选择工作区",
+      "create_a_separate_space_for_a_new_team_project_o_c5f65fb1": "为新的团队、项目或客户创建一个独立空间。",
+      "for_example_team_ops_ae637df2": "例如：运营团队",
+      "your_workspaces_d25debc1": "你的工作区",
+      "choose_a_space_to_view_its_members_files_and_bil_c350284e": "选择一个空间后，用户中心会显示它的成员、文件和账单。",
+      "currently_selected_e2914adc": "当前正在使用",
+      "available_workspace_2f7eba94": "可切换到这个工作区",
+      "people_with_access_to_this_workspace_26b655ef": "查看当前工作区成员和权限。",
+      "team_member_3e5a1366": "团队成员",
+      "no_members_yet_316c5580": "还没有成员",
+      "members_will_appear_here_after_they_accept_an_in_b8c58dfa": "邀请成员后，他们会出现在这里。",
+      "invite_a_teammate_to_this_workspace_by_email_1a655351": "通过邮箱邀请协作者加入当前工作区。",
+      "invitations_14a2745d": "邀请记录",
+      "pending_invitations_can_be_revoked_at_any_time_98bd80d1": "待接受的邀请可以随时撤销。",
+      "no_invitations_d0b5f3a4": "暂无邀请",
+      "pending_invitations_will_appear_here_after_you_s_16d15cea": "发送邀请后，待接受的记录会显示在这里。",
+      "these_addresses_open_the_matching_workspace_00caa387": "这些地址可以进入对应工作区。",
+      "no_access_address_yet_c8f4321f": "还没有访问地址",
+      "add_an_address_so_members_can_reach_this_workspa_5632bab6": "绑定团队访问地址后，成员可以更容易进入工作区。",
+      "enter_the_address_your_team_should_use_then_comp_ea452b24": "输入你希望团队使用的访问地址，保存后再完成验证。",
+      "access_address_4527d44d": "访问地址",
+      "no_workspace_selected_862a3762": "未选择工作区",
+      "workspace_list_67863cf5": "工作区列表",
+      "choose_a_workspace_first_then_manage_members_inv_bd41ac7c": "先选择要管理的工作区，再进入成员、邀请记录和访问地址设置。",
+      "access_addresses_1047c56b": "访问地址",
+      "workspaces_7e3e2011": "工作区",
+      "access_647d5f80": "访问地址",
+      "workspaces_a4215336": "工作区列表",
+      "this_page_starts_with_the_workspace_list_instead_35cbf631": "这里应该是工作区列表，而不是把所有设置表单直接铺开。",
+      "a_new_workspace_has_separate_members_files_billi_3a6e703c": "新工作区会拥有独立的成员、文件、账单和任务视图。",
+      "this_workspace_is_currently_selected_7c45d1cc": "当前正在管理这个工作区",
+      "switch_to_manage_its_members_and_settings_a414caa7": "切换后再管理它的成员和设置",
+      "management_0b9e8abe": "管理内容",
+      "members_invitations_access_348bb54b": "成员、邀请、访问地址",
+      "manage_233004f6": "管理",
+      "value_members_19133948": "{value1} · 成员",
+      "members_shown_here_belong_to_the_current_workspa_01c1d6f3": "成员列表只展示当前工作区的协作者和权限。",
+      "invite_a_teammate_to_the_current_workspace_by_em_99676bcd": "通过邮箱邀请协作者加入当前工作区。",
+      "users_only_need_to_know_who_was_invited_their_ro_d947284d": "普通用户只需要知道邀请发给了谁、是什么权限、是否已接受。",
+      "access_addresses_are_workspace_settings_and_belo_73edd9a6": "访问地址属于工作区设置，适合放在列表后的管理区里。",
+      "enter_the_address_your_team_should_use_then_comp_3052967a": "输入团队希望使用的访问地址，保存后再完成验证。",
+      "manage_your_profile_account_security_and_notific_70656c74": "管理你的公开资料、账号安全和通知偏好。",
+      "account_role_e58f704e": "账号角色",
+      "team_role_99090a66": "团队角色",
+      "other_devices_c12cc6e3": "其他设备",
+      "profile_b5886d60": "个人信息",
+      "security_a4dd2249": "安全",
+      "notifications_e0d1fbb4": "通知",
+      "devices_eb11d1c2": "设备",
+      "account_overview_69c823ae": "账号概览",
+      "a_profile_page_should_start_with_identity_summar_267864f9": "个人资料页先展示身份摘要，再让用户编辑具体信息。",
+      "profile_information_a92b4b1f": "个人信息",
+      "these_fields_control_your_display_profile_and_la_6d305458": "这些信息用于账号展示和默认语言偏好。",
+      "security_579a3882": "安全设置",
+      "password_changes_are_high_risk_and_should_live_i_8857ca3e": "密码修改属于高风险操作，应该独立成区。",
+      "notification_preferences_belong_in_account_setti_e1dca29a": "通知偏好放在账号设置里，但不要和个人信息表单混在一起。",
+      "signed_in_devices_e52e6485": "登录设备",
+      "revoke_any_device_you_do_not_recognize_bc42b115": "如果发现陌生设备，可以撤销它的登录状态。",
+      "no_other_devices_are_signed_in_90373bf6": "当前没有其他设备登录。",
+      "browser_device_f4bc3185": "浏览器设备",
+      "ready_to_pay_7785f707": "可付款",
+      "demo_environment_d24b1a24": "演示环境",
+      "billing_center_6b7cb102": "账单中心",
+      "start_with_the_current_plan_and_cost_then_review_7f86edcd": "先看当前套餐和费用，再查看订单、发票和支付资料。",
+      "payment_8c189583": "付款状态",
+      "billing_documents_a3d328b6": "账单凭证",
+      "users_first_need_to_know_what_they_have_what_is__af154f49": "用户最关心的是现在用的是什么、包含什么、下一步能做什么。",
+      "manage_plan_3dafd87f": "管理套餐",
+      "start_plan_b7964c9d": "开通套餐",
+      "no_plan_selected_4a647345": "未选择套餐",
+      "continue_to_checkout_orders_and_invoices_will_ap_f409b3d6": "点击后进入付款流程，完成后订单和发票会自动出现。",
+      "this_open_source_demo_environment_does_not_charg_ae8ed90f": "当前开源演示环境不会真实扣款，适合体验完整账单流程。",
+      "no_plan_access_yet_378471e2": "还没有套餐权益",
+      "after_starting_a_plan_your_included_access_will__b1384780": "开通套餐后，你能使用的权益会显示在这里。",
+      "billing_summary_b4243c3b": "账单摘要",
+      "billing_details_work_better_as_a_summary_before__120a4515": "把账单资料做成摘要，而不是一进来就铺满表单。",
+      "payment_method_24c3775e": "支付方式",
+      "not_saved_cff35d61": "未保存",
+      "latest_invoice_a74cff15": "最近账单",
+      "none_yet_fab6c8d8": "暂无",
+      "invoice_profile_36a4297f": "账单抬头",
+      "not_set_1e264983": "未填写",
+      "orders_b34d55aa": "订单数量",
+      "plans_776b71f3": "可选套餐",
+      "plan_cards_should_show_only_what_users_need_to_d_d94069fd": "套餐卡片只展示用户决策需要的信息。",
+      "price_ef94daec": "价格",
+      "credits_80975d91": "点数",
+      "select_700cb936": "选择",
+      "invoices_and_receipts_10b7975e": "发票与收据",
+      "users_may_need_these_for_reimbursement_refunds_o_6c6836dd": "普通用户可能用于报销、退款或核对付款，所以放在账单页二级区域。",
+      "view_document_27875c3d": "查看凭证",
+      "no_invoices_or_receipts_yet_153fe281": "暂无发票或收据",
+      "billing_documents_will_appear_here_after_a_purch_3d102256": "完成购买后，账单凭证会显示在这里。",
+      "payment_methods_2db7ab78": "支付方式",
+      "show_payment_methods_in_language_users_recognize_5abbcd7a": "只展示用户能识别的付款方式。",
+      "saved_payment_method_7abd12b6": "已保存支付方式",
+      "no_payment_method_yet_01d902be": "暂无支付方式",
+      "payment_methods_will_appear_here_after_the_first_068e91d9": "完成首次购买后，支付方式会显示在这里。",
+      "used_for_invoice_headers_and_tax_details_db146188": "用于账单抬头和税务信息。",
+      "tax_id_f8871caf": "税号",
+      "country_region_9439aec8": "国家/地区",
+      "orders_7e89b24b": "订单列表",
+      "the_orders_page_should_start_as_a_purchase_histo_c1feea91": "订单页应该先是一张可核对的购买记录列表，凭证只是每条记录的附加操作。",
+      "orders_ca187bf2": "订单",
+      "total_2c4e661e": "合计",
+      "free_demo_orders_d0fb6a4c": "免费演示订单",
+      "order_records_3a7874ee": "订单记录",
+      "a_chronological_list_for_checking_plan_amount_st_979cb88e": "按时间列出购买记录，用户可以核对套餐、金额、状态和日期。",
+      "back_to_billing_93a176f0": "返回账单",
+      "order_4e19c211": "订单",
+      "date_f14abad2": "日期",
+      "amount_a72e74a9": "金额",
+      "status_8042eaf1": "状态",
+      "action_c3ce74b0": "操作",
+      "order_2702bd80": "订单号",
+      "after_checkout_your_purchase_records_and_payment_cbfd13fa": "完成购买后，你可以在这里查看购买记录和付款状态。",
+      "view_billing_3d3e1480": "查看账单",
+      "credit_history_b29eb547": "点数记录",
+      "credit_history_works_better_as_a_transaction_lis_7860fec8": "点数页更适合做成收支明细列表，而不是一组看起来像后台记录的卡片。",
+      "balance_bf507738": "当前点数",
+      "unit_77c0cd5d": "单位",
+      "entries_bd5b4b0f": "记录数",
+      "transaction_list_8b388d42": "收支明细",
+      "each_row_explains_why_credits_increased_or_decre_168b5ef9": "每条记录说明点数为何增加或减少。",
+      "reason_0a7fcf20": "原因",
+      "date_15a1897e": "时间",
+      "change_7a8bae8a": "变化",
+      "credit_added_dd550da9": "点数增加",
+      "credit_used_f50377c3": "点数使用",
+      "no_credit_history_yet_b7961cbd": "暂无点数记录",
+      "when_you_earn_or_spend_credits_the_records_will__92ca66ab": "当你获得或使用点数时，这里会出现记录。",
+      "confirm_your_profile_and_current_team_access_8d24f20e": "确认你的显示信息和当前团队权限。",
+      "update_your_display_name_avatar_language_and_tim_6e2ba993": "更新展示名称、头像、语言和时区。",
+      "billing_overview_a8ece2c0": "账单概览",
+      "start_here_for_your_plan_credits_payment_status__29a1a4ea": "这里先看套餐、点数、付款状态和最近发票。",
+      "payment_status_9273e5de": "支付状态",
+      "ready_to_pay_59803c7a": "可直接付款",
+      "invoices_8e533afa": "发票",
+      "recommended_plan_60939eb2": "推荐套餐",
+      "tap_to_continue_to_checkout_829bad97": "点击后会进入付款流程。",
+      "this_demo_environment_will_create_a_demo_order_58061b92": "当前是演示环境，提交后会生成一笔演示订单。",
+      "continue_to_checkout_19d57b73": "去付款",
+      "choose_the_plan_that_fits_your_work_best_d8667c33": "选择一个适合当前工作的套餐。",
+      "price_7ab5917c": "金额",
+      "your_purchase_receipts_are_stored_here_badf2b7c": "这里保存你的购买凭证。",
+      "view_invoice_2368af25": "查看发票",
+      "no_invoices_yet_f96a650b": "暂无发票",
+      "invoices_and_receipts_will_appear_here_after_you_84ff3091": "完成一次购买后，这里会出现发票和收据。",
+      "available_payment_methods_appear_here_8c74ec5c": "可用的付款方式会显示在这里。",
+      "complete_a_purchase_first_and_a_payment_method_w_39b12350": "先完成一次订购，系统会帮助你建立支付方式。",
+      "current_access_9d4a81f9": "当前权益",
+      "what_your_plan_currently_includes_e42ab3ed": "你已经拥有的套餐权益。",
+      "no_access_yet_27b8db9b": "暂无权益",
+      "after_selecting_a_plan_the_features_you_can_use__0a7fe922": "选择套餐后，这里会显示你当前可以使用的功能。",
+      "order_overview_b2ef192c": "订单概览",
+      "review_your_purchases_payment_status_and_receipt_825c9a22": "查看购买记录、付款状态和收据。",
+      "total_8c3f738d": "总金额",
+      "order_history_20834855": "订单历史",
+      "each_order_can_be_opened_as_a_receipt_99d7fd4b": "每条订单都可以查看对应收据。",
+      "order_number_b3df9e95": "订单号",
+      "created_29b90579": "创建时间",
+      "view_receipt_bcb84326": "查看收据",
+      "after_checkout_orders_payment_status_and_receipt_658e9a59": "完成订购后，你可以在这里查看订单、付款状态和收据。",
+      "storage_usage_fc72a743": "空间使用情况",
+      "upload_find_and_manage_your_files_c64a78cb": "上传、查找和管理你的文件。",
+      "storage_3762c05e": "存储位置",
+      "ready_for_long_term_storage_f5b75477": "适合长期保存",
+      "best_for_local_demos_f3c176e5": "适合本地演示",
+      "your_usage_d3ec43c8": "个人用量",
+      "workspace_usage_c45bf7ca": "工作区用量",
+      "choose_a_file_to_upload_to_the_current_workspace_6e5e1c96": "选择一个文件上传到当前工作区。",
+      "images_documents_and_data_files_are_supported_wi_eec501b6": "支持常见图片、文档和数据文件。单个文件不要超过当前配额。",
+      "file_library_685c5c34": "文件库",
+      "uploaded_files_appear_here_625aa90e": "已上传的文件会显示在这里。",
+      "size_5354fe2d": "大小",
+      "use_d8f25bd7": "用途",
+      "no_files_yet_e2696a7f": "还没有文件",
+      "upload_your_first_file_to_open_download_or_delet_93337f23": "上传第一个文件后，你可以在这里打开、下载或删除它。",
+      "credit_overview_9159b084": "点数概览",
+      "see_your_available_credits_and_recent_changes_0519a627": "查看可用点数和最近变动。",
+      "credit_history_8696bc5d": "点数流水",
+      "each_record_explains_why_credits_changed_e8a57e3a": "每条记录都说明点数为什么变化。",
+      "outcome_5f3d51d2": "结果",
+      "task_overview_b409cf6f": "任务概览",
+      "track_task_progress_results_and_issues_that_need_dfd8d4b6": "查看任务进度、结果和需要处理的问题。",
+      "tasks_7e53ff19": "任务列表",
+      "recent_tasks_include_progress_and_result_links_3e251507": "最近任务会显示进度和结果入口。",
+      "started_da6afcd5": "开始时间",
+      "updated_8505907f": "更新时间",
+      "view_result_b5449146": "查看结果",
+      "view_progress_c9794340": "查看进度",
+      "no_tasks_yet_80f8a083": "暂无任务",
+      "exports_uploads_and_background_work_will_appear__a4286eeb": "当你发起导出、上传处理或其他后台任务时，会在这里显示进度。",
+      "task_progress_and_result_12bd2a9d": "任务结果和进度。",
+      "progress_3b8bb103": "进度",
+      "attempts_aace9c74": "尝试次数",
+      "result_summary_da691b87": "结果摘要",
+      "start_with_the_readable_result_before_deciding_w_d29badc5": "先看用户能看懂的结果，再决定是否需要重新执行。",
+      "status_e92c46a3": "当前状态",
+      "progress_f5502dfa": "完成度",
+      "completed_a258863b": "完成时间",
+      "result_df9aef04": "结果",
+      "next_step_aa0a86ed": "后续操作",
+      "if_this_did_not_finish_as_expected_go_back_to_th_5ee65668": "如果任务没有按预期完成，可以回到列表查看其他任务。",
+      "back_to_tasks_d9330c75": "返回任务中心",
+      "check_the_input_and_run_the_task_again_17e98402": "请先确认输入是否正确，然后重新发起任务。",
+      "this_task_may_have_expired_been_cleaned_up_or_is_2e94d139": "这个任务可能已过期、被清理，或者你当前没有查看权限。",
+      "notification_overview_6bb974c8": "通知概览",
+      "notifications_3a84e0b5": "全部通知",
+      "settings_860006f3": "通知设置",
+      "inbox_10fe3744": "通知收件箱",
+      "notifications_are_listed_by_time_6805112b": "最新通知会按时间排列。",
+      "no_notifications_2e1acc9e": "暂无通知",
+      "task_billing_and_team_updates_will_appear_here_3a75ed75": "当任务、账单或团队协作有新消息时，会显示在这里。",
+      "notification_settings_0f8fc979": "通知设置",
+      "notification_preferences_7c17fb01": "通知偏好",
+      "choose_the_kinds_of_notifications_and_delivery_m_ecd74220": "选择你想收到的通知类型和方式。",
+      "delivery_methods_2c070608": "接收方式",
+      "notification_types_0adb1cf6": "通知类型",
+      "tools_e0128c71": "工具",
+      "page_unavailable_0b5181a4": "页面暂不可用",
+      "this_page_is_not_available_right_now_b49aba34": "该页面当前无法打开。",
+      "use_value_in_this_workspace_5fdead4a": "在当前工作区使用 {value1}。"
+    }
+  },
+  "admin": {
+    "overview": {
+      "title": "后台概览",
+      "subtitle": "聚焦用户增长、账号风险、角色覆盖和当天需要处理的运营事项。",
+      "risks": {
+        "dataTitle": "数据持久性",
+        "dataDetail": "宿主正在使用本地内存模式。生产流量前请把运行时状态迁移到 Postgres。",
+        "dataAction": "配置存储",
+        "needsReview": "需要检查",
+        "deliveryTitle": "投递队列",
+        "deliveryDetail": "{count} 条投递记录需要检查，队列才能被视为健康。",
+        "deliveryAction": "检查队列",
+        "blocked": "阻塞",
+        "webhookTitle": "Webhook 接入",
+        "webhookDetail": "{count} 条 Webhook 回执失败或被拒绝，请检查回执历史。",
+        "webhookAction": "检查回执",
+        "accessTitle": "用户访问",
+        "accessDetail": "{count} 个用户已被暂停。请检查用户详情和审计时间线。",
+        "accessAction": "检查用户",
+        "readyTitle": "无活跃运营风险",
+        "readyDetail": "核心信号正常。继续关注服务健康和最近活动。",
+        "readyAction": "查看服务",
+        "healthy": "健康"
+      },
+      "activity": {
+        "user": "用户",
+        "notStarted": "未开始"
+      },
+      "counters": {
+        "catalog": "目录",
+        "moduleStates": "模块状态",
+        "outbox": "Outbox",
+        "records": "记录",
+        "audit": "审计",
+        "deliveries": "投递",
+        "notificationLogs": "通知日志"
+      },
+      "services": {
+        "database": "数据库",
+        "memoryMode": "内存模式",
+        "durable": "持久化",
+        "localOnly": "仅本地",
+        "runtimeReconcile": "运行时对账",
+        "queued": "{count} 排队",
+        "dead": "{count} 死信",
+        "manual": "手动",
+        "authentication": "认证",
+        "active": "{active}/{total} 活跃",
+        "admins": "{count} 管理员",
+        "apiGateway": "API 网关",
+        "blocked": "{count} 阻塞",
+        "routing": "路由",
+        "outboxStore": "Outbox 存储",
+        "webhookReceipts": "Webhook 回执",
+        "receipts": "{count} 回执",
+        "failed": "{count} 失败"
+      },
+      "stat": {
+        "totalUsers": "总用户",
+        "activeNew": "{active} 活跃 · {fresh} 新增",
+        "activeUsers": "活跃用户",
+        "suspendedUsers": "暂停账号",
+        "suspendedHelper": "{count} 个账号需要复核",
+        "roleCoverage": "角色覆盖",
+        "roleCoverageHelper": "{roles} 个角色 · {capabilities} 项能力",
+        "needsReview": "需要检查",
+        "healthy": "健康"
+      },
+      "today": {
+        "title": "今日",
+        "description": "每日运营的紧凑脉搏。",
+        "activeUsers": "活跃用户",
+        "notifications": "通知",
+        "roles": "角色",
+        "adminUsers": "管理员"
+      }
+    },
+    "settings": {
+      "title": "设置",
+      "subtitle": "配置产品身份、运行时设置、供应商、主题边界和诊断。"
+    },
+    "devConsole": {
+      "title": "模块开发控制台",
+      "subtitle": "面向模块地图、打包检查、模板、AI 提示和 module:test 报告的诊断工作区。",
+      "openModule": "打开模块"
+    },
+    "modules": {
+      "title": "模块",
+      "subtitle": "运营已安装的产品模块、生命周期状态、健康度、能力和发布就绪度。",
+      "detail": {
+        "detailTitle": "模块详情",
+        "subtitle": "模块契约、路由、权限、诊断、资源绑定、网关和运行活动详情。",
+        "missingTitle": "模块不存在",
+        "missingBody": "当前运行时没有找到这个模块契约。"
+      }
+    },
+    "identity": {
+      "users": {
+        "title": "用户",
+        "subtitle": "管理产品控制台的账号、访问状态、角色和审核队列。",
+        "totalUsers": "总用户",
+        "visible": "{count} 可见",
+        "active": "活跃",
+        "activeHelper": "{percent}% 账号",
+        "suspended": "暂停",
+        "suspendedHelper": "需要账号审核",
+        "admins": "管理员",
+        "adminsHelper": "宿主级访问",
+        "reviewTitle": "账号审核",
+        "reviewDescription": "这里只有需要处理的用户状态，常规账号记录留在目录里。",
+        "suspendedTitle": "暂停账号",
+        "suspendedDescription": "{count} 个用户已暂停。请检查账号详情、审计轨迹，确认原因后再恢复。",
+        "reviewUsers": "检查用户",
+        "pendingTitle": "待验证",
+        "pendingDescription": "{count} 个用户仍需验证。请检查邀请、邮件投递或引导步骤是否被阻塞。",
+        "filterPending": "筛选待验证",
+        "directoryTitle": "用户目录",
+        "directoryDescription": "按邮箱、用户 ID、角色或工作区搜索账号。敏感账号变更留在用户详情页。",
+        "searchPlaceholder": "搜索邮箱、用户 ID、角色或工作区",
+        "filterLabel": "状态/角色",
+        "columns": ["用户", "访问", "状态", "工作区", "操作"],
+        "openDetail": "打开详情",
+        "empty": "没有匹配此筛选的用户。",
+        "mobileOpen": "打开"
+      },
+      "userDetail": {
+        "title": "用户详情",
+        "subtitle": "查看用户身份、角色、设备会话、重置密码动作和安全审计时间线。",
+        "role": "角色",
+        "status": "状态",
+        "workspace": "工作区",
+        "sessions": "会话",
+        "currentState": "当前账号状态",
+        "auditRecords": "{count} 条审计记录",
+        "actionsTitle": "账号操作",
+        "actionsDescription": "使用最小安全动作。角色、状态、会话和密码变更都会写入审计记录。",
+        "accountStatus": "账号状态",
+        "accountStatusHint": "只有在必须立即停止访问时才暂停账号。",
+        "reason": "原因",
+        "updateStatus": "更新状态",
+        "updateStatusConfirm": "确认更新 {target} 的账号状态？",
+        "hostRole": "宿主角色",
+        "hostRoleHint": "Admin 角色会授予宿主级运维访问权限。",
+        "updateRole": "更新角色",
+        "updateRoleConfirm": "确认更新 {target} 的角色？",
+        "passwordReset": "密码重置",
+        "passwordResetHint": "生成重置令牌，并写入邮件供应商与后台审计证据。",
+        "sendReset": "发送重置",
+        "sendResetConfirm": "确认为 {target} 发起密码重置？",
+        "diagnosticsTitle": "诊断证据",
+        "diagnosticsDescription": "会话、审计和原始元数据默认折叠；需要排障或取证时展开。",
+        "activeSessions": "活跃会话",
+        "activeSessionsDescription": "撤销会话是安全动作，必须保持显式。",
+        "sessionColumns": ["会话", "User Agent", "创建时间", "过期时间", "操作"],
+        "revoke": "撤销",
+        "revokeConfirm": "确认撤销 {target} 的会话 {id}？",
+        "noSessions": "暂无活跃会话。",
+        "auditTitle": "审计时间线",
+        "auditDescription": "该用户最近的安全与账号变更。",
+        "noAudit": "暂无用户审计。",
+        "metadata": "元数据",
+        "metadataDescription": "原始元数据放在操作界面下方，用于诊断。",
+        "drawerTitle": "身份快照",
+        "copyId": "复制 ID",
+        "reviewRule": "审核规则",
+        "reviewRuleBody": "身份事实保留在抽屉中；不可逆或高风险变更保留在显式操作面板中。",
+        "missingTitle": "用户不存在",
+        "missingBody": "没有找到对应的宿主用户。",
+        "back": "返回用户",
+        "defaultUserTarget": "该用户"
+      },
+      "rbac": {
+        "title": "角色与权限",
+        "subtitle": "检查系统角色、宿主能力、模块权限和访问覆盖；Admin 的模块权限为 0 表示宿主管理员通过宿主能力获得访问，而不是模块权限缺失。",
+        "roles": "角色",
+        "systemRoles": "{count} 个系统角色",
+        "capabilities": "能力",
+        "assigned": "{count} 已分配",
+        "modulePermissions": "模块权限",
+        "customRoles": "自定义角色",
+        "productAccess": "产品定义访问",
+        "roleManagementTitle": "角色管理",
+        "roleManagementDescription": "先按角色查看访问范围。系统角色只允许审查；自定义角色接入持久化后在这里创建和维护。",
+        "roleColumns": ["角色", "类型", "宿主能力", "模块权限", "状态"],
+        "systemRole": "系统角色",
+        "customRole": "自定义角色",
+        "coverageEvidenceTitle": "权限矩阵",
+        "coverageEvidenceDescription": "矩阵用于审计覆盖面，默认折叠，避免把日常角色管理变成权限表扫描。",
+        "panelTitle": "权限审计",
+        "panelDescription": "按清单和矩阵审查宿主能力、模块权限和角色覆盖。",
+        "systemRolesLabel": "系统角色",
+        "hostAssignments": "宿主能力分配",
+        "moduleAssignments": "模块权限分配",
+        "roleSnapshot": "角色集快照",
+        "roleSnapshotDescription": "已加载 {total} 个角色，其中 {system} 个系统角色、{custom} 个自定义角色。",
+        "roleSnapshotMeta": "{host} 个宿主授权 · {module} 个模块授权",
+        "hostInventory": "宿主能力清单",
+        "hostInventoryDescription": "{count} 个宿主能力按分类块展示。",
+        "currentMatrix": "当前矩阵",
+        "moduleInventory": "模块权限清单",
+        "moduleInventoryDescription": "{count} 个模块权限展示在宿主能力下方。",
+        "empty": "暂无权限覆盖快照。",
+        "hostCoverage": "宿主能力覆盖",
+        "moduleCoverage": "模块权限覆盖"
+      }
+    },
+    "operations": {
+      "serviceConnections": {
+        "title": "服务连接",
+        "subtitle": "运营服务供应商、密钥来源、健康检查和连接器调用日志。"
+      },
+      "runs": {
+        "title": "运行",
+        "subtitle": "监控后台执行、停滞任务、失败尝试和恢复动作。",
+        "openRun": "打开运行"
+      },
+      "runDetail": {
+        "title": "运行详情",
+        "subtitle": "运行输入、输出、日志、事件、用量、审计、关联 ID 和恢复操作。",
+        "missingTitle": "运行不存在",
+        "missingBody": "当前运行时存储没有找到这个运行记录。"
+      },
+      "webhooks": {
+        "title": "Webhooks / Outbox",
+        "subtitle": "检查投递队列健康、Webhook 回执、Worker 延迟和重放动作。"
+      },
+      "webhookDetail": {
+        "title": "Outbox 详情",
+        "subtitle": "Outbox 载荷、尝试次数、错误、关联 Webhook 回执与重放/丢弃操作。",
+        "missingTitle": "Outbox 不存在",
+        "missingBody": "当前运行时存储没有找到这个 Outbox 记录。"
+      }
+    },
+    "commerce": {
+      "billing": {
+        "title": "计费",
+        "subtitle": "运营套餐、SKU、订单、权益、点数和支付证据。"
+      },
+      "revenue": {
+        "title": "收入",
+        "subtitle": "检查已支付订单、币种总额、供应商事件和计费对账。"
+      },
+      "entitlements": {
+        "title": "权益",
+        "subtitle": "检查访问授权、套餐来源、手工覆盖和撤销动作。"
+      }
+    },
+    "data": {
+      "usage": {
+        "title": "用量",
+        "subtitle": "模块用量和计量账本按计量项、模块、状态和产品范围汇总。"
+      },
+      "analytics": {
+        "title": "分析",
+        "subtitle": "运营指标从运行时存储、身份、文件和商业账本汇总。"
+      },
+      "files": {
+        "title": "文件",
+        "subtitle": "治理上传文件、存储持久性、扫描漂移、隔离和保留动作。"
+      },
+      "fileDetail": {
+        "title": "文件详情",
+        "subtitle": "文件来源、对象信息、下载入口和治理审计。",
+        "missingTitle": "文件不存在",
+        "missingBody": "当前运行时存储没有找到这个文件。"
+      }
+    },
+    "governance": {
+      "audit": {
+        "title": "审计",
+        "subtitle": "检查安全敏感动作、操作者范围、用量轨迹和导出证据。",
+        "exportCsv": "导出 CSV",
+        "exportJson": "导出 JSON"
+      },
+      "search": {
+        "title": "搜索",
+        "subtitle": "跨用户、运行、文件、订单、模块和 Outbox 的全局运营搜索。"
+      }
+    },
+    "error": {
+      "eyebrow": "后台错误",
+      "title": "后台页面加载失败",
+      "description": "当前页面遇到了未处理异常。请先重试当前操作；如果问题持续出现，再查看服务端日志和最近一次模块运行记录。",
+      "message": "消息",
+      "digest": "Digest",
+      "unknown": "未知后台错误",
+      "retry": "重试"
+    },
+    "inline": {
+      "no_search_results_3b8d6a21": "没有搜索结果",
+      "search_across_admin_objects_8aa9cb52": "搜索后台对象",
+      "no_admin_search_matches_body_793e79e5": "没有用户、文件、订单、模块、运行或 Outbox 记录匹配当前查询。",
+      "admin_search_empty_body_e63fc734": "输入邮箱、订单号、文件名、运行 ID、模块 ID 或 Webhook ID 来查找后台对象。",
+      "current_filter_shows_value_value_records_ffd8ee7a": "当前筛选显示 {value1} / {value2} 条记录",
+      "value_need_review_fee2a156": "{value1} 个需审核",
+      "value_inactive_c9d6730a": "{value1} 个非活跃",
+      "value_open_d19c38f3": "{value1} 个未结算",
+      "value_failed_orders_9ca0c0f7": "{value1} 个失败订单",
+      "value_active_c668ccbe": "{value1} 个活跃",
+      "value_inactive_grants_a556f8e3": "{value1} 个非活跃授权",
+      "value_plans_a759f4a7": "{value1} 个套餐",
+      "archive_plan_value_existing_subscriptions_will_not_b_da179b8e": "确认归档计划 {value1}？已有订阅不会被删除。",
+      "sync_sku_value_to_the_stripe_status_check_919dc3f3": "确认同步 SKU {value1} 到 Stripe 状态检查？",
+      "archive_sku_value_6fe9d791": "确认归档 SKU {value1}？",
+      "value_grants_are_revoked_verify_whether_matching_sub_8bd63058": "{value1} 个授权已撤销。请确认订阅和账单事件是否与该访问状态一致。",
+      "value_grants_have_expired_confirm_renewal_grace_peri_c5e9044c": "{value1} 个授权已过期。请确认续费、宽限期或降级行为。",
+      "value_loaded_0827bcbc": "{value1} 已加载",
+      "override_value_status_0da851a6": "覆盖 {value1} 状态",
+      "override_value_reason_bed3b42a": "覆盖 {value1} 原因",
+      "override_value_s_value_status_a76f8235": "确认覆盖 {value1} 的 {value2} 状态？",
+      "revoke_value_s_value_3da7b9d1": "确认撤销 {value1} 的 {value2}？",
+      "open_metering_records_95a992f4": "未完成计量记录",
+      "value_metering_records_are_not_committed_refunded_vo_5c9787fb": "{value1} 条计量记录尚未提交、退款或作废，需要确认扣量状态。",
+      "review_metering_20a2765f": "筛选计量",
+      "abnormal_usage_244b13b9": "异常用量",
+      "value_usage_records_are_negative_or_above_5x_the_med_fb589824": "{value1} 条用量记录低于 0 或高于中位数 5 倍。",
+      "review_usage_28a975f1": "查看用量",
+      "usage_review_9c908708": "用量审核队列",
+      "overages_anomalies_and_open_metering_are_promoted_be_14532b42": "超额、异常和未完成计量先于明细表展示。",
+      "quota_credits_plan_context_0cf34cc2": "配额 / 点数 / 套餐上下文",
+      "quota_credits_and_plan_context_is_derived_from_usage_44a1516a": "从用量元数据中提取配额、点数和套餐上下文；没有元数据时明确显示缺口。",
+      "no_metadata_9c6a99e4": "无元数据",
+      "audit_de9bcda7": "审计",
+      "module_46c34f61": "模块",
+      "auto_insight_reliability_needs_attention_09a3d973": "自动结论：可靠性需要先处理",
+      "the_selected_window_has_value_failed_runs_value_fail_f487384c": "当前窗口存在 {value1} 个失败运行、{value2} 个失败 Webhook、{value3} 个死信，P95 {value4}ms。",
+      "review_reliability_396baa87": "查看可靠性",
+      "auto_insight_business_signals_are_safe_to_watch_d9c28e22": "自动结论：业务指标可继续观察",
+      "revenue_value_mrr_value_signups_value_no_blocking_re_02b73db6": "收入 {value1}、MRR {value2}、新增 {value3}；可靠性窗口未出现阻塞信号。",
+      "view_revenue_7f0cbea9": "查看收入",
+      "current_window_value_value_to_value_13de8835": "当前窗口：{value1} · {value2} 到 {value3}",
+      "analysis_views_f7340f73": "分析视图",
+      "business_commerce_reliability_and_evidence_are_separ_364feb1f": "业务、商业、可靠性和证据分开看；运行数/P95 不再占据首屏业务 KPI。",
+      "business_6da818a9": "业务",
+      "users_69bf3219": "用户数",
+      "signups_2fa7c6ad": "注册数",
+      "activation_16b8b06e": "激活数",
+      "usage_peak_b0c4c213": "用量峰值",
+      "commerce_ffe5812b": "商业",
+      "revenue_baf4d829": "收入",
+      "refunds_6c3fe602": "退款数",
+      "failed_payments_117d8ce7": "失败支付",
+      "reliability_d2bd47cb": "可靠性",
+      "runs_ff5c2c65": "运行数",
+      "value_failed_8bc4fc14": "{value1} 个失败",
+      "p95_latency_c097fedb": "P95 延迟",
+      "failed_webhooks_b9eea8b8": "失败 Webhook",
+      "dead_letters_9b0b049c": "死信",
+      "evidence_c6edabc1": "证据",
+      "returned_buckets_cd1b4074": "返回桶",
+      "empty_buckets_a96e49b1": "空桶",
+      "failure_buckets_120b5c32": "失败桶",
+      "store_48d0d80a": "存储",
+      "usage_detail_2fc7505c": "用量详情",
+      "revenue_detail_fbd90eb8": "收入详情",
+      "growth_signal_eff6215c": "增长信号",
+      "user_detail_89e53ea2": "用户详情",
+      "data_quality_bucket_coverage_f54e6f7e": "数据质量 / 桶覆盖",
+      "the_server_returns_a_complete_date_bucket_series_so__a2f1e1a7": "服务端返回完整日期桶，让图表在对象表筛选时仍保留上下文；这组数据只用于解释证据质量。",
+      "revenue_metrics_aa36b65c": "收入指标",
+      "growth_metrics_a21d5394": "增长指标",
+      "churn_metrics_b185bbde": "流失指标",
+      "churn_count_493d6b47": "流失数量",
+      "churn_rate_6fdfbbf2": "流失率",
+      "lost_mrr_eebadbfc": "损失 MRR",
+      "reasons_c5a997d3": "原因",
+      "usage_buckets_and_patterns_a4df314b": "用量桶与模式",
+      "no_time_series_in_selected_range_56ae138e": "当前范围暂无时间序列",
+      "peak_260c49fd": "峰值",
+      "median_a9f38fa8": "中位数",
+      "by_module_621de414": "按模块",
+      "by_meter_83b123cb": "按计量项",
+      "cohorts_6f28f2cb": "队列",
+      "reliability_and_edge_access_fd695592": "可靠性与边缘访问",
+      "failed_runs_ce3c4150": "失败运行",
+      "failed_webhooks_dcf27f1c": "失败 Webhook",
+      "dead_letters_939898e3": "死信",
+      "p50_latency_1566a8f6": "p50 延迟",
+      "p95_latency_b8d39333": "p95 延迟",
+      "warnings_3dbf89d6": "警告",
+      "none_48d72ef0": "无",
+      "no_edge_access_logs_in_selected_range_e2eafe0f": "当前范围暂无边缘访问日志",
+      "raw_counts_3065a8d8": "原始计数",
+      "orphan_objects_e83d4bbc": "孤儿对象",
+      "value_physical_objects_have_no_runtime_metadata_owne_0f58a0e8": "{value1} 个物理对象没有运行时元数据归属，需要单独治理。",
+      "review_orphans_e7b8e2ee": "查看孤儿对象",
+      "file_quota_pressure_5b000362": "文件配额压力",
+      "highest_quota_pressure_is_about_value_review_user_wo_462fc813": "最高配额占用约 {value1}%。请确认用户、工作区或模块影响。",
+      "review_quota_00df702c": "查看配额",
+      "value_visible_d0396c4d": "{value1} 个可见",
+      "value_archived_897b05e4": "{value1} 已归档",
+      "quota_and_business_impact_6445f739": "配额与业务影响",
+      "file_quota_is_shown_by_user_workspace_and_module_so__cbfc26f6": "文件配额按用户、工作区和模块展示，帮助判断清理或扩容对谁有影响。",
+      "not_loaded_75bfeb5e": "未加载",
+      "unknown_7c2c4389": "无法判断",
+      "orphan_object_governance_3a5d296f": "孤儿对象治理",
+      "physical_orphan_objects_should_not_be_inferred_from__0883b4fb": "物理孤儿对象不应混在目录表中判断；这里单独展示孤儿对象扫描结果。",
+      "no_orphan_objects_be30825b": "没有孤儿对象。",
+      "apply_a_bulk_action_to_value_files_in_the_current_fi_ef78a325": "确认对当前筛选的 {value1} 个文件执行批量操作？",
+      "quarantine_file_value_14449c49": "确认隔离文件 {value1}？",
+      "archive_file_value_86b0e1fa": "确认归档文件 {value1}？",
+      "delete_file_value_79d4bf49": "确认删除文件 {value1}？",
+      "restore_file_value_80d981b3": "确认恢复文件 {value1}？",
+      "value_audit_in_detail_bd7575cb": "{value1} · 点开看审计",
+      "value_visible_6a947562": "{value1} 可见",
+      "jump_to_search_panel_8493feeb": "跳到搜索面板",
+      "value_total_matches_84f4f25f": "共 {value1} 个匹配对象",
+      "empty_5c14a56d": "空查询",
+      "verified_7fc41e1e": "已验证",
+      "pending_verification_78fb9c4d": "待验证",
+      "unverified_96e125d2": "未验证",
+      "verification_mail_missing_eeb3fb6e": "验证邮件未记录",
+      "admin_change_4f6e3686": "管理员改动",
+      "pending_verification_7d1aa2f3": "待完成验证",
+      "clear_d6cc40bc": "正常",
+      "verification_mail_missing_b5785888": "验证邮件缺失",
+      "value_pending_accounts_have_no_visible_email_verific_a35c816b": "{value1} 个待验证账号没有可见的邮箱验证邮件记录。",
+      "view_pending_1836a271": "查看待验证",
+      "admin_changes_f42c9853": "管理员改动",
+      "value_users_carry_roleupdatedby_roleupdatedreason_me_822e988c": "{value1} 个用户带有 roleUpdatedBy / roleUpdatedReason 记录。",
+      "review_changes_a3c66d43": "查看改动",
+      "account_status_17cc03e7": "账号状态",
+      "host_role_4848d385": "宿主角色",
+      "verified_95165cf5": "已验证于",
+      "mail_9e08b3fd": "邮件于",
+      "no_mail_record_8b6c8250": "无邮件记录",
+      "last_session_b422e3c7": "最近登录",
+      "no_sessions_b30fd382": "暂无会话",
+      "value_sessions_40272bb0": "{value1} 个会话",
+      "updated_value_ac1856f8": "更新 {value1}",
+      "orders_ca187bf2": "订单",
+      "entitlements_2ca17dc5": "权益",
+      "same_c8958a49": "相同",
+      "diff_f5d65d73": "差异",
+      "admin_has_0_module_permissions_by_design_host_admins_fec4e732": "Admin 角色的模块权限为 0 是预期结果：宿主管理员通过宿主能力访问后台、账单、文件和运维，不依赖模块级权限列表。",
+      "permission_search_43af6a5b": "权限搜索",
+      "search_capability_permission_or_category_e4548dae": "搜索能力、权限或分类",
+      "scope_2e8dbfee": "范围",
+      "permission_scope_44e7a957": "权限范围",
+      "host_capabilities_e1480ad4": "宿主能力",
+      "module_permissions_628742dc": "模块权限",
+      "permission_diff_view_116b636d": "权限差异视图",
+      "compares_admin_and_user_roles_by_default_filters_app_e1d91d4a": "默认比较 Admin 与 User 角色，筛选条件会同时作用于差异表。",
+      "no_permissions_match_this_filter_598e3d56": "没有权限匹配当前筛选。",
+      "blocks_release_57547c33": "阻塞发布",
+      "fix_lifecycle_resource_binding_or_doctor_errors_befo_b7176e93": "在准备发布候选证据前，先修复生命周期、资源绑定或诊断错误。",
+      "needs_review_e7a3a9f7": "需要审核",
+      "warnings_should_be_resolved_or_accepted_before_produ_da84cf4e": "警告需要先修复或明确接受，再放入生产流量。",
+      "foundation_9a1d6e6c": "底座模块",
+      "required_module_treat_lifecycle_changes_as_product_i_15c2b333": "这是必需模块；生命周期变更会影响产品能力。",
+      "no_blocking_evidence_c879beea": "暂无阻塞证据",
+      "enabled_and_clear_in_current_runtime_health_evidence_8a3f05b2": "当前运行健康证据无阻塞；发布前仍需确认发布检查。",
+      "not_in_release_path_c82db65f": "不在发布路径",
+      "install_or_enable_only_when_this_product_area_is_nee_07e0154a": "只有当该产品区域确实需要时再安装或启用。",
+      "install_before_using_contributed_pages_or_apis_d688f7ad": "使用贡献页面或 API 前先安装。",
+      "review_missing_resources_and_lifecycle_state_f7287c70": "检查缺失资源和生命周期状态。",
+      "open_diagnostics_and_fix_doctor_errors_2c0e0899": "打开诊断并修复诊断错误。",
+      "review_warnings_before_rc_evidence_b91e8fcb": "先审核警告，再准备发布候选证据。",
+      "monitor_runtime_activity_and_release_impact_b7c0f12c": "持续观察运行活动和发布影响。",
+      "keep_traffic_paused_until_maintenance_evidence_is_cl_5a01f8e7": "维护证据清楚前保持流量暂停。",
+      "enable_when_this_product_capability_is_ready_92ed0027": "该产品能力准备好后再启用。",
+      "showing_value_value_of_value_3d583a43": "显示 {value1}-{value2} / {value3}",
+      "value_errors_value_warnings_52368790": "{value1} 错误 / {value2} 警告",
+      "value_failures_value_99e0a2ec": "{value1} 失败 · {value2}",
+      "value_module_value_impact_value_075dd98f": "确认{value1}模块 {value2}？影响范围：{value3}",
+      "move_value_to_maintenance_mode_impact_value_28a88ab6": "确认将 {value1} 置为维护模式？影响范围：{value2}",
+      "value_value_value_failures_282222ec": "{value1} · {value2} · {value3} 失败",
+      "product_capabilities_c63c578c": "产品能力",
+      "human_readable_phrases_derived_from_routes_surfaces__eca5b552": "基于路由、界面、作业、数据、Webhook、操作和权限生成的可读短语。",
+      "operator_next_action_1f0c6789": "操作员下一步",
+      "the_next_action_is_derived_from_install_state_lifecy_837e1098": "下一步由安装状态、生命周期、运行状态和诊断共同决定。",
+      "release_candidate_impact_71d4c09e": "发布候选影响",
+      "no_release_impact_evidence_available_bfb7c0f6": "暂无发布影响证据。",
+      "use_this_before_enabling_traffic_or_preparing_rc_evi_d0b8a4a9": "在启用流量或准备 RC 证据前先看这里。",
+      "related_links_use_the_connection_id_module_id_or_ser_72aa3ac2": "关联跳转使用连接 ID、模块 ID 或服务名称作为排障线索；作业和事件目前通过运行页的类型筛选以及 Webhooks/Outbox 证据承载。",
+      "inspect_runs_that_share_the_module_or_service_correl_28b78544": "查看同模块或同服务关键字的运行记录。",
+      "jobs_do_not_have_a_standalone_admin_route_yet_the_li_efdc32a1": "作业暂时没有独立后台路由，当前由运行页的作业类型筛选承载。",
+      "inspect_outbox_receipt_and_dead_letter_records_for_t_228f29e7": "查看同模块或同服务关键字的 Outbox、回执和死信记录。",
+      "search_policy_test_rotation_and_retention_audit_by_c_974bef4c": "按连接 ID 查找策略、测试、轮换和保留审计。",
+      "choose_the_connection_that_will_read_a_new_secret_re_09c104d3": "选择要读取新密钥引用的连接。",
+      "enter_env_name_after_the_secret_is_provisioned_as_an_ab33c040": "密钥先在环境变量中准备好，再填写 env:NAME。",
+      "run_test_from_the_provider_matrix_and_verify_audit_e_4c9b8122": "回到连接矩阵执行测试，并检查审计证据。",
+      "test_connection_value_c12dd6aa": "确认测试连接 {value1}？",
+      "value_connection_value_61324463": "确认{value1}连接 {value2}？",
+      "rotate_the_secret_source_for_value_the_plaintext_sec_39b4e1e8": "确认轮换 {value1} 的密钥来源？不会显示明文。",
+      "clear_the_filter_return_to_modules_or_inspect_webhoo_bf318195": "清空筛选、回到模块列表，或者去 Webhooks 查看是否有排队/死信记录。",
+      "cancel_run_value_168aaf4e": "确认取消运行 {value1}？",
+      "requeue_run_value_ed01ac7b": "确认重新排队运行 {value1}？",
+      "trigger_worker_drain_now_this_run_processes_up_to_25_b9e93a1b": "确认立即触发 Worker Drain？本次最多处理作业、事件、Webhook 和邮件 Outbox 队列 25 条。",
+      "drain_25_worker_records_39239903": "处理 25 条 Worker 队列记录",
+      "this_drain_action_is_the_host_worker_drain_not_webho_d7cb8a14": "这里执行的是宿主 Worker 队列处理，不是只处理 Webhook；它会通过统一 Outbox 同时处理作业、事件、Webhook 和邮件。",
+      "retry_outbox_value_d2601a72": "确认重试 Outbox {value1}？",
+      "discard_outbox_value_2d809397": "确认丢弃 Outbox {value1}？",
+      "archive_outbox_value_7c8a928b": "确认归档 Outbox {value1}？",
+      "retry_webhook_receipt_value_dee92adb": "确认重试 Webhook 回执 {value1}？",
+      "outbox_detail_keeps_runs_jobs_events_service_and_aud_9d9d5900": "Outbox 详情把运行、作业、事件、服务和审计放在载荷前面，避免只能读原始 JSON 才能继续排障。",
+      "open_a211eefa": "打开",
+      "operations_7ae661f1": "运营",
+      "user_review_38aad4ec": "用户审核",
+      "failed_runs_2eed30e4": "运行失败",
+      "dead_letters_b58834c8": "Outbox 死信",
+      "failed_orders_453ed2d8": "失败订单",
+      "revoked_grants_792a3c9e": "待处理权益",
+      "revenue_pulse_b40977f0": "收入脉冲",
+      "platform_b218b539": "运维",
+      "service_connections_d365945f": "服务连接",
+      "module_health_406d1a74": "模块健康",
+      "config_audit_aa98bcad": "配置审计",
+      "browse_by_audience_a0b96fae": "按职责浏览",
+      "operations_commerce_and_platform_entry_points_are_se_2784bd2c": "运营、商业和运维入口分开，首页先让人去对的地方。",
+      "file_storage_is_using_value_configure_durable_object_7f7b6e93": "文件存储正在使用 {value1}。用户上传变重要前，请配置持久化对象存储。",
+      "value_diagnostics_are_open_across_route_catalog_prov_bc8bb0a0": "{value1} 个诊断仍涉及路由目录、供应商、保留策略或安全就绪度。",
+      "change_diff_risk_restart_impact_c5687988": "变更差异 / 风险 / 重启影响",
+      "no_field_changes_detected_1503883a": "未检测到字段变更。",
+      "updated_value_5da794a3": " · 已更新 {value1}",
+      "value_workspace_overrides_0ac11ea6": "{value1} 个工作区覆盖",
+      "value_is_loaded_as_the_product_theme_profile_608cda24": "{value1} 已作为产品主题档案加载。",
+      "value_accepted_light_tokens_are_available_to_shell_c_21b8c6f7": "{value1} 个已接受的浅色令牌可用于外壳组件。",
+      "value_dark_tokens_are_available_for_dark_system_mode_b86a1c41": "{value1} 个暗色令牌可用于暗色/系统模式。",
+      "value_rejected_tokens_or_diagnostics_need_review_bef_2c50db64": "{value1} 个被拒绝的令牌或诊断项需要在发布前复核。",
+      "visual_baseline_records_value_admin_theme_screenshot_df2213fb": "视觉基线已记录 {value1} 张后台主题截图和 {value2} 张浏览器截图。",
+      "current_filter_shows_value_value_records_f66a03c1": "当前筛选显示 {value1} / {value2} 条记录",
+      "block_release_and_repair_error_diagnostics_from_the__f4134cd0": "阻断发布，先按 AI 修复包处理错误诊断。",
+      "module_owner_reviews_warnings_and_test_evidence_befo_4e508ce4": "模块负责人在发布前复核警告和测试证据。",
+      "standard_owner_review_keep_module_doctor_and_module__82c3ccc4": "常规负责人复核；保持 module:doctor 与 module:test 证据。",
+      "mdc_does_not_have_a_remote_environment_contract_yet__9d34727c": "MDC 当前没有远端环境契约；这里把当前运行时、模块地图、module:test 证据和发布目标拆开对比，避免把本地状态误读成生产状态。",
+      "module_owner_readme_runbook_escalation_and_linked_ru_df2711d0": "模块负责人、README 运行手册、诊断升级路径和关联运行入口在原始表格之前可见。",
+      "each_module_has_a_copyable_repair_pack_with_diagnost_f986abc5": "每个模块都有可复制修复包：诊断、AI 提示、负责人、运行手册和最小验证命令放在同一行。",
+      "all_objects_80e82396": "全部对象",
+      "admin_object_23cd6ea7": "后台对象",
+      "users_b4199bc0": "用户",
+      "accounts_status_and_lifecycle_1f0bf6fe": "账号、状态和生命周期",
+      "roles_fe337bda": "角色",
+      "roles_permissions_and_access_scope_6045d921": "角色、权限和访问范围",
+      "modules_f7409f8e": "模块运行",
+      "install_lifecycle_and_runtime_state_eb3f3b3d": "安装、启停和运行状态",
+      "runs_ece48ed8": "任务运行",
+      "jobs_execution_and_retries_6c5d2cf3": "作业、执行和失败重试",
+      "files_a7510f89": "文件",
+      "file_directory_and_storage_governance_f89e1fd4": "文件目录和存储治理",
+      "billing_ed164131": "账单",
+      "orders_credits_and_subscriptions_964aaaca": "订单、点数和订阅",
+      "audit_3b13ee05": "审计",
+      "trace_export_and_evidence_91971a71": "轨迹、导出和证据",
+      "settings_2ae0756a": "设置",
+      "product_settings_and_operational_switches_04e04ed9": "产品配置和运维开关",
+      "search_users_modules_runs_afdf55f2": "搜索用户、模块、运行...",
+      "open_global_search_ebb446c0": "打开全局搜索",
+      "close_global_search_f598b929": "关闭全局搜索",
+      "global_search_a2f4b906": "全局搜索",
+      "search_objects_jump_to_domains_and_keep_recent_looku_5cbbf017": "搜索对象、跳转领域，并保留最近查询。",
+      "search_users_modules_files_orders_runs_1cb93ef1": "搜索用户、模块、文件、订单、运行...",
+      "global_search_query_9b3365b8": "全局搜索查询",
+      "search_type_3a24c841": "搜索类型",
+      "search_1875a46d": "搜索",
+      "recent_searches_13d3dfcb": "最近搜索",
+      "clear_stored_a9a3e08d": "清除记录",
+      "global_command_palette_12256d61": "全局命令面板",
+      "search_recent_items_jump_to_admin_domains_or_run_a_f_c1f9757a": "搜索最近项目、跳转后台领域，或执行聚焦的全局查找。",
+      "recent_and_quick_searches_f1433f66": "最近和快捷搜索",
+      "current_96fd588b": "当前",
+      "matching_objects_63250a66": "匹配对象",
+      "quick_jumps_f81fd51d": "快速跳转",
+      "no_value_match_this_query_press_enter_to_open_the_fu_360dbb8b": "没有匹配的{value1}。按 Enter 打开完整搜索页。"
+    }
+  },
+  "seo": {
+    "default": {
+      "title": "PloyKit",
+      "description": "PloyKit 是开源应用底座，提供公共站点、认证、工作台和后台。"
+    },
+    "pages": {
+      "home": {
+        "title": "PloyKit 产品前台",
+        "description": "从默认公开页面、认证页面和工作台入口开始，并在产品需要时用模块替换它们。"
+      },
+      "about": {
+        "title": "关于 PloyKit",
+        "description": "了解 PloyKit 适合哪些产品场景。"
+      },
+      "pricing": {
+        "title": "价格",
+        "description": "选择套餐，开发阶段可先用本地结账跑通流程。"
+      },
+      "docs": {
+        "title": "文档",
+        "description": "面向产品组合、模块开发和宿主运维的 PloyKit 文档。"
+      },
+      "contact": {
+        "title": "联系",
+        "description": "联系产品团队，讨论模块系统、宿主运维和部署方案。"
+      },
+      "privacy": {
+        "title": "隐私",
+        "description": "了解 PloyKit 产品宿主的数据和隐私处理原则。"
+      },
+      "terms": {
+        "title": "条款",
+        "description": "查看 PloyKit 产品宿主的使用条款。"
+      },
+      "success": {
+        "title": "操作成功",
+        "description": "请求已完成，可以返回工作台继续处理任务、文件、账单或模块运行状态。"
+      }
+    }
+  },
+  "moduleValue": {
+    "setupRequired": "需要设置",
+    "needsAttention": "需要关注",
+    "ready": "正常",
+    "quickSignals": "快速信号",
+    "primaryActions": "主要操作",
+    "recoveryActions": "恢复操作",
+    "operatorWorkflow": "操作流程",
+    "decision": "判断问题",
+    "nextActions": "下一步操作",
+    "recoveryPath": "恢复路径",
+    "releaseEvidence": "发布证据",
+    "operationalFacts": "运行事实",
+    "evidence": "证据",
+    "notReported": "未上报",
+    "none": "无",
+    "missing": "缺失"
+  },
+  "common": {
+    "theme": "主题"
+  }
+}

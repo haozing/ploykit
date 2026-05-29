@@ -1,0 +1,11 @@
+{
+  "nav": {
+    "dashboard": "__MODULE_NAME__"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "__MODULE_NAME__",
+      "description": "Module workspace"
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "products": [
+    {
+      "id": "demo-product",
+      "name": "PloyKit Product",
+      "profile": "hidden-default",
+      "defaultWorkspaceId": "demo-workspace"
+    },
+    {
+      "id": "team-product",
+      "name": "Team Product",
+      "profile": "explicit-workspace",
+      "defaultWorkspaceId": "team-main"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "demo-workspace",
+      "productId": "demo-product",
+      "name": "Default Workspace",
+      "slug": "default",
+      "domainAliases": ["localhost", "127.0.0.1"]
+    },
+    {
+      "id": "team-main",
+      "productId": "team-product",
+      "name": "Team Main",
+      "slug": "team-main"
+    },
+    {
+      "id": "team-lab",
+      "productId": "team-product",
+      "name": "Team Lab",
+      "slug": "team-lab",
+      "domainAliases": ["team.localhost"]
+    }
+  ],
+  "memberships": [
+    {
+      "id": "demo-product:demo-workspace:demo-admin",
+      "productId": "demo-product",
+      "workspaceId": "demo-workspace",
+      "userId": "demo-admin",
+      "role": "owner",
+      "status": "active"
+    },
+    {
+      "id": "team-product:team-main:demo-admin",
+      "productId": "team-product",
+      "workspaceId": "team-main",
+      "userId": "demo-admin",
+      "role": "owner",
+      "status": "active"
+    },
+    {
+      "id": "team-product:team-lab:demo-admin",
+      "productId": "team-product",
+      "workspaceId": "team-lab",
+      "userId": "demo-admin",
+      "role": "admin",
+      "status": "active"
+    }
+  ],
+  "invites": [],
+  "domainAliases": [
+    {
+      "hostname": "localhost",
+      "productId": "demo-product",
+      "workspaceId": "demo-workspace"
+    },
+    {
+      "hostname": "127.0.0.1",
+      "productId": "demo-product",
+      "workspaceId": "demo-workspace"
+    },
+    {
+      "hostname": "team.localhost",
+      "productId": "team-product",
+      "workspaceId": "team-lab"
+    }
+  ]
+}

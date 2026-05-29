@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "incremental": true,
+    "jsx": "preserve",
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["src/*"],
+      "@host/*": ["apps/host-next/*"],
+      "@ploykit/module-sdk": ["src/module-sdk/index.ts"],
+      "@ploykit/module-sdk/*": ["src/module-sdk/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "../../src/**/*.ts",
+    "../../modules/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

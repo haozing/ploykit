@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+.runtime/
+src/lib/module-map.ts
+src/lib/module-map.manifest.json
+modules/**/.ploykit/generated/

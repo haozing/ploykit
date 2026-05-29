@@ -1,0 +1,182 @@
+{
+  "nav": {
+    "dashboard": "工作台",
+    "support": "支持"
+  },
+  "pages": {
+    "home": {
+      "eyebrow": "Acme operations hub",
+      "title": "Acme Console",
+      "description": "一个面向客户运营、文件审核、账单健康和 AI 辅助日常工作的品牌化工作台。",
+      "primaryAction": "立即开始",
+      "secondaryAction": "查看价格",
+      "capabilityTitle": "工作区能力",
+      "capabilities": ["客户记录", "任务自动化", "文件", "账单", "洞察"],
+      "status": "ready"
+    },
+    "about": {
+      "title": "关于 Acme Console",
+      "description": "为需要清晰运营、快速客户跟进和可靠工作区治理的团队构建。",
+      "eyebrow": "Acme Console",
+      "body": "Acme Console 将任务、文件、账单信号和客户上下文整合到一个品牌化工作区，让团队在不失去运营控制的前提下，从需求进入到问题解决。"
+    },
+    "pricing": {
+      "title": "适合每个运营团队的套餐",
+      "description": "先从聚焦工作区开始，再随着产品增长扩展自动化、文件、账单和分析能力。",
+      "eyebrow": "Acme pricing",
+      "choose": "选择套餐",
+      "plans": [
+        {
+          "name": "Launch",
+          "price": "$29",
+          "detail": "适合正在验证第一条客户运营工作流的小团队。"
+        },
+        {
+          "name": "Scale",
+          "price": "$99",
+          "detail": "适合运行多个工作区、后台任务和文件流程的团队。"
+        },
+        {
+          "name": "Platform",
+          "price": "Custom",
+          "detail": "适合需要自定义 provider 和运营策略的品牌化部署。"
+        }
+      ]
+    },
+    "contact": {
+      "title": "联系 Acme",
+      "description": "告诉我们你的工作区、客户运营流程，以及你希望改善的业务结果。",
+      "eyebrow": "Acme contact",
+      "received": "消息已收到。",
+      "failed": "消息提交失败，请检查必填字段。",
+      "name": "姓名",
+      "namePlaceholder": "你的名字",
+      "email": "邮箱",
+      "emailPlaceholder": "you@example.com",
+      "company": "公司 / 团队",
+      "optional": "可选",
+      "message": "需求",
+      "messagePlaceholder": "说说你想构建的白牌产品。",
+      "submit": "发送"
+    },
+    "docs": {
+      "title": "文档中心",
+      "description": "把产品说明、开发指南和支持内容统一到可替换页面。",
+      "eyebrow": "Acme Console",
+      "body": "使用 Acme 文档中心规划页面归属、主题 token、工作台入口和验证流程，再交付自己的白牌产品。"
+    },
+    "privacy": {
+      "title": "Acme 隐私",
+      "description": "Acme Console 如何保护客户、工作区和运营数据。",
+      "eyebrow": "Acme Console",
+      "body": "这个示例隐私页覆盖账号数据、上传文件、运营事件、保留策略和 provider 处理。生产部署应替换为真实的数据处理政策。"
+    },
+    "terms": {
+      "title": "Acme 条款",
+      "description": "面向 Acme Console 客户的账号、账单和工作区使用条款。",
+      "eyebrow": "Acme Console",
+      "body": "这些示例条款描述了合理使用、账号归属、支付处理、文件治理和工作区管理。生产部署应替换为真实法律条款。"
+    },
+    "auth": {
+      "brand": "Acme Console",
+      "eyebrow": "Secure Acme access",
+      "supportingText": "使用一个安全账号访问工作区、客户记录、文件和账单历史。",
+      "email": "邮箱",
+      "emailPlaceholder": "admin@example.com",
+      "displayName": "显示名称",
+      "displayNamePlaceholder": "Acme User",
+      "resetToken": "重置 Token",
+      "resetTokenPlaceholder": "粘贴重置 token",
+      "password": "密码",
+      "passwordPlaceholder": "Admin@123456",
+      "error": "账号信息不正确，请检查后重试。",
+      "links": {
+        "login": "登录",
+        "register": "注册",
+        "forgotPassword": "忘记密码"
+      },
+      "modes": {
+        "login": {
+          "title": "登录 Acme Console",
+          "description": "通过品牌化登录页使用宿主身份服务。",
+          "submitLabel": "登录"
+        },
+        "register": {
+          "title": "创建 Acme 账号",
+          "description": "打开工作区，同时由宿主继续负责认证、会话和策略执行。",
+          "submitLabel": "创建账号"
+        },
+        "forgot-password": {
+          "title": "找回 Acme 账号",
+          "description": "从宿主身份服务请求安全的密码重置链接。",
+          "submitLabel": "发送重置链接"
+        },
+        "reset-password": {
+          "title": "重置 Acme 密码",
+          "description": "设置新密码，同时保留宿主安全边界。",
+          "submitLabel": "重置密码"
+        }
+      }
+    },
+    "dashboardHome": {
+      "eyebrow": "Acme workspace",
+      "title": "欢迎回来",
+      "description": "查看今天的工作区优先事项、文件、账单健康和客户信号。",
+      "signedInDescription": "当前账号 {email}。查看今天的工作区优先事项和客户信号。",
+      "cards": [
+        ["Tasks", "12", "模块工作可以定义面向产品的概览。"],
+        ["Files", "48", "宿主文件仍然可以在这个自定义壳中访问。"],
+        ["Runs", "7", "自动化运行健康，已准备好处理今天的工作。"]
+      ],
+      "pinnedTools": "固定工具",
+      "tools": ["CRM sync", "File review", "Billing health", "AI workspace summary"]
+    },
+    "contributions": {
+      "homeHero": "重点工作区更新和公告",
+      "adminModulesAction": "品牌预览"
+    }
+  },
+  "seo": {
+    "home": {
+      "title": "Acme Console",
+      "description": "将客户运营、文件、账单健康和 AI 辅助工作带入一个品牌化控制台。"
+    },
+    "about": {
+      "title": "关于 Acme Console",
+      "description": "了解 Acme Console 如何组织客户运营、文件、账单和治理。"
+    },
+    "pricing": {
+      "title": "Acme Pricing",
+      "description": "选择适合你的工作区、自动化和文件规模的 Acme Console 套餐。"
+    },
+    "contact": {
+      "title": "联系 Acme",
+      "description": "和 Acme 讨论客户运营、工作区自动化和治理。"
+    },
+    "docs": {
+      "title": "Acme 文档中心",
+      "description": "学习如何使用 Acme Console 组合产品页面、主题和工作区壳。"
+    },
+    "privacy": {
+      "title": "Acme 隐私",
+      "description": "Acme Console 如何保护客户、工作区和运营数据。"
+    },
+    "terms": {
+      "title": "Acme 条款",
+      "description": "面向 Acme Console 客户的账号、账单和工作区使用条款。"
+    },
+    "auth": {
+      "title": "Acme 账号",
+      "description": "通过品牌化认证页访问 Acme Console。"
+    },
+    "dashboardHome": {
+      "title": "Acme Workspace",
+      "description": "查看工作区优先事项、文件、账单健康和客户信号。"
+    }
+  },
+  "forms": {
+    "contact": {
+      "submit": "发送"
+    }
+  }
+}

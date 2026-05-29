@@ -1,0 +1,898 @@
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import type { ModuleUser, PermissionValue } from '@ploykit/module-sdk';
+import {
+  createAnonymousModuleHostSession,
+  type ModuleHostSession,
+} from '@/lib/module-runtime/host/session';
+import type {
+  RuntimeStore,
+  RuntimeStoreHostUser,
+  RuntimeStoreHostUserStatus,
+} from '@/lib/module-runtime/stores/runtime-store-types';
+import { DEFAULT_LANGUAGE, localizedDashboardPath, localizedPath, type SupportedLanguage } from './i18n';
+import { requireCapability, USER_MODULE_PERMISSIONS } from './rbac';
+import { getHostRuntimeStore } from './runtime-store';
+import {
+  DEFAULT_HOST_PRODUCT_ID,
+  DEFAULT_HOST_PRODUCT_SCOPE_PROFILE,
+  DEFAULT_HOST_WORKSPACE_ID,
+} from './default-scope';
+import { readHostSettingsView } from './host-settings';
+
+export const HOST_AUTH_COOKIE = 'ploykit_session';
+
+const DEV_AUTH_SECRET = 'ploykit-dev-auth-secret';
+const DEFAULT_PRODUCT_ID = DEFAULT_HOST_PRODUCT_ID;
+const DEFAULT_WORKSPACE_ID = DEFAULT_HOST_WORKSPACE_ID;
+const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const TOKEN_TTL_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEMO_MODULES_ENTITLEMENT = 'ploykit.demo_modules';
+
+interface SeedHostUser {
+  id: string;
+  email: string;
+  password: string;
+  role: ModuleUser['role'];
+  workspaceRole: ModuleHostSession['workspaceRole'];
+  permissions?: readonly PermissionValue[];
+}
+
+const USER_PERMISSIONS = USER_MODULE_PERMISSIONS;
+
+const SEEDED_HOST_USERS: readonly SeedHostUser[] = [
+  {
+    id: 'demo-admin',
+    email: 'admin@example.com',
+    password: 'Admin@123456',
+    role: 'admin',
+    workspaceRole: 'owner',
+  },
+  {
+    id: 'demo-user',
+    email: 'user@example.com',
+    password: 'User@123456',
+    role: 'user',
+    workspaceRole: 'editor',
+    permissions: USER_PERMISSIONS,
+  },
+];
+
+const seedPromises = new WeakMap<RuntimeStore, Promise<void>>();
+
+export interface HostAuthSessionRecord {
+  id: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+  userAgent?: string;
+}
+
+interface HostAuthTokenRecord {
+  tokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string;
+  email?: string;
+}
+
+interface HostAuthMailLogRecord {
+  id: string;
+  type: 'password-reset' | 'email-verification';
+  email: string;
+  createdAt: string;
+  tokenPreview: string;
+}
+
+interface HostAuthMetadata {
+  sessions: HostAuthSessionRecord[];
+  passwordResetTokens: HostAuthTokenRecord[];
+  emailVerificationTokens: HostAuthTokenRecord[];
+  emailVerifiedAt?: string;
+  mailLog: HostAuthMailLogRecord[];
+}
+
+interface DecodedHostSessionCookie {
+  userId: string;
+  sessionId?: string;
+  expiresAt?: string;
+}
+
+export interface HostAuthPolicy {
+  requireEmailVerification: boolean;
+  sessionTtlMs: number;
+  passwordMinLength: number;
+}
+
+export interface HostAuthAdapter {
+  authenticate(email: string, password: string): Promise<RuntimeStoreHostUser | null>;
+  createSession(
+    user: RuntimeStoreHostUser,
+    input?: { userAgent?: string }
+  ): Promise<{ session: HostAuthSessionRecord; cookie: string }>;
+  revokeSession(userId: string, sessionId: string): Promise<void>;
+  resolveSession(cookieHeader: string | null): Promise<ModuleHostSession>;
+  register(input: {
+    email: string;
+    password: string;
+    displayName?: string;
+  }): Promise<{ user: RuntimeStoreHostUser; emailVerificationToken: string }>;
+  requestPasswordReset(email: string): Promise<{ sent: boolean; resetToken?: string }>;
+  resetPassword(token: string, newPassword: string): Promise<RuntimeStoreHostUser>;
+  verifyEmail(token: string): Promise<RuntimeStoreHostUser>;
+  listSessions(userId: string): Promise<HostAuthSessionRecord[]>;
+}
+
+function parseCookieHeader(header: string | null): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const part of (header ?? '').split(';')) {
+    const [rawName, ...rawValue] = part.trim().split('=');
+    if (!rawName || rawValue.length === 0) {
+      continue;
+    }
+
+    cookies.set(rawName, decodeURIComponent(rawValue.join('=')));
+  }
+
+  return cookies;
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function booleanSetting(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return value === 'true' || value === '1' || value === 'yes';
+  }
+  return fallback;
+}
+
+function numberSetting(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(Math.max(Math.floor(parsed), min), max) : fallback;
+}
+
+function envAuthPolicy(): HostAuthPolicy {
+  return {
+    requireEmailVerification: booleanSetting(process.env.PLOYKIT_REQUIRE_EMAIL_VERIFICATION, true),
+    sessionTtlMs:
+      numberSetting(
+        process.env.PLOYKIT_SESSION_MAX_AGE_DAYS,
+        Math.round(DEFAULT_SESSION_TTL_MS / DAY_MS),
+        1,
+        365
+      ) * DAY_MS,
+    passwordMinLength: numberSetting(process.env.PLOYKIT_PASSWORD_MIN_LENGTH, 8, 8, 128),
+  };
+}
+
+function demoModuleEntitlements(): readonly string[] {
+  return process.env.PLOYKIT_ENABLE_DEMO_MODULES === '1' ||
+    process.env.PLOYKIT_ENABLE_DEMO_MODULES === 'true'
+    ? [DEMO_MODULES_ENTITLEMENT]
+    : [];
+}
+
+export async function getHostAuthPolicyForStore(store: RuntimeStore): Promise<HostAuthPolicy> {
+  const base = envAuthPolicy();
+  const settings = await readHostSettingsView(store, DEFAULT_PRODUCT_ID);
+  return {
+    requireEmailVerification: settings.requireEmailVerification ?? base.requireEmailVerification,
+    sessionTtlMs: Math.round(settings.sessionMaxAgeDays * DAY_MS),
+    passwordMinLength: settings.passwordMinLength ?? base.passwordMinLength,
+  };
+}
+
+function authSecret(): string {
+  const secret = process.env.PLOYKIT_AUTH_SECRET ?? process.env.PLOYKIT_MEDIA_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('PLOYKIT_AUTH_SECRET_REQUIRED');
+  }
+  return secret ?? DEV_AUTH_SECRET;
+}
+
+function signSessionPayload(payload: string): string {
+  return createHmac('sha256', authSecret()).update(payload).digest('base64url');
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function encodeSessionCookieValue(userId: string, sessionId?: string, expiresAt?: string): string {
+  const payload = Buffer.from(JSON.stringify({ userId, sessionId, expiresAt }), 'utf8').toString('base64url');
+  return `v2.${payload}.${signSessionPayload(payload)}`;
+}
+
+function decodeSessionCookieValue(value: string | undefined): DecodedHostSessionCookie | undefined {
+  const [version, payload, signature, ...rest] = (value ?? '').split('.');
+  if ((version !== 'v1' && version !== 'v2') || !payload || !signature || rest.length > 0) {
+    return undefined;
+  }
+  if (!safeEqual(signature, signSessionPayload(payload))) {
+    return undefined;
+  }
+
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      userId?: unknown;
+      sessionId?: unknown;
+      expiresAt?: unknown;
+    };
+    return typeof decoded.userId === 'string'
+      ? {
+          userId: decoded.userId,
+          sessionId: typeof decoded.sessionId === 'string' ? decoded.sessionId : undefined,
+          expiresAt: typeof decoded.expiresAt === 'string' ? decoded.expiresAt : undefined,
+        }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tokenHash(token: string): string {
+  return createHmac('sha256', authSecret()).update(token).digest('base64url');
+}
+
+function createToken(): string {
+  return randomBytes(24).toString('base64url');
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function expiresIso(ttlMs: number): string {
+  return new Date(Date.now() + ttlMs).toISOString();
+}
+
+function isFuture(value: string): boolean {
+  return new Date(value).getTime() > Date.now();
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function tokenRecord(value: unknown): HostAuthTokenRecord | null {
+  const item = record(value);
+  return typeof item.tokenHash === 'string' &&
+    typeof item.createdAt === 'string' &&
+    typeof item.expiresAt === 'string'
+    ? {
+        tokenHash: item.tokenHash,
+        createdAt: item.createdAt,
+        expiresAt: item.expiresAt,
+        usedAt: typeof item.usedAt === 'string' ? item.usedAt : undefined,
+        email: typeof item.email === 'string' ? item.email : undefined,
+      }
+    : null;
+}
+
+function sessionRecord(value: unknown): HostAuthSessionRecord | null {
+  const item = record(value);
+  return typeof item.id === 'string' &&
+    typeof item.userId === 'string' &&
+    typeof item.createdAt === 'string' &&
+    typeof item.expiresAt === 'string'
+    ? {
+        id: item.id,
+        userId: item.userId,
+        createdAt: item.createdAt,
+        expiresAt: item.expiresAt,
+        revokedAt: typeof item.revokedAt === 'string' ? item.revokedAt : undefined,
+        userAgent: typeof item.userAgent === 'string' ? item.userAgent : undefined,
+      }
+    : null;
+}
+
+function mailLogRecord(value: unknown): HostAuthMailLogRecord | null {
+  const item = record(value);
+  return typeof item.id === 'string' &&
+    (item.type === 'password-reset' || item.type === 'email-verification') &&
+    typeof item.email === 'string' &&
+    typeof item.createdAt === 'string' &&
+    typeof item.tokenPreview === 'string'
+    ? {
+        id: item.id,
+        type: item.type,
+        email: item.email,
+        createdAt: item.createdAt,
+        tokenPreview: item.tokenPreview,
+      }
+    : null;
+}
+
+function readAuthMetadata(user: RuntimeStoreHostUser): HostAuthMetadata {
+  const auth = record(user.metadata.auth);
+  return {
+    sessions: Array.isArray(auth.sessions)
+      ? auth.sessions.map(sessionRecord).filter((item): item is HostAuthSessionRecord => Boolean(item))
+      : [],
+    passwordResetTokens: Array.isArray(auth.passwordResetTokens)
+      ? auth.passwordResetTokens.map(tokenRecord).filter((item): item is HostAuthTokenRecord => Boolean(item))
+      : [],
+    emailVerificationTokens: Array.isArray(auth.emailVerificationTokens)
+      ? auth.emailVerificationTokens.map(tokenRecord).filter((item): item is HostAuthTokenRecord => Boolean(item))
+      : [],
+    emailVerifiedAt: typeof auth.emailVerifiedAt === 'string' ? auth.emailVerifiedAt : undefined,
+    mailLog: Array.isArray(auth.mailLog)
+      ? auth.mailLog.map(mailLogRecord).filter((item): item is HostAuthMailLogRecord => Boolean(item))
+      : [],
+  };
+}
+
+function withAuthMetadata(
+  user: RuntimeStoreHostUser,
+  auth: HostAuthMetadata
+): RuntimeStoreHostUser {
+  return {
+    ...user,
+    metadata: {
+      ...user.metadata,
+      auth,
+    },
+  };
+}
+
+function activeSessions(user: RuntimeStoreHostUser): HostAuthSessionRecord[] {
+  return readAuthMetadata(user).sessions.filter(
+    (session) => !session.revokedAt && isFuture(session.expiresAt)
+  );
+}
+
+function isSessionActive(
+  user: RuntimeStoreHostUser,
+  sessionId: string | undefined,
+  cookieExpiresAt?: string
+): boolean {
+  if (!sessionId) {
+    return process.env.NODE_ENV !== 'production';
+  }
+  const auth = readAuthMetadata(user);
+  if (activeSessions(user).some((session) => session.id === sessionId)) {
+    return true;
+  }
+  if (auth.sessions.length > 0) {
+    return false;
+  }
+  return Boolean(cookieExpiresAt && isFuture(cookieExpiresAt));
+}
+
+export function createHostPasswordHash(
+  password: string,
+  salt = randomBytes(16).toString('base64url')
+): string {
+  const key = scryptSync(password, salt, 32).toString('base64url');
+  return `scrypt-v1.${salt}.${key}`;
+}
+
+export function verifyHostPassword(password: string, passwordHash: string): boolean {
+  const [version, salt, expected, ...rest] = passwordHash.split('.');
+  if (version !== 'scrypt-v1' || !salt || !expected || rest.length > 0) {
+    return false;
+  }
+  const actual = scryptSync(password, salt, 32).toString('base64url');
+  return safeEqual(actual, expected);
+}
+
+async function seedHostIdentity(store: RuntimeStore): Promise<void> {
+  for (const user of SEEDED_HOST_USERS) {
+    const existing = await store.getHostUser(user.id);
+    if (!existing) {
+      await store.upsertHostUser({
+        id: user.id,
+        email: user.email,
+        passwordHash: createHostPasswordHash(user.password, `seed-${user.id}`),
+        role: user.role,
+        status: 'active',
+        productId: DEFAULT_PRODUCT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        workspaceRole: user.workspaceRole ?? 'viewer',
+        permissions: user.permissions,
+        metadata: {
+          seed: true,
+        },
+      });
+    }
+
+    await store.upsertMembership({
+      productId: DEFAULT_PRODUCT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      userId: user.id,
+      role: user.workspaceRole ?? 'viewer',
+      status: 'active',
+    });
+  }
+
+  const existingAudit = await store.listAudit({
+    productId: DEFAULT_PRODUCT_ID,
+    type: 'host.identity.seeded',
+  });
+  if (existingAudit.length === 0) {
+    await store.recordAudit({
+      productId: DEFAULT_PRODUCT_ID,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      actorId: 'system',
+      type: 'host.identity.seeded',
+      metadata: {
+        users: SEEDED_HOST_USERS.map((user) => user.id),
+      },
+    });
+  }
+}
+
+export async function ensureHostIdentitySeeded(store: RuntimeStore): Promise<void> {
+  let promise = seedPromises.get(store);
+  if (!promise) {
+    promise = seedHostIdentity(store).catch((error) => {
+      seedPromises.delete(store);
+      throw error;
+    });
+    seedPromises.set(store, promise);
+  }
+
+  await promise;
+}
+
+async function getHostIdentityStore(): Promise<RuntimeStore> {
+  const runtimeStore = await getHostRuntimeStore();
+  await ensureHostIdentitySeeded(runtimeStore.store);
+  return runtimeStore.store;
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function tokenMailLog(
+  type: HostAuthMailLogRecord['type'],
+  email: string,
+  token: string
+): HostAuthMailLogRecord {
+  return {
+    id: `${type}-${randomBytes(8).toString('hex')}`,
+    type,
+    email,
+    createdAt: nowIso(),
+    tokenPreview: `${token.slice(0, 6)}...${token.slice(-4)}`,
+  };
+}
+
+function hasUsableToken(tokens: readonly HostAuthTokenRecord[], token: string): boolean {
+  const hash = tokenHash(token);
+  return tokens.some((item) => item.tokenHash === hash && !item.usedAt && isFuture(item.expiresAt));
+}
+
+function markTokenUsed(tokens: readonly HostAuthTokenRecord[], token: string): HostAuthTokenRecord[] {
+  const hash = tokenHash(token);
+  return tokens.map((item) =>
+    item.tokenHash === hash && !item.usedAt
+      ? {
+          ...item,
+          usedAt: nowIso(),
+        }
+      : item
+  );
+}
+
+async function recordAuthAudit(
+  store: RuntimeStore,
+  user: RuntimeStoreHostUser,
+  type: string,
+  metadata: Record<string, unknown>
+) {
+  await store.recordAudit({
+    productId: user.productId,
+    workspaceId: user.workspaceId,
+    actorId: user.id,
+    type,
+    metadata,
+  });
+}
+
+async function findUserByToken(
+  store: RuntimeStore,
+  selector: (auth: HostAuthMetadata) => readonly HostAuthTokenRecord[],
+  token: string
+): Promise<RuntimeStoreHostUser | null> {
+  const users = await store.listHostUsers({ productId: DEFAULT_PRODUCT_ID });
+  return (
+    users.find((user) => hasUsableToken(selector(readAuthMetadata(user)), token)) ?? null
+  );
+}
+
+export function createRuntimeStoreHostAuthAdapter(store: RuntimeStore): HostAuthAdapter {
+  return {
+    async authenticate(email, password) {
+      const user = await store.findHostUserByEmail(normalizeEmail(email));
+      if (!user || user.status !== 'active') {
+        return null;
+      }
+      return verifyHostPassword(password, user.passwordHash) ? user : null;
+    },
+
+    async createSession(user, input = {}) {
+      const auth = readAuthMetadata(user);
+      const policy = await getHostAuthPolicyForStore(store);
+      const session: HostAuthSessionRecord = {
+        id: `session-${randomBytes(12).toString('hex')}`,
+        userId: user.id,
+        createdAt: nowIso(),
+        expiresAt: expiresIso(policy.sessionTtlMs),
+        userAgent: input.userAgent,
+      };
+      const saved = await store.upsertHostUser(
+        withAuthMetadata(user, {
+          ...auth,
+          sessions: [...activeSessions(user), session].slice(-20),
+        })
+      );
+      await recordAuthAudit(store, saved, 'host.auth.session.created', {
+        sessionId: session.id,
+      });
+      return {
+        session,
+        cookie: createHostSessionCookieForSession(user.id, session.id, policy.sessionTtlMs),
+      };
+    },
+
+    async revokeSession(userId, sessionId) {
+      const user = await store.getHostUser(userId);
+      if (!user) {
+        return;
+      }
+      const auth = readAuthMetadata(user);
+      const saved = await store.upsertHostUser(
+        withAuthMetadata(user, {
+          ...auth,
+          sessions: auth.sessions.map((session) =>
+            session.id === sessionId && !session.revokedAt
+              ? { ...session, revokedAt: nowIso() }
+              : session
+          ),
+        })
+      );
+      await recordAuthAudit(store, saved, 'host.auth.session.revoked', {
+        sessionId,
+      });
+    },
+
+    async resolveSession(cookieHeader) {
+      const decoded = readHostSessionCookie(cookieHeader);
+      if (!decoded) {
+        return createAnonymousHostSession();
+      }
+      const user = await store.getHostUser(decoded.userId);
+      return user && user.status === 'active' && isSessionActive(user, decoded.sessionId, decoded.expiresAt)
+        ? createHostSessionForUser(user, { authSessionId: decoded.sessionId })
+        : createAnonymousHostSession();
+    },
+
+    async register(input) {
+      const policy = await getHostAuthPolicyForStore(store);
+      const email = normalizeEmail(input.email);
+      if (!email.includes('@')) {
+        throw new Error('AUTH_EMAIL_INVALID');
+      }
+      if (input.password.length < policy.passwordMinLength) {
+        throw new Error('AUTH_PASSWORD_TOO_SHORT');
+      }
+      const existing = await store.findHostUserByEmail(email);
+      if (existing) {
+        throw new Error('AUTH_EMAIL_EXISTS');
+      }
+
+      const token = createToken();
+      const createdAt = nowIso();
+      const user = await store.upsertHostUser({
+        id: `host-user-${randomBytes(8).toString('hex')}`,
+        email,
+        passwordHash: createHostPasswordHash(input.password),
+        role: 'user',
+        status: policy.requireEmailVerification ? 'pending-verification' : 'active',
+        productId: DEFAULT_PRODUCT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        workspaceRole: 'editor',
+        permissions: USER_PERMISSIONS,
+        metadata: {
+          profile: {
+            displayName: input.displayName,
+          },
+          auth: {
+            sessions: [],
+            passwordResetTokens: [],
+            emailVerificationTokens: policy.requireEmailVerification
+              ? [
+                  {
+                    tokenHash: tokenHash(token),
+                    createdAt,
+                    expiresAt: expiresIso(24 * TOKEN_TTL_MS),
+                    email,
+                  },
+                ]
+              : [],
+            mailLog: policy.requireEmailVerification
+              ? [tokenMailLog('email-verification', email, token)]
+              : [],
+          } satisfies HostAuthMetadata,
+        },
+      });
+      await store.upsertMembership({
+        productId: DEFAULT_PRODUCT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        userId: user.id,
+        role: 'editor',
+        status: 'active',
+      });
+      await recordAuthAudit(store, user, 'host.auth.user.registered', {
+        status: user.status,
+      });
+      return { user, emailVerificationToken: token };
+    },
+
+    async requestPasswordReset(emailInput) {
+      const email = normalizeEmail(emailInput);
+      const user = await store.findHostUserByEmail(email);
+      if (!user || user.status === 'deleted') {
+        return { sent: true };
+      }
+      const token = createToken();
+      const auth = readAuthMetadata(user);
+      const saved = await store.upsertHostUser(
+        withAuthMetadata(user, {
+          ...auth,
+          passwordResetTokens: [
+            ...auth.passwordResetTokens.filter((item) => !item.usedAt && isFuture(item.expiresAt)),
+            {
+              tokenHash: tokenHash(token),
+              createdAt: nowIso(),
+              expiresAt: expiresIso(TOKEN_TTL_MS),
+              email,
+            },
+          ],
+          mailLog: [...auth.mailLog, tokenMailLog('password-reset', email, token)].slice(-20),
+        })
+      );
+      await recordAuthAudit(store, saved, 'host.auth.password_reset.requested', {});
+      return { sent: true, resetToken: token };
+    },
+
+    async resetPassword(token, newPassword) {
+      const policy = await getHostAuthPolicyForStore(store);
+      if (newPassword.length < policy.passwordMinLength) {
+        throw new Error('AUTH_PASSWORD_TOO_SHORT');
+      }
+      const user = await findUserByToken(store, (auth) => auth.passwordResetTokens, token);
+      if (!user) {
+        throw new Error('AUTH_PASSWORD_RESET_TOKEN_INVALID');
+      }
+      const auth = readAuthMetadata(user);
+      const saved = await store.upsertHostUser(
+        withAuthMetadata(
+          {
+            ...user,
+            passwordHash: createHostPasswordHash(newPassword),
+          },
+          {
+            ...auth,
+            passwordResetTokens: markTokenUsed(auth.passwordResetTokens, token),
+            sessions: auth.sessions.map((session) =>
+              session.revokedAt ? session : { ...session, revokedAt: nowIso() }
+            ),
+          }
+        )
+      );
+      await recordAuthAudit(store, saved, 'host.auth.password_reset.completed', {});
+      return saved;
+    },
+
+    async verifyEmail(token) {
+      const user = await findUserByToken(store, (auth) => auth.emailVerificationTokens, token);
+      if (!user) {
+        throw new Error('AUTH_EMAIL_VERIFICATION_TOKEN_INVALID');
+      }
+      const auth = readAuthMetadata(user);
+      const saved = await store.upsertHostUser(
+        withAuthMetadata(
+          {
+            ...user,
+            status: 'active' as RuntimeStoreHostUserStatus,
+          },
+          {
+            ...auth,
+            emailVerificationTokens: markTokenUsed(auth.emailVerificationTokens, token),
+            emailVerifiedAt: nowIso(),
+          }
+        )
+      );
+      await recordAuthAudit(store, saved, 'host.auth.email.verified', {});
+      return saved;
+    },
+
+    async listSessions(userId) {
+      const user = await store.getHostUser(userId);
+      return user ? activeSessions(user) : [];
+    },
+  };
+}
+
+export async function getHostAuthAdapter(): Promise<HostAuthAdapter> {
+  return createRuntimeStoreHostAuthAdapter(await getHostIdentityStore());
+}
+
+export async function authenticateHostUser(
+  email: string,
+  password: string
+): Promise<RuntimeStoreHostUser | null> {
+  return (await getHostAuthAdapter()).authenticate(email, password);
+}
+
+export function createHostSessionCookie(userId: string): string {
+  const maxAgeSeconds = Math.floor(envAuthPolicy().sessionTtlMs / 1000);
+  const cookie = [
+    `${HOST_AUTH_COOKIE}=${encodeURIComponent(encodeSessionCookieValue(userId))}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (process.env.NODE_ENV === 'production') {
+    cookie.push('Secure');
+  }
+  return cookie.join('; ');
+}
+
+export function createHostSessionCookieForSession(
+  userId: string,
+  sessionId: string,
+  ttlMs = envAuthPolicy().sessionTtlMs
+): string {
+  const expiresAt = expiresIso(ttlMs);
+  const maxAgeSeconds = Math.floor(ttlMs / 1000);
+  const cookie = [
+    `${HOST_AUTH_COOKIE}=${encodeURIComponent(encodeSessionCookieValue(userId, sessionId, expiresAt))}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (process.env.NODE_ENV === 'production') {
+    cookie.push('Secure');
+  }
+  return cookie.join('; ');
+}
+
+export function clearHostSessionCookie(): string {
+  return `${HOST_AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+export function createHostSessionForUser(
+  user: Pick<
+    RuntimeStoreHostUser,
+    'id' | 'email' | 'role' | 'productId' | 'workspaceId' | 'workspaceRole'
+  > & {
+    permissions?: readonly PermissionValue[];
+  },
+  options: { authSessionId?: string } = {}
+): ModuleHostSession {
+  return {
+    user: {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+    },
+    userId: user.id,
+    actorId: user.id,
+    authSessionId: options.authSessionId,
+    productId: user.productId,
+    workspaceId: user.workspaceId,
+    workspaceRole: user.workspaceRole,
+    productScopeProfile: DEFAULT_HOST_PRODUCT_SCOPE_PROFILE,
+    permissions: user.role === 'admin' ? undefined : (user.permissions ?? USER_PERMISSIONS),
+    entitlements: ['demo.entitlement', ...demoModuleEntitlements()],
+    plans: ['demo'],
+    plan: 'demo',
+    creditsBalance: user.role === 'admin' ? 1000 : 120,
+    data: null,
+  };
+}
+
+export function createAnonymousHostSession(): ModuleHostSession {
+  return {
+    ...createAnonymousModuleHostSession(),
+    productId: DEFAULT_PRODUCT_ID,
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    productScopeProfile: DEFAULT_HOST_PRODUCT_SCOPE_PROFILE,
+    data: null,
+  };
+}
+
+export async function resolveHostSessionFromCookieHeader(
+  cookieHeader: string | null
+): Promise<ModuleHostSession> {
+  return (await getHostAuthAdapter()).resolveSession(cookieHeader);
+}
+
+export function decodeHostSessionUserIdFromCookieHeader(
+  cookieHeader: string | null
+): string | undefined {
+  return readHostSessionCookie(cookieHeader)?.userId;
+}
+
+export function readHostSessionCookie(cookieHeader: string | null): DecodedHostSessionCookie | undefined {
+  return decodeSessionCookieValue(parseCookieHeader(cookieHeader).get(HOST_AUTH_COOKIE));
+}
+
+export async function revokeHostSessionFromCookieHeader(cookieHeader: string | null): Promise<void> {
+  const decoded = readHostSessionCookie(cookieHeader);
+  if (decoded?.sessionId) {
+    await (await getHostAuthAdapter()).revokeSession(decoded.userId, decoded.sessionId);
+  }
+}
+
+export function resolveHostSessionFromRequest(request: Request): Promise<ModuleHostSession> {
+  return resolveHostSessionFromCookieHeader(request.headers.get('cookie'));
+}
+
+export async function getCurrentHostSession(): Promise<ModuleHostSession> {
+  const requestHeaders = await headers();
+  return resolveHostSessionFromCookieHeader(requestHeaders.get('cookie'));
+}
+
+function loginHref(lang: SupportedLanguage, nextPath: string): string {
+  const loginPath = localizedPath(lang, '/login');
+  return `${loginPath}?next=${encodeURIComponent(nextPath)}`;
+}
+
+export async function requireHostUser(
+  lang: SupportedLanguage,
+  nextPath: string
+): Promise<ModuleHostSession> {
+  const session = await getCurrentHostSession();
+  if (!session.user) {
+    redirect(loginHref(lang, nextPath));
+  }
+
+  return session;
+}
+
+export async function requireAdminUser(
+  lang: SupportedLanguage,
+  nextPath: string
+): Promise<ModuleHostSession> {
+  const session = await requireHostUser(lang, nextPath);
+  try {
+    requireCapability(session, 'admin.access');
+  } catch {
+    redirect(localizedPath(lang, '/dashboard'));
+  }
+
+  return session;
+}
+
+export function safeRedirectPath(
+  value: FormDataEntryValue | string | null,
+  fallback = localizedDashboardPath(DEFAULT_LANGUAGE)
+): string {
+  const path = typeof value === 'string' && value.startsWith('/') ? value : fallback;
+  if (path.startsWith('//') || path.includes('://')) {
+    return fallback;
+  }
+
+  return path;
+}

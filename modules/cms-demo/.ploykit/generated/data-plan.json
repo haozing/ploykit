@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "moduleId": "cms-demo",
+  "moduleRoot": "modules/cms-demo",
+  "dataVersion": 1,
+  "documents": [],
+  "tables": [
+    {
+      "name": "posts",
+      "physicalName": "mod_cms_demo__posts",
+      "scope": "product",
+      "columns": {
+        "title": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "slug": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "excerpt": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "body": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "status": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": "draft"
+        },
+        "category_slug": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "seo_title": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "seo_description": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "published_at": {
+          "kind": "timestamp",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "metadata": {
+          "kind": "jsonb",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": {
+            "source": "cms-demo"
+          }
+        }
+      },
+      "unique": [
+        [
+          "slug"
+        ]
+      ],
+      "indexes": [
+        [
+          "status"
+        ],
+        [
+          "category_slug"
+        ],
+        [
+          "published_at"
+        ]
+      ]
+    },
+    {
+      "name": "categories",
+      "physicalName": "mod_cms_demo__categories",
+      "scope": "product",
+      "columns": {
+        "name": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "slug": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "status": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": "active"
+        },
+        "metadata": {
+          "kind": "jsonb",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": {
+            "source": "cms-demo"
+          }
+        }
+      },
+      "unique": [
+        [
+          "slug"
+        ]
+      ],
+      "indexes": [
+        [
+          "status"
+        ]
+      ]
+    },
+    {
+      "name": "notes",
+      "physicalName": "mod_cms_demo__notes",
+      "scope": "workspace",
+      "columns": {
+        "title": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "body": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "status": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": "draft"
+        },
+        "attachment_file_id": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "metadata": {
+          "kind": "jsonb",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": {
+            "source": "cms-demo"
+          }
+        },
+        "published_at": {
+          "kind": "timestamp",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        }
+      },
+      "unique": [],
+      "indexes": [
+        [
+          "status"
+        ],
+        [
+          "published_at"
+        ],
+        [
+          "attachment_file_id"
+        ]
+      ]
+    }
+  ],
+  "views": [],
+  "grants": [],
+  "checks": [],
+  "migrations": {
+    "mode": "generated",
+    "dir": "./migrations"
+  },
+  "schemaHash": "22600f17750c37e3026ba7edaf7824c7701445db9e15adfb0b8aca24984d9eb4"
+}

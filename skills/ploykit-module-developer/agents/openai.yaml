@@ -1,0 +1,4 @@
+interface:
+  display_name: 'PloyKit Module Developer'
+  short_description: 'Build PloyKit local modules safely'
+  default_prompt: 'Use $ploykit-module-developer to build or modify a PloyKit local module or host module-runtime capability.'

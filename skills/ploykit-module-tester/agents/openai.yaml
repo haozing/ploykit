@@ -1,0 +1,4 @@
+interface:
+  display_name: 'PloyKit Module Tester'
+  short_description: 'Validate PloyKit modules with real evidence'
+  default_prompt: 'Use $ploykit-module-tester to validate a PloyKit module or host module-runtime change with code, database, API, and browser checks.'

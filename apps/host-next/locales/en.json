@@ -1,0 +1,1748 @@
+{
+  "brand": {
+    "productName": "PloyKit"
+  },
+  "site": {
+    "nav": {
+      "home": "Home",
+      "pricing": "Pricing",
+      "docs": "Docs",
+      "about": "About",
+      "contact": "Contact",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "aria": "Public navigation",
+      "mobileAria": "Mobile public navigation",
+      "login": "Log in",
+      "register": "Get started"
+    },
+    "footerBrand": "PloyKit Platform",
+    "home": {
+      "eyebrow": "Local Module Host",
+      "title": "PloyKit",
+      "subtitle": "An open-source application base that gets the public site, auth, workspace, and admin running before your business modules plug in.",
+      "dashboard": "Open dashboard",
+      "admin": "View Admin",
+      "snapshotLabel": "Host capability status",
+      "stats": [
+        ["Runtime", "ready"],
+        ["Modules", "first-party"],
+        ["Host", "operational"]
+      ],
+      "cards": [
+        ["Modular extension", "Keep pages, APIs, jobs, and data plans in one module contract."],
+        ["Product base", "Auth, dashboard, admin, billing, and files have default flows."],
+        [
+          "Ready out of the box",
+          "The site, sign-in, and user center can run before business modules arrive."
+        ]
+      ]
+    },
+    "pages": {
+      "about": {
+        "title": "About PloyKit",
+        "subtitle": "PloyKit is an application base for open-source products, tools sites, and internal systems.",
+        "body": "It starts with a public site, auth, user center, and admin frame, so teams begin from a running product and plug in the business capabilities that make it different.",
+        "highlights": [
+          {
+            "title": "Open start",
+            "body": "Public pages, auth, and the workspace run first, then evolve into your product."
+          },
+          {
+            "title": "Extend by use case",
+            "body": "CMS, CRM, tools sites, and internal systems can start from small modules."
+          },
+          {
+            "title": "Less repeated work",
+            "body": "Common product foundations exist already, so teams can focus on their core work."
+          }
+        ]
+      },
+      "privacy": {
+        "title": "Privacy",
+        "subtitle": "PloyKit isolates data by product, workspace, and module boundaries by default.",
+        "body": "Before production, replace this placeholder with real data collection, file storage, log, and audit retention policies."
+      },
+      "terms": {
+        "title": "Terms",
+        "subtitle": "When using a PloyKit host, modules, data, and external providers should follow the service boundaries of the deployment owner.",
+        "body": "This page records the usage boundaries for accounts, credits, files, public tools, module capabilities, and service connections."
+      },
+      "success": {
+        "title": "Success",
+        "subtitle": "Your request has been completed.",
+        "body": "Return to the dashboard to keep reviewing tasks, files, billing, or module runtime status."
+      },
+      "docs": {
+        "title": "Docs",
+        "subtitle": "Read by path: build a product, develop a module, or prepare for launch.",
+        "cards": [
+          [
+            "Module development",
+            "Declare pages, APIs, jobs, data tables, and host capability permissions."
+          ],
+          [
+            "Page overrides",
+            "Replace the public site, auth flow, and workspace home through product presentation."
+          ],
+          [
+            "Runtime validation",
+            "Use module doctor, the browser matrix, and the RC gate to validate delivery quality."
+          ]
+        ],
+        "start": {
+          "title": "Start with the path that matches your goal",
+          "body": "Whether you are building a product, writing a module, or preparing launch, start from the matching section instead of reading the whole architecture first."
+        }
+      },
+      "pricing": {
+        "title": "Pricing",
+        "subtitle": "Choose a plan, then use local checkout during development to prove the flow.",
+        "billingProvider": "Billing mode",
+        "checkout": "Checkout status",
+        "plans": "Plan count",
+        "ready": "connected",
+        "localFallback": "local checkout",
+        "included": "includes",
+        "entitlements": "Entitlements",
+        "start": "Get started",
+        "providerModes": {
+          "local": "Local mode"
+        },
+        "flow": {
+          "title": "Run the flow first, connect payments later",
+          "body": "Use local checkout during development and demos. When you are ready to charge, connect the same plans to Stripe."
+        }
+      },
+      "contact": {
+        "title": "Contact",
+        "subtitle": "Tell us about the module, deployment plan, or product question you are working through.",
+        "received": "Your message was received. We will continue by email.",
+        "failed": "Message submission failed. Check required fields and try again.",
+        "name": "Name",
+        "namePlaceholder": "Your name",
+        "email": "Email",
+        "emailPlaceholder": "you@example.com",
+        "company": "Company / team",
+        "optional": "Optional",
+        "message": "Request",
+        "messagePlaceholder": "Briefly describe your module, deployment environment, or product plan.",
+        "submit": "Send",
+        "aside": {
+          "title": "Tell us what you want to build",
+          "body": "Use this for module integration, deployment planning, or commercialization questions. We record the request and handle it by email.",
+          "topics": ["Product questions", "Deployment help", "Commercial path"]
+        }
+      }
+    },
+    "homeExperience": {
+      "hero": {
+        "titleLines": ["Build deployable apps faster", "with AI-ready", "module contracts"],
+        "subtitle": "PloyKit uses module contracts to constrain boundaries while host capabilities carry common product logic. AI only needs to focus on the current module to generate pages, APIs, jobs, and data structures with less context.",
+        "primaryCta": "Get started for free",
+        "docsCta": "View documentation",
+        "githubCta": "GitHub",
+        "codeFilename": "cms.module.ts",
+        "stackIntro": "A modern web stack works with the module runtime, taking products from local development to deployable releases."
+      },
+      "stackItems": [
+        "Next.js / React",
+        "TypeScript",
+        "Tailwind CSS",
+        "Postgres / Memory Store",
+        "Outbox Worker",
+        "Event Queue"
+      ],
+      "trustItems": [
+        {
+          "title": "Modular extension",
+          "body": "Pages, APIs, jobs, and data plug in as modules with clearer product boundaries."
+        },
+        {
+          "title": "Built-in capabilities",
+          "body": "Auth, dashboard, files, billing, notifications, and workers are available by default."
+        },
+        {
+          "title": "Easy deployment",
+          "body": "Local development, module composition, runtime storage, and deployment stay aligned."
+        },
+        {
+          "title": "Open and controllable",
+          "body": "Code, modules, and product pages are versioned in-repo for review and extension."
+        }
+      ],
+      "features": {
+        "title": "Why PloyKit works for AI-assisted development",
+        "body": "Module contracts and host capabilities keep context focused on the current task.",
+        "cards": [
+          {
+            "title": "Contract-first modules",
+            "body": "Pages, APIs, data, jobs, permissions, and events live in one declaration, so AI does not have to guess the project shape."
+          },
+          {
+            "title": "Smaller context",
+            "body": "Each task can focus on the current module and contract, reducing global code reading, shortening prompts, and stabilizing output."
+          },
+          {
+            "title": "Clear delivery path",
+            "body": "Generated modules plug into host capabilities, then move through the same runtime path for validation and deployment."
+          }
+        ]
+      },
+      "capabilities": {
+        "title": "Host capabilities are ready, modules only add business logic",
+        "body": "Auth, routing, data, files, jobs, events, and diagnostics are handled by the host. Modules declare what they need through contracts, then run, trace, and deploy through one runtime.",
+        "cards": [
+          {
+            "title": "Data & schema",
+            "body": "Declare data models, migrations, and access boundaries while the host handles storage and runtime mapping."
+          },
+          {
+            "title": "Pages & routes",
+            "body": "Modules declare public, user-center, and admin entries, then the host mounts them consistently."
+          },
+          {
+            "title": "Jobs & events",
+            "body": "Scheduled jobs, webhooks, business events, and result tracking flow through the shared runtime."
+          },
+          {
+            "title": "Files & artifacts",
+            "body": "Uploads, storage, permissions, and module-generated files are managed by the host."
+          },
+          {
+            "title": "Service connectors",
+            "body": "AI, email, payments, and external APIs connect to modules as host capabilities."
+          },
+          {
+            "title": "Module Doctor",
+            "body": "Scan contracts, permissions, routes, and dependencies to catch integration risks early."
+          }
+        ]
+      },
+      "composition": {
+        "title": "Start with one module and compose a complete app",
+        "body": "Declare one module, attach the host capabilities it needs, then compose CMS, CRM, commerce, or internal tools around the use case.",
+        "steps": [
+          {
+            "title": "Declare",
+            "body": "Declare pages, APIs, schema, jobs, and permissions through the contract."
+          },
+          {
+            "title": "Attach",
+            "body": "Choose the auth, workspace, file, billing, or event capabilities it needs."
+          },
+          {
+            "title": "Ship",
+            "body": "Compose CMS, CRM, commerce, or internal tools and launch."
+          }
+        ]
+      },
+      "buildCards": [
+        {
+          "title": "CMS",
+          "body": "Content models, editorial flows, publishing."
+        },
+        {
+          "title": "Shop",
+          "body": "Catalogs, orders, payments, files."
+        },
+        {
+          "title": "CRM",
+          "body": "Customers, leads, activities, pipelines."
+        },
+        {
+          "title": "Workflow",
+          "body": "Connect apps, jobs, and tasks."
+        },
+        {
+          "title": "Automation",
+          "body": "Jobs, triggers, and workflows."
+        },
+        {
+          "title": "Reports",
+          "body": "Dashboards, analytics, exports."
+        }
+      ],
+      "final": {
+        "title": "Start with a module contract and let the host run the product.",
+        "body": "Read the docs, inspect the module contract, and plug your business capability into PloyKit. Common capabilities stay in the host while modules focus on product logic.",
+        "githubCta": "Star on GitHub",
+        "startCta": "Get started"
+      }
+    }
+  },
+  "auth": {
+    "notices": {
+      "registered": "Your account was created. Verify your email before logging in.",
+      "verified": "Email verified. You can log in now.",
+      "resetSent": "A reset link was generated. Check the email log.",
+      "resetDone": "Password reset complete. You can log in with the new password."
+    },
+    "shell": {
+      "badge": "Account access",
+      "detail": "PloyKit account"
+    },
+    "page": {
+      "modes": {
+        "login": [
+          "Log in",
+          "Enter your workspace and continue with projects, billing, and notifications.",
+          "Log in"
+        ],
+        "register": [
+          "Create account",
+          "Create an account and enter the workspace to start exploring.",
+          "Create"
+        ],
+        "forgot-password": [
+          "Reset password",
+          "Enter your email and we will send a secure reset link.",
+          "Send link"
+        ],
+        "reset-password": [
+          "Set new password",
+          "Choose a new password for your account.",
+          "Reset password"
+        ]
+      },
+      "email": "Email",
+      "emailPlaceholder": "admin@example.com",
+      "displayName": "Display name",
+      "displayNamePlaceholder": "PloyKit User",
+      "resetToken": "Reset token",
+      "resetTokenPlaceholder": "Token from the email log",
+      "password": "Password",
+      "passwordPlaceholder": "Admin@123456",
+      "error": "The account or password is incorrect. Check the email, password, or account status.",
+      "login": "Log in",
+      "register": "Register",
+      "forgotPassword": "Forgot password"
+    },
+    "shellExperience": {
+      "heroTitle": "Return to the PloyKit",
+      "heroHighlight": "module workflow",
+      "heroBody": "PloyKit keeps module boundaries explicit while host capabilities handle shared product logic. Sign in to continue managing modules, workspaces, tasks, and deployments from the same product frame.",
+      "principles": [
+        {
+          "title": "Module contracts",
+          "body": "Pages, APIs, jobs, and data structures are declared around the active module."
+        },
+        {
+          "title": "Host capabilities",
+          "body": "Auth, files, billing, events, and runtime work stay with the host base."
+        },
+        {
+          "title": "One entry point",
+          "body": "Sign in, create an account, or reset access from one consistent entry point."
+        }
+      ]
+    }
+  },
+  "shell": {
+    "dashboardNav": [
+      {
+        "href": "/dashboard",
+        "label": "Overview"
+      },
+      {
+        "href": "/dashboard/workspaces",
+        "label": "Workspaces"
+      },
+      {
+        "href": "/dashboard/profile",
+        "label": "Profile"
+      },
+      {
+        "href": "/dashboard/billing",
+        "label": "Billing"
+      },
+      {
+        "href": "/dashboard/orders",
+        "label": "Orders"
+      },
+      {
+        "href": "/dashboard/credit-history",
+        "label": "Credit history"
+      },
+      {
+        "href": "/dashboard/files",
+        "label": "Files"
+      },
+      {
+        "href": "/dashboard/notifications",
+        "label": "Notifications"
+      },
+      {
+        "href": "/dashboard/settings/notifications",
+        "label": "Notification settings"
+      },
+      {
+        "href": "/dashboard/tasks",
+        "label": "Task center"
+      }
+    ],
+    "adminNav": [
+      {
+        "href": "/admin",
+        "label": "Operations Overview",
+        "detail": "Users, revenue, and risk",
+        "group": "Overview",
+        "icon": "layoutDashboard",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.access"]
+        }
+      },
+      {
+        "href": "/admin/analytics",
+        "label": "Analytics",
+        "detail": "Growth metrics and operating trends",
+        "group": "Overview",
+        "icon": "barChart3",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/search",
+        "label": "Advanced Search",
+        "detail": "Cross-object lookup and jump",
+        "group": "Overview",
+        "icon": "search",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.access"]
+        }
+      },
+      {
+        "href": "/admin/users",
+        "label": "Users",
+        "detail": "Accounts, status, and lifecycle",
+        "group": "Users & Permissions",
+        "icon": "users",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.users.manage"]
+        }
+      },
+      {
+        "href": "/admin/rbac",
+        "label": "Roles",
+        "detail": "Roles, permissions, and access scope",
+        "group": "Users & Permissions",
+        "icon": "shieldCheck",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.rbac.read"]
+        }
+      },
+      {
+        "href": "/admin/entitlements",
+        "label": "Entitlements",
+        "detail": "Plans, grants, and overrides",
+        "group": "Users & Permissions",
+        "icon": "badgeDollarSign",
+        "source": "host",
+        "requires": {
+          "capabilities": ["billing.read", "admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/revenue",
+        "label": "Revenue",
+        "detail": "Order ledger and reconciliation",
+        "group": "Billing",
+        "icon": "circleDollarSign",
+        "source": "host",
+        "requires": {
+          "capabilities": ["billing.read"]
+        }
+      },
+      {
+        "href": "/admin/billing",
+        "label": "Billing",
+        "detail": "Orders, credits, and subscriptions",
+        "group": "Billing",
+        "icon": "creditCard",
+        "source": "host",
+        "requires": {
+          "capabilities": ["billing.read"]
+        }
+      },
+      {
+        "href": "/admin/usage",
+        "label": "Usage Metering",
+        "detail": "Meters, quotas, and anomalies",
+        "group": "Billing",
+        "icon": "gauge",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/files",
+        "label": "Files",
+        "detail": "File directory and storage governance",
+        "group": "Resources",
+        "icon": "folderOpen",
+        "source": "host",
+        "requires": {
+          "capabilities": ["files.read"]
+        }
+      },
+      {
+        "href": "/admin/service-connections",
+        "label": "Connections",
+        "detail": "Providers, secrets, and calls",
+        "group": "Integrations",
+        "icon": "cable",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/webhooks",
+        "label": "Webhooks",
+        "detail": "Receipts, replay, and signatures",
+        "group": "Integrations",
+        "icon": "cable",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/modules",
+        "label": "Modules",
+        "detail": "Install, lifecycle, and runtime state",
+        "group": "Run",
+        "icon": "package",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/runs",
+        "label": "Runs",
+        "detail": "Jobs, execution, and retries",
+        "group": "Run",
+        "icon": "activity",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/module-dev-console",
+        "label": "Dev Console",
+        "detail": "Doctor, fixes, and release gates",
+        "group": "Run",
+        "icon": "squareTerminal",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      },
+      {
+        "href": "/admin/audit",
+        "label": "Audit",
+        "detail": "Trace, export, and evidence",
+        "group": "Security",
+        "icon": "fileText",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.read"]
+        }
+      },
+      {
+        "href": "/admin/settings",
+        "label": "Settings",
+        "detail": "Product settings and operational switches",
+        "group": "System",
+        "icon": "settings",
+        "source": "host",
+        "requires": {
+          "capabilities": ["admin.operations.write"]
+        }
+      }
+    ],
+    "adminScope": {
+      "label": "Admin",
+      "detail": "Operations"
+    },
+    "workspaceScope": {
+      "label": "Workspace",
+      "detail": "Dashboard"
+    },
+    "dashboardGroups": {
+      "workspace": "Workspace",
+      "account": "Account",
+      "work": "Work"
+    },
+    "userNames": {
+      "admin": "System Administrator",
+      "user": "Workspace User"
+    },
+    "toolsGroup": "Tools",
+    "header": {
+      "adminArea": "Admin",
+      "workspaceArea": "Workspace",
+      "search": "Search",
+      "notifications": "Notifications",
+      "searchPlaceholder": "Search workspace..."
+    },
+    "userMenu": {
+      "profile": "Profile",
+      "notifications": "Notifications",
+      "logout": "Sign out",
+      "menu": "Account menu"
+    },
+    "languageSwitch": {
+      "label": "切换到中文",
+      "targetShort": "中文"
+    },
+    "layout": {
+      "brandName": "PloyKit",
+      "consoleLabel": "Product console",
+      "platformLabel": "Platform",
+      "platformFullName": "PloyKit Platform",
+      "version": "v2.1.0",
+      "navigation": "Navigation",
+      "areaNavigation": {
+        "admin": "Admin navigation",
+        "dashboard": "Dashboard navigation"
+      },
+      "mobileNavigation": "Mobile navigation",
+      "closeNavigation": "Close navigation",
+      "menu": "Menu",
+      "overview": "Overview"
+    }
+  },
+  "dashboard": {
+    "landing": {
+      "title": "Dashboard",
+      "subtitle": "Review workspace status and recent activity.",
+      "profile": "Profile",
+      "workspace": "Workspace",
+      "billing": "Billing",
+      "tools": "Tools",
+      "baseEntitlement": "This workspace is using the base capabilities.",
+      "taskColumns": ["Task", "Status", "Progress"],
+      "notificationColumns": ["Notification", "Status", "Time"],
+      "orderColumns": ["Order", "Status", "Amount"],
+      "noTasks": "No tasks yet",
+      "noNotifications": "No notifications"
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "subtitle": "Manage team spaces, members, invitations, and access addresses.",
+      "switchWorkspace": "Switch workspace",
+      "createWorkspace": "Create workspace",
+      "name": "Name",
+      "switch": "Switch",
+      "create": "Create",
+      "use": "Use",
+      "members": "Members",
+      "invite": "Invite",
+      "email": "Email",
+      "role": "Role",
+      "sendInvite": "Send invite",
+      "revoke": "Revoke",
+      "revokeConfirm": "Revoke the invitation for {email}?",
+      "aliases": "Domain aliases",
+      "bindDomain": "Bind domain",
+      "save": "Save",
+      "workspaceColumns": ["Workspace", "Status", "Action"],
+      "memberColumns": ["Email", "Role", "Status"],
+      "inviteColumns": ["Email", "Role", "Status", "Action"],
+      "aliasColumns": ["Access address", "Workspace"]
+    },
+    "simple": {
+      "emptyTitle": "No data",
+      "emptyBody": "There are no records to show for this workspace yet. New activity will appear here."
+    },
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Manage your account details, password, notification preferences, and signed-in devices.",
+      "basic": "Basic profile",
+      "displayName": "Display name",
+      "avatarUrl": "Avatar URL",
+      "language": "Language",
+      "chinese": "Chinese",
+      "timezone": "Timezone",
+      "saveProfile": "Save profile",
+      "password": "Password",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "changePassword": "Change password",
+      "changePasswordConfirm": "Change the current account password? Other device sessions can still be revoked below.",
+      "notificationPrefs": "Notification preferences",
+      "inApp": "In-app notifications",
+      "emailDelivery": "Email delivery",
+      "billingEvents": "Billing events",
+      "fileEvents": "File events",
+      "workspaceAdminEvents": "Workspace and admin events",
+      "savePrefs": "Save preferences",
+      "sessionColumns": ["Device", "Created", "Expires", "Action"],
+      "noSessions": "No other devices are signed in",
+      "revoke": "Revoke",
+      "revokeSessionConfirm": "Revoke session {id}?"
+    },
+    "billing": {
+      "title": "Billing",
+      "subtitle": "Review your current plan, credits, invoices, payment methods, and billing details.",
+      "checkoutNote": "This demo environment will create a demo order.",
+      "skuColumns": ["Plan", "Amount", "Credits"],
+      "subscriptionColumns": ["Subscription", "Plan", "Status", "Renewal"],
+      "invoiceColumns": ["Invoice", "Order", "Amount", "Status"],
+      "paymentColumns": ["Payment Method", "Status"],
+      "taxProfile": "Tax Profile",
+      "taxNote": "Used for invoice headers and tax details.",
+      "company": "Company",
+      "save": "Save",
+      "entitlementColumns": ["Access", "Status"]
+    },
+    "orders": {
+      "title": "Orders",
+      "subtitle": "Review purchase history, payment status, and receipts.",
+      "columns": ["Order", "Status", "Amount"]
+    },
+    "files": {
+      "title": "Files",
+      "subtitle": "Upload, find, download, and delete files in the current workspace.",
+      "uploadFile": "Upload File",
+      "upload": "Upload",
+      "searchPlaceholder": "Search by file name, use, or type",
+      "columns": ["Name", "Use", "Status", "Size", "Action"],
+      "open": "Open",
+      "download": "Download",
+      "pending": "pending",
+      "archive": "Archive",
+      "delete": "Delete",
+      "archiveConfirm": "Archive file {name}?",
+      "deleteConfirm": "Delete file {name}?"
+    },
+    "credits": {
+      "title": "Credit History",
+      "subtitle": "Review your credit balance and why credits increased or decreased.",
+      "columns": ["Reason", "Amount", "Status"]
+    },
+    "tasks": {
+      "title": "Task Center",
+      "subtitle": "Track background task progress, results, and issues that need attention.",
+      "columns": ["Task", "Status", "Progress"]
+    },
+    "taskDetail": {
+      "title": "Task Detail",
+      "subtitle": "Review task progress, results, and next steps.",
+      "fieldColumns": ["Field", "Value"],
+      "fields": ["Status", "Progress", "Time", "Result"],
+      "missingTitle": "Task not found",
+      "missingBody": "This task may have expired, been cleaned up, or is unavailable to your account."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Review the latest task, billing, file, and team updates.",
+      "readAll": "Read All",
+      "readAllBody": "Mark every delivered notification in the current workspace as read.",
+      "readAllConfirm": "Mark all notifications as read?",
+      "markRead": "Mark read",
+      "columns": ["Title", "Status", "Category", "Time", "Action"],
+      "markOneConfirm": "Mark notification {title} as read?"
+    },
+    "notificationSettings": {
+      "title": "Notification Settings",
+      "subtitle": "Manage notification preferences for task, billing, file, and workspace events.",
+      "save": "Save"
+    },
+    "common": {
+      "noRecords": "No records",
+      "filterResult": "Showing {visible} of {total} records after filters"
+    },
+    "inline": {
+      "workspace_name_default_1f9f0d11": "Default Workspace",
+      "workspace_name_team_main_93a67cf4": "Team Main",
+      "workspace_name_team_lab_7d9f2c0a": "Team Lab",
+      "task_notification_failed_b5c4f1f1": "{value1} failed",
+      "task_notification_completed_2cb56f8c": "{value1} completed",
+      "billing_notification_failed_1cf0efad": "{value1} billing failed",
+      "billing_notification_completed_75f33eb0": "{value1} billing completed",
+      "file_notification_needs_review_a46e97cc": "File needs review: {value1}",
+      "file_notification_ready_0a3f5d22": "File ready: {value1}",
+      "member_email_placeholder_1aefb764": "member@example.com",
+      "team_domain_placeholder_0f966e50": "team.example.com",
+      "free_42f97715": "Free",
+      "current_plan_45e3ad53": "Current plan",
+      "active_e8a4041b": "Active",
+      "accepted_d6eaf321": "Accepted",
+      "available_e21a3cf6": "Available",
+      "archived_797d98cb": "Archived",
+      "canceled_63d8fe18": "Canceled",
+      "canceling_fccaf875": "Canceling",
+      "created_d8278ec8": "Created",
+      "deleted_152a0ec4": "Deleted",
+      "disabled_475ec81f": "Disabled",
+      "draft_061b35fb": "Draft",
+      "expired_b75ba2e1": "Expired",
+      "failed_1dad4921": "Failed",
+      "inactive_84e2b542": "Inactive",
+      "needs_attention_7cc748e2": "Needs attention",
+      "open_c7300fb7": "Open",
+      "completed_58782c56": "Completed",
+      "pending_a85c6ad6": "Pending",
+      "pending_verification_0436cf10": "Pending verification",
+      "published_416cccb7": "Published",
+      "needs_review_edd7a2ee": "Needs review",
+      "queued_61a7726c": "Queued",
+      "read_19b1eb84": "Read",
+      "ready_0db0c52c": "Ready",
+      "refunded_bfcf17a1": "Refunded",
+      "revoked_5c4ad67e": "Revoked",
+      "running_9a4f6603": "Running",
+      "suspended_9b234ede": "Suspended",
+      "trialing_f2df1495": "Trialing",
+      "unread_7a7f2db0": "Unread",
+      "uploading_06ae9013": "Uploading",
+      "voided_3352f2b4": "Voided",
+      "viewer_869788c4": "Viewer",
+      "editor_53d607ba": "Editor",
+      "admin_f22d5ee6": "Admin",
+      "owner_11c4ab29": "Owner",
+      "user_b9e95558": "User",
+      "recorded_0a4c2f96": "Recorded",
+      "not_scheduled_3c7cc321": "Not scheduled",
+      "chinese_5fd94fbf": "Chinese",
+      "use_current_language_7df097e0": "Use current language",
+      "base_access_d18b0eb4": "Base access",
+      "pro_tools_access_d232c1dd": "Pro tools access",
+      "enabled_access_74eac6f9": "Enabled access",
+      "credits_8c75616f": "credits",
+      "welcome_bonus_0439221e": "Welcome bonus",
+      "public_tool_usage_485b0697": "Public tool usage",
+      "credit_adjustment_5ca70ea2": "Credit adjustment",
+      "export_public_tools_data_201afecb": "Export public tools data",
+      "user_task_f874d779": "User task",
+      "exported_value_row_value_210f20bf": "Exported {value1} row{value2}.",
+      "the_task_is_complete_bed21f2c": "The task is complete.",
+      "free_demo_order_5fc6871d": "Free demo order",
+      "free_b34fd7a2": "Free",
+      "demo_payment_ee7b8c01": "Demo payment",
+      "cloud_storage_fb0bba0d": "Cloud storage",
+      "local_storage_3974f971": "Local storage",
+      "source_file_73f2562b": "Source file",
+      "generated_result_4bba5c2e": "Generated result",
+      "attachment_60724b1b": "Attachment",
+      "avatar_8f6f49e2": "Avatar",
+      "document_b79f4255": "Document",
+      "file_873b4b0f": "File",
+      "image_af0beeca": "Image",
+      "video_ed08debe": "Video",
+      "audio_c00f635b": "Audio",
+      "text_a07b8bd6": "Text",
+      "team_dbaabef7": "Team",
+      "billing_32ee28d7": "Billing",
+      "files_de86c79a": "Files",
+      "system_5b103db0": "System",
+      "tasks_9350ae8a": "Tasks",
+      "workspace_7f1bc761": "Workspace",
+      "notification_d41b6f05": "Notification",
+      "workspace_update_edfee6a6": "Workspace update",
+      "payment_completed_5ab2736a": "Payment completed",
+      "payment_failed_b67c0bb5": "Payment failed",
+      "new_notification_32c0d12f": "New notification",
+      "the_task_is_ready_open_the_task_center_to_view_t_ac7cfbbc": "The task is ready. Open the task center to view the result.",
+      "free_demo_order_be134cb6": "Free demo order.",
+      "the_file_status_has_been_updated_3e59fe25": "The file status has been updated.",
+      "workspace_information_has_been_updated_b03017e9": "Workspace information has been updated.",
+      "no_details_available_36541c46": "No details available",
+      "value_complete_c3f68502": "{value1}% complete",
+      "close_panel_89b65434": "Close panel",
+      "close_fbd8cee0": "Close",
+      "welcome_back_start_with_what_needs_attention_tod_0e1c25b9": "Welcome back. Start with what needs attention today.",
+      "current_workspace_325f034a": "Current workspace",
+      "credits_70d04d46": "Credits",
+      "plan_90212e66": "Plan",
+      "unread_45848609": "Unread",
+      "needs_review_ab1a4a04": "Needs review",
+      "needs_your_attention_b25ac3ea": "Needs your attention",
+      "only_reminders_that_affect_your_next_step_are_sh_4b3d4d47": "Only reminders that affect your next step are shown here.",
+      "review_notifications_d32c0109": "Review notifications",
+      "you_have_value_unread_notification_value_90d2cb19": "You have {value1} unread notification{value2}.",
+      "no_new_notifications_right_now_d6dcf247": "No new notifications right now.",
+      "open_notifications_f70313dc": "Open notifications",
+      "continue_tasks_1c1eeb4b": "Continue tasks",
+      "value_task_value_in_progress_1b82dbb6": "{value1} task{value2} in progress.",
+      "no_task_is_waiting_on_you_2010c145": "No task is waiting on you.",
+      "view_tasks_5f74b4a8": "View tasks",
+      "check_billing_c05b2b93": "Check billing",
+      "recent_notifications_2517e7e3": "Recent notifications",
+      "the_latest_updates_related_to_you_ed4010f1": "The latest updates related to you.",
+      "task_billing_and_team_updates_will_appear_here_090333a7": "Task, billing, and team updates will appear here.",
+      "recent_orders_2e151682": "Recent orders",
+      "your_latest_purchases_and_receipts_11a7f2ae": "Your latest purchases and receipts.",
+      "view_order_88c88f23": "View order",
+      "no_orders_yet_b6d57cb8": "No orders yet",
+      "after_checkout_orders_and_receipts_will_appear_h_8192f0e3": "After checkout, orders and receipts will appear here.",
+      "team_workspace_overview_50189f0b": "Team workspace overview",
+      "not_selected_2cc5db14": "Not selected",
+      "members_a4462f09": "Members",
+      "pending_invites_fcc3f8cc": "Pending invites",
+      "access_points_c1792555": "Access points",
+      "files_billing_and_tasks_will_switch_with_the_wor_83b77dfa": "Files, billing, and tasks will switch with the workspace.",
+      "choose_workspace_354952b1": "Choose workspace",
+      "create_a_separate_space_for_a_new_team_project_o_c5f65fb1": "Create a separate space for a new team, project, or client.",
+      "for_example_team_ops_ae637df2": "For example: Team Ops",
+      "your_workspaces_d25debc1": "Your workspaces",
+      "choose_a_space_to_view_its_members_files_and_bil_c350284e": "Choose a space to view its members, files, and billing.",
+      "currently_selected_e2914adc": "Currently selected",
+      "available_workspace_2f7eba94": "Available workspace",
+      "people_with_access_to_this_workspace_26b655ef": "People with access to this workspace.",
+      "team_member_3e5a1366": "Team member",
+      "no_members_yet_316c5580": "No members yet",
+      "members_will_appear_here_after_they_accept_an_in_b8c58dfa": "Members will appear here after they accept an invitation.",
+      "invite_a_teammate_to_this_workspace_by_email_1a655351": "Invite a teammate to this workspace by email.",
+      "invitations_14a2745d": "Invitations",
+      "pending_invitations_can_be_revoked_at_any_time_98bd80d1": "Pending invitations can be revoked at any time.",
+      "no_invitations_d0b5f3a4": "No invitations",
+      "pending_invitations_will_appear_here_after_you_s_16d15cea": "Pending invitations will appear here after you send them.",
+      "these_addresses_open_the_matching_workspace_00caa387": "These addresses open the matching workspace.",
+      "no_access_address_yet_c8f4321f": "No access address yet",
+      "add_an_address_so_members_can_reach_this_workspa_5632bab6": "Add an address so members can reach this workspace more easily.",
+      "enter_the_address_your_team_should_use_then_comp_ea452b24": "Enter the address your team should use, then complete verification.",
+      "access_address_4527d44d": "Access address",
+      "no_workspace_selected_862a3762": "No workspace selected",
+      "workspace_list_67863cf5": "Workspace list",
+      "choose_a_workspace_first_then_manage_members_inv_bd41ac7c": "Choose a workspace first, then manage members, invitations, and access addresses.",
+      "access_addresses_1047c56b": "Access addresses",
+      "workspaces_7e3e2011": "Workspaces",
+      "access_647d5f80": "Access",
+      "workspaces_a4215336": "Workspaces",
+      "this_page_starts_with_the_workspace_list_instead_35cbf631": "This page starts with the workspace list instead of exposing every settings form at once.",
+      "a_new_workspace_has_separate_members_files_billi_3a6e703c": "A new workspace has separate members, files, billing, and tasks.",
+      "this_workspace_is_currently_selected_7c45d1cc": "This workspace is currently selected",
+      "switch_to_manage_its_members_and_settings_a414caa7": "Switch to manage its members and settings",
+      "management_0b9e8abe": "Management",
+      "members_invitations_access_348bb54b": "Members, invitations, access",
+      "manage_233004f6": "Manage",
+      "value_members_19133948": "{value1} · Members",
+      "members_shown_here_belong_to_the_current_workspa_01c1d6f3": "Members shown here belong to the current workspace.",
+      "invite_a_teammate_to_the_current_workspace_by_em_99676bcd": "Invite a teammate to the current workspace by email.",
+      "users_only_need_to_know_who_was_invited_their_ro_d947284d": "Users only need to know who was invited, their role, and whether they accepted.",
+      "access_addresses_are_workspace_settings_and_belo_73edd9a6": "Access addresses are workspace settings and belong after the list.",
+      "enter_the_address_your_team_should_use_then_comp_3052967a": "Enter the address your team should use, then complete verification.",
+      "manage_your_profile_account_security_and_notific_70656c74": "Manage your profile, account security, and notification preferences.",
+      "account_role_e58f704e": "Account role",
+      "team_role_99090a66": "Team role",
+      "other_devices_c12cc6e3": "Other devices",
+      "profile_b5886d60": "Profile",
+      "security_a4dd2249": "Security",
+      "notifications_e0d1fbb4": "Notifications",
+      "devices_eb11d1c2": "Devices",
+      "account_overview_69c823ae": "Account overview",
+      "a_profile_page_should_start_with_identity_summar_267864f9": "A profile page should start with identity summary before edit forms.",
+      "profile_information_a92b4b1f": "Profile information",
+      "these_fields_control_your_display_profile_and_la_6d305458": "These fields control your display profile and language preference.",
+      "security_579a3882": "Security",
+      "password_changes_are_high_risk_and_should_live_i_8857ca3e": "Password changes are high-risk and should live in their own section.",
+      "notification_preferences_belong_in_account_setti_e1dca29a": "Notification preferences belong in account settings, but should not be mixed into profile editing.",
+      "signed_in_devices_e52e6485": "Signed-in devices",
+      "revoke_any_device_you_do_not_recognize_bc42b115": "Revoke any device you do not recognize.",
+      "no_other_devices_are_signed_in_90373bf6": "No other devices are signed in.",
+      "browser_device_f4bc3185": "Browser device",
+      "ready_to_pay_7785f707": "Ready to pay",
+      "demo_environment_d24b1a24": "Demo environment",
+      "billing_center_6b7cb102": "Billing center",
+      "start_with_the_current_plan_and_cost_then_review_7f86edcd": "Start with the current plan and cost, then review orders, invoices, and payment details.",
+      "payment_8c189583": "Payment",
+      "billing_documents_a3d328b6": "Billing documents",
+      "users_first_need_to_know_what_they_have_what_is__af154f49": "Users first need to know what they have, what is included, and what to do next.",
+      "manage_plan_3dafd87f": "Manage plan",
+      "start_plan_b7964c9d": "Start plan",
+      "no_plan_selected_4a647345": "No plan selected",
+      "continue_to_checkout_orders_and_invoices_will_ap_f409b3d6": "Continue to checkout; orders and invoices will appear after payment.",
+      "this_open_source_demo_environment_does_not_charg_ae8ed90f": "This open-source demo environment does not charge real money and is meant for trying the billing flow.",
+      "no_plan_access_yet_378471e2": "No plan access yet",
+      "after_starting_a_plan_your_included_access_will__b1384780": "After starting a plan, your included access will appear here.",
+      "billing_summary_b4243c3b": "Billing summary",
+      "billing_details_work_better_as_a_summary_before__120a4515": "Billing details work better as a summary before forms.",
+      "payment_method_24c3775e": "Payment method",
+      "not_saved_cff35d61": "Not saved",
+      "latest_invoice_a74cff15": "Latest invoice",
+      "none_yet_fab6c8d8": "None yet",
+      "invoice_profile_36a4297f": "Invoice profile",
+      "not_set_1e264983": "Not set",
+      "orders_b34d55aa": "Orders",
+      "plans_776b71f3": "Plans",
+      "plan_cards_should_show_only_what_users_need_to_d_d94069fd": "Plan cards should show only what users need to decide.",
+      "price_ef94daec": "Price",
+      "credits_80975d91": "Credits",
+      "select_700cb936": "Select",
+      "invoices_and_receipts_10b7975e": "Invoices and receipts",
+      "users_may_need_these_for_reimbursement_refunds_o_6c6836dd": "Users may need these for reimbursement, refunds, or payment checks, so they stay in the billing area.",
+      "view_document_27875c3d": "View document",
+      "no_invoices_or_receipts_yet_153fe281": "No invoices or receipts yet",
+      "billing_documents_will_appear_here_after_a_purch_3d102256": "Billing documents will appear here after a purchase.",
+      "payment_methods_2db7ab78": "Payment methods",
+      "show_payment_methods_in_language_users_recognize_5abbcd7a": "Show payment methods in language users recognize.",
+      "saved_payment_method_7abd12b6": "Saved payment method",
+      "no_payment_method_yet_01d902be": "No payment method yet",
+      "payment_methods_will_appear_here_after_the_first_068e91d9": "Payment methods will appear here after the first purchase.",
+      "used_for_invoice_headers_and_tax_details_db146188": "Used for invoice headers and tax details.",
+      "tax_id_f8871caf": "Tax ID",
+      "country_region_9439aec8": "Country/region",
+      "orders_7e89b24b": "Orders",
+      "the_orders_page_should_start_as_a_purchase_histo_c1feea91": "The orders page should start as a purchase history list; documents are secondary actions.",
+      "orders_ca187bf2": "Orders",
+      "total_2c4e661e": "Total",
+      "free_demo_orders_d0fb6a4c": "Free demo orders",
+      "order_records_3a7874ee": "Order records",
+      "a_chronological_list_for_checking_plan_amount_st_979cb88e": "A chronological list for checking plan, amount, status, and date.",
+      "back_to_billing_93a176f0": "Back to billing",
+      "order_4e19c211": "Order",
+      "date_f14abad2": "Date",
+      "amount_a72e74a9": "Amount",
+      "status_8042eaf1": "Status",
+      "action_c3ce74b0": "Action",
+      "order_2702bd80": "Order",
+      "after_checkout_your_purchase_records_and_payment_cbfd13fa": "After checkout, your purchase records and payment status will appear here.",
+      "view_billing_3d3e1480": "View billing",
+      "credit_history_b29eb547": "Credit history",
+      "credit_history_works_better_as_a_transaction_lis_7860fec8": "Credit history works better as a transaction list than backend-looking cards.",
+      "balance_bf507738": "Balance",
+      "unit_77c0cd5d": "Unit",
+      "entries_bd5b4b0f": "Entries",
+      "transaction_list_8b388d42": "Transaction list",
+      "each_row_explains_why_credits_increased_or_decre_168b5ef9": "Each row explains why credits increased or decreased.",
+      "reason_0a7fcf20": "Reason",
+      "date_15a1897e": "Date",
+      "change_7a8bae8a": "Change",
+      "credit_added_dd550da9": "Credit added",
+      "credit_used_f50377c3": "Credit used",
+      "no_credit_history_yet_b7961cbd": "No credit history yet",
+      "when_you_earn_or_spend_credits_the_records_will__92ca66ab": "When you earn or spend credits, the records will appear here.",
+      "confirm_your_profile_and_current_team_access_8d24f20e": "Confirm your profile and current team access.",
+      "update_your_display_name_avatar_language_and_tim_6e2ba993": "Update your display name, avatar, language, and timezone.",
+      "billing_overview_a8ece2c0": "Billing overview",
+      "start_here_for_your_plan_credits_payment_status__29a1a4ea": "Start here for your plan, credits, payment status, and recent invoices.",
+      "payment_status_9273e5de": "Payment status",
+      "ready_to_pay_59803c7a": "Ready to pay",
+      "invoices_8e533afa": "Invoices",
+      "recommended_plan_60939eb2": "Recommended plan",
+      "tap_to_continue_to_checkout_829bad97": "Tap to continue to checkout.",
+      "this_demo_environment_will_create_a_demo_order_58061b92": "This demo environment will create a demo order.",
+      "continue_to_checkout_19d57b73": "Continue to checkout",
+      "choose_the_plan_that_fits_your_work_best_d8667c33": "Choose the plan that fits your work best.",
+      "price_7ab5917c": "Price",
+      "your_purchase_receipts_are_stored_here_badf2b7c": "Your purchase receipts are stored here.",
+      "view_invoice_2368af25": "View invoice",
+      "no_invoices_yet_f96a650b": "No invoices yet",
+      "invoices_and_receipts_will_appear_here_after_you_84ff3091": "Invoices and receipts will appear here after your first purchase.",
+      "available_payment_methods_appear_here_8c74ec5c": "Available payment methods appear here.",
+      "complete_a_purchase_first_and_a_payment_method_w_39b12350": "Complete a purchase first and a payment method will be created for you.",
+      "current_access_9d4a81f9": "Current access",
+      "what_your_plan_currently_includes_e42ab3ed": "What your plan currently includes.",
+      "no_access_yet_27b8db9b": "No access yet",
+      "after_selecting_a_plan_the_features_you_can_use__0a7fe922": "After selecting a plan, the features you can use will appear here.",
+      "order_overview_b2ef192c": "Order overview",
+      "review_your_purchases_payment_status_and_receipt_825c9a22": "Review your purchases, payment status, and receipts.",
+      "total_8c3f738d": "Total",
+      "order_history_20834855": "Order history",
+      "each_order_can_be_opened_as_a_receipt_99d7fd4b": "Each order can be opened as a receipt.",
+      "order_number_b3df9e95": "Order number",
+      "created_29b90579": "Created",
+      "view_receipt_bcb84326": "View receipt",
+      "after_checkout_orders_payment_status_and_receipt_658e9a59": "After checkout, orders, payment status, and receipts will appear here.",
+      "storage_usage_fc72a743": "Storage usage",
+      "upload_find_and_manage_your_files_c64a78cb": "Upload, find, and manage your files.",
+      "storage_3762c05e": "Storage",
+      "ready_for_long_term_storage_f5b75477": "Ready for long-term storage",
+      "best_for_local_demos_f3c176e5": "Best for local demos",
+      "your_usage_d3ec43c8": "Your usage",
+      "workspace_usage_c45bf7ca": "Workspace usage",
+      "choose_a_file_to_upload_to_the_current_workspace_6e5e1c96": "Choose a file to upload to the current workspace.",
+      "images_documents_and_data_files_are_supported_wi_eec501b6": "Images, documents, and data files are supported within your quota.",
+      "file_library_685c5c34": "File library",
+      "uploaded_files_appear_here_625aa90e": "Uploaded files appear here.",
+      "size_5354fe2d": "Size",
+      "use_d8f25bd7": "Use",
+      "no_files_yet_e2696a7f": "No files yet",
+      "upload_your_first_file_to_open_download_or_delet_93337f23": "Upload your first file to open, download, or delete it here.",
+      "credit_overview_9159b084": "Credit overview",
+      "see_your_available_credits_and_recent_changes_0519a627": "See your available credits and recent changes.",
+      "credit_history_8696bc5d": "Credit history",
+      "each_record_explains_why_credits_changed_e8a57e3a": "Each record explains why credits changed.",
+      "outcome_5f3d51d2": "Outcome",
+      "task_overview_b409cf6f": "Task overview",
+      "track_task_progress_results_and_issues_that_need_dfd8d4b6": "Track task progress, results, and issues that need attention.",
+      "tasks_7e53ff19": "Tasks",
+      "recent_tasks_include_progress_and_result_links_3e251507": "Recent tasks include progress and result links.",
+      "started_da6afcd5": "Started",
+      "updated_8505907f": "Updated",
+      "view_result_b5449146": "View result",
+      "view_progress_c9794340": "View progress",
+      "no_tasks_yet_80f8a083": "No tasks yet",
+      "exports_uploads_and_background_work_will_appear__a4286eeb": "Exports, uploads, and background work will appear here.",
+      "task_progress_and_result_12bd2a9d": "Task progress and result.",
+      "progress_3b8bb103": "Progress",
+      "attempts_aace9c74": "Attempts",
+      "result_summary_da691b87": "Result summary",
+      "start_with_the_readable_result_before_deciding_w_d29badc5": "Start with the readable result before deciding what to do next.",
+      "status_e92c46a3": "Status",
+      "progress_f5502dfa": "Progress",
+      "completed_a258863b": "Completed",
+      "result_df9aef04": "Result",
+      "next_step_aa0a86ed": "Next step",
+      "if_this_did_not_finish_as_expected_go_back_to_th_5ee65668": "If this did not finish as expected, go back to the list to review other tasks.",
+      "back_to_tasks_d9330c75": "Back to tasks",
+      "check_the_input_and_run_the_task_again_17e98402": "Check the input and run the task again.",
+      "this_task_may_have_expired_been_cleaned_up_or_is_2e94d139": "This task may have expired, been cleaned up, or is unavailable to your account.",
+      "notification_overview_6bb974c8": "Notification overview",
+      "notifications_3a84e0b5": "Notifications",
+      "settings_860006f3": "Settings",
+      "inbox_10fe3744": "Inbox",
+      "notifications_are_listed_by_time_6805112b": "Notifications are listed by time.",
+      "no_notifications_2e1acc9e": "No notifications",
+      "task_billing_and_team_updates_will_appear_here_3a75ed75": "Task, billing, and team updates will appear here.",
+      "notification_settings_0f8fc979": "Notification settings",
+      "notification_preferences_7c17fb01": "Notification preferences",
+      "choose_the_kinds_of_notifications_and_delivery_m_ecd74220": "Choose the kinds of notifications and delivery methods you want.",
+      "delivery_methods_2c070608": "Delivery methods",
+      "notification_types_0adb1cf6": "Notification types",
+      "tools_e0128c71": "Tools",
+      "page_unavailable_0b5181a4": "Page unavailable",
+      "this_page_is_not_available_right_now_b49aba34": "This page is not available right now.",
+      "use_value_in_this_workspace_5fdead4a": "Use {value1} in this workspace."
+    }
+  },
+  "admin": {
+    "overview": {
+      "title": "Admin Overview",
+      "subtitle": "Focus on user growth, account risk, role coverage, and operating actions that need attention today.",
+      "risks": {
+        "dataTitle": "Data durability",
+        "dataDetail": "The host is using local memory mode. Move runtime state to Postgres before production traffic.",
+        "dataAction": "Configure storage",
+        "needsReview": "Needs review",
+        "deliveryTitle": "Delivery queue",
+        "deliveryDetail": "{count} delivery records need review before the queue can be considered healthy.",
+        "deliveryAction": "Review queue",
+        "blocked": "Blocked",
+        "webhookTitle": "Webhook intake",
+        "webhookDetail": "{count} webhook receipts failed or were rejected. Inspect the receipt history.",
+        "webhookAction": "Inspect receipts",
+        "accessTitle": "User access",
+        "accessDetail": "{count} users are suspended. Review their detail pages and audit timeline.",
+        "accessAction": "Review users",
+        "readyTitle": "No active operational risk",
+        "readyDetail": "Core signals are clear. Keep monitoring service health and recent activity.",
+        "readyAction": "View services",
+        "healthy": "Healthy"
+      },
+      "activity": {
+        "user": "User",
+        "notStarted": "not started"
+      },
+      "counters": {
+        "catalog": "Catalog",
+        "moduleStates": "module states",
+        "outbox": "Outbox",
+        "records": "records",
+        "audit": "Audit",
+        "deliveries": "Deliveries",
+        "notificationLogs": "notification logs"
+      },
+      "services": {
+        "database": "Database",
+        "memoryMode": "Memory mode",
+        "durable": "durable",
+        "localOnly": "local only",
+        "runtimeReconcile": "Runtime Reconcile",
+        "queued": "{count} queued",
+        "dead": "{count} dead",
+        "manual": "manual",
+        "authentication": "Authentication",
+        "active": "{active}/{total} active",
+        "admins": "{count} admins",
+        "apiGateway": "API Gateway",
+        "blocked": "{count} blocked",
+        "routing": "routing",
+        "outboxStore": "Outbox Store",
+        "webhookReceipts": "Webhook Receipts",
+        "receipts": "{count} receipts",
+        "failed": "{count} failed"
+      },
+      "stat": {
+        "totalUsers": "Total Users",
+        "activeNew": "{active} active · {fresh} new",
+        "activeUsers": "Active Users",
+        "suspendedUsers": "Suspended Accounts",
+        "suspendedHelper": "{count} accounts need review",
+        "roleCoverage": "Role Coverage",
+        "roleCoverageHelper": "{roles} roles · {capabilities} capabilities",
+        "needsReview": "Needs review",
+        "healthy": "Healthy"
+      },
+      "today": {
+        "title": "Today",
+        "description": "A compact pulse for daily operations.",
+        "activeUsers": "Active users",
+        "notifications": "Notifications",
+        "roles": "Roles",
+        "adminUsers": "Admin users"
+      }
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "Configure product identity, runtime settings, providers, theme boundaries, and diagnostics."
+    },
+    "devConsole": {
+      "title": "Module Dev Console",
+      "subtitle": "Diagnostics-only workspace for module maps, bundle inspection, templates, AI prompts, and module:test reports.",
+      "openModule": "Open module"
+    },
+    "modules": {
+      "title": "Modules",
+      "subtitle": "Operate installed product modules, lifecycle state, health, capabilities, and release readiness.",
+      "detail": {
+        "detailTitle": "Module Detail",
+        "subtitle": "Module contract, routes, permissions, doctor, resource binding, gateways, and runtime activity details.",
+        "missingTitle": "Module not found",
+        "missingBody": "The current runtime did not find this module contract."
+      }
+    },
+    "identity": {
+      "users": {
+        "title": "Users",
+        "subtitle": "Manage accounts, access status, roles, and review queues for the product console.",
+        "totalUsers": "Total Users",
+        "visible": "{count} visible",
+        "active": "Active",
+        "activeHelper": "{percent}% of accounts",
+        "suspended": "Suspended",
+        "suspendedHelper": "Requires account review",
+        "admins": "Admins",
+        "adminsHelper": "Host-level access",
+        "reviewTitle": "Account review",
+        "reviewDescription": "Only user states that need action appear here. Routine account records stay in the directory.",
+        "suspendedTitle": "Suspended accounts",
+        "suspendedDescription": "{count} users are suspended. Review account detail, audit trail, and restore only after confirming the reason.",
+        "reviewUsers": "Review users",
+        "pendingTitle": "Pending verification",
+        "pendingDescription": "{count} users still need verification. Check whether invites, email delivery, or onboarding steps are blocked.",
+        "filterPending": "Filter pending",
+        "directoryTitle": "User directory",
+        "directoryDescription": "Search accounts by email, user id, role, or workspace. Sensitive account changes live in the user detail page.",
+        "searchPlaceholder": "Search email, user ID, role, or workspace",
+        "filterLabel": "Status / role",
+        "columns": ["User", "Access", "Status", "Workspace", "Action"],
+        "openDetail": "Open detail",
+        "empty": "No users match this filter.",
+        "mobileOpen": "Open"
+      },
+      "userDetail": {
+        "title": "User Detail",
+        "subtitle": "Review identity, roles, device sessions, password reset actions, and security audit timeline.",
+        "role": "Role",
+        "status": "Status",
+        "workspace": "Workspace",
+        "sessions": "Sessions",
+        "currentState": "Current account state",
+        "auditRecords": "{count} audit records",
+        "actionsTitle": "Account actions",
+        "actionsDescription": "Use the smallest safe action. Role, status, session and password changes write audit records.",
+        "accountStatus": "Account status",
+        "accountStatusHint": "Suspend only when access must stop immediately.",
+        "reason": "Reason",
+        "updateStatus": "Update status",
+        "updateStatusConfirm": "Update account status for {target}?",
+        "hostRole": "Host role",
+        "hostRoleHint": "Admin role grants host-level operations access.",
+        "updateRole": "Update role",
+        "updateRoleConfirm": "Update role for {target}?",
+        "passwordReset": "Password reset",
+        "passwordResetHint": "Generates a reset token and writes email provider and admin audit evidence.",
+        "sendReset": "Send reset",
+        "sendResetConfirm": "Start password reset for {target}?",
+        "diagnosticsTitle": "Diagnostic evidence",
+        "diagnosticsDescription": "Sessions, audit, and raw metadata are folded by default; expand them for troubleshooting or evidence.",
+        "activeSessions": "Active sessions",
+        "activeSessionsDescription": "Session revocation is a security action and should stay explicit.",
+        "sessionColumns": ["Session", "User Agent", "Created", "Expires", "Action"],
+        "revoke": "Revoke",
+        "revokeConfirm": "Revoke session {id} for {target}?",
+        "noSessions": "No active sessions.",
+        "auditTitle": "Audit timeline",
+        "auditDescription": "Recent security and account changes for this user.",
+        "noAudit": "No user audit yet.",
+        "metadata": "Metadata",
+        "metadataDescription": "Raw metadata is kept below the action surface for diagnostics.",
+        "drawerTitle": "Identity snapshot",
+        "copyId": "Copy ID",
+        "reviewRule": "Review rule",
+        "reviewRuleBody": "Keep identity facts in the drawer; keep irreversible or risky changes in explicit action panels.",
+        "missingTitle": "User not found",
+        "missingBody": "No matching host user was found.",
+        "back": "Back to users",
+        "defaultUserTarget": "this user"
+      },
+      "rbac": {
+        "title": "Roles & Permissions",
+        "subtitle": "Review system roles, host capabilities, module permissions, and access coverage. Admin module permissions can be 0 because host admins receive access through host capabilities.",
+        "roles": "Roles",
+        "systemRoles": "{count} system roles",
+        "capabilities": "Capabilities",
+        "assigned": "{count} assigned",
+        "modulePermissions": "Module Permissions",
+        "customRoles": "Custom Roles",
+        "productAccess": "Product-defined access",
+        "roleManagementTitle": "Role Management",
+        "roleManagementDescription": "Review access by role first. System roles are review-only; custom roles can be created and maintained here once persistence is connected.",
+        "roleColumns": ["Role", "Type", "Host capabilities", "Module permissions", "Status"],
+        "systemRole": "System role",
+        "customRole": "Custom role",
+        "coverageEvidenceTitle": "Permission matrix",
+        "coverageEvidenceDescription": "Use the matrix for coverage audits. It is folded by default so routine role work does not start as a permission-table scan.",
+        "panelTitle": "Permission Audit",
+        "panelDescription": "Audit host capabilities, module permissions, and role coverage with inventories and the matrix.",
+        "systemRolesLabel": "System roles",
+        "hostAssignments": "Host capability assignments",
+        "moduleAssignments": "Module permission assignments",
+        "roleSnapshot": "Role set snapshot",
+        "roleSnapshotDescription": "{total} roles loaded, {system} system and {custom} custom.",
+        "roleSnapshotMeta": "{host} host grants · {module} module grants",
+        "hostInventory": "Host capability inventory",
+        "hostInventoryDescription": "{count} host capabilities grouped into category blocks.",
+        "currentMatrix": "current matrix",
+        "moduleInventory": "Module permission inventory",
+        "moduleInventoryDescription": "{count} module permissions grouped below host capabilities.",
+        "empty": "No permission coverage snapshot available.",
+        "hostCoverage": "Host capability coverage",
+        "moduleCoverage": "Module permission coverage"
+      }
+    },
+    "operations": {
+      "serviceConnections": {
+        "title": "Service Connections",
+        "subtitle": "Operate service providers, secret sources, health checks, and connector call logs."
+      },
+      "runs": {
+        "title": "Runs",
+        "subtitle": "Monitor background execution, stalled work, failed attempts, and recovery actions.",
+        "openRun": "Open run"
+      },
+      "runDetail": {
+        "title": "Run Detail",
+        "subtitle": "Run input, output, logs, events, usage, audit, correlation id, and recovery actions.",
+        "missingTitle": "Run not found",
+        "missingBody": "The current runtime store did not find this run."
+      },
+      "webhooks": {
+        "title": "Webhooks / Outbox",
+        "subtitle": "Review delivery queue health, webhook receipts, worker lag, and replay actions."
+      },
+      "webhookDetail": {
+        "title": "Outbox Detail",
+        "subtitle": "Outbox payload, attempts, errors, linked webhook receipts, and replay/discard actions.",
+        "missingTitle": "Outbox not found",
+        "missingBody": "The current runtime store did not find this outbox record."
+      }
+    },
+    "commerce": {
+      "billing": {
+        "title": "Billing",
+        "subtitle": "Operate plans, SKUs, orders, entitlements, credits, and payment evidence."
+      },
+      "revenue": {
+        "title": "Revenue",
+        "subtitle": "Review paid orders, currency totals, provider events, and billing reconciliation."
+      },
+      "entitlements": {
+        "title": "Entitlements",
+        "subtitle": "Review access grants, package source, manual overrides, and revocation actions."
+      }
+    },
+    "data": {
+      "usage": {
+        "title": "Usage",
+        "subtitle": "Module usage and metering ledger are summarized by meter, module, status, and product scope."
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Operational metrics are summarized from runtime store, identity, files, and commercial ledger."
+      },
+      "files": {
+        "title": "Files",
+        "subtitle": "Govern uploaded files, storage durability, scan drift, quarantine, and retention actions."
+      },
+      "fileDetail": {
+        "title": "File Detail",
+        "subtitle": "File source, object information, download access, and governance audit.",
+        "missingTitle": "File not found",
+        "missingBody": "The current runtime store did not find this file."
+      }
+    },
+    "governance": {
+      "audit": {
+        "title": "Audit",
+        "subtitle": "Review security-sensitive actions, actor scope, usage traces, and export evidence.",
+        "exportCsv": "Export CSV",
+        "exportJson": "Export JSON"
+      },
+      "search": {
+        "title": "Search",
+        "subtitle": "Global operations search across users, runs, files, orders, modules, and outbox."
+      }
+    },
+    "error": {
+      "eyebrow": "Admin error",
+      "title": "Admin page failed to load",
+      "description": "This page hit an unhandled exception. Retry the current operation first; if it keeps happening, inspect server logs and the latest module run.",
+      "message": "Message",
+      "digest": "Digest",
+      "unknown": "Unknown admin error",
+      "retry": "Retry"
+    },
+    "inline": {
+      "no_search_results_3b8d6a21": "No search results",
+      "search_across_admin_objects_8aa9cb52": "Search across admin objects",
+      "no_admin_search_matches_body_793e79e5": "No users, files, orders, modules, runs, or outbox records matched this query.",
+      "admin_search_empty_body_e63fc734": "Enter a search term to find users, files, orders, modules, runs, or outbox records.",
+      "current_filter_shows_value_value_records_ffd8ee7a": "Current filter shows {value1} / {value2} records",
+      "value_need_review_fee2a156": "{value1} need review",
+      "value_inactive_c9d6730a": "{value1} inactive",
+      "value_open_d19c38f3": "{value1} open",
+      "value_failed_orders_9ca0c0f7": "{value1} failed orders",
+      "value_active_c668ccbe": "{value1} active",
+      "value_inactive_grants_a556f8e3": "{value1} inactive grants",
+      "value_plans_a759f4a7": "{value1} plans",
+      "archive_plan_value_existing_subscriptions_will_not_b_da179b8e": "Archive plan {value1}? Existing subscriptions will not be deleted.",
+      "sync_sku_value_to_the_stripe_status_check_919dc3f3": "Sync SKU {value1} to the Stripe status check?",
+      "archive_sku_value_6fe9d791": "Archive SKU {value1}?",
+      "value_grants_are_revoked_verify_whether_matching_sub_8bd63058": "{value1} grants are revoked. Verify whether matching subscriptions and billing events agree with this access state.",
+      "value_grants_have_expired_confirm_renewal_grace_peri_c5e9044c": "{value1} grants have expired. Confirm renewal, grace period, or downgrade behavior.",
+      "value_loaded_0827bcbc": "{value1} loaded",
+      "override_value_status_0da851a6": "Override {value1} status",
+      "override_value_reason_bed3b42a": "Override {value1} reason",
+      "override_value_s_value_status_a76f8235": "Override {value1}'s {value2} status?",
+      "revoke_value_s_value_3da7b9d1": "Revoke {value1}'s {value2}?",
+      "open_metering_records_95a992f4": "Open metering records",
+      "value_metering_records_are_not_committed_refunded_vo_5c9787fb": "{value1} metering records are not committed/refunded/voided and need review.",
+      "review_metering_20a2765f": "Review metering",
+      "abnormal_usage_244b13b9": "Abnormal usage",
+      "value_usage_records_are_negative_or_above_5x_the_med_fb589824": "{value1} usage records are negative or above 5x the median.",
+      "review_usage_28a975f1": "Review usage",
+      "usage_review_9c908708": "Usage review",
+      "overages_anomalies_and_open_metering_are_promoted_be_14532b42": "Overages, anomalies, and open metering are promoted before detail tables.",
+      "quota_credits_plan_context_0cf34cc2": "Quota / credits / plan context",
+      "quota_credits_and_plan_context_is_derived_from_usage_44a1516a": "Quota, credits, and plan context is derived from usage metadata; missing metadata is visible.",
+      "no_metadata_9c6a99e4": "no metadata",
+      "audit_de9bcda7": "Audit",
+      "module_46c34f61": "Module",
+      "auto_insight_reliability_needs_attention_09a3d973": "Auto insight: reliability needs attention",
+      "the_selected_window_has_value_failed_runs_value_fail_f487384c": "The selected window has {value1} failed runs, {value2} failed webhooks, {value3} dead letters, and P95 {value4}ms.",
+      "review_reliability_396baa87": "Review reliability",
+      "auto_insight_business_signals_are_safe_to_watch_d9c28e22": "Auto insight: business signals are safe to watch",
+      "revenue_value_mrr_value_signups_value_no_blocking_re_02b73db6": "Revenue {value1}, MRR {value2}, signups {value3}; no blocking reliability signal in this window.",
+      "view_revenue_7f0cbea9": "View revenue",
+      "current_window_value_value_to_value_13de8835": "Current window: {value1} · {value2} to {value3}",
+      "analysis_views_f7340f73": "Analysis views",
+      "business_commerce_reliability_and_evidence_are_separ_364feb1f": "Business, commerce, reliability, and evidence are separated; Runs/P95 no longer dominate first-screen business KPIs.",
+      "business_6da818a9": "Business",
+      "users_69bf3219": "Users",
+      "signups_2fa7c6ad": "Signups",
+      "activation_16b8b06e": "Activation",
+      "usage_peak_b0c4c213": "Usage peak",
+      "commerce_ffe5812b": "Commerce",
+      "revenue_baf4d829": "Revenue",
+      "refunds_6c3fe602": "Refunds",
+      "failed_payments_117d8ce7": "Failed payments",
+      "reliability_d2bd47cb": "Reliability",
+      "runs_ff5c2c65": "Runs",
+      "value_failed_8bc4fc14": "{value1} failed",
+      "p95_latency_c097fedb": "P95 latency",
+      "failed_webhooks_b9eea8b8": "Failed webhooks",
+      "dead_letters_9b0b049c": "Dead letters",
+      "evidence_c6edabc1": "Evidence",
+      "returned_buckets_cd1b4074": "Returned buckets",
+      "empty_buckets_a96e49b1": "Empty buckets",
+      "failure_buckets_120b5c32": "Failure buckets",
+      "store_48d0d80a": "Store",
+      "usage_detail_2fc7505c": "Usage detail",
+      "revenue_detail_fbd90eb8": "Revenue detail",
+      "growth_signal_eff6215c": "growth signal",
+      "user_detail_89e53ea2": "User detail",
+      "data_quality_bucket_coverage_f54e6f7e": "Data quality / Bucket coverage",
+      "the_server_returns_a_complete_date_bucket_series_so__a2f1e1a7": "The server returns a complete date bucket series so charts keep context while object tables are filtered; this section explains evidence quality only.",
+      "revenue_metrics_aa36b65c": "Revenue metrics",
+      "growth_metrics_a21d5394": "Growth metrics",
+      "churn_metrics_b185bbde": "Churn metrics",
+      "churn_count_493d6b47": "churn count",
+      "churn_rate_6fdfbbf2": "churn rate",
+      "lost_mrr_eebadbfc": "lost MRR",
+      "reasons_c5a997d3": "reasons",
+      "usage_buckets_and_patterns_a4df314b": "Usage buckets and patterns",
+      "no_time_series_in_selected_range_56ae138e": "No time series in selected range",
+      "peak_260c49fd": "peak",
+      "median_a9f38fa8": "median",
+      "by_module_621de414": "by module",
+      "by_meter_83b123cb": "by meter",
+      "cohorts_6f28f2cb": "Cohorts",
+      "reliability_and_edge_access_fd695592": "Reliability and edge access",
+      "failed_runs_ce3c4150": "failed runs",
+      "failed_webhooks_dcf27f1c": "failed webhooks",
+      "dead_letters_939898e3": "dead letters",
+      "p50_latency_1566a8f6": "p50 latency",
+      "p95_latency_b8d39333": "p95 latency",
+      "warnings_3dbf89d6": "warnings",
+      "none_48d72ef0": "none",
+      "no_edge_access_logs_in_selected_range_e2eafe0f": "No edge access logs in selected range",
+      "raw_counts_3065a8d8": "Raw counts",
+      "orphan_objects_e83d4bbc": "Orphan objects",
+      "value_physical_objects_have_no_runtime_metadata_owne_0f58a0e8": "{value1} physical objects have no runtime metadata owner and need independent governance.",
+      "review_orphans_e7b8e2ee": "Review orphans",
+      "file_quota_pressure_5b000362": "File quota pressure",
+      "highest_quota_pressure_is_about_value_review_user_wo_462fc813": "Highest quota pressure is about {value1}%. Review user, workspace, or module impact.",
+      "review_quota_00df702c": "Review quota",
+      "value_visible_d0396c4d": "{value1} visible",
+      "value_archived_897b05e4": "{value1} archived",
+      "quota_and_business_impact_6445f739": "Quota and business impact",
+      "file_quota_is_shown_by_user_workspace_and_module_so__cbfc26f6": "File quota is shown by user, workspace, and module so cleanup or expansion has a clear impact surface.",
+      "not_loaded_75bfeb5e": "not loaded",
+      "unknown_7c2c4389": "unknown",
+      "orphan_object_governance_3a5d296f": "Orphan object governance",
+      "physical_orphan_objects_should_not_be_inferred_from__0883b4fb": "Physical orphan objects should not be inferred from the directory table; scan results are governed separately here.",
+      "no_orphan_objects_be30825b": "No orphan objects.",
+      "apply_a_bulk_action_to_value_files_in_the_current_fi_ef78a325": "Apply a bulk action to {value1} files in the current filter?",
+      "quarantine_file_value_14449c49": "Quarantine file {value1}?",
+      "archive_file_value_86b0e1fa": "Archive file {value1}?",
+      "delete_file_value_79d4bf49": "Delete file {value1}?",
+      "restore_file_value_80d981b3": "Restore file {value1}?",
+      "value_audit_in_detail_bd7575cb": "{value1} · audit in detail",
+      "value_visible_6a947562": "{value1} visible",
+      "jump_to_search_panel_8493feeb": "Jump to search panel",
+      "value_total_matches_84f4f25f": "{value1} total matches",
+      "empty_5c14a56d": "empty",
+      "verified_7fc41e1e": "verified",
+      "pending_verification_78fb9c4d": "pending verification",
+      "unverified_96e125d2": "unverified",
+      "verification_mail_missing_eeb3fb6e": "verification mail missing",
+      "admin_change_4f6e3686": "admin change",
+      "pending_verification_7d1aa2f3": "pending verification",
+      "clear_d6cc40bc": "clear",
+      "verification_mail_missing_b5785888": "Verification mail missing",
+      "value_pending_accounts_have_no_visible_email_verific_a35c816b": "{value1} pending accounts have no visible email-verification mail record.",
+      "view_pending_1836a271": "View pending",
+      "admin_changes_f42c9853": "Admin changes",
+      "value_users_carry_roleupdatedby_roleupdatedreason_me_822e988c": "{value1} users carry roleUpdatedBy / roleUpdatedReason metadata.",
+      "review_changes_a3c66d43": "Review changes",
+      "account_status_17cc03e7": "Account status",
+      "host_role_4848d385": "Host role",
+      "verified_95165cf5": "Verified",
+      "mail_9e08b3fd": "Mail",
+      "no_mail_record_8b6c8250": "No mail record",
+      "last_session_b422e3c7": "Last session",
+      "no_sessions_b30fd382": "No sessions",
+      "value_sessions_40272bb0": "{value1} sessions",
+      "updated_value_ac1856f8": "Updated {value1}",
+      "orders_ca187bf2": "Orders",
+      "entitlements_2ca17dc5": "Entitlements",
+      "same_c8958a49": "same",
+      "diff_f5d65d73": "diff",
+      "admin_has_0_module_permissions_by_design_host_admins_fec4e732": "Admin has 0 module permissions by design: host admins access admin, billing, files, and operations through host capabilities instead of module-level permissions.",
+      "permission_search_43af6a5b": "Permission search",
+      "search_capability_permission_or_category_e4548dae": "Search capability, permission, or category",
+      "scope_2e8dbfee": "Scope",
+      "permission_scope_44e7a957": "Permission scope",
+      "host_capabilities_e1480ad4": "Host capabilities",
+      "module_permissions_628742dc": "Module permissions",
+      "permission_diff_view_116b636d": "Permission diff view",
+      "compares_admin_and_user_roles_by_default_filters_app_e1d91d4a": "Compares Admin and User roles by default; filters apply to this diff table as well.",
+      "no_permissions_match_this_filter_598e3d56": "No permissions match this filter.",
+      "blocks_release_57547c33": "Blocks release",
+      "fix_lifecycle_resource_binding_or_doctor_errors_befo_b7176e93": "Fix lifecycle, resource binding, or doctor errors before release candidate evidence.",
+      "needs_review_e7a3a9f7": "Needs review",
+      "warnings_should_be_resolved_or_accepted_before_produ_da84cf4e": "Warnings should be resolved or accepted before production traffic.",
+      "foundation_9a1d6e6c": "Foundation",
+      "required_module_treat_lifecycle_changes_as_product_i_15c2b333": "Required module. Treat lifecycle changes as product-impacting operations.",
+      "no_blocking_evidence_c879beea": "No blocking evidence",
+      "enabled_and_clear_in_current_runtime_health_evidence_8a3f05b2": "Enabled and clear in current runtime health evidence; confirm release checks before shipping.",
+      "not_in_release_path_c82db65f": "Not in release path",
+      "install_or_enable_only_when_this_product_area_is_nee_07e0154a": "Install or enable only when this product area is needed.",
+      "install_before_using_contributed_pages_or_apis_d688f7ad": "Install before using contributed pages or APIs.",
+      "review_missing_resources_and_lifecycle_state_f7287c70": "Review missing resources and lifecycle state.",
+      "open_diagnostics_and_fix_doctor_errors_2c0e0899": "Open diagnostics and fix doctor errors.",
+      "review_warnings_before_rc_evidence_b91e8fcb": "Review warnings before RC evidence.",
+      "monitor_runtime_activity_and_release_impact_b7c0f12c": "Monitor runtime activity and release impact.",
+      "keep_traffic_paused_until_maintenance_evidence_is_cl_5a01f8e7": "Keep traffic paused until maintenance evidence is clear.",
+      "enable_when_this_product_capability_is_ready_92ed0027": "Enable when this product capability is ready.",
+      "showing_value_value_of_value_3d583a43": "Showing {value1}-{value2} of {value3}",
+      "value_errors_value_warnings_52368790": "{value1} errors / {value2} warnings",
+      "value_failures_value_99e0a2ec": "{value1} failures · {value2}",
+      "value_module_value_impact_value_075dd98f": "{value1} module {value2}? Impact: {value3}",
+      "move_value_to_maintenance_mode_impact_value_28a88ab6": "Move {value1} to maintenance mode? Impact: {value2}",
+      "value_value_value_failures_282222ec": "{value1} · {value2} · {value3} failures",
+      "product_capabilities_c63c578c": "Product capabilities",
+      "human_readable_phrases_derived_from_routes_surfaces__eca5b552": "Human-readable phrases derived from routes, surfaces, jobs, data, webhooks, actions, and permissions.",
+      "operator_next_action_1f0c6789": "Operator next action",
+      "the_next_action_is_derived_from_install_state_lifecy_837e1098": "The next action is derived from install state, lifecycle, runtime state, and diagnostics.",
+      "release_candidate_impact_71d4c09e": "Release candidate impact",
+      "no_release_impact_evidence_available_bfb7c0f6": "No release impact evidence available.",
+      "use_this_before_enabling_traffic_or_preparing_rc_evi_d0b8a4a9": "Use this before enabling traffic or preparing RC evidence.",
+      "related_links_use_the_connection_id_module_id_or_ser_72aa3ac2": "Related links use the connection id, module id, or service name as correlation evidence; jobs and events currently resolve through run kind filters and webhook/outbox evidence.",
+      "inspect_runs_that_share_the_module_or_service_correl_28b78544": "Inspect runs that share the module or service correlation key.",
+      "jobs_do_not_have_a_standalone_admin_route_yet_the_li_efdc32a1": "Jobs do not have a standalone Admin route yet; the link resolves to the job run kind filter.",
+      "inspect_outbox_receipt_and_dead_letter_records_for_t_228f29e7": "Inspect outbox, receipt, and dead-letter records for the same module or service key.",
+      "search_policy_test_rotation_and_retention_audit_by_c_974bef4c": "Search policy, test, rotation, and retention audit by connection id.",
+      "choose_the_connection_that_will_read_a_new_secret_re_09c104d3": "Choose the connection that will read a new secret reference.",
+      "enter_env_name_after_the_secret_is_provisioned_as_an_ab33c040": "Enter env:NAME after the secret is provisioned as an environment variable.",
+      "run_test_from_the_provider_matrix_and_verify_audit_e_4c9b8122": "Run Test from the provider matrix and verify audit evidence.",
+      "test_connection_value_c12dd6aa": "Test connection {value1}?",
+      "value_connection_value_61324463": "{value1} connection {value2}?",
+      "rotate_the_secret_source_for_value_the_plaintext_sec_39b4e1e8": "Rotate the secret source for {value1}? The plaintext secret will not be shown.",
+      "clear_the_filter_return_to_modules_or_inspect_webhoo_bf318195": "Clear the filter, return to modules, or inspect webhooks for queued and dead-letter records.",
+      "cancel_run_value_168aaf4e": "Cancel run {value1}?",
+      "requeue_run_value_ed01ac7b": "Requeue run {value1}?",
+      "trigger_worker_drain_now_this_run_processes_up_to_25_b9e93a1b": "Trigger worker drain now? This run processes up to 25 current Jobs, Events, Webhooks, and Email outbox records.",
+      "drain_25_worker_records_39239903": "Drain 25 worker records",
+      "this_drain_action_is_the_host_worker_drain_not_webho_d7cb8a14": "This drain action is the host worker drain, not webhook-only; it processes Jobs, Events, Webhooks, and Email through the shared outbox.",
+      "retry_outbox_value_d2601a72": "Retry outbox {value1}?",
+      "discard_outbox_value_2d809397": "Discard outbox {value1}?",
+      "archive_outbox_value_7c8a928b": "Archive outbox {value1}?",
+      "retry_webhook_receipt_value_dee92adb": "Retry webhook receipt {value1}?",
+      "outbox_detail_keeps_runs_jobs_events_service_and_aud_9d9d5900": "Outbox detail keeps Runs, Jobs, Events, Service, and Audit links ahead of raw payload evidence.",
+      "open_a211eefa": "Open",
+      "operations_7ae661f1": "Operations",
+      "user_review_38aad4ec": "User review",
+      "failed_runs_2eed30e4": "Failed runs",
+      "dead_letters_b58834c8": "Dead letters",
+      "failed_orders_453ed2d8": "Failed orders",
+      "revoked_grants_792a3c9e": "Revoked grants",
+      "revenue_pulse_b40977f0": "Revenue pulse",
+      "platform_b218b539": "Platform",
+      "service_connections_d365945f": "Service connections",
+      "module_health_406d1a74": "Module health",
+      "config_audit_aa98bcad": "Config audit",
+      "browse_by_audience_a0b96fae": "Browse by audience",
+      "operations_commerce_and_platform_entry_points_are_se_2784bd2c": "Operations, commerce, and platform entry points are separated so the homepage sends people to the right place first.",
+      "file_storage_is_using_value_configure_durable_object_7f7b6e93": "File storage is using {value1}. Configure durable object storage before user uploads matter.",
+      "value_diagnostics_are_open_across_route_catalog_prov_bc8bb0a0": "{value1} diagnostics are open across route catalog, providers, retention, or security readiness.",
+      "change_diff_risk_restart_impact_c5687988": "Change diff / risk / restart impact",
+      "no_field_changes_detected_1503883a": "No field changes detected.",
+      "updated_value_5da794a3": " · updated {value1}",
+      "value_workspace_overrides_0ac11ea6": "{value1} workspace overrides",
+      "value_is_loaded_as_the_product_theme_profile_608cda24": "{value1} is loaded as the product theme profile.",
+      "value_accepted_light_tokens_are_available_to_shell_c_21b8c6f7": "{value1} accepted light tokens are available to shell components.",
+      "value_dark_tokens_are_available_for_dark_system_mode_b86a1c41": "{value1} dark tokens are available for dark/system mode.",
+      "value_rejected_tokens_or_diagnostics_need_review_bef_2c50db64": "{value1} rejected tokens or diagnostics need review before release.",
+      "visual_baseline_records_value_admin_theme_screenshot_df2213fb": "Visual baseline records {value1} Admin theme screenshots and {value2} browser screenshots.",
+      "current_filter_shows_value_value_records_f66a03c1": "Current filter shows {value1} / {value2} records",
+      "block_release_and_repair_error_diagnostics_from_the__f4134cd0": "Block release and repair error diagnostics from the AI repair pack first.",
+      "module_owner_reviews_warnings_and_test_evidence_befo_4e508ce4": "Module owner reviews warnings and test evidence before release.",
+      "standard_owner_review_keep_module_doctor_and_module__82c3ccc4": "Standard owner review; keep module:doctor and module:test evidence current.",
+      "mdc_does_not_have_a_remote_environment_contract_yet__9d34727c": "MDC does not have a remote-environment contract yet; this compares runtime, module map, module:test evidence, and release target separately.",
+      "module_owner_readme_runbook_escalation_and_linked_ru_df2711d0": "Module owner, README runbook, escalation, and linked runs are visible before raw tables.",
+      "each_module_has_a_copyable_repair_pack_with_diagnost_f986abc5": "Each module has a copyable repair pack with diagnostics, AI prompt, owner, runbook, and minimal validation commands.",
+      "all_objects_80e82396": "All objects",
+      "admin_object_23cd6ea7": "Admin object",
+      "users_b4199bc0": "Users",
+      "accounts_status_and_lifecycle_1f0bf6fe": "Accounts, status, and lifecycle",
+      "roles_fe337bda": "Roles",
+      "roles_permissions_and_access_scope_6045d921": "Roles, permissions, and access scope",
+      "modules_f7409f8e": "Modules",
+      "install_lifecycle_and_runtime_state_eb3f3b3d": "Install, lifecycle, and runtime state",
+      "runs_ece48ed8": "Runs",
+      "jobs_execution_and_retries_6c5d2cf3": "Jobs, execution, and retries",
+      "files_a7510f89": "Files",
+      "file_directory_and_storage_governance_f89e1fd4": "File directory and storage governance",
+      "billing_ed164131": "Billing",
+      "orders_credits_and_subscriptions_964aaaca": "Orders, credits, and subscriptions",
+      "audit_3b13ee05": "Audit",
+      "trace_export_and_evidence_91971a71": "Trace, export, and evidence",
+      "settings_2ae0756a": "Settings",
+      "product_settings_and_operational_switches_04e04ed9": "Product settings and operational switches",
+      "search_users_modules_runs_afdf55f2": "Search users, modules, runs...",
+      "open_global_search_ebb446c0": "Open global search",
+      "close_global_search_f598b929": "Close global search",
+      "global_search_a2f4b906": "Global search",
+      "search_objects_jump_to_domains_and_keep_recent_looku_5cbbf017": "Search objects, jump to domains, and keep recent lookups.",
+      "search_users_modules_files_orders_runs_1cb93ef1": "Search users, modules, files, orders, runs...",
+      "global_search_query_9b3365b8": "Global search query",
+      "search_type_3a24c841": "Search type",
+      "search_1875a46d": "Search",
+      "recent_searches_13d3dfcb": "Recent searches",
+      "clear_stored_a9a3e08d": "Clear stored",
+      "global_command_palette_12256d61": "Global command palette",
+      "search_recent_items_jump_to_admin_domains_or_run_a_f_c1f9757a": "Search recent items, jump to admin domains, or run a focused global lookup.",
+      "recent_and_quick_searches_f1433f66": "Recent and quick searches",
+      "current_96fd588b": "Current",
+      "matching_objects_63250a66": "Matching objects",
+      "quick_jumps_f81fd51d": "Quick jumps",
+      "no_value_match_this_query_press_enter_to_open_the_fu_360dbb8b": "No {value1} match this query. Press Enter to open the full search page."
+    }
+  },
+  "seo": {
+    "default": {
+      "title": "PloyKit",
+      "description": "PloyKit is an open-source app base with a public site, auth, workspace, and admin."
+    },
+    "pages": {
+      "home": {
+        "title": "PloyKit product site",
+        "description": "Start from the default public pages, auth pages, and workspace entry points, then replace them with modules when your product needs to specialize."
+      },
+      "about": {
+        "title": "About PloyKit",
+        "description": "Learn which product scenarios PloyKit is built for."
+      },
+      "pricing": {
+        "title": "Pricing",
+        "description": "Choose a plan, then use local checkout during development to prove the flow."
+      },
+      "docs": {
+        "title": "Docs",
+        "description": "PloyKit documentation for product composition, module development, and host operations."
+      },
+      "contact": {
+        "title": "Contact",
+        "description": "Contact the product team about module systems, host operations, and deployment plans."
+      },
+      "privacy": {
+        "title": "Privacy",
+        "description": "Understand the data and privacy principles of the PloyKit product host."
+      },
+      "terms": {
+        "title": "Terms",
+        "description": "Review the terms for using the PloyKit product host."
+      },
+      "success": {
+        "title": "Success",
+        "description": "The request has completed; return to the workspace to continue with tasks, files, billing, or module status."
+      }
+    }
+  },
+  "moduleValue": {
+    "setupRequired": "Setup required",
+    "needsAttention": "Needs attention",
+    "ready": "Ready",
+    "quickSignals": "Quick signals",
+    "primaryActions": "Primary actions",
+    "recoveryActions": "Recovery actions",
+    "operatorWorkflow": "Operator workflow",
+    "decision": "Decision",
+    "nextActions": "Next actions",
+    "recoveryPath": "Recovery path",
+    "releaseEvidence": "Release evidence",
+    "operationalFacts": "Operational facts",
+    "evidence": "Evidence",
+    "notReported": "Not reported",
+    "none": "None",
+    "missing": "Missing"
+  },
+  "common": {
+    "theme": "Theme"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "nav": {
+    "site": "__MODULE_NAME__",
+    "console": "__MODULE_NAME__",
+    "admin": "__MODULE_NAME__ Admin"
+  },
+  "pages": {
+    "site": {
+      "title": "__MODULE_NAME__"
+    },
+    "console": {
+      "title": "__MODULE_NAME__ Console"
+    },
+    "admin": {
+      "title": "__MODULE_NAME__ Admin"
+    }
+  }
+}

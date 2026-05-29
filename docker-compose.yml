@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ploykit-v2-postgres
+    environment:
+      POSTGRES_DB: ploykit
+      POSTGRES_USER: ploykit
+      POSTGRES_PASSWORD: ploykit
+    ports:
+      - '55432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ploykit -d ploykit']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  minio:
+    image: minio/minio:latest
+    container_name: ploykit-v2-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ploykit
+      MINIO_ROOT_PASSWORD: ploykit-minio-secret
+    ports:
+      - '59000:9000'
+      - '59001:9001'
+    volumes:
+      - minio-data:/data
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: /bin/sh
+    command: >
+      -c "until mc alias set local http://minio:9000 ploykit ploykit-minio-secret;
+      do sleep 1; done;
+      mc mb --ignore-existing local/ploykit-files"
+
+volumes:
+  minio-data:
