@@ -71,6 +71,7 @@ export function diagnoseModuleCatalog(input: DiagnoseModuleCatalogInput): Module
   }
 
   const publicPaths = new Map<string, string>();
+  const routePaths = new Map<string, string>();
   for (const contract of input.contracts) {
     const state = stateByModule.get(contract.id);
     if (state && state.status !== 'enabled') {
@@ -92,6 +93,28 @@ export function diagnoseModuleCatalog(input: DiagnoseModuleCatalogInput): Module
           );
         } else {
           publicPaths.set(path, contract.id);
+        }
+      }
+    }
+
+    for (const group of ['dashboard', 'admin'] as const) {
+      for (const route of contract.routes[group]) {
+        for (const path of [route.path, ...(route.aliases ?? [])]) {
+          const key = `${group}:${path}`;
+          const owner = routePaths.get(key);
+          if (owner && owner !== contract.id) {
+            diagnostics.push(
+              diagnostic(
+                'error',
+                'MODULE_CATALOG_ROUTE_PATH_CONFLICT',
+                `${group} path "${path}" is declared by both "${owner}" and "${contract.id}".`,
+                `modules.${contract.id}.routes.${group}`,
+                'Change one route path or alias so each dashboard/admin path has one owner.'
+              )
+            );
+          } else {
+            routePaths.set(key, contract.id);
+          }
         }
       }
     }

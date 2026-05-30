@@ -147,3 +147,82 @@ test('P11 catalog doctor reports required disabled modules', () => {
     true
   );
 });
+
+test('P11 catalog doctor reports enabled module route alias conflicts', () => {
+  const firstModule = defineModule({
+    id: 'first-alias-owner',
+    name: 'First Alias Owner',
+    version: '1.0.0',
+    routes: {
+      dashboard: [
+        {
+          path: '/first',
+          component: './pages/FirstPage',
+          auth: 'auth',
+          aliases: ['/shared-console-path'],
+        },
+      ],
+    },
+  });
+  const secondModule = defineModule({
+    id: 'second-alias-owner',
+    name: 'Second Alias Owner',
+    version: '1.0.0',
+    routes: {
+      dashboard: [
+        {
+          path: '/shared-console-path',
+          component: './pages/SecondPage',
+          auth: 'auth',
+        },
+      ],
+    },
+  });
+
+  const diagnostics = diagnoseModuleCatalog({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'first-alias-owner': {
+          rootDir: 'modules/first-alias-owner',
+          sourceId: 'workspace',
+          sourceDir: 'modules',
+          sourceKind: 'workspace',
+          module: async () => ({ default: firstModule }),
+          pages: {},
+          apis: {},
+          actions: {},
+          surfaces: {},
+          lifecycle: {},
+          jobs: {},
+          events: {},
+          webhooks: {},
+        },
+        'second-alias-owner': {
+          rootDir: 'modules/second-alias-owner',
+          sourceId: 'workspace',
+          sourceDir: 'modules',
+          sourceKind: 'workspace',
+          module: async () => ({ default: secondModule }),
+          pages: {},
+          apis: {},
+          actions: {},
+          surfaces: {},
+          lifecycle: {},
+          jobs: {},
+          events: {},
+          webhooks: {},
+        },
+      },
+    },
+    contracts: [
+      normalizeModuleRuntimeContract(firstModule),
+      normalizeModuleRuntimeContract(secondModule),
+    ],
+  });
+
+  assert.equal(
+    diagnostics.some((item) => item.code === 'MODULE_CATALOG_ROUTE_PATH_CONFLICT'),
+    true
+  );
+});

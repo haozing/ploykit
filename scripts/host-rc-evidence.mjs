@@ -93,12 +93,70 @@ function summarizeDetail(detail) {
   return Object.keys(summary).length > 0 ? summary : undefined;
 }
 
+async function waitForBaseUrl(url, timeoutMs = 120_000) {
+  if (!url) {
+    return;
+  }
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, { redirect: 'manual' });
+      if (response.status > 0 && response.status < 500) {
+        return;
+      }
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error(
+    `Host base URL did not become ready at ${url}. Last error: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`
+  );
+}
+
+async function waitForBaseUrlStep(id, title, url) {
+  const startedAt = Date.now();
+  try {
+    await waitForBaseUrl(url);
+    return {
+      id,
+      title,
+      status: 'passed',
+      ok: true,
+      command: `wait for ${url}`,
+      durationMs: Date.now() - startedAt,
+      summary: { baseUrl: url },
+    };
+  } catch (error) {
+    return {
+      id,
+      title,
+      status: 'failed',
+      ok: false,
+      command: `wait for ${url}`,
+      durationMs: Date.now() - startedAt,
+      summary: { baseUrl: url },
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function runStep(id, title, script, args = []) {
   const startedAt = Date.now();
   const commandArgs = npmArgs(script, args);
+  const env = { ...process.env };
+  if (normalizedBaseUrl) {
+    env.HOST_SMOKE_BASE_URL = normalizedBaseUrl;
+    env.PLOYKIT_HOST_URL = normalizedBaseUrl;
+  }
   const result = spawnSync(npm, commandArgs, {
     encoding: 'utf8',
     shell: process.platform === 'win32',
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const stdout = result.stdout ?? '';
@@ -248,6 +306,9 @@ checks.push(
     ...(required ? ['--required'] : []),
   ])
 );
+if (normalizedBaseUrl) {
+  checks.push(await waitForBaseUrlStep('host-base-url-ready', 'Host base URL readiness', normalizedBaseUrl));
+}
 checks.push(
   runStep('web-shell-evidence', 'Web Shell evidence', 'host:web-shell-evidence', [
     ...(required ? ['--required'] : []),
@@ -256,6 +317,12 @@ checks.push(
 checks.push(
   runStep('module-quality', 'Module-declared quality evidence', 'module:quality', [
     ...(required ? ['--required'] : []),
+  ])
+);
+checks.push(
+  runStep('worker-heartbeat-refresh', 'Worker heartbeat refresh', 'host:worker', [
+    '--limit',
+    '0',
   ])
 );
 checks.push(

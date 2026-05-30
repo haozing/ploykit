@@ -865,7 +865,8 @@ export function HealthRow({ lang, item }: { lang: SupportedLanguage; item: Healt
       {item.href ? <ChevronRight className="h-4 w-4 shrink-0 text-admin-text-muted transition group-hover:text-admin-primary" aria-hidden /> : null}
     </>
   );
-  const className = 'group flex items-center gap-3 px-3 py-2.5 transition hover:bg-admin-surface-muted/70';
+  const className =
+    'group flex w-full min-w-0 flex-col gap-2 px-3 py-2.5 transition hover:bg-admin-surface-muted/70 sm:flex-row sm:items-center';
 
   if (item.href) {
     return (
@@ -1239,7 +1240,7 @@ export function EntityListItem({
   );
 
   const className = cn(
-    'group flex items-center gap-3 rounded-admin-md px-3 transition hover:bg-admin-surface-muted/70',
+    'group flex w-full min-w-0 max-w-full items-center gap-3 rounded-admin-md px-3 transition hover:bg-admin-surface-muted/70',
     compact ? 'py-2' : 'py-3'
   );
 

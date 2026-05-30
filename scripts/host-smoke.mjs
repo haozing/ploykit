@@ -111,7 +111,7 @@ async function login() {
 async function main() {
   await checkPage('site-home', '/zh', { contains: 'PloyKit' });
   await checkPage('auth-login-page', '/zh/login', { contains: 'admin@example.com' });
-  await checkPage('public-demo-page', '/zh/demo', { contains: 'JSON' });
+  await checkPage('public-demo-page', '/zh/demo', { contains: 'Capability Demo' });
   await checkPublicToolApi();
 
   const cookie = await login();

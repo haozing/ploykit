@@ -41,6 +41,7 @@ const uiModule = defineModule({
         loader: './loaders/dashboard-loader',
         metadata: './loaders/dashboard-metadata',
         auth: 'auth',
+        aliases: ['/ui-dashboard'],
       },
     ],
   },
@@ -246,6 +247,7 @@ test('P5 renders public aliases with canonical fallback, sitemap and head tags',
   assert.ok(
     sitemap.some((entry) => entry.path === '/public-ui-test' && entry.source === 'publicAlias')
   );
+  assert.equal(sitemap.some((entry) => entry.path === '/ui-dashboard'), false);
 
   const tags = createModuleHeadTags(result.page.seo);
   assert.ok(tags.some((tag) => tag.tag === 'title' && tag.content === 'Public UI Tool'));

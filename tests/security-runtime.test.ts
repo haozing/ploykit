@@ -587,6 +587,7 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
           requestId: '${ctx.request.id}',
           workspaceId: '${ctx.scope.workspaceId}',
           remoteAccountId: '${resource.signedWorkspace.remoteAccountId}',
+          workflowId: '${input.workflowId}',
         },
         operations: {
           'admin.request': {
@@ -706,10 +707,10 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
   const result = (await services.invoke('signedAdmin', 'admin.request', {
     path: '/v1/runs',
     method: 'POST',
+    workflowId: 'wf_1',
     json: {
       items: [undefined, 'kept'],
       optional: undefined,
-      workflowId: 'wf_1',
       token: 'input-token',
     },
   })) as { ok: boolean };
@@ -718,6 +719,7 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
   const requestJson = JSON.parse(capturedRequest!.body!);
   assert.deepEqual(requestJson.items, [null, 'kept']);
   assert.equal('optional' in requestJson, false);
+  assert.equal('workflowId' in requestJson, false);
   assert.equal(capturedRequest?.url, 'https://signed-api.example/v1/runs');
   assert.equal(capturedRequest?.headers.get('authorization'), 'Bearer bearer-secret');
   assert.ok(capturedRequest?.headers.get('x-module-signature'));
@@ -726,6 +728,7 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
   );
   assert.equal(claims.requestId, 'req-service-1');
   assert.equal(claims.remoteAccountId, 'acct_123');
+  assert.equal(claims.workflowId, 'wf_1');
 
   const invocations = await store.listProviderInvocations({ productId: 'product-a' });
   assert.equal(invocations.length, 1);

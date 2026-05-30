@@ -38,7 +38,7 @@ export interface ResolvedModulePageRoute {
   kind: ModulePageRouteKind;
   route: ModulePageRoute;
   matchedPath: string;
-  routeSource: 'route' | 'publicAlias';
+  routeSource: 'route' | 'alias' | 'publicAlias';
   canonicalPath: string;
   params: Record<string, string>;
   contract: ModuleRuntimeContract;

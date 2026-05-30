@@ -123,6 +123,7 @@ export const HOST_PAGE_REGISTRY = [
   adminPage('admin.file-detail', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.modules', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.module-detail', ['header.actions', 'main.before', 'main.after', 'side']),
+  adminPage('admin.module-route', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.rbac', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.revenue', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.runs', ['header.actions', 'main.before', 'main.after', 'side']),

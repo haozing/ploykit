@@ -4,7 +4,7 @@ export interface ModuleSitemapEntry {
   moduleId: string;
   path: string;
   canonicalPath: string;
-  source: 'route' | 'publicAlias';
+  source: 'route' | 'alias' | 'publicAlias';
   url?: string;
 }
 
@@ -17,7 +17,7 @@ export function createModuleSitemapEntries(
   options: CreateModuleSitemapEntriesOptions = {}
 ): ModuleSitemapEntry[] {
   return host.routes
-    .filter((entry) => entry.kind === 'site')
+    .filter((entry) => entry.kind === 'site' && entry.source !== 'alias')
     .map((entry) => ({
       moduleId: entry.moduleId,
       path: entry.path,

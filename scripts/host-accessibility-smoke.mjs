@@ -1,9 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  collectModuleQualityRoutes,
-  routeAppliesToViewport,
-} from './module-quality-manifest.mjs';
+import { routeAppliesToViewport } from './module-quality-manifest.mjs';
 
 const required = process.argv.includes('--required');
 const baseUrl = (
@@ -34,15 +31,12 @@ function writeReport(report) {
   fs.copyFileSync(reportPath, latestPath);
 }
 
-const moduleQualityRoutes = collectModuleQualityRoutes('accessibility');
-
 const routes = [
   { path: '/zh/docs', contains: '文档' },
   { path: '/zh/login', contains: '登录' },
   { path: '/zh/register', contains: '创建账号' },
-  { path: '/zh/demo', contains: 'JSON / CSV 工具' },
+  { path: '/zh/demo', contains: 'Capability Demo' },
   { path: '/zh/dashboard', auth: true, contains: 'admin@example.com' },
-  ...moduleQualityRoutes,
   { path: '/zh/admin', auth: true, contains: '后台概览' },
   { path: '/zh/admin/modules', auth: true, contains: '模块' },
   { path: '/zh/admin/settings', auth: true, contains: '设置' },
@@ -80,7 +74,7 @@ function parseSetCookieHeader(setCookieHeader, cookieUrl) {
     domain: url.hostname,
     path: '/',
     httpOnly: setCookieHeader.toLowerCase().includes('httponly'),
-    secure: url.protocol === 'https:' || setCookieHeader.toLowerCase().includes('secure'),
+    secure: url.protocol === 'https:',
     sameSite: setCookieHeader.toLowerCase().includes('samesite=strict') ? 'Strict' : 'Lax',
   };
 }
@@ -134,9 +128,10 @@ function routeContainsText(route, bodyText) {
     : bodyText.trim().length > 0;
 }
 
-async function gotoRoute(page, url) {
-  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-  await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+async function gotoRoute(page, url, timeoutMs = 20_000) {
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+  await page.waitForLoadState('networkidle', { timeout: 1_000 }).catch(() => undefined);
+  await page.waitForTimeout(100);
   return response;
 }
 

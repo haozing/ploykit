@@ -151,6 +151,79 @@ test('module contract requires public aliases to be public site routes', () => {
   assert.ok(codes.includes('MODULE_PUBLIC_ALIAS_PUBLIC_AUTH_REQUIRED'));
 });
 
+test('module contract validates dashboard and admin route aliases', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'route-alias-test',
+      name: 'Route Alias Test',
+      version: '0.1.0',
+      routes: {
+        dashboard: [
+          {
+            path: '/canonical',
+            component: './pages/DashboardPage',
+            auth: 'auth',
+            aliases: ['/canonical', '/alias/:dynamic', '/alias/:dynamic', '/alias?tab=one'],
+          },
+        ],
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_ROUTE_ALIAS_SELF_REFERENCE'));
+  assert.ok(codes.includes('MODULE_ROUTE_ALIAS_DYNAMIC_UNSUPPORTED'));
+  assert.ok(codes.includes('MODULE_ROUTE_ALIAS_DUPLICATE'));
+  assert.ok(codes.includes('MODULE_ROUTE_ALIAS_PATH_INVALID'));
+});
+
+test('module contract keeps public aliases and route aliases in separate lanes', () => {
+  const siteCodes = codesFor(
+    defineModule({
+      id: 'site-route-alias-test',
+      name: 'Site Route Alias Test',
+      version: '0.1.0',
+      routes: {
+        site: [
+          {
+            path: '/canonical',
+            component: './pages/SitePage',
+            metadata: './loaders/site-meta',
+            auth: 'public',
+            aliases: ['/legacy'],
+            cache: { strategy: 'public', revalidateSeconds: 300 },
+          },
+        ],
+      },
+    })
+  );
+
+  const conflictCodes = codesFor(
+    defineModule({
+      id: 'route-alias-conflict-test',
+      name: 'Route Alias Conflict Test',
+      version: '0.1.0',
+      routes: {
+        dashboard: [
+          {
+            path: '/orders/:orderId',
+            component: './pages/OrderPage',
+            auth: 'auth',
+          },
+          {
+            path: '/orders/archive',
+            component: './pages/ArchivePage',
+            auth: 'auth',
+            aliases: ['/orders/:orderId'],
+          },
+        ],
+      },
+    })
+  );
+
+  assert.ok(siteCodes.includes('MODULE_ROUTE_ALIAS_NON_SITE_ONLY'));
+  assert.ok(conflictCodes.includes('MODULE_ROUTE_PATH_CONFLICT'));
+});
+
 test('module contract requires public site routes to declare SEO metadata and cache policy', () => {
   const codes = codesFor(
     defineModule({

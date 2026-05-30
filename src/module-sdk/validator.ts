@@ -513,6 +513,111 @@ function validatePublicAliases(
   }
 }
 
+function validateRouteAliases(
+  diagnostics: ModuleDiagnostic[],
+  route: ModulePageRoute,
+  path: string,
+  group: 'site' | 'dashboard' | 'admin'
+): void {
+  const aliases = route.aliases ?? [];
+  if (aliases.length === 0) {
+    return;
+  }
+
+  if (group === 'site') {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_ALIAS_NON_SITE_ONLY',
+      'Route aliases are only supported on dashboard and admin page routes.',
+      `${path}.aliases`,
+      'Use publicAliases for public site compatibility paths.'
+    );
+  }
+
+  const seen = new Set<string>();
+  for (const [index, alias] of aliases.entries()) {
+    const aliasPath = `${path}.aliases.${index}`;
+
+    if (!alias.startsWith('/') || alias.includes('?') || alias.includes('#')) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_ALIAS_PATH_INVALID',
+        `Route alias "${alias}" must be an absolute path without query or hash.`,
+        aliasPath,
+        'Use a module-local alias path like "/orders" or "/billing".'
+      );
+      continue;
+    }
+
+    if (alias.includes(':') || alias.includes('*')) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_ALIAS_DYNAMIC_UNSUPPORTED',
+        `Route alias "${alias}" must be a static path.`,
+        aliasPath,
+        'Use a fixed alias path that resolves to this canonical route.'
+      );
+    }
+
+    if (alias === route.path) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_ALIAS_SELF_REFERENCE',
+        `Route alias "${alias}" duplicates the canonical ${group} route path.`,
+        aliasPath,
+        'Remove the alias or point it at another compatibility path.'
+      );
+    }
+
+    if (seen.has(alias)) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_ALIAS_DUPLICATE',
+        `Route alias "${alias}" is duplicated in this route.`,
+        aliasPath
+      );
+    }
+    seen.add(alias);
+  }
+}
+
+function validateRoutePathConflicts(diagnostics: ModuleDiagnostic[], definition: ModuleDefinition): void {
+  for (const group of ['site', 'dashboard', 'admin'] as const) {
+    const owners = new Map<string, string>();
+    for (const [index, route] of (definition.routes?.[group] ?? []).entries()) {
+      const routePath = `routes.${group}.${index}`;
+      const paths = [
+        { path: route.path, source: 'path', diagnosticPath: `${routePath}.path` },
+        ...(route.aliases ?? []).map((alias, aliasIndex) => ({
+          path: alias,
+          source: 'alias',
+          diagnosticPath: `${routePath}.aliases.${aliasIndex}`,
+        })),
+        ...(route.publicAliases ?? []).map((alias, aliasIndex) => ({
+          path: alias,
+          source: 'publicAlias',
+          diagnosticPath: `${routePath}.publicAliases.${aliasIndex}`,
+        })),
+      ];
+
+      for (const item of paths) {
+        const owner = owners.get(item.path);
+        if (owner) {
+          addError(
+            diagnostics,
+            'MODULE_ROUTE_PATH_CONFLICT',
+            `${group} route ${item.source} "${item.path}" conflicts with ${owner}.`,
+            item.diagnosticPath,
+            'Keep each canonical path, route alias, and public alias unique within the same route group.'
+          );
+        } else {
+          owners.set(item.path, `${routePath}.${item.source}`);
+        }
+      }
+    }
+  }
+}
+
 function validatePageRoute(
   diagnostics: ModuleDiagnostic[],
   route: ModulePageRoute,
@@ -523,6 +628,7 @@ function validatePageRoute(
   validateLocalModulePath(diagnostics, route.component, `${path}.component`, 'Page component');
   validateLocalModulePath(diagnostics, route.loader, `${path}.loader`, 'Page loader', false);
   validateLocalModulePath(diagnostics, route.metadata, `${path}.metadata`, 'Page metadata', false);
+  validateRouteAliases(diagnostics, route, path, group);
   validatePublicAliases(diagnostics, route, path, group);
 
   for (const [index, field] of (route.metadataResult?.required ?? []).entries()) {
@@ -743,6 +849,8 @@ function validateRoutes(diagnostics: ModuleDiagnostic[], definition: ModuleDefin
       );
     }
   }
+
+  validateRoutePathConflicts(diagnostics, definition);
 
   for (const [index, route] of (definition.routes?.api ?? []).entries()) {
     const path = `routes.api.${index}`;

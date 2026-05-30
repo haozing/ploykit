@@ -133,7 +133,9 @@ export function createModuleRuntimeHostSnapshot(
       explanation:
         route.source === 'publicAlias'
           ? `${route.path} resolves to ${route.moduleId}:${route.canonicalPath} through a public alias.`
-          : `${route.path} resolves to ${route.moduleId}:${route.canonicalPath} through the ${route.kind} route manifest.`,
+          : route.source === 'alias'
+            ? `${route.path} resolves to ${route.moduleId}:${route.canonicalPath} through a ${route.kind} alias.`
+            : `${route.path} resolves to ${route.moduleId}:${route.canonicalPath} through the ${route.kind} route manifest.`,
     })),
     moduleMapHealth: {
       modules: Object.keys(host.artifact.modules).length,

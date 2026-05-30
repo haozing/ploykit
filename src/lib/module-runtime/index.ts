@@ -1,6 +1,9 @@
 export * from './actions';
 export * from './admin';
 export * from './adapters';
+export { createS3CompatibleHttpClient } from '../module-capabilities/files/s3-compatible-http-client';
+export { createRuntimeStoreNotificationRuntime } from '../module-capabilities/notifications/notification-runtime';
+export { createInMemoryRagVectorStore } from '../module-capabilities/rag/vector-store';
 export * from './capabilities';
 export * from './catalog';
 export * from './connectors';

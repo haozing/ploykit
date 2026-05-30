@@ -71,6 +71,14 @@ const testModule = defineModule({
         metadata: './loaders/dashboard-metadata',
         auth: 'auth',
       },
+      {
+        path: '/workspace',
+        component: './pages/WorkspaceDashboardPage',
+        loader: './loaders/workspace-state',
+        metadata: './loaders/workspace-metadata',
+        auth: 'auth',
+        aliases: ['/workspace-dashboard', '/dashboard/special'],
+      },
     ],
     api: [
       {
@@ -176,6 +184,11 @@ const artifact: ModuleMapArtifact = {
             return { view: 'dashboard' };
           },
         }),
+        'pages/WorkspaceDashboardPage': async () => ({
+          default: function WorkspaceDashboardPage() {
+            return { view: 'workspace-dashboard' };
+          },
+        }),
         'pages/PublicToolPage': async () => ({
           default: function PublicToolPage() {
             return { view: 'public-tool' };
@@ -192,6 +205,17 @@ const artifact: ModuleMapArtifact = {
         'loaders/dashboard-metadata': async () => ({
           default: (ctx: ModuleContext) => ({
             title: `Dashboard ${ctx.request.params.slug}`,
+          }),
+        }),
+        'loaders/workspace-state': async () => ({
+          default: (ctx: ModuleContext) => ({
+            workspace: true,
+            userId: ctx.user?.id ?? null,
+          }),
+        }),
+        'loaders/workspace-metadata': async () => ({
+          default: () => ({
+            title: 'Workspace dashboard',
           }),
         }),
         'loaders/public-tool-metadata': async () => ({
@@ -627,6 +651,68 @@ test('createModuleHost resolves public aliases for site routes', async () => {
   assert.deepEqual((result.page.component as () => unknown)(), { view: 'public-tool' });
 });
 
+test('createModuleHost resolves dashboard aliases to canonical routes', async () => {
+  const host = await createModuleHost({
+    artifact,
+    resolveSession: async () => ({
+      user: { id: 'user_alias', role: 'user' },
+      permissions: [Permission.DataDocumentRead],
+      data: {
+        productId: 'product_1',
+        userId: 'user_alias',
+        actorId: 'user_alias',
+      },
+    }),
+  });
+
+  const result = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/dashboard/workspace-dashboard', { method: 'GET' }),
+    pathname: '/workspace-dashboard',
+  });
+
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+
+  assert.equal(result.page.route.path, '/workspace');
+  assert.equal(result.page.matchedPath, '/workspace-dashboard');
+  assert.equal(result.page.canonicalPath, '/workspace');
+  assert.equal(result.page.routeSource, 'alias');
+  assert.deepEqual(result.page.params, {});
+  assert.deepEqual(result.page.loaderData, { workspace: true, userId: 'user_alias' });
+  assert.deepEqual((result.page.component as () => unknown)(), { view: 'workspace-dashboard' });
+});
+
+test('createModuleHost prefers static dashboard aliases over dynamic canonical routes', async () => {
+  const host = await createModuleHost({
+    artifact,
+    resolveSession: async () => ({
+      user: { id: 'user_alias_static', role: 'user' },
+      permissions: [Permission.DataDocumentRead],
+      data: {
+        productId: 'product_1',
+        userId: 'user_alias_static',
+        actorId: 'user_alias_static',
+      },
+    }),
+  });
+
+  const result = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/dashboard/special', { method: 'GET' }),
+    pathname: '/dashboard/special',
+  });
+
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+
+  assert.equal(result.page.routeSource, 'alias');
+  assert.deepEqual(result.page.params, {});
+  assert.deepEqual((result.page.component as () => unknown)(), { view: 'workspace-dashboard' });
+});
+
 test('createModuleHost rejects machine API routes without an API key', async () => {
   const host = await createModuleHost({ artifact });
 
@@ -794,9 +880,10 @@ test('runtime host snapshot explains mounted capabilities and module map health'
   });
 
   assert.equal(snapshot.mountedCapabilities.modules, 1);
-  assert.equal(snapshot.mountedCapabilities.routes, 6);
+  assert.equal(snapshot.mountedCapabilities.routes, 9);
   assert.equal(snapshot.mountedCapabilities.actions, 1);
   assert.equal(snapshot.routeResolution.some((route) => route.source === 'publicAlias'), true);
+  assert.equal(snapshot.routeResolution.some((route) => route.source === 'alias'), true);
   assert.equal(snapshot.productScope?.profile, 'test');
   assert.equal(health.ok, false);
   assert.ok(health.issues.some((issue) => issue.kind === 'missing-release-metadata'));

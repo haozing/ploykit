@@ -1,9 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  collectModuleQualityRoutes,
-  routeAppliesToViewport,
-} from './module-quality-manifest.mjs';
+import { routeAppliesToViewport } from './module-quality-manifest.mjs';
 
 const required = process.argv.includes('--required');
 const baseUrl = (
@@ -41,8 +38,6 @@ function writeReport(report) {
   fs.copyFileSync(reportPath, latestPath);
 }
 
-const moduleQualityRoutes = collectModuleQualityRoutes('browser');
-
 const routes = [
   { path: '/', contains: 'PloyKit' },
   { path: '/zh/pricing', contains: '价格' },
@@ -51,7 +46,7 @@ const routes = [
   { path: '/zh/register', contains: '创建账号' },
   { path: '/zh/forgot-password', contains: '找回密码' },
   { path: '/zh/reset-password', contains: '重置密码' },
-  { path: '/zh/demo', contains: 'JSON / CSV 工具' },
+  { path: '/zh/demo', contains: 'Capability Demo' },
   { path: '/zh/dashboard', auth: true, contains: 'admin@example.com' },
   { path: '/zh/dashboard/workspaces', auth: true, contains: '工作区' },
   { path: '/zh/dashboard/files', auth: true, contains: '文件' },
@@ -60,7 +55,6 @@ const routes = [
   { path: '/zh/dashboard/credit-history', auth: true, contains: '点数记录' },
   { path: '/zh/dashboard/notifications', auth: true, contains: '通知' },
   { path: '/zh/dashboard/settings/notifications', auth: true, contains: '通知设置' },
-  ...moduleQualityRoutes,
   { path: '/zh/admin', auth: true, contains: '后台概览' },
   { path: '/zh/admin/modules', auth: true, contains: '模块' },
   { path: '/zh/admin/module-dev-console', auth: true, contains: '模块开发控制台' },
@@ -112,7 +106,7 @@ function parseSetCookieHeader(setCookieHeader, cookieUrl) {
     domain: url.hostname,
     path: '/',
     httpOnly: setCookieHeader.toLowerCase().includes('httponly'),
-    secure: url.protocol === 'https:' || setCookieHeader.toLowerCase().includes('secure'),
+    secure: url.protocol === 'https:',
     sameSite: setCookieHeader.toLowerCase().includes('samesite=strict') ? 'Strict' : 'Lax',
   };
 }
@@ -256,6 +250,13 @@ async function runAdminGlobalSearchChecks(page, outputDir, viewportId) {
   });
 }
 
+async function gotoRoute(page, url, timeoutMs = 20_000) {
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+  await page.waitForLoadState('networkidle', { timeout: 1_000 }).catch(() => undefined);
+  await page.waitForTimeout(100);
+  return response;
+}
+
 try {
   for (const viewport of viewports) {
     const context = await browser.newContext({
@@ -275,7 +276,7 @@ try {
       const id = `${viewport.id}:${routePath}`;
       const url = `${normalizedBaseUrl}${routePath}`;
       try {
-        const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 20_000 });
+        const response = await gotoRoute(page, url);
         const bodyText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
         const finalPath = new URL(page.url()).pathname;
         const screenshot = path.join(

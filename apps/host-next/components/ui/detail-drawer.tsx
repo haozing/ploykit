@@ -30,7 +30,11 @@ export function DetailDrawer({
           <h2 className="truncate text-base font-semibold leading-6">{title}</h2>
           {description ? <p className="mt-1 break-all text-sm leading-6 text-admin-text-muted">{description}</p> : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{actions}</div> : null}
+        {actions ? (
+          <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-2 overflow-hidden sm:w-auto sm:justify-end [&>*]:max-w-full [&>*]:min-w-0">
+            {actions}
+          </div>
+        ) : null}
       </header>
       <div className="p-4 sm:p-5">{children}</div>
     </aside>

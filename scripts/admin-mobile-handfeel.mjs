@@ -63,7 +63,7 @@ function parseSetCookieHeader(setCookieHeader, cookieUrl) {
     domain: url.hostname,
     path: '/',
     httpOnly: setCookieHeader.toLowerCase().includes('httponly'),
-    secure: url.protocol === 'https:' || setCookieHeader.toLowerCase().includes('secure'),
+    secure: url.protocol === 'https:',
     sameSite: setCookieHeader.toLowerCase().includes('samesite=strict') ? 'Strict' : 'Lax',
   };
 }

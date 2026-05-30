@@ -60,6 +60,7 @@ export interface ModulePageRoute extends ModuleRouteBase {
     required?: readonly ('title' | 'description' | 'canonical' | 'sitemap' | 'openGraph')[];
     i18nNamespaces?: readonly string[];
   };
+  aliases?: readonly string[];
   publicAliases?: readonly string[];
   cache?: {
     strategy: 'none' | 'public' | 'private';

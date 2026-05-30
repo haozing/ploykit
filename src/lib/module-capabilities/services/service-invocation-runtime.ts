@@ -336,7 +336,10 @@ function defaultAllowedInputFields(operation: ModuleServiceOperationDefinition):
 
 function assertAllowedInputFields(operation: ModuleServiceOperationDefinition, value: unknown) {
   const input = recordValue(value);
-  const allowed = new Set(operation.input?.allow ?? defaultAllowedInputFields(operation));
+  const allowed = new Set([
+    ...(operation.input?.allow ?? defaultAllowedInputFields(operation)),
+    ...(operation.input?.claimsAllow ?? []),
+  ]);
   for (const key of Object.keys(input)) {
     if (!allowed.has(key)) {
       throw new Error(`MODULE_SERVICE_INPUT_FIELD_DENIED: ${key}`);

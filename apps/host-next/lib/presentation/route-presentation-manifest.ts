@@ -78,6 +78,7 @@ const HOST_ROUTE_PATH_BY_PAGE_ID: Record<string, string> = {
   'admin.file-detail': '/admin/files/:fileId',
   'admin.modules': '/admin/modules',
   'admin.module-detail': '/admin/modules/:moduleId',
+  'admin.module-route': '/admin/:modulePath*',
   'admin.rbac': '/admin/rbac',
   'admin.revenue': '/admin/revenue',
   'admin.runs': '/admin/runs',

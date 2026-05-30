@@ -13,7 +13,7 @@ import {
 } from './route-pattern';
 
 export type ModuleRuntimeRouteKind = 'site' | 'dashboard' | 'admin' | 'api';
-export type ModuleRuntimeRouteSource = 'route' | 'publicAlias';
+export type ModuleRuntimeRouteSource = 'route' | 'alias' | 'publicAlias';
 
 export type ModuleRuntimeRouteDefinition = ModulePageRoute | ModuleApiRoute;
 
@@ -32,6 +32,18 @@ export interface ModuleRuntimeRouteEntry {
 export interface ModuleRuntimeRouteMatch {
   entry: ModuleRuntimeRouteEntry;
   params: ModuleRoutePathMatch['params'];
+}
+
+function routeSpecificity(entry: ModuleRuntimeRouteEntry): number {
+  return entry.compiled.segments.reduce((score, segment) => {
+    if (segment.kind === 'static') {
+      return score + 3;
+    }
+    if (segment.kind === 'param') {
+      return score + 1;
+    }
+    return score;
+  }, 0);
 }
 
 function createEntry(
@@ -64,6 +76,10 @@ export function createModuleRouteManifest(
       for (const route of contract.routes[kind]) {
         entries.push(createEntry(contract, kind, route));
 
+        for (const alias of route.aliases ?? []) {
+          entries.push(createEntry(contract, kind, route, alias, 'alias'));
+        }
+
         if (kind === 'site') {
           for (const publicAlias of route.publicAliases ?? []) {
             entries.push(createEntry(contract, kind, route, publicAlias, 'publicAlias'));
@@ -79,7 +95,10 @@ export function createModuleRouteManifest(
     if (left.kind !== right.kind) {
       return left.kind.localeCompare(right.kind);
     }
-    return right.compiled.segments.length - left.compiled.segments.length;
+    if (left.compiled.segments.length !== right.compiled.segments.length) {
+      return right.compiled.segments.length - left.compiled.segments.length;
+    }
+    return routeSpecificity(right) - routeSpecificity(left);
   });
 }
 

@@ -128,6 +128,7 @@ import {
 import {
   createHostRequest,
   dashboardHref,
+  hostBaseUrl,
   modulePathFromSegments,
   requestUrl,
 } from '../apps/host-next/lib/paths';
@@ -190,6 +191,10 @@ type WebShellTestRunner = {
 
 const runNodeTest = nodeTest as unknown as WebShellTestRunner;
 let webShellTestQueue: Promise<void> = Promise.resolve();
+
+function sameOriginHeader(): string {
+  return new URL(hostBaseUrl()).origin;
+}
 
 const test: WebShellTestRunner = ((
   name: string,
@@ -858,7 +863,7 @@ test('X2 host user APIs expose profile, role and guarded password operations', a
       headers: {
         cookie: currentSession.cookie.split(';')[0]!,
         'content-type': 'application/json',
-        origin: 'http://localhost:3000',
+        origin: sameOriginHeader(),
       },
       body: JSON.stringify({ currentPassword: 'Current@123', newPassword: 'Changed@123' }),
     })
@@ -1520,7 +1525,7 @@ test('X9 auth transactional routes use the host email provider contract', async 
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          origin: 'http://localhost:3000',
+          origin: sameOriginHeader(),
         },
         body: JSON.stringify({ email: 'admin@example.com' }),
       })
@@ -2328,7 +2333,7 @@ test('R1 contact API accepts public requests through the route security catalog'
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        origin: 'http://localhost:3000',
+        origin: sameOriginHeader(),
       },
       body: JSON.stringify({
         name: 'PloyKit Operator',
