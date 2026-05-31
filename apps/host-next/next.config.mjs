@@ -1,4 +1,7 @@
+import path from 'node:path';
+
 const isDevelopment = process.env.NODE_ENV !== 'production';
+const projectRoot = path.resolve(process.cwd());
 const scriptSrc = ["'self'", "'unsafe-inline'", ...(isDevelopment ? ["'unsafe-eval'"] : [])].join(
   ' '
 );
@@ -9,6 +12,16 @@ const nextConfig = {
   typedRoutes: false,
   experimental: {
     externalDir: true,
+  },
+  turbopack: {
+    resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
+  },
+  webpack(config) {
+    config.resolve.modules = [
+      ...(config.resolve.modules ?? []),
+      path.join(projectRoot, 'node_modules'),
+    ];
+    return config;
   },
   async headers() {
     return [

@@ -137,6 +137,22 @@ function readMetadataString(metadata: unknown, key: 'title' | 'description'): st
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
+function readDashboardShellChrome(metadata: unknown): 'none' | 'site' | 'workspace' | 'admin' | undefined {
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined;
+  }
+
+  const shell = (metadata as Record<string, unknown>).shell;
+  if (!shell || typeof shell !== 'object') {
+    return undefined;
+  }
+
+  const chrome = (shell as Record<string, unknown>).chrome;
+  return chrome === 'none' || chrome === 'site' || chrome === 'workspace' || chrome === 'admin'
+    ? chrome
+    : undefined;
+}
+
 function dashboardNavigationLabel(
   host: ModuleHost,
   session: ModuleHostSession,
@@ -305,9 +321,11 @@ async function DashboardHome({ request }: { request: Request }) {
 async function ModuleDashboardPage({
   result,
   lang,
+  unframed = false,
 }: {
   result: ResolveModulePageRouteResult;
   lang: SupportedLanguage;
+  unframed?: boolean;
 }) {
   if (!result.ok) {
     return <ErrorPanel status={result.status} code={result.code} message={result.message} />;
@@ -319,6 +337,10 @@ async function ModuleDashboardPage({
     metadata: result.page.metadata,
     language: lang,
   });
+
+  if (unframed) {
+    return <ModuleValue value={output} />;
+  }
 
   return (
     <section className="rounded-md border border-border bg-card p-5 shadow-sm">
@@ -366,6 +388,17 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   const scopeResolution = await resolveDemoProductScope(request);
   const workspaces = await listDemoWorkspaces(scopeResolution.product.id);
   const theme = getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id });
+  const usesModuleChrome =
+    modulePageResult?.ok === true && readDashboardShellChrome(modulePageResult.page.metadata) === 'none';
+
+  if (modulePageResult && usesModuleChrome) {
+    return (
+      <>
+        <ProductThemeStyle id="ploykit-workspace-theme" theme={theme} />
+        <ModuleDashboardPage result={modulePageResult} lang={lang} unframed />
+      </>
+    );
+  }
 
   return (
     <AppFrame

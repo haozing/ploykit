@@ -20,6 +20,15 @@ const HOST_TARGETS = [
   'scripts/release-candidate-gate.ts',
 ];
 const ROOT_SCRIPT_TARGET = 'scripts';
+const PACKAGE_SCRIPT_TARGET = 'package.json#scripts';
+const HOST_POLICY_FILES = [
+  'package.json',
+  'ploykit.config.json',
+  'apps/host-next/app/globals.css',
+  'apps/host-next/next.config.mjs',
+  'apps/host-next/tsconfig.json',
+  'tsconfig.json',
+];
 const ALLOWED_FILES = new Set([
   normalizePath('src/lib/module-map.ts'),
   normalizePath('src/lib/module-map.manifest.json'),
@@ -173,6 +182,16 @@ function concreteModuleReference(value, modules) {
   })?.id;
 }
 
+function externalModuleSourceReference(value) {
+  const normalized = value.replace(/\\/g, '/');
+  if (!normalized.includes('../')) {
+    return undefined;
+  }
+  return /(?:^|\/)(?:\.\.\/)+(?:[^/?#*]+\/)*modules\/[a-z][a-z0-9-]*(?:$|[/?#])/.test(normalized)
+    ? normalized
+    : undefined;
+}
+
 function allowedRootScriptLiteral(value) {
   const normalized = value.replace(/\\/g, '/');
   return ROOT_SCRIPT_LITERAL_ALLOWLIST.some((pattern) => pattern.test(normalized));
@@ -275,6 +294,38 @@ function scanRootScriptFile(filePath, modules) {
   return violations;
 }
 
+function scanHostPolicyFile(filePath, modules) {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+
+  const source = fs.readFileSync(filePath, 'utf8');
+  const file = relativePath(filePath);
+  const violations = [];
+  for (const literal of collectStringLiterals(source)) {
+    const moduleId = concreteModuleReference(literal.value, modules);
+    if (moduleId) {
+      violations.push({
+        type: 'host-policy-concrete-module-literal',
+        file,
+        line: lineNumber(source, literal.index),
+        detail: moduleId,
+      });
+    }
+
+    const externalModulePath = externalModuleSourceReference(literal.value);
+    if (externalModulePath) {
+      violations.push({
+        type: 'host-policy-external-module-source-literal',
+        file,
+        line: lineNumber(source, literal.index),
+        detail: externalModulePath,
+      });
+    }
+  }
+  return violations;
+}
+
 function scanPackageScripts(modules) {
   const packagePath = path.join(PROJECT_ROOT, 'package.json');
   if (!fs.existsSync(packagePath)) {
@@ -319,9 +370,11 @@ function scanPackageScripts(modules) {
 const modules = readModuleRecords();
 const hostFiles = [...new Set(HOST_TARGETS.flatMap(collectFiles))].sort();
 const rootScriptFiles = collectFiles(ROOT_SCRIPT_TARGET).filter(shouldScanRootScriptFile).sort();
+const hostPolicyFiles = HOST_POLICY_FILES.map((file) => path.join(PROJECT_ROOT, file));
 const violations = [
   ...hostFiles.flatMap((file) => scanFile(file, modules)),
   ...rootScriptFiles.flatMap((file) => scanRootScriptFile(file, modules)),
+  ...hostPolicyFiles.flatMap((file) => scanHostPolicyFile(file, modules)),
   ...scanPackageScripts(modules),
 ];
 
@@ -339,9 +392,9 @@ if (violations.length > 0) {
     `${JSON.stringify(
       {
         ok: true,
-        files: hostFiles.length + rootScriptFiles.length + 1,
+        files: hostFiles.length + rootScriptFiles.length + hostPolicyFiles.length + 1,
         modules: modules.length,
-        targets: [...HOST_TARGETS, ROOT_SCRIPT_TARGET, 'package.json'],
+        targets: [...HOST_TARGETS, ROOT_SCRIPT_TARGET, ...HOST_POLICY_FILES, PACKAGE_SCRIPT_TARGET],
       },
       null,
       2

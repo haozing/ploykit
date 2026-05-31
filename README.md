@@ -53,6 +53,10 @@ After editing module sources or entry points, regenerate the runtime registry:
 npm run modules:scan
 ```
 
+For local development against a module outside this repository, use an ignored local
+config via `PLOYKIT_CONFIG` instead of editing the tracked `ploykit.config.json`.
+See `docs/external-module-local-development.zh-CN.md`.
+
 Generated files:
 
 - `src/lib/module-map.ts`: runtime import map for the host.

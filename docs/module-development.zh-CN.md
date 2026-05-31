@@ -149,7 +149,9 @@ npm run module:evidence -- --module <id> --file ./scripts/e2e.ts --runner tsx --
 
 模块 `quality.evidence` 需要自动执行模块自有脚本时，也应指向通用 `module:evidence` 入口，而不是新增 `module:<id>-*` package script。只有在确认宿主已有通用质量入口后，再接入通用入口。
 
-宿主和共享层禁止感知具体模块实现：不要在 `apps/host-next/*`、`src/lib/module-runtime/*` 或宿主质量脚本里写 `moduleId === '<id>'`、`import modules/<id>`、`/dashboard/<id>`、`<module-root>` 这类特例。需要宿主渲染、路由、质量证据或发布门禁配合时，先补通用 registry、catalog、manifest 或 contribution seam，再由模块声明贡献。`npm run host:boundary-check` 会阻止宿主 import 具体模块或硬编码模块 id/rootDir。
+宿主和共享层禁止感知具体模块实现：不要在 `apps/host-next/*`、`src/lib/module-runtime/*` 或宿主质量脚本里写 `moduleId === '<id>'`、`import modules/<id>`、`/dashboard/<id>`、`<module-root>` 这类特例。需要宿主渲染、路由、质量证据或发布门禁配合时，先补通用 registry、catalog、manifest 或 contribution seam，再由模块声明贡献。`npm run host:boundary-check` 会阻止宿主 import 具体模块、硬编码模块 id/rootDir，或在 tracked 宿主配置、CSS、package scripts 中写入外部模块专属路径。
+
+开发仓库外模块时，不要修改 tracked `ploykit.config.json`、`apps/host-next/app/globals.css` 或 `package.json` 来接入某个具体模块。应复制 `ploykit.local.config.example.json` 为被 `.gitignore` 忽略的 `ploykit.local.config.json`，再通过 `PLOYKIT_CONFIG=ploykit.local.config.json` 运行本地扫描和开发服务器。提交宿主代码前切回默认配置重新运行 `npm run modules:scan`，避免 `src/lib/module-map.ts` 和 `src/lib/module-map.manifest.json` 带入本地专属模块。
 
 ## 测试
 
