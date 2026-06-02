@@ -126,6 +126,54 @@ test('P1.5A resolves white-label public site page overrides from product composi
   assert.deepEqual(plan.diagnostics, []);
 });
 
+test('P5 host page override selection uses shared surface access permissions', async () => {
+  const contribution = {
+    moduleId: 'definition-only-override',
+    surfaceId: 'host.page:site.home',
+    priority: 0,
+    definition: {
+      mode: 'replace',
+      component: './surfaces/HomePage',
+      loader: './loaders/home-meta',
+      permissions: [Permission.SurfaceOverride],
+    },
+  } as const;
+  const host = {
+    contracts: [{ id: 'definition-only-override', permissions: [] }],
+    surfaces: {
+      get: (surfaceId: string) =>
+        surfaceId === 'host.page:site.home' ? [contribution] : [],
+    },
+    getContract: (moduleId: string) =>
+      moduleId === 'definition-only-override'
+        ? { id: 'definition-only-override', permissions: [] }
+        : null,
+  } as unknown as Parameters<typeof resolveHostPageComposition>[0];
+
+  const plan = resolveHostPageComposition(host, {
+    pageId: 'site.home',
+    composition: {
+      enabledModules: ['definition-only-override'],
+      pageOverrides: {
+        'site.home': {
+          moduleId: 'definition-only-override',
+          enabled: true,
+          reason: 'regression test',
+        },
+      },
+    },
+  });
+
+  assert.equal(plan.activeOverride, null);
+  assert.ok(
+    plan.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === 'HOST_PAGE_OVERRIDE_PERMISSION_MISSING' &&
+        diagnostic.moduleId === 'definition-only-override'
+    )
+  );
+});
+
 test('P1.5A reports conflicting page overrides when composition does not select one', async () => {
   const first = defineModule({
     id: 'first-site',

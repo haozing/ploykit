@@ -13,6 +13,7 @@ import {
   mergeModuleRuntimeAccessSession,
   type ModuleRuntimeAccessSession,
 } from '../security';
+import { checkModuleAnonymousPolicy } from '../security/anonymous-policy';
 import { asModuleApiDefinition } from './module-export';
 
 export interface DispatchModuleApiRouteInput {
@@ -172,6 +173,17 @@ export async function dispatchModuleApiRoute(
   const user = accessSession.user;
   if (!routeAllowsMethod(route, input.request.method)) {
     return jsonError(405, 'MODULE_API_METHOD_NOT_ALLOWED', 'HTTP method is not allowed.');
+  }
+
+  const anonymousPolicyDenied = checkModuleAnonymousPolicy({
+    moduleId: match.entry.moduleId,
+    route,
+    request: input.request,
+    userId: accessSession.userId ?? accessSession.user?.id ?? null,
+    anonymous: !accessSession.user && !accessSession.userId,
+  });
+  if (anonymousPolicyDenied) {
+    return anonymousPolicyDenied;
   }
 
   const entry = host.getMapEntry(match.entry.moduleId);

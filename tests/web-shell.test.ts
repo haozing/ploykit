@@ -226,6 +226,36 @@ const test: WebShellTestRunner = ((
   }
 }) as WebShellTestRunner;
 
+function restoreEnvValue(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    Reflect.deleteProperty(process.env, name);
+  } else {
+    Reflect.set(process.env, name, value);
+  }
+}
+
+async function withDemoHostUsers<T>(run: () => T | Promise<T>): Promise<T> {
+  const previousDemoUsers = process.env.PLOYKIT_ENABLE_DEMO_USERS;
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.PLOYKIT_ENABLE_DEMO_USERS = 'true';
+  if (process.env.NODE_ENV === 'production') {
+    restoreEnvValue('NODE_ENV', 'test');
+  }
+  try {
+    return await run();
+  } finally {
+    restoreEnvValue('PLOYKIT_ENABLE_DEMO_USERS', previousDemoUsers);
+    restoreEnvValue('NODE_ENV', previousNodeEnv);
+  }
+}
+
+async function seedDemoHostIdentity(
+  store?: Parameters<typeof ensureHostIdentitySeeded>[0]
+): Promise<void> {
+  const targetStore = store ?? (await getHostRuntime()).runtimeStore.store;
+  await withDemoHostUsers(() => ensureHostIdentitySeeded(targetStore));
+}
+
 test('P10 path helpers map Next catch-all segments to module routes', () => {
   assert.equal(modulePathFromSegments(undefined), '/');
   assert.equal(modulePathFromSegments([]), '/');
@@ -276,6 +306,7 @@ test('P10 host shell dispatches module API routes with a demo host session', asy
 
 test('K1 host module API resolves request cookie sessions without a demo override', async () => {
   const host = await getModuleHost();
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const response = await host.dispatchApiRoute({
     request: createHostRequest('/api/modules/hello', {
@@ -680,6 +711,7 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
 });
 
 test('M2 host auth adapter resolves seeded admin sessions from the auth cookie', async () => {
+  await seedDemoHostIdentity();
   const user = await authenticateHostUser('admin@example.com', 'Admin@123456');
   assert.ok(user);
 
@@ -713,7 +745,7 @@ test('M2 host auth adapter rejects unsigned or tampered session cookies', async 
 
 test('K2 host identity seed stores users, roles and password hashes in runtime store', async () => {
   const store = createInMemoryRuntimeStore();
-  await ensureHostIdentitySeeded(store);
+  await seedDemoHostIdentity(store);
   const admin = await store.findHostUserByEmail('admin@example.com');
   const users = await store.listHostUsers({ productId: 'demo-product' });
   const memberships = await store.listMemberships({ productId: 'demo-product' });
@@ -724,6 +756,61 @@ test('K2 host identity seed stores users, roles and password hashes in runtime s
   assert.equal(verifyHostPassword('Admin@123456', admin?.passwordHash ?? ''), true);
   assert.equal(users.length, 2);
   assert.ok(memberships.some((membership) => membership.userId === 'demo-admin'));
+});
+
+test('K2 host identity seed is disabled by default and blocks demo users in production', async () => {
+  const store = createInMemoryRuntimeStore();
+  const previousDemoUsers = process.env.PLOYKIT_ENABLE_DEMO_USERS;
+  const previousBootstrapEmail = process.env.PLOYKIT_BOOTSTRAP_ADMIN_EMAIL;
+  const previousBootstrapPassword = process.env.PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD;
+  const previousNodeEnv = process.env.NODE_ENV;
+
+  try {
+    delete process.env.PLOYKIT_ENABLE_DEMO_USERS;
+    delete process.env.PLOYKIT_BOOTSTRAP_ADMIN_EMAIL;
+    delete process.env.PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD;
+    await ensureHostIdentitySeeded(store);
+    assert.equal(await store.findHostUserByEmail('admin@example.com'), null);
+    assert.equal(await store.findHostUserByEmail('user@example.com'), null);
+
+    process.env.PLOYKIT_ENABLE_DEMO_USERS = 'true';
+    restoreEnvValue('NODE_ENV', 'production');
+    await assert.rejects(() => ensureHostIdentitySeeded(store), /PLOYKIT_DEMO_USERS_PRODUCTION_FORBIDDEN/);
+  } finally {
+    restoreEnvValue('PLOYKIT_ENABLE_DEMO_USERS', previousDemoUsers);
+    restoreEnvValue('PLOYKIT_BOOTSTRAP_ADMIN_EMAIL', previousBootstrapEmail);
+    restoreEnvValue('PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD', previousBootstrapPassword);
+    restoreEnvValue('NODE_ENV', previousNodeEnv);
+  }
+});
+
+test('K2 host identity bootstrap creates only an explicit admin account', async () => {
+  const store = createInMemoryRuntimeStore();
+  const previousDemoUsers = process.env.PLOYKIT_ENABLE_DEMO_USERS;
+  const previousBootstrapEmail = process.env.PLOYKIT_BOOTSTRAP_ADMIN_EMAIL;
+  const previousBootstrapPassword = process.env.PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD;
+
+  try {
+    delete process.env.PLOYKIT_ENABLE_DEMO_USERS;
+    process.env.PLOYKIT_BOOTSTRAP_ADMIN_EMAIL = 'Owner@Example.com';
+    process.env.PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD = 'Bootstrap@123456';
+    await ensureHostIdentitySeeded(store);
+
+    const owner = await store.findHostUserByEmail('owner@example.com');
+    const demoAdmin = await store.findHostUserByEmail('admin@example.com');
+    const demoUser = await store.findHostUserByEmail('user@example.com');
+
+    assert.equal(owner?.id, 'bootstrap-admin');
+    assert.equal(owner?.role, 'admin');
+    assert.equal(owner?.status, 'active');
+    assert.equal(verifyHostPassword('Bootstrap@123456', owner?.passwordHash ?? ''), true);
+    assert.equal(demoAdmin, null);
+    assert.equal(demoUser, null);
+  } finally {
+    restoreEnvValue('PLOYKIT_ENABLE_DEMO_USERS', previousDemoUsers);
+    restoreEnvValue('PLOYKIT_BOOTSTRAP_ADMIN_EMAIL', previousBootstrapEmail);
+    restoreEnvValue('PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD', previousBootstrapPassword);
+  }
 });
 
 test('K2 host identity status disables session resolution', async () => {
@@ -750,6 +837,7 @@ test('K2 host identity status disables session resolution', async () => {
 });
 
 test('X3 auth login redirects with the browser host so host-only cookies survive', async () => {
+  await seedDemoHostIdentity();
   resetHostSecurityRateLimiter();
   const response = await loginUserApi(
     new Request('http://localhost:3000/api/auth/login', {
@@ -774,6 +862,7 @@ test('X3 auth login redirects with the browser host so host-only cookies survive
 });
 
 test('K1 host session bridge exposes request-cookie resolution source', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const resolved = await resolveHostRequestSession(
     createHostRequest('/api/auth/session', {
@@ -786,6 +875,7 @@ test('K1 host session bridge exposes request-cookie resolution source', async ()
 });
 
 test('X2 host user APIs expose profile, role and guarded password operations', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const profileResponse = await getUserProfile(
     createHostRequest('/api/user/profile', { headers: { cookie } })
@@ -874,6 +964,7 @@ test('X2 host user APIs expose profile, role and guarded password operations', a
 });
 
 test('X2 scope, notification, billing and admin APIs run through route handlers', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const scopeResponse = await getCurrentProductScope(
     createHostRequest('/api/product-scope/current', { headers: { cookie } })
@@ -1043,6 +1134,7 @@ test('X2 scope, notification, billing and admin APIs run through route handlers'
 });
 
 test('X6 admin entitlement API can override entitlement status with audit', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const hostRuntime = await getHostRuntime();
   const grant = await hostRuntime.runtimeStore.store.grantEntitlement({
@@ -1202,6 +1294,7 @@ test('A8 admin commercial view redacts commercial secret metadata', async () => 
 });
 
 test('X9 notifications are store-backed, readable and honor preferences', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const hostRuntime = await getHostRuntime();
   const sku = `x9-muted-${Date.now()}`;
@@ -1553,7 +1646,6 @@ test('X9 auth transactional routes use the host email provider contract', async 
 
 test('X3 host auth adapter supports registration, verification, sessions and reset', async () => {
   const store = createInMemoryRuntimeStore();
-  await ensureHostIdentitySeeded(store);
   const adapter = createRuntimeStoreHostAuthAdapter(store);
   const registered = await adapter.register({
     email: 'new-user@example.com',
@@ -1588,7 +1680,7 @@ test('X3 host auth adapter supports registration, verification, sessions and res
 
 test('X3 signed session cookie falls back when memory store has no session table entry', async () => {
   const store = createInMemoryRuntimeStore();
-  await ensureHostIdentitySeeded(store);
+  await seedDemoHostIdentity(store);
   const adapter = createRuntimeStoreHostAuthAdapter(store);
   const cookie = createHostSessionCookieForSession('demo-admin', 'external-session').split(';')[0]!;
 
@@ -1597,6 +1689,7 @@ test('X3 signed session cookie falls back when memory store has no session table
 });
 
 test('X3 admin APIs reject non-admin sessions through capability guard', async () => {
+  await seedDemoHostIdentity();
   const userCookie = createHostSessionCookie('demo-user').split(';')[0]!;
   const response = await searchAdminApi(
     createHostRequest('/api/admin/search?q=demo', { headers: { cookie: userCookie } })
@@ -1606,6 +1699,7 @@ test('X3 admin APIs reject non-admin sessions through capability guard', async (
 });
 
 test('R2 admin audit API exports protected CSV evidence', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const hostRuntime = await getHostRuntime();
   const bulkType = `admin.audit.bulk.${Date.now().toString(36)}`;
@@ -1718,6 +1812,7 @@ test('R2 admin identity operations protect the acting and last admin account', a
 });
 
 test('X8 admin dead-letter API bulk replays records', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const hostRuntime = await getHostRuntime();
   const outbox = await hostRuntime.runtimeStore.store.enqueueOutbox({
@@ -1780,6 +1875,7 @@ test('X8 admin dead-letter API bulk replays records', async () => {
 });
 
 test('X8 admin dead-letter API lists all dead-letter records beyond the snapshot window', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const hostRuntime = await getHostRuntime();
   const prefix = `x8.dead-letter.list.${Date.now()}`;
@@ -1820,6 +1916,7 @@ test('X8 admin dead-letter API lists all dead-letter records beyond the snapshot
 });
 
 test('X8 admin dead-letter API defaults discard and archive actions to dead-letter records', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const hostRuntime = await getHostRuntime();
   const prefix = `x8.dead-letter.defaults.${Date.now()}`;
@@ -1878,6 +1975,7 @@ test('X8 admin dead-letter API defaults discard and archive actions to dead-lett
 });
 
 test('X4 product scope APIs switch across products and expose domain aliases', async () => {
+  await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const switchResponse = await switchProductScopeWorkspace(
     createHostRequest('/api/product-scope/switch', {
@@ -2310,6 +2408,23 @@ test('K4 host security catalog covers main routes and blocks cross-origin mutati
   );
 
   assert.equal(response?.status, 403);
+
+  const previousNodeEnv = process.env.NODE_ENV;
+  try {
+    restoreEnvValue('NODE_ENV', 'production');
+    const missingOriginResponse = await checkHostRouteSecurity(
+      createHostRequest('/api/files', { method: 'POST' }),
+      'files.collection',
+      { session: createDemoHostSession() }
+    );
+    assert.equal(missingOriginResponse?.status, 403);
+    assert.equal(
+      ((await missingOriginResponse?.json()) as { code: string } | undefined)?.code,
+      'HOST_ORIGIN_REQUIRED'
+    );
+  } finally {
+    restoreEnvValue('NODE_ENV', previousNodeEnv);
+  }
 
   const loopbackAliasResponse = await checkHostRouteSecurity(
     new Request('http://localhost:3000/api/auth/login', {
@@ -2963,7 +3078,7 @@ test('M6 host commercial provider applies local paid checkout benefits', async (
 });
 
 test('X6 host billing overview exposes subscriptions, invoices, payment methods and tax profile', async () => {
-  await ensureHostIdentitySeeded((await getHostRuntime()).runtimeStore.store);
+  await seedDemoHostIdentity();
   const overview = await getHostBillingOverview(createDemoHostSession());
 
   assert.equal(overview.catalog.skus[0]?.id, 'demo-pro-monthly');
@@ -2975,7 +3090,7 @@ test('X6 host billing overview exposes subscriptions, invoices, payment methods 
 
 test('A7 admin billing catalog changes feed runtime entitlements and user billing', async () => {
   const session = createDemoHostSession();
-  await ensureHostIdentitySeeded((await getHostRuntime()).runtimeStore.store);
+  await seedDemoHostIdentity();
   const suffix = Date.now().toString(36);
   const planId = `ops-pro-${suffix}`;
   const skuId = `ops-pro-monthly-${suffix}`;
@@ -3420,6 +3535,7 @@ test('A10 host settings source metadata keeps env configured fields locked', () 
 });
 
 test('A8/A9 admin analytics, edge access and audit retention expose operational evidence', async () => {
+  await seedDemoHostIdentity();
   const session = createDemoHostSession();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const jsonExport = await getAdminAuditApi(

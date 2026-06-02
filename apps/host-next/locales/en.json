@@ -306,13 +306,13 @@
         ]
       },
       "email": "Email",
-      "emailPlaceholder": "admin@example.com",
+      "emailPlaceholder": "you@example.com",
       "displayName": "Display name",
       "displayNamePlaceholder": "PloyKit User",
       "resetToken": "Reset token",
       "resetTokenPlaceholder": "Token from the email log",
       "password": "Password",
-      "passwordPlaceholder": "Admin@123456",
+      "passwordPlaceholder": "Your password",
       "error": "The account or password is incorrect. Check the email, password, or account status.",
       "login": "Log in",
       "register": "Register",
@@ -1211,7 +1211,11 @@
         "detailTitle": "Module Detail",
         "subtitle": "Module contract, routes, permissions, doctor, resource binding, gateways, and runtime activity details.",
         "missingTitle": "Module not found",
-        "missingBody": "The current runtime did not find this module contract."
+        "missingBody": "The current runtime did not find this module contract.",
+        "productShapeTitle": "Product shape",
+        "productShapeDescription": "Host-level product metadata shows which shells a module intends to own before raw route evidence is inspected.",
+        "productShapeEmptyTitle": "No product shape declared",
+        "productShapeEmptyBody": "This module can still be valid, but product modules should declare module.product so doctor, quality, and Admin can catch missing site, console, or admin surfaces."
       }
     },
     "identity": {
@@ -1354,7 +1358,13 @@
     "commerce": {
       "billing": {
         "title": "Billing",
-        "subtitle": "Operate plans, SKUs, orders, entitlements, credits, and payment evidence."
+        "subtitle": "Operate plans, SKUs, orders, entitlements, credits, and payment evidence.",
+        "creditReservationsDescription": "Pre-authorized credit holds are visible beside the ledger so AI task reserve, commit, and release states can be audited.",
+        "redeemCodeLifecycleDescription": "Only masked code metadata and hash prefixes are exposed; raw redeem codes remain one-time export material.",
+        "redemptionRecord": "Redemption",
+        "attemptRecord": "Attempt",
+        "machineApiKeysDescription": "Server-to-server access keys are listed by prefix and owner; hashes and raw keys are never exposed.",
+        "riskFactsDescription": "Risk events and subject blocks stay in the same commercial evidence view as the facts they protect."
       },
       "revenue": {
         "title": "Revenue",

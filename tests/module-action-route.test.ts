@@ -137,3 +137,60 @@ test('module action route redirects form payload parse errors through the form c
     'http://localhost/dashboard/fallback?moduleAction=error&moduleActionCode=MODULE_ACTION_PAYLOAD_INVALID'
   );
 });
+
+test('module action route returns module business error envelopes without details', async () => {
+  const response = await handleModuleActionPost(
+    new Request('http://localhost/api/module-actions/shop-demo/checkoutCart', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ sku: '' }),
+    }),
+    actionContext('shop-demo', 'checkoutCart'),
+    dependencies(() => ({
+      ok: false,
+      code: 'SHOP_DEMO_SKU_REQUIRED',
+      message: 'SKU is required.',
+      details: { rawInput: { sku: '' }, secret: 'do-not-return' },
+    }))
+  );
+  const body = (await response.json()) as {
+    ok: boolean;
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(body, {
+    ok: false,
+    code: 'SHOP_DEMO_SKU_REQUIRED',
+    message: 'SKU is required.',
+  });
+  assert.equal(body.details, undefined);
+});
+
+test('module action route redacts non-allowlisted thrown module errors', async () => {
+  const response = await handleModuleActionPost(
+    new Request('http://localhost/api/module-actions/shop-demo/checkoutCart', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ sku: '' }),
+    }),
+    actionContext('shop-demo', 'checkoutCart'),
+    dependencies(() => {
+      throw new Error('SHOP_DEMO_SKU_REQUIRED: raw input sku=""');
+    })
+  );
+  const body = (await response.json()) as { ok: boolean; code: string; message: string };
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(body, {
+    ok: false,
+    code: 'MODULE_ACTION_ROUTE_ERROR',
+    message: 'Module action failed.',
+  });
+});

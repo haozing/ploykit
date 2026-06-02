@@ -14,7 +14,8 @@
   "scripts": {
     "modules:scan": "node scripts/generate-module-map.mjs",
     "modules:check": "node scripts/generate-module-map.mjs --check && node scripts/host-boundary-check.mjs && node scripts/ploykit-module.mjs check",
-    "modules:apply": "node scripts/generate-module-map.mjs && node scripts/ploykit-module.mjs check",
+    "modules:apply": "node scripts/module-deps.mjs --install && node scripts/generate-module-map.mjs && node scripts/ploykit-module.mjs check",
+    "modules:deps": "node scripts/module-deps.mjs",
     "modules:templates": "node scripts/ploykit-module.mjs templates",
     "catalog:doctor": "node scripts/module-catalog.mjs doctor",
     "catalog:plan": "node scripts/module-catalog.mjs plan",
@@ -45,6 +46,10 @@
     "i18n:check": "tsx scripts/i18n-check.ts --required",
     "seo:check": "tsx scripts/seo-check.ts --required",
     "docs:encoding-check": "node scripts/docs-encoding-check.mjs",
+    "lint": "npm run typecheck && npm run docs:encoding-check && npm run modules:check",
+    "format": "npx prettier package.json tsconfig.json .prettierrc.json .github/workflows/ci.yml --write",
+    "format:check": "npx prettier package.json tsconfig.json .prettierrc.json .github/workflows/ci.yml --check",
+    "format:all": "npx prettier . --write",
     "white-label:smoke": "tsx scripts/white-label-smoke.ts --required",
     "release:local-gate": "node scripts/host-boundary-check.mjs && tsx scripts/release-candidate-gate.ts --profile local",
     "release:integration-gate": "node scripts/host-boundary-check.mjs && tsx scripts/release-candidate-gate.ts --profile integration",
@@ -92,7 +97,7 @@
     "admin:ui-gate": "node scripts/admin-ui-gate.mjs",
     "admin:mobile-handfeel": "node scripts/admin-mobile-handfeel.mjs --required",
     "admin:visual-baseline": "node scripts/admin-visual-baseline.mjs",
-    "host:dev": "next dev apps/host-next",
+    "host:dev": "node scripts/host-dev.mjs",
     "host:build": "next build apps/host-next",
     "host:start": "next start apps/host-next",
     "host:ai-rag-local-smoke": "node scripts/host-ai-rag-local-smoke.mjs",
@@ -135,9 +140,10 @@
     "@tailwindcss/postcss": "^4.3.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
-    "next": "^16.2.6",
+    "next": "^16.2.7",
     "next-themes": "^0.4.6",
     "pg": "^8.21.0",
+    "prettier": "^3.8.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwind-merge": "^3.6.0",
@@ -151,6 +157,9 @@
     "playwright": "^1.60.0",
     "tsx": "^4.22.2",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.15"
   },
   "engines": {
     "node": ">=22 <26",

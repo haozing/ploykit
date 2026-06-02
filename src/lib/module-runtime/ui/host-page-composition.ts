@@ -1,9 +1,4 @@
-import {
-  Permission,
-  type ModuleRouteAuth,
-  type ModuleSurfaceDefinition,
-  type PermissionValue,
-} from '@ploykit/module-sdk';
+import type { PermissionValue } from '@ploykit/module-sdk';
 import type { ProductPresentationLocaleTypography } from '@ploykit/module-sdk/presentation';
 import type { ModuleRuntimeHost } from '../host';
 import {
@@ -11,6 +6,7 @@ import {
   type ModuleRuntimeAccessDecision,
   type ModuleRuntimeAccessSession,
 } from '../security';
+import { resolveModuleSurfaceAccessPolicy } from '../surfaces/surface-access-policy';
 import type { ModuleRuntimeSurfaceContribution } from '../surfaces';
 import type { ModuleThemeTokenValue } from './theme-runtime';
 import {
@@ -85,15 +81,28 @@ export interface ResolveHostPageCompositionOptions {
   session?: ModuleRuntimeAccessSession;
 }
 
-function hasOverridePermission(
+function missingSurfaceAccessPermission(
+  host: ModuleRuntimeHost,
+  candidate: ModuleRuntimeSurfaceContribution
+): PermissionValue | null {
+  const contract = host.getContract(candidate.moduleId);
+  if (!contract) {
+    return null;
+  }
+  const accessPolicy = resolveModuleSurfaceAccessPolicy(candidate.definition);
+  const declaredPermissions = new Set(contract.permissions);
+  return (
+    accessPolicy.requiredModulePermissions.find(
+      (permission) => !declaredPermissions.has(permission)
+    ) ?? null
+  );
+}
+
+function hasSurfaceAccessPermissions(
   host: ModuleRuntimeHost,
   candidate: ModuleRuntimeSurfaceContribution
 ): boolean {
-  const contract = host.getContract(candidate.moduleId);
-  return Boolean(
-    candidate.definition.permissions?.includes(Permission.SurfaceOverride) ||
-      contract?.permissions.includes(Permission.SurfaceOverride)
-  );
+  return missingSurfaceAccessPermission(host, candidate) === null;
 }
 
 function slotPolicyDiagnostic(input: {
@@ -112,40 +121,6 @@ function slotPolicyDiagnostic(input: {
     surfaceId: input.surfaceId,
     moduleId: input.moduleId,
   };
-}
-
-function surfaceAuth(definition: ModuleSurfaceDefinition): ModuleRouteAuth {
-  switch (definition.visibility?.mode) {
-    case 'authenticated':
-      return 'auth';
-    case 'admin':
-      return 'admin';
-    default:
-      return 'public';
-  }
-}
-
-function surfacePermissions(definition: ModuleSurfaceDefinition): readonly PermissionValue[] {
-  if (definition.visibility?.mode === 'permission' && definition.visibility.permission) {
-    return [definition.visibility.permission];
-  }
-  return [];
-}
-
-function surfaceFeatures(definition: ModuleSurfaceDefinition): readonly string[] | undefined {
-  return definition.visibility?.mode === 'feature' && definition.visibility.feature
-    ? [definition.visibility.feature]
-    : undefined;
-}
-
-function requiredModuleSurfacePermissions(
-  definition: ModuleSurfaceDefinition
-): readonly PermissionValue[] {
-  const permissions = new Set(definition.permissions ?? []);
-  permissions.add(
-    definition.mode === 'replace' ? Permission.SurfaceOverride : Permission.SurfaceContribute
-  );
-  return [...permissions];
 }
 
 function accessDiagnosticSeverity(
@@ -174,11 +149,12 @@ export function resolveHostPageComposition(
     .filter((item) => enabledModules.has(item.moduleId));
 
   for (const candidate of replaceCandidates) {
-    if (!hasOverridePermission(host, candidate)) {
+    const missingPermission = missingSurfaceAccessPermission(host, candidate);
+    if (missingPermission) {
       diagnostics.push({
         severity: 'error',
         code: 'HOST_PAGE_OVERRIDE_PERMISSION_MISSING',
-        message: `Module "${candidate.moduleId}" replaces "${page.id}" without SurfaceOverride.`,
+        message: `Module "${candidate.moduleId}" replaces "${page.id}" without declaring required permission "${missingPermission}".`,
         pageId: page.id,
         surfaceId: page.surfaceId,
         moduleId: candidate.moduleId,
@@ -187,7 +163,7 @@ export function resolveHostPageComposition(
   }
 
   const eligibleReplaceCandidates = replaceCandidates.filter((candidate) =>
-    hasOverridePermission(host, candidate)
+    hasSurfaceAccessPermissions(host, candidate)
   );
   const configuredOverride = composition.pageOverrides?.[page.id];
   let activeOverride: ModuleRuntimeSurfaceContribution | null = null;
@@ -224,7 +200,7 @@ export function resolveHostPageComposition(
       const configuredCandidate = replaceCandidates.find(
         (candidate) => candidate.moduleId === configuredOverride.moduleId
       );
-      activeOverride = configuredCandidate && hasOverridePermission(host, configuredCandidate)
+      activeOverride = configuredCandidate && hasSurfaceAccessPermissions(host, configuredCandidate)
         ? configuredCandidate
         : null;
 
@@ -339,8 +315,9 @@ export function resolveHostPageComposition(
         return false;
       }
 
+      const accessPolicy = resolveModuleSurfaceAccessPolicy(item.definition);
       const declaredPermissions = new Set(contract.permissions);
-      const missingPermission = requiredModuleSurfacePermissions(item.definition).find(
+      const missingPermission = accessPolicy.requiredModulePermissions.find(
         (permission) => !declaredPermissions.has(permission)
       );
       if (missingPermission) {
@@ -365,10 +342,10 @@ export function resolveHostPageComposition(
         kind: 'surface',
         contract,
         session: surfaceAccessSession,
-        auth: surfaceAuth(item.definition),
-        permissions: surfacePermissions(item.definition),
+        auth: accessPolicy.auth,
+        permissions: accessPolicy.permissions,
         commercial: item.definition.commercial,
-        features: surfaceFeatures(item.definition),
+        features: accessPolicy.features,
       });
       if (!decision) {
         return true;

@@ -43,6 +43,29 @@ function writeExternalModuleWithTests(): string {
   return moduleRoot;
 }
 
+function writeExternalModuleWithMissingDependency(): string {
+  const moduleRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ploykit-external-module-'));
+  fs.writeFileSync(
+    path.join(moduleRoot, 'module.ts'),
+    `
+      import { defineModule } from '@ploykit/module-sdk';
+
+      export default defineModule({
+        id: 'external-missing-dependency',
+        name: 'External Missing Dependency',
+        version: '0.1.0',
+        dependencies: {
+          npm: {
+            'left-pad': '^1.3.0',
+          },
+        },
+      });
+    `,
+    'utf8'
+  );
+  return moduleRoot;
+}
+
 function writeConfig(moduleRoot: string, trustedRoots: string[], workspace = process.cwd()): string {
   const configFile = path.join(os.tmpdir(), `ploykit-config-${crypto.randomUUID()}.json`);
   fs.writeFileSync(
@@ -141,4 +164,21 @@ test('module doctor and module test resolve trusted external modules by id', () 
     assert.equal(moduleTest.status, 0, moduleTest.stderr || moduleTest.stdout);
     assert.match(moduleTest.stdout, /"success": true/);
   });
+});
+
+test('module dependency check reports external npm dependencies missing from host manifest', () => {
+  const moduleRoot = writeExternalModuleWithMissingDependency();
+  const configFile = writeConfig(moduleRoot, [process.cwd(), path.dirname(moduleRoot)]);
+
+  const result = runPloyKitCommand(configFile, ['scripts/module-deps.mjs', '--check']);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+
+  const body = JSON.parse(result.stdout) as {
+    success: boolean;
+    missing: { name: string; range: string }[];
+  };
+  assert.equal(body.success, false);
+  assert.ok(
+    body.missing.some((dependency) => dependency.name === 'left-pad' && dependency.range === '^1.3.0')
+  );
 });

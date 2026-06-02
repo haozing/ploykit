@@ -1317,8 +1317,8 @@ export function AdminModuleDetailOperationsPage({
             </AdminPanel>
 
             <AdminPanel
-              title="Product shape"
-              description="Host-level product metadata shows which shells a module intends to own before raw route evidence is inspected."
+              title={copy.productShapeTitle}
+              description={copy.productShapeDescription}
               contentClassName="grid gap-4"
             >
               {module.product ? (
@@ -1377,9 +1377,8 @@ export function AdminModuleDetailOperationsPage({
                   />
                 </>
               ) : (
-                <EmptyState title="No product shape declared">
-                  This module can still be valid, but product modules should declare module.product
-                  so doctor, quality, and Admin can catch missing site, console, or admin surfaces.
+                <EmptyState title={copy.productShapeEmptyTitle}>
+                  {copy.productShapeEmptyBody}
                 </EmptyState>
               )}
             </AdminPanel>

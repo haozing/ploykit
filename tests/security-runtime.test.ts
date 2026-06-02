@@ -6,6 +6,7 @@ import {
   defineApi,
   defineModule,
   Permission,
+  sql,
   type CommercialSubject,
   type ModuleContext,
   type ModuleDataApi,
@@ -1382,6 +1383,123 @@ test('runtime capability guard applies inside data transactions', async () => {
     /MODULE_CAPABILITY_PERMISSION_NOT_DECLARED/
   );
   assert.equal(wrote, false);
+});
+
+test('runtime capability guard requires UnsafeSqlRaw for ctx.data.sql execution', async () => {
+  let queried = false;
+  let executed = false;
+  const sqlGuardModule = defineModule({
+    id: 'sql-raw-guard-test',
+    name: 'SQL Raw Guard Test',
+    version: '0.1.0',
+    permissions: [Permission.DataSqlRead, Permission.DataSqlWrite, Permission.UnsafeSqlRaw],
+    actions: {
+      queryRaw: {
+        handler: './actions/query-raw',
+        auth: 'auth',
+      },
+      executeRaw: {
+        handler: './actions/execute-raw',
+        auth: 'auth',
+      },
+    },
+  });
+  const data = {
+    document() {
+      throw new Error('DATA_DOCUMENT_UNUSED');
+    },
+    table() {
+      throw new Error('DATA_TABLE_UNUSED');
+    },
+    async transaction<T>(callback: (tx: ModuleDataApi) => Promise<T>): Promise<T> {
+      return callback(this);
+    },
+    tableRef() {
+      return { text: 'unused', values: [] };
+    },
+    viewRef() {
+      return { text: 'unused', values: [] };
+    },
+    sql: {
+      async query() {
+        queried = true;
+        return [];
+      },
+      async execute() {
+        executed = true;
+        return { rowCount: 1 };
+      },
+    },
+  } satisfies ModuleDataApi;
+  const host = await createModuleHost({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'sql-raw-guard-test': {
+          module: async () => ({ default: sqlGuardModule }),
+          actions: {
+            'actions/query-raw': async () => ({
+              default: action(async (ctx: ModuleContext) => ctx.data.sql.query(sql`select 1`)),
+            }),
+            'actions/execute-raw': async () => ({
+              default: action(async (ctx: ModuleContext) => ctx.data.sql.execute(sql`delete from items`)),
+            }),
+          },
+        },
+      },
+    },
+    createDataApi: () => data,
+  });
+
+  await assert.rejects(
+    () =>
+      host.executeAction({
+        moduleId: 'sql-raw-guard-test',
+        name: 'queryRaw',
+        session: {
+          user: { id: 'user_11', role: 'user' },
+          permissions: [Permission.DataSqlRead],
+        },
+      }),
+    /MODULE_CAPABILITY_SYSTEM_PERMISSION_REQUIRED/
+  );
+  assert.equal(queried, false);
+
+  await host.executeAction({
+    moduleId: 'sql-raw-guard-test',
+    name: 'queryRaw',
+    session: {
+      user: null,
+      system: true,
+      permissions: [Permission.DataSqlRead, Permission.UnsafeSqlRaw],
+    },
+  });
+  assert.equal(queried, true);
+
+  await assert.rejects(
+    () =>
+      host.executeAction({
+        moduleId: 'sql-raw-guard-test',
+        name: 'executeRaw',
+        session: {
+          user: { id: 'user_11', role: 'user' },
+          permissions: [Permission.DataSqlWrite],
+        },
+      }),
+    /MODULE_CAPABILITY_SYSTEM_PERMISSION_REQUIRED/
+  );
+  assert.equal(executed, false);
+
+  await host.executeAction({
+    moduleId: 'sql-raw-guard-test',
+    name: 'executeRaw',
+    session: {
+      user: null,
+      system: true,
+      permissions: [Permission.DataSqlWrite, Permission.UnsafeSqlRaw],
+    },
+  });
+  assert.equal(executed, true);
 });
 
 test('runtime capability guard protects subject-scoped entitlements, redeem codes, and risk', async () => {

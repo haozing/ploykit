@@ -25,6 +25,11 @@ export {
   hasModuleDiagnosticErrors,
 } from '../../src/module-sdk/diagnostics.ts';
 export {
+  isValidModuleNpmPackageName,
+  normalizeModuleNpmDependencies,
+  normalizeModuleNpmDependencyInputs,
+} from '../../src/module-sdk/dependencies.ts';
+export {
   HOST_COMMERCIAL_ORDER_STATUS_EVENT_NAME,
   HostEvent,
 } from '../../src/module-sdk/host-events.ts';
@@ -36,6 +41,7 @@ export {
 export type * from '../../src/module-sdk/context.ts';
 export type * from '../../src/module-sdk/data.ts';
 export type * from '../../src/module-sdk/diagnostics.ts';
+export type * from '../../src/module-sdk/dependencies.ts';
 export type * from '../../src/module-sdk/host-events.ts';
 export type * from '../../src/module-sdk/permissions.ts';
 export type * from '../../src/module-sdk/presentation.ts';

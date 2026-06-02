@@ -31,6 +31,13 @@ interface ActionPayload {
   redirectOnComplete: boolean;
 }
 
+interface ActionFailureEnvelope {
+  ok: false;
+  code?: unknown;
+  message?: unknown;
+  details?: unknown;
+}
+
 class ModuleActionPayloadError extends Error {
   constructor(message: string) {
     super(`MODULE_ACTION_PAYLOAD_INVALID: ${message}`);
@@ -230,7 +237,8 @@ function actionErrorStatus(code: string): number {
   if (
     code.includes('CONFIRMATION_REQUIRED') ||
     code.includes('IDEMPOTENCY_KEY_REQUIRED') ||
-    code.includes('PAYLOAD_INVALID')
+    code.includes('PAYLOAD_INVALID') ||
+    code.endsWith('_REQUIRED')
   ) {
     return 400;
   }
@@ -240,14 +248,57 @@ function actionErrorStatus(code: string): number {
   return 500;
 }
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isActionFailureEnvelope(value: unknown): value is ActionFailureEnvelope {
+  const item = record(value);
+  return item?.ok === false;
+}
+
+function safeActionErrorCode(value: unknown, fallback: string): string {
+  const code = typeof value === 'string' ? value.trim() : '';
+  return /^[A-Z][A-Z0-9_]{1,80}$/.test(code) ? code : fallback;
+}
+
+function safeActionErrorMessage(value: unknown, fallback: string): string {
+  const message = typeof value === 'string' ? value.trim() : '';
+  if (!message || /[\u0000-\u001f\u007f]/.test(message)) {
+    return fallback;
+  }
+  return message.slice(0, 240);
+}
+
 function actionErrorDetails(error: unknown): { code: string; message: string } {
   const message = error instanceof Error ? error.message : 'Module action failed.';
-  const code = message.match(/^(MODULE_ACTION_[A-Z0-9_]+)/)?.[1] ?? 'MODULE_ACTION_ROUTE_ERROR';
-  return { code, message };
+  const code = message.match(/^(MODULE_ACTION_[A-Z0-9_]+)/)?.[1];
+  if (!code) {
+    return { code: 'MODULE_ACTION_ROUTE_ERROR', message: 'Module action failed.' };
+  }
+  return {
+    code,
+    message: safeActionErrorMessage(message, 'Module action failed.'),
+  };
+}
+
+function actionFailureEnvelopeDetails(envelope: ActionFailureEnvelope): {
+  code: string;
+  message: string;
+} {
+  const code = safeActionErrorCode(envelope.code, 'MODULE_ACTION_BUSINESS_ERROR');
+  return {
+    code,
+    message: safeActionErrorMessage(envelope.message, 'Module action failed.'),
+  };
 }
 
 function actionErrorResponse(error: unknown): Response {
-  const { code, message } = actionErrorDetails(error);
+  const { code, message } = isActionFailureEnvelope(error)
+    ? actionFailureEnvelopeDetails(error)
+    : actionErrorDetails(error);
   return Response.json(
     {
       ok: false,
@@ -282,6 +333,14 @@ export async function handleModuleActionPost(
       confirmed: payload.confirmed ?? readActionConfirmed(request),
       idempotencyKey: payload.idempotencyKey ?? readIdempotencyKey(request),
     });
+
+    if (isActionFailureEnvelope(result)) {
+      const { code } = actionFailureEnvelopeDetails(result);
+      if (payload.redirectOnComplete) {
+        return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'error', code), 303);
+      }
+      return actionErrorResponse(result);
+    }
 
     if (payload.redirectOnComplete) {
       return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'ok'), 303);

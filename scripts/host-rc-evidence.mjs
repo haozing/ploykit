@@ -195,6 +195,23 @@ function skippedStep(id, title, reason, ok = true) {
   };
 }
 
+function advisoryStep(step, reason) {
+  if (step.ok) {
+    return step;
+  }
+  return {
+    ...step,
+    status: 'advisory',
+    ok: true,
+    advisory: true,
+    originalOk: false,
+    summary: {
+      ...(step.summary ?? {}),
+      advisoryReason: reason,
+    },
+  };
+}
+
 function latestRuntimeDir(name) {
   const parent = path.resolve(process.cwd(), '.runtime', name);
   if (!fs.existsSync(parent)) {
@@ -336,10 +353,17 @@ checks.push(
   ])
 );
 checks.push(
-  runStep('drift-check', 'Unified drift check', 'drift:check', [
-    '--reuse-latest',
-    ...(required ? ['--required'] : []),
-  ])
+  required
+    ? runStep('drift-check', 'Unified drift check', 'drift:check', [
+        '--reuse-latest',
+        '--required',
+      ])
+    : advisoryStep(
+        runStep('drift-check', 'Unified drift check', 'drift:check', [
+          '--reuse-latest',
+        ]),
+        'Non-required evidence records drift findings without blocking local RC evidence. Use --required for blocking production evidence.'
+      )
 );
 checks.push(
   runStep('backup-restore', 'Backup/restore smoke', 'host:backup-restore-smoke', [

@@ -73,7 +73,7 @@ function runtimeStatus(): RuntimeChecksStatus {
 }
 
 try {
-  if (storeConfig.databaseUrl) {
+  if (config.ok && storeConfig.databaseUrl) {
     pool = new Pool({ connectionString: storeConfig.databaseUrl });
   }
   const database = pool ? createPgModuleDataExecutor(pool) : undefined;

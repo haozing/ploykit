@@ -423,10 +423,12 @@ function guardData(
     sql: {
       async query(statement) {
         permission(Permission.DataSqlRead, 'ctx.data.sql.query');
+        permission(Permission.UnsafeSqlRaw, 'ctx.data.sql.query.raw');
         return data.sql.query(statement);
       },
       async execute(statement) {
         permission(Permission.DataSqlWrite, 'ctx.data.sql.execute');
+        permission(Permission.UnsafeSqlRaw, 'ctx.data.sql.execute.raw');
         return data.sql.execute(statement);
       },
     },

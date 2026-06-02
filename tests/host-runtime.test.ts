@@ -14,6 +14,7 @@ import {
   checkModuleMapHealth,
   createModuleHost,
   createModuleRuntimeHostSnapshot,
+  resetModuleAnonymousPolicyRateLimitsForTests,
   type ModuleDataPostgresExecutor,
   type ModuleMapArtifact,
 } from '../src/lib/module-runtime';
@@ -81,6 +82,29 @@ const testModule = defineModule({
       },
     ],
     api: [
+      {
+        path: '/public-limited',
+        handler: './api/public-limited',
+        auth: 'public',
+        methods: ['POST'],
+        anonymousPolicy: {
+          rateLimit: { bucket: ['ip', 'route'], limit: 1, window: '1m' },
+          maxUploadBytes: 8,
+          captcha: 'never',
+          allowHighCostActions: false,
+        },
+      },
+      {
+        path: '/public-high-cost',
+        handler: './api/public-high-cost',
+        auth: 'public',
+        methods: ['GET'],
+        commercial: { entitlements: ['host-test.pro'] },
+        anonymousPolicy: {
+          rateLimit: { bucket: 'route', limit: 10, window: '1m' },
+          allowHighCostActions: false,
+        },
+      },
       {
         path: '/state',
         handler: './api/state',
@@ -157,6 +181,26 @@ const artifact: ModuleMapArtifact = {
                 ok: true,
                 moduleId: ctx.module.id,
                 userId: ctx.user?.id ?? null,
+              });
+            },
+          }),
+        }),
+        'api/public-limited': async () => ({
+          default: defineApi({
+            post(ctx) {
+              return ctx.json({
+                ok: true,
+                moduleId: ctx.module.id,
+              });
+            },
+          }),
+        }),
+        'api/public-high-cost': async () => ({
+          default: defineApi({
+            get(ctx) {
+              return ctx.json({
+                ok: true,
+                moduleId: ctx.module.id,
               });
             },
           }),
@@ -864,6 +908,64 @@ test('createModuleHost preserves auth boundaries for API routes and resolves sur
   assert.equal(host.getContract('host-test')?.id, 'host-test');
 });
 
+test('createModuleHost enforces anonymous API route policy before handlers run', async () => {
+  resetModuleAnonymousPolicyRateLimitsForTests();
+  const host = await createModuleHost({ artifact });
+
+  const tooLarge = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/public-limited', {
+      method: 'POST',
+      headers: {
+        'content-length': '9',
+        'x-forwarded-for': '203.0.113.10',
+      },
+    }),
+    pathname: '/public-limited',
+  });
+  assert.equal(tooLarge.status, 413);
+  assert.equal(
+    ((await tooLarge.json()) as { code: string }).code,
+    'MODULE_API_ANONYMOUS_UPLOAD_TOO_LARGE'
+  );
+
+  const first = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/public-limited', {
+      method: 'POST',
+      headers: {
+        'content-length': '2',
+        'x-forwarded-for': '203.0.113.11',
+      },
+    }),
+    pathname: '/public-limited',
+  });
+  const second = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/public-limited', {
+      method: 'POST',
+      headers: {
+        'content-length': '2',
+        'x-forwarded-for': '203.0.113.11',
+      },
+    }),
+    pathname: '/public-limited',
+  });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 429);
+  assert.equal(
+    ((await second.json()) as { code: string }).code,
+    'MODULE_API_ANONYMOUS_RATE_LIMITED'
+  );
+
+  const highCost = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/public-high-cost', { method: 'GET' }),
+    pathname: '/public-high-cost',
+  });
+  assert.equal(highCost.status, 403);
+  assert.equal(
+    ((await highCost.json()) as { code: string }).code,
+    'MODULE_API_ANONYMOUS_HIGH_COST_DENIED'
+  );
+});
+
 test('runtime host snapshot explains mounted capabilities and module map health', async () => {
   const host = await createModuleHost({ artifact });
   const snapshot = createModuleRuntimeHostSnapshot(host.runtime, {
@@ -880,7 +982,7 @@ test('runtime host snapshot explains mounted capabilities and module map health'
   });
 
   assert.equal(snapshot.mountedCapabilities.modules, 1);
-  assert.equal(snapshot.mountedCapabilities.routes, 9);
+  assert.equal(snapshot.mountedCapabilities.routes, 11);
   assert.equal(snapshot.mountedCapabilities.actions, 1);
   assert.equal(snapshot.routeResolution.some((route) => route.source === 'publicAlias'), true);
   assert.equal(snapshot.routeResolution.some((route) => route.source === 'alias'), true);

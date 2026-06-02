@@ -101,6 +101,10 @@ export interface AdminModuleDetailCopy {
   subtitle: string;
   missingTitle: string;
   missingBody: string;
+  productShapeTitle: string;
+  productShapeDescription: string;
+  productShapeEmptyTitle: string;
+  productShapeEmptyBody: string;
 }
 
 export interface AdminUsersCopy {
@@ -246,6 +250,12 @@ export interface AdminWebhookDetailCopy {
 export interface AdminBillingCopy {
   title: string;
   subtitle: string;
+  creditReservationsDescription: string;
+  redeemCodeLifecycleDescription: string;
+  redemptionRecord: string;
+  attemptRecord: string;
+  machineApiKeysDescription: string;
+  riskFactsDescription: string;
 }
 
 export interface AdminRevenueCopy {
@@ -424,6 +434,10 @@ export function getAdminModuleDetailCopy(lang: SupportedLanguage): AdminModuleDe
     subtitle: t('subtitle'),
     missingTitle: t('missingTitle'),
     missingBody: t('missingBody'),
+    productShapeTitle: t('productShapeTitle'),
+    productShapeDescription: t('productShapeDescription'),
+    productShapeEmptyTitle: t('productShapeEmptyTitle'),
+    productShapeEmptyBody: t('productShapeEmptyBody'),
   };
 }
 
@@ -598,6 +612,12 @@ export function getAdminBillingCopy(lang: SupportedLanguage): AdminBillingCopy {
   return {
     title: t('title'),
     subtitle: t('subtitle'),
+    creditReservationsDescription: t('creditReservationsDescription'),
+    redeemCodeLifecycleDescription: t('redeemCodeLifecycleDescription'),
+    redemptionRecord: t('redemptionRecord'),
+    attemptRecord: t('attemptRecord'),
+    machineApiKeysDescription: t('machineApiKeysDescription'),
+    riskFactsDescription: t('riskFactsDescription'),
   };
 }
 

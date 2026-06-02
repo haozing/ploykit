@@ -21,6 +21,11 @@ export {
   sql,
 } from './data';
 export { createModuleDiagnostic, hasModuleDiagnosticErrors } from './diagnostics';
+export {
+  isValidModuleNpmPackageName,
+  normalizeModuleNpmDependencies,
+  normalizeModuleNpmDependencyInputs,
+} from './dependencies';
 export { validateModuleDefinition } from './validator';
 export { createTestingModuleContext } from './testing';
 export { HOST_COMMERCIAL_ORDER_STATUS_EVENT_NAME, HostEvent } from './host-events';
@@ -32,6 +37,7 @@ export {
 export type * from './context';
 export type * from './data';
 export type * from './diagnostics';
+export type * from './dependencies';
 export type * from './host-events';
 export type * from './permissions';
 export type * from './presentation';

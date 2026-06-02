@@ -278,13 +278,13 @@
         "reset-password": ["重置密码", "设置一个新的账号密码。", "重置"]
       },
       "email": "邮箱",
-      "emailPlaceholder": "admin@example.com",
+      "emailPlaceholder": "you@example.com",
       "displayName": "显示名称",
       "displayNamePlaceholder": "PloyKit User",
       "resetToken": "重置 Token",
       "resetTokenPlaceholder": "从邮件日志中获取的 token",
       "password": "密码",
-      "passwordPlaceholder": "Admin@123456",
+      "passwordPlaceholder": "你的密码",
       "error": "账号或密码不正确。请检查邮箱、密码或账号状态。",
       "login": "登录",
       "register": "注册",
@@ -1183,7 +1183,11 @@
         "detailTitle": "模块详情",
         "subtitle": "模块契约、路由、权限、诊断、资源绑定、网关和运行活动详情。",
         "missingTitle": "模块不存在",
-        "missingBody": "当前运行时没有找到这个模块契约。"
+        "missingBody": "当前运行时没有找到这个模块契约。",
+        "productShapeTitle": "产品形态",
+        "productShapeDescription": "宿主级产品元数据会在检查原始路由证据前，说明模块想拥有哪些 shell。",
+        "productShapeEmptyTitle": "未声明产品形态",
+        "productShapeEmptyBody": "这个模块仍然可以是有效模块，但产品模块应声明 module.product，让 doctor、quality 和后台能够发现缺失的站点、控制台或管理端 surface。"
       }
     },
     "identity": {
@@ -1326,7 +1330,13 @@
     "commerce": {
       "billing": {
         "title": "计费",
-        "subtitle": "运营套餐、SKU、订单、权益、点数和支付证据。"
+        "subtitle": "运营套餐、SKU、订单、权益、点数和支付证据。",
+        "creditReservationsDescription": "预授权点数预留会与账本并排展示，便于审计 AI 任务的 reserve、commit 和 release 状态。",
+        "redeemCodeLifecycleDescription": "这里只暴露脱敏码元数据和哈希前缀；原始兑换码仍然只作为一次性导出材料。",
+        "redemptionRecord": "兑换",
+        "attemptRecord": "尝试",
+        "machineApiKeysDescription": "服务到服务访问密钥只按前缀和所有者列出；哈希和原始密钥永不暴露。",
+        "riskFactsDescription": "风险事件和主体阻断会与其保护的商业事实保留在同一证据视图中。"
       },
       "revenue": {
         "title": "收入",

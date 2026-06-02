@@ -23,7 +23,7 @@ import {
   ModuleUsageApi,
   ModuleUsageRecord,
 } from '@ploykit/module-sdk';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { ModuleRuntimeAccessSession } from '../../module-runtime/security';
 import type {
   RuntimeStore,
@@ -47,6 +47,46 @@ import type {
   RuntimeStoreSubscriptionStatus,
   RuntimeStoreTaxProfileRecord,
 } from '../../module-runtime/stores';
+import {
+  aggregateProvider,
+  assertAdmin,
+  assertNonNegative,
+  assertPositive,
+  bucketDate,
+  createInvoiceTaxSnapshot,
+  hashRedeemCode,
+  isExpired,
+  isRevenueInvoice,
+  isWithinPeriod,
+  maskRedeemCode,
+  metadataObject,
+  metadataRecord,
+  normalizeJurisdiction,
+  orderInvoiceNumber,
+  redeemAttemptEmailMetadata,
+  redeemBindStatus,
+  redeemRedemptionMetadata,
+  sameSubject,
+  subjectFromCommercialInput,
+  subjectFromMetadata,
+  subjectFromStoredUserId,
+  subjectToStoredUserId,
+  subscriptionStatusForEvent,
+  taxValidationStatus,
+  timestampToMillis,
+  toCheckout,
+  toCreditBalance,
+  toCreditLedgerEntry,
+  toCreditsReservation,
+  toEntitlementGrant,
+  toMeteringAuthorization,
+  toRedeemCodeRecord,
+  toRedeemCodeRedemption,
+  toUsageRecord,
+  uniqueEntitlements,
+  userSubject,
+} from './commercial-ledger-utils';
+export { normalizeRuntimeStoreEntitlementGrant } from './commercial-ledger-utils';
 
 export interface CommercialSkuDefinition {
   credits?: {
@@ -316,586 +356,14 @@ export interface RuntimeStoreCommercialRuntime {
     reconcileOrders(
       providerOrders: CommercialProviderOrderState[]
     ): Promise<CommercialReconcileResult>;
-    reconcilePaidOrderBenefits(query?: { userId?: string }): Promise<CommercialBenefitReconcileResult>;
+    reconcilePaidOrderBenefits(query?: {
+      userId?: string;
+    }): Promise<CommercialBenefitReconcileResult>;
     recordSettlement(input: CommercialSettlementInput): Promise<RuntimeStoreSettlementBatch>;
     recordSubscriptionEvent(
       input: CommercialSubscriptionEventInput
     ): Promise<RuntimeStoreSubscriptionEventRecord>;
   };
-}
-
-function toUsageRecord(
-  record: Awaited<ReturnType<RuntimeStore['recordUsage']>>
-): ModuleUsageRecord {
-  return {
-    id: record.id,
-    moduleId: record.moduleId,
-    meter: record.meter,
-    quantity: record.quantity,
-    unit: record.unit,
-    idempotencyKey: record.idempotencyKey,
-    metadata: record.metadata,
-    createdAt: record.createdAt,
-  };
-}
-
-function toMeteringAuthorization(
-  record: Awaited<ReturnType<RuntimeStore['recordMetering']>>
-): ModuleMeteringAuthorization {
-  return {
-    id: record.id,
-    moduleId: record.moduleId,
-    meter: record.meter,
-    quantity: record.quantity,
-    unit: record.unit,
-    status: record.status,
-    idempotencyKey: record.idempotencyKey,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
-
-function toCheckout(order: RuntimeStoreCommercialOrder): ModuleCommerceCheckout {
-  const subject = subjectFromStoredUserId(order.userId);
-  return {
-    id: order.id,
-    userId: order.userId,
-    buyer: subject,
-    beneficiary: subject,
-    sku: order.sku,
-    amount: order.amount,
-    currency: order.currency,
-    status: order.status,
-    idempotencyKey: order.idempotencyKey,
-    createdAt: order.createdAt,
-  };
-}
-
-function userSubject(userId: string): CommercialSubject {
-  return { type: 'user', id: userId };
-}
-
-function subjectToStoredUserId(subject: CommercialSubject): string {
-  return subject.type === 'user' ? subject.id : `${subject.type}:${subject.id}`;
-}
-
-function subjectFromStoredUserId(userId: string): CommercialSubject {
-  const [type, ...idParts] = userId.split(':');
-  if (
-    (type === 'workspace' || type === 'organization' || type === 'apiKey') &&
-    idParts.length > 0
-  ) {
-    return { type, id: idParts.join(':') };
-  }
-
-  return userSubject(userId);
-}
-
-function subjectFromCommercialInput(input: {
-  subject?: CommercialSubject;
-  userId?: string;
-}): CommercialSubject {
-  return input.subject ?? userSubject(input.userId ?? 'anonymous');
-}
-
-function toCreditBalance(balance: { userId: string; unit: string; balance: number }): ModuleCreditsBalance {
-  const subject = subjectFromStoredUserId(balance.userId);
-  return {
-    subject,
-    userId: subject.type === 'user' ? subject.id : balance.userId,
-    unit: balance.unit,
-    balance: balance.balance,
-  };
-}
-
-function creditLedgerDirection(record: RuntimeStoreCreditLedgerEntry): ModuleCreditsLedgerEntry['direction'] {
-  if (record.reason.includes('release')) {
-    return 'release';
-  }
-  if (record.reason.includes('overage')) {
-    return record.amount < 0 ? 'consume' : 'grant';
-  }
-  if (record.reason.includes('refund')) {
-    return 'refund';
-  }
-  if (record.reason.includes('adjust')) {
-    return 'adjust';
-  }
-  if (record.reason.includes('revoke')) {
-    return 'revoke';
-  }
-  if (record.reason.includes('reserve')) {
-    return 'reserve';
-  }
-  return record.amount < 0 ? 'consume' : 'grant';
-}
-
-function creditLedgerStatus(
-  record: RuntimeStoreCreditLedgerEntry
-): ModuleCreditsLedgerEntry['status'] {
-  if (record.status === 'pending') {
-    return 'pending';
-  }
-  if (record.status === 'expired') {
-    return 'expired';
-  }
-  if (record.status === 'void') {
-    return 'void';
-  }
-  return 'available';
-}
-
-function toCreditLedgerEntry(record: RuntimeStoreCreditLedgerEntry): ModuleCreditsLedgerEntry {
-  const subject = subjectFromStoredUserId(record.userId);
-  return {
-    id: record.id,
-    subject,
-    amount: record.amount,
-    unit: record.unit,
-    direction: creditLedgerDirection(record),
-    status: creditLedgerStatus(record),
-    reason: record.reason,
-    source: typeof record.metadata.source === 'string' ? record.metadata.source : undefined,
-    sourceId: typeof record.metadata.sourceId === 'string' ? record.metadata.sourceId : undefined,
-    reservationId:
-      typeof record.metadata.reservationId === 'string' ? record.metadata.reservationId : undefined,
-    idempotencyKey: record.idempotencyKey,
-    expiresAt: record.expiresAt,
-    metadata: record.metadata,
-    createdAt: record.createdAt,
-  };
-}
-
-function toCreditsReservation(record: RuntimeStoreCreditReservation): ModuleCreditsReservation {
-  return {
-    id: record.id,
-    subject: subjectFromStoredUserId(record.userId),
-    amountReserved: record.amountReserved,
-    amountCommitted: record.amountCommitted,
-    unit: record.unit,
-    status: record.status,
-    source: record.source,
-    sourceId: record.sourceId,
-    idempotencyKey: record.idempotencyKey,
-    metadata: record.metadata,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
-
-function toEntitlementGrant(record: RuntimeStoreEntitlementGrant): ModuleEntitlementGrant {
-  const subject = subjectFromStoredUserId(record.userId);
-  return {
-    id: record.id,
-    subject,
-    userId: subject.type === 'user' ? subject.id : record.userId,
-    entitlement: record.entitlement,
-    planId: record.planId,
-    source: record.source,
-    status: record.status,
-    idempotencyKey: record.idempotencyKey,
-    expiresAt: record.expiresAt,
-    metadata: record.metadata,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
-
-function toRedeemCodeRecord(
-  record: RuntimeStoreRedeemCode,
-  now: () => Date = () => new Date()
-): ModuleRedeemCodeRecord {
-  const storedStatus =
-    typeof record.metadata.status === 'string'
-      ? (record.metadata.status as ModuleRedeemCodeRecord['status'])
-      : undefined;
-  const status =
-    storedStatus === 'frozen' || storedStatus === 'revoked'
-      ? storedStatus
-      : isExpired(record.expiresAt, now)
-        ? 'expired'
-        : (storedStatus ?? 'active');
-  return {
-    id: `${record.productId}:${record.code}`,
-    maskedCode:
-      typeof record.metadata.maskedCode === 'string'
-        ? record.metadata.maskedCode
-        : maskRedeemCode(record.code),
-    prefix:
-      typeof record.metadata.prefix === 'string'
-        ? record.metadata.prefix
-        : record.code.includes('_')
-          ? record.code.split('_')[0]
-          : undefined,
-    entitlement: record.entitlement,
-    credits: record.creditsAmount
-      ? { amount: record.creditsAmount, unit: record.creditsUnit }
-      : undefined,
-    maxRedemptions: record.maxRedemptions,
-    status,
-    expiresAt: record.expiresAt,
-    metadata: record.metadata,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  };
-}
-
-function toRedeemCodeRedemption(
-  record: RuntimeStoreRedeemRedemption
-): ModuleRedeemCodeRedemption {
-  const subject = subjectFromStoredUserId(record.userId);
-  return {
-    id: record.id,
-    code: record.code,
-    subject,
-    entitlement: record.entitlement,
-    credits: record.creditsAmount
-      ? { amount: record.creditsAmount, unit: record.creditsUnit }
-      : undefined,
-    idempotencyKey: record.idempotencyKey,
-    metadata: record.metadata,
-    createdAt: record.createdAt,
-  };
-}
-
-function maskRedeemCode(code: string): string {
-  if (code.length <= 8) {
-    return `${code.slice(0, 2)}****`;
-  }
-  return `${code.slice(0, 4)}****${code.slice(-4)}`;
-}
-
-function hashRedeemCode(code: string): string {
-  return createHash('sha256').update(code.trim()).digest('hex');
-}
-
-function normalizedEmail(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim()
-    ? value.trim().toLowerCase()
-    : undefined;
-}
-
-function maskedEmail(value: string): string {
-  const [local = '', domain = ''] = value.split('@');
-  if (!domain) {
-    return '***';
-  }
-  return `${local.slice(0, 1)}***@${domain}`;
-}
-
-function redeemAttemptEmailMetadata(email: unknown): Record<string, string> {
-  const normalized = normalizedEmail(email);
-  if (!normalized) {
-    return {};
-  }
-  return {
-    contactHash: createHash('sha256').update(normalized).digest('hex'),
-    contactMasked: maskedEmail(normalized),
-  };
-}
-
-function assertAdmin(session: ModuleRuntimeAccessSession): void {
-  if (session.system || session.user?.role === 'admin') {
-    return;
-  }
-  throw new Error('MODULE_COMMERCIAL_ADMIN_REQUIRED');
-}
-
-function isExpired(expiresAt: string | undefined, now: () => Date): boolean {
-  return Boolean(expiresAt && new Date(expiresAt).getTime() <= now().getTime());
-}
-
-export function normalizeRuntimeStoreEntitlementGrant(
-  grant: RuntimeStoreEntitlementGrant,
-  now: () => Date = () => new Date()
-): RuntimeStoreEntitlementGrant {
-  if (grant.status !== 'active' || !isExpired(grant.expiresAt, now)) {
-    return grant;
-  }
-  return { ...grant, status: 'expired' };
-}
-
-function assertPositive(amount: number, operation: string): void {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation}`);
-  }
-}
-
-function assertNonNegative(amount: number, operation: string): void {
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation}`);
-  }
-}
-
-function metadataObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function isRedeemSensitiveMetadataKey(key: string): boolean {
-  const normalized = key.replace(/[\s_-]/g, '').toLowerCase();
-  return (
-    [
-      'bind',
-      'rawcode',
-      'codehash',
-      'contacthash',
-      'email',
-      'phone',
-      'apikey',
-      'secret',
-      'token',
-      'password',
-      'authorization',
-      'signature',
-    ].includes(normalized) ||
-    normalized.endsWith('email') ||
-    normalized.endsWith('apikey') ||
-    normalized.endsWith('secret') ||
-    normalized.endsWith('token')
-  );
-}
-
-function redeemRedemptionMetadata(value: unknown): Record<string, unknown> {
-  const redact = (item: unknown): unknown => {
-    if (Array.isArray(item)) {
-      return item.map(redact);
-    }
-    if (!item || typeof item !== 'object') {
-      return item;
-    }
-    return Object.fromEntries(
-      Object.entries(item as Record<string, unknown>).map(([key, nested]) => [
-        key,
-        isRedeemSensitiveMetadataKey(key) ? '[REDACTED]' : redact(nested),
-      ])
-    );
-  };
-  return metadataObject(redact(value));
-}
-
-function sameSubject(left: CommercialSubject, right: CommercialSubject): boolean {
-  return left.type === right.type && left.id === right.id;
-}
-
-function subjectFromMetadata(value: unknown): CommercialSubject | null {
-  const record = metadataObject(value);
-  const type = record.type;
-  const id = record.id;
-  if (
-    (type === 'user' || type === 'workspace' || type === 'organization' || type === 'apiKey') &&
-    typeof id === 'string' &&
-    id.length > 0
-  ) {
-    return { type, id };
-  }
-  return null;
-}
-
-function redeemBindStatus(
-  bind: unknown,
-  input: { subject: CommercialSubject; email?: string }
-): { ok: true } | { ok: false; reason: string } {
-  const record = metadataObject(bind);
-  const expectedEmail = normalizedEmail(record.email);
-  if (expectedEmail && normalizedEmail(input.email) !== expectedEmail) {
-    return { ok: false, reason: 'email_binding_mismatch' };
-  }
-
-  const expectedSubject = subjectFromMetadata(record.subject);
-  if (expectedSubject && !sameSubject(expectedSubject, input.subject)) {
-    return { ok: false, reason: 'subject_binding_mismatch' };
-  }
-
-  const subjectType = record.subjectType;
-  const subjectId = record.subjectId;
-  if (
-    (subjectType === 'user' ||
-      subjectType === 'workspace' ||
-      subjectType === 'organization' ||
-      subjectType === 'apiKey') &&
-    typeof subjectId === 'string' &&
-    !sameSubject({ type: subjectType, id: subjectId }, input.subject)
-  ) {
-    return { ok: false, reason: 'subject_binding_mismatch' };
-  }
-
-  if (
-    typeof record.userId === 'string' &&
-    (input.subject.type !== 'user' || input.subject.id !== record.userId)
-  ) {
-    return { ok: false, reason: 'user_binding_mismatch' };
-  }
-  if (
-    typeof record.workspaceId === 'string' &&
-    (input.subject.type !== 'workspace' || input.subject.id !== record.workspaceId)
-  ) {
-    return { ok: false, reason: 'workspace_binding_mismatch' };
-  }
-  if (
-    typeof record.organizationId === 'string' &&
-    (input.subject.type !== 'organization' || input.subject.id !== record.organizationId)
-  ) {
-    return { ok: false, reason: 'organization_binding_mismatch' };
-  }
-
-  return { ok: true };
-}
-
-function uniqueEntitlements(
-  sku: CommercialSkuDefinition | undefined,
-  planCatalog: readonly ModuleBillingPlan[]
-): string[] {
-  const entitlements = new Set<string>();
-  if (sku?.entitlement) {
-    entitlements.add(sku.entitlement);
-  }
-  for (const entitlement of sku?.entitlements ?? []) {
-    entitlements.add(entitlement);
-  }
-  const plan = sku?.planId ? planCatalog.find((candidate) => candidate.id === sku.planId) : null;
-  for (const entitlement of plan?.entitlements ?? []) {
-    entitlements.add(entitlement);
-  }
-  return [...entitlements];
-}
-
-function bucketDate(value: string): string {
-  return value.slice(0, 10);
-}
-
-function orderInvoiceNumber(order: RuntimeStoreCommercialOrder): string {
-  return `PK-${order.createdAt.slice(0, 10).replaceAll('-', '')}-${order.id.slice(-6)}`;
-}
-
-function isWithinPeriod(value: string, start: string, end: string): boolean {
-  const time = new Date(value).getTime();
-  return time >= new Date(start).getTime() && time <= new Date(end).getTime();
-}
-
-function isRevenueInvoice(invoice: RuntimeStoreInvoiceRecord): boolean {
-  return Boolean(invoice.paidAt) && (invoice.status === 'paid' || invoice.status === 'refunded');
-}
-
-function aggregateProvider(values: readonly (string | null | undefined)[]): string | null {
-  const providers = new Set(values.filter((value): value is string => Boolean(value)));
-  if (providers.size === 0) {
-    return null;
-  }
-  if (providers.size === 1) {
-    return providers.values().next().value ?? null;
-  }
-  return 'mixed';
-}
-
-function subscriptionStatusForEvent(
-  type: RuntimeStoreSubscriptionEventType,
-  override: RuntimeStoreSubscriptionStatus | undefined
-): RuntimeStoreSubscriptionStatus {
-  if (override) {
-    return override;
-  }
-  if (type === 'trial_started') {
-    return 'trialing';
-  }
-  if (type === 'past_due') {
-    return 'past_due';
-  }
-  if (type === 'paused') {
-    return 'paused';
-  }
-  if (type === 'canceled') {
-    return 'canceled';
-  }
-  return 'active';
-}
-
-function timestampToMillis(value?: string | null): number | null {
-  if (!value) {
-    return null;
-  }
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) ? time : null;
-}
-
-function normalizeJurisdiction(value: string): string {
-  const normalized = value.trim().toUpperCase();
-  if (!/^[A-Z]{2}(-[A-Z0-9]{1,8})?$/.test(normalized)) {
-    throw new Error(`MODULE_COMMERCIAL_TAX_JURISDICTION_INVALID: ${value}`);
-  }
-  return normalized;
-}
-
-function taxValidationStatus(profile: Record<string, unknown> | undefined): 'valid' | 'invalid' {
-  const taxId = profile?.taxId ?? profile?.vatId ?? profile?.businessId;
-  if (typeof taxId === 'string' && taxId.trim().length >= 4) {
-    return 'valid';
-  }
-  return 'invalid';
-}
-
-function metadataRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function stringMetadata(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-}
-
-function maskTaxIdentifier(value: unknown): string | undefined {
-  const normalized = stringMetadata(value)?.replace(/\s+/g, '');
-  return normalized ? `***${normalized.slice(-4)}` : undefined;
-}
-
-function createInvoiceTaxSnapshot(input: {
-  taxProfile: RuntimeStoreTaxProfileRecord | null;
-  hostUserMetadata?: Record<string, unknown>;
-  capturedAt: string;
-}): Record<string, unknown> {
-  const hostTaxProfile = metadataRecord(metadataRecord(input.hostUserMetadata?.billing).taxProfile);
-  const runtimeTaxProfile = metadataRecord(input.taxProfile?.profile);
-  const profile = { ...hostTaxProfile, ...runtimeTaxProfile };
-  const taxId =
-    profile.taxId ??
-    profile.vatId ??
-    profile.businessId ??
-    input.taxProfile?.metadata.taxId ??
-    input.taxProfile?.metadata.vatId;
-  const snapshot: Record<string, unknown> = {
-    source: input.taxProfile
-      ? 'runtime-store'
-      : Object.keys(profile).length > 0
-        ? 'host-user-metadata'
-        : 'none',
-    capturedAt: input.capturedAt,
-    status: input.taxProfile?.status ?? 'draft',
-    validationStatus: input.taxProfile?.validationStatus ?? 'unverified',
-  };
-  if (input.taxProfile?.id) {
-    snapshot.taxProfileId = input.taxProfile.id;
-  }
-  if (input.taxProfile?.jurisdiction) {
-    snapshot.jurisdiction = input.taxProfile.jurisdiction;
-  }
-  const company = stringMetadata(profile.company);
-  if (company) {
-    snapshot.company = company;
-  }
-  const country = stringMetadata(profile.country);
-  if (country) {
-    snapshot.country = country;
-  }
-  const taxIdMasked = maskTaxIdentifier(taxId);
-  if (taxIdMasked) {
-    snapshot.taxIdMasked = taxIdMasked;
-  }
-  if (input.taxProfile?.updatedAt) {
-    snapshot.taxProfileUpdatedAt = input.taxProfile.updatedAt;
-  }
-  return snapshot;
 }
 
 export async function checkRuntimeStoreCommercialRequirement(input: {
@@ -972,7 +440,9 @@ export function createRuntimeStoreCommercialRuntime(
     return typeof orderId === 'string' && orderId.length > 0 ? orderId : null;
   }
 
-  function subscriptionLastEventAt(subscription: RuntimeStoreSubscriptionRecord | null): number | null {
+  function subscriptionLastEventAt(
+    subscription: RuntimeStoreSubscriptionRecord | null
+  ): number | null {
     const lastEventAt = subscription?.metadata.lastEventAt;
     return timestampToMillis(typeof lastEventAt === 'string' ? lastEventAt : null);
   }
@@ -1285,7 +755,8 @@ export function createRuntimeStoreCommercialRuntime(
               id: `${order.provider}:${order.providerRef ?? order.id}`,
               provider: order.provider,
               type: order.provider === 'local' ? 'local' : 'card',
-              label: order.provider === 'local' ? 'Local ledger checkout' : `${order.provider} checkout`,
+              label:
+                order.provider === 'local' ? 'Local ledger checkout' : `${order.provider} checkout`,
               status: 'active',
               updatedAt: order.updatedAt,
             },
@@ -1339,7 +810,10 @@ export function createRuntimeStoreCommercialRuntime(
     }
   }
 
-  async function refreshRevenueBucket(date: string, currency: string): Promise<RuntimeStoreRevenueBucket> {
+  async function refreshRevenueBucket(
+    date: string,
+    currency: string
+  ): Promise<RuntimeStoreRevenueBucket> {
     const [invoices, creditNotes] = await Promise.all([
       options.store.listInvoices({
         productId: scope.productId,
@@ -1358,9 +832,7 @@ export function createRuntimeStoreCommercialRuntime(
     );
     const bucketCreditNotes = creditNotes.filter(
       (note) =>
-        note.currency === currency &&
-        note.status === 'issued' &&
-        bucketDate(note.issuedAt) === date
+        note.currency === currency && note.status === 'issued' && bucketDate(note.issuedAt) === date
     );
     const gross = bucketInvoices.reduce((sum, invoice) => sum + invoice.total, 0);
     const discount = bucketInvoices.reduce((sum, invoice) => sum + invoice.discount, 0);
@@ -1479,7 +951,9 @@ export function createRuntimeStoreCommercialRuntime(
       total: invoice?.total ?? input.order.amount,
       refunded: invoice?.refunded ?? 0,
       fee: invoice?.fee ?? 0,
-      net: invoice?.net ?? (invoice?.total ?? input.order.amount) - (invoice?.refunded ?? 0) - (invoice?.fee ?? 0),
+      net:
+        invoice?.net ??
+        (invoice?.total ?? input.order.amount) - (invoice?.refunded ?? 0) - (invoice?.fee ?? 0),
       currency: input.currency,
       provider: invoice?.provider ?? input.provider,
       providerRef: invoice?.providerRef ?? input.providerRef,
@@ -1634,11 +1108,7 @@ export function createRuntimeStoreCommercialRuntime(
       typeof redeemCodeRecord?.metadata.status === 'string'
         ? redeemCodeRecord.metadata.status
         : 'active';
-    if (
-      !redeemCodeRecord ||
-      status !== 'active' ||
-      isExpired(redeemCodeRecord.expiresAt, now)
-    ) {
+    if (!redeemCodeRecord || status !== 'active' || isExpired(redeemCodeRecord.expiresAt, now)) {
       return { ok: false, reason: 'invalid_or_unavailable' };
     }
 
@@ -1988,9 +1458,7 @@ export function createRuntimeStoreCommercialRuntime(
               amount: finalAmount - reservation.amountReserved,
               unit: reservation.unit,
               reason: 'reserve.overage',
-              idempotencyKey: input.idempotencyKey
-                ? `${input.idempotencyKey}:overage`
-                : undefined,
+              idempotencyKey: input.idempotencyKey ? `${input.idempotencyKey}:overage` : undefined,
               metadata: {
                 ...(input.metadata ?? {}),
                 subject: subjectFromStoredUserId(reservation.userId),
@@ -2022,8 +1490,7 @@ export function createRuntimeStoreCommercialRuntime(
             });
           }
           if (reservation.status !== 'released') {
-            const releasable =
-              reservation.amountReserved - reservation.amountCommitted;
+            const releasable = reservation.amountReserved - reservation.amountCommitted;
             if (releasable > 0) {
               await recordCredit({
                 subject: subjectFromStoredUserId(reservation.userId),
@@ -2088,7 +1555,9 @@ export function createRuntimeStoreCommercialRuntime(
             userId: input.subject || input.userId ? subjectToStoredUserId(subject) : undefined,
             unit: input.unit,
             status:
-              input.status === 'available' || input.status === 'pending' || input.status === 'expired'
+              input.status === 'available' ||
+              input.status === 'pending' ||
+              input.status === 'expired'
                 ? input.status
                 : undefined,
           });
@@ -2124,12 +1593,8 @@ export function createRuntimeStoreCommercialRuntime(
             return false;
           }
           return (
-            (
-              await activeEntitlements(
-                subjectToStoredUserId(subject),
-                resolvedEntitlement
-              )
-            ).length > 0
+            (await activeEntitlements(subjectToStoredUserId(subject), resolvedEntitlement)).length >
+            0
           );
         },
         async list(input = {}) {
@@ -2228,8 +1693,7 @@ export function createRuntimeStoreCommercialRuntime(
           return order ? toCheckout(order) : null;
         },
         async applyCheckoutPaid(input) {
-          const beneficiary =
-            input.beneficiary ?? input.buyer ?? subjectFromCommercialInput(input);
+          const beneficiary = input.beneficiary ?? input.buyer ?? subjectFromCommercialInput(input);
           let order = input.orderId
             ? await requireScopedOrder(input.orderId, 'MODULE_COMMERCIAL_PAID')
             : null;
@@ -2287,14 +1751,18 @@ export function createRuntimeStoreCommercialRuntime(
           if (!order) {
             throw new Error(`MODULE_COMMERCIAL_REFUND_ORDER_NOT_FOUND: ${input.providerRef}`);
           }
-          const refundedOrder = await options.store.updateCommercialOrderStatus(order.id, 'refunded', {
-            provider: input.provider,
-            providerRef: input.providerRef,
-            refundAmount: input.amount ?? order.amount,
-            refundCurrency: input.currency ?? order.currency,
-            refundReason: input.reason ?? 'provider.refund',
-            ...(input.metadata ?? {}),
-          });
+          const refundedOrder = await options.store.updateCommercialOrderStatus(
+            order.id,
+            'refunded',
+            {
+              provider: input.provider,
+              providerRef: input.providerRef,
+              refundAmount: input.amount ?? order.amount,
+              refundCurrency: input.currency ?? order.currency,
+              refundReason: input.reason ?? 'provider.refund',
+              ...(input.metadata ?? {}),
+            }
+          );
           const reversed = await reverseOrderBenefits(
             refundedOrder,
             input.amount ?? order.amount,
@@ -2321,7 +1789,8 @@ export function createRuntimeStoreCommercialRuntime(
             status,
             provider: input.provider ?? null,
             providerRef: input.providerRef ?? null,
-            currentPeriodStart: input.currentPeriodStart ?? input.effectiveAt ?? new Date().toISOString(),
+            currentPeriodStart:
+              input.currentPeriodStart ?? input.effectiveAt ?? new Date().toISOString(),
             currentPeriodEnd: input.currentPeriodEnd ?? null,
             trialEnd: input.trialEnd ?? null,
             cancelAtPeriodEnd: input.cancelAtPeriodEnd ?? status === 'canceled',
@@ -2347,7 +1816,13 @@ export function createRuntimeStoreCommercialRuntime(
               subject,
             },
           });
-          return { id: event.id, subject, planId: event.planId, type: event.type, status: event.status };
+          return {
+            id: event.id,
+            subject,
+            planId: event.planId,
+            type: event.type,
+            status: event.status,
+          };
         },
         async reconcilePaidOrderBenefits(input = {}) {
           const orders = await options.store.listCommercialOrders({
@@ -2863,7 +2338,9 @@ export function createRuntimeStoreCommercialRuntime(
             ? items.find((item) => item.version === input.version)
             : items.find((item) => item.status === 'draft')) ?? items[0];
         if (!source) {
-          throw new Error(`MODULE_COMMERCIAL_CATALOG_ITEM_NOT_FOUND: ${input.kind}.${input.itemId}`);
+          throw new Error(
+            `MODULE_COMMERCIAL_CATALOG_ITEM_NOT_FOUND: ${input.kind}.${input.itemId}`
+          );
         }
         const published = await options.store.upsertCommercialCatalogItem({
           ...scope,
@@ -3274,12 +2751,17 @@ export function createRuntimeStoreCommercialRuntime(
                 provider: input.provider ?? null,
                 providerRef: input.providerRef ?? null,
                 currentPeriodStart:
-                  input.currentPeriodStart ?? currentSubscription?.currentPeriodStart ?? effectiveAt,
-                currentPeriodEnd: input.currentPeriodEnd ?? currentSubscription?.currentPeriodEnd ?? null,
+                  input.currentPeriodStart ??
+                  currentSubscription?.currentPeriodStart ??
+                  effectiveAt,
+                currentPeriodEnd:
+                  input.currentPeriodEnd ?? currentSubscription?.currentPeriodEnd ?? null,
                 trialEnd: input.trialEnd ?? currentSubscription?.trialEnd ?? null,
                 cancelAtPeriodEnd:
                   input.cancelAtPeriodEnd ??
-                  (status === 'canceled' ? true : (currentSubscription?.cancelAtPeriodEnd ?? false)),
+                  (status === 'canceled'
+                    ? true
+                    : (currentSubscription?.cancelAtPeriodEnd ?? false)),
                 renewalStrategy: input.provider ? 'provider' : 'manual',
                 metadata: nextMetadata,
               });
@@ -3351,7 +2833,8 @@ export function createRuntimeStoreCommercialRuntime(
         );
         const gross = providerInvoices.reduce((sum, invoice) => sum + invoice.total, 0);
         const refund = providerCreditNotes.reduce((sum, note) => sum + note.amount, 0);
-        const orderCount = new Set(providerInvoices.map((invoice) => invoice.orderId ?? invoice.id)).size;
+        const orderCount = new Set(providerInvoices.map((invoice) => invoice.orderId ?? invoice.id))
+          .size;
         const batch = await options.store.upsertSettlementBatch({
           ...scope,
           provider: input.provider,

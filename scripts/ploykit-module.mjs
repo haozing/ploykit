@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import childProcess from 'node:child_process';
 import crypto from 'node:crypto';
-import { builtinModules } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { register } from 'tsx/esm/api';
 import {
@@ -10,6 +9,14 @@ import {
   getModuleSources,
   resolveModuleRoot as resolveConfiguredModuleRoot,
 } from './lib/module-sources.mjs';
+import {
+  extractDeclaredNpmDependencyReport,
+  readHostPackageManifest,
+} from './lib/module-dependencies.mjs';
+import {
+  checkModuleSourceSafety,
+  readModuleSourceCode,
+} from './lib/module-source-safety.mjs';
 import './lib/module-sdk-alias.cjs';
 
 const PROJECT_ROOT = process.cwd();
@@ -45,10 +52,6 @@ const MODULE_TEMPLATES = new Set([
   'product-app',
 ]);
 const MODULE_MAP_MANIFEST_FILE = path.join(PROJECT_ROOT, 'src', 'lib', 'module-map.manifest.json');
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
-const NODE_BUILTINS = new Set(
-  builtinModules.map((specifier) => specifier.replace(/^node:/, '').split('/')[0])
-);
 const RESERVED_PUBLIC_ALIAS_PATHS = new Set([
   '/',
   '/about',
@@ -226,11 +229,7 @@ function extractAllContractLocalPaths(source) {
 }
 
 function readPackageManifest() {
-  const file = path.join(PROJECT_ROOT, 'package.json');
-  if (!fs.existsSync(file)) {
-    return { dependencies: {}, devDependencies: {} };
-  }
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  return readHostPackageManifest(PROJECT_ROOT);
 }
 
 function readDefaultExport(value) {
@@ -539,9 +538,7 @@ function resolveAnonymousPolicySource(routeObject, moduleSource) {
 }
 
 function moduleCode(moduleRoot) {
-  return listModuleSourceFiles(moduleRoot)
-    .map((file) => fs.readFileSync(file, 'utf8'))
-    .join('\n');
+  return readModuleSourceCode(moduleRoot);
 }
 
 function listModuleHashFiles(moduleRoot) {
@@ -780,36 +777,6 @@ function checkFileExists(diagnostics, file, code, message, fix) {
   }
 
   diagnostics.push(diagnostic('error', code, message, toProjectPath(file), fix));
-}
-
-function listModuleSourceFiles(moduleRoot) {
-  const files = [];
-
-  function visit(current) {
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      if (
-        entry.name === '.ploykit' ||
-        entry.name === 'migrations' ||
-        entry.name === 'scripts' ||
-        entry.name === 'tests'
-      ) {
-        continue;
-      }
-
-      const fullPath = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        visit(fullPath);
-        continue;
-      }
-
-      if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
-        files.push(fullPath);
-      }
-    }
-  }
-
-  visit(moduleRoot);
-  return files.sort();
 }
 
 function hasAnyPermission(source, permissions) {
@@ -1357,155 +1324,6 @@ function checkPublicRouteContracts(source, diagnostics) {
   }
 }
 
-function extractImportSpecifiers(source) {
-  const specifiers = [];
-  const patterns = [
-    /\bimport\s+(?:type\s+)?(?:[^'"`]*?\s+from\s+)?['"`]([^'"`]+)['"`]/g,
-    /\bexport\s+(?:type\s+)?[^'"`]*?\s+from\s+['"`]([^'"`]+)['"`]/g,
-    /\brequire\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
-    /\bimport\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
-  ];
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      specifiers.push(match[1]);
-    }
-  }
-  return [...new Set(specifiers)];
-}
-
-function isPathInsideDirectory(parent, candidate) {
-  const relative = path.relative(parent, candidate);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function checkSourceSafety(moduleRoot, diagnostics) {
-  for (const file of listModuleSourceFiles(moduleRoot)) {
-    const source = fs.readFileSync(file, 'utf8');
-    const projectPath = toProjectPath(file);
-
-    for (const specifier of extractImportSpecifiers(source)) {
-      const normalizedSpecifier = specifier.replace(/\\/g, '/');
-      const builtin = normalizedSpecifier.replace(/^node:/, '').split('/')[0];
-
-      if (
-        normalizedSpecifier.includes('src/lib') ||
-        normalizedSpecifier.includes('apps/host-next') ||
-        normalizedSpecifier.startsWith('@host/') ||
-        normalizedSpecifier.startsWith('@/lib/module-runtime')
-      ) {
-        diagnostics.push(
-          diagnostic(
-            'error',
-            'MODULE_HOST_IMPORT_FORBIDDEN',
-            'Module code must not import host internals.',
-            projectPath,
-            'Use @ploykit/module-sdk and ctx capabilities instead.'
-          )
-        );
-      }
-
-      if (normalizedSpecifier.startsWith('.')) {
-        const resolved = path.resolve(path.dirname(file), normalizedSpecifier);
-        if (!isPathInsideDirectory(moduleRoot, resolved)) {
-          diagnostics.push(
-            diagnostic(
-              'error',
-              'MODULE_SOURCE_IMPORT_ESCAPES_ROOT',
-              `Module source import "${specifier}" must not escape the module root.`,
-              projectPath,
-              'Move shared code inside the module root or expose it through @ploykit/module-sdk.'
-            )
-          );
-        }
-      }
-
-      if (NODE_BUILTINS.has(builtin)) {
-        diagnostics.push(
-          diagnostic(
-            'error',
-            'MODULE_NODE_BUILTIN_FORBIDDEN',
-            `Module code must not import Node builtin "${specifier}".`,
-            projectPath,
-            'Move privileged IO into a host service or connector capability.'
-          )
-        );
-      }
-    }
-
-    if (/\bprocess\.env\b/.test(source)) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'MODULE_PROCESS_ENV_FORBIDDEN',
-          'Module code must not read process.env directly.',
-          projectPath,
-          'Use ctx.config or ctx.secrets.'
-        )
-      );
-    }
-
-    if (/\bctx\s*\[/.test(source)) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'MODULE_DYNAMIC_CTX_ACCESS_FORBIDDEN',
-          'Module code must not access ctx with dynamic property names.',
-          projectPath,
-          'Use explicit ctx capabilities so doctor can map permissions.'
-        )
-      );
-    }
-
-    if (/\beval\s*\(|\bnew\s+Function\s*\(|(?<!function\s+)\bFunction\s*\(/.test(source)) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'MODULE_DYNAMIC_CODE_FORBIDDEN',
-          'Module code must not use eval or Function constructors.',
-          projectPath,
-          'Use normal module code and declared handlers.'
-        )
-      );
-    }
-
-    if (/\bimport\s*\(\s*(?!['"`])/.test(source)) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'MODULE_DYNAMIC_IMPORT_FORBIDDEN',
-          'Module code must not use dynamic import specifiers.',
-          projectPath,
-          'Use static imports so doctor can validate source boundaries.'
-        )
-      );
-    }
-
-    if (/\brequire\s*\(\s*(?!['"`])/.test(source)) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'MODULE_DYNAMIC_REQUIRE_FORBIDDEN',
-          'Module code must not use dynamic require specifiers.',
-          projectPath,
-          'Use static imports so doctor can validate source boundaries.'
-        )
-      );
-    }
-
-    if (/(?<![\w.])fetch\s*\(/.test(source)) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'MODULE_RAW_FETCH_FORBIDDEN',
-          'Module code must not call global fetch directly.',
-          projectPath,
-          'Use ctx.http.fetch and declare Permission.ExternalHttp with a narrow egress origin.'
-        )
-      );
-    }
-  }
-}
-
 function checkHandlerDefinitions(moduleRoot, moduleSource, diagnostics) {
   for (const localPath of extractHandlerPaths(moduleSource)) {
     const resolved = normalizeLocalModulePath(moduleRoot, localPath);
@@ -1577,27 +1395,13 @@ function checkContractPartFiles(moduleRoot, moduleSource, diagnostics) {
   }
 }
 
-function extractDeclaredNpmDependencies(source) {
-  const packages = new Set();
-  const npmArray = source.match(/\bnpm\s*:\s*\[([\s\S]*?)\]/)?.[1];
-  if (npmArray) {
-    for (const match of npmArray.matchAll(/['"`]([^'"`]+)['"`]/g)) {
-      packages.add(match[1]);
-    }
-  }
-
-  const npmObject = source.match(/\bnpm\s*:\s*{([\s\S]*?)}/)?.[1];
-  if (npmObject) {
-    for (const match of npmObject.matchAll(/['"`]([^'"`]+)['"`]\s*:/g)) {
-      packages.add(match[1]);
-    }
-  }
-
-  return [...packages].sort();
-}
-
 function checkModuleDependencies(source, diagnostics) {
-  const dependencies = extractDeclaredNpmDependencies(source);
+  const report = extractDeclaredNpmDependencyReport(source);
+  for (const item of report.diagnostics) {
+    diagnostics.push(normalizeDiagnostic(item));
+  }
+
+  const dependencies = report.dependencies.map((dependency) => dependency.name);
   if (dependencies.length === 0) {
     return;
   }
@@ -2001,7 +1805,7 @@ async function doctorModule(moduleRoot) {
   checkHttpEgress(moduleRoot, source, diagnostics);
   checkPublicRouteContracts(source, diagnostics);
   checkLifecycleContracts(moduleRoot, source, diagnostics);
-  checkSourceSafety(moduleRoot, diagnostics);
+  checkModuleSourceSafety({ projectRoot: PROJECT_ROOT, moduleRoot, diagnostics, diagnostic });
   checkHandlerDefinitions(moduleRoot, source, diagnostics);
   checkModuleDependencies(source, diagnostics);
   await checkSdkContractValidation(moduleRoot, diagnostics);
@@ -2035,20 +1839,14 @@ function printJson(value) {
 async function commandDoctor(args) {
   const target = args[0];
   const roots = discoverModuleRoots(target);
+  const results = await Promise.all(roots.map(doctorModule));
   const result =
-    roots.length === 1
-      ? await doctorModule(roots[0])
+    roots.length === 1 && target !== 'all'
+      ? results[0]
       : {
-          success: false,
-          diagnostics: [
-            diagnostic(
-              'error',
-              'MODULE_DOCTOR_TARGET_AMBIGUOUS',
-              `Expected one module root, found ${roots.length}.`,
-              target ?? 'all',
-              'Pass a specific module id or module root path.'
-            ),
-          ],
+          success: results.every((item) => item.success),
+          count: results.length,
+          results,
         };
   printJson(result);
   if (!result.success) {
@@ -2251,12 +2049,13 @@ function commandTemplates() {
 
 function commandDev(args) {
   const target = args[0] ?? 'all';
+  runLocalScript(path.join('scripts', 'module-deps.mjs'), ['--install']);
   runLocalScript(path.join('scripts', 'generate-module-map.mjs'), ['--check']);
   runLocalScript(path.join('scripts', 'ploykit-module.mjs'), ['check', target]);
   printJson({
     success: true,
     target,
-    checks: ['modules:scan --check', 'modules:check'],
+    checks: ['modules:deps --install', 'modules:scan --check', 'modules:check'],
     next: [
       `npm run module:doctor -- ${target}`,
       `npm run module:test -- ${target}`,

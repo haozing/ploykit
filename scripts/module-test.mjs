@@ -1,7 +1,12 @@
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readModuleIdFromSource, resolveModuleRoot, slash } from './lib/module-sources.mjs';
+import {
+  discoverModuleRoots,
+  readModuleIdFromSource,
+  resolveModuleRoot,
+  slash,
+} from './lib/module-sources.mjs';
 
 const PROJECT_ROOT = process.cwd();
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
@@ -113,46 +118,34 @@ function saveReport(moduleRoot, report) {
   return toProjectPath(reportFile);
 }
 
-function main() {
-  const options = parseArgs(process.argv.slice(2));
-  let moduleRoot;
-  try {
-    moduleRoot = resolveModuleRoot(PROJECT_ROOT, options.target);
-  } catch (error) {
-    printJson({
-      success: false,
-      diagnostics: [
-        {
-          severity: 'error',
-          code: 'MODULE_TEST_TARGET_INVALID',
-          message: error instanceof Error ? error.message : String(error),
-          path: options.target,
-          fix: 'Pass a module id or module root path from ploykit.config.json.',
-        },
-      ],
-    });
-    process.exitCode = 1;
-    return;
-  }
-  const steps = [];
+function saveAllReport(report) {
+  const reportFile = path.join(PROJECT_ROOT, '.runtime', 'module-test-reports', 'all.json');
+  fs.mkdirSync(path.dirname(reportFile), { recursive: true });
+  fs.writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
+  return toProjectPath(reportFile);
+}
 
+function invalidTarget(target, message) {
+  return {
+    success: false,
+    diagnostics: [
+      {
+        severity: 'error',
+        code: 'MODULE_TEST_TARGET_INVALID',
+        message,
+        path: target,
+        fix: 'Pass a module id, a module root path, or all from ploykit.config.json.',
+      },
+    ],
+  };
+}
+
+function runModuleTest(moduleRoot, options) {
   if (!fs.existsSync(path.join(moduleRoot, 'module.ts'))) {
-    printJson({
-      success: false,
-      diagnostics: [
-        {
-          severity: 'error',
-          code: 'MODULE_TEST_TARGET_INVALID',
-          message: `Target "${options.target}" is not a module root.`,
-          path: options.target,
-          fix: 'Pass a module id or module root path from ploykit.config.json.',
-        },
-      ],
-    });
-    process.exitCode = 1;
-    return;
+    return invalidTarget(options.target, `Target "${options.target}" is not a module root.`);
   }
 
+  const steps = [];
   const doctor = run(process.execPath, [
     path.join('scripts', 'ploykit-module.mjs'),
     'doctor',
@@ -191,11 +184,56 @@ function main() {
   const report = {
     success,
     moduleRoot: toProjectPath(moduleRoot),
+    moduleId: readModuleIdFromSource(moduleRoot),
     mode: options.real ? 'real' : 'fake',
     steps,
     checkedAt: new Date().toISOString(),
   };
   report.reportFile = saveReport(moduleRoot, report);
+  return report;
+}
+
+function resolveTargetRoots(options) {
+  if (!options.target || options.target === 'all') {
+    return discoverModuleRoots(PROJECT_ROOT, 'all');
+  }
+  return [resolveModuleRoot(PROJECT_ROOT, options.target)];
+}
+
+function main() {
+  const options = parseArgs(process.argv.slice(2));
+  let moduleRoots;
+  try {
+    moduleRoots = resolveTargetRoots(options);
+  } catch (error) {
+    printJson({
+      ...invalidTarget(options.target, error instanceof Error ? error.message : String(error)),
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  const moduleReports = moduleRoots.map((moduleRoot) => runModuleTest(moduleRoot, options));
+  if (moduleReports.some((report) => !report.success && Array.isArray(report.diagnostics))) {
+    printJson(moduleReports.length === 1 ? moduleReports[0] : { success: false, results: moduleReports });
+    process.exitCode = 1;
+    return;
+  }
+
+  const success = moduleReports.every((report) => report.success);
+  const report =
+    moduleReports.length === 1 && options.target !== 'all'
+      ? moduleReports[0]
+      : {
+          success,
+          count: moduleReports.length,
+          mode: options.real ? 'real' : 'fake',
+          results: moduleReports,
+          checkedAt: new Date().toISOString(),
+        };
+  if ('results' in report) {
+    report.reportFile = saveAllReport(report);
+  }
   printJson(report);
   if (!success) {
     process.exitCode = 1;

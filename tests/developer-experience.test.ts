@@ -72,6 +72,17 @@ test('module templates include contract, README, and smoke test', () => {
   }
 });
 
+test('root tsconfig uses explicit path aliases without a wildcard catch-all', () => {
+  const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8')) as {
+    compilerOptions?: { paths?: Record<string, string[]> };
+  };
+  const paths = tsconfig.compilerOptions?.paths ?? {};
+
+  assert.equal(Object.prototype.hasOwnProperty.call(paths, '*'), false);
+  assert.deepEqual(paths['@ploykit/module-sdk'], ['src/module-sdk/index.ts']);
+  assert.deepEqual(paths['@ploykit/module-sdk/*'], ['src/module-sdk/*']);
+});
+
 test('dev console snapshot summarizes module map, capabilities, and diagnostics', () => {
   const moduleDefinition = defineModule({
     id: 'console-test',

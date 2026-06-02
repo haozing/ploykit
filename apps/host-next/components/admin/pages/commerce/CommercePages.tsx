@@ -1610,7 +1610,7 @@ export function AdminBillingOperationsPage({
         {showReservations ? (
           <EvidenceSection
             title={`Credit reservations · ${reservations.length}`}
-            description="Pre-authorized credit holds are visible beside the ledger so AI task reserve, commit, and release states can be audited."
+            description={copy.creditReservationsDescription}
           >
             <DataTable
               className="shadow-none"
@@ -1635,7 +1635,7 @@ export function AdminBillingOperationsPage({
         {showRedeem ? (
           <EvidenceSection
             title={`Redeem code lifecycle · ${redeemCodes.length + redeemRedemptions.length + redeemAttempts.length}`}
-            description="Only masked code metadata and hash prefixes are exposed; raw redeem codes remain one-time export material."
+            description={copy.redeemCodeLifecycleDescription}
           >
             <DataTable
               className="shadow-none"
@@ -1662,7 +1662,7 @@ export function AdminBillingOperationsPage({
                 ...redeemRedemptions.map((redemption) => [
                   <span key={`${redemption.id}:redemption`} className="block min-w-0">
                     <span className="block truncate font-semibold text-admin-text">
-                      Redemption
+                      {copy.redemptionRecord}
                     </span>
                     <span className="mt-0.5 block truncate font-mono text-[11px] text-admin-text-muted">
                       {redemption.codeHashPrefix}
@@ -1682,7 +1682,7 @@ export function AdminBillingOperationsPage({
                 ...redeemAttempts.map((attempt) => [
                   <span key={`${attempt.id}:attempt`} className="block min-w-0">
                     <span className="block truncate font-semibold text-admin-text">
-                      Attempt
+                      {copy.attemptRecord}
                     </span>
                     <span className="mt-0.5 block truncate font-mono text-[11px] text-admin-text-muted">
                       {attempt.codeHashPrefix ?? attempt.id}
@@ -1704,7 +1704,7 @@ export function AdminBillingOperationsPage({
         {showApiKeys ? (
           <EvidenceSection
             title={`Machine API keys · ${apiKeys.length}`}
-            description="Server-to-server access keys are listed by prefix and owner; hashes and raw keys are never exposed."
+            description={copy.machineApiKeysDescription}
           >
             <DataTable
               className="shadow-none"
@@ -1727,7 +1727,7 @@ export function AdminBillingOperationsPage({
         {showRisk ? (
           <EvidenceSection
             title={`Risk facts · ${riskRows.length}`}
-            description="Risk events and subject blocks stay in the same commercial evidence view as the facts they protect."
+            description={copy.riskFactsDescription}
           >
             <DataTable
               className="shadow-none"

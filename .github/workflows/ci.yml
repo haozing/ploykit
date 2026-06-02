@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Module map and contracts
+        run: npm run modules:check
+
+      - name: Catalog doctor
+        run: npm run catalog:doctor
+
+      - name: Documentation encoding
+        run: npm run docs:encoding-check
+
+      - name: Host runtime tests
+        run: npm run test:host-runtime
+
+      - name: Security runtime tests
+        run: npm run test:security-runtime
+
+      - name: Security hardening tests
+        run: npm run test:security-hardening
+
+      - name: Web shell tests
+        run: npm run test:web-shell
+
+      - name: Module smoke tests
+        run: npm run module:test -- all

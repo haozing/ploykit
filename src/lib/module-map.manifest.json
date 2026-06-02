@@ -378,8 +378,8 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "8cfc073470895ffebd245beaf06a84d5326c753c058566e8a3c05fd1601eb502",
-        "contractDigest": "904d67b046b1e0cf0352279d3509c960c6dadd2acee0888bd772571d15401563",
+        "sourceHash": "a2daff57b31974b5e0c01dff01f19c82cc935de89187e00c836cea963fa8ceb5",
+        "contractDigest": "990540f80f781c293641b5c14cb024ddb4dd8536ca64da829377afbac22cf997",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
           ".ploykit/generated/data-types.ts",
@@ -401,7 +401,7 @@
         "capabilitySummary": {
           "routes": 6,
           "dataModels": 3,
-          "permissions": 14,
+          "permissions": 15,
           "backgroundHandlers": 0,
           "providerRequirements": 0,
           "commercialRequirements": 3,

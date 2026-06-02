@@ -54,6 +54,17 @@ test('runtime config accepts POSTGRES_URL as database fallback', () => {
   assert.equal(result.config?.databaseUrl, 'postgres://user:pass@localhost:5432/app');
 });
 
+test('runtime config rejects reserved OIDC provider until an adapter exists', () => {
+  const result = loadRuntimeConfig({
+    DATABASE_URL: 'postgres://user:pass@localhost:5432/app',
+    PLOYKIT_HOST_URL: 'https://app.example.com',
+    PLOYKIT_AUTH_PROVIDER: 'oidc',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.diagnostics[0]?.code, 'RUNTIME_CONFIG_AUTH_PROVIDER_INVALID');
+});
+
 test('observability redacts secrets from logs and connector records', () => {
   const logger = createRuntimeLogger({
     now: () => new Date('2026-01-01T00:00:00.000Z'),

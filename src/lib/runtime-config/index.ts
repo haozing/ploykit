@@ -1,4 +1,4 @@
-export type RuntimeAuthProvider = 'none' | 'host' | 'oidc';
+export type RuntimeAuthProvider = 'none' | 'host';
 
 export interface RuntimeConfig {
   databaseUrl: string;
@@ -48,7 +48,7 @@ function parseFlags(value: string | undefined): Record<string, boolean> {
 }
 
 function isAuthProvider(value: string): value is RuntimeAuthProvider {
-  return value === 'none' || value === 'host' || value === 'oidc';
+  return value === 'none' || value === 'host';
 }
 
 export function loadRuntimeConfig(
@@ -85,7 +85,7 @@ export function loadRuntimeConfig(
     diagnostics.push(
       diagnostic(
         'RUNTIME_CONFIG_AUTH_PROVIDER_INVALID',
-        'PLOYKIT_AUTH_PROVIDER must be one of none, host, or oidc.',
+        'PLOYKIT_AUTH_PROVIDER must be one of none or host. OIDC is reserved until the host OIDC adapter is implemented.',
         'PLOYKIT_AUTH_PROVIDER',
         'Set PLOYKIT_AUTH_PROVIDER=host for product auth integration.'
       )

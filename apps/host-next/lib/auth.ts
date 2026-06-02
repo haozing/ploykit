@@ -30,6 +30,8 @@ const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEMO_MODULES_ENTITLEMENT = 'ploykit.demo_modules';
+const DEMO_USERS_PRODUCTION_ERROR = 'PLOYKIT_DEMO_USERS_PRODUCTION_FORBIDDEN';
+const BOOTSTRAP_ADMIN_INCOMPLETE_ERROR = 'PLOYKIT_BOOTSTRAP_ADMIN_INCOMPLETE';
 
 interface SeedHostUser {
   id: string;
@@ -60,7 +62,14 @@ const SEEDED_HOST_USERS: readonly SeedHostUser[] = [
   },
 ];
 
-const seedPromises = new WeakMap<RuntimeStore, Promise<void>>();
+type HostIdentitySeedKind = 'none' | 'demo' | 'bootstrap';
+
+interface HostIdentitySeedPlan {
+  kind: HostIdentitySeedKind;
+  users: readonly SeedHostUser[];
+}
+
+const seedPromises = new WeakMap<RuntimeStore, Map<string, Promise<void>>>();
 
 export interface HostAuthSessionRecord {
   id: string;
@@ -156,6 +165,10 @@ function booleanSetting(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
+function envFlag(value: string | undefined): boolean {
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
 function numberSetting(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.min(Math.max(Math.floor(parsed), min), max) : fallback;
@@ -176,10 +189,7 @@ function envAuthPolicy(): HostAuthPolicy {
 }
 
 function demoModuleEntitlements(): readonly string[] {
-  return process.env.PLOYKIT_ENABLE_DEMO_MODULES === '1' ||
-    process.env.PLOYKIT_ENABLE_DEMO_MODULES === 'true'
-    ? [DEMO_MODULES_ENTITLEMENT]
-    : [];
+  return envFlag(process.env.PLOYKIT_ENABLE_DEMO_MODULES) ? [DEMO_MODULES_ENTITLEMENT] : [];
 }
 
 export async function getHostAuthPolicyForStore(store: RuntimeStore): Promise<HostAuthPolicy> {
@@ -266,6 +276,55 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function readHostIdentitySeedPlan(env = process.env): HostIdentitySeedPlan {
+  const demoUsersEnabled = envFlag(env.PLOYKIT_ENABLE_DEMO_USERS);
+  if (demoUsersEnabled) {
+    if (env.NODE_ENV === 'production') {
+      throw new Error(DEMO_USERS_PRODUCTION_ERROR);
+    }
+    return { kind: 'demo', users: SEEDED_HOST_USERS };
+  }
+
+  const bootstrapEmail = env.PLOYKIT_BOOTSTRAP_ADMIN_EMAIL?.trim();
+  const bootstrapPassword = env.PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD;
+  if (bootstrapEmail || bootstrapPassword) {
+    if (!bootstrapEmail || !bootstrapPassword) {
+      throw new Error(BOOTSTRAP_ADMIN_INCOMPLETE_ERROR);
+    }
+    if (!bootstrapEmail.includes('@')) {
+      throw new Error('PLOYKIT_BOOTSTRAP_ADMIN_EMAIL_INVALID');
+    }
+    if (bootstrapPassword.length < envAuthPolicy().passwordMinLength) {
+      throw new Error('PLOYKIT_BOOTSTRAP_ADMIN_PASSWORD_TOO_SHORT');
+    }
+    return {
+      kind: 'bootstrap',
+      users: [
+        {
+          id: 'bootstrap-admin',
+          email: normalizeEmail(bootstrapEmail),
+          password: bootstrapPassword,
+          role: 'admin',
+          workspaceRole: 'owner',
+        },
+      ],
+    };
+  }
+
+  return { kind: 'none', users: [] };
+}
+
+function hostIdentitySeedPlanKey(plan: HostIdentitySeedPlan): string {
+  return [
+    plan.kind,
+    ...plan.users.map((user) => `${user.id}:${normalizeEmail(user.email)}:${user.role}`),
+  ].join('|');
 }
 
 function tokenRecord(value: unknown): HostAuthTokenRecord | null {
@@ -390,60 +449,87 @@ export function verifyHostPassword(password: string, passwordHash: string): bool
   return safeEqual(actual, expected);
 }
 
-async function seedHostIdentity(store: RuntimeStore): Promise<void> {
-  for (const user of SEEDED_HOST_USERS) {
+async function seedHostIdentity(store: RuntimeStore, plan: HostIdentitySeedPlan): Promise<void> {
+  const seededUserIds: string[] = [];
+  for (const user of plan.users) {
     const existing = await store.getHostUser(user.id);
+    const existingByEmail = existing ? null : await store.findHostUserByEmail(normalizeEmail(user.email));
+    if (plan.kind === 'bootstrap' && existingByEmail && existingByEmail.role !== 'admin') {
+      throw new Error('PLOYKIT_BOOTSTRAP_ADMIN_EMAIL_CONFLICT');
+    }
     if (!existing) {
-      await store.upsertHostUser({
-        id: user.id,
-        email: user.email,
-        passwordHash: createHostPasswordHash(user.password, `seed-${user.id}`),
-        role: user.role,
-        status: 'active',
-        productId: DEFAULT_PRODUCT_ID,
-        workspaceId: DEFAULT_WORKSPACE_ID,
-        workspaceRole: user.workspaceRole ?? 'viewer',
-        permissions: user.permissions,
-        metadata: {
-          seed: true,
-        },
-      });
+      if (!existingByEmail) {
+        await store.upsertHostUser({
+          id: user.id,
+          email: normalizeEmail(user.email),
+          passwordHash: createHostPasswordHash(
+            user.password,
+            plan.kind === 'demo' ? `seed-${user.id}` : undefined
+          ),
+          role: user.role,
+          status: 'active',
+          productId: DEFAULT_PRODUCT_ID,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          workspaceRole: user.workspaceRole ?? 'viewer',
+          permissions: user.permissions,
+          metadata: {
+            seed: true,
+            seedKind: plan.kind,
+          },
+        });
+        seededUserIds.push(user.id);
+      }
     }
 
-    await store.upsertMembership({
-      productId: DEFAULT_PRODUCT_ID,
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      userId: user.id,
-      role: user.workspaceRole ?? 'viewer',
-      status: 'active',
-    });
+    const membershipUserId = existing?.id ?? existingByEmail?.id ?? user.id;
+    if (plan.kind === 'demo' || !existingByEmail || existingByEmail.role === 'admin') {
+      await store.upsertMembership({
+        productId: DEFAULT_PRODUCT_ID,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+        userId: membershipUserId,
+        role: user.workspaceRole ?? 'viewer',
+        status: 'active',
+      });
+    }
   }
 
   const existingAudit = await store.listAudit({
     productId: DEFAULT_PRODUCT_ID,
-    type: 'host.identity.seeded',
+    type: `host.identity.${plan.kind}.seeded`,
   });
   if (existingAudit.length === 0) {
     await store.recordAudit({
       productId: DEFAULT_PRODUCT_ID,
       workspaceId: DEFAULT_WORKSPACE_ID,
       actorId: 'system',
-      type: 'host.identity.seeded',
+      type: `host.identity.${plan.kind}.seeded`,
       metadata: {
-        users: SEEDED_HOST_USERS.map((user) => user.id),
+        users: plan.users.map((user) => user.id),
+        createdUsers: seededUserIds,
       },
     });
   }
 }
 
 export async function ensureHostIdentitySeeded(store: RuntimeStore): Promise<void> {
-  let promise = seedPromises.get(store);
+  const plan = readHostIdentitySeedPlan();
+  if (plan.kind === 'none') {
+    return;
+  }
+
+  let storePromises = seedPromises.get(store);
+  if (!storePromises) {
+    storePromises = new Map();
+    seedPromises.set(store, storePromises);
+  }
+  const planKey = hostIdentitySeedPlanKey(plan);
+  let promise = storePromises.get(planKey);
   if (!promise) {
-    promise = seedHostIdentity(store).catch((error) => {
-      seedPromises.delete(store);
+    promise = seedHostIdentity(store, plan).catch((error) => {
+      storePromises.delete(planKey);
       throw error;
     });
-    seedPromises.set(store, promise);
+    storePromises.set(planKey, promise);
   }
 
   await promise;
@@ -453,10 +539,6 @@ async function getHostIdentityStore(): Promise<RuntimeStore> {
   const runtimeStore = await getHostRuntimeStore();
   await ensureHostIdentitySeeded(runtimeStore.store);
   return runtimeStore.store;
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
 }
 
 function tokenMailLog(

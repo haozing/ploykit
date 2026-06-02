@@ -524,7 +524,7 @@ function checkOrigin(request: Request, route: HostRouteCatalogEntry): Response |
 
   const origin = originFromRequest(request);
   if (!origin) {
-    return process.env.PLOYKIT_STRICT_ORIGIN === '1'
+    return process.env.NODE_ENV === 'production' || process.env.PLOYKIT_STRICT_ORIGIN === '1'
       ? jsonSecurityResponse(403, 'HOST_ORIGIN_REQUIRED', 'Request origin is required.')
       : null;
   }

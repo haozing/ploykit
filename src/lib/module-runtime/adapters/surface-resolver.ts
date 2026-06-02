@@ -1,12 +1,8 @@
-import {
-  Permission,
-  type ModuleRouteAuth,
-  type ModuleSurfaceDefinition,
-  type PermissionValue,
-} from '@ploykit/module-sdk';
+import type { ModuleSurfaceDefinition } from '@ploykit/module-sdk';
 import type { ModuleRuntimeHost } from '../host';
 import { resolveModuleEntryLoader, type ModuleLoader } from '../loader';
 import type { ModuleRuntimeSurfaceContribution } from '../surfaces';
+import { resolveModuleSurfaceAccessPolicy } from '../surfaces/surface-access-policy';
 import {
   checkModuleRuntimeAccess,
   type ModuleRuntimeAccessDecision,
@@ -47,40 +43,6 @@ interface ResolvedSurfaceCandidate {
   surfaceId: string;
   priority: number;
   definition: ModuleSurfaceDefinition;
-}
-
-function surfaceAuth(definition: ModuleSurfaceDefinition): ModuleRouteAuth {
-  switch (definition.visibility?.mode) {
-    case 'authenticated':
-      return 'auth';
-    case 'admin':
-      return 'admin';
-    default:
-      return 'public';
-  }
-}
-
-function surfacePermissions(definition: ModuleSurfaceDefinition): readonly PermissionValue[] {
-  if (definition.visibility?.mode === 'permission' && definition.visibility.permission) {
-    return [definition.visibility.permission];
-  }
-  return [];
-}
-
-function requiredModuleSurfacePermissions(
-  definition: ModuleSurfaceDefinition
-): readonly PermissionValue[] {
-  const permissions = new Set(definition.permissions ?? []);
-  permissions.add(
-    definition.mode === 'replace' ? Permission.SurfaceOverride : Permission.SurfaceContribute
-  );
-  return [...permissions];
-}
-
-function surfaceFeatures(definition: ModuleSurfaceDefinition): readonly string[] | undefined {
-  return definition.visibility?.mode === 'feature' && definition.visibility.feature
-    ? [definition.visibility.feature]
-    : undefined;
 }
 
 function accessDiagnostic(
@@ -164,8 +126,9 @@ export function resolveModuleSurfaceContributions(
       continue;
     }
 
+    const accessPolicy = resolveModuleSurfaceAccessPolicy(contribution.definition);
     const declaredPermissions = new Set(contract.permissions);
-    const missingPermission = requiredModuleSurfacePermissions(contribution.definition).find(
+    const missingPermission = accessPolicy.requiredModulePermissions.find(
       (permission) => !declaredPermissions.has(permission)
     );
     if (missingPermission) {
@@ -194,10 +157,10 @@ export function resolveModuleSurfaceContributions(
       kind: 'surface',
       contract,
       session: options.session ?? { user: null },
-      auth: surfaceAuth(contribution.definition),
-      permissions: surfacePermissions(contribution.definition),
+      auth: accessPolicy.auth,
+      permissions: accessPolicy.permissions,
       commercial: contribution.definition.commercial,
-      features: surfaceFeatures(contribution.definition),
+      features: accessPolicy.features,
     });
     if (decision) {
       options.onDenied?.(decision, contribution);

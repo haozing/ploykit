@@ -380,6 +380,58 @@ test('module doctor reuses SDK contract validation gates', () => {
   assert.ok(codes.includes('MODULE_DEPENDENCY_VERSION_REQUIRED'));
 });
 
+test('module doctor rejects unsafe module npm dependency declarations', () => {
+  const moduleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule } from '@ploykit/module-sdk';
+      export default defineModule({
+        id: 'doctor-unsafe-dependencies',
+        name: 'Doctor Unsafe Dependencies',
+        version: '0.1.0',
+        dependencies: {
+          npm: {
+            BadName: '^1.0.0',
+            local: 'file:../local-package',
+            workspace: 'workspace:*',
+            remote: 'https://example.com/package.tgz',
+            git: 'github:owner/repo',
+            alias: 'npm:react@^19.0.0',
+          },
+        },
+      });
+    `,
+  });
+
+  const result = runDoctor(moduleRoot);
+  const codes = result.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.ok(codes.includes('MODULE_DEPENDENCY_NAME_INVALID'));
+  assert.ok(codes.includes('MODULE_DEPENDENCY_SOURCE_FORBIDDEN'));
+  assert.ok(codes.includes('MODULE_DEPENDENCY_ALIAS_FORBIDDEN'));
+});
+
+test('module doctor requires static dependencies.npm declarations', () => {
+  const moduleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule } from '@ploykit/module-sdk';
+      const npm = { react: '^19.0.0' };
+      export default defineModule({
+        id: 'doctor-dynamic-dependencies',
+        name: 'Doctor Dynamic Dependencies',
+        version: '0.1.0',
+        dependencies: { npm },
+      });
+    `,
+  });
+
+  const result = runDoctor(moduleRoot);
+  const codes = result.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.ok(codes.includes('MODULE_DEPENDENCY_STATIC_DECLARATION_REQUIRED'));
+});
+
 test('module doctor does not evaluate contracts after source boundary errors', () => {
   const moduleRoot = writeFixture({
     'module.ts': `

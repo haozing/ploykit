@@ -10,6 +10,7 @@ export default defineModule({
   permissions: [
     Permission.DataTableRead,
     Permission.DataTableWrite,
+    Permission.DataTransaction,
     Permission.BillingRead,
     Permission.CreditsRead,
     Permission.CreditsConsume,
@@ -145,6 +146,7 @@ export default defineModule({
       permissions: [
         Permission.DataTableRead,
         Permission.DataTableWrite,
+        Permission.DataTransaction,
         Permission.CommerceWrite,
         Permission.AuditWrite,
         Permission.EventsEmit,

@@ -94,3 +94,48 @@ test('shop-demo creates product, coupon and checkout order evidence', async () =
   assert.equal(ops.metrics.orders, 1);
   assert.equal(ops.metrics.revenueCents, 4500);
 });
+
+test('shop-demo compensates inventory when checkout provider fails', async () => {
+  const ctx = createTestingModuleContext({
+    moduleId: 'shop-demo',
+    request: {
+      async json<T = unknown>() {
+        return {
+          sku: 'PKT-FAIL',
+          title: 'PloyKit Failure Seat',
+          priceCents: 1000,
+          inventory: 2,
+        } as T;
+      },
+    },
+  });
+
+  const createResponse = await productsApi.post?.(ctx);
+  assert.equal(createResponse?.status, 201);
+  ctx.commerce.createCheckout = async () => {
+    throw new Error('TEST_CHECKOUT_PROVIDER_DOWN');
+  };
+
+  await assert.rejects(
+    async () => {
+      await checkoutCart.run(ctx, {
+        sku: 'PKT-FAIL',
+        quantity: 2,
+      });
+    },
+    /TEST_CHECKOUT_PROVIDER_DOWN/
+  );
+
+  const shopfront = await loadShopfront(ctx);
+  assert.equal(shopfront.products[0]?.inventory, 2);
+
+  const ordersResponse = await ordersApi.get?.(ctx);
+  const orders = (await ordersResponse?.json()) as {
+    ok: boolean;
+    orders: { sku: string; status: string; checkout_id: string | null }[];
+  };
+  assert.equal(orders.ok, true);
+  assert.equal(orders.orders[0]?.sku, 'PKT-FAIL');
+  assert.equal(orders.orders[0]?.status, 'checkout_failed');
+  assert.equal(orders.orders[0]?.checkout_id, null);
+});
