@@ -897,7 +897,7 @@ class PostgresTableRepository<TRecord> implements ModuleDataTable<TRecord> {
       parts.push(
         value === null
           ? `${quoteIdentifier(field)} is null`
-          : `${quoteIdentifier(field)} = ${pushValue(values, value)}`
+          : `${quoteIdentifier(field)} = ${this.buildColumnValue(values, field, value)}`
       );
     }
 
@@ -906,7 +906,9 @@ class PostgresTableRepository<TRecord> implements ModuleDataTable<TRecord> {
 
   private buildInsertStatement(values: unknown[], record: DataRecord, conflict: string): string {
     const columns = Object.keys(record);
-    const placeholders = columns.map((column) => pushValue(values, record[column]));
+    const placeholders = columns.map((column) =>
+      this.buildColumnValue(values, column, record[column])
+    );
     return `insert into ${this.runtime.tableName(this.name)} (${columns.map(quoteIdentifier).join(', ')})
       values (${placeholders.join(', ')})${conflict}
       returning *`;
@@ -949,7 +951,7 @@ class PostgresTableRepository<TRecord> implements ModuleDataTable<TRecord> {
     const patch = this.pickTablePatch(input);
     const actor = this.runtime.session.actorId ?? this.runtime.session.userId ?? null;
     const set = Object.entries(patch).map(
-      ([field, value]) => `${quoteIdentifier(field)} = ${pushValue(values, value)}`
+      ([field, value]) => `${quoteIdentifier(field)} = ${this.buildColumnValue(values, field, value)}`
     );
     set.push(`${quoteIdentifier('updated_at')} = now()`);
     set.push(`${quoteIdentifier('updated_by')} = ${pushValue(values, actor)}`);
@@ -980,6 +982,14 @@ class PostgresTableRepository<TRecord> implements ModuleDataTable<TRecord> {
   private columnExpression(field: string): string {
     this.assertReadableField(field);
     return quoteIdentifier(field);
+  }
+
+  private buildColumnValue(values: unknown[], field: string, value: unknown): string {
+    const column = this.definition.columns[field];
+    if (column?.kind === 'jsonb') {
+      return `${pushValue(values, value === null ? null : JSON.stringify(value))}::jsonb`;
+    }
+    return pushValue(values, value);
   }
 
   private assertReadableField(field: string): void {

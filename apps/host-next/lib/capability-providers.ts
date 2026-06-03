@@ -321,7 +321,9 @@ function resolveHostServiceSecretRef(ref: string): string | null {
 }
 
 function parseServiceOriginRewrite(value: string | undefined): Record<string, string> | undefined {
-  if (!value || process.env.NODE_ENV === 'production') {
+  const allowProductionRewrite =
+    process.env.PLOYKIT_ALLOW_SERVICE_E2E_ORIGIN_MAP_IN_PRODUCTION === '1';
+  if (!value || (process.env.NODE_ENV === 'production' && !allowProductionRewrite)) {
     return undefined;
   }
 

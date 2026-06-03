@@ -68,28 +68,59 @@ function createModuleDependencyAliases(config, formatPackageRoot) {
   return aliases;
 }
 
+function createHostSharedDependencyAliases(formatPackageRoot) {
+  const aliases = {};
+  const dependencyNames = [
+    '@radix-ui/react-avatar',
+    '@radix-ui/react-dialog',
+    '@radix-ui/react-dropdown-menu',
+    '@radix-ui/react-select',
+    '@radix-ui/react-tabs',
+    'lucide-react',
+    'react',
+    'react-dom',
+  ];
+  for (const dependencyName of dependencyNames) {
+    const packageRoot = path.join(projectRoot, 'node_modules', dependencyName);
+    if (fs.existsSync(packageRoot)) {
+      aliases[dependencyName] = formatPackageRoot(packageRoot);
+    }
+  }
+  return aliases;
+}
+
 const ployKitConfig = readPloyKitConfig();
 const turbopackRoot = commonAncestor([projectRoot, nextConfigDir, ...readTrustedModuleRoots(ployKitConfig)]);
 const turbopackModuleDependencyAliases = createModuleDependencyAliases(ployKitConfig, (packageRoot) =>
   relativeImportPath(nextConfigDir, packageRoot)
 );
 const webpackModuleDependencyAliases = createModuleDependencyAliases(ployKitConfig, (packageRoot) => packageRoot);
+const turbopackHostSharedDependencyAliases = createHostSharedDependencyAliases((packageRoot) =>
+  relativeImportPath(nextConfigDir, packageRoot)
+);
+const webpackHostSharedDependencyAliases = createHostSharedDependencyAliases((packageRoot) => packageRoot);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   typedRoutes: false,
+  output: 'standalone',
+  outputFileTracingRoot: projectRoot,
   experimental: {
     externalDir: true,
   },
   turbopack: {
     root: turbopackRoot,
-    resolveAlias: turbopackModuleDependencyAliases,
+    resolveAlias: {
+      ...turbopackHostSharedDependencyAliases,
+      ...turbopackModuleDependencyAliases,
+    },
     resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.json'],
   },
   webpack(config) {
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
+      ...webpackHostSharedDependencyAliases,
       ...webpackModuleDependencyAliases,
     };
     config.resolve.modules = [
