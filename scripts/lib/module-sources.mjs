@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const PLOYKIT_CONFIG_ENV = 'PLOYKIT_CONFIG';
-export const PLOYKIT_CONFIG_FILE = 'ploykit.config.json';
+export const MODULE_CONFIG_FILE = 'ploykit.config.json';
 
 const MODULE_SOURCE_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+const WORKSPACE_MODULE_SOURCE = Object.freeze({ id: 'workspace', path: 'modules' });
 
 export function slash(value) {
   return value.replace(/\\/g, '/');
@@ -15,8 +15,8 @@ export function portableProjectPath(projectRoot, filePath) {
   return slash(relative || '.');
 }
 
-export function canonicalPath(projectRoot, value) {
-  const resolved = path.resolve(projectRoot, value);
+export function canonicalPath(value) {
+  const resolved = path.resolve(value);
   try {
     return fs.realpathSync.native(resolved);
   } catch {
@@ -40,13 +40,9 @@ function readJson(filePath) {
 }
 
 export function loadPloyKitConfig(projectRoot = process.cwd()) {
-  const configuredPath = process.env[PLOYKIT_CONFIG_ENV] ?? PLOYKIT_CONFIG_FILE;
-  const configPath = path.resolve(projectRoot, configuredPath);
+  const configPath = path.resolve(projectRoot, MODULE_CONFIG_FILE);
   if (!fs.existsSync(configPath)) {
-    throw new Error(
-      `PloyKit config not found: ${portableProjectPath(projectRoot, configPath)}. ` +
-        `Create ${PLOYKIT_CONFIG_FILE} with moduleSources.`
-    );
+    return { configPath, config: {} };
   }
 
   const config = readJson(configPath);
@@ -57,24 +53,51 @@ export function loadPloyKitConfig(projectRoot = process.cwd()) {
   return { configPath, config };
 }
 
-function normalizeTrustedRoots(projectRoot, config) {
-  const configuredRoots = Array.isArray(config.trustedModuleRoots)
-    ? config.trustedModuleRoots
-    : ['.'];
-  const roots = configuredRoots
-    .filter((entry) => typeof entry === 'string' && entry.trim())
-    .map((entry) => canonicalPath(projectRoot, entry));
-  const project = canonicalPath(projectRoot, projectRoot);
-  return [...new Set([project, ...roots])];
+function assertProjectPath(projectRoot, filePath, label) {
+  const project = canonicalPath(projectRoot);
+  const candidate = canonicalPath(filePath);
+  if (!isPathInsideDirectory(project, candidate)) {
+    throw new Error(
+      `${label} must live inside the PloyKit workspace. Move the module source into modules/<id>.`
+    );
+  }
+  return candidate;
 }
 
-function inferSourceKind(projectRoot, dir) {
-  return isPathInsideDirectory(canonicalPath(projectRoot, projectRoot), canonicalPath(projectRoot, dir))
-    ? 'workspace'
-    : 'external';
+function moduleRootRelativePath(projectRoot, filePath) {
+  return path.relative(canonicalPath(path.resolve(projectRoot, 'modules')), canonicalPath(filePath));
 }
 
-function normalizeModuleSource(projectRoot, source, trustedRoots, index) {
+function isDirectWorkspaceModuleRoot(projectRoot, filePath) {
+  const relative = moduleRootRelativePath(projectRoot, filePath);
+  return (
+    relative !== '' &&
+    !relative.startsWith('..') &&
+    !path.isAbsolute(relative) &&
+    relative.split(path.sep).filter(Boolean).length === 1
+  );
+}
+
+function isWorkspaceModuleSourcePath(projectRoot, filePath) {
+  const relative = moduleRootRelativePath(projectRoot, filePath);
+  return relative === '' || isDirectWorkspaceModuleRoot(projectRoot, filePath);
+}
+
+function assertModuleSourcePath(projectRoot, filePath, label) {
+  assertProjectPath(projectRoot, filePath, label);
+  if (!isWorkspaceModuleSourcePath(projectRoot, filePath)) {
+    throw new Error(`${label} must point to modules or a module under modules/<id>.`);
+  }
+}
+
+function assertModuleRootPath(projectRoot, filePath, label) {
+  assertProjectPath(projectRoot, filePath, label);
+  if (!isDirectWorkspaceModuleRoot(projectRoot, filePath)) {
+    throw new Error(`${label} must live under modules/<id>.`);
+  }
+}
+
+function normalizeModuleSource(projectRoot, source, index) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) {
     throw new Error(`moduleSources[${index}] must be an object with id and path.`);
   }
@@ -89,34 +112,31 @@ function normalizeModuleSource(projectRoot, source, trustedRoots, index) {
   }
 
   const dir = path.resolve(projectRoot, configuredPath);
-  const canonicalDir = canonicalPath(projectRoot, dir);
-  if (!trustedRoots.some((root) => isPathInsideDirectory(root, canonicalDir))) {
-    throw new Error(
-      `Module source "${id}" resolves outside trusted module roots: ${configuredPath}. ` +
-        `Add its parent directory to trustedModuleRoots in ${PLOYKIT_CONFIG_FILE}.`
-    );
-  }
+  assertModuleSourcePath(projectRoot, dir, `Module source "${id}"`);
 
   return {
     id,
     configuredPath,
     dir,
+    projectRoot,
     path: portableProjectPath(projectRoot, dir),
-    kind: inferSourceKind(projectRoot, dir),
   };
 }
 
 export function getModuleSources(projectRoot = process.cwd()) {
   const { configPath, config } = loadPloyKitConfig(projectRoot);
-  const sources = Array.isArray(config.moduleSources) ? config.moduleSources : [];
+  if (Array.isArray(config.trustedModuleRoots)) {
+    throw new Error(
+      `${portableProjectPath(projectRoot, configPath)} must not declare trustedModuleRoots. ` +
+        'PloyKit modules must live under modules/<id>.'
+    );
+  }
+  const sources = Array.isArray(config.moduleSources) ? config.moduleSources : [WORKSPACE_MODULE_SOURCE];
   if (sources.length === 0) {
     throw new Error(`${portableProjectPath(projectRoot, configPath)} must declare at least one module source.`);
   }
 
-  const trustedRoots = normalizeTrustedRoots(projectRoot, config);
-  const normalized = sources.map((source, index) =>
-    normalizeModuleSource(projectRoot, source, trustedRoots, index)
-  );
+  const normalized = sources.map((source, index) => normalizeModuleSource(projectRoot, source, index));
   const sourceIds = new Set();
   const sourcePaths = new Set();
   for (const source of normalized) {
@@ -124,7 +144,7 @@ export function getModuleSources(projectRoot = process.cwd()) {
       throw new Error(`Duplicate module source id: ${source.id}.`);
     }
     sourceIds.add(source.id);
-    const canonicalDir = canonicalPath(projectRoot, source.dir);
+    const canonicalDir = canonicalPath(source.dir);
     if (sourcePaths.has(canonicalDir)) {
       throw new Error(`Duplicate module source path: ${source.configuredPath}.`);
     }
@@ -133,7 +153,6 @@ export function getModuleSources(projectRoot = process.cwd()) {
 
   return {
     configPath,
-    trustedRoots: trustedRoots.map((root) => portableProjectPath(projectRoot, root)),
     sources: normalized,
   };
 }
@@ -144,14 +163,23 @@ export function findModuleRootsInSource(source) {
   }
 
   if (fs.existsSync(path.join(source.dir, 'module.ts'))) {
+    if (source.projectRoot) {
+      assertModuleRootPath(source.projectRoot, source.dir, `Module root "${source.configuredPath}"`);
+    }
     return [source.dir];
   }
 
-  return fs
+  const roots = fs
     .readdirSync(source.dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => path.join(source.dir, entry.name))
     .filter((dir) => fs.existsSync(path.join(dir, 'module.ts')));
+  if (source.projectRoot) {
+    for (const root of roots) {
+      assertModuleRootPath(source.projectRoot, root, `Module root "${portableProjectPath(source.projectRoot, root)}"`);
+    }
+  }
+  return roots;
 }
 
 export function discoverConfiguredModuleRoots(projectRoot = process.cwd()) {
@@ -165,6 +193,7 @@ export function discoverModuleRoots(projectRoot = process.cwd(), targetPath) {
 
   const resolved = path.resolve(projectRoot, targetPath);
   if (fs.existsSync(path.join(resolved, 'module.ts'))) {
+    assertModuleRootPath(projectRoot, resolved, `Module target "${targetPath}"`);
     return [resolved];
   }
 
@@ -179,9 +208,10 @@ export function discoverModuleRoots(projectRoot = process.cwd(), targetPath) {
     id: 'explicit',
     configuredPath: targetPath,
     dir: resolved,
+    projectRoot,
     path: portableProjectPath(projectRoot, resolved),
-    kind: inferSourceKind(projectRoot, resolved),
   };
+  assertModuleSourcePath(projectRoot, resolved, `Module target "${targetPath}"`);
   return findModuleRootsInSource(source);
 }
 
@@ -222,6 +252,7 @@ export function resolveModuleRoot(projectRoot = process.cwd(), target) {
 
   const resolved = path.resolve(projectRoot, target);
   if (fs.existsSync(path.join(resolved, 'module.ts'))) {
+    assertModuleRootPath(projectRoot, resolved, `Module target "${target}"`);
     return resolved;
   }
 
@@ -233,7 +264,9 @@ export function resolveModuleRoot(projectRoot = process.cwd(), target) {
     return moduleInfo.id === target || rootDir === slash(target) || absoluteRoot === targetAbsolute;
   });
   if (match?.rootDir) {
-    return path.resolve(projectRoot, match.rootDir);
+    const matchedRoot = path.resolve(projectRoot, match.rootDir);
+    assertModuleRootPath(projectRoot, matchedRoot, `Module target "${target}"`);
+    return matchedRoot;
   }
 
   const configuredMatch = discoverConfiguredModuleRoots(projectRoot).find((root) => {
@@ -244,5 +277,5 @@ export function resolveModuleRoot(projectRoot = process.cwd(), target) {
     return configuredMatch;
   }
 
-  throw new Error(`Module target not found: ${target}. Run npm run modules:scan after updating moduleSources.`);
+  throw new Error(`Module target not found: ${target}. Modules must live under modules/<id>.`);
 }

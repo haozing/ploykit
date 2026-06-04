@@ -44,6 +44,7 @@ const LIFECYCLE_HOOKS = new Set([
 const MODULE_TEMPLATES = new Set([
   'basic',
   'dashboard',
+  'product',
   'crud',
   'connector',
   'signed-service',
@@ -51,6 +52,18 @@ const MODULE_TEMPLATES = new Set([
   'white-label',
   'product-app',
 ]);
+const MODULE_EXTENSIONS = new Set(['service-backed', 'background']);
+const TEMPLATES_WITH_DATA_ARTIFACTS = new Set(['crud', 'product']);
+const MODULE_EXTENSION_MARKERS = [
+  'CONTRACT_VERSION',
+  'PERMISSION_EXTENSIONS',
+  'EGRESS',
+  'SERVICE_REQUIREMENTS',
+  'RESOURCE_BINDINGS',
+  'API_ROUTE_EXTENSIONS',
+  'ACTION_EXTENSIONS',
+  'JOB_EXTENSIONS',
+];
 const MODULE_MAP_MANIFEST_FILE = path.join(PROJECT_ROOT, 'src', 'lib', 'module-map.manifest.json');
 const RESERVED_PUBLIC_ALIAS_PATHS = new Set([
   '/',
@@ -1866,7 +1879,7 @@ async function commandCheck(args) {
 }
 
 async function commandValidateContractInternal(args) {
-  const moduleRoot = path.resolve(PROJECT_ROOT, args[0] ?? '.');
+  const moduleRoot = resolveConfiguredModuleRoot(PROJECT_ROOT, args[0] ?? '.');
   const diagnostics = await evaluateSdkContractValidation(moduleRoot);
   printJson({
     success: !diagnostics.some((item) => item.severity === 'error'),
@@ -1895,12 +1908,23 @@ function commandInspect(args) {
 
 function parseCreateArgs(args) {
   let moduleId = null;
-  let template = 'basic';
+  let template = 'product';
+  const extensions = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === '--template' || arg === '-t') {
+    if (arg === '--template' || arg === '--preset' || arg === '-t') {
       template = args[index + 1] ?? '';
+      index += 1;
+      continue;
+    }
+    if (arg === '--with' || arg === '--extension' || arg === '--extensions') {
+      extensions.push(
+        ...(args[index + 1] ?? '')
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+      );
       index += 1;
       continue;
     }
@@ -1915,7 +1939,7 @@ function parseCreateArgs(args) {
     }
   }
 
-  return { moduleId, template };
+  return { moduleId, template, extensions: [...new Set(extensions)] };
 }
 
 function moduleDisplayName(moduleId) {
@@ -1951,6 +1975,203 @@ function copyTemplateDirectory(sourceDir, targetDir, variables) {
   }
 }
 
+function moduleMarker(name) {
+  return `/* __PLOYKIT_${name}__ */`;
+}
+
+function insertModuleSnippet(source, markerName, snippet) {
+  const marker = moduleMarker(markerName);
+  if (!source.includes(marker)) {
+    throw new Error(`Template module.ts is missing extension marker ${marker}.`);
+  }
+  return source.replace(marker, `${snippet}\n  ${marker}`);
+}
+
+function cleanupModuleExtensionMarkers(source) {
+  let next = source;
+  for (const markerName of MODULE_EXTENSION_MARKERS) {
+    const pattern = new RegExp(`\\n?\\s*${moduleMarker(markerName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+    next = next.replace(pattern, '');
+  }
+  return next.replace(/\n{3,}/g, '\n\n');
+}
+
+function applyServiceBackedExtension(moduleSource) {
+  let next = moduleSource;
+  next = insertModuleSnippet(next, 'CONTRACT_VERSION', 'contractVersion: 2,');
+  next = insertModuleSnippet(
+    next,
+    'PERMISSION_EXTENSIONS',
+    [
+      'Permission.ServicesInvoke,',
+      'Permission.AuditWrite,',
+      'Permission.ResourceBindingsRead,',
+    ].join('\n    ')
+  );
+  next = insertModuleSnippet(next, 'EGRESS', "egress: ['https://service.example'],");
+  next = insertModuleSnippet(
+    next,
+    'SERVICE_REQUIREMENTS',
+    `serviceRequirements: {
+    serviceCore: {
+      required: true,
+      provider: 'service-core',
+      kind: 'signed-http',
+      description: 'Call the product service through runtime signing.',
+      connection: {
+        baseUrl: 'https://service.example',
+        egress: ['https://service.example'],
+        timeoutMs: 8000,
+        retry: { attempts: 2, backoff: 'exponential', retryOn: [502, 503, 504] },
+        maxRequestBytes: 262144,
+        maxResponseBytes: 524288,
+      },
+      secrets: {
+        bearerToken: { required: true, description: 'Service bearer token.' },
+        hmacSecret: { required: true, description: 'Runtime signing HMAC secret.' },
+      },
+      claims: {
+        requestId: '\${ctx.request.id}',
+        correlationId: '\${ctx.request.correlationId}',
+        actorId: '\${ctx.auth.actorId}',
+        workspaceId: '\${ctx.scope.workspaceId}',
+        tenantId: '\${input.tenantId}',
+        moduleId: '\${ctx.module.id}',
+      },
+      operations: {
+        request: {
+          input: { allow: ['path', 'method', 'headers', 'query', 'json', 'tenantId'] },
+          auth: { type: 'bearer', secret: 'bearerToken' },
+          signing: {
+            type: 'hmac-sha256',
+            secret: 'hmacSecret',
+            header: 'x-service-signature',
+            timestampHeader: 'x-service-timestamp',
+            claimsHeader: 'x-service-claims',
+            canonical: ['method', 'path', 'timestamp', 'bodySha256', 'claimsSha256'],
+          },
+          request: {
+            body: 'json',
+            allowHeaders: ['content-type', 'idempotency-key', 'x-request-id'],
+            denyHeaders: ['authorization', 'cookie', 'x-service-signature'],
+          },
+          response: { body: 'json', maxBytes: 524288 },
+          audit: {
+            event: '__MODULE_ID__.service.requested',
+            includeClaims: ['requestId', 'workspaceId', 'tenantId'],
+          },
+          redaction: {
+            request: ['headers.authorization', 'headers.x-service-signature', 'json.token', 'json.secret'],
+            response: ['headers.set-cookie', 'json.token', 'json.secret', 'json.credentials'],
+            error: ['headers.set-cookie', 'body.token', 'body.secret', 'body.credentials'],
+          },
+        },
+      },
+    },
+  },`
+  );
+  next = insertModuleSnippet(
+    next,
+    'RESOURCE_BINDINGS',
+    `resourceBindings: {
+    remote_tenant: {
+      kind: 'service.tenant',
+      required: false,
+      description: 'Remote tenant binding for the product service.',
+    },
+  },`
+  );
+  next = insertModuleSnippet(
+    next,
+    'API_ROUTE_EXTENSIONS',
+    `{
+        path: '/service/status',
+        handler: './api/service-status',
+        methods: ['GET'],
+        auth: 'auth',
+        permissions: [Permission.ServicesInvoke],
+      },`
+  );
+  next = insertModuleSnippet(
+    next,
+    'ACTION_EXTENSIONS',
+    `callService: {
+      handler: './actions/call-service',
+      auth: 'auth',
+      sideEffect: 'external',
+      permissions: [Permission.ServicesInvoke, Permission.AuditWrite],
+      idempotency: { required: true, keyFrom: 'request' },
+    },`
+  );
+  return next;
+}
+
+function applyBackgroundExtension(moduleSource) {
+  let next = moduleSource;
+  next = insertModuleSnippet(
+    next,
+    'PERMISSION_EXTENSIONS',
+    [
+      'Permission.JobsEnqueue,',
+      'Permission.JobsRegister,',
+      'Permission.ArtifactsWrite,',
+      'Permission.NotificationsSend,',
+    ].join('\n    ')
+  );
+  next = insertModuleSnippet(
+    next,
+    'ACTION_EXTENSIONS',
+    `enqueueReport: {
+      handler: './actions/enqueue-report',
+      auth: 'auth',
+      sideEffect: 'write',
+      permissions: [Permission.JobsEnqueue],
+    },`
+  );
+  next = insertModuleSnippet(
+    next,
+    'JOB_EXTENSIONS',
+    `jobs: {
+    generateReport: {
+      handler: './jobs/generate-report',
+      retries: 2,
+      timeoutMs: 30000,
+      permissions: [Permission.ArtifactsWrite, Permission.NotificationsSend],
+    },
+  },`
+  );
+  return next;
+}
+
+function applyModuleExtensions(moduleRoot, extensions, variables) {
+  if (extensions.length === 0) {
+    const moduleFile = path.join(moduleRoot, 'module.ts');
+    if (fs.existsSync(moduleFile)) {
+      fs.writeFileSync(moduleFile, cleanupModuleExtensionMarkers(fs.readFileSync(moduleFile, 'utf8')), 'utf8');
+    }
+    return;
+  }
+
+  const moduleFile = path.join(moduleRoot, 'module.ts');
+  let moduleSource = fs.readFileSync(moduleFile, 'utf8');
+
+  for (const extension of extensions) {
+    const extensionRoot = path.join(PROJECT_ROOT, 'templates', 'module-extensions', extension);
+    if (!fs.existsSync(extensionRoot)) {
+      throw new Error(`Extension directory is missing: ${toProjectPath(extensionRoot)}`);
+    }
+    copyTemplateDirectory(extensionRoot, moduleRoot, variables);
+
+    if (extension === 'service-backed') {
+      moduleSource = applyServiceBackedExtension(moduleSource);
+    } else if (extension === 'background') {
+      moduleSource = applyBackgroundExtension(moduleSource);
+    }
+  }
+
+  fs.writeFileSync(moduleFile, cleanupModuleExtensionMarkers(moduleSource), 'utf8');
+}
+
 function runLocalScript(script, args) {
   const result = childProcess.spawnSync(process.execPath, [script, ...args], {
     cwd: PROJECT_ROOT,
@@ -1971,10 +2192,10 @@ function runLocalScript(script, args) {
 }
 
 function commandCreate(args) {
-  const { moduleId, template } = parseCreateArgs(args);
+  const { moduleId, template, extensions } = parseCreateArgs(args);
   if (!moduleId || !MODULE_ID_PATTERN.test(moduleId)) {
     throw new Error(
-      'Usage: npm run module:create -- <module-id> [--template basic|dashboard|crud|connector|signed-service|job|white-label|product-app]'
+      'Usage: npm run module:create -- <module-id> [--template product|basic|dashboard|crud|connector|signed-service|job|white-label|product-app] [--with service-backed,background]'
     );
   }
 
@@ -1982,6 +2203,16 @@ function commandCreate(args) {
     throw new Error(
       `Unknown module template "${template}". Available: ${[...MODULE_TEMPLATES].join(', ')}.`
     );
+  }
+  for (const extension of extensions) {
+    if (!MODULE_EXTENSIONS.has(extension)) {
+      throw new Error(
+        `Unknown module extension "${extension}". Available: ${[...MODULE_EXTENSIONS].join(', ')}.`
+      );
+    }
+  }
+  if (extensions.length > 0 && template !== 'product') {
+    throw new Error('Module extensions currently require the product template.');
   }
 
   const sources = getModuleSources(PROJECT_ROOT).sources;
@@ -1999,12 +2230,15 @@ function commandCreate(args) {
     throw new Error(`Template directory is missing: ${toProjectPath(templateRoot)}`);
   }
 
-  copyTemplateDirectory(templateRoot, moduleRoot, {
+  const variables = {
     moduleId,
     moduleName: moduleDisplayName(moduleId),
-  });
+  };
 
-  if (template === 'crud') {
+  copyTemplateDirectory(templateRoot, moduleRoot, variables);
+  applyModuleExtensions(moduleRoot, extensions, variables);
+
+  if (TEMPLATES_WITH_DATA_ARTIFACTS.has(template)) {
     runLocalScript(path.join('scripts', 'module-data.mjs'), ['generate', moduleRoot]);
     runLocalScript(path.join('scripts', 'module-data.mjs'), ['types', moduleRoot]);
   }
@@ -2016,6 +2250,7 @@ function commandCreate(args) {
     success: true,
     moduleRoot: toProjectPath(moduleRoot),
     template,
+    extensions,
     next: [
       `npm run module:doctor -- ${toProjectPath(moduleRoot)}`,
       `npm run module:test -- ${toProjectPath(moduleRoot)}`,
@@ -2025,6 +2260,7 @@ function commandCreate(args) {
 
 function commandTemplates() {
   const templateRoot = path.join(PROJECT_ROOT, 'templates', 'modules');
+  const extensionRoot = path.join(PROJECT_ROOT, 'templates', 'module-extensions');
   const templates = [...MODULE_TEMPLATES].sort().map((name) => {
     const dir = path.join(templateRoot, name);
     const files = fs.existsSync(dir)
@@ -2043,8 +2279,26 @@ function commandTemplates() {
       files,
     };
   });
+  const extensions = [...MODULE_EXTENSIONS].sort().map((name) => {
+    const dir = path.join(extensionRoot, name);
+    const files = fs.existsSync(dir)
+      ? fs
+          .readdirSync(dir, { recursive: true, withFileTypes: true })
+          .filter((entry) => entry.isFile())
+          .map((entry) => {
+            const absolute = path.join(entry.parentPath ?? dir, entry.name);
+            return slash(path.relative(dir, absolute));
+          })
+          .sort()
+      : [];
+    return {
+      name,
+      path: toProjectPath(dir),
+      files,
+    };
+  });
 
-  printJson({ success: true, templates });
+  printJson({ success: true, templates, extensions });
 }
 
 function commandDev(args) {

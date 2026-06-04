@@ -71,6 +71,9 @@ test('P20 developer platform report exposes templates and modules with errors', 
   assert.ok(report.templates.some((template) => template.id === 'billing-aware'));
   assert.ok(report.templates.some((template) => template.id === 'ai-rag'));
   assert.ok(report.templates.some((template) => template.id === 'signed-service'));
+  assert.ok(report.templates.some((template) => template.id === 'product'));
+  assert.ok(report.templates.some((template) => template.id === 'service-backed'));
+  assert.ok(report.templates.some((template) => template.id === 'background'));
   assert.ok(report.templates.some((template) => template.id === 'product-app'));
   assert.match(report.aiFixPrompts.demo, /DEMO_ERROR/);
 });

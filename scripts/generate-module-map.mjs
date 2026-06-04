@@ -27,11 +27,18 @@ function relativeToProject(file) {
   return portableProjectPath(PROJECT_ROOT, file);
 }
 
+function isInsideProject(file) {
+  const relative = path.relative(PROJECT_ROOT, file);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
 function moduleSpecifier(modulePath, outputDir) {
-  let relativePath = slash(path.relative(outputDir, modulePath));
-  if (path.isAbsolute(relativePath)) {
-    return pathToFileURL(modulePath).href.replace(/\.(ts|tsx|js|jsx)$/, '');
+  if (!isInsideProject(modulePath)) {
+    throw new Error(
+      `Module map cannot import files outside the PloyKit workspace: ${relativeToProject(modulePath)}`
+    );
   }
+  let relativePath = slash(path.relative(outputDir, modulePath));
   if (!relativePath.startsWith('.')) {
     relativePath = `./${relativePath}`;
   }
@@ -285,9 +292,6 @@ async function scanModules() {
         ...summary,
         root,
         rootDir: relativeToProject(root),
-        sourceId: target.id,
-        sourceDir: target.path,
-        sourceKind: target.kind,
         pages: scanDirectory(root, 'pages'),
         apis: scanDirectory(root, 'api', ['.ts', '.js']),
         loaders: scanDirectory(root, 'loaders', ['.ts', '.js']),
@@ -356,9 +360,6 @@ function generateModuleMap(modules) {
     const runtimeInfo = runtimeModuleInfo(moduleInfo);
     const parts = [
       `    rootDir: ${JSON.stringify(runtimeInfo.rootDir)},`,
-      `    sourceId: ${JSON.stringify(runtimeInfo.sourceId)},`,
-      `    sourceDir: ${JSON.stringify(runtimeInfo.sourceDir)},`,
-      `    sourceKind: ${JSON.stringify(runtimeInfo.sourceKind)},`,
       `    release: ${JSON.stringify(runtimeInfo.release)},`,
       `    module: () => import(${JSON.stringify(moduleSpecifier(path.join(moduleInfo.root, 'module.ts'), outputDir))}),`,
     ];
@@ -411,17 +412,9 @@ export const MODULE_MAP_ARTIFACT: ModuleMapArtifact = {
 }
 
 function generateManifest(modules) {
-  const sourceConfig = getSourceTargets();
   return `${JSON.stringify(
     {
       version: 1,
-      config: relativeToProject(sourceConfig.configPath),
-      trustedModuleRoots: sourceConfig.trustedRoots,
-      moduleSources: sourceConfig.sources.map((target) => ({
-        id: target.id,
-        path: target.path,
-        kind: target.kind,
-      })),
       buildId: BUILD_ID,
       generatedAt: GENERATED_AT,
       modules: modules.map(runtimeModuleInfo),

@@ -2,20 +2,47 @@
 
 ## Create A Module
 
-Use the smallest template that matches the requested product behavior:
+Use the target template model when designing new module work:
+
+```text
+product        main preset: minimal + product + white-label + Data v2 CRUD
+service-backed extension: OpenAPI/serviceRequirements/service client/mock/live smoke
+background     extension: jobs/events/webhooks/lifecycle
+```
+
+Use the product preset by default and add extensions only when the module needs
+those capabilities:
 
 ```bash
-npm run module:create -- <module-id> --template <basic|dashboard|crud|connector|job|white-label>
+npm run module:create -- <module-id>
+npm run module:create -- <module-id> --template product
+npm run module:create -- <module-id> --template product --with service-backed
+npm run module:create -- <module-id> --template product --with background
+npm run module:create -- <module-id> --template product --with service-backed,background
 ```
+
+The CLI still exposes transitional templates (`basic`, `dashboard`, `crud`,
+`connector`, `signed-service`, `job`, `white-label`, `product-app`) for
+compatibility. Use them as historical references when repairing existing
+modules, not as the default shape for new product work.
 
 After creation, read:
 
 - `modules/<module-id>/module.ts`
 - generated files under `modules/<module-id>/.ploykit/generated/` when the
   module declares Data v2
-- matching files under `templates/modules/<template>/` when template behavior
-  is unclear
+- matching files under `templates/modules/product/` and
+  `templates/module-extensions/<extension>/` when template behavior is unclear
 - `templates/modules/white-label/` when product presentation or page replacement behavior is unclear
+
+For service-backed modules, also read the service machine contract
+(`openapi.yaml`, AsyncAPI, JSON Schema, or Proto) before implementing pages or
+actions. If only handwritten Markdown exists, report the missing machine
+contract first.
+
+For product modules that need page replacement and Data v2, prefer one product
+module root from the `product` preset over separate white-label and CRUD
+modules.
 
 ## Work Order
 
@@ -26,8 +53,35 @@ After creation, read:
 4. Add or update module-local tests.
 5. Run `npm run module:doctor -- modules/<module-id>`.
 6. Fix the first error diagnostic by `path` and `fix`, then rerun.
-7. Run `npm run module:test -- modules/<module-id>`.
-8. Run `npm run modules:scan` after contract or file path changes.
+7. For service-backed modules, run
+   `npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>`.
+   Add `--write-fixtures` when OpenAPI examples/schema should refresh generated
+   mock fixtures.
+8. Run `npm run module:test -- modules/<module-id>`.
+9. Run `npm run modules:scan` after contract or file path changes.
+
+## Service-Backed Work
+
+Use this path for modules backed by an independent service such as a Go Core:
+
+1. Treat the service machine contract as the API source of truth.
+2. Declare `contractVersion: 2`, `serviceRequirements`, resource bindings, and
+   `Permission.ServicesInvoke` in `module.ts`.
+3. Keep a single `lib/service-client.ts` or equivalent as the only
+   `ctx.services.invoke(...)` entry point.
+4. Let pages, loaders, and actions call semantic functions from that client
+   (`listProjects`, `createJob`, `rotateToken`), not raw service paths.
+5. Use OpenAPI examples/schema and module-local fixtures for mock tests.
+6. Use `createTestingModuleContext({ serviceHandlers })` for fixture-backed
+   `ctx.services.invoke(...)` tests; do not branch page/action code for mock
+   mode.
+7. Keep `tests/service-contract.json` current when the service client uses
+   dynamic paths that static source scanning cannot fully infer.
+8. Do not claim release readiness from mock tests. Signing, tenant isolation,
+   idempotency, quota, one-time token, lease/retry, and state-machine behavior
+   need live smoke or service blackbox evidence.
+9. Switch mock/live by service connection base URL and secret refs, not by
+   branching UI or action code.
 
 ## Module-Local Boundary
 
@@ -94,5 +148,6 @@ If the current host has no seam for the requested behavior, report the missing g
 Read module.ts first and treat it as the contract for routes, actions, jobs, events, webhooks, data, permissions, surfaces, lifecycle, resources, dependencies, and egress.
 Use @ploykit/module-sdk and ctx.* capabilities only. Do not import src/lib/*, read process.env, use database clients directly, call global fetch(), import Node builtins, or use dynamic ctx access.
 When using ctx.data, ctx.files, ctx.artifacts, ctx.ai, ctx.rag, ctx.http, ctx.notifications, ctx.audit, ctx.billing, ctx.metering, ctx.credits, ctx.jobs, ctx.events, or ctx.webhooks, update module.ts permissions.
+For modules backed by an independent service, read OpenAPI/AsyncAPI/JSON Schema/Proto first. If no machine contract exists, report the missing contract instead of guessing endpoints. Keep one service client/adapter as the only ctx.services.invoke entry. Use mocks for UI and ordinary flows, but require live smoke for signing, tenant isolation, idempotency, quota, one-time token, lease/retry, and state-machine behavior.
 Run npm run module:doctor -- modules/<module-id>, fix the first error diagnostic, rerun until it succeeds, then run npm run host:boundary-check when host/shared files changed.
 ```

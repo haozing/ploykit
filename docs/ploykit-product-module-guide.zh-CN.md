@@ -66,10 +66,12 @@ product: {
 优先使用：
 
 ```bash
-npm run module:create -- my-product --template product-app
+npm run module:create -- my-product --template product
+npm run module:create -- my-service-product --template product --with service-backed
+npm run module:create -- my-full-product --template product --with service-backed,background
 ```
 
-`product-app` 模板包含：
+`product` 主模板包含：
 
 - `product.requiredShells`
 - `product.pages`
@@ -77,8 +79,13 @@ npm run module:create -- my-product --template product-app
 - `routes.dashboard`
 - `routes.admin`
 - 多位置 navigation
+- white-label/presentation/page replacement
+- Data v2 CRUD 骨架、migration/types 生成入口
 - dashboard surface
 - smoke test
+
+`product-app` 仍可作为历史兼容模板参考，但新产品模块优先从 `product` 主模板开始，需要受控服务或后台任务时用
+`--with service-backed`、`--with background` 叠加。
 
 ## 6. 宿主与模块职责边界
 

@@ -12,24 +12,31 @@ Node.js 级别的不可信第三方插件沙箱；不要安装或执行未经源
 ## 创建模块
 
 ```bash
-npm run module:create -- my-module --template basic
-npm run module:create -- my-dashboard --template dashboard
-npm run module:create -- notes --template crud
-npm run module:create -- service-sync --template connector
-npm run module:create -- admin-api --template signed-service
-npm run module:create -- scheduled-report --template job
-npm run module:create -- acme-site --template white-label
+npm run module:create -- my-product
+npm run module:create -- my-product --template product
+npm run module:create -- my-service-product --template product --with service-backed
+npm run module:create -- my-worker-product --template product --with background
+npm run module:create -- my-full-product --template product --with service-backed,background
 ```
 
-可用模板：
+推荐模型：
 
-- `basic`：page、API、action、README、smoke test。
-- `dashboard`：dashboard page、loader、navigation、surface、API、action、smoke test。
-- `crud`：Data v2 table、page loader、API、action、migration/types 自动生成。
-- `connector`：connector API/action、sync job、file result。
-- `signed-service`：受控外部服务 contract v2、runtime 代签 action、status API、smoke test。
-- `job`：background job、artifact、notification。
-- `white-label`：public/auth/page replacement、locale resources、page presentation loader、theme tokens、smoke test。
+- `product`：主模板，覆盖 minimal、product、white-label、Data v2 CRUD 的统一产品模块骨架。未指定 `--template` 时默认使用它。
+- `service-backed`：扩展，通过 `--with service-backed` 叠加 OpenAPI/受控服务/service client/mock/live smoke。
+- `background`：扩展，通过 `--with background` 叠加 jobs/events/webhooks/lifecycle。
+
+模板体系的目标不是继续增加平级模板，而是让 `product` 主模板覆盖大多数真实产品模块：public site、dashboard、admin、页面替换、
+presentation/SEO/theme/i18n、Data v2 表和 migration/test 骨架。`service-backed` 与 `background` 不再作为孤立产品模板，而是叠加在
+`product` 上的能力块。
+
+当前仓库的 CLI 仍保留 `basic`、`dashboard`、`crud`、`connector`、`signed-service`、`job`、`white-label`、`product-app`
+等历史模板；它们是兼容入口或拆分片段，不再作为新增模板的主要方向。新能力优先按上面的主模板/扩展模型设计，不要继续增加新的平级模板。
+
+服务端分离型产品模块（例如独立 Go Core + PloyKit 控制台）不要只按普通 dashboard 或 CRUD 模块处理。优先阅读
+[服务端分离型模块开发指南](service-backed-module-development.zh-CN.md)：服务端以 OpenAPI 等机器契约为源头，PloyKit
+模块声明 `contractVersion: 2` 和 `serviceRequirements`，在模块内保留单一 service client/adapter，并用
+contract mock、fixture mock 和 live smoke 分层开发。现在应从 `product + service-backed` 生成；需要后台任务时再叠加
+`background`。
 
 创建后脚本会自动刷新 module map，并对新模块运行 doctor。要看当前可用模板，也可以运行：
 
@@ -53,6 +60,21 @@ npm run data:generate -- my-module
 npm run data:types -- my-module
 npm run data:verify -- --module my-module
 ```
+
+服务端分离型模块还应增加契约与真实链路分层验证：
+
+```bash
+# 校验模块消费的 method/path 没有从服务端机器契约漂移。
+npm run module:service-contract -- <module-id> --openapi ../service/openapi.yaml
+npm run module:service-contract -- <module-id> --openapi ../service/openapi.yaml --write-fixtures
+npm run module:test -- <module-id>
+
+# 真实服务联调或发布前，把模块自有 live smoke 放在模块目录内，通过通用 evidence 入口执行。
+npm run module:evidence -- --module <module-id> --file ./scripts/live-smoke.ts --runner tsx -- --required
+```
+
+mock 只证明页面、loader、action 和 error display 能按契约工作；租约、重试、幂等、quota、HMAC、跨租户隔离、
+one-time token 和状态机时序必须用真实服务 live smoke 或服务端 blackbox 测试证明。
 
 ## CRUD 模块结构
 
@@ -83,6 +105,8 @@ await notes.insert({ title: 'First note', status: 'draft' });
 - 模块禁止导入 `src/lib/*`、读取 `process.env`、使用 Node builtin、`eval`、`Function`、动态 `ctx[...]` 和裸 `fetch()`。
 - 普通外部 HTTP 使用 `ctx.http.fetch(...)`；需要 service secret、runtime signing、动态 claims
   或强审计的 privileged external service 必须使用 `ctx.services.invoke(...)`。
+- 服务端分离型模块应把 OpenAPI 或等价机器契约作为服务 API 源头；页面、loader、action 不直接拼受控服务请求，
+  只调用模块内的 service client/adapter。切换 mock、联调服务和生产服务时，应切换 service connection，而不是改页面代码。
 
 ## 商业账本边界
 
@@ -133,7 +157,7 @@ await ctx.metering.charge({
 
 ## 宿主文件边界
 
-模块开发默认只修改配置的模块根目录，例如 `modules/<id>/` 或仓库外可信 source 中的模块目录。允许因为模块契约同步而变更的宿主外文件只有：
+模块开发默认只修改仓库内模块根目录，例如 `modules/<id>/`。PloyKit 不再支持从仓库外加载 module 源码；服务端、Worker 或第三方 API 可以继续独立维护，但产品模块壳应放在 `modules/<id>/`，通过 `serviceRequirements`、`ctx.services.invoke(...)` 或其他 host capabilities 接入。允许因为模块契约同步而变更的宿主外文件只有：
 
 - `src/lib/module-map.ts`
 - `src/lib/module-map.manifest.json`
@@ -149,9 +173,9 @@ npm run module:evidence -- --module <id> --file ./scripts/e2e.ts --runner tsx --
 
 模块 `quality.evidence` 需要自动执行模块自有脚本时，也应指向通用 `module:evidence` 入口，而不是新增 `module:<id>-*` package script。只有在确认宿主已有通用质量入口后，再接入通用入口。
 
-宿主和共享层禁止感知具体模块实现：不要在 `apps/host-next/*`、`src/lib/module-runtime/*` 或宿主质量脚本里写 `moduleId === '<id>'`、`import modules/<id>`、`/dashboard/<id>`、`<module-root>` 这类特例。需要宿主渲染、路由、质量证据或发布门禁配合时，先补通用 registry、catalog、manifest 或 contribution seam，再由模块声明贡献。`npm run host:boundary-check` 会阻止宿主 import 具体模块、硬编码模块 id/rootDir，或在 tracked 宿主配置、CSS、package scripts 中写入外部模块专属路径。
+宿主和共享层禁止感知具体模块实现：不要在 `apps/host-next/*`、`src/lib/module-runtime/*` 或宿主质量脚本里写 `moduleId === '<id>'`、`import modules/<id>`、`/dashboard/<id>`、`<module-root>` 这类特例。需要宿主渲染、路由、质量证据或发布门禁配合时，先补通用 registry、catalog、manifest 或 contribution seam，再由模块声明贡献。`npm run host:boundary-check` 会阻止宿主 import 具体模块、硬编码模块 id/rootDir，或在 tracked 宿主配置、CSS、package scripts 中写入仓库外源码路径。
 
-开发仓库外模块时，不要修改 tracked `ploykit.config.json`、`apps/host-next/app/globals.css` 或 `package.json` 来接入某个具体模块。应复制 `ploykit.local.config.example.json` 为被 `.gitignore` 忽略的 `ploykit.local.config.json`，再通过 `PLOYKIT_CONFIG=ploykit.local.config.json` 运行本地扫描和开发服务器。提交宿主代码前切回默认配置重新运行 `npm run modules:scan`，避免 `src/lib/module-map.ts` 和 `src/lib/module-map.manifest.json` 带入本地专属模块。
+需要把 RunLynk 这类外部服务接入 PloyKit 时，把 PloyKit module 放在 `modules/runlynk/`，把 Core/OpenAPI/Worker/live smoke 保留在服务端仓库。提交前用默认 `ploykit.config.json` 重新运行 `npm run modules:scan`，确保 `src/lib/module-map.ts` 和 `src/lib/module-map.manifest.json` 只包含仓库内模块。
 
 ## 测试
 

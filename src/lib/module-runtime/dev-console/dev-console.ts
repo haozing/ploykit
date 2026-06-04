@@ -1,6 +1,6 @@
 import type { ModuleDiagnostic } from '@ploykit/module-sdk';
 import type { ModuleRuntimeContract } from '../contract';
-import type { ModuleMapArtifact, ModuleRuntimeMapEntry } from '../loader';
+import type { ModuleMapArtifact } from '../loader';
 
 export interface ModuleDevConsoleCapabilitySummary {
   routes: number;
@@ -28,9 +28,6 @@ export interface ModuleDevConsoleModule {
   name?: string;
   version?: string;
   rootDir?: string;
-  sourceId?: string;
-  sourceDir?: string;
-  sourceKind?: ModuleRuntimeMapEntry['sourceKind'];
   map: {
     pages: number;
     apis: number;
@@ -119,9 +116,6 @@ export function createModuleDevConsoleSnapshot(
         name: contract?.name,
         version: contract?.version,
         rootDir: entry.rootDir,
-        sourceId: entry.sourceId,
-        sourceDir: entry.sourceDir,
-        sourceKind: entry.sourceKind,
         map: {
           pages: countRecord(entry.pages),
           apis: countRecord(entry.apis),

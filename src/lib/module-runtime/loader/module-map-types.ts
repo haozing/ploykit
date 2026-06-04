@@ -24,9 +24,6 @@ export interface ModuleMapReleaseMetadata {
 
 export interface ModuleRuntimeMapEntry {
   rootDir?: string;
-  sourceId?: string;
-  sourceDir?: string;
-  sourceKind?: 'workspace' | 'external';
   release?: ModuleMapReleaseMetadata;
   product?: ModuleProductDefinition;
   quality?: ModuleQualityDefinition;

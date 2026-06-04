@@ -2,6 +2,8 @@
 
 审计日期：2026-06-02
 
+> 历史状态说明：本文保留 2026-06-02 审计时的证据和判断，其中“当前工作树”指当时的工作树状态。文中的 `runlynk`、`.runtime/*external*`、仓库外 module source 等命中仅作为历史问题证据保留；默认生成物污染和外部源码模块开发入口已在后续清理中移除。新的服务端分离型开发边界是：PloyKit module 壳放在仓库内 `modules/<id>/`，Core、Worker、OpenAPI 和 live smoke 等服务端资产可以独立维护。
+
 审计对象：当前工作区 `d:\code2\ploykit` 的项目框架代码、默认模块、脚本、测试与文档。审计期间工作区已有未提交改动，因此本报告评价的是“当前工作树状态”，不是某一个干净 commit。仓库外部的 `../runlynk` 源码不在本轮审计范围内；本报告只把它出现在 tracked 生成物中视为默认仓库发布卫生问题。
 
 ## 1. 结论摘要
@@ -116,13 +118,13 @@ PloyKit 已经具备一个有野心、且骨架相当完整的模块化应用框
 建议修复：
 
 - 从 tracked `src/lib/module-map.ts` 和 manifest 中移除外部模块。
-- 将外部模块生成物输出到 ignored local artifact，例如 `.runtime/module-map.local.ts`，或只在本地 dev server 动态加载。
+- 取消仓库外 module source 开发入口；RunLynk 这类项目只把 Core/OpenAPI/Worker 作为外部服务，PloyKit module 壳迁入 `modules/<id>/`。
 - CI 增加检查：默认 tracked module map 不允许出现 `../` 外部 root、不允许引用 `.runtime/*external*` config。
 - `modules:check` 和 `seo:check` 必须在干净 clone 中通过。
 
 修复状态（2026-06-02）：已完成并验证。
 
-- 已用默认 `ploykit.config.json` 重跑 `npm run modules:scan`，tracked `src/lib/module-map.ts` 与 `src/lib/module-map.manifest.json` 只包含默认 7 个 workspace modules。
+- 已用默认 `ploykit.config.json` 重跑 `npm run modules:scan`，tracked `src/lib/module-map.ts` 与 `src/lib/module-map.manifest.json` 只包含默认 workspace modules。
 - 已验证 `rg -n "runlynk|\.runtime/.+external|\.runtime\\.+external|\.\./runlynk|external" src/lib/module-map.ts src/lib/module-map.manifest.json` 无命中。
 - 已验证 `npm run modules:check` 通过，`npm run seo:check` 通过且 diagnostics 为空。
 
@@ -418,7 +420,7 @@ PloyKit 已经具备一个有野心、且骨架相当完整的模块化应用框
 
 - 根 `tsconfig.json` 已移除宽泛 `"*"` alias，仅保留 `@/*`、`@host/*`、`@ploykit/module-sdk`、明确 React/lucide 类型 alias。
 - 已新增 `tests/developer-experience.test.ts` 断言根 tsconfig 不存在 `"*"` catch-all，并固定 SDK alias。
-- 已新增外部模块 fixture：声明未安装 `left-pad` 时，`scripts/module-deps.mjs --check` 会报告 missing dependency，模块外部依赖必须走 manifest + dependency check。
+- 已新增 workspace dependency fixture：声明未安装 `left-pad` 时，`scripts/module-deps.mjs --check` 会报告 missing dependency；仓库外 module source 另由拒绝用例覆盖。
 - 已验证 `npm run test:developer-experience`、`npm run test:module-map`、`node scripts/module-deps.mjs --check` 通过。
 
 ### P2-5 Action error code taxonomy 不够稳定
@@ -450,7 +452,7 @@ PloyKit 已经具备一个有野心、且骨架相当完整的模块化应用框
 
 修复状态（2026-06-02）：已完成并验证。
 
-- 默认 `ploykit.config.json` 与 tracked module map/SEO 产物已恢复为默认 7 个模块，避免本地外部模块污染 release evidence。
+- 默认 `ploykit.config.json` 与 tracked module map/SEO 产物已恢复为默认 workspace modules，避免本地外部模块污染 release evidence。
 - `scripts/host-rc-evidence.mjs` 已区分 required 与非 required：非 required 本地 evidence 会记录 drift-check 产物与 advisory，不再把本地 profile drift 当 blocker；`--required` 仍保持阻断语义。
 - evidence 输出包含本次 `checkedAt` 与 `.runtime/rc-evidence/<timestamp>` 产物路径。
 - 已验证 `npm run release:local-gate`、`npm run release:evidence` 通过，`release:evidence` blockers 为空。
@@ -532,7 +534,7 @@ PloyKit 已经具备一个有野心、且骨架相当完整的模块化应用框
 建议：
 
 - 默认 map 只包含仓库内模块。
-- 外部模块开发使用 ignored local map 或 runtime profile。
+- 仓库外 module source 不再作为开发模式；服务端外置时，PloyKit module 壳仍放在 `modules/<id>/`。
 - `host:boundary-check` 需要补一条规则：tracked map 不得引用 repo root 外路径。
 
 ### 7.3 Host runtime 与 adapter

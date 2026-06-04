@@ -28,6 +28,11 @@ export function createDeveloperPlatformReport(input: {
       capabilities: ['dashboard', 'surfaces'],
     },
     {
+      id: 'product',
+      path: 'templates/modules/product',
+      capabilities: ['site', 'dashboard', 'admin', 'product', 'white-label', 'data'],
+    },
+    {
       id: 'product-app',
       path: 'templates/modules/product-app',
       capabilities: ['site', 'dashboard', 'admin', 'product'],
@@ -40,6 +45,16 @@ export function createDeveloperPlatformReport(input: {
       capabilities: ['services', 'secretRefs', 'audit'],
     },
     { id: 'job', path: 'templates/modules/job', capabilities: ['jobs', 'events'] },
+    {
+      id: 'service-backed',
+      path: 'templates/module-extensions/service-backed',
+      capabilities: ['services', 'contracts', 'mocks'],
+    },
+    {
+      id: 'background',
+      path: 'templates/module-extensions/background',
+      capabilities: ['jobs', 'events', 'lifecycle'],
+    },
     {
       id: 'billing-aware',
       path: 'templates/modules/billing-aware',

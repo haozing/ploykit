@@ -4,7 +4,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { pathToFileURL } from 'node:url';
+import test, { type TestContext } from 'node:test';
 
 function writeExternalModule(): string {
   const moduleRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ploykit-external-module-'));
@@ -24,35 +25,18 @@ function writeExternalModule(): string {
   return moduleRoot;
 }
 
-function writeExternalModuleWithTests(): string {
-  const moduleRoot = writeExternalModule();
-  fs.mkdirSync(path.join(moduleRoot, 'tests'), { recursive: true });
-  fs.writeFileSync(
-    path.join(moduleRoot, 'tests', 'smoke.test.ts'),
-    `
-      import assert from 'node:assert/strict';
-      import test from 'node:test';
-      import moduleDefinition from '../module';
-
-      test('external module fixture loads through sdk alias', () => {
-        assert.equal(moduleDefinition.id, 'external-map-fixture');
-      });
-    `,
-    'utf8'
-  );
-  return moduleRoot;
-}
-
-function writeExternalModuleWithMissingDependency(): string {
-  const moduleRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ploykit-external-module-'));
+function writeWorkspaceModuleWithMissingDependency(t: TestContext): string {
+  const moduleId = `dependency-fixture-${crypto.randomUUID().slice(0, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+  fs.mkdirSync(moduleRoot, { recursive: true });
   fs.writeFileSync(
     path.join(moduleRoot, 'module.ts'),
     `
       import { defineModule } from '@ploykit/module-sdk';
 
       export default defineModule({
-        id: 'external-missing-dependency',
-        name: 'External Missing Dependency',
+        id: '${moduleId}',
+        name: 'Dependency Fixture',
         version: '0.1.0',
         dependencies: {
           npm: {
@@ -63,49 +47,57 @@ function writeExternalModuleWithMissingDependency(): string {
     `,
     'utf8'
   );
+  t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
   return moduleRoot;
 }
 
-function writeConfig(moduleRoot: string, trustedRoots: string[], workspace = process.cwd()): string {
-  const configFile = path.join(os.tmpdir(), `ploykit-config-${crypto.randomUUID()}.json`);
+function writeWorkspaceModuleOutsideModules(t: TestContext): string {
+  const moduleRoot = path.join(process.cwd(), '.runtime', `workspace-module-${crypto.randomUUID().slice(0, 8)}`);
+  fs.mkdirSync(moduleRoot, { recursive: true });
   fs.writeFileSync(
-    configFile,
-    `${JSON.stringify(
-      {
-        moduleSources: [
-          { id: 'workspace', path: path.join(workspace, 'modules') },
-          { id: 'external-fixtures', path: moduleRoot },
-        ],
-        trustedModuleRoots: trustedRoots,
-      },
-      null,
-      2
-    )}\n`,
+    path.join(moduleRoot, 'module.ts'),
+    `
+      import { defineModule } from '@ploykit/module-sdk';
+
+      export default defineModule({
+        id: 'workspace-outside-modules',
+        name: 'Workspace Outside Modules',
+        version: '0.1.0',
+      });
+    `,
     'utf8'
   );
-  return configFile;
+  t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
+  return moduleRoot;
 }
 
-function runModuleMapCheck(configFile: string) {
-  return childProcess.spawnSync(process.execPath, ['scripts/generate-module-map.mjs', '--check'], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PLOYKIT_CONFIG: configFile,
-    },
-  });
-}
-
-function runPloyKitCommand(configFile: string, args: string[]) {
+function runPloyKitCommand(args: string[]) {
   return childProcess.spawnSync(process.execPath, args, {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: {
       ...process.env,
-      PLOYKIT_CONFIG: configFile,
+      PLOYKIT_CONFIG: path.join(os.tmpdir(), `ignored-${crypto.randomUUID()}.json`),
     },
   });
+}
+
+function runModuleSourceImport(cwd: string) {
+  const moduleSourcesUrl = pathToFileURL(
+    path.join(process.cwd(), 'scripts', 'lib', 'module-sources.mjs')
+  ).href;
+  return childProcess.spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import(${JSON.stringify(moduleSourcesUrl)}).then((m) => { m.getModuleSources(process.cwd()); }).catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); });`,
+    ],
+    {
+      cwd,
+      encoding: 'utf8',
+    }
+  );
 }
 
 function withGeneratedModuleMapRestore<T>(run: () => T): T {
@@ -123,54 +115,83 @@ function withGeneratedModuleMapRestore<T>(run: () => T): T {
   }
 }
 
-test('module map rejects module sources outside trusted roots', () => {
-  const moduleRoot = writeExternalModule();
-  const result = runModuleMapCheck(writeConfig(moduleRoot, [process.cwd()]));
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /trustedModuleRoots/);
-});
-
-test('module map accepts trusted external module sources before drift check', () => {
-  const moduleRoot = writeExternalModule();
-  const result = runModuleMapCheck(writeConfig(moduleRoot, [path.dirname(moduleRoot)]));
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /Module map check failed/);
-  assert.doesNotMatch(result.stderr, /outside trusted module roots/);
-});
-
-test('module doctor and module test resolve trusted external modules by id', () => {
-  withGeneratedModuleMapRestore(() => {
-    const moduleRoot = writeExternalModuleWithTests();
-    const configFile = writeConfig(moduleRoot, [process.cwd(), path.dirname(moduleRoot)]);
-
-    const scan = runPloyKitCommand(configFile, ['scripts/generate-module-map.mjs']);
-    assert.equal(scan.status, 0, scan.stderr);
-
-    const doctor = runPloyKitCommand(configFile, [
-      'scripts/ploykit-module.mjs',
-      'doctor',
-      'external-map-fixture',
-    ]);
-    assert.equal(doctor.status, 0, doctor.stderr || doctor.stdout);
-    assert.match(doctor.stdout, /"success": true/);
-    assert.match(doctor.stdout, /"moduleRoot":/);
-
-    const moduleTest = runPloyKitCommand(configFile, [
-      'scripts/module-test.mjs',
-      'external-map-fixture',
-    ]);
-    assert.equal(moduleTest.status, 0, moduleTest.stderr || moduleTest.stdout);
-    assert.match(moduleTest.stdout, /"success": true/);
+test('module source discovery rejects configured sources outside the workspace', (t) => {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ploykit-source-config-'));
+  const externalModule = writeExternalModule();
+  t.after(() => {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    fs.rmSync(externalModule, { recursive: true, force: true });
   });
+
+  fs.writeFileSync(
+    path.join(fixtureRoot, 'ploykit.config.json'),
+    `${JSON.stringify(
+      {
+        moduleSources: [{ id: 'external-fixtures', path: externalModule }],
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+
+  const result = runModuleSourceImport(fixtureRoot);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr, /must live inside the PloyKit workspace/);
 });
 
-test('module dependency check reports external npm dependencies missing from host manifest', () => {
-  const moduleRoot = writeExternalModuleWithMissingDependency();
-  const configFile = writeConfig(moduleRoot, [process.cwd(), path.dirname(moduleRoot)]);
+test('module source discovery rejects trustedModuleRoots configuration', (t) => {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ploykit-trusted-roots-'));
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
 
-  const result = runPloyKitCommand(configFile, ['scripts/module-deps.mjs', '--check']);
+  fs.writeFileSync(
+    path.join(fixtureRoot, 'ploykit.config.json'),
+    `${JSON.stringify(
+      {
+        moduleSources: [{ id: 'workspace', path: 'modules' }],
+        trustedModuleRoots: ['.'],
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+
+  const result = runModuleSourceImport(fixtureRoot);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stderr, /must not declare trustedModuleRoots/);
+});
+
+test('module doctor rejects explicit external module roots', (t) => {
+  const moduleRoot = writeExternalModule();
+  t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
+
+  const result = runPloyKitCommand(['scripts/ploykit-module.mjs', 'doctor', moduleRoot]);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stdout, /must live inside the PloyKit workspace/);
+});
+
+test('module contract validation internal command rejects explicit external module roots', (t) => {
+  const moduleRoot = writeExternalModule();
+  t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
+
+  const result = runPloyKitCommand(['scripts/ploykit-module.mjs', 'validate-contract-internal', moduleRoot]);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(`${result.stdout}\n${result.stderr}`, /must live inside the PloyKit workspace/);
+});
+
+test('module doctor rejects workspace module roots outside modules directory', (t) => {
+  const moduleRoot = writeWorkspaceModuleOutsideModules(t);
+
+  const result = runPloyKitCommand(['scripts/ploykit-module.mjs', 'doctor', moduleRoot]);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stdout, /must live under modules\/<id>/);
+});
+
+test('module dependency check reports workspace npm dependencies missing from host manifest', (t) => {
+  writeWorkspaceModuleWithMissingDependency(t);
+
+  const result = runPloyKitCommand(['scripts/module-deps.mjs', '--check']);
   assert.equal(result.status, 1, result.stderr || result.stdout);
 
   const body = JSON.parse(result.stdout) as {
@@ -181,4 +202,31 @@ test('module dependency check reports external npm dependencies missing from hos
   assert.ok(
     body.missing.some((dependency) => dependency.name === 'left-pad' && dependency.range === '^1.3.0')
   );
+});
+
+test('generated module map manifest omits external source metadata', () => {
+  withGeneratedModuleMapRestore(() => {
+    const scan = runPloyKitCommand(['scripts/generate-module-map.mjs']);
+    assert.equal(scan.status, 0, scan.stderr || scan.stdout);
+
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'src', 'lib', 'module-map.manifest.json'), 'utf8')
+    ) as {
+      trustedModuleRoots?: unknown;
+      moduleSources?: unknown;
+      config?: unknown;
+      modules: Array<Record<string, unknown>>;
+    };
+
+    assert.equal('trustedModuleRoots' in manifest, false);
+    assert.equal('moduleSources' in manifest, false);
+    assert.equal('config' in manifest, false);
+    assert.equal(
+      manifest.modules.some(
+        (moduleInfo) =>
+          'sourceId' in moduleInfo || 'sourceDir' in moduleInfo || 'sourceKind' in moduleInfo
+      ),
+      false
+    );
+  });
 });

@@ -21,7 +21,6 @@ function main() {
       name: moduleInfo.name,
       version: moduleInfo.version,
       rootDir: moduleInfo.rootDir,
-      sourceKind: moduleInfo.sourceKind,
       files: {
         pages: moduleInfo.pages ?? [],
         apis: moduleInfo.apis ?? [],

@@ -29,6 +29,10 @@ const HOST_POLICY_FILES = [
   'apps/host-next/tsconfig.json',
   'tsconfig.json',
 ];
+const GENERATED_MODULE_MAP_FILES = [
+  'src/lib/module-map.ts',
+  'src/lib/module-map.manifest.json',
+];
 const ALLOWED_FILES = new Set([
   normalizePath('src/lib/module-map.ts'),
   normalizePath('src/lib/module-map.manifest.json'),
@@ -367,14 +371,116 @@ function scanPackageScripts(modules) {
   return violations;
 }
 
+function generatedPathViolation(value) {
+  const normalized = value.replace(/\\/g, '/');
+  return (
+    normalized.startsWith('../') ||
+    normalized.includes('/../') ||
+    path.isAbsolute(value) ||
+    /^[a-zA-Z]:[\\/]/.test(value)
+  );
+}
+
+function scanGeneratedModuleMapFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+
+  const source = fs.readFileSync(filePath, 'utf8');
+  const file = relativePath(filePath);
+  const violations = [];
+
+  if (file.endsWith('.json')) {
+    try {
+      const manifest = JSON.parse(source);
+      if ('trustedModuleRoots' in manifest) {
+        violations.push({
+          type: 'module-map-trusted-roots',
+          file,
+          line: 1,
+          detail: 'trustedModuleRoots',
+        });
+      }
+      const config = typeof manifest.config === 'string' ? manifest.config : '';
+      if (/ploykit\.local\.config|\.runtime\/.*external|\.runtime\\.*external/i.test(config)) {
+        violations.push({
+          type: 'module-map-local-config',
+          file,
+          line: lineNumber(source, source.indexOf(config)),
+          detail: config,
+        });
+      }
+      for (const [index, moduleInfo] of (manifest.modules ?? []).entries()) {
+        const rootDir = typeof moduleInfo.rootDir === 'string' ? moduleInfo.rootDir : '';
+        if (rootDir && generatedPathViolation(rootDir)) {
+          violations.push({
+            type: 'module-map-external-root',
+            file,
+            line: lineNumber(source, source.indexOf(rootDir)),
+            detail: `${moduleInfo.id ?? index}:${rootDir}`,
+          });
+        }
+        if (moduleInfo.sourceKind === 'external') {
+          violations.push({
+            type: 'module-map-external-source-kind',
+            file,
+            line: lineNumber(source, source.indexOf('"sourceKind"')),
+            detail: moduleInfo.id ?? index,
+          });
+        }
+        const sourceDir = typeof moduleInfo.sourceDir === 'string' ? moduleInfo.sourceDir : '';
+        if (sourceDir && generatedPathViolation(sourceDir)) {
+          violations.push({
+            type: 'module-map-external-source-dir',
+            file,
+            line: lineNumber(source, source.indexOf(sourceDir)),
+            detail: `${moduleInfo.id ?? index}:${sourceDir}`,
+          });
+        }
+      }
+    } catch (error) {
+      violations.push({
+        type: 'module-map-json-parse-error',
+        file,
+        line: 1,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return violations;
+  }
+
+  for (const match of source.matchAll(/\b(rootDir|sourceDir)\s*:\s*["'`]([^"'`]+)["'`]/g)) {
+    const [, key, value] = match;
+    if (generatedPathViolation(value)) {
+      violations.push({
+        type: key === 'rootDir' ? 'module-map-external-root' : 'module-map-external-source-dir',
+        file,
+        line: lineNumber(source, match.index ?? 0),
+        detail: value,
+      });
+    }
+  }
+  for (const match of source.matchAll(/\bsourceKind\s*:\s*["'`]external["'`]/g)) {
+    violations.push({
+      type: 'module-map-external-source-kind',
+      file,
+      line: lineNumber(source, match.index ?? 0),
+      detail: 'external',
+    });
+  }
+  return violations;
+}
+
 const modules = readModuleRecords();
 const hostFiles = [...new Set(HOST_TARGETS.flatMap(collectFiles))].sort();
 const rootScriptFiles = collectFiles(ROOT_SCRIPT_TARGET).filter(shouldScanRootScriptFile).sort();
 const hostPolicyFiles = HOST_POLICY_FILES.map((file) => path.join(PROJECT_ROOT, file));
+const generatedModuleMapFiles = GENERATED_MODULE_MAP_FILES.map((file) => path.join(PROJECT_ROOT, file));
 const violations = [
   ...hostFiles.flatMap((file) => scanFile(file, modules)),
   ...rootScriptFiles.flatMap((file) => scanRootScriptFile(file, modules)),
   ...hostPolicyFiles.flatMap((file) => scanHostPolicyFile(file, modules)),
+  ...generatedModuleMapFiles.flatMap(scanGeneratedModuleMapFile),
   ...scanPackageScripts(modules),
 ];
 
@@ -392,9 +498,9 @@ if (violations.length > 0) {
     `${JSON.stringify(
       {
         ok: true,
-        files: hostFiles.length + rootScriptFiles.length + hostPolicyFiles.length + 1,
+        files: hostFiles.length + rootScriptFiles.length + hostPolicyFiles.length + generatedModuleMapFiles.length + 1,
         modules: modules.length,
-        targets: [...HOST_TARGETS, ROOT_SCRIPT_TARGET, ...HOST_POLICY_FILES, PACKAGE_SCRIPT_TARGET],
+        targets: [...HOST_TARGETS, ROOT_SCRIPT_TARGET, ...HOST_POLICY_FILES, ...GENERATED_MODULE_MAP_FILES, PACKAGE_SCRIPT_TARGET],
       },
       null,
       2

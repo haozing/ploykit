@@ -1,4 +1,13 @@
 interface:
   display_name: 'PloyKit Module Tester'
   short_description: 'Validate PloyKit modules with real evidence'
-  default_prompt: 'Use $ploykit-module-tester to validate a PloyKit module or host module-runtime change with code, database, API, and browser checks.'
+  default_prompt: >-
+    Use $ploykit-module-tester to validate a PloyKit module or host
+    module-runtime change with evidence. For modules, start from
+    modules/<module-id>/module.ts, then run module:doctor, module:test,
+    modules:check, and typecheck as applicable. For service-backed modules,
+    separate consumer contract, fixture/contract mock, and live service evidence:
+    run module:service-contract --write-fixtures, verify mock tests exercise
+    ordinary UI/action branches, and do not accept mocks as proof for signing,
+    tenant isolation, idempotency, quota, one-time token, lease/retry, or
+    state-machine behavior.

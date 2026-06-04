@@ -47,9 +47,6 @@ const artifact: ModuleMapArtifact = {
   modules: {
     enabled: {
       rootDir: 'modules/enabled',
-      sourceId: 'workspace',
-      sourceDir: 'modules',
-      sourceKind: 'workspace',
       module: async () => ({ default: enabledModule }),
       pages: {
         'pages/EnabledPage': async () => ({ default: () => 'enabled' }),
@@ -64,9 +61,6 @@ const artifact: ModuleMapArtifact = {
     },
     disabled: {
       rootDir: 'modules/disabled',
-      sourceId: 'workspace',
-      sourceDir: 'modules',
-      sourceKind: 'workspace',
       module: async () => ({ default: disabledModule }),
       pages: {
         'pages/DisabledPage': async () => ({ default: () => 'disabled' }),
@@ -185,9 +179,6 @@ test('P11 catalog doctor reports enabled module route alias conflicts', () => {
       modules: {
         'first-alias-owner': {
           rootDir: 'modules/first-alias-owner',
-          sourceId: 'workspace',
-          sourceDir: 'modules',
-          sourceKind: 'workspace',
           module: async () => ({ default: firstModule }),
           pages: {},
           apis: {},
@@ -200,9 +191,6 @@ test('P11 catalog doctor reports enabled module route alias conflicts', () => {
         },
         'second-alias-owner': {
           rootDir: 'modules/second-alias-owner',
-          sourceId: 'workspace',
-          sourceDir: 'modules',
-          sourceKind: 'workspace',
           module: async () => ({ default: secondModule }),
           pages: {},
           apis: {},

@@ -1,4 +1,12 @@
 interface:
   display_name: 'PloyKit Module Developer'
   short_description: 'Build PloyKit local modules safely'
-  default_prompt: 'Use $ploykit-module-developer to build or modify a PloyKit local module or host module-runtime capability.'
+  default_prompt: >-
+    Use $ploykit-module-developer to build or modify a PloyKit module under
+    modules/<module-id>. Read module.ts first, stay inside the module unless a
+    generic host seam is explicitly requested, and run module:doctor/module:test.
+    For service-backed modules, read OpenAPI/AsyncAPI/JSON Schema/Proto before
+    coding, keep one lib/service-client.ts ctx.services.invoke entry, run
+    module:service-contract --write-fixtures for contract mocks, and require
+    module-local live smoke for signing, tenant isolation, idempotency, quota,
+    one-time token, lease/retry, and state-machine behavior.

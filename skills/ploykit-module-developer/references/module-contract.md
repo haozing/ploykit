@@ -142,6 +142,74 @@ const response = await ctx.http.fetch('https://api.example.com/v1/items');
 
 Never call global `fetch()` from module code.
 
+## Privileged Service Requirements
+
+Use `serviceRequirements` for services that need secrets, runtime signing,
+dynamic claims, private network access, or strong audit. Module code should call
+one module-local service client, not scatter raw `ctx.services.invoke(...)`
+calls across pages, loaders, and actions.
+
+```ts
+import { defineModule, Permission } from '@ploykit/module-sdk';
+
+export default defineModule({
+  contractVersion: 2,
+  id: 'service-console',
+  name: 'Service Console',
+  version: '0.1.0',
+  permissions: [Permission.ServicesInvoke, Permission.AuditWrite],
+  serviceRequirements: {
+    serviceCore: {
+      required: true,
+      provider: 'service-core',
+      kind: 'signed-http',
+      connection: {
+        baseUrl: 'https://core.example.com',
+        egress: ['https://core.example.com'],
+        timeoutMs: 8000,
+      },
+      secrets: {
+        bearerToken: { required: true },
+        hmacSecret: { required: true },
+      },
+      claims: {
+        requestId: '${ctx.request.id}',
+        correlationId: '${ctx.request.correlationId}',
+        actorId: '${ctx.auth.actorId}',
+        workspaceId: '${ctx.scope.workspaceId}',
+        tenantId: '${input.tenantId}',
+        moduleId: '${ctx.module.id}',
+      },
+      operations: {
+        request: {
+          input: { allow: ['path', 'method', 'query', 'json', 'tenantId'] },
+          auth: { type: 'bearer', secret: 'bearerToken' },
+          signing: {
+            type: 'hmac-sha256',
+            secret: 'hmacSecret',
+            header: 'x-service-signature',
+            timestampHeader: 'x-service-timestamp',
+            claimsHeader: 'x-service-claims',
+          },
+          request: {
+            body: 'json',
+            allowHeaders: ['content-type', 'idempotency-key', 'x-request-id'],
+            denyHeaders: ['authorization', 'cookie'],
+          },
+          response: { body: 'json', maxBytes: 1048576 },
+          audit: { event: 'service.core.requested' },
+        },
+      },
+    },
+  },
+});
+```
+
+For service-backed modules, use OpenAPI or an equivalent machine contract as the
+source for endpoint/schema/error shape. Generate or maintain contract/fixture
+mocks for development, but keep live smoke evidence for signing, tenant,
+idempotency, quota, one-time token, lease/retry, and state-machine behavior.
+
 ## Surfaces
 
 Surface contribution requires a surface declaration and permission:

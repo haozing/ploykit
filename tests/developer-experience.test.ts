@@ -13,19 +13,20 @@ import {
 const templateNames = [
   'basic',
   'dashboard',
+  'product',
   'crud',
   'connector',
   'signed-service',
   'job',
   'product-app',
 ];
-const moduleDataRuntimeDir = path.join('.runtime', 'test-modules', 'module-data-contract');
+const extensionNames = ['service-backed', 'background'];
 const hostBoundaryRuntimeDir = path.join('.runtime', 'test-modules', 'host-boundary-policy');
 
 function writeModuleDataFixture(files: Record<string, string>): string {
   const fixtureRoot = path.join(
-    moduleDataRuntimeDir,
-    `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    'modules',
+    `module-data-contract-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
   for (const [name, content] of Object.entries(files)) {
     const file = path.join(fixtureRoot, name);
@@ -70,6 +71,44 @@ test('module templates include contract, README, and smoke test', () => {
       templateName
     );
   }
+});
+
+test('module extensions are product-safe overlays with tests and no root README collision', () => {
+  for (const extensionName of extensionNames) {
+    const extensionRoot = path.join('templates', 'module-extensions', extensionName);
+    assert.equal(fs.existsSync(extensionRoot), true, extensionName);
+    assert.equal(fs.existsSync(path.join(extensionRoot, 'README.md')), false, extensionName);
+    assert.equal(
+      fs.existsSync(path.join(extensionRoot, 'tests', `${extensionName}.test.ts`)),
+      true,
+      extensionName
+    );
+  }
+  assert.equal(
+    fs.existsSync(path.join('templates', 'module-extensions', 'service-backed', 'tests', 'service-contract.json')),
+    true
+  );
+});
+
+test('module template CLI exposes product preset and extension overlays', () => {
+  const result = childProcess.spawnSync(
+    process.execPath,
+    ['scripts/ploykit-module.mjs', 'templates'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const body = JSON.parse(result.stdout) as {
+    templates: Array<{ name: string; files: string[] }>;
+    extensions: Array<{ name: string; files: string[] }>;
+  };
+
+  assert.ok(body.templates.some((template) => template.name === 'product'));
+  assert.ok(body.extensions.some((extension) => extension.name === 'service-backed'));
+  assert.ok(body.extensions.some((extension) => extension.name === 'background'));
 });
 
 test('root tsconfig uses explicit path aliases without a wildcard catch-all', () => {
@@ -223,13 +262,32 @@ test('module data CLI reads evaluated module.ts data contracts', (t) => {
   assert.equal(plan.checks[0].definition.kind, 'rls');
 });
 
-test('host boundary check rejects tracked host policy external module source literals', (t) => {
+test('host boundary check rejects tracked host policy and module map external source literals', (t) => {
   const fixtureRoot = writeHostBoundaryFixture({
     'package.json': JSON.stringify({ name: 'host-boundary-fixture', scripts: {} }, null, 2),
     'ploykit.config.json': JSON.stringify(
       {
         moduleSources: [{ id: 'workspace', path: 'modules' }],
-        trustedModuleRoots: ['.'],
+      },
+      null,
+      2
+    ),
+    'src/lib/module-map.ts': [
+      'export const MODULE_MAP = {',
+      '  demo: { rootDir: "../some-product/modules/demo" }',
+      '};',
+      '',
+    ].join('\n'),
+    'src/lib/module-map.manifest.json': JSON.stringify(
+      {
+        version: 1,
+        modules: [
+          {
+            id: 'demo',
+            rootDir: '../some-product/modules/demo',
+            sourceKind: 'external',
+          },
+        ],
       },
       null,
       2
@@ -247,5 +305,7 @@ test('host boundary check rejects tracked host policy external module source lit
 
   assert.notEqual(result.status, 0, output);
   assert.match(output, /host-policy-external-module-source-literal/);
+  assert.match(output, /module-map-external-root/);
+  assert.match(output, /module-map-external-source-kind/);
   assert.match(output, /apps\/host-next\/app\/globals\.css/);
 });

@@ -20,7 +20,7 @@ Use host behavior through `ctx.*` and declare matching permissions in
 | `ctx.rag` | `Permission.RagRead`, `Permission.RagWrite` | Indexing, search, and context packs. |
 | `ctx.ai` | `Permission.AiGenerate`, `Permission.AiEmbed` | Generation, streaming, and embeddings. |
 | `ctx.connectors` | `Permission.ConnectorsRead`, `Permission.ConnectorsInvoke`, `Permission.ConnectorsManage` | Managed external service profiles and operations. |
-| `ctx.services` | `Permission.ServicesInvoke` | Host-provided internal service calls. |
+| `ctx.services` | `Permission.ServicesInvoke` | Privileged service calls declared by `serviceRequirements`. |
 | `ctx.resourceBindings` | `Permission.ResourceBindingsRead`, `Permission.ResourceBindingsWrite` | Product/workspace resource bindings. |
 | `ctx.http.fetch` | `Permission.ExternalHttp` plus `egress` | External HTTP through the egress guard. |
 | `ctx.cache` | `Permission.CacheRevalidate` | Cache lookup and invalidation support. |
@@ -44,6 +44,12 @@ Rules:
 - Public APIs must declare `anonymousPolicy`.
 - External HTTP requires both `Permission.ExternalHttp` and a narrow `egress`
   origin such as `https://api.example.com`.
+- Privileged services with secrets, runtime signing, dynamic claims, private
+  network risk, or strong audit use `ctx.services.invoke(...)` plus
+  `serviceRequirements`; do not call those origins with `ctx.http.fetch(...)`.
+- For service-backed modules, keep a module-local service client as the only
+  `ctx.services.invoke(...)` entry and use service connection configuration to
+  switch between mock and live service targets.
 - Long-running work belongs in actions/jobs/runs, not synchronous page loaders
   or request handlers.
 - Secrets belong in `ctx.secrets`, not source files, config, logs, artifacts, or

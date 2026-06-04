@@ -6,6 +6,7 @@
 
 - [模块开发](module-development.zh-CN.md)
 - [module.ts 契约规范](module-contract-spec.zh-CN.md)
+- [服务端分离型模块开发指南](service-backed-module-development.zh-CN.md)
 - [AI 辅助模块开发](ai-module-authoring.zh-CN.md)
 - [运行时存储](runtime-stores.zh-CN.md)
 - [安全模型](security-model.zh-CN.md)
@@ -14,19 +15,18 @@
 
 ## 模块源
 
-PloyKit 通过根目录 `ploykit.config.json` 配置模块源：
+PloyKit 模块源码放在仓库内 `modules/<module-id>/`。根目录 `ploykit.config.json` 默认指向 `modules`：
 
 ```json
 {
   "moduleSources": [
-    { "id": "workspace", "path": "modules" },
-    { "id": "client-a", "path": "../client-a-ploykit-modules" }
-  ],
-  "trustedModuleRoots": [".", ".."]
+    { "id": "workspace", "path": "modules" }
+  ]
 }
 ```
 
-`moduleSources` 可以指向仓库内目录，也可以指向仓库外的可信本地源码目录。仓库外目录必须被 `trustedModuleRoots` 覆盖。修改配置或模块入口后运行：
+PloyKit 不再支持从仓库外加载模块源码。服务端、Worker 或第三方 API 可以继续独立在仓库外维护，但 PloyKit module 壳应放在
+`modules/<module-id>/`，并通过 `serviceRequirements` 或 host capabilities 调用外部服务。修改模块或模块入口后运行：
 
 ```bash
 npm run modules:scan

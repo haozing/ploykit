@@ -1,0 +1,21 @@
+{
+  "nav": {
+    "site": "__MODULE_NAME__",
+    "console": "__MODULE_NAME__",
+    "admin": "__MODULE_NAME__ 管理"
+  },
+  "pages": {
+    "home": {
+      "eyebrow": "产品模块",
+      "title": "__MODULE_NAME__",
+      "description": "包含白牌展示与 Data v2 的 PloyKit 产品模块。",
+      "primaryAction": "打开控制台"
+    }
+  },
+  "seo": {
+    "home": {
+      "title": "__MODULE_NAME__",
+      "description": "由 PloyKit 生成的产品模块。"
+    }
+  }
+}

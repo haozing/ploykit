@@ -1,0 +1,11 @@
+{
+  "endpoints": [
+    {
+      "service": "serviceCore",
+      "operation": "request",
+      "method": "GET",
+      "path": "/v1/status",
+      "source": "lib/service-client.ts"
+    }
+  ]
+}

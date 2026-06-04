@@ -1659,10 +1659,10 @@ export function AdminModuleDetailOperationsPage({
               </EvidenceSection>
 
               <EvidenceSection
-                title={adminInlineText(lang, 'Source and release metadata')}
+                title={adminInlineText(lang, 'Module root and release metadata')}
                 description={adminInlineText(
                   lang,
-                  'Generated module-map evidence explains whether source, contract, and release metadata still match.'
+                  'Generated module-map evidence explains whether module files, contract, and release metadata still match.'
                 )}
               >
                 <DataTable
@@ -1670,11 +1670,9 @@ export function AdminModuleDetailOperationsPage({
                   columns={adminInlineColumns(lang, ['Field', 'Value', 'Evidence'])}
                   rows={[
                     [
-                      'Module source',
-                      [module.contractMeta.sourceId, module.contractMeta.sourceKind]
-                        .filter(Boolean)
-                        .join(' / ') || 'workspace',
-                      module.contractMeta.sourceDir ?? 'unknown',
+                      'Module root',
+                      module.contractMeta.rootDir ?? 'unknown',
+                      'workspace modules directory',
                     ],
                     [
                       'Build ID',
@@ -1965,11 +1963,6 @@ export function AdminModuleDetailOperationsPage({
                 { label: 'Version', value: module.version },
                 { label: 'Installed', value: module.installed ? 'yes' : 'no' },
                 { label: 'Required', value: module.required ? 'yes' : 'no' },
-                {
-                  label: 'Source',
-                  value: [contract?.sourceId, contract?.sourceKind].filter(Boolean).join(' / ') || 'unknown',
-                  mono: true,
-                },
                 { label: 'Root', value: contract?.rootDir ?? 'unknown', mono: true },
                 { label: 'Permissions', value: module.permissions.join(', ') || 'none' },
                 { label: 'Catalog', value: compactJson(detail.catalogState ?? {}), mono: true },

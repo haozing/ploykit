@@ -1,14 +1,11 @@
 import type { ModuleRuntimeContract } from '../contract';
-import type { ModuleMapArtifact, ModuleRuntimeMapEntry } from '../loader';
+import type { ModuleMapArtifact } from '../loader';
 
 export interface ModuleBundleManifestModule {
   id: string;
   name?: string;
   version?: string;
   rootDir?: string;
-  sourceId?: string;
-  sourceDir?: string;
-  sourceKind?: ModuleRuntimeMapEntry['sourceKind'];
   files: {
     pages: readonly string[];
     apis: readonly string[];
@@ -79,9 +76,6 @@ export function createModuleBundleManifest(
         name: contract?.name,
         version: contract?.version,
         rootDir: entry.rootDir,
-        sourceId: entry.sourceId,
-        sourceDir: entry.sourceDir,
-        sourceKind: entry.sourceKind,
         files: {
           pages: keys(entry.pages),
           apis: keys(entry.apis),

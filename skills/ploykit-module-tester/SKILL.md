@@ -27,14 +27,20 @@ screenshots and inspect them.
      locale catalogs, module locale resources, and the page presentation loader.
 2. Run code-level validation before starting browsers or servers.
    - Use `references/code-level.md` for command order and review checklist.
-3. Run database/runtime validation when Data v2, runtime stores, jobs, events,
+3. For service-backed modules, inspect the service machine contract and the
+   module service client before real API/browser checks.
+   - Use OpenAPI/AsyncAPI/JSON Schema/Proto plus module fixtures to separate
+     consumer contract, mock behavior, and live smoke evidence.
+   - Do not accept mock evidence for signing, tenant isolation, idempotency,
+     quota, one-time token, lease/retry, or state-machine behavior.
+4. Run database/runtime validation when Data v2, runtime stores, jobs, events,
    files, commercial, AI/RAG, or product scope changed.
    - Use `references/database-runtime.md` for Docker/Postgres rules.
-4. Run real API/action validation against a local app.
+5. Run real API/action validation against a local app.
    - Use `references/real-api.md` for endpoint discovery and request matrix.
-5. Run real browser validation with screenshots and console/network collection.
+6. Run real browser validation with screenshots and console/network collection.
    - Use `references/browser-visual.md` for route sweep and visual inspection.
-6. Report only evidence-backed results.
+7. Report only evidence-backed results.
    - Use `references/reporting.md` for summary shape and pass/fail rules.
 
 ## Operating Rules
@@ -59,6 +65,8 @@ screenshots and inspect them.
 
 ```bash
 npm run module:doctor -- modules/<module-id>
+npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>
+npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml> --write-fixtures
 npm run module:test -- modules/<module-id>
 npm run module:quality -- modules/<module-id> -- --required
 npm run modules:scan

@@ -21,6 +21,12 @@ Check that contract and source usage match:
 - permissions: every used `ctx.*` capability has the matching `Permission.*`
 - public APIs: `anonymousPolicy` exists and blocks unintended high-cost work
 - external HTTP: `ctx.http.fetch`, `Permission.ExternalHttp`, and narrow egress
+- privileged service calls: `serviceRequirements`, `Permission.ServicesInvoke`,
+  and one module-local service client/adapter as the only
+  `ctx.services.invoke(...)` entry
+- service-backed contracts: module client endpoints have a machine contract
+  source such as OpenAPI/AsyncAPI/JSON Schema/Proto, plus fixtures or examples
+  for mock tests
 - Data v2: tables/documents, generated artifacts, migrations, and types are
   synchronized with `module.ts`
 - surfaces/navigation: contribution or override permissions are declared
@@ -38,6 +44,13 @@ Start narrow for a module:
 ```bash
 npm run module:doctor -- modules/<module-id>
 npm run module:test -- modules/<module-id>
+```
+
+For service-backed modules:
+
+```bash
+npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>
+npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml> --write-fixtures
 ```
 
 If contract or generated files changed:
@@ -74,6 +87,10 @@ npm run release:rc-gate
 RC-level claims are for host/product release readiness. Do not add
 module-specific required checks to the global RC gate; module-owned external E2E
 belongs in module README instructions until a generic module E2E entry exists.
+For service-backed modules, RC-level claims also need module-local live smoke or
+service blackbox evidence for signing, tenant isolation, idempotency, quota,
+one-time token, lease/retry, and state-machine behavior. Mock tests alone are
+not enough.
 
 ## Failure Handling
 

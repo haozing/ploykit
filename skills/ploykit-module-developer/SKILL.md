@@ -1,6 +1,6 @@
 ---
 name: ploykit-module-developer
-description: Build, modify, review, and debug PloyKit first-class local modules and host module-runtime capabilities with AI-agent-safe workflows. Use when an AI agent is asked to create or edit modules under modules/, update module.ts contracts, choose module templates, implement module pages/APIs/actions/jobs/events/webhooks/surfaces/lifecycle/data, map ctx capabilities to permissions, run module:doctor/module:test/Data v2 checks, or prepare AI-agent prompts for PloyKit module development.
+description: Build, modify, review, and debug PloyKit first-class local modules and host module-runtime capabilities with AI-agent-safe workflows. Use when an AI agent is asked to create or edit modules under modules/, update module.ts contracts, choose module templates, implement module pages/APIs/actions/jobs/events/webhooks/surfaces/lifecycle/data, connect service-backed modules through OpenAPI/serviceRequirements/ctx.services.invoke, map ctx capabilities to permissions, run module:doctor/module:test/Data v2 checks, or prepare AI-agent prompts for PloyKit module development.
 ---
 
 # PloyKit Module Developer
@@ -26,50 +26,71 @@ changes only when the requested capability cannot be expressed inside a module.
    `product.requiredShells`, `product.pages`, `routes.site`,
    `routes.dashboard`, `routes.admin`, and matching navigation. Do not treat a
    backend Admin API as a product Admin console.
-4. Keep module work inside `modules/<module-id>/` unless the user explicitly
+4. If the module is backed by an independent service, find the machine contract
+   first (`openapi.yaml`, AsyncAPI, JSON Schema, or Proto). Do not implement
+   against handwritten Markdown alone. Declare `contractVersion: 2` and
+   `serviceRequirements`, keep a single module-local service client/adapter as
+   the only `ctx.services.invoke(...)` entry, and use contract/fixture mocks for
+   UI development plus live smoke for signing, tenant, idempotency, quota,
+   one-time token, lease/retry, and state-machine behavior.
+5. Keep module work inside `modules/<module-id>/` unless the user explicitly
    asks for host runtime, SDK, template, documentation, or test harness changes.
-5. Use `@ploykit/module-sdk`, `@ploykit/module-sdk/testing`, module-local paths,
+6. Use `@ploykit/module-sdk`, `@ploykit/module-sdk/testing`, module-local paths,
    and injected `ctx.*` capabilities.
-6. Add permissions that match every used `ctx.*` capability. Remove unused
+7. Add permissions that match every used `ctx.*` capability. Remove unused
    permissions when diagnostics identify them.
-7. Use Data v2 for module persistence. Do not add alternate storage models or
+8. Use Data v2 for module persistence. Do not add alternate storage models or
    compatibility layers.
-8. Add or update module-local tests and only broaden to host tests when the
+9. Add or update module-local tests and only broaden to host tests when the
    change affects shared runtime behavior.
-9. Run `npm run module:doctor -- modules/<module-id>` and repair the first
+10. Run `npm run module:doctor -- modules/<module-id>` and repair the first
    error diagnostic until it succeeds.
-10. Run `npm run modules:scan` when `module.ts`, local handler paths, resources,
+11. For service-backed modules, run
+   `npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>`
+   after editing the service client or service machine contract.
+12. Run `npm run modules:scan` when `module.ts`, local handler paths, resources,
    or generated artifacts change.
-11. For module-owned external end-to-end checks, document the prerequisites,
+13. For module-owned external end-to-end checks, document the prerequisites,
     command, and evidence path in `modules/<module-id>/README.md`; wire it to a
     host quality runner only after a generic module E2E entry exists.
-12. For white-label, public site, auth, dashboard shell, theme, SEO, or locale
+14. For white-label, public site, auth, dashboard shell, theme, SEO, or locale
     work, keep copy in locale catalogs, use `labelKey` for navigation, and
     validate the product presentation gates before handing off.
-13. If a module needs host rendering, routing, quality evidence, or release
+15. If a module needs host rendering, routing, quality evidence, or release
     behavior that has no extension seam, report the missing generic seam first.
     Do not add `moduleId === '<id>'`, `/dashboard/<id>`, or concrete
     `modules/<id>` imports in host/shared code to finish the task.
 
 ## Template Choice
 
-- `basic`: page, API, action, README, and smoke test.
-- `dashboard`: dashboard page, loader, navigation, surface, API, action, and
-  smoke test.
-- `product-app`: public site, workspace console, admin operations, product page
-  shape, multi-shell navigation, surface, and smoke test.
-- `crud`: Data v2 table, page loader, API, action, generated data artifacts,
-  migration, and types.
-- `connector`: connector API/action, sync job, and file result flow.
-- `job`: background job, artifact, and notification flow.
-- `white-label`: public/auth page replacement, locale resources, page
-  presentation loader, semantic theme tokens, and smoke test.
+Target template model:
+
+- `product`: the main module preset. It combines minimal module scaffolding,
+  product shape, white-label/presentation/page replacement, and Data v2 CRUD
+  structure for the common product-module case.
+- `service-backed`: extension for OpenAPI, `serviceRequirements`, service
+  client, contract/fixture mocks, and live smoke.
+- `background`: extension for jobs, events, webhooks, and lifecycle handlers.
+
+The CLI still exposes transitional templates (`basic`, `dashboard`, `crud`,
+`connector`, `signed-service`, `job`, `white-label`, `product-app`) for
+compatibility. Treat them as split pieces of the target model rather than a
+reason to add more top-level templates.
 
 Create a module with:
 
 ```bash
-npm run module:create -- <module-id> --template <basic|dashboard|product-app|crud|connector|job|white-label>
+npm run module:create -- <module-id>
+npm run module:create -- <module-id> --template product
+npm run module:create -- <module-id> --template product --with service-backed
+npm run module:create -- <module-id> --template product --with background
+npm run module:create -- <module-id> --template product --with service-backed,background
 ```
+
+For a full service-backed product, start from `product --with service-backed`.
+Add `background` when the module owns jobs, events, webhooks, lifecycle work, or
+long-running service orchestration. Use `product-app` and `signed-service` only
+as historical references when repairing existing modules.
 
 ## Product Shape Work
 
@@ -116,6 +137,11 @@ Use the Product Presentation Kernel for white-label surfaces:
   `ctx` dynamically.
 - External HTTP must use `ctx.http.fetch(...)`, `Permission.ExternalHttp`, and a
   narrow `egress` origin.
+- Privileged services that need secrets, signing, dynamic claims, private
+  network access, or strong audit must use `serviceRequirements` and
+  `ctx.services.invoke(...)`; do not use `ctx.http.fetch(...)` for those origins.
+- Service-backed modules should switch mock/live behavior through service
+  connection configuration, not by branching page/action code.
 - API handlers must use `defineApi(...)`.
 - Action handlers must use `action(...)` or `defineAction(...)`.
 - Public APIs must declare `anonymousPolicy`.
@@ -141,6 +167,14 @@ Start narrow:
 ```bash
 npm run module:doctor -- modules/<module-id>
 npm run module:test -- modules/<module-id>
+```
+
+For service-backed modules:
+
+```bash
+npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>
+npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml> --write-fixtures
+npm run module:evidence -- --module <module-id> --file ./scripts/live-smoke.ts --runner tsx -- --required
 ```
 
 For Data v2 modules:

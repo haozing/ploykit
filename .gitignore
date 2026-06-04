@@ -14,5 +14,3 @@ test-results/
 .env
 .env.local
 .env.*.local
-ploykit.local.config.json
-ploykit.*.local.json

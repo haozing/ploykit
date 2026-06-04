@@ -38,6 +38,7 @@ import type {
   ModuleRiskApi,
   ModuleRunRecord,
   ModuleRunsApi,
+  ModuleServiceInvokeOptions,
   ModuleScopeContext,
   ModuleSecretsApi,
   ModuleServicesApi,
@@ -52,7 +53,16 @@ export interface CreateTestingModuleContextOptions {
   moduleVersion?: string;
   user?: ModuleUser | null;
   request?: Partial<ModuleRequest>;
+  services?: ModuleServicesApi;
+  serviceHandlers?: Record<string, TestingServiceHandler>;
 }
+
+export type TestingServiceHandler<TInput = unknown, TResult = unknown> = (input: {
+  service: string;
+  operation: string;
+  request: TInput;
+  options?: ModuleServiceInvokeOptions;
+}) => TResult | Promise<TResult>;
 
 function createResponseFactory(): ModuleResponseFactory {
   return {
@@ -293,10 +303,31 @@ function createTestingSecretsApi(): ModuleSecretsApi {
   };
 }
 
-function createTestingServicesApi(): ModuleServicesApi {
+export function createTestingServicesApi(
+  handlers: Record<string, TestingServiceHandler> = {}
+): ModuleServicesApi {
   return {
-    async invoke() {
-      throw new Error('MODULE_TEST_SERVICE_UNAVAILABLE');
+    async invoke<TInput = unknown, TResult = unknown>(
+      name: string,
+      operationOrInput: string | TInput,
+      inputOrOptions?: TInput | ModuleServiceInvokeOptions,
+      maybeOptions?: ModuleServiceInvokeOptions
+    ): Promise<TResult> {
+      const operation = typeof operationOrInput === 'string' ? operationOrInput : 'default';
+      const request = (typeof operationOrInput === 'string' ? inputOrOptions : operationOrInput) as TInput;
+      const options = (typeof operationOrInput === 'string' ? maybeOptions : inputOrOptions) as
+        | ModuleServiceInvokeOptions
+        | undefined;
+      const handler = handlers[`${name}.${operation}`] ?? handlers[name];
+      if (!handler) {
+        throw new Error(`MODULE_TEST_SERVICE_UNAVAILABLE: ${name}.${operation}`);
+      }
+      return (await handler({
+        service: name,
+        operation,
+        request,
+        options,
+      })) as TResult;
     },
   };
 }
@@ -1315,7 +1346,7 @@ export function createTestingModuleContext(
     data: createTestingDataApi(moduleId),
     config: createTestingConfigApi(),
     secrets: createTestingSecretsApi(),
-    services: createTestingServicesApi(),
+    services: options.services ?? createTestingServicesApi(options.serviceHandlers),
     connectors: createTestingConnectorsApi(),
     resourceBindings: createTestingResourceBindingsApi(),
     http: createTestingHttpApi(),

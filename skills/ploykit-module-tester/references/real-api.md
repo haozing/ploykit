@@ -31,6 +31,18 @@ For a module, derive endpoints from `module.ts`:
 For host route sweeps, discover API handlers from `apps/host-next/app/**/route.ts`
 and runtime helpers from `src/lib/module-runtime/**`.
 
+For service-backed modules, also discover the module service client/adapter and
+its machine contract source (`openapi.yaml`, AsyncAPI, JSON Schema, or Proto).
+Separate three validation layers:
+
+- consumer contract: module-used method/path exists in the machine contract;
+  start with `npm run module:service-contract -- modules/<module-id> --openapi
+  <openapi.yaml>`, then add schema-specific evidence when the change needs it
+- mock behavior: fixtures or generated mock responses exercise UI and ordinary
+  action branches
+- live smoke: real service verifies signing, tenant isolation, idempotency,
+  quota, one-time token, lease/retry, and state-machine behavior
+
 ## Request Matrix
 
 For each relevant endpoint or action, test the smallest meaningful matrix:
@@ -42,7 +54,13 @@ For each relevant endpoint or action, test the smallest meaningful matrix:
 - public high-cost route behavior when AI/RAG/files/commercial work is possible
 - commercial guard behavior for entitlements, metering, credits, or checkout
 - egress failure behavior for external HTTP
+- service connection failure and redaction behavior for `ctx.services.invoke`
 - idempotency/retry behavior for webhooks, lifecycle, jobs, and actions
+
+For service-backed modules, include at least one live success and one live
+negative case for the privileged service path. Do not report HMAC, tenant
+isolation, one-time token, quota, lease, retry, or state-machine behavior as
+passed from generated OpenAPI mocks alone.
 
 For Data v2 APIs, verify side effects:
 
@@ -63,6 +81,7 @@ Record for every endpoint:
 - important headers
 - database side-effect check when relevant
 - log file path or summary JSON path
+- whether the response came from mock, fixture, stateful mock, or live service
 
 Never print secrets, full cookies, API keys, signed URLs, or full database URLs
 in the final answer.

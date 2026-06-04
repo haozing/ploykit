@@ -1025,7 +1025,7 @@ export function AdminModuleDevConsoleOperationsPage({
             columns={adminInlineColumns(lang, ['Bundle Module', 'Source', 'Files'])}
             rows={view.bundle.modules.map((module) => [
               module.id,
-              [module.sourceId, module.rootDir ?? 'unknown'].filter(Boolean).join(' / '),
+              module.rootDir ?? 'unknown',
               [
                 module.files.pages.length ? `${module.files.pages.length} pages` : null,
                 module.files.apis.length ? `${module.files.apis.length} apis` : null,
