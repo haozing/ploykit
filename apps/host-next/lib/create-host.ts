@@ -25,6 +25,7 @@ import { createHostRuntimeHealth, type HostRuntimeHealth } from './host-health';
 import { getHostRagProviderStatus } from './rag-provider';
 import { resolveHostRequestSession } from './auth-session';
 import { getHostRuntimeStore, type HostRuntimeStoreHandle } from './runtime-store';
+import { applyHostDevRuntimeSeed } from './dev-runtime-seed';
 import {
   DEFAULT_HOST_ADMIN_USER_ID,
   DEFAULT_HOST_PRODUCT_ID,
@@ -126,6 +127,7 @@ export async function createHostRuntime(): Promise<HostRuntime> {
   ]);
   await ensureHostCatalogSeeded(runtimeStore);
   await ensureHostDemoCreditsSeeded(runtimeStore);
+  await applyHostDevRuntimeSeed(runtimeStore);
   const billingCatalog = await loadHostBillingCatalog(runtimeStore.store, DEFAULT_HOST_PRODUCT_ID);
   const moduleHost = await createModuleHostForRuntime({
     runtimeStore,

@@ -30,6 +30,56 @@ function createModuleDependencyAliases(formatPackageRoot) {
   return aliases;
 }
 
+function packageRuntimeEntry(packageRoot) {
+  const packageJson = readPackageJson(path.join(packageRoot, 'package.json'));
+  const exportsDot = packageJson?.exports?.['.'] ?? packageJson?.exports;
+  const candidates = [
+    exportTarget(exportsDot?.import?.default),
+    exportTarget(exportsDot?.import),
+    exportTarget(exportsDot?.default),
+    exportTarget(packageJson?.module),
+    exportTarget(exportsDot?.require?.default),
+    exportTarget(exportsDot?.require),
+    exportTarget(packageJson?.main),
+    'index.js',
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (candidate.endsWith('.d.ts') || candidate.endsWith('.d.mts') || candidate.endsWith('.d.cts')) {
+      continue;
+    }
+    const runtimePath = path.join(packageRoot, candidate);
+    if (fs.existsSync(runtimePath)) {
+      return runtimePath;
+    }
+  }
+
+  return packageRoot;
+}
+
+function readPackageJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function exportTarget(value) {
+  return typeof value === 'string' ? value.replace(/^\.\//, '') : undefined;
+}
+
+function createWebpackDependencyAliases() {
+  const aliases = {};
+  for (const [dependencyName, packageRoot] of Object.entries({
+    ...createHostSharedDependencyAliases((root) => root),
+    ...createModuleDependencyAliases((root) => root),
+  })) {
+    aliases[`${dependencyName}$`] = packageRuntimeEntry(packageRoot);
+  }
+  return aliases;
+}
+
 function createHostSharedDependencyAliases(formatPackageRoot) {
   const aliases = {};
   const dependencyNames = [
@@ -52,11 +102,10 @@ function createHostSharedDependencyAliases(formatPackageRoot) {
 const turbopackModuleDependencyAliases = createModuleDependencyAliases((packageRoot) =>
   relativeImportPath(nextConfigDir, packageRoot)
 );
-const webpackModuleDependencyAliases = createModuleDependencyAliases((packageRoot) => packageRoot);
 const turbopackHostSharedDependencyAliases = createHostSharedDependencyAliases((packageRoot) =>
   relativeImportPath(nextConfigDir, packageRoot)
 );
-const webpackHostSharedDependencyAliases = createHostSharedDependencyAliases((packageRoot) => packageRoot);
+const webpackDependencyAliases = createWebpackDependencyAliases();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -75,8 +124,7 @@ const nextConfig = {
   webpack(config) {
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
-      ...webpackHostSharedDependencyAliases,
-      ...webpackModuleDependencyAliases,
+      ...webpackDependencyAliases,
     };
     config.resolve.modules = [
       ...(config.resolve.modules ?? []),
