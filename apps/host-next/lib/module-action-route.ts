@@ -36,6 +36,13 @@ interface ActionFailureEnvelope {
   code?: unknown;
   message?: unknown;
   details?: unknown;
+  publicDetails?: unknown;
+}
+
+interface ActionErrorInfo {
+  code: string;
+  message: string;
+  publicDetails?: unknown;
 }
 
 class ModuleActionPayloadError extends Error {
@@ -197,6 +204,29 @@ function readIdempotencyKey(request: Request): string | undefined {
   );
 }
 
+function firstHeaderValue(value: string | null): string | null {
+  return value?.split(',')[0]?.trim() || null;
+}
+
+function redirectBaseUrl(request: Request): URL {
+  const fallback = new URL(request.url);
+  const host =
+    firstHeaderValue(request.headers.get('x-forwarded-host')) ??
+    firstHeaderValue(request.headers.get('host'));
+  const forwardedProto = firstHeaderValue(request.headers.get('x-forwarded-proto'));
+  const protocol = forwardedProto ? `${forwardedProto.replace(/:$/, '')}:` : fallback.protocol;
+
+  if (!host) {
+    return fallback;
+  }
+
+  try {
+    return new URL(`${protocol}//${host}`);
+  } catch {
+    return fallback;
+  }
+}
+
 function safeRedirectTarget(
   request: Request,
   target: string | undefined,
@@ -204,10 +234,11 @@ function safeRedirectTarget(
   code?: string
 ) {
   const fallback = request.headers.get('referer') ?? '/dashboard';
-  const url = new URL(target ?? fallback, request.url);
-  const origin = new URL(request.url).origin;
+  const base = redirectBaseUrl(request);
+  const url = new URL(target ?? fallback, base);
+  const origin = base.origin;
   if (url.origin !== origin) {
-    return new URL('/dashboard', request.url);
+    return new URL('/dashboard', base);
   }
   url.searchParams.set('moduleAction', status);
   if (code) {
@@ -228,6 +259,7 @@ function actionErrorStatus(code: string): number {
   if (
     code.includes('ADMIN_REQUIRED') ||
     code.includes('PERMISSION') ||
+    code.includes('FORBIDDEN') ||
     code.includes('ENTITLEMENT') ||
     code.includes('PLAN_REQUIRED') ||
     code.includes('CREDITS_REQUIRED')
@@ -272,7 +304,7 @@ function safeActionErrorMessage(value: unknown, fallback: string): string {
   return message.slice(0, 240);
 }
 
-function actionErrorDetails(error: unknown): { code: string; message: string } {
+function actionErrorDetails(error: unknown): ActionErrorInfo {
   const message = error instanceof Error ? error.message : 'Module action failed.';
   const code = message.match(/^(MODULE_ACTION_[A-Z0-9_]+)/)?.[1];
   if (!code) {
@@ -284,19 +316,17 @@ function actionErrorDetails(error: unknown): { code: string; message: string } {
   };
 }
 
-function actionFailureEnvelopeDetails(envelope: ActionFailureEnvelope): {
-  code: string;
-  message: string;
-} {
+function actionFailureEnvelopeDetails(envelope: ActionFailureEnvelope): ActionErrorInfo {
   const code = safeActionErrorCode(envelope.code, 'MODULE_ACTION_BUSINESS_ERROR');
   return {
     code,
     message: safeActionErrorMessage(envelope.message, 'Module action failed.'),
+    publicDetails: envelope.publicDetails,
   };
 }
 
 function actionErrorResponse(error: unknown): Response {
-  const { code, message } = isActionFailureEnvelope(error)
+  const { code, message, publicDetails } = isActionFailureEnvelope(error)
     ? actionFailureEnvelopeDetails(error)
     : actionErrorDetails(error);
   return Response.json(
@@ -304,9 +334,16 @@ function actionErrorResponse(error: unknown): Response {
       ok: false,
       code,
       message,
+      ...(publicDetails === undefined ? {} : { details: publicDetails }),
     },
     { status: actionErrorStatus(code) }
   );
+}
+
+function logModuleActionRouteError(error: unknown): void {
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[module-action-route] action failed', error);
+  }
 }
 
 export async function handleModuleActionPost(
@@ -348,6 +385,7 @@ export async function handleModuleActionPost(
 
     return Response.json({ ok: true, result });
   } catch (error) {
+    logModuleActionRouteError(error);
     if (payload.redirectOnComplete) {
       const { code } = actionErrorDetails(error);
       return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'error', code), 303);

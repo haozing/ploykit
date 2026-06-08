@@ -9,6 +9,7 @@ import type {
 export type ProductScopeResolutionSource =
   | 'adminOverride'
   | 'domainAlias'
+  | 'workspaceOverride'
   | 'urlWorkspace'
   | 'sessionDefault'
   | 'productDefault';
@@ -23,6 +24,7 @@ export interface ResolveProductScopeInput {
   request: Request;
   session?: ModuleRuntimeAccessSession;
   adminOverride?: ProductScopeOverride;
+  workspaceOverride?: ProductScopeOverride;
   workspaceSlug?: string;
 }
 
@@ -139,6 +141,22 @@ export function resolveProductScope(input: ResolveProductScopeInput): ProductSco
       userId
     );
     if (resolution) {
+      return resolution;
+    }
+  }
+
+  if (input.workspaceOverride) {
+    const resolution = resolutionFrom(
+      input.snapshot,
+      'workspaceOverride',
+      input.workspaceOverride.productId,
+      input.workspaceOverride.workspaceId,
+      userId
+    );
+    if (
+      resolution &&
+      (input.session?.user?.role === 'admin' || resolution.membership?.status === 'active')
+    ) {
       return resolution;
     }
   }

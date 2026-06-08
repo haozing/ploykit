@@ -66,6 +66,22 @@ function moduleRobots(metadata: unknown): Metadata['robots'] {
   };
 }
 
+function readSiteShellChrome(metadata: unknown): 'none' | 'site' | 'workspace' | 'admin' | undefined {
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined;
+  }
+
+  const shell = (metadata as Record<string, unknown>).shell;
+  if (!shell || typeof shell !== 'object') {
+    return undefined;
+  }
+
+  const chrome = (shell as Record<string, unknown>).chrome;
+  return chrome === 'none' || chrome === 'site' || chrome === 'workspace' || chrome === 'admin'
+    ? chrome
+    : undefined;
+}
+
 export async function siteModuleMetadata(pathname: string): Promise<Metadata> {
   const lang = languageFromPathname(pathname);
   const modulePathname = stripLanguagePrefix(pathname);
@@ -136,9 +152,18 @@ export async function renderSiteModulePage(pathname: string) {
     metadata: result.page.metadata,
     language: lang,
   });
+  const usesModuleChrome = readSiteShellChrome(result.page.metadata) === 'none';
   const title = readMetadataString(result.page.metadata, 'title') ?? result.page.contract.name;
   const description =
     readMetadataString(result.page.metadata, 'description') ?? result.page.contract.description;
+
+  if (usesModuleChrome) {
+    return (
+      <SiteFrame lang={lang} navItems={headerItems} footerItems={footerItems}>
+        <ModuleValue value={output} />
+      </SiteFrame>
+    );
+  }
 
   return (
     <SiteFrame lang={lang} navItems={headerItems} footerItems={footerItems}>

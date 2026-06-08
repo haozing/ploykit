@@ -20,7 +20,80 @@ import {
   DEFAULT_PRODUCT_SCOPE_SNAPSHOT,
 } from './default-scope';
 
+export const HOST_PRODUCT_SCOPE_COOKIE = 'ploykit_product_scope';
+
 const seedPromises = new WeakMap<RuntimeStore, Promise<void>>();
+
+function parseCookieHeader(header: string | null): Map<string, string> {
+  const cookies = new Map<string, string>();
+  if (!header) {
+    return cookies;
+  }
+  for (const part of header.split(';')) {
+    const [name, ...valueParts] = part.trim().split('=');
+    if (!name) {
+      continue;
+    }
+    cookies.set(name, decodeURIComponent(valueParts.join('=') ?? ''));
+  }
+  return cookies;
+}
+
+function encodeProductScopeCookieValue(input: {
+  productId: string;
+  workspaceId: string;
+}): string {
+  return Buffer.from(JSON.stringify(input), 'utf8').toString('base64url');
+}
+
+function decodeProductScopeCookieValue(value: string | undefined): {
+  productId: string;
+  workspaceId: string;
+} | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as Record<string, unknown>).productId === 'string' &&
+      typeof (parsed as Record<string, unknown>).workspaceId === 'string'
+    ) {
+      return parsed as { productId: string; workspaceId: string };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function createProductScopeCookie(input: {
+  productId: string;
+  workspaceId: string;
+}): string {
+  const maxAgeSeconds = 365 * 24 * 60 * 60;
+  const cookie = [
+    `${HOST_PRODUCT_SCOPE_COOKIE}=${encodeURIComponent(encodeProductScopeCookieValue(input))}`,
+    'Path=/',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (process.env.NODE_ENV === 'production') {
+    cookie.push('Secure');
+  }
+  return cookie.join('; ');
+}
+
+function readProductScopeCookie(request: Request): {
+  productId: string;
+  workspaceId: string;
+} | null {
+  return decodeProductScopeCookieValue(
+    parseCookieHeader(request.headers.get('cookie')).get(HOST_PRODUCT_SCOPE_COOKIE)
+  );
+}
 
 function defaultSnapshot(): ProductScopeSnapshot {
   return DEFAULT_PRODUCT_SCOPE_SNAPSHOT;
@@ -154,6 +227,7 @@ export async function resolveDemoProductScope(request: Request): Promise<Product
     snapshot,
     request,
     session,
+    workspaceOverride: readProductScopeCookie(request) ?? undefined,
   });
 }
 

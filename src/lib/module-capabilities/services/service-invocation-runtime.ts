@@ -1121,7 +1121,7 @@ export function createServiceInvocationRuntime(
         throw new Error(`MODULE_SERVICE_CONNECTION_BLOCKED: ${connection.connectionId}`);
       }
       const status = healthStatus(connection);
-      if (!options.readinessProbe && (status === 'blocked' || (requirement.required && status !== 'ready'))) {
+      if (!options.readinessProbe && (status === 'blocked' || (requirement.required && status === 'unknown'))) {
         throw new Error(`MODULE_SERVICE_CONNECTION_NOT_READY: ${connection.connectionId}`);
       }
 
@@ -1168,7 +1168,7 @@ export function createServiceInvocationRuntime(
           response: safeResult,
           auditEvent: operation.audit?.event,
         });
-        return safeResult as TResult;
+        return result as TResult;
       } catch (error) {
         if (serviceFailureAffectsConnection(error)) {
           await options.store

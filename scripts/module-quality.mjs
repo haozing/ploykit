@@ -141,6 +141,36 @@ function runCommand(moduleId, evidence) {
   };
 }
 
+function runRuntimeEvidence(scriptName, args = []) {
+  if (noRun) {
+    return undefined;
+  }
+  const startedAt = Date.now();
+  const result = spawnSync(process.execPath, [path.resolve(projectRoot, scriptName), ...args], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const commandDir = path.join(outputDir, 'commands');
+  fs.mkdirSync(commandDir, { recursive: true });
+  const prefix = safeId(scriptName);
+  const stdoutLog = path.join(commandDir, `${prefix}.stdout.log`);
+  const stderrLog = path.join(commandDir, `${prefix}.stderr.log`);
+  fs.writeFileSync(stdoutLog, result.stdout ?? '');
+  fs.writeFileSync(stderrLog, result.stderr ?? '');
+  return {
+    script: scriptName,
+    args,
+    ok: result.status === 0,
+    status: result.status,
+    durationMs: Date.now() - startedAt,
+    stdoutLog,
+    stderrLog,
+    error: result.error?.message ?? (result.status === 0 ? undefined : result.stderr?.trim()),
+  };
+}
+
 const manifest = readModuleQualityManifest(projectRoot);
 const modules = manifest.modules
   .filter((moduleInfo) => {
@@ -171,6 +201,25 @@ const productChecks = collectModuleProductChecks(projectRoot).filter((check) =>
 );
 
 const checks = [];
+const runtimeCommandResults = [];
+if (browserRoutes.length > 0) {
+  runtimeCommandResults.push({
+    id: 'browser-routes',
+    command: runRuntimeEvidence('scripts/host-browser-matrix.mjs', [
+      '--module-quality-only',
+      ...(required ? ['--required'] : []),
+    ]),
+  });
+}
+if (accessibilityRoutes.length > 0) {
+  runtimeCommandResults.push({
+    id: 'accessibility-routes',
+    command: runRuntimeEvidence('scripts/host-accessibility-smoke.mjs', [
+      '--module-quality-only',
+      ...(required ? ['--required'] : []),
+    ]),
+  });
+}
 if (manifest.error) {
   checks.push({
     id: 'module-quality-manifest',
@@ -251,7 +300,7 @@ const report = {
   moduleIds: [...moduleIds],
   targets,
   checks,
-  commands: commandResults,
+  commands: [...runtimeCommandResults, ...commandResults],
   artifacts: {
     report: reportPath,
     latest: latestPath,

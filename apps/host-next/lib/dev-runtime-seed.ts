@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { createHostPasswordHash } from './auth';
 import type { HostRuntimeStoreHandle } from './runtime-store';
@@ -7,9 +8,15 @@ import type { ModuleWorkspaceRole } from '@ploykit/module-sdk';
 interface DevRuntimeSeed {
   hostUsers?: Array<Record<string, unknown>>;
   memberships?: Array<Record<string, unknown>>;
+  productScopeProducts?: Array<Record<string, unknown>>;
+  productScopeWorkspaces?: Array<Record<string, unknown>>;
+  productScopeDomainAliases?: Array<Record<string, unknown>>;
+  productScopeInvites?: Array<Record<string, unknown>>;
   serviceConnections?: Array<Record<string, unknown>>;
   resourceBindings?: Array<Record<string, unknown>>;
 }
+
+const seedApplyState = new WeakMap<HostRuntimeStoreHandle, { path: string; fingerprint: string }>();
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -33,8 +40,13 @@ function workspaceRoleValue(value: unknown, fallback: ModuleWorkspaceRole): Modu
     : fallback;
 }
 
-export async function applyHostDevRuntimeSeed(
-  runtimeStore: HostRuntimeStoreHandle
+function seedFingerprint(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+async function applyHostDevRuntimeSeedInternal(
+  runtimeStore: HostRuntimeStoreHandle,
+  options: { force: boolean }
 ): Promise<void> {
   const seedFile = process.env.PLOYKIT_HOST_DEV_SEED_FILE;
   if (!seedFile || process.env.NODE_ENV === 'production') {
@@ -42,7 +54,96 @@ export async function applyHostDevRuntimeSeed(
   }
 
   const resolvedPath = path.resolve(seedFile);
-  const seed = JSON.parse(await fs.readFile(resolvedPath, 'utf8')) as DevRuntimeSeed;
+  const seedText = await fs.readFile(resolvedPath, 'utf8');
+  const fingerprint = seedFingerprint(seedText);
+  const state = seedApplyState.get(runtimeStore);
+  if (
+    !options.force &&
+    state?.path === resolvedPath &&
+    state.fingerprint === fingerprint
+  ) {
+    return;
+  }
+
+  const seed = JSON.parse(seedText) as DevRuntimeSeed;
+
+  for (const product of arrayValue(seed.productScopeProducts)) {
+    const id = stringValue(product.id);
+    const name = stringValue(product.name);
+    if (!id || !name) {
+      continue;
+    }
+    const profile = stringValue(product.profile);
+    await runtimeStore.store.upsertProductScopeProduct({
+      id,
+      name,
+      profile:
+        profile === 'explicit-workspace' || profile === 'domain-alias' || profile === 'hidden-default'
+          ? profile
+          : 'hidden-default',
+      defaultWorkspaceId: stringValue(product.defaultWorkspaceId),
+    });
+  }
+
+  for (const workspace of arrayValue(seed.productScopeWorkspaces)) {
+    const id = stringValue(workspace.id);
+    const productId = stringValue(workspace.productId);
+    const name = stringValue(workspace.name);
+    const slug = stringValue(workspace.slug);
+    if (!id || !productId || !name || !slug) {
+      continue;
+    }
+    await runtimeStore.store.upsertProductScopeWorkspace({
+      id,
+      productId,
+      name,
+      slug,
+      domainAliases: Array.isArray(workspace.domainAliases)
+        ? workspace.domainAliases.filter((alias): alias is string => typeof alias === 'string')
+        : undefined,
+    });
+  }
+
+  for (const alias of arrayValue(seed.productScopeDomainAliases)) {
+    const hostname = stringValue(alias.hostname);
+    const productId = stringValue(alias.productId);
+    if (!hostname || !productId) {
+      continue;
+    }
+    await runtimeStore.store.upsertProductScopeDomainAlias({
+      hostname,
+      productId,
+      workspaceId: stringValue(alias.workspaceId),
+    });
+  }
+
+  for (const invite of arrayValue(seed.productScopeInvites)) {
+    const id = stringValue(invite.id);
+    const productId = stringValue(invite.productId);
+    const workspaceId = stringValue(invite.workspaceId);
+    const email = stringValue(invite.email);
+    const token = stringValue(invite.token);
+    const expiresAt = stringValue(invite.expiresAt);
+    if (!id || !productId || !workspaceId || !email || !token || !expiresAt) {
+      continue;
+    }
+    const status = stringValue(invite.status);
+    await runtimeStore.store.upsertProductScopeInvite({
+      id,
+      productId,
+      workspaceId,
+      email,
+      role: workspaceRoleValue(invite.role, 'viewer'),
+      status:
+        status === 'accepted' || status === 'revoked' || status === 'expired'
+          ? status
+          : 'pending',
+      token,
+      expiresAt,
+      invitedBy: stringValue(invite.invitedBy),
+      acceptedBy: stringValue(invite.acceptedBy),
+    });
+  }
 
   for (const user of arrayValue(seed.hostUsers)) {
     const id = stringValue(user.id);
@@ -139,4 +240,18 @@ export async function applyHostDevRuntimeSeed(
       },
     });
   }
+
+  seedApplyState.set(runtimeStore, { path: resolvedPath, fingerprint });
+}
+
+export async function applyHostDevRuntimeSeed(
+  runtimeStore: HostRuntimeStoreHandle
+): Promise<void> {
+  await applyHostDevRuntimeSeedInternal(runtimeStore, { force: true });
+}
+
+export async function applyHostDevRuntimeSeedIfChanged(
+  runtimeStore: HostRuntimeStoreHandle
+): Promise<void> {
+  await applyHostDevRuntimeSeedInternal(runtimeStore, { force: false });
 }

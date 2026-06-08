@@ -72,6 +72,12 @@ function pageError(
   return { ok: false, status, code, message };
 }
 
+function logModulePageHandlerError(error: unknown): void {
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[module-page-route] handler failed', error);
+  }
+}
+
 async function loadDefaultExport(loader: () => Promise<unknown>): Promise<unknown> {
   return readModuleDefaultExport(await loader());
 }
@@ -199,7 +205,8 @@ export async function resolveModulePageRoute(
         metadata,
       },
     };
-  } catch {
+  } catch (error) {
+    logModulePageHandlerError(error);
     return pageError(500, 'MODULE_PAGE_HANDLER_ERROR', 'Module page route failed.');
   }
 }

@@ -6,8 +6,12 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import nodeTest from 'node:test';
 import {
+  createModuleRouteManifest,
   createInMemoryRuntimeStore,
+  loadModuleRuntimeContracts,
 } from '../src/lib/module-runtime';
+import { MODULE_MAP_ARTIFACT } from '../src/lib/module-map';
+import { Permission } from '../src/module-sdk';
 import {
   COMMERCIAL_ORDER_STATUS_EVENT_NAME,
   createMemoryModuleFileStorage,
@@ -106,6 +110,9 @@ import {
   uploadHostUserFile,
 } from '../apps/host-next/lib/files';
 import { getHostRuntime, getHostRuntimeHealth } from '../apps/host-next/lib/create-host';
+import {
+  applyModuleSelfServiceSessionPermissions,
+} from '../apps/host-next/lib/create-host';
 import { baseHostSettings, mergeHostSettings } from '../apps/host-next/lib/host-settings';
 import { DEFAULT_HOST_PRODUCT_ID } from '../apps/host-next/lib/default-scope';
 import { runHostConfigDoctor } from '../apps/host-next/lib/config-doctor';
@@ -2369,6 +2376,34 @@ test('K4 host security catalog covers main routes and blocks cross-origin mutati
   assert.ok(ownerCapabilities.includes('workspace.manage'));
   assert.equal(ownerCapabilities.includes('admin.access'), false);
   assert.equal(ownerCapabilities.includes('billing.write'), false);
+
+  const baseModuleSession = {
+    user: { id: 'self-service-user', role: 'user' as const },
+    userId: 'self-service-user',
+    permissions: USER_MODULE_PERMISSIONS,
+    data: null,
+  };
+  const moduleContracts = await loadModuleRuntimeContracts(MODULE_MAP_ARTIFACT);
+  const moduleRoutes = createModuleRouteManifest(moduleContracts);
+  const helloDashboardContract = moduleContracts.find((contract) =>
+    contract.routes.dashboard.some((route) => route.path === '/hello')
+  );
+  assert.ok(helloDashboardContract);
+  const helloDashboardSession = applyModuleSelfServiceSessionPermissions(baseModuleSession, {
+    operation: 'page',
+    routeKind: 'dashboard',
+    pathname: '/hello',
+  }, moduleContracts, moduleRoutes);
+  for (const permission of helloDashboardContract.permissions) {
+    assert.ok(helloDashboardSession.permissions?.includes(permission));
+  }
+  const unrelatedDashboardSession = applyModuleSelfServiceSessionPermissions(baseModuleSession, {
+    operation: 'page',
+    routeKind: 'dashboard',
+    pathname: '/does-not-match-a-module',
+  }, moduleContracts, moduleRoutes);
+  assert.equal(unrelatedDashboardSession.permissions?.includes(Permission.ServicesInvoke), false);
+  assert.equal(unrelatedDashboardSession.permissions?.includes(Permission.ResourceBindingsRead), false);
 
   const adminShellAudit = auditAdminShellRegistry(process.cwd());
   assert.equal(adminShellAudit.ok, true);

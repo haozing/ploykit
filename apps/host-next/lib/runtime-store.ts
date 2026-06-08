@@ -107,7 +107,17 @@ export function resolveHostRuntimeStoreConfig(
   };
 }
 
+const RUNTIME_STORE_GLOBAL_KEY = Symbol.for('ploykit.host.runtimeStorePromise');
+
+type HostRuntimeStoreGlobal = typeof globalThis & {
+  [RUNTIME_STORE_GLOBAL_KEY]?: Promise<HostRuntimeStoreHandle> | null;
+};
+
 let runtimeStorePromise: Promise<HostRuntimeStoreHandle> | null = null;
+
+function runtimeStoreGlobal(): HostRuntimeStoreGlobal {
+  return globalThis as HostRuntimeStoreGlobal;
+}
 
 export function assertHostRuntimeStoreConfig(
   config: HostRuntimeStoreConfig,
@@ -182,6 +192,11 @@ async function createRuntimeStoreHandle(): Promise<HostRuntimeStoreHandle> {
 }
 
 export function getHostRuntimeStore(): Promise<HostRuntimeStoreHandle> {
+  if (process.env.NODE_ENV !== 'production') {
+    const state = runtimeStoreGlobal();
+    state[RUNTIME_STORE_GLOBAL_KEY] ??= createRuntimeStoreHandle();
+    return state[RUNTIME_STORE_GLOBAL_KEY]!;
+  }
   runtimeStorePromise ??= createRuntimeStoreHandle();
   return runtimeStorePromise;
 }
@@ -192,4 +207,5 @@ export async function getHostRuntimeStoreStatus(): Promise<HostRuntimeStoreStatu
 
 export function resetHostRuntimeStoreForTests(): void {
   runtimeStorePromise = null;
+  runtimeStoreGlobal()[RUNTIME_STORE_GLOBAL_KEY] = null;
 }

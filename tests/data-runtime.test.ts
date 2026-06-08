@@ -5,6 +5,8 @@ import test from 'node:test';
 import { Pool, type QueryResultRow } from 'pg';
 import { normalizeModuleRuntimeContract } from '../src/lib/module-runtime/contract/normalize-contract';
 import {
+  createMemoryModuleDataApi,
+  createMemoryModuleDataStore,
   createPgModuleDataExecutor,
   createPostgresModuleDataApi,
   createPostgresModuleDataHostFactory,
@@ -247,6 +249,61 @@ test('Data v2 Postgres runtime refuses unsafe RLS context options by default', a
       wrapOperationsInTransaction: false,
       unsafeAllowRlsBypass: true,
     })
+  );
+});
+
+test('Data v2 memory runtime supports table upsert without a Postgres store', async () => {
+  const contract = await readModuleContract('capability-demo');
+  const store = createMemoryModuleDataStore();
+  const workspaceA = createMemoryModuleDataApi({
+    contract,
+    store,
+    session: {
+      productId: 'product_a',
+      workspaceId: 'workspace_a',
+      scopeId: 'workspace_a',
+      userId: 'user_a',
+      actorId: 'user_a',
+    },
+  });
+  const workspaceB = createMemoryModuleDataApi({
+    contract,
+    store,
+    session: {
+      productId: 'product_a',
+      workspaceId: 'workspace_b',
+      scopeId: 'workspace_b',
+      userId: 'user_b',
+      actorId: 'user_b',
+    },
+  });
+
+  const first = await workspaceA.table('demo_notes').upsert(
+    {
+      title: 'memory-runtime-post',
+      body: 'first body',
+    },
+    { uniqueBy: ['title'] }
+  );
+  const second = await workspaceA.table('demo_notes').upsert(
+    {
+      title: 'memory-runtime-post',
+      body: 'updated body',
+    },
+    { uniqueBy: ['title'] }
+  );
+
+  assert.equal(first.title, 'memory-runtime-post');
+  assert.equal(second.id, first.id);
+  assert.equal(second.body, 'updated body');
+  assert.equal(
+    (await workspaceA.table('demo_notes').findOne({ where: { title: 'memory-runtime-post' } }))
+      ?.body,
+    'updated body'
+  );
+  assert.equal(
+    await workspaceB.table('demo_notes').findOne({ where: { title: 'memory-runtime-post' } }),
+    null
   );
 });
 

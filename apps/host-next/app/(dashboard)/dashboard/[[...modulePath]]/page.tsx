@@ -17,6 +17,7 @@ import {
   type SupportedLanguage,
 } from '@host/lib/i18n';
 import { dashboardInlineText } from '@host/lib/dashboard-copy';
+import { applyModuleSelfServiceSessionPermissions } from '@host/lib/create-host';
 import { getModuleHost } from '@host/lib/module-host';
 import { createHostRequest, dashboardHref, modulePathFromSegments } from '@host/lib/paths';
 import {
@@ -199,6 +200,23 @@ function dashboardPageChrome(
   };
 }
 
+function applyDashboardModuleSessionPermissions(
+  host: ModuleHost,
+  session: ModuleHostSession,
+  pathname: string
+): ModuleHostSession {
+  return applyModuleSelfServiceSessionPermissions(
+    session,
+    {
+      operation: 'page',
+      routeKind: 'dashboard',
+      pathname,
+    },
+    host.runtime.contracts,
+    host.runtime.routes
+  );
+}
+
 export async function generateMetadata({ params }: DashboardPageProps): Promise<Metadata> {
   const { modulePath } = await params;
   const pathname = modulePathFromSegments(modulePath);
@@ -211,7 +229,11 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
 
   const host = await getModuleHost();
   const request = await createScopedDashboardRequest(dashboardHref(pathname));
-  const session = await createScopedDemoHostSession(request);
+  const session = applyDashboardModuleSessionPermissions(
+    host,
+    await createScopedDemoHostSession(request),
+    pathname
+  );
   const result = await host.resolvePageRoute({
     kind: 'dashboard',
     pathname,
@@ -368,6 +390,7 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
     query
   );
   const session = await createScopedDemoHostSession(request);
+  const moduleSession = applyDashboardModuleSessionPermissions(host, session, pathname);
   const navGroups = dashboardNavGroups(host, session, lang);
   const modulePageResult =
     pathname === '/'
@@ -376,12 +399,12 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
           kind: 'dashboard',
           pathname,
           request,
-          session,
+          session: moduleSession,
         });
   const moduleChrome = modulePageResult
     ? dashboardPageChrome(
         modulePageResult,
-        dashboardNavigationLabel(host, session, pathname, lang),
+        dashboardNavigationLabel(host, moduleSession, pathname, lang),
         lang
       )
     : null;

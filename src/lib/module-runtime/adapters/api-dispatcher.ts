@@ -71,6 +71,12 @@ function jsonError(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, message }, { status });
 }
 
+function logModuleApiHandlerError(error: unknown): void {
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[module-api-route] handler failed', error);
+  }
+}
+
 function routeAllowsMethod(route: ModuleApiRoute, method: string): boolean {
   const targetMethod = method.toUpperCase();
   return (route.methods ?? ['GET']).some((candidate) => candidate === targetMethod);
@@ -254,7 +260,8 @@ export async function dispatchModuleApiRoute(
 
   try {
     return await handler(context);
-  } catch {
+  } catch (error) {
+    logModuleApiHandlerError(error);
     return jsonError(500, 'MODULE_API_HANDLER_ERROR', 'Module API handler failed.');
   }
 }

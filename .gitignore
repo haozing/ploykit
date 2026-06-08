@@ -9,6 +9,8 @@ test-results/
 .runtime/
 .ploykit/generated/
 .ploykit-build/
+modules/*/.tmp/
+modules/*/tests/artifacts/
 *.tsbuildinfo
 *.log
 .env

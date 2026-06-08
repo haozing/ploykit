@@ -741,6 +741,173 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
   assert.ok(!serializedMetadata.includes('bearer-secret'));
 });
 
+test('runtime services.invoke keeps required warning connections callable', async () => {
+  const serviceModule = defineModule({
+    contractVersion: 2,
+    id: 'service-warning-test',
+    name: 'Service Warning Test',
+    version: '0.1.0',
+    permissions: [Permission.ServicesInvoke],
+    serviceRequirements: {
+      adminApi: {
+        required: true,
+        provider: 'admin-api',
+        kind: 'signed-http',
+        connection: {
+          baseUrl: 'https://admin.example',
+          egress: ['https://admin.example'],
+        },
+        operations: {
+          call: {
+            method: 'GET',
+            auth: { type: 'none' },
+            signing: { type: 'none' },
+            request: { body: 'none' },
+            response: { body: 'json' },
+          },
+        },
+      },
+    },
+  });
+  const contract = normalizeModuleRuntimeContract(serviceModule);
+  const store = createInMemoryRuntimeStore();
+  await store.upsertServiceConnection({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    moduleId: contract.id,
+    connectionId: `${contract.id}:service:adminApi`,
+    service: 'adminApi',
+    provider: 'admin-api',
+    status: 'active',
+    config: { baseUrl: 'https://admin.example' },
+    health: { status: 'warning', lastError: 'HTTP 400' },
+  });
+  let called = false;
+  const services = createServiceInvocationRuntime({
+    contract,
+    store,
+    session: {
+      user: null,
+      productId: 'product-a',
+      workspaceId: 'workspace-a',
+      permissions: [Permission.ServicesInvoke],
+    },
+    request: { id: 'req-warning', correlationId: 'corr-warning', method: 'GET', path: '/test' },
+    privateNetworkResolver: async () => ['203.0.113.10'],
+    async fetchImpl() {
+      called = true;
+      return Response.json({ ok: true });
+    },
+  });
+
+  const result = (await services.invoke('adminApi', 'call', {})) as { ok: boolean };
+
+  assert.equal(called, true);
+  assert.equal(result.ok, true);
+  assert.equal(
+    (await store.getServiceConnection('product-a', `${contract.id}:service:adminApi`))?.health
+      .status,
+    'ready'
+  );
+});
+
+test('runtime services.invoke does not dispatch blocked or disabled signed-service connections', async () => {
+  const serviceModule = defineModule({
+    contractVersion: 2,
+    id: 'service-blocked-disabled-test',
+    name: 'Service Blocked Disabled Test',
+    version: '0.1.0',
+    permissions: [Permission.ServicesInvoke],
+    serviceRequirements: {
+      adminApi: {
+        required: true,
+        provider: 'admin-api',
+        kind: 'signed-http',
+        connection: {
+          baseUrl: 'https://admin.example',
+          egress: ['https://admin.example'],
+        },
+        operations: {
+          call: {
+            method: 'GET',
+            auth: { type: 'none' },
+            signing: { type: 'none' },
+            request: { body: 'none' },
+            response: { body: 'json' },
+          },
+        },
+      },
+    },
+  });
+  const contract = normalizeModuleRuntimeContract(serviceModule);
+  const store = createInMemoryRuntimeStore();
+  const connectionId = `${contract.id}:service:adminApi`;
+  await store.upsertServiceConnection({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    moduleId: contract.id,
+    connectionId,
+    service: 'adminApi',
+    provider: 'admin-api',
+    status: 'active',
+    config: { baseUrl: 'https://admin.example' },
+    health: { status: 'blocked', lastError: 'missing required HMAC secret' },
+  });
+  let dispatches = 0;
+  const services = createServiceInvocationRuntime({
+    contract,
+    store,
+    session: {
+      user: null,
+      productId: 'product-a',
+      workspaceId: 'workspace-a',
+      permissions: [Permission.ServicesInvoke],
+    },
+    request: { id: 'req-blocked-disabled', correlationId: 'corr-blocked-disabled', method: 'GET', path: '/test' },
+    privateNetworkResolver: async () => ['203.0.113.10'],
+    async fetchImpl() {
+      dispatches += 1;
+      return Response.json({ ok: true });
+    },
+  });
+
+  await assert.rejects(
+    () => services.invoke('adminApi', 'call', {}),
+    /MODULE_SERVICE_CONNECTION_NOT_READY/
+  );
+  await store.upsertServiceConnection({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    moduleId: contract.id,
+    connectionId,
+    service: 'adminApi',
+    provider: 'admin-api',
+    status: 'blocked',
+    config: { baseUrl: 'https://admin.example' },
+    health: { status: 'ready' },
+  });
+  await assert.rejects(
+    () => services.invoke('adminApi', 'call', {}),
+    /MODULE_SERVICE_CONNECTION_BLOCKED/
+  );
+  await store.upsertServiceConnection({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    moduleId: contract.id,
+    connectionId,
+    service: 'adminApi',
+    provider: 'admin-api',
+    status: 'disabled',
+    config: { baseUrl: 'https://admin.example' },
+    health: { status: 'ready' },
+  });
+  await assert.rejects(
+    () => services.invoke('adminApi', 'call', {}),
+    /MODULE_SERVICE_CONNECTION_DISABLED/
+  );
+  assert.equal(dispatches, 0);
+});
+
 test('runtime services.invoke enforces operation policy before dispatch', async () => {
   const serviceModule = defineModule({
     contractVersion: 2,

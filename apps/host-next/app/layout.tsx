@@ -19,12 +19,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const requestHeaders = await headers();
   const lang = languageFromHeaders(requestHeaders);
   const productTheme = getProductThemeRuntimeView();
+  const hideNextDevPortal = process.env.PLOYKIT_HIDE_NEXT_DEV_PORTAL === '1';
   return (
     <html lang={lang} data-lang={lang} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <LanguageDocumentState />
         <ProductThemeStyle theme={productTheme} />
         <ProductStructuredData lang={lang} />
+        {hideNextDevPortal ? (
+          <style id="ploykit-hide-next-dev-portal">{`
+            nextjs-portal {
+              display: none !important;
+              pointer-events: none !important;
+            }
+          `}</style>
+        ) : null}
         <ThemeProvider defaultTheme={productTheme.defaultTheme}>{children}</ThemeProvider>
       </body>
     </html>

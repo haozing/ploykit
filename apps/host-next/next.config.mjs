@@ -6,6 +6,9 @@ import { collectModuleNpmDependencies } from '../../scripts/lib/module-dependenc
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const projectRoot = path.resolve(process.cwd());
 const nextConfigDir = path.dirname(fileURLToPath(import.meta.url));
+const devDistDir = process.env.NEXT_PRIVATE_DEV_DIST_DIR
+  ? path.relative(nextConfigDir, path.resolve(process.env.NEXT_PRIVATE_DEV_DIST_DIR)).replace(/\\/g, '/')
+  : undefined;
 const scriptSrc = ["'self'", "'unsafe-inline'", ...(isDevelopment ? ["'unsafe-eval'"] : [])].join(
   ' '
 );
@@ -111,6 +114,7 @@ const webpackDependencyAliases = createWebpackDependencyAliases();
 const nextConfig = {
   reactStrictMode: true,
   typedRoutes: false,
+  ...(devDistDir ? { distDir: devDistDir } : {}),
   output: 'standalone',
   outputFileTracingRoot: projectRoot,
   turbopack: {

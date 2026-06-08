@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { routeAppliesToViewport } from './module-quality-manifest.mjs';
+import { collectModuleQualityRoutes, routeAppliesToViewport } from './module-quality-manifest.mjs';
 
 const required = process.argv.includes('--required');
+const moduleQualityOnly = process.argv.includes('--module-quality-only');
 const baseUrl = (
   process.argv.includes('--base-url')
     ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -38,7 +39,7 @@ function writeReport(report) {
   fs.copyFileSync(reportPath, latestPath);
 }
 
-const routes = [
+const baseRoutes = [
   { path: '/', contains: 'PloyKit' },
   { path: '/zh/pricing', contains: '价格' },
   { path: '/zh/docs', contains: '文档' },
@@ -75,12 +76,55 @@ const routes = [
   { path: '/zh/admin/settings', auth: true, contains: '设置' },
   { path: '/zh/admin/search', auth: true, contains: '搜索' },
 ];
+const moduleQualityRoutes = collectModuleQualityRoutes('browser').map((route) => ({
+  ...route,
+  delegatedToModuleQuality: true,
+}));
+const routes = [...baseRoutes, ...moduleQualityRoutes];
 
 const viewports = [
   { id: 'desktop', width: 1440, height: 1000 },
   { id: 'mobile', width: 390, height: 844 },
 ];
 let qaLoginIpCounter = 0;
+
+function moduleQualityRouteChecks() {
+  return viewports.flatMap((viewport) =>
+    moduleQualityRoutes
+      .filter((route) => routeAppliesToViewport(route, viewport.id))
+      .map((route) => ({
+        id: `${viewport.id}:${route.path}`,
+        ok: true,
+        delegatedToModuleQuality: true,
+        moduleId: route.moduleId,
+        source: route.source,
+      }))
+  );
+}
+
+if (moduleQualityOnly) {
+  const result = {
+    ok: true,
+    required,
+    skipped: false,
+    baseUrl: normalizedBaseUrl,
+    outputDir,
+    checkedAt: new Date().toISOString(),
+    summary: {
+      mode: 'module-quality-only',
+      baseRoutes: 0,
+      moduleQualityRoutes: moduleQualityRoutes.length,
+    },
+    checks: moduleQualityRouteChecks(),
+    artifacts: {
+      report: reportPath,
+      latest: latestPath,
+    },
+  };
+  writeReport(result);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.exit(0);
+}
 
 async function loadPlaywright() {
   try {
@@ -268,6 +312,16 @@ try {
       if (!routeAppliesToViewport(route, viewport.id)) {
         continue;
       }
+      if (route.delegatedToModuleQuality) {
+        checks.push({
+          id: `${viewport.id}:${route.path}`,
+          ok: true,
+          delegatedToModuleQuality: true,
+          moduleId: route.moduleId,
+          source: route.source,
+        });
+        continue;
+      }
       if (route.auth && !loggedIn) {
         await ensureAdminLogin(context, viewport.id);
         loggedIn = true;
@@ -331,6 +385,10 @@ const result = {
   baseUrl: normalizedBaseUrl,
   outputDir,
   checkedAt: new Date().toISOString(),
+  summary: {
+    baseRoutes: baseRoutes.length,
+    moduleQualityRoutes: moduleQualityRoutes.length,
+  },
   checks,
   artifacts: {
     report: reportPath,

@@ -2,7 +2,20 @@ import { MODULE_MAP_ARTIFACT } from '@/lib/module-map';
 import type { RuntimeStoreCommercialRuntime } from '@/lib/module-capabilities/commercial/commercial-ledger';
 import type { StorageBackedModuleFileRuntime } from '@/lib/module-capabilities/files/storage-file-runtime';
 import { createModuleHost, type ModuleHost } from '@/lib/module-runtime/host/create-module-host';
+import type { ModuleRuntimeContract } from '@/lib/module-runtime/contract';
+import { loadModuleRuntimeContracts } from '@/lib/module-runtime/loader/load-module-contracts';
+import {
+  createModuleRouteManifest,
+  findModuleRouteMatch,
+  type ModuleRuntimeRouteEntry,
+} from '@/lib/module-runtime/routes';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
+import {
+  createMemoryModuleDataApi,
+  createMemoryModuleDataStore,
+  type MemoryModuleDataStore,
+} from '@/lib/module-runtime/data';
+import type { PermissionValue } from '@ploykit/module-sdk';
 import {
   createHostCommercialRuntimeFromStore,
   getHostBillingProviderStatus,
@@ -23,15 +36,67 @@ import {
 import { getHostAuthStatus, getHostSecurityStatus } from './host-config';
 import { createHostRuntimeHealth, type HostRuntimeHealth } from './host-health';
 import { getHostRagProviderStatus } from './rag-provider';
-import { resolveHostRequestSession } from './auth-session';
 import { getHostRuntimeStore, type HostRuntimeStoreHandle } from './runtime-store';
-import { applyHostDevRuntimeSeed } from './dev-runtime-seed';
+import {
+  applyHostDevRuntimeSeed,
+  applyHostDevRuntimeSeedIfChanged,
+} from './dev-runtime-seed';
 import {
   DEFAULT_HOST_ADMIN_USER_ID,
   DEFAULT_HOST_PRODUCT_ID,
   DEFAULT_HOST_WORKSPACE_ID,
 } from './default-scope';
 import { getDefaultModuleCatalogSeed } from './default-module-catalog';
+
+function sessionWithPermissions(
+  session: ModuleHostSession,
+  permissions: readonly PermissionValue[]
+): ModuleHostSession {
+  if (!session.user || session.user.role === 'admin' || session.system) {
+    return session;
+  }
+
+  const merged = new Set([...(session.permissions ?? []), ...permissions]);
+  return {
+    ...session,
+    permissions: [...merged],
+  };
+}
+
+function moduleIdForHostRequest(input: {
+  operation: 'api' | 'action' | 'page';
+  pathname?: string;
+  routeKind?: 'site' | 'dashboard' | 'admin';
+  moduleId?: string;
+}, routes: readonly ModuleRuntimeRouteEntry[]): string | null {
+  if (input.moduleId) {
+    return input.moduleId;
+  }
+  if (!input.pathname) {
+    return null;
+  }
+  const routeKind = input.operation === 'api' ? 'api' : input.routeKind;
+  if (!routeKind) {
+    return null;
+  }
+  return findModuleRouteMatch(routes, routeKind, input.pathname)?.entry.moduleId ?? null;
+}
+
+export function applyModuleSelfServiceSessionPermissions(
+  session: ModuleHostSession,
+  input: {
+    operation: 'api' | 'action' | 'page';
+    pathname?: string;
+    routeKind?: 'site' | 'dashboard' | 'admin';
+    moduleId?: string;
+  },
+  contracts: readonly ModuleRuntimeContract[],
+  routes: readonly ModuleRuntimeRouteEntry[] = createModuleRouteManifest(contracts)
+): ModuleHostSession {
+  const moduleId = moduleIdForHostRequest(input, routes);
+  const contract = moduleId ? contracts.find((candidate) => candidate.id === moduleId) : null;
+  return contract ? sessionWithPermissions(session, contract.permissions) : session;
+}
 
 async function ensureHostCatalogSeeded(runtimeStore: HostRuntimeStoreHandle): Promise<void> {
   const moduleIds = Object.keys(MODULE_MAP_ARTIFACT.modules);
@@ -76,6 +141,22 @@ export interface HostRuntime {
 }
 
 let hostRuntimePromise: Promise<HostRuntime> | null = null;
+const MEMORY_MODULE_DATA_STORE_KEY = Symbol.for('ploykit.host.memoryModuleDataStore');
+
+type HostMemoryModuleDataStoreGlobal = typeof globalThis & {
+  [MEMORY_MODULE_DATA_STORE_KEY]?: MemoryModuleDataStore;
+};
+
+function getHostMemoryModuleDataStore(): MemoryModuleDataStore {
+  const state = globalThis as HostMemoryModuleDataStoreGlobal;
+  state[MEMORY_MODULE_DATA_STORE_KEY] ??= createMemoryModuleDataStore();
+  return state[MEMORY_MODULE_DATA_STORE_KEY]!;
+}
+
+async function resolveScopedHostRequestSession(request: Request): Promise<ModuleHostSession> {
+  const { createScopedDemoHostSession } = await import('./product-scope');
+  return createScopedDemoHostSession(request);
+}
 
 async function createModuleHostForRuntime(input: {
   runtimeStore: HostRuntimeStoreHandle;
@@ -85,14 +166,19 @@ async function createModuleHostForRuntime(input: {
   const catalogStates = await input.runtimeStore.store.listCatalogStates({
     productId: DEFAULT_HOST_PRODUCT_ID,
   });
+  const contracts = await loadModuleRuntimeContracts(MODULE_MAP_ARTIFACT);
+  const routes = createModuleRouteManifest(contracts);
+  const memoryDataStore = input.runtimeStore.database ? null : getHostMemoryModuleDataStore();
   return createModuleHost({
     artifact: MODULE_MAP_ARTIFACT,
     catalog: {
       productId: DEFAULT_HOST_PRODUCT_ID,
       moduleStates: catalogStates,
     },
-    async resolveSession({ request }) {
-      return (await resolveHostRequestSession(request)).session;
+    async resolveSession(requestInput) {
+      await applyHostDevRuntimeSeedIfChanged(input.runtimeStore);
+      const scopedSession = await resolveScopedHostRequestSession(requestInput.request);
+      return applyModuleSelfServiceSessionPermissions(scopedSession, requestInput, contracts, routes);
     },
     verifyApiKey: createHostModuleApiKeyVerifier({
       store: input.runtimeStore.store,
@@ -114,6 +200,26 @@ async function createModuleHostForRuntime(input: {
               actorId: hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id ?? null,
             };
           },
+        }
+      : undefined,
+    createDataApi: memoryDataStore
+      ? ({ contract, session }) => {
+          const productId = session?.productId;
+          if (!productId) {
+            throw new Error(`MODULE_HOST_MEMORY_DATA_SESSION_REQUIRED: ${contract.id}`);
+          }
+
+          return createMemoryModuleDataApi({
+            contract,
+            store: memoryDataStore,
+            session: {
+              productId,
+              workspaceId: session.workspaceId ?? null,
+              scopeId: session.workspaceId ?? productId,
+              userId: session.userId ?? session.user?.id ?? null,
+              actorId: session.actorId ?? session.userId ?? session.user?.id ?? null,
+            },
+          });
         }
       : undefined,
     capabilities: createHostCapabilityProviders(input),
