@@ -30,6 +30,7 @@ import { renderDashboardSurface, renderPageComponent } from '@host/lib/rendering
 import type {
   ModuleHost,
   ModuleHostSession,
+  ModulePageRouteErrorResult,
   ResolveModulePageRouteResult,
 } from '@/lib/module-runtime';
 import { translateModuleMessage } from '@/lib/module-runtime/i18n';
@@ -152,6 +153,18 @@ function readDashboardShellChrome(metadata: unknown): 'none' | 'site' | 'workspa
   return chrome === 'none' || chrome === 'site' || chrome === 'workspace' || chrome === 'admin'
     ? chrome
     : undefined;
+}
+
+function dashboardResultShellChrome(
+  result: ResolveModulePageRouteResult | null | undefined
+): 'none' | 'site' | 'workspace' | 'admin' | undefined {
+  if (!result) {
+    return undefined;
+  }
+
+  return result.ok
+    ? readDashboardShellChrome(result.page.metadata)
+    : readDashboardShellChrome(result.routeContext?.metadata);
 }
 
 function dashboardNavigationLabel(
@@ -350,6 +363,10 @@ async function ModuleDashboardPage({
   unframed?: boolean;
 }) {
   if (!result.ok) {
+    if (unframed) {
+      return <ModuleChromeErrorPanel result={result} lang={lang} />;
+    }
+
     return <ErrorPanel status={result.status} code={result.code} message={result.message} />;
   }
 
@@ -368,6 +385,51 @@ async function ModuleDashboardPage({
     <section className="rounded-md border border-border bg-card p-5 shadow-sm">
       <ModuleValue value={output} />
     </section>
+  );
+}
+
+function ModuleChromeErrorPanel({
+  result,
+  lang,
+}: {
+  result: ModulePageRouteErrorResult;
+  lang: SupportedLanguage;
+}) {
+  const moduleName = result.routeContext?.contract.name ?? 'Module';
+  const title = dashboardInlineText(lang, 'page_unavailable_0b5181a4');
+  const description = dashboardInlineText(
+    lang,
+    'this_page_is_not_available_right_now_b49aba34'
+  );
+
+  return (
+    <main className="min-h-screen bg-background px-6 py-8 text-foreground">
+      <div className="mx-auto max-w-3xl">
+        <div className="text-xs font-semibold uppercase text-muted-foreground">
+          {moduleName}
+        </div>
+        <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+        <div className="mt-6 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
+          <div className="font-semibold">
+            {result.status} {result.code}
+          </div>
+          <p className="mt-2 text-muted-foreground">{result.message}</p>
+          {result.routeContext ? (
+            <dl className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <div>
+                <dt className="font-medium text-foreground">Module</dt>
+                <dd className="break-words">{result.routeContext.moduleId}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-foreground">Route</dt>
+                <dd className="break-words">{result.routeContext.canonicalPath}</dd>
+              </div>
+            </dl>
+          ) : null}
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -411,8 +473,7 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   const scopeResolution = await resolveDemoProductScope(request);
   const workspaces = await listDemoWorkspaces(scopeResolution.product.id);
   const theme = getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id });
-  const usesModuleChrome =
-    modulePageResult?.ok === true && readDashboardShellChrome(modulePageResult.page.metadata) === 'none';
+  const usesModuleChrome = dashboardResultShellChrome(modulePageResult) === 'none';
 
   if (modulePageResult && usesModuleChrome) {
     return (

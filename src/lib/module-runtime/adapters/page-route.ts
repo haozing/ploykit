@@ -53,11 +53,24 @@ export interface ResolvedModulePageRouteResult {
   page: ResolvedModulePageRoute;
 }
 
+export interface ModulePageRouteErrorContext {
+  moduleId: string;
+  kind: ModulePageRouteKind;
+  route: ModulePageRoute;
+  matchedPath: string;
+  routeSource: 'route' | 'alias' | 'publicAlias';
+  canonicalPath: string;
+  params: Record<string, string>;
+  contract: ModuleRuntimeContract;
+  metadata?: unknown;
+}
+
 export interface ModulePageRouteErrorResult {
   ok: false;
   status: 401 | 403 | 404 | 500;
   code: string;
   message: string;
+  routeContext?: ModulePageRouteErrorContext;
 }
 
 export type ResolveModulePageRouteResult =
@@ -67,9 +80,45 @@ export type ResolveModulePageRouteResult =
 function pageError(
   status: ModulePageRouteErrorResult['status'],
   code: string,
-  message: string
+  message: string,
+  routeContext?: ModulePageRouteErrorContext
 ): ModulePageRouteErrorResult {
-  return { ok: false, status, code, message };
+  return routeContext
+    ? { ok: false, status, code, message, routeContext }
+    : { ok: false, status, code, message };
+}
+
+function moduleRouteContext(input: {
+  match: ModuleRuntimeRouteMatch;
+  kind: ModulePageRouteKind;
+  route: ModulePageRoute;
+  contract: ModuleRuntimeContract;
+  params: Record<string, string>;
+  metadata?: unknown;
+}): ModulePageRouteErrorContext {
+  return {
+    moduleId: input.match.entry.moduleId,
+    kind: input.kind,
+    route: input.route,
+    matchedPath: input.match.entry.path,
+    routeSource: input.match.entry.source,
+    canonicalPath: input.match.entry.canonicalPath,
+    params: input.params,
+    contract: input.contract,
+    metadata: input.metadata,
+  };
+}
+
+async function resolveErrorMetadata(
+  metadataLoader: (() => Promise<unknown>) | null,
+  context: ModuleContext
+): Promise<unknown> {
+  try {
+    return await resolveOptionalRouteExport(metadataLoader, context);
+  } catch (error) {
+    logModulePageHandlerError(error);
+    return undefined;
+  }
 }
 
 function logModulePageHandlerError(error: unknown): void {
@@ -152,6 +201,15 @@ export async function resolveModulePageRoute(
     return pageError(500, 'MODULE_PAGE_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.');
   }
 
+  const params = { ...match.params, ...input.params };
+  const baseRouteContext = moduleRouteContext({
+    match,
+    kind: input.kind,
+    route,
+    contract,
+    params,
+  });
+
   const accessDenied = checkModuleRuntimeAccess({
     kind: 'page',
     contract,
@@ -165,48 +223,97 @@ export async function resolveModulePageRoute(
   }
 
   const componentLoader = resolveModuleEntryLoader(entry, 'pages', route.component);
-  if (!componentLoader) {
-    return pageError(500, 'MODULE_PAGE_COMPONENT_MISSING', 'Module page component is missing.');
-  }
-
   const loader = route.loader ? resolveModuleEntryLoader(entry, 'loaders', route.loader) : null;
-  if (route.loader && !loader) {
-    return pageError(500, 'MODULE_PAGE_LOADER_MISSING', 'Module page loader is missing.');
-  }
-
   const metadataLoader = route.metadata
     ? resolveModuleEntryLoader(entry, 'loaders', route.metadata)
     : null;
-  if (route.metadata && !metadataLoader) {
-    return pageError(500, 'MODULE_PAGE_METADATA_MISSING', 'Module page metadata is missing.');
+  const context = createContext(host, contract, route, input, match, params, user, accessSession);
+
+  if (!componentLoader) {
+    const metadata = await resolveErrorMetadata(metadataLoader, context);
+    return pageError(
+      500,
+      'MODULE_PAGE_COMPONENT_MISSING',
+      'Module page component is missing.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+    );
   }
 
-  try {
-    const params = { ...match.params, ...input.params };
-    const context = createContext(host, contract, route, input, match, params, user, accessSession);
-    const component = await loadDefaultExport(componentLoader);
-    const loaderData = await resolveOptionalRouteExport(loader, context);
-    const metadata = await resolveOptionalRouteExport(metadataLoader, context);
+  if (route.loader && !loader) {
+    const metadata = await resolveErrorMetadata(metadataLoader, context);
+    return pageError(
+      500,
+      'MODULE_PAGE_LOADER_MISSING',
+      'Module page loader is missing.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+    );
+  }
 
-    return {
-      ok: true,
-      status: 200,
-      page: {
-        moduleId: match.entry.moduleId,
-        kind: input.kind,
-        route,
-        matchedPath: match.entry.path,
-        routeSource: match.entry.source,
-        canonicalPath: match.entry.canonicalPath,
-        params,
-        contract,
-        component,
-        loaderData,
-        metadata,
-      },
-    };
+  if (route.metadata && !metadataLoader) {
+    return pageError(
+      500,
+      'MODULE_PAGE_METADATA_MISSING',
+      'Module page metadata is missing.',
+      baseRouteContext
+    );
+  }
+
+  let component: unknown;
+  try {
+    component = await loadDefaultExport(componentLoader);
   } catch (error) {
     logModulePageHandlerError(error);
-    return pageError(500, 'MODULE_PAGE_HANDLER_ERROR', 'Module page route failed.');
+    const metadata = await resolveErrorMetadata(metadataLoader, context);
+    return pageError(
+      500,
+      'MODULE_PAGE_HANDLER_ERROR',
+      'Module page route failed.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+    );
   }
+
+  let loaderData: unknown;
+  try {
+    loaderData = await resolveOptionalRouteExport(loader, context);
+  } catch (error) {
+    logModulePageHandlerError(error);
+    const metadata = await resolveErrorMetadata(metadataLoader, context);
+    return pageError(
+      500,
+      'MODULE_PAGE_HANDLER_ERROR',
+      'Module page route failed.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+    );
+  }
+
+  let metadata: unknown;
+  try {
+    metadata = await resolveOptionalRouteExport(metadataLoader, context);
+  } catch (error) {
+    logModulePageHandlerError(error);
+    return pageError(
+      500,
+      'MODULE_PAGE_HANDLER_ERROR',
+      'Module page route failed.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params })
+    );
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    page: {
+      moduleId: match.entry.moduleId,
+      kind: input.kind,
+      route,
+      matchedPath: match.entry.path,
+      routeSource: match.entry.source,
+      canonicalPath: match.entry.canonicalPath,
+      params,
+      contract,
+      component,
+      loaderData,
+      metadata,
+    },
+  };
 }

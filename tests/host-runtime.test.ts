@@ -80,6 +80,19 @@ const testModule = defineModule({
         auth: 'auth',
         aliases: ['/workspace-dashboard', '/dashboard/special'],
       },
+      {
+        path: '/module-loader-error',
+        component: './pages/ExplodingLoaderPage',
+        loader: './loaders/exploding-loader-state',
+        metadata: './loaders/module-chrome-metadata',
+        auth: 'auth',
+      },
+      {
+        path: '/module-metadata-error',
+        component: './pages/ExplodingMetadataPage',
+        metadata: './loaders/exploding-metadata',
+        auth: 'auth',
+      },
     ],
     api: [
       {
@@ -238,6 +251,16 @@ const artifact: ModuleMapArtifact = {
             return { view: 'public-tool' };
           },
         }),
+        'pages/ExplodingLoaderPage': async () => ({
+          default: function ExplodingLoaderPage() {
+            return { view: 'exploding-loader' };
+          },
+        }),
+        'pages/ExplodingMetadataPage': async () => ({
+          default: function ExplodingMetadataPage() {
+            return { view: 'exploding-metadata' };
+          },
+        }),
       },
       loaders: {
         'loaders/dashboard-state': async () => ({
@@ -267,6 +290,25 @@ const artifact: ModuleMapArtifact = {
             title: 'Host Test Tool',
             description: 'Host runtime public tool fixture.',
           }),
+        }),
+        'loaders/exploding-loader-state': async () => ({
+          default: () => {
+            throw new Error('database connection failed');
+          },
+        }),
+        'loaders/module-chrome-metadata': async () => ({
+          default: () => ({
+            title: 'Module chrome page',
+            shell: {
+              area: 'dashboard',
+              chrome: 'none',
+            },
+          }),
+        }),
+        'loaders/exploding-metadata': async () => ({
+          default: () => {
+            throw new Error('metadata failed');
+          },
         }),
       },
       surfaces: {
@@ -677,6 +719,52 @@ test('createModuleHost resolves page routes with loader data and metadata', asyn
   assert.deepEqual((result.page.component as () => unknown)(), { view: 'dashboard' });
 });
 
+test('createModuleHost keeps module chrome when dashboard loader fails', async () => {
+  const host = await createModuleHost({ artifact });
+
+  const result = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/module-loader-error', { method: 'GET' }),
+    pathname: '/module-loader-error',
+    session: {
+      user: { id: 'user_loader_error', role: 'user' },
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
+  assert.equal(result.code, 'MODULE_PAGE_HANDLER_ERROR');
+  assert.equal(result.routeContext?.moduleId, 'host-test');
+  assert.equal(result.routeContext?.route.path, '/module-loader-error');
+  assert.deepEqual(result.routeContext?.metadata, {
+    title: 'Module chrome page',
+    shell: {
+      area: 'dashboard',
+      chrome: 'none',
+    },
+  });
+});
+
+test('createModuleHost includes matched route context when metadata fails', async () => {
+  const host = await createModuleHost({ artifact });
+
+  const result = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/module-metadata-error', { method: 'GET' }),
+    pathname: '/module-metadata-error',
+    session: {
+      user: { id: 'user_metadata_error', role: 'user' },
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
+  assert.equal(result.code, 'MODULE_PAGE_HANDLER_ERROR');
+  assert.equal(result.routeContext?.moduleId, 'host-test');
+  assert.equal(result.routeContext?.route.path, '/module-metadata-error');
+  assert.equal(result.routeContext?.metadata, undefined);
+});
+
 test('createModuleHost resolves public aliases for site routes', async () => {
   const host = await createModuleHost({ artifact });
 
@@ -982,7 +1070,7 @@ test('runtime host snapshot explains mounted capabilities and module map health'
   });
 
   assert.equal(snapshot.mountedCapabilities.modules, 1);
-  assert.equal(snapshot.mountedCapabilities.routes, 11);
+  assert.equal(snapshot.mountedCapabilities.routes, 13);
   assert.equal(snapshot.mountedCapabilities.actions, 1);
   assert.equal(snapshot.routeResolution.some((route) => route.source === 'publicAlias'), true);
   assert.equal(snapshot.routeResolution.some((route) => route.source === 'alias'), true);
