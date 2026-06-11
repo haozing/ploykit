@@ -309,3 +309,38 @@ test('host boundary check rejects tracked host policy and module map external so
   assert.match(output, /module-map-external-source-kind/);
   assert.match(output, /apps\/host-next\/app\/globals\.css/);
 });
+
+test('host boundary check rejects concrete module dashboard routes in host code', (t) => {
+  const fixtureRoot = writeHostBoundaryFixture({
+    'package.json': JSON.stringify({ name: 'host-boundary-fixture', scripts: {} }, null, 2),
+    'src/lib/module-map.ts': 'export {};\n',
+    'src/lib/module-map.manifest.json': JSON.stringify(
+      {
+        version: 1,
+        modules: [
+          {
+            id: 'sample-module',
+            rootDir: 'modules/sample-module',
+          },
+        ],
+      },
+      null,
+      2
+    ),
+    'apps/host-next/components/layout/Sidebar.tsx': [
+      'export const canonicalDashboardPaths = {',
+      '  "/dashboard/sample-module/legacy": "/dashboard/sample-module/current",',
+      '};',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  const result = runHostBoundaryCheck(fixtureRoot);
+  const output = `${result.stdout}\n${result.stderr}`;
+
+  assert.notEqual(result.status, 0, output);
+  assert.match(output, /concrete-module-literal/);
+  assert.match(output, /apps\/host-next\/components\/layout\/Sidebar\.tsx/);
+  assert.match(output, /sample-module/);
+});

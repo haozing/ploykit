@@ -33,7 +33,10 @@ export function Header({
     'shell.languageSwitch'
   );
   const userMenuLabels = readHostMessageValue<HeaderUserMenuLabels>(lang, 'shell.userMenu');
-  const searchPath = localizedPath(lang, area === 'admin' ? '/admin/search' : '/dashboard');
+  const searchPath = localizedPath(
+    lang,
+    area === 'admin' ? '/admin/search' : scope?.searchHref ?? '/dashboard'
+  );
   const areaLabel = area === 'admin' ? t('adminArea') : t('workspaceArea');
   const searchLabel = t('search');
   const notificationLabel = t('notifications');
@@ -45,6 +48,7 @@ export function Header({
         'sticky top-0 z-20 flex min-h-16 items-center gap-2 border-b border-admin-border bg-admin-surface/95 px-4 backdrop-blur sm:gap-3 sm:px-5',
         className
       )}
+      data-host-header={area}
     >
       <span className="sr-only">{scope?.label ?? area}</span>
       <div className="flex min-w-0 items-center gap-2 lg:hidden">
@@ -78,6 +82,13 @@ export function Header({
             placeholder={searchPlaceholder}
             className="min-w-0 flex-1 bg-transparent text-sm text-admin-text outline-none placeholder:text-admin-text-subtle"
           />
+          <button
+            type="submit"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-admin-md text-admin-text-muted hover:bg-admin-surface hover:text-admin-text focus:outline-none focus:ring-2 focus:ring-admin-primary/30"
+            aria-label={searchLabel}
+          >
+            <Search className="h-3.5 w-3.5" aria-hidden />
+          </button>
         </form>
       )}
       <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1 sm:gap-2">

@@ -10,9 +10,13 @@ import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
 import type { AppFrameLabels } from './AppFrame';
 import type { NavGroup } from './types';
 
+function normalizePath(path: string): string {
+  return path.replace(/\/$/, '') || '/';
+}
+
 function isActivePath(currentPath: string, href: string): boolean {
-  const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
-  const normalizedHref = href.replace(/\/$/, '') || '/';
+  const normalizedCurrent = normalizePath(currentPath);
+  const normalizedHref = normalizePath(href);
   if (normalizedCurrent === normalizedHref) {
     return true;
   }
@@ -38,12 +42,16 @@ function resolveActiveItem(lang: SupportedLanguage, groups: readonly NavGroup[],
 }
 
 export function MobileNav({
+  area,
   lang,
   groups,
+  activePath,
   labels,
 }: {
+  area: 'admin' | 'dashboard';
   lang: SupportedLanguage;
   groups: readonly NavGroup[];
+  activePath?: string;
   labels: AppFrameLabels;
 }) {
   const pathname = usePathname();
@@ -52,7 +60,8 @@ export function MobileNav({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
-  const active = resolveActiveItem(lang, groups, pathname);
+  const currentPath = activePath ?? pathname;
+  const active = resolveActiveItem(lang, groups, currentPath);
 
   useEffect(() => setMounted(true), []);
 
@@ -123,6 +132,7 @@ export function MobileNav({
       <nav
         id="mobile-admin-navigation"
         ref={drawerRef}
+        data-host-mobile-nav-drawer={area}
         className="absolute left-0 top-0 flex h-full w-[min(86vw,320px)] flex-col border-r border-admin-border bg-admin-surface shadow-admin-popover"
         aria-label={labels.mobileNavigation}
       >
@@ -151,7 +161,7 @@ export function MobileNav({
                 {group.items.map((item) => {
                   const href =
                     item.localized === false ? item.href : localizedPath(lang, item.href);
-                  const activeItem = isActivePath(pathname, href);
+                  const activeItem = isActivePath(currentPath, href);
                   return (
                     <Link
                       key={`${group.id}:${item.href}`}
@@ -186,7 +196,7 @@ export function MobileNav({
   ) : null;
 
   return (
-    <div className="border-b border-admin-border bg-admin-surface/95 px-4 py-3 backdrop-blur lg:hidden">
+    <div className="border-b border-admin-border bg-admin-surface/95 px-4 py-3 backdrop-blur lg:hidden" data-host-mobile-nav={area}>
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"

@@ -48,9 +48,13 @@ const navIcons: Record<
   users: Users,
 };
 
+function normalizePath(path: string): string {
+  return path.replace(/\/$/, '') || '/';
+}
+
 function isActivePath(currentPath: string, href: string): boolean {
-  const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
-  const normalizedHref = href.replace(/\/$/, '') || '/';
+  const normalizedCurrent = normalizePath(currentPath);
+  const normalizedHref = normalizePath(href);
   if (normalizedCurrent === normalizedHref) {
     return true;
   }
@@ -61,12 +65,14 @@ function isActivePath(currentPath: string, href: string): boolean {
 }
 
 export function Sidebar({
+  area,
   lang,
   groups,
   activePath,
   label,
   labels,
 }: {
+  area?: 'admin' | 'dashboard';
   lang: SupportedLanguage;
   groups: readonly NavGroup[];
   activePath?: string;
@@ -77,7 +83,10 @@ export function Sidebar({
   const currentPath = activePath ?? pathname;
 
   return (
-    <aside className="hidden h-screen w-[248px] shrink-0 border-r border-admin-border bg-admin-surface px-3 py-4 lg:sticky lg:top-0 lg:flex lg:flex-col">
+    <aside
+      className="hidden h-screen w-[248px] shrink-0 border-r border-admin-border bg-admin-surface px-3 py-4 lg:sticky lg:top-0 lg:flex lg:flex-col"
+      data-host-sidebar={area ?? 'true'}
+    >
       <div className="mb-5 flex items-center gap-3 px-3">
         <span className="relative grid h-9 w-9 place-items-center rounded-admin-md bg-slate-950 text-xs font-bold text-white shadow-sm dark:bg-slate-100 dark:text-slate-950">
           P

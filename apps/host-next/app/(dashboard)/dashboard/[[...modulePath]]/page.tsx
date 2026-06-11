@@ -20,6 +20,7 @@ import { dashboardInlineText } from '@host/lib/dashboard-copy';
 import { applyModuleSelfServiceSessionPermissions } from '@host/lib/create-host';
 import { getModuleHost } from '@host/lib/module-host';
 import { createHostRequest, dashboardHref, modulePathFromSegments } from '@host/lib/paths';
+import { getHostUserProfile } from '@host/lib/user-api';
 import {
   createScopedDemoHostSession,
   listDemoWorkspaces,
@@ -180,6 +181,44 @@ function dashboardNavigationLabel(
   return item ? moduleNavigationLabel(host, item, lang) : undefined;
 }
 
+function dashboardModuleSearchHref(
+  host: ModuleHost,
+  moduleId: string | undefined
+): string | undefined {
+  if (!moduleId) {
+    return undefined;
+  }
+  const candidate = dashboardHref(`/${moduleId}/search`);
+  const hasSearchRoute = host.runtime.routes.some(
+    (route) =>
+      route.kind === 'dashboard' &&
+      route.moduleId === moduleId &&
+      dashboardHref(route.path) === candidate
+  );
+  return hasSearchRoute ? candidate : undefined;
+}
+
+function dashboardModuleId(
+  result: ResolveModulePageRouteResult | null | undefined
+): string | undefined {
+  if (!result) {
+    return undefined;
+  }
+  return result.ok ? result.page.moduleId : result.routeContext?.moduleId;
+}
+
+function dashboardActivePath(
+  result: ResolveModulePageRouteResult | null | undefined,
+  pathname: string
+): string {
+  const canonicalPath = result
+    ? result.ok
+      ? result.page.canonicalPath
+      : result.routeContext?.canonicalPath
+    : undefined;
+  return dashboardHref(canonicalPath ?? pathname);
+}
+
 function dashboardPageChrome(
   result: ResolveModulePageRouteResult,
   navigationLabel?: string,
@@ -228,6 +267,18 @@ function applyDashboardModuleSessionPermissions(
     host.runtime.contracts,
     host.runtime.routes
   );
+}
+
+async function dashboardFrameUser(session: ModuleHostSession) {
+  if (!session.user) {
+    return undefined;
+  }
+
+  const profile = await getHostUserProfile(session).catch(() => null);
+  return {
+    name: profile?.displayName ?? session.user.email ?? session.user.id,
+    email: session.user.email,
+  };
 }
 
 export async function generateMetadata({ params }: DashboardPageProps): Promise<Metadata> {
@@ -474,6 +525,12 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   const workspaces = await listDemoWorkspaces(scopeResolution.product.id);
   const theme = getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id });
   const usesModuleChrome = dashboardResultShellChrome(modulePageResult) === 'none';
+  const frameUser = await dashboardFrameUser(session);
+  const moduleSearchHref = dashboardModuleSearchHref(
+    host,
+    dashboardModuleId(modulePageResult)
+  );
+  const activePath = dashboardActivePath(modulePageResult, pathname);
 
   if (modulePageResult && usesModuleChrome) {
     return (
@@ -489,7 +546,13 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
       area="dashboard"
       lang={lang}
       navGroups={navGroups}
-      scope={{ label: scopeResolution.workspace.name, detail: scopeResolution.product.name }}
+      activePath={activePath}
+      scope={{
+        label: scopeResolution.workspace.name,
+        detail: scopeResolution.product.name,
+        searchHref: moduleSearchHref,
+      }}
+      user={frameUser}
     >
       <ProductThemeStyle id="ploykit-workspace-theme" theme={theme} />
       <PageShell

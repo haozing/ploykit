@@ -98,6 +98,10 @@ await notes.insert({ title: 'First note', status: 'draft' });
 
 ## 边界规则
 
+- 开发任何页面入口、按钮、下拉、表单或状态展示前，先判断它是宿主级能力还是模块产品能力。登录、退出、session、账号菜单、个人资料、product/workspace scope、workspace 切换、workspace 管理、成员、邀请、角色、权限、全局 dashboard shell、全局导航、语言、主题、宿主通知、billing、checkout、发票、文件上传大闭环、secret/service connection、安全存储、审计和平台 Admin 默认属于宿主。
+- 宿主已有能力时，模块应优先复用宿主页面、组件、API、`ctx.*` capability、registry/contribution seam 或请求新增通用宿主透传上下文。不要在模块内重新实现第二套账号、workspace、成员、权限、计费、文件或通知系统。
+- 如果宿主能力暂未暴露给模块，不要用固定文案、mock 状态或假下拉伪造成真实状态；先报告需要的通用宿主扩展点。临时内部版本只能使用中性 fallback 和真实宿主链接，例如 `Workspace`、`Account`、`/dashboard/workspaces`、`/dashboard/profile`。
+- 模块不能写死看似真实的当前用户、workspace、套餐、成员、权限或购买状态。任何这类展示必须来自宿主上下文、宿主 capability、真实外部服务或明确标记的静态营销内容。
 - API handler 必须使用 `defineApi(...)`。
 - action handler 必须使用 `action(...)` 或 `defineAction(...)`。
 - job/event/webhook/lifecycle handler 可以导出函数或带 `run`/`handle` 的对象。

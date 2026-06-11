@@ -41,6 +41,7 @@ export interface HeaderUser {
 export interface HeaderScope {
   label: string;
   detail?: string;
+  searchHref?: string;
 }
 
 export interface PageShellAction {

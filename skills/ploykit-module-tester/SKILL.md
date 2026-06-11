@@ -40,6 +40,13 @@ screenshots and inspect them.
    - Use `references/real-api.md` for endpoint discovery and request matrix.
 6. Run real browser validation with screenshots and console/network collection.
    - Use `references/browser-visual.md` for route sweep and visual inspection.
+   - For product dashboard/admin pages, verify host-owned controls are real:
+     account/session/logout, profile, workspace/product scope, workspace
+     switching/management, members/roles, global navigation, language/theme,
+     notifications, billing, files, and audit must either use host chrome,
+     existing host APIs/pages, or clearly neutral fallbacks with real links. Flag
+     hard-coded realistic user/workspace/plan/member/role/security state,
+     mock-looking platform data, or nonfunctional dropdowns as failures.
 7. Report only evidence-backed results.
    - Use `references/reporting.md` for summary shape and pass/fail rules.
 

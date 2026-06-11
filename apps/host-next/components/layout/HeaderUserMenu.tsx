@@ -27,7 +27,7 @@ export function HeaderUserMenu({
   const initials = user.name.slice(0, 2).toUpperCase();
 
   return (
-    <div className="relative inline-flex min-w-0 items-center">
+    <div className="relative inline-flex min-w-0 items-center" data-host-user-menu="true">
       <button
         type="button"
         className={cn(

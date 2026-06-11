@@ -17,7 +17,10 @@ export function PageShell({
   children: ReactNode;
 }) {
   return (
-    <main className={cn('mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-10', wide ? 'max-w-[1480px]' : 'max-w-5xl')}>
+    <main
+      className={cn('mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-10', wide ? 'max-w-[1480px]' : 'max-w-5xl')}
+      data-host-page-shell="true"
+    >
       <header className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {eyebrow ? (

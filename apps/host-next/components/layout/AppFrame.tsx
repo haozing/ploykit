@@ -28,6 +28,7 @@ export function AppFrame({
   lang,
   navGroups,
   children,
+  activePath,
   scope,
   user,
 }: {
@@ -35,23 +36,32 @@ export function AppFrame({
   lang: SupportedLanguage;
   navGroups: readonly NavGroup[];
   children: ReactNode;
+  activePath?: string;
   scope?: HeaderScope;
   user?: HeaderUser;
 }) {
   const labels = readHostMessageValue<AppFrameLabels>(lang, 'shell.layout');
 
   return (
-    <div className="min-h-screen bg-admin-bg text-admin-text">
+    <div className="min-h-screen bg-admin-bg text-admin-text" data-host-app-frame={area}>
       <div className="flex min-h-screen">
         <Sidebar
+          area={area}
           lang={lang}
           groups={navGroups}
+          activePath={activePath}
           label={labels.areaNavigation[area]}
           labels={labels}
         />
         <div className="min-w-0 flex-1">
           <Header lang={lang} area={area} scope={scope} user={user} />
-          <MobileNav lang={lang} groups={navGroups} labels={labels} />
+          <MobileNav
+            area={area}
+            lang={lang}
+            groups={navGroups}
+            activePath={activePath}
+            labels={labels}
+          />
           {children}
         </div>
       </div>

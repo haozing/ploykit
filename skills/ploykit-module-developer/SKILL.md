@@ -26,37 +26,53 @@ changes only when the requested capability cannot be expressed inside a module.
    `product.requiredShells`, `product.pages`, `routes.site`,
    `routes.dashboard`, `routes.admin`, and matching navigation. Do not treat a
    backend Admin API as a product Admin console.
-4. If the module is backed by an independent service, find the machine contract
+4. Before adding any page control, menu, dropdown, form, status display, or
+   shell element, decide whether it is a host-owned capability or a module
+   product capability. Host-owned capabilities include account/session/logout,
+   profile, product/workspace scope, workspace switching/management,
+   members/invitations/roles/permissions, global dashboard/admin shells,
+   global navigation, language/theme, host notifications, billing/checkout,
+   invoices, full file upload/management loops, secrets/service connections,
+   audit, and platform Admin. Reuse host pages/components/APIs, `ctx.*`
+   capabilities, registry/contribution seams, or request a generic host context
+   extension instead of reimplementing them inside the module.
+5. If a needed host-owned capability is not exposed to the module, report the
+   missing generic host seam. Do not fake completion with hard-coded user names,
+   workspace names, plans, member counts, roles, purchase states, mock state, or
+   nonfunctional dropdowns. Temporary internal builds may use neutral fallbacks
+   plus real host links such as `Workspace`, `Account`,
+   `/dashboard/workspaces`, and `/dashboard/profile`.
+6. If the module is backed by an independent service, find the machine contract
    first (`openapi.yaml`, AsyncAPI, JSON Schema, or Proto). Do not implement
    against handwritten Markdown alone. Declare `contractVersion: 2` and
    `serviceRequirements`, keep a single module-local service client/adapter as
    the only `ctx.services.invoke(...)` entry, and use contract/fixture mocks for
    UI development plus live smoke for signing, tenant, idempotency, quota,
    one-time token, lease/retry, and state-machine behavior.
-5. Keep module work inside `modules/<module-id>/` unless the user explicitly
+7. Keep module work inside `modules/<module-id>/` unless the user explicitly
    asks for host runtime, SDK, template, documentation, or test harness changes.
-6. Use `@ploykit/module-sdk`, `@ploykit/module-sdk/testing`, module-local paths,
+8. Use `@ploykit/module-sdk`, `@ploykit/module-sdk/testing`, module-local paths,
    and injected `ctx.*` capabilities.
-7. Add permissions that match every used `ctx.*` capability. Remove unused
+9. Add permissions that match every used `ctx.*` capability. Remove unused
    permissions when diagnostics identify them.
-8. Use Data v2 for module persistence. Do not add alternate storage models or
+10. Use Data v2 for module persistence. Do not add alternate storage models or
    compatibility layers.
-9. Add or update module-local tests and only broaden to host tests when the
+11. Add or update module-local tests and only broaden to host tests when the
    change affects shared runtime behavior.
-10. Run `npm run module:doctor -- modules/<module-id>` and repair the first
+12. Run `npm run module:doctor -- modules/<module-id>` and repair the first
    error diagnostic until it succeeds.
-11. For service-backed modules, run
+13. For service-backed modules, run
    `npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>`
    after editing the service client or service machine contract.
-12. Run `npm run modules:scan` when `module.ts`, local handler paths, resources,
+14. Run `npm run modules:scan` when `module.ts`, local handler paths, resources,
    or generated artifacts change.
-13. For module-owned external end-to-end checks, document the prerequisites,
+15. For module-owned external end-to-end checks, document the prerequisites,
     command, and evidence path in `modules/<module-id>/README.md`; wire it to a
     host quality runner only after a generic module E2E entry exists.
-14. For white-label, public site, auth, dashboard shell, theme, SEO, or locale
+16. For white-label, public site, auth, dashboard shell, theme, SEO, or locale
     work, keep copy in locale catalogs, use `labelKey` for navigation, and
     validate the product presentation gates before handing off.
-15. If a module needs host rendering, routing, quality evidence, or release
+17. If a module needs host rendering, routing, quality evidence, or release
     behavior that has no extension seam, report the missing generic seam first.
     Do not add `moduleId === '<id>'`, `/dashboard/<id>`, or concrete
     `modules/<id>` imports in host/shared code to finish the task.
@@ -132,6 +148,19 @@ Use the Product Presentation Kernel for white-label surfaces:
 ## Boundary Rules
 
 - Module code must not import host internals from `src/lib/*`.
+- Host-owned product infrastructure must not be reimplemented in modules:
+  account/session/logout, profile, workspace/product scope, workspace switching
+  and management, members/invitations/roles/permissions, global shells and
+  navigation, language/theme, host notifications, billing/checkout/invoices,
+  file management, secrets/service connections, audit, and platform Admin.
+- Prefer host chrome for dashboard/admin product routes. Use module-controlled
+  `chrome: 'none'` only for public marketing, auth replacement, embedded
+  full-screen tools, or explicitly temporary migration states with a plan to
+  return host-owned account/workspace/global navigation.
+- Do not hard-code realistic platform state in module UI: user initials/names,
+  workspace names, member counts, roles, plans, purchase states, permissions, or
+  security status must come from host context/capabilities, a real service, or
+  be clearly static marketing copy.
 - Module code must not read `process.env`, use database clients directly, call
   global `fetch()`, import Node builtins, use `eval`, use `Function`, or access
   `ctx` dynamically.

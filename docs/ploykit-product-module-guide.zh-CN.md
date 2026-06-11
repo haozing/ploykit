@@ -93,6 +93,9 @@ npm run module:create -- my-full-product --template product --with service-backe
 
 - 登录、注册、session
 - 用户、组织、工作区
+- product/workspace scope、workspace 切换、workspace 管理、成员、邀请、角色和权限
+- 账号菜单、个人资料、退出登录、宿主通知入口
+- 全局 site/dashboard/admin shell、全局导航、语言、主题
 - RBAC 和 Admin shell
 - Service connection 和 secretRefs
 - Files、billing、audit、notifications 的基础能力
@@ -108,6 +111,10 @@ npm run module:create -- my-full-product --template product --with service-backe
 
 不要把宿主已有的登录、账单、团队、模块管理重新做一遍。也不要把模块领域后台误认为宿主通用 Admin。
 
+完整产品模块也不应长期自造全局 shell。`routes.dashboard` 和 `routes.admin` 默认使用宿主 dashboard/admin shell；只有 public marketing、auth 替换页、嵌入式全屏工具或明确的临时迁移场景才允许使用 `chrome: 'none'`。如果模块为了品牌感复制账号菜单、workspace 切换、全局导航或退出登录，应改为复用宿主 shell，或请求宿主提供通用 shell context。
+
+模块页面可以保留产品内品牌、局部导航、表格、筛选器和业务操作，但不能写死看似真实的当前用户、workspace、套餐、成员、权限或购买状态。拿不到宿主数据时，只能使用中性 fallback 和真实宿主链接，例如 `Workspace`、`Account`、`/dashboard/workspaces`、`/dashboard/profile`。
+
 ## 7. 验收清单
 
 完整产品模块交付前必须确认：
@@ -120,3 +127,5 @@ npm run module:create -- my-full-product --template product --with service-backe
 - browser/accessibility 覆盖来自 `product.pages`。
 - Admin Modules 页面能看到产品形态覆盖。
 - 页面没有自造全局 shell，使用宿主 site/dashboard/admin shell。
+- 页面没有自造第二套账号菜单、workspace 切换、成员管理、权限管理、计费或文件系统。
+- 页面没有固定文案伪造当前用户、workspace、套餐、成员、权限或购买状态。

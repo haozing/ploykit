@@ -91,6 +91,8 @@ OpenAPI 不足以单独证明运行时行为：
 - 受控服务调用：由 runtime 负责 secret ref、签名、claims、egress、timeout、redaction、provider invocation ledger。
 - 本地 read model：只存映射、偏好、短期缓存和展示快照，不复制服务端权威事实。
 
+服务端分离型模块也必须遵守宿主能力优先规则：登录、退出、账号菜单、workspace 切换、workspace 管理、成员、邀请、角色、权限、billing、文件上传大闭环、通知和审计默认属于 PloyKit 宿主。外部服务可以拥有自己的 tenant/project/job/worker 等领域模型，但不应成为 PloyKit 账号、workspace membership 或商业账本的第二权威来源。
+
 ### 外部服务负责什么
 
 - 权威领域对象和状态机。
@@ -106,6 +108,7 @@ OpenAPI 不足以单独证明运行时行为：
 - 不用裸 `fetch()` 或 `ctx.http.fetch(...)` 调 privileged service。
 - 不把 secret、token、webhook signature 写入 Data v2、日志、artifact、notification 或 screenshot。
 - 不把服务端权威状态复制成可写 Data v2 表。
+- 不用固定文案、mock 状态或假下拉伪造宿主账号、workspace、成员、权限、套餐、购买或文件状态。
 - 不在 host runtime、host script 或 `apps/host-next/*` 里写具体模块特例。
 
 ## PloyKit 侧落地方式

@@ -7,6 +7,7 @@
 - [模块开发](module-development.zh-CN.md)
 - [module.ts 契约规范](module-contract-spec.zh-CN.md)
 - [服务端分离型模块开发指南](service-backed-module-development.zh-CN.md)
+- [受控服务接入指南](service-integration-guide.zh-CN.md)
 - [AI 辅助模块开发](ai-module-authoring.zh-CN.md)
 - [运行时存储](runtime-stores.zh-CN.md)
 - [安全模型](security-model.zh-CN.md)

@@ -3,6 +3,35 @@
 Use this reference only when the requested change cannot be implemented inside a
 single module.
 
+## Host-Owned Capabilities
+
+Treat these as host-owned by default:
+
+- Account, login/logout, session, profile, and account menus.
+- Product/workspace scope, workspace switching, workspace management, members,
+  invitations, roles, and permissions.
+- Global site/dashboard/admin shells, global navigation, language, theme, and
+  host notifications.
+- Billing, checkout, invoices, credits/entitlements, redeem codes, and
+  authoritative commercial state.
+- Full file upload/management loops, secrets, service connections, audit, and
+  platform Admin.
+
+If a module needs one of these and the host already has it, prefer reuse through
+host chrome, a host page link, an existing API, a `ctx.*` capability, or a
+generic contribution/registry seam. Do not add a module-local second
+implementation.
+
+If the host capability exists but is not visible to module UI, add a generic
+extension such as a shell context, product-scope context, presentation slot, or
+capability descriptor. The extension must be reusable by other modules; never
+key it to one module id.
+
+Temporary module fallbacks must be neutral and honest. Use labels such as
+`Workspace` or `Account` plus real host links. Do not hard-code realistic
+platform state such as workspace names, user initials, plans, member counts,
+roles, purchase status, or security status.
+
 ## Change Surfaces
 
 Common host-runtime files include:
