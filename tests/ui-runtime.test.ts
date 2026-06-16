@@ -11,6 +11,7 @@ import {
   resolveModuleNavigationGroups,
   resolveModuleResources,
   resolveModuleThemeTokens,
+  translateModuleMessage,
   type ModuleMapArtifact,
 } from '../src/lib/module-runtime';
 
@@ -173,6 +174,18 @@ const artifact: ModuleMapArtifact = {
         }),
       },
       assets: ['assets/logo.png', 'assets/sync.worker.js', 'assets/engine.wasm'],
+      messages: {
+        'zh-CN': {
+          nav: {
+            label: '模块控制台',
+          },
+        },
+        en: {
+          nav: {
+            label: 'Module console',
+          },
+        },
+      },
     },
   },
 };
@@ -247,7 +260,10 @@ test('P5 renders public aliases with canonical fallback, sitemap and head tags',
   assert.ok(
     sitemap.some((entry) => entry.path === '/public-ui-test' && entry.source === 'publicAlias')
   );
-  assert.equal(sitemap.some((entry) => entry.path === '/ui-dashboard'), false);
+  assert.equal(
+    sitemap.some((entry) => entry.path === '/ui-dashboard'),
+    false
+  );
 
   const tags = createModuleHeadTags(result.page.seo);
   assert.ok(tags.some((tag) => tag.tag === 'title' && tag.content === 'Public UI Tool'));
@@ -389,6 +405,23 @@ test('P5 resolves navigation groups and module resources', async () => {
   assert.equal(
     resources.assets.find((asset) => asset.path.endsWith('.worker.js'))?.contentType,
     'text/javascript; charset=utf-8'
+  );
+});
+
+test('P5 translates module messages from generated map entries', async () => {
+  const host = await createModuleHost({ artifact });
+
+  assert.equal(translateModuleMessage(host.runtime, 'ui-test', 'zh-CN', 'nav.label'), '模块控制台');
+  assert.equal(
+    translateModuleMessage(host.runtime, 'ui-test', 'en-US', 'nav.label'),
+    'Module console'
+  );
+  assert.equal(
+    translateModuleMessage(host.runtime, 'ui-test', 'en-US', 'nav.missing', {
+      fallback: 'Fallback {name}',
+      values: { name: 'A' },
+    }),
+    'Fallback A'
   );
 });
 

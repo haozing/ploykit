@@ -1,5 +1,5 @@
 import { AdminBillingOperationsPage } from '@host/components/admin/AdminPages';
-import { getAdminCommercialView } from '@host/lib/admin-operations';
+import { getAdminCommercialView } from '@host/lib/admin-commercial';
 import { invalidateHostRuntime } from '@host/lib/create-host';
 import {
   archiveHostBillingPlan,

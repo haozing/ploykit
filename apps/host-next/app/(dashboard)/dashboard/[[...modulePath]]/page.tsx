@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AppFrame } from '@host/components/layout/AppFrame';
+import { ClientTransitionLinks } from '@host/components/layout/ClientTransitionLinks';
 import { ErrorPanel } from '@host/components/layout/ErrorPanel';
 import { PageShell } from '@host/components/layout/PageShell';
 import type { NavGroup, NavItem } from '@host/components/layout/types';
@@ -17,6 +19,13 @@ import {
   type SupportedLanguage,
 } from '@host/lib/i18n';
 import { dashboardInlineText } from '@host/lib/dashboard-copy';
+import { cachedDashboardNavigation } from '@host/lib/dashboard-shell-cache';
+import {
+  createDashboardTimingReport,
+  maybeLogDashboardTiming,
+  measureDashboardSpan,
+  type DashboardTimingSpan,
+} from '@host/lib/dashboard-timing';
 import { applyModuleSelfServiceSessionPermissions } from '@host/lib/create-host';
 import { getModuleHost } from '@host/lib/module-host';
 import { createHostRequest, dashboardHref, modulePathFromSegments } from '@host/lib/paths';
@@ -32,6 +41,7 @@ import type {
   ModuleHost,
   ModuleHostSession,
   ModulePageRouteErrorResult,
+  ResolveModulePageRouteMetadataResult,
   ResolveModulePageRouteResult,
 } from '@/lib/module-runtime';
 import { translateModuleMessage } from '@/lib/module-runtime/i18n';
@@ -49,7 +59,19 @@ interface DashboardPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
+interface GenerateDashboardMetadataDependencies {
+  getHost?: () => Promise<ModuleHost> | ModuleHost;
+  createRequest?: (pathname: string) => Promise<Request> | Request;
+  createSession?: (request: Request) => Promise<ModuleHostSession> | ModuleHostSession;
+  applySessionPermissions?: (
+    host: ModuleHost,
+    session: ModuleHostSession,
+    pathname: string
+  ) => ModuleHostSession;
+}
+
 type DashboardNavigationEntry = ReturnType<ModuleHost['resolveNavigation']>[number];
+type DashboardNavigationEntries = ReturnType<ModuleHost['resolveNavigation']>;
 
 function moduleNavigationLabel(
   host: ModuleHost,
@@ -105,13 +127,20 @@ async function createScopedDashboardRequest(
   });
 }
 
+function resolveDashboardNavigation(
+  host: ModuleHost,
+  session: ModuleHostSession
+): DashboardNavigationEntries {
+  return host.resolveNavigation('dashboard.sidebar', { session });
+}
+
 function dashboardNavGroups(
   host: ModuleHost,
-  session: ModuleHostSession,
+  navigation: DashboardNavigationEntries,
   lang: SupportedLanguage
 ): NavGroup[] {
   const grouped = new Map<string, { label: string; items: NavItem[] }>();
-  for (const item of host.resolveNavigation('dashboard.sidebar', { session })) {
+  for (const item of navigation) {
     const label = moduleNavigationGroupLabel(host, item, lang);
     const id = `${item.moduleId}:${item.item.fallbackGroup ?? item.item.groupKey ?? 'module-tools'}`;
     const group = grouped.get(id) ?? { label, items: [] };
@@ -140,7 +169,9 @@ function readMetadataString(metadata: unknown, key: 'title' | 'description'): st
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
-function readDashboardShellChrome(metadata: unknown): 'none' | 'site' | 'workspace' | 'admin' | undefined {
+function readDashboardShellChrome(
+  metadata: unknown
+): 'none' | 'site' | 'workspace' | 'admin' | undefined {
   if (!metadata || typeof metadata !== 'object') {
     return undefined;
   }
@@ -156,8 +187,12 @@ function readDashboardShellChrome(metadata: unknown): 'none' | 'site' | 'workspa
     : undefined;
 }
 
+type DashboardChromeRouteResult =
+  | ResolveModulePageRouteResult
+  | ResolveModulePageRouteMetadataResult;
+
 function dashboardResultShellChrome(
-  result: ResolveModulePageRouteResult | null | undefined
+  result: DashboardChromeRouteResult | null | undefined
 ): 'none' | 'site' | 'workspace' | 'admin' | undefined {
   if (!result) {
     return undefined;
@@ -170,14 +205,14 @@ function dashboardResultShellChrome(
 
 function dashboardNavigationLabel(
   host: ModuleHost,
-  session: ModuleHostSession,
+  navigation: DashboardNavigationEntries,
   pathname: string,
   lang: SupportedLanguage = DEFAULT_LANGUAGE
 ): string | undefined {
   const href = dashboardHref(pathname);
-  const item = host
-    .resolveNavigation('dashboard.sidebar', { session })
-    .find((navigationItem) => dashboardHref(navigationItem.item.path) === href);
+  const item = navigation.find(
+    (navigationItem) => dashboardHref(navigationItem.item.path) === href
+  );
   return item ? moduleNavigationLabel(host, item, lang) : undefined;
 }
 
@@ -220,7 +255,7 @@ function dashboardActivePath(
 }
 
 function dashboardPageChrome(
-  result: ResolveModulePageRouteResult,
+  result: DashboardChromeRouteResult,
   navigationLabel?: string,
   lang: SupportedLanguage = DEFAULT_LANGUAGE
 ): {
@@ -281,7 +316,42 @@ async function dashboardFrameUser(session: ModuleHostSession) {
   };
 }
 
-export async function generateMetadata({ params }: DashboardPageProps): Promise<Metadata> {
+async function resolveDashboardShellData(
+  request: Request,
+  session: ModuleHostSession,
+  timingSpans?: DashboardTimingSpan[]
+) {
+  const spans = timingSpans ?? [];
+  const scopeResolutionPromise = measureDashboardSpan('scope', spans, () =>
+    resolveDemoProductScope(request)
+  );
+  const workspacesPromise = scopeResolutionPromise.then((scopeResolution) =>
+    measureDashboardSpan('workspaces', spans, () => listDemoWorkspaces(scopeResolution.product.id))
+  );
+  const frameUserPromise = measureDashboardSpan('profile', spans, () =>
+    dashboardFrameUser(session)
+  );
+  const [scopeResolution, workspaces, frameUser] = await Promise.all([
+    scopeResolutionPromise,
+    workspacesPromise,
+    frameUserPromise,
+  ]);
+  const theme = await measureDashboardSpan('theme', spans, () =>
+    getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id })
+  );
+
+  return {
+    scopeResolution,
+    workspaces,
+    theme,
+    frameUser,
+  };
+}
+
+async function generateDashboardMetadata(
+  { params }: DashboardPageProps,
+  dependencies: GenerateDashboardMetadataDependencies = {}
+): Promise<Metadata> {
   const { modulePath } = await params;
   const pathname = modulePathFromSegments(modulePath);
   if (pathname === '/') {
@@ -291,14 +361,20 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
     };
   }
 
-  const host = await getModuleHost();
-  const request = await createScopedDashboardRequest(dashboardHref(pathname));
-  const session = applyDashboardModuleSessionPermissions(
+  const host = await (dependencies.getHost?.() ?? getModuleHost());
+  const request = await (dependencies.createRequest?.(pathname) ??
+    createScopedDashboardRequest(dashboardHref(pathname)));
+  const applySessionPermissions =
+    dependencies.applySessionPermissions ?? applyDashboardModuleSessionPermissions;
+  const session = applySessionPermissions(
     host,
-    await createScopedDemoHostSession(request),
+    await (dependencies.createSession?.(request) ?? createScopedDemoHostSession(request)),
     pathname
   );
-  const result = await host.resolvePageRoute({
+  const navigation = cachedDashboardNavigation(session, () =>
+    resolveDashboardNavigation(host, session)
+  );
+  const result = await host.resolvePageRouteMetadata({
     kind: 'dashboard',
     pathname,
     request,
@@ -312,7 +388,7 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
     };
   }
 
-  const chrome = dashboardPageChrome(result, dashboardNavigationLabel(host, session, pathname));
+  const chrome = dashboardPageChrome(result, dashboardNavigationLabel(host, navigation, pathname));
 
   return {
     title: chrome.title,
@@ -320,6 +396,12 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
     robots: privateDashboardRobots,
   };
 }
+
+export async function generateMetadata({ params }: DashboardPageProps): Promise<Metadata> {
+  return generateDashboardMetadata({ params });
+}
+
+export const generateDashboardModuleMetadataForTest = generateDashboardMetadata;
 
 async function DashboardHome({ request }: { request: Request }) {
   const host = await getModuleHost();
@@ -448,17 +530,12 @@ function ModuleChromeErrorPanel({
 }) {
   const moduleName = result.routeContext?.contract.name ?? 'Module';
   const title = dashboardInlineText(lang, 'page_unavailable_0b5181a4');
-  const description = dashboardInlineText(
-    lang,
-    'this_page_is_not_available_right_now_b49aba34'
-  );
+  const description = dashboardInlineText(lang, 'this_page_is_not_available_right_now_b49aba34');
 
   return (
     <main className="min-h-screen bg-background px-6 py-8 text-foreground">
       <div className="mx-auto max-w-3xl">
-        <div className="text-xs font-semibold uppercase text-muted-foreground">
-          {moduleName}
-        </div>
+        <div className="text-xs font-semibold uppercase text-muted-foreground">{moduleName}</div>
         <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
         <div className="mt-6 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-foreground">
@@ -484,7 +561,24 @@ function ModuleChromeErrorPanel({
   );
 }
 
+export function HostClientTransitionFrame({
+  area,
+  children,
+}: {
+  area: 'admin' | 'dashboard';
+  children: ReactNode;
+}) {
+  return (
+    <div data-host-app-frame={area}>
+      <ClientTransitionLinks area={area} />
+      {children}
+    </div>
+  );
+}
+
 export default async function DashboardPage({ params, searchParams }: DashboardPageProps) {
+  const timingStartedAt = Date.now();
+  const timingSpans: DashboardTimingSpan[] = [];
   const requestHeaders = await headers();
   const lang = languageFromHeaders(requestHeaders);
   const { modulePath } = await params;
@@ -493,50 +587,97 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   if (pathname === '/') {
     redirect(localizedPath(lang, '/dashboard'));
   }
-  await requireHostUser(
-    lang,
-    pathname === '/' ? localizedPath(lang, '/dashboard') : dashboardHref(pathname)
+  await measureDashboardSpan('auth', timingSpans, () =>
+    requireHostUser(
+      lang,
+      pathname === '/' ? localizedPath(lang, '/dashboard') : dashboardHref(pathname)
+    )
   );
-  const host = await getModuleHost();
+  const host = await measureDashboardSpan('module-host', timingSpans, () => getModuleHost());
   const request = await createScopedDashboardRequest(
     pathname === '/' ? '/dashboard' : dashboardHref(pathname),
     query
   );
-  const session = await createScopedDemoHostSession(request);
-  const moduleSession = applyDashboardModuleSessionPermissions(host, session, pathname);
-  const navGroups = dashboardNavGroups(host, session, lang);
-  const modulePageResult =
-    pathname === '/'
-      ? undefined
-      : await host.resolvePageRoute({
-          kind: 'dashboard',
-          pathname,
-          request,
-          session: moduleSession,
-        });
-  const moduleChrome = modulePageResult
-    ? dashboardPageChrome(
-        modulePageResult,
-        dashboardNavigationLabel(host, moduleSession, pathname, lang),
-        lang
-      )
-    : null;
-  const scopeResolution = await resolveDemoProductScope(request);
-  const workspaces = await listDemoWorkspaces(scopeResolution.product.id);
-  const theme = getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id });
-  const usesModuleChrome = dashboardResultShellChrome(modulePageResult) === 'none';
-  const frameUser = await dashboardFrameUser(session);
-  const moduleSearchHref = dashboardModuleSearchHref(
-    host,
-    dashboardModuleId(modulePageResult)
+  const session = await measureDashboardSpan('session', timingSpans, () =>
+    createScopedDemoHostSession(request)
   );
-  const activePath = dashboardActivePath(modulePageResult, pathname);
+  const moduleSession = await measureDashboardSpan('module-session', timingSpans, () =>
+    applyDashboardModuleSessionPermissions(host, session, pathname)
+  );
+  const { moduleNavigation, navGroups } = await measureDashboardSpan(
+    'navigation',
+    timingSpans,
+    () => {
+      const nextShellNavigation = cachedDashboardNavigation(session, () =>
+        resolveDashboardNavigation(host, session)
+      );
+      const nextModuleNavigation =
+        moduleSession === session
+          ? nextShellNavigation
+          : cachedDashboardNavigation(moduleSession, () =>
+              resolveDashboardNavigation(host, moduleSession)
+            );
+      return {
+        shellNavigation: nextShellNavigation,
+        moduleNavigation: nextModuleNavigation,
+        navGroups: dashboardNavGroups(host, nextShellNavigation, lang),
+      };
+    }
+  );
+  const modulePageResultPromise: Promise<ResolveModulePageRouteResult | undefined> =
+    pathname === '/'
+      ? Promise.resolve(undefined)
+      : measureDashboardSpan('route-resolve', timingSpans, () =>
+          host.resolvePageRoute({
+            kind: 'dashboard',
+            pathname,
+            request,
+            session: moduleSession,
+          })
+        );
+  const shellDataPromise = measureDashboardSpan('shell-data', timingSpans, () =>
+    resolveDashboardShellData(request, session, timingSpans)
+  );
+  const [modulePageResult, shellData] = await Promise.all([
+    modulePageResultPromise,
+    shellDataPromise,
+  ]);
+  const { moduleChrome, usesModuleChrome, moduleSearchHref, activePath, moduleId } =
+    await measureDashboardSpan('chrome', timingSpans, () => {
+      const nextModuleChrome = modulePageResult
+        ? dashboardPageChrome(
+            modulePageResult,
+            dashboardNavigationLabel(host, moduleNavigation, pathname, lang),
+            lang
+          )
+        : null;
+      const nextModuleId = dashboardModuleId(modulePageResult);
+      return {
+        moduleChrome: nextModuleChrome,
+        usesModuleChrome: dashboardResultShellChrome(modulePageResult) === 'none',
+        moduleSearchHref: dashboardModuleSearchHref(host, nextModuleId),
+        activePath: dashboardActivePath(modulePageResult, pathname),
+        moduleId: nextModuleId,
+      };
+    });
+  maybeLogDashboardTiming(
+    createDashboardTimingReport({
+      pathname,
+      routeKind: 'dashboard',
+      moduleId,
+      status: modulePageResult?.status ?? 200,
+      spans: timingSpans,
+      totalMs: Date.now() - timingStartedAt,
+    })
+  );
 
   if (modulePageResult && usesModuleChrome) {
     return (
       <>
-        <ProductThemeStyle id="ploykit-workspace-theme" theme={theme} />
-        <ModuleDashboardPage result={modulePageResult} lang={lang} unframed />
+        <ProductThemeStyle id="ploykit-workspace-theme" theme={shellData.theme} />
+        <HostClientTransitionFrame area="dashboard">
+          <ModuleDashboardPage result={modulePageResult} lang={lang} unframed />
+        </HostClientTransitionFrame>
       </>
     );
   }
@@ -548,19 +689,24 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
       navGroups={navGroups}
       activePath={activePath}
       scope={{
-        label: scopeResolution.workspace.name,
-        detail: scopeResolution.product.name,
+        label: shellData.scopeResolution.workspace.name,
+        detail: shellData.scopeResolution.product.name,
         searchHref: moduleSearchHref,
       }}
-      user={frameUser}
+      user={shellData.frameUser}
     >
-      <ProductThemeStyle id="ploykit-workspace-theme" theme={theme} />
+      <ProductThemeStyle id="ploykit-workspace-theme" theme={shellData.theme} />
       <PageShell
         eyebrow={moduleChrome?.eyebrow ?? 'Workspace'}
         title={moduleChrome?.title ?? 'Dashboard'}
         description={moduleChrome?.description ?? 'Browse your available workspace tools.'}
         wide
-        actions={<ProductScopeSwitcher resolution={scopeResolution} workspaces={workspaces} />}
+        actions={
+          <ProductScopeSwitcher
+            resolution={shellData.scopeResolution}
+            workspaces={shellData.workspaces}
+          />
+        }
       >
         {modulePageResult ? (
           <ModuleDashboardPage result={modulePageResult} lang={lang} />

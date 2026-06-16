@@ -5,6 +5,16 @@ import { languageFromRequest, localizedPath } from '@host/lib/i18n';
 import { requestUrl } from '@host/lib/paths';
 import { checkHostRouteSecurity } from '@host/lib/security';
 
+export function passwordResetResponseData(
+  result: { sent: boolean; resetToken?: string },
+  nodeEnv = process.env.NODE_ENV
+): { sent: boolean; resetToken?: string } {
+  return {
+    sent: result.sent,
+    ...(nodeEnv === 'production' ? {} : { resetToken: result.resetToken }),
+  };
+}
+
 export async function POST(request: Request) {
   const securityResponse = await checkHostRouteSecurity(request, 'auth.passwordReset.request');
   if (securityResponse) {
@@ -33,10 +43,7 @@ export async function POST(request: Request) {
       url.searchParams.set('reset', 'sent');
       return Response.redirect(url, 303);
     }
-    return apiOk({
-      sent: result.sent,
-      ...(process.env.NODE_ENV === 'production' ? {} : { resetToken: result.resetToken }),
-    });
+    return apiOk(passwordResetResponseData(result));
   } catch (error) {
     if (!isJson) {
       const url = requestUrl(localizedPath(lang, '/forgot-password'), request);

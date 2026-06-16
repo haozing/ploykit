@@ -71,13 +71,22 @@ Generated files:
 
 ## Included Modules
 
-- `hello`: minimal runtime fixture and contract smoke module.
-- `public-tools-demo`: public JSON, CSV, and text tools.
-- `cms-demo`: CMS-style CRUD, files, posts, and notes.
-- `shop-demo`: catalog, cart, commerce, and billing guard demo.
-- `capability-demo`: host capabilities, jobs, events, webhooks, AI/RAG, and public route demo.
-- `ai-rag-demo`: AI and RAG workflow demo.
-- `white-label-site-demo`: branded site and presentation-layer override demo.
+Default module grades describe how each bundled module should be used: Fixture
+modules are test scaffolds, Demo modules demonstrate breadth without promising
+production completeness, and Reference modules are suitable starting points for
+real product modules.
+
+- `hello` (Fixture): minimal runtime fixture and contract smoke module.
+- `public-tools-demo` (Reference): public JSON, CSV, and text tools.
+- `cms-demo` (Reference): CMS-style CRUD, files, posts, and notes.
+- `shop-demo` (Demo/Reference): catalog, cart, commerce, and billing guard demo;
+  production use still needs concurrency, real provider, and database evidence.
+- `capability-demo` (Demo): host capabilities, jobs, events, webhooks, AI/RAG,
+  and public route demo.
+- `ai-rag-demo` (Demo/Reference): AI and RAG workflow demo; production use must
+  account for cost controls and anonymous access policy.
+- `white-label-site-demo` (Reference): branded site and presentation-layer
+  override demo.
 
 ## Requirements
 
@@ -227,13 +236,16 @@ npm run modules:scan
 
 ## 当前模块
 
-- `hello`：最小运行时夹具和契约冒烟模块。
-- `public-tools-demo`：公开 JSON、CSV 和文本工具。
-- `cms-demo`：类 CMS 的 CRUD、文件、文章和笔记示例。
-- `shop-demo`：目录、购物车、商业化和计费护栏示例。
-- `capability-demo`：宿主能力、任务、事件、Webhook、AI/RAG 和公开路由示例。
-- `ai-rag-demo`：AI 与 RAG 工作流示例。
-- `white-label-site-demo`：品牌化站点和展示层替换示例。
+默认模块等级用于说明内置模块的使用边界：Fixture 只作为测试夹具，Demo
+用于展示能力广度但不承诺生产完整性，Reference 可作为真实产品模块的骨架参考。
+
+- `hello`（Fixture）：最小运行时夹具和契约冒烟模块。
+- `public-tools-demo`（Reference）：公开 JSON、CSV 和文本工具。
+- `cms-demo`（Reference）：类 CMS 的 CRUD、文件、文章和笔记示例。
+- `shop-demo`（Demo/Reference）：目录、购物车、商业化和计费护栏示例；生产使用仍需补并发、真实 provider 和数据库证据。
+- `capability-demo`（Demo）：宿主能力、任务、事件、Webhook、AI/RAG 和公开路由示例。
+- `ai-rag-demo`（Demo/Reference）：AI 与 RAG 工作流示例；生产使用需明确成本控制和匿名访问策略。
+- `white-label-site-demo`（Reference）：品牌化站点和展示层替换示例。
 
 ## 运行要求
 

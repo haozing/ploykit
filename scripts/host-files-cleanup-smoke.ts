@@ -1,4 +1,6 @@
-import { cleanupAdminDeletedFiles, deleteAdminFile } from '../apps/host-next/lib/admin-operations';
+import fs from 'node:fs';
+import path from 'node:path';
+import { cleanupAdminDeletedFiles, deleteAdminFile } from '../apps/host-next/lib/admin-files';
 import { getHostRuntime } from '../apps/host-next/lib/create-host';
 import { getHostFileStorage, uploadHostUserFile } from '../apps/host-next/lib/files';
 import { createDemoHostSession } from '../apps/host-next/lib/module-host';
@@ -40,6 +42,14 @@ const ok =
   objectAfterCleanup === null &&
   Boolean(cleanupAudit);
 
+const outputDir = path.resolve(
+  process.cwd(),
+  '.runtime',
+  'files-cleanup',
+  checkedAt.replace(/[:.]/g, '-')
+);
+const latestPath = path.resolve(process.cwd(), '.runtime', 'files-cleanup', 'latest.json');
+const reportPath = path.join(outputDir, 'files-cleanup-smoke.json');
 const result = {
   ok,
   checkedAt,
@@ -58,7 +68,16 @@ const result = {
     mode: storage.status.mode,
     durable: storage.status.durable,
   },
+  artifacts: {
+    report: reportPath,
+    latest: latestPath,
+  },
 };
+
+fs.mkdirSync(outputDir, { recursive: true });
+fs.mkdirSync(path.dirname(latestPath), { recursive: true });
+fs.writeFileSync(reportPath, `${JSON.stringify(result, null, 2)}\n`);
+fs.copyFileSync(reportPath, latestPath);
 
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 process.exitCode = ok ? 0 : 1;

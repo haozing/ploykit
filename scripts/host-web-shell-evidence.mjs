@@ -33,6 +33,7 @@ function isolatedWebShellTestEnv(source) {
   delete env.POSTGRES_URL;
   delete env.PLOYKIT_RUNTIME_DATABASE_URL;
   delete env.PLOYKIT_RUNTIME_STORE;
+  delete env.NODE_ENV;
 
   return env;
 }

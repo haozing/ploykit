@@ -2,13 +2,13 @@ import {
   Pool } from 'pg';
 import { loadRuntimeConfig } from '../src/lib/runtime-config';
 import {
-  checkModuleMapHealth,
   createPgModuleDataExecutor,
   createPostgresRuntimeStore,
   loadModuleRuntimeContracts,
   runRuntimeChecks,
   type RuntimeChecksStatus,
 } from '../src/lib/module-runtime';
+import { checkModuleMapHealth } from '../src/lib/module-runtime/loader/module-map-health';
 import {
   createMemoryModuleFileStorage,
 } from '../src/lib/module-capabilities';

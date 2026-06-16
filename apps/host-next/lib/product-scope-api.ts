@@ -11,7 +11,10 @@ import type {
 } from '@/lib/module-runtime/stores/runtime-store-types';
 import { getHostRuntime } from './create-host';
 import { defaultProductId } from './default-scope';
-import { ensureHostProductScopeSeeded } from './product-scope';
+import {
+  ensureHostProductScopeSeeded,
+  invalidateHostProductScopeCache,
+} from './product-scope';
 
 type WorkspaceRole = ProductScopeMembership['role'];
 type WorkspaceCreationPolicy = 'admin_only' | 'authenticated' | 'product_member';
@@ -198,6 +201,7 @@ export async function switchCurrentWorkspace(session: ModuleHostSession, workspa
     productId: membership.productId,
     workspaceId,
   });
+  invalidateHostProductScopeCache();
   return getCurrentProductScope({
     ...session,
     productId: membership.productId,
@@ -276,6 +280,7 @@ export async function createProductScopeWorkspace(
     productId: workspace.productId,
     workspaceId: workspace.id,
   });
+  invalidateHostProductScopeCache();
   return workspace;
 }
 
@@ -334,6 +339,7 @@ export async function upsertProductScopeDomainAlias(
     productId: alias.productId,
     workspaceId: alias.workspaceId,
   });
+  invalidateHostProductScopeCache();
   return alias;
 }
 
@@ -381,6 +387,7 @@ export async function upsertWorkspaceMember(
     role: input.role,
     status: member.status,
   });
+  invalidateHostProductScopeCache();
   return member;
 }
 
@@ -417,6 +424,7 @@ export async function createWorkspaceInvitation(
     email: invite.email,
     role: invite.role,
   });
+  invalidateHostProductScopeCache();
   return invite;
 }
 
@@ -462,6 +470,7 @@ export async function updateWorkspaceInvitation(
       email: invite.email,
       acceptedBy: user.id,
     });
+    invalidateHostProductScopeCache();
     return accepted;
   }
 
@@ -477,5 +486,6 @@ export async function updateWorkspaceInvitation(
     productId: invite.productId,
     token: invite.token,
   });
+  invalidateHostProductScopeCache();
   return updated;
 }

@@ -1,5 +1,5 @@
 import { AdminOverviewPage } from '@host/components/admin/AdminPages';
-import { getAdminOperationsView } from '@host/lib/admin-operations';
+import { getAdminOperationsView } from '@host/lib/admin-module-operations';
 import { getHostIdentityOperationsView } from '@host/lib/identity-operations';
 import { listAdminRoles } from '@host/lib/admin-api';
 import { getAdminProviderStatusView } from '@host/lib/admin-provider-status';

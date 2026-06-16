@@ -7,7 +7,7 @@ import {
   getAdminFilesView,
   quarantineAdminFile,
   restoreAdminFile,
-} from '@host/lib/admin-operations';
+} from '@host/lib/admin-files';
 import { createAdminAction } from '@host/lib/admin-action';
 import { getHostFileQuotaStatus } from '@host/lib/files';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';

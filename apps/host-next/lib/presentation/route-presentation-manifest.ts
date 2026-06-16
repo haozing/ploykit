@@ -7,11 +7,11 @@ import {
 import type { ModulePageCachePresentation } from '@ploykit/module-sdk/presentation';
 import { DEFAULT_LANGUAGE, localizedPath, type SupportedLanguage } from '../i18n';
 import { createHostRequestContext, type HostRequestContext } from '../request-context';
-import type { ModuleHostSession } from '@/lib/module-runtime';
+import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
 import { requireAdminUser, requireHostUser } from '../auth';
 import { requireCapability } from '../rbac';
 import { resolvePagePresentation, type ResolvedPagePresentation } from './page-presentation';
-import { createAnonymousModuleHostSession } from '@/lib/module-runtime';
+import { createAnonymousModuleHostSession } from '@/lib/module-runtime/host/session';
 
 export type RoutePresentationAccess = 'public' | 'auth' | 'admin';
 
@@ -69,6 +69,7 @@ const HOST_ROUTE_PATH_BY_PAGE_ID: Record<string, string> = {
   'dashboard.tasks': '/dashboard/tasks',
   'dashboard.task-detail': '/dashboard/tasks/:id',
   'dashboard.workspaces': '/dashboard/workspaces',
+  'dashboard.module-route': '/dashboard/:modulePath*',
   'admin.overview': '/admin',
   'admin.analytics': '/admin/analytics',
   'admin.audit': '/admin/audit',

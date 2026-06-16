@@ -41,6 +41,19 @@ memory store 和 Postgres store 两层实现，两个实现需要保持行为一
 - 商业化核心事实的 subject-first、幂等、账本边界重构见
   [宿主商业核心原语重构计划](host-commercial-core-primitives-plan.zh-CN.md)。
 
+## 基线与迁移边界
+
+`migrations/runtime/*.sql` 是当前 runtime store 的可重建 schema 基线。它必须能在空
+Postgres 库中完整应用，并通过 `runtime:stores:verify` 的表、列、索引和 migration
+journal 检查。
+
+这不是对任意历史库的自动数据迁移承诺。若某个部署选择不迁移旧数据，应在部署说明中
+明确声明“新 baseline 需要重建数据库”，并把旧库作为归档或人工迁移源处理。任何旧数据
+迁移都应作为单独项目提供映射、回滚、抽样校验和审计证据。
+
+Postgres baseline、`pg_dump`/`pg_restore`、托管快照和 WAL/PITR 演练的上线口径见
+[Postgres Baseline 与 PITR 运维手册](postgres-baseline-pitr-runbook.zh-CN.md)。
+
 ## 常用验证
 
 ```bash
@@ -53,6 +66,9 @@ npm run test:commercial-postgres
 npm run test:files-storage
 npm run test:background-reliability
 npm run runtime:stores:verify
+npm run host:backup-restore-smoke -- --required
+npm run host:postgres-physical-restore-smoke -- --required
+npm run host:upgrade-migration-smoke -- --required
 ```
 
 ## 什么时候看这个文档

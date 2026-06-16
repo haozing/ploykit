@@ -128,6 +128,10 @@ export default defineProductPresentation({
         mode: 'host',
         scope: 'workspace',
       },
+      'module-route': {
+        mode: 'host',
+        scope: 'workspace',
+      },
     },
     admin: {
       overview: { mode: 'host' },

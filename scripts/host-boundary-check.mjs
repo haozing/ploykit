@@ -16,6 +16,7 @@ const HOST_TARGETS = [
   'src/lib/runtime-config',
   'scripts/host-accessibility-smoke.mjs',
   'scripts/host-browser-matrix.mjs',
+  'scripts/host-dashboard-transition-smoke.mjs',
   'scripts/host-theme-matrix.mjs',
   'scripts/release-candidate-gate.ts',
 ];

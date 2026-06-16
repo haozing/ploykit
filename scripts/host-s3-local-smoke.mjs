@@ -20,10 +20,36 @@ function run(command, args, options = {}) {
   return result;
 }
 
+function tryRun(command, args, options = {}) {
+  return spawnSync(command, args, {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+    stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    env: options.env ?? process.env,
+  });
+}
+
+function ensureMinioContainer() {
+  const compose = tryRun(docker, ['compose', 'up', '-d', 'minio'], { capture: true });
+  if (compose.status === 0) {
+    run(docker, ['compose', 'run', '--rm', 'minio-init']);
+    return;
+  }
+
+  const output = `${compose.stdout ?? ''}\n${compose.stderr ?? ''}`;
+  if (!output.includes('container name "/ploykit-v2-minio" is already in use')) {
+    const stderr = compose.stderr?.trim();
+    throw new Error(
+      `${docker} compose up -d minio failed with ${compose.status}${stderr ? `: ${stderr}` : ''}`
+    );
+  }
+
+  run(docker, ['start', 'ploykit-v2-minio']);
+}
+
 try {
   if (!skipDocker) {
-    run(docker, ['compose', 'up', '-d', 'minio']);
-    run(docker, ['compose', 'run', '--rm', 'minio-init']);
+    ensureMinioContainer();
   }
 
   const smoke = run(

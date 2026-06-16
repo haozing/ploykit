@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Pool } from 'pg';
 import type { ModuleAiApi } from '@ploykit/module-sdk';
 import {
   createInMemoryRuntimeStore,
+  createPgModuleDataExecutor,
+  createPostgresRuntimeStore,
 } from '../src/lib/module-runtime';
 import {
   createInMemoryRagVectorStore,
@@ -12,6 +15,9 @@ import {
   type RagVectorStore,
 } from '../src/lib/module-capabilities';
 import { createHostModuleRagApi } from '../apps/host-next/lib/rag-provider';
+
+const DATABASE_URL =
+  process.env.DATABASE_URL ?? 'postgres://ploykit:ploykit@127.0.0.1:55432/ploykit';
 
 const keywordAi: ModuleAiApi = {
   async generateText(input) {
@@ -32,6 +38,26 @@ const keywordAi: ModuleAiApi = {
     };
   },
 };
+
+async function databaseReachable(): Promise<boolean> {
+  const pool = new Pool({ connectionString: DATABASE_URL });
+  try {
+    await pool.query('select 1');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await pool.end().catch(() => undefined);
+  }
+}
+
+async function resetRagRuntimeTables(pool: Pool): Promise<void> {
+  await pool.query(`
+    drop table if exists module_rag_chunks cascade;
+    drop table if exists module_rag_sources cascade;
+    drop table if exists module_runtime_migrations cascade;
+  `);
+}
 
 async function assertReindexHidesStaleChunks(vectorStore: RagVectorStore) {
   const indexer = createRagIndexer({
@@ -170,6 +196,95 @@ test('P8 runtime-store RAG vector store persists source and chunk ledger', async
     ).length,
     0
   );
+});
+
+test('P8 Postgres RAG vector store isolates workspace source and chunk ledger', async (t) => {
+  if (!(await databaseReachable())) {
+    t.skip(`Postgres is not reachable at ${DATABASE_URL}. Start it with npm run db:up.`);
+    return;
+  }
+
+  const pool = new Pool({ connectionString: DATABASE_URL });
+  try {
+    await resetRagRuntimeTables(pool);
+    const store = createPostgresRuntimeStore({
+      database: createPgModuleDataExecutor(pool),
+    });
+    await store.ensureSchema?.();
+    const vectorStore = createRuntimeStoreRagVectorStore(store);
+    const ai = createStaticModuleAiRuntime();
+    const productId = 'product-rag-postgres';
+    const moduleId = 'rag-postgres-store';
+    const createIndexer = (workspaceId: string) =>
+      createRagIndexer({
+        productId,
+        workspaceId,
+        moduleId,
+        ai: ai.forModule(moduleId),
+        vectorStore,
+        chunkSize: 20,
+      });
+    const workspaceA = createIndexer('workspace-a');
+    const workspaceB = createIndexer('workspace-b');
+
+    await workspaceA.index({
+      sourceId: 'shared-source',
+      content: 'alpha launch notes for workspace A',
+      metadata: { workspace: 'workspace-a' },
+    });
+    await workspaceB.index({
+      sourceId: 'shared-source',
+      content: 'alpha private notes for workspace B',
+      metadata: { workspace: 'workspace-b' },
+    });
+
+    const resultsA = await workspaceA.search({ query: 'alpha notes', limit: 5 });
+    const resultsB = await workspaceB.search({ query: 'alpha notes', limit: 5 });
+    assert.ok(resultsA.length > 0);
+    assert.ok(resultsB.length > 0);
+    assert.ok(resultsA.every((result) => result.metadata.workspace === 'workspace-a'));
+    assert.ok(resultsB.every((result) => result.metadata.workspace === 'workspace-b'));
+    assert.equal(
+      (
+        await store.listRagSources({
+          productId,
+          workspaceId: 'workspace-a',
+          moduleId,
+          sourceId: 'shared-source',
+        })
+      ).length,
+      1
+    );
+    assert.equal(
+      (
+        await store.listRagSources({
+          productId,
+          workspaceId: 'workspace-b',
+          moduleId,
+          sourceId: 'shared-source',
+        })
+      ).length,
+      1
+    );
+
+    const deleted = await workspaceA.deleteSource('shared-source');
+    assert.ok(deleted > 0);
+    assert.equal((await workspaceA.search({ query: 'alpha notes', limit: 5 })).length, 0);
+    assert.ok((await workspaceB.search({ query: 'alpha notes', limit: 5 })).length > 0);
+    assert.equal(
+      (
+        await store.listRagChunks({
+          productId,
+          workspaceId: 'workspace-b',
+          moduleId,
+          sourceId: 'shared-source',
+        })
+      ).length > 0,
+      true
+    );
+  } finally {
+    await pool.end();
+  }
 });
 
 test('K7 host RAG provider uses vector indexer, workspace isolation and audit hooks', async () => {

@@ -47,6 +47,7 @@ import {
   DEFAULT_HOST_WORKSPACE_ID,
 } from './default-scope';
 import { getDefaultModuleCatalogSeed } from './default-module-catalog';
+import { invalidateDashboardShellCache } from './dashboard-shell-cache';
 
 function sessionWithPermissions(
   session: ModuleHostSession,
@@ -100,11 +101,12 @@ export function applyModuleSelfServiceSessionPermissions(
 
 async function ensureHostCatalogSeeded(runtimeStore: HostRuntimeStoreHandle): Promise<void> {
   const moduleIds = Object.keys(MODULE_MAP_ARTIFACT.modules);
+  const existing = await runtimeStore.store.listCatalogStates({
+    productId: DEFAULT_HOST_PRODUCT_ID,
+  });
+  const existingModuleIds = new Set(existing.map((state) => state.moduleId));
   for (const moduleId of moduleIds) {
-    const existing = await runtimeStore.store.listCatalogStates({
-      productId: DEFAULT_HOST_PRODUCT_ID,
-    });
-    if (existing.some((state) => state.moduleId === moduleId)) {
+    if (existingModuleIds.has(moduleId)) {
       continue;
     }
     const seed = getDefaultModuleCatalogSeed(moduleId);
@@ -116,6 +118,7 @@ async function ensureHostCatalogSeeded(runtimeStore: HostRuntimeStoreHandle): Pr
       required: seed.required,
       scopeProfile: seed.scopeProfile,
     });
+    existingModuleIds.add(moduleId);
   }
 }
 
@@ -300,4 +303,5 @@ export function resetHostRuntimeForTests(): void {
 
 export function invalidateHostRuntime(): void {
   hostRuntimePromise = null;
+  invalidateDashboardShellCache();
 }

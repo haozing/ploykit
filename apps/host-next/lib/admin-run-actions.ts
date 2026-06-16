@@ -1,5 +1,5 @@
 import { createAdminAction } from './admin-action';
-import { cancelAdminRun, requeueAdminRun } from './admin-operations';
+import { cancelAdminRun, requeueAdminRun } from './admin-runs';
 
 function readRequiredFormString(formData: FormData, name: string): string {
   const value = formData.get(name);

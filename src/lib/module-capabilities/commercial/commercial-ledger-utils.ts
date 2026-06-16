@@ -27,7 +27,7 @@ import type {
   RuntimeStoreSubscriptionStatus,
   RuntimeStoreTaxProfileRecord,
 } from '../../module-runtime/stores';
-import type { CommercialSkuDefinition } from './commercial-ledger';
+import type { CommercialSkuDefinition } from './commercial-ledger-types';
 
 export function toUsageRecord(
   record: Awaited<ReturnType<RuntimeStore['recordUsage']>>

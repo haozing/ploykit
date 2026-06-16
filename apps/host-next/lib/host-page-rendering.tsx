@@ -20,7 +20,10 @@ import {
 import { presentHostRoute } from './presentation/route-presentation-manifest';
 import { callModuleComponent } from './rendering';
 import type { SupportedLanguage } from './i18n';
-import { createAnonymousModuleHostSession, type ModuleHostSession } from '@/lib/module-runtime';
+import {
+  createAnonymousModuleHostSession,
+  type ModuleHostSession,
+} from '@/lib/module-runtime/host/session';
 
 interface HostPageOverrideRenderResult {
   resolved: boolean;

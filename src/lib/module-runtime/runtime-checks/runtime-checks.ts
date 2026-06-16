@@ -1,6 +1,6 @@
 import type { LoadRuntimeConfigResult } from '../../runtime-config';
 import type { ModuleDataPostgresExecutor } from '../data';
-import type { ModuleMapHealthReport } from '../loader';
+import type { ModuleMapHealthReport } from '../loader/module-map-health';
 import type { RuntimeStore } from '../stores';
 import { verifyRuntimeStoreSchema } from '../stores';
 

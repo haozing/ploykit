@@ -4,14 +4,16 @@ import {
   bulkDiscardAdminOutbox,
   bulkReplayAdminDeadLetters,
   previewAdminOutboxBulkAction,
-} from '@host/lib/admin-operations';
+} from '@host/lib/admin-delivery';
 import { listAdminDeadLetters, readAdminApiQuery } from '@host/lib/admin-api';
 
 function readStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
-  const values = value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  const values = value.filter(
+    (item): item is string => typeof item === 'string' && item.length > 0
+  );
   return values.length > 0 ? values : undefined;
 }
 

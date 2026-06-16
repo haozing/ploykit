@@ -1,292 +1,46 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type ReleaseCandidateCheckStatus = 'passed' | 'pending' | 'failed';
-export type ReleaseCandidateGateProfile = 'local' | 'integration' | 'maintainer';
+import {
+  collectReleaseCandidateScan,
+  DEFAULT_RELEASE_CANDIDATE_SCAN_TARGETS,
+} from './rc-gate-legacy-scan';
+import {
+  asRecord,
+  collectModuleQualityEvidenceRequirements,
+  collectModuleQualityRouteRequirements,
+  commercialDomainEvidenceFromReport,
+  missingModuleQualityRouteChecks,
+  providerInvocationEvidenceFromReport,
+  readModuleTestReports,
+  readProductPresentationManifest,
+  readProviderMatrixReport,
+  readRuntimeEvidenceReport,
+  readRuntimeStorePostgresReport,
+  readWorkerSoakReport,
+} from './rc-gate-evidence';
+import type {
+  DriftCheckReport,
+  FilesCleanupReport,
+  FilesReconcileReport,
+  ReleaseCandidateCheck,
+  ReleaseCandidateCheckStatus,
+  ReleaseCandidateDiagnostic,
+  ReleaseCandidateGateProfile,
+  ReleaseCandidateGateResult,
+  ResolvedCheckEvidence,
+  RunReleaseCandidateGateInput,
+  RuntimeEvidenceReport,
+} from './rc-gate-types';
 
-export interface ReleaseCandidateCheck {
-  id: string;
-  title: string;
-  required: boolean;
-  status: ReleaseCandidateCheckStatus;
-  evidence?: string;
-}
-
-export interface ReleaseCandidateDiagnostic {
-  severity: 'error' | 'warning';
-  code: string;
-  message: string;
-  path: string;
-  line?: number;
-  term?: string;
-  snippet?: string;
-  fix?: string;
-}
-
-export interface ReleaseCandidateGateResult {
-  ok: boolean;
-  checkedAt: string;
-  profile: ReleaseCandidateGateProfile;
-  scannedFiles: number;
-  diagnostics: ReleaseCandidateDiagnostic[];
-  checks: ReleaseCandidateCheck[];
-}
-
-export interface RunReleaseCandidateGateInput {
-  projectRoot: string;
-  profile?: ReleaseCandidateGateProfile;
-  targets?: readonly string[];
-  requiredChecks?: Record<string, ReleaseCandidateCheckStatus | boolean | undefined>;
-  now?: () => Date;
-}
-
-interface LegacyRuntimeTerm {
-  code: string;
-  value: string;
-  formalName: string;
-}
-
-interface ResolvedCheckEvidence {
-  status: ReleaseCandidateCheckStatus;
-  evidence?: string;
-}
-
-interface ProviderMatrixReport {
-  ok?: boolean;
-  required?: boolean;
-  checkedAt?: string;
-  checks?: { id?: string; ok?: boolean }[];
-}
-
-interface WorkerSoakReport {
-  ok?: boolean;
-  required?: boolean;
-  checkedAt?: string;
-  enqueued?: number;
-  drain?: {
-    processed?: number;
-    failed?: number;
-    deadLettered?: number;
-    iterations?: number;
-  };
-  deliveryLedger?: {
-    records?: number;
-    delivered?: number;
-    failed?: number;
-    deadLettered?: number;
-    workerRecords?: number;
-    workers?: number;
-  };
-  workerRegistry?: {
-    workers?: number;
-    activeWorkers?: number;
-    errorWorkers?: number;
-    latestHeartbeatAt?: string;
-  };
-}
-
-interface RuntimeStorePostgresReport {
-  ok?: boolean;
-  required?: boolean;
-  checkedAt?: string;
-  profile?: string;
-  checks?: { id?: string; ok?: boolean }[];
-}
-
-interface RuntimeEvidenceReport {
-  ok?: boolean;
-  required?: boolean;
-  skipped?: boolean;
-  checkedAt?: string;
-  mode?: string;
-  baseUrl?: string;
-  outputDir?: string;
-  summary?: { tests?: number; pass?: number; fail?: number; skipped?: number };
-  checks?: { id?: string; ok?: boolean; status?: string }[];
-  domainEvidence?: Record<string, unknown>;
-}
-
-type DriftCheckReport = Omit<RuntimeEvidenceReport, 'summary'> & {
-  findings?: {
-    id?: string;
-    domain?: string;
-    severity?: string;
-    blocking?: boolean;
-    message?: string;
-  }[];
-  summary?: {
-    total?: number;
-    blocking?: number;
-    errors?: number;
-    warnings?: number;
-    domains?: string[];
-  };
-  policy?: {
-    warningBlocks?: boolean;
-    errorBlocks?: boolean;
-  };
-};
-
-interface CommercialDomainEvidence {
-  orders?: number;
-  paidOrders?: number;
-  invoices?: number;
-  subscriptions?: number;
-  catalogItems?: number;
-  billingAccount?: boolean;
-  revenueBuckets?: number;
-}
-
-interface ProviderInvocationEvidence {
-  invocations?: number;
-  successful?: number;
-  failed?: number;
-  operations?: string[];
-  kinds?: string[];
-  ragSources?: number;
-  ragChunks?: number;
-  connectorInvocations?: number;
-}
-
-interface ProductPresentationManifest {
-  kind?: string;
-  checkedAt?: string;
-  diagnostics?: { severity?: string; code?: string; message?: string; path?: string }[];
-  product?: { id?: string; supportedLanguages?: string[] };
-  pages?: Record<string, unknown>;
-  theme?: { rejectedTokens?: string[]; rejectedDarkTokens?: string[] };
-}
-
-interface ModuleTestReport {
-  success?: boolean;
-  moduleRoot?: string;
-  checkedAt?: string;
-  steps?: { name?: string; ok?: boolean; status?: number }[];
-}
-
-interface ModuleQualityRouteEvidence {
-  path?: string;
-  viewports?: string[];
-}
-
-interface ModuleQualityCommand {
-  script?: string;
-  args?: string[];
-}
-
-interface ModuleQualityRuntimeEvidence {
-  id?: string;
-  title?: string;
-  runtimeDir?: string;
-  required?: boolean;
-  command?: ModuleQualityCommand;
-  checks?: string[];
-}
-
-interface ModuleQualityDefinition {
-  routes?: {
-    browser?: ModuleQualityRouteEvidence[];
-    accessibility?: ModuleQualityRouteEvidence[];
-  };
-  evidence?: ModuleQualityRuntimeEvidence[];
-}
-
-interface ModuleMapManifestModule {
-  id?: string;
-  name?: string;
-  quality?: ModuleQualityDefinition;
-}
-
-interface ModuleMapManifest {
-  modules?: ModuleMapManifestModule[];
-}
-
-interface ModuleQualityRouteRequirement {
-  moduleId: string;
-  path: string;
-  viewports: readonly string[];
-}
-
-interface ModuleQualityEvidenceRequirement {
-  moduleId: string;
-  title: string;
-  id: string;
-  runtimeDir: string;
-  command?: ModuleQualityCommand;
-  checks: readonly string[];
-}
-
-const DEFAULT_TARGETS = [
-  'src',
-  'modules',
-  'templates',
-  'apps',
-  'docs',
-  'README.md',
-  'package.json',
-] as const;
-
-const TEXT_EXTENSIONS = new Set([
-  '.cjs',
-  '.css',
-  '.js',
-  '.json',
-  '.jsx',
-  '.md',
-  '.mjs',
-  '.ts',
-  '.tsx',
-  '.txt',
-  '.yaml',
-  '.yml',
-]);
-
-const IGNORED_DIRECTORIES = new Set([
-  '.git',
-  '.next',
-  '.runtime',
-  'coverage',
-  'dist',
-  'node_modules',
-]);
-
-const LEGACY_RUNTIME_TERMS: LegacyRuntimeTerm[] = [
-  {
-    code: 'RC_LEGACY_DEFINE_FACTORY',
-    value: `${'define'}${'Plugin'}`,
-    formalName: 'legacy factory API',
-  },
-  {
-    code: 'RC_LEGACY_ENTRY_FILE',
-    value: `${'plugin'}.${'ts'}`,
-    formalName: 'legacy entry file',
-  },
-  {
-    code: 'RC_LEGACY_STORAGE_API',
-    value: `${'ctx'}.${'storage'}`,
-    formalName: 'legacy storage API',
-  },
-  {
-    code: 'RC_LEGACY_SDK_IMPORT',
-    value: `${'@ploykit'}/${'plugin-sdk'}`,
-    formalName: 'legacy SDK import',
-  },
-  {
-    code: 'RC_LEGACY_RUNTIME_IMPORT',
-    value: `${'plugin'}-${'runtime'}`,
-    formalName: 'legacy runtime import',
-  },
-  {
-    code: 'RC_LEGACY_MODULE_ROOT',
-    value: `${'plugins'}/`,
-    formalName: 'legacy module root',
-  },
-  {
-    code: 'RC_LEGACY_MODULE_ROOT',
-    value: `${'plugins'}\\`,
-    formalName: 'legacy module root',
-  },
-];
+export type {
+  ReleaseCandidateCheck,
+  ReleaseCandidateCheckStatus,
+  ReleaseCandidateDiagnostic,
+  ReleaseCandidateGateProfile,
+  ReleaseCandidateGateResult,
+  RunReleaseCandidateGateInput,
+} from './rc-gate-types';
 
 const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence'>[] = [
   {
@@ -302,6 +56,12 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
   {
     id: 'host-product-smoke',
     title: 'Product host smoke covers site, auth, dashboard, admin, and public tools.',
+    required: true,
+  },
+  {
+    id: 'dashboard-transition-smoke',
+    title:
+      'Dashboard transition smoke proves hydrated route changes avoid document navigation regressions.',
     required: true,
   },
   {
@@ -373,7 +133,8 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
   },
   {
     id: 'data-safety-matrix',
-    title: 'Auth secrets, store durability, route security, files, worker, and legacy scans are checked.',
+    title:
+      'Auth secrets, store durability, route security, files, worker, and legacy scans are checked.',
     required: true,
   },
   {
@@ -387,13 +148,20 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
     required: true,
   },
   {
+    id: 'postgres-physical-restore-matrix',
+    title: 'Postgres physical pg_dump/pg_restore evidence restores runtime store data.',
+    required: true,
+  },
+  {
     id: 'upgrade-migration-matrix',
-    title: 'Runtime store upgrade migrations are ordered, covered, idempotent, and non-destructive.',
+    title:
+      'Runtime store upgrade migrations are ordered, covered, idempotent, and non-destructive.',
     required: true,
   },
   {
     id: 'chaos-matrix',
-    title: 'Queue chaos evidence covers concurrency, backoff, lease reclaim, and dead-letter replay.',
+    title:
+      'Queue chaos evidence covers concurrency, backoff, lease reclaim, and dead-letter replay.',
     required: true,
   },
   {
@@ -403,9 +171,20 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
     required: true,
   },
   {
+    id: 'files-storage-domain',
+    title: 'Files cleanup and reconcile evidence proves metadata/object-store consistency checks.',
+    required: true,
+  },
+  {
     id: 'provider-invocation-ledger',
     title:
       'Provider invocation ledger records AI/RAG/connectors with operation, status, usage, cost, and latency.',
+    required: true,
+  },
+  {
+    id: 'ai-rag-policy',
+    title:
+      'AI/RAG policy evidence proves budget guards, quota accounting, and anonymous route fail-closed behavior.',
     required: true,
   },
   {
@@ -417,17 +196,12 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
 ];
 
 const PROFILE_REQUIRED_CHECKS: Record<ReleaseCandidateGateProfile, readonly string[]> = {
-  local: [
-    'module-contract',
-    'web-shell',
-    'security-operations',
-    'demo-products',
-    'documentation',
-  ],
+  local: ['module-contract', 'web-shell', 'security-operations', 'demo-products', 'documentation'],
   integration: [
     'module-contract',
     'web-shell',
     'host-product-smoke',
+    'dashboard-transition-smoke',
     'runtime-stores',
     'production-adapters',
     'security-operations',
@@ -442,107 +216,6 @@ const PROFILE_REQUIRED_CHECKS: Record<ReleaseCandidateGateProfile, readonly stri
   maintainer: REQUIRED_CHECKS.map((check) => check.id),
 };
 
-const DEFAULT_MODULE_ROUTE_VIEWPORTS = ['desktop', 'mobile'] as const;
-
-function slash(value: string): string {
-  return value.replace(/\\/g, '/');
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function numberFromRecord(record: Record<string, unknown> | undefined, key: string): number {
-  const value = record?.[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function booleanFromRecord(record: Record<string, unknown> | undefined, key: string): boolean {
-  return record?.[key] === true;
-}
-
-function commercialDomainEvidenceFromReport(
-  report: RuntimeEvidenceReport | undefined
-): CommercialDomainEvidence | undefined {
-  const direct = asRecord(report?.domainEvidence?.commercialDomain);
-  if (direct) {
-    return {
-      orders: numberFromRecord(direct, 'orders'),
-      paidOrders: numberFromRecord(direct, 'paidOrders'),
-      invoices: numberFromRecord(direct, 'invoices'),
-      subscriptions: numberFromRecord(direct, 'subscriptions'),
-      catalogItems: numberFromRecord(direct, 'catalogItems'),
-      billingAccount: booleanFromRecord(direct, 'billingAccount'),
-      revenueBuckets: numberFromRecord(direct, 'revenueBuckets'),
-    };
-  }
-
-  const checks = report?.checks ?? [];
-  for (const check of checks) {
-    const detail = asRecord((check as { detail?: unknown }).detail);
-    const nested =
-      asRecord(detail?.commercialDomain) ??
-      asRecord(asRecord(detail?.domainEvidence)?.commercialDomain);
-    if (nested) {
-      return {
-        orders: numberFromRecord(nested, 'orders'),
-        paidOrders: numberFromRecord(nested, 'paidOrders'),
-        invoices: numberFromRecord(nested, 'invoices'),
-        subscriptions: numberFromRecord(nested, 'subscriptions'),
-        catalogItems: numberFromRecord(nested, 'catalogItems'),
-        billingAccount: booleanFromRecord(nested, 'billingAccount'),
-        revenueBuckets: numberFromRecord(nested, 'revenueBuckets'),
-      };
-    }
-  }
-  return undefined;
-}
-
-function providerInvocationEvidenceFromReport(
-  report: RuntimeEvidenceReport | ProviderMatrixReport | undefined
-): ProviderInvocationEvidence | undefined {
-  const direct = asRecord((report as RuntimeEvidenceReport | undefined)?.domainEvidence)
-    ?.providerInvocationLedger;
-  const directRecord = asRecord(direct);
-  if (directRecord) {
-    const operations = directRecord.operations;
-    return {
-      invocations: numberFromRecord(directRecord, 'invocations'),
-      successful: numberFromRecord(directRecord, 'successful'),
-      failed: numberFromRecord(directRecord, 'failed'),
-      operations: Array.isArray(operations) ? operations.map(String) : [],
-      kinds: Array.isArray(directRecord.kinds) ? directRecord.kinds.map(String) : [],
-      ragSources: numberFromRecord(directRecord, 'ragSources'),
-      ragChunks: numberFromRecord(directRecord, 'ragChunks'),
-      connectorInvocations: numberFromRecord(directRecord, 'connectorInvocations'),
-    };
-  }
-
-  const checks = report?.checks ?? [];
-  for (const check of checks) {
-    const detail = asRecord((check as { detail?: unknown }).detail);
-    const nested =
-      asRecord(detail?.providerInvocationLedger) ??
-      asRecord(asRecord(detail?.domainEvidence)?.providerInvocationLedger);
-    if (nested) {
-      const operations = nested.operations;
-      return {
-        invocations: numberFromRecord(nested, 'invocations'),
-        successful: numberFromRecord(nested, 'successful'),
-        failed: numberFromRecord(nested, 'failed'),
-        operations: Array.isArray(operations) ? operations.map(String) : [],
-        kinds: Array.isArray(nested.kinds) ? nested.kinds.map(String) : [],
-        ragSources: numberFromRecord(nested, 'ragSources'),
-        ragChunks: numberFromRecord(nested, 'ragChunks'),
-        connectorInvocations: numberFromRecord(nested, 'connectorInvocations'),
-      };
-    }
-  }
-  return undefined;
-}
-
 function normalizeCheckStatus(
   value: ReleaseCandidateCheckStatus | boolean | undefined
 ): ReleaseCandidateCheckStatus {
@@ -553,273 +226,6 @@ function normalizeCheckStatus(
     return 'failed';
   }
   return value ?? 'pending';
-}
-
-function readProviderMatrixReport(projectRoot: string): {
-  report?: ProviderMatrixReport;
-  path: string;
-  error?: string;
-} {
-  const reportPath = path.join(projectRoot, '.runtime', 'provider-matrix', 'latest.json');
-  if (!fs.existsSync(reportPath)) {
-    return { path: reportPath, error: 'Provider matrix evidence is missing.' };
-  }
-  try {
-    return {
-      path: reportPath,
-      report: JSON.parse(fs.readFileSync(reportPath, 'utf8')) as ProviderMatrixReport,
-    };
-  } catch (error) {
-    return {
-      path: reportPath,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function readWorkerSoakReport(projectRoot: string): {
-  report?: WorkerSoakReport;
-  path: string;
-  error?: string;
-} {
-  const reportPath = path.join(projectRoot, '.runtime', 'worker-soak', 'latest.json');
-  if (!fs.existsSync(reportPath)) {
-    return { path: reportPath, error: 'Worker soak evidence is missing.' };
-  }
-  try {
-    return {
-      path: reportPath,
-      report: JSON.parse(fs.readFileSync(reportPath, 'utf8')) as WorkerSoakReport,
-    };
-  } catch (error) {
-    return {
-      path: reportPath,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function readRuntimeStorePostgresReport(projectRoot: string): {
-  report?: RuntimeStorePostgresReport;
-  path: string;
-  error?: string;
-} {
-  const reportPath = path.join(projectRoot, '.runtime', 'runtime-store-postgres', 'latest.json');
-  if (!fs.existsSync(reportPath)) {
-    return { path: reportPath, error: 'Runtime store Postgres evidence is missing.' };
-  }
-  try {
-    return {
-      path: reportPath,
-      report: JSON.parse(fs.readFileSync(reportPath, 'utf8')) as RuntimeStorePostgresReport,
-    };
-  } catch (error) {
-    return {
-      path: reportPath,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function readRuntimeEvidenceReport(
-  projectRoot: string,
-  runtimeDir: string
-): {
-  report?: RuntimeEvidenceReport;
-  path: string;
-  error?: string;
-} {
-  const reportPath = path.join(projectRoot, '.runtime', runtimeDir, 'latest.json');
-  if (!fs.existsSync(reportPath)) {
-    return { path: reportPath, error: `${runtimeDir} evidence is missing.` };
-  }
-  try {
-    return {
-      path: reportPath,
-      report: JSON.parse(fs.readFileSync(reportPath, 'utf8')) as RuntimeEvidenceReport,
-    };
-  } catch (error) {
-    return {
-      path: reportPath,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function readModuleMapManifest(projectRoot: string): {
-  manifest?: ModuleMapManifest;
-  path: string;
-  error?: string;
-} {
-  const manifestPath = path.join(projectRoot, 'src', 'lib', 'module-map.manifest.json');
-  if (!fs.existsSync(manifestPath)) {
-    return { path: manifestPath, error: 'Module map manifest is missing.' };
-  }
-  try {
-    return {
-      path: manifestPath,
-      manifest: JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as ModuleMapManifest,
-    };
-  } catch (error) {
-    return {
-      path: manifestPath,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function collectModuleQualityRouteRequirements(
-  projectRoot: string,
-  kind: 'browser' | 'accessibility'
-): { requirements: ModuleQualityRouteRequirement[]; manifestPath: string; error?: string } {
-  const manifest = readModuleMapManifest(projectRoot);
-  if (!manifest.manifest) {
-    return { requirements: [], manifestPath: manifest.path, error: manifest.error };
-  }
-
-  const requirements = (manifest.manifest.modules ?? []).flatMap((moduleInfo) => {
-    const moduleId = moduleInfo.id;
-    if (!moduleId) {
-      return [];
-    }
-    const routes = moduleInfo.quality?.routes?.[kind] ?? [];
-    return routes.flatMap((route): ModuleQualityRouteRequirement[] => {
-      if (!route.path || !route.path.startsWith('/')) {
-        return [];
-      }
-      return [
-        {
-          moduleId,
-          path: route.path,
-          viewports:
-            route.viewports && route.viewports.length > 0
-              ? route.viewports
-              : DEFAULT_MODULE_ROUTE_VIEWPORTS,
-        },
-      ];
-    });
-  });
-
-  return { requirements, manifestPath: manifest.path };
-}
-
-function collectModuleQualityEvidenceRequirements(projectRoot: string): {
-  requirements: ModuleQualityEvidenceRequirement[];
-  manifestPath: string;
-  error?: string;
-} {
-  const manifest = readModuleMapManifest(projectRoot);
-  if (!manifest.manifest) {
-    return { requirements: [], manifestPath: manifest.path, error: manifest.error };
-  }
-
-  const requirements = (manifest.manifest.modules ?? []).flatMap((moduleInfo) => {
-    const moduleId = moduleInfo.id;
-    if (!moduleId) {
-      return [];
-    }
-    const evidence = moduleInfo.quality?.evidence ?? [];
-    return evidence.flatMap((item): ModuleQualityEvidenceRequirement[] => {
-      if (!item.id || item.required === false) {
-        return [];
-      }
-      return [
-        {
-          moduleId,
-          title: item.title ?? `${moduleInfo.name ?? moduleId} module quality`,
-          id: item.id,
-          runtimeDir: item.runtimeDir ?? item.id,
-          command: item.command,
-          checks: item.checks ?? [],
-        },
-      ];
-    });
-  });
-
-  return { requirements, manifestPath: manifest.path };
-}
-
-function missingModuleQualityRouteChecks(
-  report: RuntimeEvidenceReport,
-  requirements: readonly ModuleQualityRouteRequirement[]
-): string[] {
-  const passedIds = new Set(
-    (report.checks ?? [])
-      .filter((check) => check.ok === true)
-      .map((check) => check.id)
-      .filter((id): id is string => typeof id === 'string')
-  );
-  return requirements
-    .flatMap((route) => route.viewports.map((viewport) => `${viewport}:${route.path}`))
-    .filter((id) => !passedIds.has(id));
-}
-
-function readProductPresentationManifest(projectRoot: string): {
-  manifest?: ProductPresentationManifest;
-  path: string;
-  error?: string;
-} {
-  const reportPath = [
-    path.join(projectRoot, '.ploykit', 'generated', 'product-presentation.manifest.json'),
-    path.join(projectRoot, '.runtime', 'product-presentation-manifest.json'),
-  ].find((candidate) => fs.existsSync(candidate));
-  if (!reportPath) {
-    return {
-      path: path.join(projectRoot, '.ploykit', 'generated', 'product-presentation.manifest.json'),
-      error: 'Product Presentation manifest is missing.',
-    };
-  }
-  try {
-    return {
-      path: reportPath,
-      manifest: JSON.parse(fs.readFileSync(reportPath, 'utf8')) as ProductPresentationManifest,
-    };
-  } catch (error) {
-    return {
-      path: reportPath,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function readModuleTestReports(projectRoot: string): {
-  reports: { moduleId: string; path: string; report?: ModuleTestReport; error?: string }[];
-  missing: string[];
-} {
-  const modulesRoot = path.join(projectRoot, 'modules');
-  const reportsRoot = path.join(projectRoot, '.runtime', 'module-test-reports');
-  const moduleIds = fs.existsSync(modulesRoot)
-    ? fs
-        .readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort()
-    : [];
-  const reports = moduleIds.map((moduleId) => {
-    const reportPath = path.join(reportsRoot, `${moduleId}.json`);
-    if (!fs.existsSync(reportPath)) {
-      return { moduleId, path: reportPath, error: 'Module test report is missing.' };
-    }
-    try {
-      return {
-        moduleId,
-        path: reportPath,
-        report: JSON.parse(fs.readFileSync(reportPath, 'utf8')) as ModuleTestReport,
-      };
-    } catch (error) {
-      return {
-        moduleId,
-        path: reportPath,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  });
-  return {
-    reports,
-    missing: reports
-      .filter((item) => !item.report || item.report.success !== true)
-      .map((item) => item.moduleId),
-  };
 }
 
 function resolveHostProductSmokeCheck(
@@ -884,7 +290,10 @@ function resolveBrowserMatrixCheck(
       evidence: `${moduleRoutes.error} (${moduleRoutes.manifestPath})`,
     };
   }
-  const missingModuleRoutes = missingModuleQualityRouteChecks(matrix.report, moduleRoutes.requirements);
+  const missingModuleRoutes = missingModuleQualityRouteChecks(
+    matrix.report,
+    moduleRoutes.requirements
+  );
   if (missingModuleRoutes.length > 0) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
@@ -933,7 +342,10 @@ function resolveAccessibilitySmokeCheck(
       evidence: `${moduleRoutes.error} (${moduleRoutes.manifestPath})`,
     };
   }
-  const missingModuleRoutes = missingModuleQualityRouteChecks(smoke.report, moduleRoutes.requirements);
+  const missingModuleRoutes = missingModuleQualityRouteChecks(
+    smoke.report,
+    moduleRoutes.requirements
+  );
   if (missingModuleRoutes.length > 0) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
@@ -952,6 +364,106 @@ function resolveAccessibilitySmokeCheck(
   return {
     status: requestedStatus === 'passed' ? 'failed' : 'pending',
     evidence: `Accessibility smoke did not pass or was skipped. Failed checks: ${failedChecks.join(', ') || 'unknown'}. (${smoke.path})`,
+  };
+}
+
+function dashboardTransitionCheckPassed(report: RuntimeEvidenceReport, checkId: string): boolean {
+  return (report.checks ?? []).some((check) => check.id === checkId && check.ok === true);
+}
+
+function resolveDashboardTransitionSmokeCheck(
+  projectRoot: string,
+  requestedStatus: ReleaseCandidateCheckStatus
+): ResolvedCheckEvidence {
+  if (requestedStatus === 'failed') {
+    return {
+      status: 'failed',
+      evidence: 'Dashboard transition smoke was marked failed by the release gate caller.',
+    };
+  }
+
+  const smoke = readRuntimeEvidenceReport(projectRoot, 'dashboard-transition-smoke');
+  if (!smoke.report) {
+    return {
+      status: requestedStatus === 'passed' ? 'failed' : 'pending',
+      evidence: `${smoke.error} Run npm run host:dashboard-transition-smoke. (${smoke.path})`,
+    };
+  }
+
+  if (requestedStatus === 'passed' && smoke.report.required !== true) {
+    return {
+      status: 'failed',
+      evidence: `Dashboard transition smoke strict evidence must be generated with npm run host:dashboard-transition-smoke -- --required --repeat 3 --inject-anchor. (${smoke.path})`,
+    };
+  }
+
+  const summary = asRecord(smoke.report.summary);
+  const repeat = typeof summary?.repeat === 'number' ? summary.repeat : undefined;
+  const injectAnchor = summary?.injectAnchor === true;
+  const transitions = typeof summary?.transitions === 'number' ? summary.transitions : undefined;
+  const resetTransitions =
+    typeof summary?.resetTransitions === 'number' ? summary.resetTransitions : undefined;
+  const transitionDocumentNavigations =
+    typeof summary?.transitionDocumentNavigations === 'number'
+      ? summary.transitionDocumentNavigations
+      : undefined;
+  const hydrationErrors =
+    typeof summary?.hydrationErrors === 'number' ? summary.hydrationErrors : undefined;
+  const p95Ms = typeof summary?.p95Ms === 'number' ? summary.p95Ms : undefined;
+  const appFramePresent = summary?.appFramePresent === true;
+  const clientTransitionMarkerPresent = summary?.clientTransitionMarkerPresent === true;
+  const injectedAnchorInAppFrame = !injectAnchor || summary?.injectedAnchorInAppFrame === true;
+  const failedChecks = (smoke.report.checks ?? [])
+    .filter((check) => check.ok === false)
+    .map((check) => check.id ?? 'unknown');
+  const missingSignals = [
+    smoke.report.ok === true ? undefined : 'report did not pass',
+    smoke.report.skipped === true ? 'report was skipped' : undefined,
+    (repeat ?? 0) >= 3 ? undefined : `repeat>=3 required, actual=${repeat ?? 'missing'}`,
+    injectAnchor ? undefined : 'injectAnchor=true required',
+    (transitions ?? 0) >= 3
+      ? undefined
+      : `at least 3 transitions required, actual=${transitions ?? 'missing'}`,
+    (resetTransitions ?? 0) >= 2
+      ? undefined
+      : `at least 2 reset transitions required, actual=${resetTransitions ?? 'missing'}`,
+    transitionDocumentNavigations === 0
+      ? undefined
+      : `transitionDocumentNavigations=${transitionDocumentNavigations ?? 'missing'}`,
+    hydrationErrors === 0 ? undefined : `hydrationErrors=${hydrationErrors ?? 'missing'}`,
+    appFramePresent ? undefined : 'appFramePresent=true required',
+    clientTransitionMarkerPresent ? undefined : 'clientTransitionMarkerPresent=true required',
+    injectedAnchorInAppFrame ? undefined : 'injectedAnchorInAppFrame=true required',
+    dashboardTransitionCheckPassed(smoke.report, 'shell:app-frame')
+      ? undefined
+      : 'shell:app-frame check missing or failed',
+    dashboardTransitionCheckPassed(smoke.report, 'shell:client-transition-marker')
+      ? undefined
+      : 'shell:client-transition-marker check missing or failed',
+    !injectAnchor || dashboardTransitionCheckPassed(smoke.report, 'shell:injected-anchor-frame')
+      ? undefined
+      : 'shell:injected-anchor-frame check missing or failed',
+    dashboardTransitionCheckPassed(smoke.report, 'transition:document-navigation')
+      ? undefined
+      : 'transition:document-navigation check missing or failed',
+    dashboardTransitionCheckPassed(smoke.report, 'transition:hydration')
+      ? undefined
+      : 'transition:hydration check missing or failed',
+    dashboardTransitionCheckPassed(smoke.report, 'transition:p95')
+      ? undefined
+      : 'transition:p95 check missing or failed',
+  ].filter(Boolean);
+
+  if (missingSignals.length === 0) {
+    return {
+      status: 'passed',
+      evidence: `Dashboard transition smoke passed at ${smoke.report.checkedAt ?? 'unknown time'} with repeat=${repeat}, injectAnchor=${injectAnchor}, appFramePresent=${appFramePresent}, clientTransitionMarkerPresent=${clientTransitionMarkerPresent}, injectedAnchorInAppFrame=${injectedAnchorInAppFrame}, transitions=${transitions}, resetTransitions=${resetTransitions}, transition document navigations=${transitionDocumentNavigations}, hydration errors=${hydrationErrors}, and P95 ${p95Ms ?? 'unknown'}ms. (${smoke.path})`,
+    };
+  }
+
+  return {
+    status: requestedStatus === 'passed' ? 'failed' : 'pending',
+    evidence: `Dashboard transition smoke evidence is incomplete: ${missingSignals.join('; ')}. Failed checks: ${failedChecks.join(', ') || 'none'}. (${smoke.path})`,
   };
 }
 
@@ -988,7 +500,9 @@ function resolveModuleQualityCheck(
         requirement,
         status: requestedStatus === 'passed' ? 'failed' : 'pending',
         evidence: `${evidence.error} Run ${
-          requirement.command?.script ? `npm run ${requirement.command.script}` : 'the declared module quality command'
+          requirement.command?.script
+            ? `npm run ${requirement.command.script}`
+            : 'the declared module quality command'
         } -- --required. (${evidence.path})`,
       };
     }
@@ -1206,7 +720,9 @@ function resolveDriftCheck(
     };
   }
 
-  const blockedFindings = (drift.report.findings ?? []).filter((finding) => finding.blocking === true);
+  const blockedFindings = (drift.report.findings ?? []).filter(
+    (finding) => finding.blocking === true
+  );
   if (drift.report.ok === true) {
     return {
       status: 'passed',
@@ -1216,9 +732,65 @@ function resolveDriftCheck(
 
   return {
     status: requestedStatus === 'passed' ? 'failed' : 'pending',
-    evidence: `Unified drift check did not pass. Blocking findings: ${blockedFindings
-      .map((finding) => finding.id ?? finding.message ?? 'unknown')
-      .join(', ') || 'unknown'}. (${drift.path})`,
+    evidence: `Unified drift check did not pass. Blocking findings: ${
+      blockedFindings.map((finding) => finding.id ?? finding.message ?? 'unknown').join(', ') ||
+      'unknown'
+    }. (${drift.path})`,
+  };
+}
+
+function resolveRuntimeEvidenceCheck(input: {
+  projectRoot: string;
+  requestedStatus: ReleaseCandidateCheckStatus;
+  runtimeDir: string;
+  displayName: string;
+  command: string;
+  strictCommand: string;
+  markedFailedEvidence: string;
+  validate?: (report: RuntimeEvidenceReport) => { ok: boolean; detail?: string };
+}): ResolvedCheckEvidence {
+  if (input.requestedStatus === 'failed') {
+    return {
+      status: 'failed',
+      evidence: input.markedFailedEvidence,
+    };
+  }
+
+  const evidence = readRuntimeEvidenceReport(input.projectRoot, input.runtimeDir);
+  if (!evidence.report) {
+    return {
+      status: input.requestedStatus === 'passed' ? 'failed' : 'pending',
+      evidence: `${evidence.error} Run ${input.command}. (${evidence.path})`,
+    };
+  }
+
+  if (input.requestedStatus === 'passed' && evidence.report.required !== true) {
+    return {
+      status: 'failed',
+      evidence: `${input.displayName} strict evidence must be generated with ${input.strictCommand}. (${evidence.path})`,
+    };
+  }
+
+  const failedChecks = (evidence.report.checks ?? [])
+    .filter((check) => check.ok === false)
+    .map((check) => check.id ?? 'unknown');
+  const validation = input.validate?.(evidence.report);
+  if (validation && !validation.ok) {
+    return {
+      status: input.requestedStatus === 'passed' ? 'failed' : 'pending',
+      evidence: `${input.displayName} evidence is incomplete. ${validation.detail ?? 'Custom validation did not pass.'}. (${evidence.path})`,
+    };
+  }
+  if (evidence.report.ok === true) {
+    return {
+      status: 'passed',
+      evidence: `${input.displayName} passed at ${evidence.report.checkedAt ?? 'unknown time'} in ${evidence.report.mode ?? 'unknown'} mode with ${evidence.report.checks?.length ?? 0} checks${validation?.detail ? `; ${validation.detail}` : ''}. (${evidence.path})`,
+    };
+  }
+
+  return {
+    status: input.requestedStatus === 'passed' ? 'failed' : 'pending',
+    evidence: `${input.displayName} did not pass. Failed checks: ${failedChecks.join(', ') || 'unknown'}. (${evidence.path})`,
   };
 }
 
@@ -1226,84 +798,47 @@ function resolveBackupRestoreCheck(
   projectRoot: string,
   requestedStatus: ReleaseCandidateCheckStatus
 ): ResolvedCheckEvidence {
-  if (requestedStatus === 'failed') {
-    return {
-      status: 'failed',
-      evidence: 'Backup/restore evidence was marked failed by the release gate caller.',
-    };
-  }
+  return resolveRuntimeEvidenceCheck({
+    projectRoot,
+    requestedStatus,
+    runtimeDir: 'backup-restore',
+    displayName: 'Backup/restore smoke',
+    command: 'npm run host:backup-restore-smoke',
+    strictCommand: 'npm run host:backup-restore-smoke -- --required',
+    markedFailedEvidence: 'Backup/restore evidence was marked failed by the release gate caller.',
+  });
+}
 
-  const backupRestore = readRuntimeEvidenceReport(projectRoot, 'backup-restore');
-  if (!backupRestore.report) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${backupRestore.error} Run npm run host:backup-restore-smoke. (${backupRestore.path})`,
-    };
-  }
-
-  if (requestedStatus === 'passed' && backupRestore.report.required !== true) {
-    return {
-      status: 'failed',
-      evidence: `Backup/restore strict evidence must be generated with npm run host:backup-restore-smoke -- --required. (${backupRestore.path})`,
-    };
-  }
-
-  const failedChecks = (backupRestore.report.checks ?? [])
-    .filter((check) => check.ok === false)
-    .map((check) => check.id ?? 'unknown');
-  if (backupRestore.report.ok === true) {
-    return {
-      status: 'passed',
-      evidence: `Backup/restore smoke passed at ${backupRestore.report.checkedAt ?? 'unknown time'} in ${backupRestore.report.mode ?? 'unknown'} mode with ${backupRestore.report.checks?.length ?? 0} checks. (${backupRestore.path})`,
-    };
-  }
-
-  return {
-    status: requestedStatus === 'passed' ? 'failed' : 'pending',
-    evidence: `Backup/restore smoke did not pass. Failed checks: ${failedChecks.join(', ') || 'unknown'}. (${backupRestore.path})`,
-  };
+function resolvePostgresPhysicalRestoreCheck(
+  projectRoot: string,
+  requestedStatus: ReleaseCandidateCheckStatus
+): ResolvedCheckEvidence {
+  return resolveRuntimeEvidenceCheck({
+    projectRoot,
+    requestedStatus,
+    runtimeDir: 'postgres-physical-restore',
+    displayName: 'Postgres physical restore smoke',
+    command: 'npm run host:postgres-physical-restore-smoke',
+    strictCommand: 'npm run host:postgres-physical-restore-smoke -- --required',
+    markedFailedEvidence:
+      'Postgres physical restore evidence was marked failed by the release gate caller.',
+  });
 }
 
 function resolveUpgradeMigrationCheck(
   projectRoot: string,
   requestedStatus: ReleaseCandidateCheckStatus
 ): ResolvedCheckEvidence {
-  if (requestedStatus === 'failed') {
-    return {
-      status: 'failed',
-      evidence: 'Upgrade migration evidence was marked failed by the release gate caller.',
-    };
-  }
-
-  const upgrade = readRuntimeEvidenceReport(projectRoot, 'upgrade-migration');
-  if (!upgrade.report) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${upgrade.error} Run npm run host:upgrade-migration-smoke. (${upgrade.path})`,
-    };
-  }
-
-  if (requestedStatus === 'passed' && upgrade.report.required !== true) {
-    return {
-      status: 'failed',
-      evidence: `Upgrade migration strict evidence must be generated with npm run host:upgrade-migration-smoke -- --required. (${upgrade.path})`,
-    };
-  }
-
-  const failedChecks = (upgrade.report.checks ?? [])
-    .filter((check) => check.ok === false)
-    .map((check) => check.id ?? 'unknown');
-  if (upgrade.report.ok === true) {
-    return {
-      status: 'passed',
-      evidence: `Upgrade migration smoke passed at ${upgrade.report.checkedAt ?? 'unknown time'} in ${upgrade.report.mode ?? 'unknown'} mode with ${upgrade.report.checks?.length ?? 0} checks. (${upgrade.path})`,
-    };
-  }
-
-  return {
-    status: requestedStatus === 'passed' ? 'failed' : 'pending',
-    evidence: `Upgrade migration smoke did not pass. Failed checks: ${failedChecks.join(', ') || 'unknown'}. (${upgrade.path})`,
-  };
+  return resolveRuntimeEvidenceCheck({
+    projectRoot,
+    requestedStatus,
+    runtimeDir: 'upgrade-migration',
+    displayName: 'Upgrade migration smoke',
+    command: 'npm run host:upgrade-migration-smoke',
+    strictCommand: 'npm run host:upgrade-migration-smoke -- --required',
+    markedFailedEvidence:
+      'Upgrade migration evidence was marked failed by the release gate caller.',
+  });
 }
 
 function resolveChaosCheck(
@@ -1680,6 +1215,67 @@ function resolveCommercialDomainCheck(
   };
 }
 
+function resolveFilesStorageDomainCheck(
+  projectRoot: string,
+  requestedStatus: ReleaseCandidateCheckStatus
+): ResolvedCheckEvidence {
+  if (requestedStatus === 'failed') {
+    return {
+      status: 'failed',
+      evidence: 'Files storage domain evidence was marked failed by the release gate caller.',
+    };
+  }
+
+  const cleanup = readRuntimeEvidenceReport(projectRoot, 'files-cleanup');
+  const reconcile = readRuntimeEvidenceReport(projectRoot, 'files-reconcile');
+  const cleanupReport = cleanup.report as FilesCleanupReport | undefined;
+  const reconcileReport = reconcile.report as FilesReconcileReport | undefined;
+  if (!cleanupReport || !reconcileReport) {
+    const missing = [
+      cleanupReport ? null : `cleanup: ${cleanup.error}`,
+      reconcileReport ? null : `reconcile: ${reconcile.error}`,
+    ]
+      .filter(Boolean)
+      .join('; ');
+    return {
+      status: requestedStatus === 'passed' ? 'failed' : 'pending',
+      evidence: `${missing} Run npm run host:files-cleanup-smoke and npm run host:files-reconcile-smoke. (${cleanup.path}; ${reconcile.path})`,
+    };
+  }
+
+  const cleanupOk =
+    cleanupReport.ok === true &&
+    cleanupReport.file?.status === 'deleted' &&
+    cleanupReport.file.objectDeleted === true &&
+    (cleanupReport.cleanup?.matched ?? 0) >= 1 &&
+    Boolean(cleanupReport.cleanup?.auditId);
+  const reconcileChecks = new Map(
+    (reconcileReport.checks ?? []).map((check) => [check.id, check.ok === true])
+  );
+  const reconcileOk =
+    reconcileReport.ok === true &&
+    reconcileChecks.get('ready-object-present') === true &&
+    reconcileChecks.get('deleted-object-present-detected') === true &&
+    reconcileChecks.get('missing-active-object-detected') === true &&
+    reconcileChecks.get('orphan-object-detected') === true &&
+    (reconcileReport.report?.checkedFiles ?? 0) >= 3 &&
+    (reconcileReport.report?.deletedObjectsPresent ?? 0) >= 1 &&
+    (reconcileReport.report?.missingActiveObjects ?? 0) >= 1 &&
+    (reconcileReport.report?.orphanObjects ?? 0) >= 1;
+
+  if (cleanupOk && reconcileOk) {
+    return {
+      status: 'passed',
+      evidence: `Files storage evidence passed: cleanup deleted ${cleanupReport.cleanup?.matched ?? 0} object(s) with audit ${cleanupReport.cleanup?.auditId}, reconcile checked ${reconcileReport.report?.checkedFiles ?? 0} files and detected deleted-object, missing-object, and orphan-object cases. (${cleanup.path}; ${reconcile.path})`,
+    };
+  }
+
+  return {
+    status: requestedStatus === 'passed' ? 'failed' : 'pending',
+    evidence: `Files storage evidence is incomplete. cleanupOk=${cleanupOk}, cleanupStatus=${cleanupReport.file?.status ?? 'unknown'}, objectDeleted=${cleanupReport.file?.objectDeleted === true}, reconcileOk=${reconcileOk}, checkedFiles=${reconcileReport.report?.checkedFiles ?? 0}, deletedObjectsPresent=${reconcileReport.report?.deletedObjectsPresent ?? 0}, missingActiveObjects=${reconcileReport.report?.missingActiveObjects ?? 0}, orphanObjects=${reconcileReport.report?.orphanObjects ?? 0}. (${cleanup.path}; ${reconcile.path})`,
+  };
+}
+
 function resolveProviderInvocationLedgerCheck(
   projectRoot: string,
   requestedStatus: ReleaseCandidateCheckStatus
@@ -1736,6 +1332,48 @@ function resolveProviderInvocationLedgerCheck(
   };
 }
 
+function resolveAiRagPolicyCheck(
+  projectRoot: string,
+  requestedStatus: ReleaseCandidateCheckStatus
+): ResolvedCheckEvidence {
+  return resolveRuntimeEvidenceCheck({
+    projectRoot,
+    requestedStatus,
+    runtimeDir: 'ai-rag-policy',
+    displayName: 'AI/RAG policy smoke',
+    command: 'npm run host:ai-rag-policy-smoke',
+    strictCommand: 'npm run host:ai-rag-policy-smoke -- --required',
+    markedFailedEvidence: 'AI/RAG policy evidence was marked failed by the release gate caller.',
+    validate(report) {
+      const evidence = asRecord(asRecord(report.domainEvidence)?.aiRagPolicy);
+      const missingSignals = [
+        evidence?.budgetDeniesMissingCredits === true
+          ? undefined
+          : 'budgetDeniesMissingCredits is missing',
+        evidence?.successfulCostCommitted === true
+          ? undefined
+          : 'successfulCostCommitted is missing',
+        evidence?.failedProviderReservationReleased === true
+          ? undefined
+          : 'failedProviderReservationReleased is missing',
+        evidence?.anonymousRateLimitRequired === true
+          ? undefined
+          : 'anonymousRateLimitRequired is missing',
+        evidence?.anonymousHighCostForbidden === true
+          ? undefined
+          : 'anonymousHighCostForbidden is missing',
+      ].filter(Boolean);
+      return {
+        ok: missingSignals.length === 0,
+        detail:
+          missingSignals.length === 0
+            ? 'budget guard, quota accounting, and anonymous policy evidence present'
+            : missingSignals.join('; '),
+      };
+    },
+  });
+}
+
 function resolveWorkerSoakCheck(
   projectRoot: string,
   requestedStatus: ReleaseCandidateCheckStatus
@@ -1766,7 +1404,8 @@ function resolveWorkerSoakCheck(
   const processed = soak.report.drain?.processed ?? 0;
   const failed = soak.report.drain?.failed ?? 0;
   const deadLettered = soak.report.drain?.deadLettered ?? 0;
-  const passed = soak.report.ok === true && processed >= enqueued && failed === 0 && deadLettered === 0;
+  const passed =
+    soak.report.ok === true && processed >= enqueued && failed === 0 && deadLettered === 0;
   if (passed) {
     return {
       status: 'passed',
@@ -1834,6 +1473,9 @@ function resolveCheckEvidence(
   if (checkId === 'host-product-smoke') {
     return resolveHostProductSmokeCheck(projectRoot, requestedStatus);
   }
+  if (checkId === 'dashboard-transition-smoke') {
+    return resolveDashboardTransitionSmokeCheck(projectRoot, requestedStatus);
+  }
   if (checkId === 'web-shell') {
     return resolveWebShellCheck(projectRoot, requestedStatus);
   }
@@ -1882,6 +1524,9 @@ function resolveCheckEvidence(
   if (checkId === 'backup-restore-matrix') {
     return resolveBackupRestoreCheck(projectRoot, requestedStatus);
   }
+  if (checkId === 'postgres-physical-restore-matrix') {
+    return resolvePostgresPhysicalRestoreCheck(projectRoot, requestedStatus);
+  }
   if (checkId === 'upgrade-migration-matrix') {
     return resolveUpgradeMigrationCheck(projectRoot, requestedStatus);
   }
@@ -1891,8 +1536,14 @@ function resolveCheckEvidence(
   if (checkId === 'commercial-domain') {
     return resolveCommercialDomainCheck(projectRoot, requestedStatus);
   }
+  if (checkId === 'files-storage-domain') {
+    return resolveFilesStorageDomainCheck(projectRoot, requestedStatus);
+  }
   if (checkId === 'provider-invocation-ledger') {
     return resolveProviderInvocationLedgerCheck(projectRoot, requestedStatus);
+  }
+  if (checkId === 'ai-rag-policy') {
+    return resolveAiRagPolicyCheck(projectRoot, requestedStatus);
   }
   if (checkId === 'documentation') {
     return resolveDocumentationCheck(projectRoot, requestedStatus);
@@ -1903,102 +1554,13 @@ function resolveCheckEvidence(
   };
 }
 
-function isTextFile(filePath: string): boolean {
-  return TEXT_EXTENSIONS.has(path.extname(filePath).toLowerCase());
-}
-
-function collectFiles(root: string, target: string): string[] {
-  const absolute = path.resolve(root, target);
-  if (!fs.existsSync(absolute)) {
-    return [];
-  }
-  const stat = fs.statSync(absolute);
-  if (stat.isFile()) {
-    return isTextFile(absolute) ? [absolute] : [];
-  }
-  if (!stat.isDirectory()) {
-    return [];
-  }
-
-  const files: string[] = [];
-  const visit = (dir: string) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) {
-          visit(path.join(dir, entry.name));
-        }
-        continue;
-      }
-      const filePath = path.join(dir, entry.name);
-      if (entry.isFile() && isTextFile(filePath)) {
-        files.push(filePath);
-      }
-    }
-  };
-  visit(absolute);
-  return files;
-}
-
-function isCleanupContext(relativePath: string, line: string): boolean {
-  const normalized = slash(relativePath);
-  if (normalized.startsWith('docs/old-ploykit-')) {
-    return true;
-  }
-  if (
-    /(do not|don't|must not|never|legacy|old|forbidden|deny|cleanup|remove|removed|no longer|not use)/i.test(
-      line
-    )
-  ) {
-    return true;
-  }
-  if (
-    /(不恢复|不使用|不迁移|不保留|不再|不应|不能|不得|不要|没有新增|删除|旧|老|禁止|阻断|清理|门禁|拒绝|禁用)/u.test(
-      line
-    )
-  ) {
-    return true;
-  }
-  if (normalized.startsWith('docs/') && /(\.\.\/PloyKit|老代码|材料库)/u.test(line)) {
-    return true;
-  }
-  return false;
-}
-
-function scanFile(root: string, filePath: string): ReleaseCandidateDiagnostic[] {
-  const relativePath = slash(path.relative(root, filePath));
-  const content = fs.readFileSync(filePath, 'utf8');
-  const diagnostics: ReleaseCandidateDiagnostic[] = [];
-  const lines = content.split(/\r?\n/);
-
-  lines.forEach((line, index) => {
-    for (const term of LEGACY_RUNTIME_TERMS) {
-      if (!line.includes(term.value) || isCleanupContext(relativePath, line)) {
-        continue;
-      }
-      diagnostics.push({
-        severity: 'error',
-        code: term.code,
-        message: `Formal v2 entry mentions ${term.formalName}.`,
-        path: relativePath,
-        line: index + 1,
-        term: term.formalName,
-        snippet: line.trim(),
-        fix: 'Replace the formal entry with defineModule, ctx.data, modules/, and the v2 module runtime contract.',
-      });
-    }
-  });
-
-  return diagnostics;
-}
-
 export function runReleaseCandidateGate(
   input: RunReleaseCandidateGateInput
 ): ReleaseCandidateGateResult {
   const projectRoot = path.resolve(input.projectRoot);
   const profile = input.profile ?? 'maintainer';
-  const targets = input.targets ?? DEFAULT_TARGETS;
-  const files = [...new Set(targets.flatMap((target) => collectFiles(projectRoot, target)))].sort();
-  const diagnostics = files.flatMap((file) => scanFile(projectRoot, file));
+  const targets = input.targets ?? DEFAULT_RELEASE_CANDIDATE_SCAN_TARGETS;
+  const { files, diagnostics } = collectReleaseCandidateScan(projectRoot, targets);
   const profileRequiredChecks = new Set(PROFILE_REQUIRED_CHECKS[profile]);
   const checks = REQUIRED_CHECKS.map((check) => {
     const evidence = resolveCheckEvidence(projectRoot, check.id, input.requiredChecks?.[check.id]);

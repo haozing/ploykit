@@ -1,6 +1,7 @@
 import { AdminAuditOperationsPage } from '@host/components/admin/AdminPages';
+import { applyAdminAuditRetention } from '@host/lib/admin-audit';
 import { listAdminAudit } from '@host/lib/admin-api';
-import { applyAdminAuditRetention, getAdminOperationsView } from '@host/lib/admin-operations';
+import { getAdminOperationsView } from '@host/lib/admin-module-operations';
 import { createAdminAction } from '@host/lib/admin-action';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';
 import { readAdminTableQuery, type RouteSearchParams } from '@host/lib/table-query';

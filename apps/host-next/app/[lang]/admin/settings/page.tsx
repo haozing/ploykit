@@ -1,10 +1,7 @@
 import { CompositionSettings } from '@host/components/admin/CompositionSettings';
 import { AdminSettingsOperationsPage } from '@host/components/admin/AdminPages';
-import {
-  getAdminHostSettingsView,
-  getAdminOperationsView,
-  updateAdminHostSettings,
-} from '@host/lib/admin-operations';
+import { getAdminOperationsView } from '@host/lib/admin-module-operations';
+import { getAdminHostSettingsView, updateAdminHostSettings } from '@host/lib/admin-settings';
 import { getAdminProviderStatusView } from '@host/lib/admin-provider-status';
 import { getAdminWorkerStatusView } from '@host/lib/admin-worker-status';
 import { runHostConfigDoctor } from '@host/lib/config-doctor';

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createServer } from 'node:http';
 import test from 'node:test';
@@ -15,6 +16,31 @@ import {
   createModuleHttpApi,
 } from '../src/lib/module-capabilities';
 import { loadRuntimeConfig } from '../src/lib/runtime-config';
+import {
+  createDashboardTimingReport,
+  measureDashboardSpan,
+} from '../apps/host-next/lib/dashboard-timing';
+import {
+  cachedDashboardProductScopeSnapshot,
+  cachedDashboardNavigation,
+  cachedDashboardTheme,
+  cachedDashboardUserProfile,
+  dashboardShellProductScopeResolutionKey,
+  dashboardShellSessionKey,
+  dashboardShellNavigationKey,
+  invalidateDashboardShellCache,
+  resetDashboardShellCacheForTests,
+} from '../apps/host-next/lib/dashboard-shell-cache';
+import { resolveHostClientTransitionHref } from '../apps/host-next/lib/client-transition-links';
+
+type NextHeaderRule = {
+  source: string;
+  headers: Array<{ key: string; value: string }>;
+};
+
+type HostNextConfig = {
+  headers(): Promise<NextHeaderRule[]>;
+};
 
 test('runtime config reports missing production inputs without fallback', () => {
   const result = loadRuntimeConfig({});
@@ -63,6 +89,271 @@ test('runtime config rejects reserved OIDC provider until an adapter exists', ()
 
   assert.equal(result.ok, false);
   assert.equal(result.diagnostics[0]?.code, 'RUNTIME_CONFIG_AUTH_PROVIDER_INVALID');
+});
+
+test('host static brand assets use immutable cache headers', async () => {
+  const configUrl = new URL(
+    `file://${path.resolve('apps/host-next/next.config.mjs').replace(/\\/g, '/')}`
+  ).href;
+  const { default: nextConfig } = (await import(configUrl)) as { default: HostNextConfig };
+  const headers = await nextConfig.headers();
+  const brandRule = headers.find((rule) => rule.source === '/brand/:path*');
+
+  assert.ok(brandRule);
+  assert.deepEqual(brandRule.headers, [
+    {
+      key: 'Cache-Control',
+      value: 'public, max-age=31536000, immutable',
+    },
+  ]);
+});
+
+test('dashboard timing reports structured slow-route spans', async () => {
+  const spans: Array<{ name: string; durationMs: number }> = [];
+  const value = await measureDashboardSpan('route-resolve', spans, () => 'resolved');
+  await measureDashboardSpan('scope', spans, () => ({ id: 'scope' }));
+  await measureDashboardSpan('workspaces', spans, () => []);
+  await measureDashboardSpan('profile', spans, () => null);
+  await measureDashboardSpan('theme', spans, () => ({ mode: 'light' }));
+  const report = createDashboardTimingReport(
+    {
+      pathname: '/origin-agentops/agents',
+      routeKind: 'dashboard',
+      moduleId: 'origin-agentops',
+      status: 200,
+      spans,
+      totalMs: 1250,
+    },
+    1000
+  );
+
+  assert.equal(value, 'resolved');
+  assert.deepEqual(
+    spans.map((span) => span.name),
+    ['route-resolve', 'scope', 'workspaces', 'profile', 'theme']
+  );
+  assert.equal(spans[0]?.name, 'route-resolve');
+  assert.ok((spans[0]?.durationMs ?? -1) >= 0);
+  assert.deepEqual(report, {
+    kind: 'dashboard-timing',
+    pathname: '/origin-agentops/agents',
+    routeKind: 'dashboard',
+    moduleId: 'origin-agentops',
+    status: 200,
+    spans,
+    totalMs: 1250,
+    slow: true,
+  });
+});
+
+test('dashboard shell cache reuses scoped shell reads and respects invalidation', async () => {
+  resetDashboardShellCacheForTests();
+  const originalTtl = process.env.PLOYKIT_DASHBOARD_SHELL_CACHE_TTL_MS;
+  process.env.PLOYKIT_DASHBOARD_SHELL_CACHE_TTL_MS = '1000';
+  try {
+    const session = {
+      user: { id: 'user-1', role: 'user' as const },
+      userId: 'user-1',
+      authKind: 'user' as const,
+      authSessionId: 'session-1',
+      productId: 'product-1',
+      workspaceId: 'workspace-1',
+      workspaceRole: 'owner' as const,
+    };
+    const sameSession = { ...session, requestId: 'request-noise' };
+    const nextSession = { ...session, authSessionId: 'session-2' };
+    const request = new Request('https://app.example.com/dashboard?workspace=workspace-1', {
+      headers: { host: 'app.example.com' },
+    });
+
+    assert.equal(dashboardShellSessionKey(session), dashboardShellSessionKey(sameSession));
+    assert.notEqual(dashboardShellSessionKey(session), dashboardShellSessionKey(nextSession));
+    assert.equal(
+      dashboardShellProductScopeResolutionKey(request, session),
+      'app.example.com|workspace-1||user:session-1:user-1:user:product-1:workspace-1:owner:'
+    );
+    assert.equal(
+      dashboardShellNavigationKey(session),
+      'user:session-1:user-1:user:product-1:workspace-1:owner:|user||||||||'
+    );
+    assert.notEqual(
+      dashboardShellNavigationKey(session),
+      dashboardShellNavigationKey({
+        ...session,
+        entitlements: ['pro'],
+      })
+    );
+
+    let snapshots = 0;
+    const firstSnapshot = await Promise.all([
+      cachedDashboardProductScopeSnapshot(async () => {
+        snapshots += 1;
+        return {
+          version: 1 as const,
+          products: [{ id: 'product-1', name: 'Product', profile: 'hidden-default' as const }],
+          workspaces: [],
+          memberships: [],
+          invites: [],
+          domainAliases: [],
+        };
+      }),
+      cachedDashboardProductScopeSnapshot(async () => {
+        snapshots += 1;
+        throw new Error('snapshot cache miss');
+      }),
+    ]);
+    assert.equal(snapshots, 1);
+    assert.equal(firstSnapshot[0], firstSnapshot[1]);
+
+    let profiles = 0;
+    const profile = await cachedDashboardUserProfile(session, async () => {
+      profiles += 1;
+      return {
+        id: 'user-1',
+        email: 'user@example.com',
+        role: 'user',
+        status: 'active',
+        productId: 'product-1',
+        workspaceId: 'workspace-1',
+        workspaceRole: 'owner',
+        displayName: 'User One',
+        preferences: {
+          notifications: {
+            inApp: true,
+            email: false,
+            billing: true,
+            files: true,
+            admin: true,
+          },
+          search: { recentSearches: [] },
+        },
+      };
+    });
+    const cachedProfile = await cachedDashboardUserProfile(session, async () => {
+      profiles += 1;
+      throw new Error('profile cache miss');
+    });
+    assert.equal(profiles, 1);
+    assert.equal(cachedProfile, profile);
+
+    let themes = 0;
+    const theme = cachedDashboardTheme('workspace-1', () => {
+      themes += 1;
+      return {
+        product: {} as never,
+        workspace: null,
+        page: null,
+        defaultTheme: 'system' as const,
+        cssVariables: { '--theme-color-background': '#fff' },
+        darkCssVariables: {},
+        localeTypography: {},
+      };
+    });
+    const cachedTheme = cachedDashboardTheme('workspace-1', () => {
+      themes += 1;
+      throw new Error('theme cache miss');
+    });
+    assert.equal(themes, 1);
+    assert.equal(cachedTheme, theme);
+
+    let navigation = 0;
+    const nav = cachedDashboardNavigation(session, () => {
+      navigation += 1;
+      return [{ href: '/dashboard', label: 'Dashboard' }];
+    });
+    const cachedNav = cachedDashboardNavigation(session, () => {
+      navigation += 1;
+      throw new Error('navigation cache miss');
+    });
+    assert.equal(navigation, 1);
+    assert.equal(cachedNav, nav);
+
+    invalidateDashboardShellCache('profile');
+    const refreshedProfile = await cachedDashboardUserProfile(session, async () => {
+      profiles += 1;
+      return { ...profile, displayName: 'User Two' };
+    });
+    assert.equal(profiles, 2);
+    assert.equal(refreshedProfile.displayName, 'User Two');
+
+    invalidateDashboardShellCache();
+    cachedDashboardTheme('workspace-1', () => {
+      themes += 1;
+      return theme;
+    });
+    assert.equal(themes, 2);
+    cachedDashboardNavigation(session, () => {
+      navigation += 1;
+      return nav;
+    });
+    assert.equal(navigation, 2);
+  } finally {
+    if (originalTtl === undefined) {
+      delete process.env.PLOYKIT_DASHBOARD_SHELL_CACHE_TTL_MS;
+    } else {
+      process.env.PLOYKIT_DASHBOARD_SHELL_CACHE_TTL_MS = originalTtl;
+    }
+    resetDashboardShellCacheForTests();
+  }
+});
+
+test('host client transition catches module dashboard anchors without breaking safe link defaults', () => {
+  assert.deepEqual(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: '/dashboard/origin-agentops/skills',
+      currentUrl: 'https://app.example.com/dashboard/origin-agentops/agents',
+    }),
+    {
+      shouldNavigate: true,
+      href: '/dashboard/origin-agentops/skills',
+    }
+  );
+  assert.deepEqual(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: '/zh/dashboard/files?tab=all',
+      currentUrl: 'https://app.example.com/zh/dashboard',
+    }),
+    {
+      shouldNavigate: true,
+      href: '/zh/dashboard/files?tab=all',
+    }
+  );
+
+  assert.equal(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: 'https://external.example.com/dashboard',
+      currentUrl: 'https://app.example.com/dashboard',
+    }).shouldNavigate,
+    false
+  );
+  assert.equal(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: '/dashboard/files',
+      currentUrl: 'https://app.example.com/dashboard',
+      ctrlKey: true,
+    }).shouldNavigate,
+    false
+  );
+  assert.equal(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: '/dashboard#files',
+      currentUrl: 'https://app.example.com/dashboard',
+    }).shouldNavigate,
+    false
+  );
+  assert.equal(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: '/api/billing/invoices?id=invoice-1',
+      currentUrl: 'https://app.example.com/dashboard/orders',
+    }).shouldNavigate,
+    false
+  );
 });
 
 test('observability redacts secrets from logs and connector records', () => {

@@ -1,6 +1,6 @@
 import { AdminModuleDevConsoleOperationsPage } from '@host/components/admin/AdminPages';
 import { HostPagesPanel } from '@host/components/dev-console/HostPagesPanel';
-import { getAdminModuleDevConsoleView } from '@host/lib/admin-operations';
+import { getAdminModuleDevConsoleView } from '@host/lib/admin-module-dev-console';
 import {
   getProductCompositionView,
   getProductThemeDiagnosticsView,

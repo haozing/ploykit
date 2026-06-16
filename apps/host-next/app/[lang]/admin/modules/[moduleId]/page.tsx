@@ -1,5 +1,5 @@
 import { AdminModuleDetailOperationsPage } from '@host/components/admin/AdminPages';
-import { getAdminModuleDetail } from '@host/lib/admin-operations';
+import { getAdminModuleDetail } from '@host/lib/admin-module-operations';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';
 
 interface AdminModuleDetailRouteParams extends LanguageRouteParams {

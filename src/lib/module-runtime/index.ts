@@ -20,7 +20,6 @@ export * from './observability';
 export * from './packaging';
 export * from './queue';
 export * from './registry/module-runtime-registry';
-export * from './release';
 export * from './resources';
 export * from './routes';
 export * from './runtime-checks';

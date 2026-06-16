@@ -1,225 +1,9 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runReleaseCandidateGate } from '../src/lib/module-runtime';
-
-function createTempProject() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'ploykit-rc-gate-'));
-}
-
-function writeJson(filePath: string, value: unknown) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(value));
-}
-
-function providerInvocationEvidence() {
-  return {
-    domainEvidence: {
-      providerInvocationLedger: {
-        invocations: 6,
-        successful: 6,
-        failed: 0,
-        operations: ['contextPack', 'delete', 'embedText', 'generateText', 'index', 'search'],
-        kinds: ['ai', 'rag'],
-        ragSources: 1,
-        ragChunks: 2,
-        connectorInvocations: 1,
-      },
-    },
-  };
-}
-
-function workerSoakEvidence(overrides: Record<string, unknown> = {}) {
-  return {
-    ok: true,
-    required: true,
-    checkedAt: '2026-05-23T00:00:00.000Z',
-    enqueued: 3,
-    drain: {
-      iterations: 1,
-      processed: 3,
-      failed: 0,
-      deadLettered: 0,
-    },
-    deliveryLedger: {
-      records: 4,
-      delivered: 4,
-      failed: 0,
-      deadLettered: 0,
-      workerRecords: 1,
-      workers: 3,
-    },
-    workerRegistry: {
-      workers: 1,
-      activeWorkers: 1,
-      errorWorkers: 0,
-      latestHeartbeatAt: '2026-05-23T00:00:00.000Z',
-    },
-    ...overrides,
-  };
-}
-
-const FIXTURE_MODULE_ID = 'fixture-module';
-const FIXTURE_MODULE_ROUTE_PATHS = [
-  '/dashboard/fixture-module',
-  '/dashboard/fixture-module/items',
-  '/dashboard/fixture-module/items/demo-item',
-  '/dashboard/fixture-module/runs',
-  '/dashboard/fixture-module/runs/demo-run',
-  '/dashboard/fixture-module/operators',
-  '/dashboard/fixture-module/operators/demo-operator',
-  '/dashboard/fixture-module/pools',
-  '/dashboard/fixture-module/diagnostics',
-  '/dashboard/fixture-module/api',
-  '/dashboard/fixture-module/webhooks',
-  '/dashboard/fixture-module/scheduler',
-  '/dashboard/fixture-module/storage',
-  '/dashboard/fixture-module/security',
-  '/dashboard/fixture-module/usage',
-  '/dashboard/fixture-module/enterprise',
-];
-
-function fixtureModuleRouteChecks() {
-  return ['desktop', 'mobile'].flatMap((viewport) =>
-    FIXTURE_MODULE_ROUTE_PATHS.map((routePath) => ({ id: `${viewport}:${routePath}`, ok: true }))
-  );
-}
-
-const FIXTURE_MODULE_P2_BROWSER_CHECKS = [
-  ...fixtureModuleRouteChecks().map((check) => check.id),
-  'p2-interactive-routes',
-  'p2-action-submissions',
-  'p2-filter-submissions',
-  'p2-copy-controls',
-  'p2-confirmation-flows',
-];
-
-function fixtureModuleP2BrowserEvidence(overrides: Record<string, unknown> = {}) {
-  return {
-    ok: true,
-    required: true,
-    skipped: false,
-    checkedAt: '2026-05-26T00:00:00.000Z',
-    checks: FIXTURE_MODULE_P2_BROWSER_CHECKS.map((id) => ({ id, ok: true })),
-    ...overrides,
-  };
-}
-
-const FIXTURE_MODULE_CORE_E2E_CHECKS = [
-  'core-reachable',
-  'admin-signed-service-auth',
-  'admin-signed-service-rejects-invalid-signature',
-  'core-meta',
-  'ploykit-host-runtime-seed',
-  'ploykit-host-dashboard-api-smoke',
-  'ploykit-files-core-asset-e2e',
-  'ploykit-background-validator-first-success-e2e',
-  'ploykit-runtime-admin-flow',
-  'project-create-and-tenant-binding',
-  'cross-tenant-project-access-blocked',
-  'resource-pool-lifecycle',
-  'item-type-create-update-contract',
-  'api-token-one-time-display',
-  'integration-key-one-time-display-and-audit',
-  'webhook-endpoint-lifecycle',
-  'schedule-lifecycle',
-  'admin-run-operator-success-assets-events-logs',
-  'failed-run-retry-cancel',
-  'external-run-idempotency-list-detail-cancel',
-  'external-run-operator-success-callback-delivery-retry',
-  'encrypted-payload-result-passthrough',
-  'usage-daily-quota-exceeded',
-  'metrics-root-surface',
-  'one-time-secret-redaction-evidence',
-  'cleanup-revoke-and-delete',
-];
-
-const FIXTURE_MODULE_CORE_VERIFICATION_CHECKS = [
-  'core-unit-test-all',
-  'core-static-analysis',
-  'core-concurrency-check',
-  'core-database-integration',
-  'core-container-image-build',
-];
-
-function fixtureModuleCoreE2eEvidence(overrides: Record<string, unknown> = {}) {
-  return {
-    ok: true,
-    required: true,
-    skipped: false,
-    baseUrl: 'http://localhost:8080',
-    checkedAt: '2026-05-26T00:00:00.000Z',
-    checks: FIXTURE_MODULE_CORE_E2E_CHECKS.map((id) => ({ id, ok: true })),
-    ...overrides,
-  };
-}
-
-function fixtureModuleCoreVerificationEvidence(overrides: Record<string, unknown> = {}) {
-  return {
-    ok: true,
-    required: true,
-    skipped: false,
-    checkedAt: '2026-05-26T00:00:00.000Z',
-    checks: FIXTURE_MODULE_CORE_VERIFICATION_CHECKS.map((id) => ({ id, ok: true })),
-    ...overrides,
-  };
-}
-
-function writeModuleQualityManifest(root: string) {
-  const routes = FIXTURE_MODULE_ROUTE_PATHS.map((routePath) => ({
-    path: routePath,
-    auth: true,
-    contains: 'Fixture Module',
-  }));
-  writeJson(path.join(root, 'src', 'lib', 'module-map.manifest.json'), {
-    modules: [
-      {
-        id: FIXTURE_MODULE_ID,
-        name: 'Fixture Module',
-        quality: {
-          routes: {
-            browser: routes,
-            accessibility: routes,
-          },
-          evidence: [
-            {
-              id: 'fixture-module-core-e2e',
-              title: 'Fixture Module Core E2E',
-              runtimeDir: 'modules/fixture-module/core-e2e',
-              required: true,
-              command: {
-                script: 'module:evidence',
-              },
-              checks: FIXTURE_MODULE_CORE_E2E_CHECKS,
-            },
-            {
-              id: 'fixture-module-p2-browser',
-              title: 'Fixture Module P2 browser evidence',
-              runtimeDir: 'modules/fixture-module/p2-browser',
-              required: true,
-              command: {
-                script: 'module:evidence',
-              },
-              checks: FIXTURE_MODULE_P2_BROWSER_CHECKS,
-            },
-            {
-              id: 'fixture-module-core-verification',
-              title: 'Fixture Module Core verification evidence',
-              runtimeDir: 'modules/fixture-module/core-verification',
-              required: true,
-              command: {
-                script: 'module:evidence',
-              },
-              checks: FIXTURE_MODULE_CORE_VERIFICATION_CHECKS,
-            },
-          ],
-        },
-      },
-    ],
-  });
-}
+import { runReleaseCandidateGate } from '../src/lib/module-runtime/release/rc-gate';
+import { createTempProject, writeJson } from './release-candidate-fixtures';
 
 test('P21 RC gate rejects formal legacy runtime entries', () => {
   const root = createTempProject();
@@ -287,689 +71,6 @@ test('P21 RC gate allows old PloyKit inventory documents as historical context',
   assert.equal(result.diagnostics.length, 0);
 });
 
-test('P21 RC gate reads provider matrix evidence with local depth and AI/RAG smoke', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'provider-matrix'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'provider-matrix', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: true,
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      ...providerInvocationEvidence(),
-      checks: [
-        { id: 'local-provider-depth', ok: true },
-        { id: 'ai-rag-local', ok: true },
-      ],
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'provider-live-matrix': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const providerCheck = result.checks.find((item) => item.id === 'provider-live-matrix');
-
-  assert.equal(result.ok, false);
-  assert.equal(providerCheck?.status, 'passed');
-  assert.match(providerCheck?.evidence ?? '', /local-provider-depth/);
-  assert.match(providerCheck?.evidence ?? '', /ai-rag-local/);
-});
-
-test('P21 RC gate fails required provider matrix without local depth smoke', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'provider-matrix'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'provider-matrix', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: true,
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      ...providerInvocationEvidence(),
-      checks: [
-        { id: 's3-compatible-storage', ok: true },
-        { id: 'ai-rag-local', ok: true },
-      ],
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'provider-live-matrix': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const providerCheck = result.checks.find((item) => item.id === 'provider-live-matrix');
-
-  assert.equal(result.ok, false);
-  assert.equal(providerCheck?.status, 'failed');
-  assert.match(providerCheck?.evidence ?? '', /local-provider-depth evidence is missing/);
-});
-
-test('P21 RC gate fails required provider matrix without AI/RAG local smoke', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'provider-matrix'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'provider-matrix', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: true,
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      ...providerInvocationEvidence(),
-      checks: [
-        { id: 'local-provider-depth', ok: true },
-        { id: 's3-compatible-storage', ok: true },
-      ],
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'provider-live-matrix': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const providerCheck = result.checks.find((item) => item.id === 'provider-live-matrix');
-
-  assert.equal(result.ok, false);
-  assert.equal(providerCheck?.status, 'failed');
-  assert.match(providerCheck?.evidence ?? '', /ai-rag-local evidence is missing/);
-});
-
-test('P21 RC gate rejects non-required provider matrix for strict evidence', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'provider-matrix'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'provider-matrix', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: false,
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      ...providerInvocationEvidence(),
-      checks: [
-        { id: 'local-provider-depth', ok: true },
-        { id: 'ai-rag-local', ok: true },
-      ],
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'provider-live-matrix': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const providerCheck = result.checks.find((item) => item.id === 'provider-live-matrix');
-
-  assert.equal(result.ok, false);
-  assert.equal(providerCheck?.status, 'failed');
-  assert.match(providerCheck?.evidence ?? '', /--required/);
-});
-
-test('P21 RC gate reads runtime store Postgres strict evidence', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'runtime-store-postgres'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'runtime-store-postgres', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: true,
-      profile: 'local-postgres',
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      checks: [
-        { id: 'runtime-stores-verify', ok: true },
-        { id: 'runtime-stores-tests', ok: true },
-      ],
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'runtime-stores': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const runtimeCheck = result.checks.find((item) => item.id === 'runtime-stores');
-
-  assert.equal(result.ok, false);
-  assert.equal(runtimeCheck?.status, 'passed');
-  assert.match(runtimeCheck?.evidence ?? '', /local-postgres/);
-});
-
-test('P21 RC gate fails runtime store strict evidence when local Postgres report is missing', () => {
-  const root = createTempProject();
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'runtime-stores': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const runtimeCheck = result.checks.find((item) => item.id === 'runtime-stores');
-
-  assert.equal(result.ok, false);
-  assert.equal(runtimeCheck?.status, 'failed');
-  assert.match(runtimeCheck?.evidence ?? '', /host:postgres-local-smoke/);
-});
-
-test('P21 RC gate reads worker soak strict evidence', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'worker-soak'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'worker-soak', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: true,
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      enqueued: 3,
-      drain: {
-        iterations: 1,
-        processed: 3,
-        failed: 0,
-        deadLettered: 0,
-      },
-      deliveryLedger: {
-        records: 4,
-        delivered: 4,
-        failed: 0,
-        deadLettered: 0,
-        workerRecords: 1,
-        workers: 3,
-      },
-      workerRegistry: {
-        workers: 1,
-        activeWorkers: 1,
-        errorWorkers: 0,
-        latestHeartbeatAt: '2026-05-21T00:00:00.000Z',
-      },
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'worker-soak': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const workerCheck = result.checks.find((item) => item.id === 'worker-soak');
-
-  assert.equal(result.ok, false);
-  assert.equal(workerCheck?.status, 'passed');
-  assert.match(workerCheck?.evidence ?? '', /3\/3/);
-});
-
-test('P21 RC gate reads host product smoke evidence', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'host-smoke', 'latest.json'), {
-    ok: true,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    baseUrl: 'http://localhost:3000',
-    checks: [
-      { id: 'site-home', ok: true },
-      { id: 'admin-modules', ok: true },
-    ],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'host-product-smoke': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const hostSmokeCheck = result.checks.find((item) => item.id === 'host-product-smoke');
-
-  assert.equal(result.ok, false);
-  assert.equal(hostSmokeCheck?.status, 'passed');
-  assert.match(hostSmokeCheck?.evidence ?? '', /2 checks/);
-});
-
-test('P21 RC gate reads web shell evidence', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'web-shell', 'latest.json'), {
-    ok: true,
-    required: true,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    summary: { tests: 42, pass: 42, fail: 0, skipped: 0 },
-    checks: [{ id: 'test:web-shell', ok: true }],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'web-shell': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const webShellCheck = result.checks.find((item) => item.id === 'web-shell');
-
-  assert.equal(result.ok, false);
-  assert.equal(webShellCheck?.status, 'passed');
-  assert.match(webShellCheck?.evidence ?? '', /42 tests/);
-});
-
-test('P21 RC gate rejects non-required browser matrix for strict evidence', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'browser-matrix', 'latest.json'), {
-    ok: true,
-    required: false,
-    skipped: false,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    checks: [{ id: 'desktop:/zh/admin', ok: true }],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'browser-matrix': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const browserCheck = result.checks.find((item) => item.id === 'browser-matrix');
-
-  assert.equal(result.ok, false);
-  assert.equal(browserCheck?.status, 'failed');
-  assert.match(browserCheck?.evidence ?? '', /--required/);
-});
-
-test('P21 RC gate rejects browser matrix without module-declared route coverage', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(path.join(root, '.runtime', 'browser-matrix', 'latest.json'), {
-    ok: true,
-    required: true,
-    skipped: false,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    checks: [{ id: 'desktop:/zh/admin', ok: true }],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'browser-matrix': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const browserCheck = result.checks.find((item) => item.id === 'browser-matrix');
-
-  assert.equal(result.ok, false);
-  assert.equal(browserCheck?.status, 'failed');
-  assert.match(browserCheck?.evidence ?? '', /module-declared route evidence/);
-});
-
-test('P21 RC gate reads accessibility smoke with module-declared route coverage', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(path.join(root, '.runtime', 'accessibility-smoke', 'latest.json'), {
-    ok: true,
-    required: true,
-    skipped: false,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    checks: fixtureModuleRouteChecks(),
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'accessibility-smoke': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const accessibilityCheck = result.checks.find((item) => item.id === 'accessibility-smoke');
-
-  assert.equal(result.ok, false);
-  assert.equal(accessibilityCheck?.status, 'passed');
-  assert.match(accessibilityCheck?.evidence ?? '', /Accessibility smoke passed/);
-});
-
-test('P21 RC gate rejects accessibility smoke without module-declared route coverage', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(path.join(root, '.runtime', 'accessibility-smoke', 'latest.json'), {
-    ok: true,
-    required: true,
-    skipped: false,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    checks: [{ id: 'desktop:/zh/docs', ok: true }],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'accessibility-smoke': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const accessibilityCheck = result.checks.find((item) => item.id === 'accessibility-smoke');
-
-  assert.equal(result.ok, false);
-  assert.equal(accessibilityCheck?.status, 'failed');
-  assert.match(accessibilityCheck?.evidence ?? '', /module-declared route evidence/);
-});
-
-test('P21 RC gate reads strict module-declared core E2E evidence', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-e2e', 'latest.json'),
-    fixtureModuleCoreE2eEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'p2-browser', 'latest.json'),
-    fixtureModuleP2BrowserEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-verification', 'latest.json'),
-    fixtureModuleCoreVerificationEvidence()
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'module-quality': true },
-    now: () => new Date('2026-05-26T00:00:00.000Z'),
-  });
-  const coreCheck = result.checks.find((item) => item.id === 'module-quality');
-
-  assert.equal(result.ok, false);
-  assert.equal(coreCheck?.status, 'passed');
-  assert.match(coreCheck?.evidence ?? '', /fixture-module:fixture-module-core-e2e/);
-  assert.match(coreCheck?.evidence ?? '', /fixture-module:fixture-module-p2-browser/);
-  assert.match(coreCheck?.evidence ?? '', /fixture-module:fixture-module-core-verification/);
-});
-
-test('P21 RC gate rejects non-required module-declared core E2E evidence for strict gate', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-e2e', 'latest.json'),
-    fixtureModuleCoreE2eEvidence({ required: false })
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'p2-browser', 'latest.json'),
-    fixtureModuleP2BrowserEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-verification', 'latest.json'),
-    fixtureModuleCoreVerificationEvidence()
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'module-quality': true },
-    now: () => new Date('2026-05-26T00:00:00.000Z'),
-  });
-  const coreCheck = result.checks.find((item) => item.id === 'module-quality');
-
-  assert.equal(result.ok, false);
-  assert.equal(coreCheck?.status, 'failed');
-  assert.match(coreCheck?.evidence ?? '', /--required/);
-});
-
-test('P21 RC gate rejects module-declared core E2E evidence missing required flow checks', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-e2e', 'latest.json'),
-    fixtureModuleCoreE2eEvidence({
-      checks: FIXTURE_MODULE_CORE_E2E_CHECKS.filter((id) => id !== 'usage-daily-quota-exceeded').map(
-        (id) => ({ id, ok: true })
-      ),
-    })
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'p2-browser', 'latest.json'),
-    fixtureModuleP2BrowserEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-verification', 'latest.json'),
-    fixtureModuleCoreVerificationEvidence()
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'module-quality': true },
-    now: () => new Date('2026-05-26T00:00:00.000Z'),
-  });
-  const coreCheck = result.checks.find((item) => item.id === 'module-quality');
-
-  assert.equal(result.ok, false);
-  assert.equal(coreCheck?.status, 'failed');
-  assert.match(coreCheck?.evidence ?? '', /usage-daily-quota-exceeded/);
-});
-
-test('P21 RC gate rejects module-declared P2 browser evidence missing interaction checks', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-e2e', 'latest.json'),
-    fixtureModuleCoreE2eEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'p2-browser', 'latest.json'),
-    fixtureModuleP2BrowserEvidence({
-      checks: FIXTURE_MODULE_P2_BROWSER_CHECKS.filter((id) => id !== 'p2-confirmation-flows').map(
-        (id) => ({ id, ok: true })
-      ),
-    })
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-verification', 'latest.json'),
-    fixtureModuleCoreVerificationEvidence()
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'module-quality': true },
-    now: () => new Date('2026-05-26T00:00:00.000Z'),
-  });
-  const coreCheck = result.checks.find((item) => item.id === 'module-quality');
-
-  assert.equal(result.ok, false);
-  assert.equal(coreCheck?.status, 'failed');
-  assert.match(coreCheck?.evidence ?? '', /p2-confirmation-flows/);
-});
-
-test('P21 RC gate rejects module-declared core verification evidence missing required checks', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-e2e', 'latest.json'),
-    fixtureModuleCoreE2eEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'p2-browser', 'latest.json'),
-    fixtureModuleP2BrowserEvidence()
-  );
-  writeJson(
-    path.join(root, '.runtime', 'modules', FIXTURE_MODULE_ID, 'core-verification', 'latest.json'),
-    fixtureModuleCoreVerificationEvidence({
-      checks: FIXTURE_MODULE_CORE_VERIFICATION_CHECKS.filter((id) => id !== 'core-static-analysis').map(
-        (id) => ({ id, ok: true })
-      ),
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'module-quality': true },
-    now: () => new Date('2026-05-26T00:00:00.000Z'),
-  });
-  const coreCheck = result.checks.find((item) => item.id === 'module-quality');
-
-  assert.equal(result.ok, false);
-  assert.equal(coreCheck?.status, 'failed');
-  assert.match(coreCheck?.evidence ?? '', /core-static-analysis/);
-});
-
-test('P21 RC gate blocks pending required module quality evidence', () => {
-  const root = createTempProject();
-  writeModuleQualityManifest(root);
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    now: () => new Date('2026-05-26T00:00:00.000Z'),
-  });
-  const coreCheck = result.checks.find((item) => item.id === 'module-quality');
-
-  assert.equal(result.ok, false);
-  assert.equal(coreCheck?.status, 'pending');
-  assert.match(coreCheck?.evidence ?? '', /Run npm run module:evidence/);
-});
-
-test('P21 RC gate reads product presentation manifest evidence', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'product-presentation-manifest.json'), {
-    kind: 'ploykit.product-presentation.manifest',
-    checkedAt: '2026-05-23T00:00:00.000Z',
-    product: { id: 'test-product', supportedLanguages: ['zh', 'en'] },
-    pages: {
-      'site.home': { moduleId: 'white-label-site-demo', enabled: true },
-    },
-    diagnostics: [],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'product-presentation-kernel': true },
-    now: () => new Date('2026-05-23T00:00:00.000Z'),
-  });
-  const presentationCheck = result.checks.find(
-    (item) => item.id === 'product-presentation-kernel'
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(presentationCheck?.status, 'passed');
-  assert.match(presentationCheck?.evidence ?? '', /test-product/);
-});
-
-test('P21 RC gate fails product presentation manifest with diagnostics', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'product-presentation-manifest.json'), {
-    kind: 'ploykit.product-presentation.manifest',
-    checkedAt: '2026-05-23T00:00:00.000Z',
-    product: { id: 'test-product', supportedLanguages: ['zh', 'en'] },
-    pages: {},
-    diagnostics: [
-      {
-        severity: 'error',
-        code: 'PRESENTATION_LEGACY_CONFIG_PRESENT',
-        path: 'product-composition.config.json',
-      },
-    ],
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'product-presentation-kernel': true },
-    now: () => new Date('2026-05-23T00:00:00.000Z'),
-  });
-  const presentationCheck = result.checks.find(
-    (item) => item.id === 'product-presentation-kernel'
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(presentationCheck?.status, 'failed');
-  assert.match(presentationCheck?.evidence ?? '', /PRESENTATION_LEGACY_CONFIG_PRESENT/);
-});
-
-test('P21 RC gate reads production adapter evidence from provider, store and worker reports', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'provider-matrix', 'latest.json'), {
-    ok: true,
-    required: true,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    ...providerInvocationEvidence(),
-    checks: [
-      { id: 'local-provider-depth', ok: true },
-      { id: 'ai-rag-local', ok: true },
-    ],
-  });
-  writeJson(path.join(root, '.runtime', 'runtime-store-postgres', 'latest.json'), {
-    ok: true,
-    required: true,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    profile: 'local-postgres',
-    checks: [{ id: 'runtime-stores-verify', ok: true }],
-  });
-  writeJson(path.join(root, '.runtime', 'worker-soak', 'latest.json'), {
-    ok: true,
-    required: true,
-    checkedAt: '2026-05-21T00:00:00.000Z',
-    enqueued: 2,
-    drain: { iterations: 1, processed: 2, failed: 0, deadLettered: 0 },
-    deliveryLedger: {
-      records: 3,
-      delivered: 3,
-      failed: 0,
-      deadLettered: 0,
-      workerRecords: 1,
-      workers: 2,
-    },
-    workerRegistry: {
-      workers: 1,
-      activeWorkers: 1,
-      errorWorkers: 0,
-      latestHeartbeatAt: '2026-05-21T00:00:00.000Z',
-    },
-  });
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'production-adapters': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const adaptersCheck = result.checks.find((item) => item.id === 'production-adapters');
-
-  assert.equal(result.ok, false);
-  assert.equal(adaptersCheck?.status, 'passed');
-  assert.match(adaptersCheck?.evidence ?? '', /provider matrix, runtime store, worker soak, and delivery ledger/);
-});
-
-test('P9 RC gate reads delivery ledger and worker registry strict evidence', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'worker-soak', 'latest.json'), workerSoakEvidence());
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'delivery-ledger': true },
-    now: () => new Date('2026-05-23T00:00:00.000Z'),
-  });
-  const deliveryCheck = result.checks.find((item) => item.id === 'delivery-ledger');
-
-  assert.equal(result.ok, false);
-  assert.equal(deliveryCheck?.status, 'passed');
-  assert.match(deliveryCheck?.evidence ?? '', /worker registry/);
-});
-
-test('P9 RC gate fails delivery ledger strict evidence without persisted worker registry', () => {
-  const root = createTempProject();
-  writeJson(path.join(root, '.runtime', 'worker-soak', 'latest.json'), workerSoakEvidence({
-    workerRegistry: {
-      workers: 0,
-      activeWorkers: 0,
-      errorWorkers: 0,
-    },
-  }));
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'delivery-ledger': true },
-    now: () => new Date('2026-05-23T00:00:00.000Z'),
-  });
-  const deliveryCheck = result.checks.find((item) => item.id === 'delivery-ledger');
-
-  assert.equal(result.ok, false);
-  assert.equal(deliveryCheck?.status, 'failed');
-  assert.match(deliveryCheck?.evidence ?? '', /workers=0/);
-});
-
 test('P9 RC gate reads commercial domain strict evidence', () => {
   const root = createTempProject();
   writeJson(path.join(root, '.runtime', 'billing-reconcile', 'latest.json'), {
@@ -1006,6 +107,90 @@ test('P9 RC gate reads commercial domain strict evidence', () => {
   assert.match(commercialCheck?.evidence ?? '', /revenue buckets/);
 });
 
+test('P9 RC gate reads files storage domain strict evidence', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, '.runtime', 'files-cleanup', 'latest.json'), {
+    ok: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    file: {
+      id: 'file-cleaned',
+      status: 'deleted',
+      objectDeleted: true,
+    },
+    cleanup: {
+      matched: 1,
+      cleanedFileIds: ['file-cleaned'],
+      auditId: 'audit-cleanup',
+    },
+    storage: {
+      mode: 'local',
+      durable: true,
+    },
+  });
+  writeJson(path.join(root, '.runtime', 'files-reconcile', 'latest.json'), {
+    ok: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    checks: [
+      { id: 'ready-object-present', ok: true },
+      { id: 'deleted-object-present-detected', ok: true },
+      { id: 'missing-active-object-detected', ok: true },
+      { id: 'orphan-object-detected', ok: true },
+    ],
+    report: {
+      checkedFiles: 3,
+      issues: 3,
+      presentObjects: 2,
+      missingObjects: 1,
+      deletedObjectsPresent: 1,
+      missingActiveObjects: 1,
+      orphanObjects: 1,
+      orphanBytes: 28,
+    },
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'files-storage-domain': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const filesCheck = result.checks.find((item) => item.id === 'files-storage-domain');
+
+  assert.equal(result.ok, false);
+  assert.equal(filesCheck?.status, 'passed');
+  assert.match(filesCheck?.evidence ?? '', /deleted-object, missing-object, and orphan-object/);
+});
+
+test('P9 RC gate fails files storage domain without reconcile evidence', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, '.runtime', 'files-cleanup', 'latest.json'), {
+    ok: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    file: {
+      id: 'file-cleaned',
+      status: 'deleted',
+      objectDeleted: true,
+    },
+    cleanup: {
+      matched: 1,
+      cleanedFileIds: ['file-cleaned'],
+      auditId: 'audit-cleanup',
+    },
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'files-storage-domain': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const filesCheck = result.checks.find((item) => item.id === 'files-storage-domain');
+
+  assert.equal(result.ok, false);
+  assert.equal(filesCheck?.status, 'failed');
+  assert.match(filesCheck?.evidence ?? '', /host:files-reconcile-smoke/);
+});
+
 test('P9 RC gate reads provider invocation ledger strict evidence', () => {
   const root = createTempProject();
   writeJson(path.join(root, '.runtime', 'ai-rag-local', 'latest.json'), {
@@ -1039,6 +224,82 @@ test('P9 RC gate reads provider invocation ledger strict evidence', () => {
   assert.equal(providerCheck?.status, 'passed');
   assert.match(providerCheck?.evidence ?? '', /generateText/);
   assert.match(providerCheck?.evidence ?? '', /RAG sources/);
+});
+
+test('P9 RC gate reads AI/RAG policy strict evidence', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, '.runtime', 'ai-rag-policy', 'latest.json'), {
+    ok: true,
+    required: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    profile: 'local-ai-rag-policy',
+    domainEvidence: {
+      aiRagPolicy: {
+        budgetDeniesMissingCredits: true,
+        successfulCostCommitted: true,
+        failedProviderReservationReleased: true,
+        anonymousRateLimitRequired: true,
+        anonymousHighCostForbidden: true,
+      },
+    },
+    checks: [
+      { id: 'ai-budget-denies-missing-credits', ok: true },
+      { id: 'ai-budget-commits-successful-cost', ok: true },
+      { id: 'ai-budget-releases-failed-provider-reservation', ok: true },
+      { id: 'anonymous-public-api-requires-rate-limit-policy', ok: true },
+      { id: 'anonymous-public-api-forbids-high-cost-commercial-actions', ok: true },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'ai-rag-policy': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const policyCheck = result.checks.find((item) => item.id === 'ai-rag-policy');
+
+  assert.equal(result.ok, false);
+  assert.equal(policyCheck?.status, 'passed');
+  assert.match(policyCheck?.evidence ?? '', /budget guard, quota accounting/);
+});
+
+test('P9 RC gate rejects AI/RAG policy evidence missing anonymous fail-closed signal', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, '.runtime', 'ai-rag-policy', 'latest.json'), {
+    ok: true,
+    required: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    profile: 'local-ai-rag-policy',
+    domainEvidence: {
+      aiRagPolicy: {
+        budgetDeniesMissingCredits: true,
+        successfulCostCommitted: true,
+        failedProviderReservationReleased: true,
+        anonymousRateLimitRequired: true,
+        anonymousHighCostForbidden: false,
+      },
+    },
+    checks: [
+      { id: 'ai-budget-denies-missing-credits', ok: true },
+      { id: 'ai-budget-commits-successful-cost', ok: true },
+      { id: 'ai-budget-releases-failed-provider-reservation', ok: true },
+      { id: 'anonymous-public-api-requires-rate-limit-policy', ok: true },
+      { id: 'anonymous-public-api-forbids-high-cost-commercial-actions', ok: false },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'ai-rag-policy': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const policyCheck = result.checks.find((item) => item.id === 'ai-rag-policy');
+
+  assert.equal(result.ok, false);
+  assert.equal(policyCheck?.status, 'failed');
+  assert.match(policyCheck?.evidence ?? '', /anonymousHighCostForbidden/);
 });
 
 test('P21 RC gate reads data safety and security operation evidence', () => {
@@ -1189,6 +450,59 @@ test('P21 RC gate rejects non-required backup/restore evidence for strict gate',
   assert.equal(result.ok, false);
   assert.equal(backupCheck?.status, 'failed');
   assert.match(backupCheck?.evidence ?? '', /--required/);
+});
+
+test('P21 RC gate reads Postgres physical restore strict evidence', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, '.runtime', 'postgres-physical-restore', 'latest.json'), {
+    ok: true,
+    required: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    mode: 'postgres-pg-dump-restore-local',
+    checks: [
+      { id: 'pg-dump-created', ok: true },
+      { id: 'pg-restore-applied', ok: true },
+      { id: 'restore-runtime-data-fingerprint', ok: true },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'postgres-physical-restore-matrix': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const restoreCheck = result.checks.find((item) => item.id === 'postgres-physical-restore-matrix');
+
+  assert.equal(result.ok, false);
+  assert.equal(restoreCheck?.status, 'passed');
+  assert.match(restoreCheck?.evidence ?? '', /postgres-pg-dump-restore-local/);
+});
+
+test('P21 RC gate rejects failed Postgres physical restore evidence for strict gate', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, '.runtime', 'postgres-physical-restore', 'latest.json'), {
+    ok: false,
+    required: true,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    mode: 'postgres-pg-dump-restore-local',
+    checks: [
+      { id: 'pg-dump-created', ok: true },
+      { id: 'restore-runtime-data-fingerprint', ok: false },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'postgres-physical-restore-matrix': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const restoreCheck = result.checks.find((item) => item.id === 'postgres-physical-restore-matrix');
+
+  assert.equal(result.ok, false);
+  assert.equal(restoreCheck?.status, 'failed');
+  assert.match(restoreCheck?.evidence ?? '', /restore-runtime-data-fingerprint/);
 });
 
 test('P21 RC gate reads upgrade migration strict evidence', () => {
@@ -1346,36 +660,4 @@ test('P21 RC gate reads documentation presence evidence', () => {
   assert.equal(result.ok, false);
   assert.equal(documentationCheck?.status, 'passed');
   assert.match(documentationCheck?.evidence ?? '', /release-candidate-checklist/);
-});
-
-test('P21 RC gate rejects non-required worker soak for strict evidence', () => {
-  const root = createTempProject();
-  fs.mkdirSync(path.join(root, '.runtime', 'worker-soak'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, '.runtime', 'worker-soak', 'latest.json'),
-    JSON.stringify({
-      ok: true,
-      required: false,
-      checkedAt: '2026-05-21T00:00:00.000Z',
-      enqueued: 3,
-      drain: {
-        iterations: 1,
-        processed: 3,
-        failed: 0,
-        deadLettered: 0,
-      },
-    })
-  );
-
-  const result = runReleaseCandidateGate({
-    projectRoot: root,
-    targets: [],
-    requiredChecks: { 'worker-soak': true },
-    now: () => new Date('2026-05-21T00:00:00.000Z'),
-  });
-  const workerCheck = result.checks.find((item) => item.id === 'worker-soak');
-
-  assert.equal(result.ok, false);
-  assert.equal(workerCheck?.status, 'failed');
-  assert.match(workerCheck?.evidence ?? '', /--required/);
 });

@@ -2,12 +2,22 @@ import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
-const runtimeDir = path.join('.runtime', 'test-modules', 'doctor-http');
+const createdFixtureRoots = new Set<string>();
+
+after(() => {
+  for (const fixtureRoot of createdFixtureRoots) {
+    fs.rmSync(path.join(process.cwd(), fixtureRoot), { recursive: true, force: true });
+  }
+});
 
 function writeFixture(files: Record<string, string>): string {
-  const fixtureRoot = path.join(runtimeDir, `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const fixtureRoot = path.join(
+    'modules',
+    `doctor-fixture-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+  createdFixtureRoots.add(fixtureRoot);
   for (const [name, content] of Object.entries(files)) {
     const file = path.join(fixtureRoot, name);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -85,6 +95,52 @@ test('module doctor validates egress permission and explicit origins', () => {
   assert.ok(codes.includes('MODULE_EGRESS_ORIGIN_INVALID'));
 });
 
+test('module doctor keeps service egress separate from ordinary http egress', () => {
+  const moduleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule, Permission } from '@ploykit/module-sdk';
+      export default defineModule({
+        contractVersion: 2,
+        id: 'doctor-service-egress',
+        name: 'Doctor Service Egress',
+        version: '0.1.0',
+        permissions: [Permission.ServicesInvoke],
+        serviceRequirements: {
+          serviceCore: {
+            required: true,
+            provider: 'service-core',
+            kind: 'signed-http',
+            connection: {
+              baseUrl: 'https://service.example',
+              egress: ['https://service.example'],
+            },
+            secrets: {
+              bearerToken: { required: true },
+              hmacSecret: { required: true },
+            },
+            claims: {
+              requestId: '\${ctx.request.id}',
+            },
+            operations: {
+              request: {
+                input: { allow: ['path'], claimsAllow: ['tenantId'] },
+                auth: { type: 'bearer', secret: 'bearerToken' },
+                signing: { type: 'hmac-sha256', secret: 'hmacSecret' },
+              },
+            },
+          },
+        },
+      });
+    `,
+  });
+
+  const result = runDoctor(moduleRoot);
+  const codes = result.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+
+  assert.equal(result.status, 0, result.stderr || JSON.stringify(result.body, null, 2));
+  assert.equal(codes.includes('MODULE_EGRESS_PERMISSION_REQUIRED'), false);
+});
+
 test('module doctor catches public site routes without SEO metadata or cache policy', () => {
   const moduleRoot = writeFixture({
     'module.ts': `
@@ -159,8 +215,10 @@ test('module doctor validates public API anonymous policy details', () => {
         },
       });
     `,
-    'api/missing-policy.ts': "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ post(ctx) { return ctx.json({ ok: true }); } });",
-    'api/bad-policy.ts': "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ post(ctx) { return ctx.json({ ok: true }); } });",
+    'api/missing-policy.ts':
+      "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ post(ctx) { return ctx.json({ ok: true }); } });",
+    'api/bad-policy.ts':
+      "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ post(ctx) { return ctx.json({ ok: true }); } });",
   });
 
   const result = runDoctor(moduleRoot);
@@ -303,7 +361,9 @@ test('module doctor validates notification read and send permissions separately'
     `,
   });
   const sendResult = runDoctor(sendModuleRoot);
-  const sendCodes = sendResult.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+  const sendCodes = sendResult.body.diagnostics.map(
+    (diagnostic: { code: string }) => diagnostic.code
+  );
 
   assert.equal(sendResult.status, 1, sendResult.stderr);
   assert.ok(sendCodes.includes('MODULE_NOTIFICATIONS_SEND_PERMISSION_MISSING'));
@@ -330,7 +390,9 @@ test('module doctor validates notification read and send permissions separately'
     `,
   });
   const readResult = runDoctor(readModuleRoot);
-  const readCodes = readResult.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+  const readCodes = readResult.body.diagnostics.map(
+    (diagnostic: { code: string }) => diagnostic.code
+  );
 
   assert.equal(readResult.status, 1, readResult.stderr);
   assert.ok(readCodes.includes('MODULE_NOTIFICATIONS_READ_PERMISSION_MISSING'));
@@ -367,8 +429,10 @@ test('module doctor reuses SDK contract validation gates', () => {
         },
       });
     `,
-    'api/validator.ts': "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ get(ctx) { return ctx.json({ ok: true }); } });",
-    'actions/call-external.ts': "import { action } from '@ploykit/module-sdk'; export default action(async () => ({ ok: true }));",
+    'api/validator.ts':
+      "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ get(ctx) { return ctx.json({ ok: true }); } });",
+    'actions/call-external.ts':
+      "import { action } from '@ploykit/module-sdk'; export default action(async () => ({ ok: true }));",
   });
 
   const result = runDoctor(moduleRoot);

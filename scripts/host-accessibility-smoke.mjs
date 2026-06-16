@@ -136,8 +136,11 @@ async function prepareVisualQaPage(page) {
 
 async function ensureAdminLogin(context) {
   const loginUrl = `${normalizedBaseUrl}/api/auth/login`;
+  const loginPageUrl = `${normalizedBaseUrl}/zh/login`;
   const response = await context.request.post(loginUrl, {
     headers: {
+      origin: normalizedBaseUrl,
+      referer: loginPageUrl,
       'x-forwarded-for': `10.203.${qaLoginIpCounter++}.10`,
     },
     form: {

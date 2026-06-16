@@ -14,7 +14,7 @@ import { AppFrame } from '@host/components/layout/AppFrame';
 import { PageShell } from '@host/components/layout/PageShell';
 import type { NavGroup, NavIconKey } from '@host/components/layout/types';
 import { SiteFrame } from '@host/components/site/SiteFrame';
-import { defaultAdminNavItems, resolveAdminNavItems } from '@host/lib/admin-console-nav';
+import { getAdminNavItems, resolveAdminNavItems } from '@host/lib/admin-console-nav';
 import { resolvePublicNavigation } from '@host/lib/site-navigation';
 
 export interface ProductNavItem {
@@ -140,7 +140,7 @@ function toNavItem(item: ProductNavItem) {
   };
 }
 
-export const adminNav: readonly ProductNavItem[] = defaultAdminNavItems;
+export const adminNav: readonly ProductNavItem[] = getAdminNavItems('en');
 
 async function getAdminNav(
   lang: SupportedLanguage,

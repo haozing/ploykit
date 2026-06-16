@@ -10,16 +10,12 @@ import {
   type ModuleMapArtifact,
 } from '../src/lib/module-runtime';
 
-const templateNames = [
-  'basic',
-  'dashboard',
-  'product',
-  'crud',
-  'connector',
-  'signed-service',
-  'job',
-  'product-app',
-];
+const templateNames = fs
+  .readdirSync(path.join('templates', 'modules'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
+const dataArtifactTemplates = new Set(['crud', 'product']);
 const extensionNames = ['service-backed', 'background'];
 const hostBoundaryRuntimeDir = path.join('.runtime', 'test-modules', 'host-boundary-policy');
 
@@ -60,6 +56,41 @@ function runHostBoundaryCheck(cwd: string): childProcess.SpawnSyncReturns<string
   );
 }
 
+function runProjectNodeScript(args: string[]): childProcess.SpawnSyncReturns<string> {
+  return childProcess.spawnSync(process.execPath, args, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+}
+
+function templateChoiceList(): string {
+  return templateNames.join('|');
+}
+
+function copyTemplateFixture(
+  templateRoot: string,
+  moduleRoot: string,
+  variables: { moduleId: string; moduleName: string }
+): void {
+  fs.mkdirSync(moduleRoot, { recursive: true });
+  for (const entry of fs.readdirSync(templateRoot, { withFileTypes: true })) {
+    const source = path.join(templateRoot, entry.name);
+    const target = path.join(moduleRoot, entry.name);
+    if (entry.isDirectory()) {
+      copyTemplateFixture(source, target, variables);
+      continue;
+    }
+    if (entry.isFile()) {
+      const content = fs
+        .readFileSync(source, 'utf8')
+        .replaceAll('__MODULE_ID__', variables.moduleId)
+        .replaceAll('__MODULE_NAME__', variables.moduleName);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, content, 'utf8');
+    }
+  }
+}
+
 test('module templates include contract, README, and smoke test', () => {
   for (const templateName of templateNames) {
     const templateRoot = path.join('templates', 'modules', templateName);
@@ -85,7 +116,15 @@ test('module extensions are product-safe overlays with tests and no root README 
     );
   }
   assert.equal(
-    fs.existsSync(path.join('templates', 'module-extensions', 'service-backed', 'tests', 'service-contract.json')),
+    fs.existsSync(
+      path.join(
+        'templates',
+        'module-extensions',
+        'service-backed',
+        'tests',
+        'service-contract.json'
+      )
+    ),
     true
   );
 });
@@ -105,10 +144,112 @@ test('module template CLI exposes product preset and extension overlays', () => 
     templates: Array<{ name: string; files: string[] }>;
     extensions: Array<{ name: string; files: string[] }>;
   };
+  const cliTemplateNames = body.templates.map((template) => template.name).sort();
 
+  assert.deepEqual(cliTemplateNames, templateNames);
   assert.ok(body.templates.some((template) => template.name === 'product'));
+  assert.ok(body.templates.some((template) => template.name === 'ai-rag'));
+  assert.ok(body.templates.some((template) => template.name === 'billing-aware'));
   assert.ok(body.extensions.some((extension) => extension.name === 'service-backed'));
   assert.ok(body.extensions.some((extension) => extension.name === 'background'));
+});
+
+test('module CLI help documents dynamic template and extension choices', () => {
+  const rootHelp = runProjectNodeScript(['scripts/ploykit-module.mjs', '--help']);
+  const createHelp = runProjectNodeScript(['scripts/ploykit-module.mjs', 'create', '--help']);
+  const expectedCreateUsage = `--template ${templateChoiceList()}`;
+
+  assert.equal(rootHelp.status, 0, rootHelp.stderr || rootHelp.stdout);
+  assert.equal(createHelp.status, 0, createHelp.stderr || createHelp.stdout);
+  assert.match(rootHelp.stdout, /doctor <module-id\|module-root\|all>/);
+  assert.match(rootHelp.stdout, /templates\s+Print available module templates/);
+  assert.ok(rootHelp.stdout.includes(expectedCreateUsage), rootHelp.stdout);
+  assert.ok(createHelp.stdout.includes(expectedCreateUsage), createHelp.stdout);
+  assert.ok(createHelp.stdout.includes('--with background,service-backed'), createHelp.stdout);
+});
+
+test('module templates generate modules that pass doctor and fake-host tests', (t) => {
+  const createdModuleIds: string[] = [];
+  t.after(() => {
+    for (const moduleId of createdModuleIds) {
+      fs.rmSync(path.join(process.cwd(), 'modules', moduleId), { recursive: true, force: true });
+      fs.rmSync(path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`), {
+        force: true,
+      });
+    }
+  });
+
+  for (const templateName of templateNames) {
+    const moduleId = `template-${templateName}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+    createdModuleIds.push(moduleId);
+    copyTemplateFixture(path.join('templates', 'modules', templateName), moduleRoot, {
+      moduleId,
+      moduleName: `Template ${templateName}`,
+    });
+
+    if (dataArtifactTemplates.has(templateName)) {
+      const generate = runProjectNodeScript(['scripts/module-data.mjs', 'generate', moduleRoot]);
+      assert.equal(generate.status, 0, `${templateName}\n${generate.stdout}\n${generate.stderr}`);
+      const types = runProjectNodeScript(['scripts/module-data.mjs', 'types', moduleRoot]);
+      assert.equal(types.status, 0, `${templateName}\n${types.stdout}\n${types.stderr}`);
+    }
+
+    const doctor = runProjectNodeScript(['scripts/ploykit-module.mjs', 'doctor', moduleRoot]);
+    assert.equal(doctor.status, 0, `${templateName}\n${doctor.stdout}\n${doctor.stderr}`);
+
+    const moduleTest = runProjectNodeScript(['scripts/module-test.mjs', moduleRoot, '--summary']);
+    assert.equal(
+      moduleTest.status,
+      0,
+      `${templateName}\n${moduleTest.stdout}\n${moduleTest.stderr}`
+    );
+    assert.match(moduleTest.stdout, new RegExp(`${moduleId}: passed`));
+  }
+});
+
+test('module template extensions generate modules that pass doctor and fake-host tests', (t) => {
+  const extensionMatrix = [['service-backed'], ['background'], ['service-backed', 'background']];
+  const createdModuleIds: string[] = [];
+  t.after(() => {
+    for (const moduleId of createdModuleIds) {
+      fs.rmSync(path.join(process.cwd(), 'modules', moduleId), { recursive: true, force: true });
+      fs.rmSync(path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`), {
+        force: true,
+      });
+    }
+    runProjectNodeScript(['scripts/generate-module-map.mjs']);
+  });
+
+  for (const extensions of extensionMatrix) {
+    const suffix = extensions.join('-');
+    const moduleId = `template-product-${suffix}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    createdModuleIds.push(moduleId);
+
+    const create = runProjectNodeScript([
+      'scripts/ploykit-module.mjs',
+      'create',
+      moduleId,
+      '--template',
+      'product',
+      '--with',
+      extensions.join(','),
+    ]);
+    assert.equal(create.status, 0, `${suffix}\n${create.stdout}\n${create.stderr}`);
+
+    const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+    const moduleSource = fs.readFileSync(path.join(moduleRoot, 'module.ts'), 'utf8');
+    assert.equal(moduleSource.includes('__PLOYKIT_'), false, suffix);
+    assert.equal(moduleSource.includes('__MODULE_ID__'), false, suffix);
+
+    const moduleTest = runProjectNodeScript(['scripts/module-test.mjs', moduleRoot, '--summary']);
+    assert.equal(moduleTest.status, 0, `${suffix}\n${moduleTest.stdout}\n${moduleTest.stderr}`);
+    assert.match(moduleTest.stdout, new RegExp(`${moduleId}: passed`));
+  }
 });
 
 test('root tsconfig uses explicit path aliases without a wildcard catch-all', () => {

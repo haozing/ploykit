@@ -79,6 +79,10 @@ function hashSourceFiles(root: string): string {
   return hash.digest('hex');
 }
 
+function projectPath(...segments: string[]): string {
+  return path.resolve(/* turbopackIgnore: true */ process.cwd(), ...segments);
+}
+
 export function checkModuleMapHealth(input: {
   artifact: ModuleMapArtifact;
   contracts: readonly ModuleRuntimeContract[];
@@ -106,7 +110,7 @@ export function checkModuleMapHealth(input: {
     }
 
     if (entry.rootDir) {
-      const moduleFile = path.resolve(process.cwd(), entry.rootDir, 'module.ts');
+      const moduleFile = projectPath(entry.rootDir, 'module.ts');
       if (fs.existsSync(moduleFile)) {
         const digest = hashFile(moduleFile);
         if (entry.release.contractDigest !== digest) {
@@ -120,7 +124,7 @@ export function checkModuleMapHealth(input: {
         }
       }
 
-      const moduleRoot = path.resolve(process.cwd(), entry.rootDir);
+      const moduleRoot = projectPath(entry.rootDir);
       if (fs.existsSync(moduleRoot)) {
         const sourceHash = hashSourceFiles(moduleRoot);
         if (entry.release.sourceHash !== sourceHash) {

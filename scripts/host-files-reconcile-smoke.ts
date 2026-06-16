@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   cleanupAdminDeletedFiles,
   deleteAdminFile,
   reconcileAdminFileStorage,
-} from '../apps/host-next/lib/admin-operations';
+} from '../apps/host-next/lib/admin-files';
 import { createHostSessionForUser } from '../apps/host-next/lib/auth';
 import { getHostRuntime } from '../apps/host-next/lib/create-host';
 import { getHostFileStorage, uploadHostUserFile } from '../apps/host-next/lib/files';
 
+const checkedAt = new Date().toISOString();
 const suffix = Date.now().toString(36);
 const productId = `files-reconcile-product-${suffix}`;
 const workspaceId = `files-reconcile-workspace-${suffix}`;
@@ -94,9 +97,17 @@ await deleteAdminFile(session, missing.id);
 await cleanupAdminDeletedFiles(session);
 await storage.storage.delete(orphanKey);
 
+const outputDir = path.resolve(
+  process.cwd(),
+  '.runtime',
+  'files-reconcile',
+  checkedAt.replace(/[:.]/g, '-')
+);
+const latestPath = path.resolve(process.cwd(), '.runtime', 'files-reconcile', 'latest.json');
+const reportPath = path.join(outputDir, 'files-reconcile-smoke.json');
 const result = {
   ok: checks.every((check) => check.ok),
-  checkedAt: new Date().toISOString(),
+  checkedAt,
   files: {
     ready: ready.file.id,
     deleted: deleted.file.id,
@@ -116,6 +127,15 @@ const result = {
     orphanObjects: report.orphanObjects,
     orphanBytes: report.orphanBytes,
   },
+  artifacts: {
+    report: reportPath,
+    latest: latestPath,
+  },
 };
+
+fs.mkdirSync(outputDir, { recursive: true });
+fs.mkdirSync(path.dirname(latestPath), { recursive: true });
+fs.writeFileSync(reportPath, `${JSON.stringify(result, null, 2)}\n`);
+fs.copyFileSync(reportPath, latestPath);
 
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

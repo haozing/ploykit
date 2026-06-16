@@ -19,6 +19,11 @@ import {
   DEFAULT_HOST_WORKSPACE_ID,
   DEFAULT_PRODUCT_SCOPE_SNAPSHOT,
 } from './default-scope';
+import {
+  cachedDashboardProductScopeResolution,
+  cachedDashboardProductScopeSnapshot,
+  invalidateDashboardShellCache,
+} from './dashboard-shell-cache';
 
 export const HOST_PRODUCT_SCOPE_COOKIE = 'ploykit_product_scope';
 
@@ -199,35 +204,39 @@ function membershipToProductScope(membership: {
 }
 
 export async function getHostProductScopeSnapshot(): Promise<ProductScopeSnapshot> {
-  const hostRuntime = await getHostRuntime();
-  const store = hostRuntime.runtimeStore.store;
-  await ensureHostProductScopeSeeded(store);
-  const [products, workspaces, memberships, invites, domainAliases] = await Promise.all([
-    store.listProductScopeProducts(),
-    store.listProductScopeWorkspaces(),
-    store.listMemberships(),
-    store.listProductScopeInvites(),
-    store.listProductScopeDomainAliases(),
-  ]);
+  return cachedDashboardProductScopeSnapshot(async () => {
+    const hostRuntime = await getHostRuntime();
+    const store = hostRuntime.runtimeStore.store;
+    await ensureHostProductScopeSeeded(store);
+    const [products, workspaces, memberships, invites, domainAliases] = await Promise.all([
+      store.listProductScopeProducts(),
+      store.listProductScopeWorkspaces(),
+      store.listMemberships(),
+      store.listProductScopeInvites(),
+      store.listProductScopeDomainAliases(),
+    ]);
 
-  return {
-    version: 1,
-    products: products as ProductScopeProduct[],
-    workspaces: workspaces as ProductScopeWorkspace[],
-    memberships: memberships.map(membershipToProductScope),
-    invites: invites as ProductScopeInvite[],
-    domainAliases: domainAliases as ProductScopeDomainAlias[],
-  };
+    return {
+      version: 1,
+      products: products as ProductScopeProduct[],
+      workspaces: workspaces as ProductScopeWorkspace[],
+      memberships: memberships.map(membershipToProductScope),
+      invites: invites as ProductScopeInvite[],
+      domainAliases: domainAliases as ProductScopeDomainAlias[],
+    };
+  });
 }
 
 export async function resolveDemoProductScope(request: Request): Promise<ProductScopeResolution> {
-  const snapshot = await getHostProductScopeSnapshot();
   const session = await resolveHostSessionFromRequest(request);
-  return resolveProductScope({
-    snapshot,
-    request,
-    session,
-    workspaceOverride: readProductScopeCookie(request) ?? undefined,
+  return cachedDashboardProductScopeResolution(request, session, async () => {
+    const snapshot = await getHostProductScopeSnapshot();
+    return resolveProductScope({
+      snapshot,
+      request,
+      session,
+      workspaceOverride: readProductScopeCookie(request) ?? undefined,
+    });
   });
 }
 
@@ -239,4 +248,8 @@ export async function createScopedDemoHostSession(request: Request) {
 export async function listDemoWorkspaces(productId: string) {
   const snapshot = await getHostProductScopeSnapshot();
   return snapshot.workspaces.filter((workspace) => workspace.productId === productId);
+}
+
+export function invalidateHostProductScopeCache(): void {
+  invalidateDashboardShellCache('product-scope');
 }

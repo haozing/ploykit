@@ -1,6 +1,6 @@
 import { AdminWebhooksOperationsPage } from '@host/components/admin/AdminPages';
 import { createAdminAction } from '@host/lib/admin-action';
-import { getAdminOperationsView } from '@host/lib/admin-operations';
+import { getAdminOperationsView } from '@host/lib/admin-module-operations';
 import {
   archiveAdminOutbox,
   bulkArchiveAdminOutbox,
@@ -12,10 +12,14 @@ import {
   retryAdminWebhookReceipt,
   retryAdminOutbox,
 } from '@host/lib/admin-delivery';
+import {
+  drainAdminWorker,
+  getAdminWorkerRuntimeStatus,
+  type AdminWorkerDrainResult,
+} from '@host/lib/admin-worker-operations';
 import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';
 import { readAdminTableQuery, type RouteSearchParams } from '@host/lib/table-query';
-import { drainHostWorker, getHostWorkerStatus } from '@host/lib/worker';
 
 function readRequiredFormString(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -60,7 +64,6 @@ function operationResultHref(
 
 type BulkOutboxResult = Awaited<ReturnType<typeof bulkReplayAdminDeadLetters>>;
 type BulkWebhookReceiptResult = Awaited<ReturnType<typeof bulkRetryAdminWebhookReceipts>>;
-type WorkerDrainResult = Awaited<ReturnType<typeof drainHostWorker>>;
 
 const retryOutboxAction = createAdminAction({
   id: 'webhooks.retryOutbox',
@@ -201,7 +204,7 @@ const bulkRetryFailedReceiptsAction = createAdminAction<
   audit: { metadata: ({ input, result }) => ({ ...input, result }) },
 });
 
-const drainWorkerAction = createAdminAction<{ limit: number }, WorkerDrainResult>({
+const drainWorkerAction = createAdminAction<{ limit: number }, AdminWorkerDrainResult>({
   id: 'webhooks.drainWorker',
   parse: (formData) => {
     const limitValue = Number(formData.get('limit') ?? 25);
@@ -209,7 +212,7 @@ const drainWorkerAction = createAdminAction<{ limit: number }, WorkerDrainResult
       limit: Number.isFinite(limitValue) ? limitValue : 25,
     };
   },
-  run: ({ session, input }) => drainHostWorker({ session, limit: input.limit }),
+  run: ({ session, input }) => drainAdminWorker(session, { limit: input.limit }),
   revalidate: () => ['/admin/webhooks', '/admin/runs', '/admin'],
   redirect: ({ lang, result }) =>
     operationResultHref(lang, 'worker drain', {
@@ -232,7 +235,7 @@ export default async function AdminWebhooksPage({
   const query = await readAdminTableQuery(searchParams);
   const [view, workerStatus, replayPreview, discardPreview, archivePreview] = await Promise.all([
     getAdminOperationsView(),
-    getHostWorkerStatus(),
+    getAdminWorkerRuntimeStatus(),
     previewAdminOutboxBulkAction(session, {
       action: 'replay',
       status: 'dead_letter',

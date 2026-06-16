@@ -1,6 +1,6 @@
 import type { ModuleCatalogModuleStatus } from '@/lib/module-runtime';
 import { AdminModulesOperationsPage } from '@host/components/admin/AdminPages';
-import { getAdminOperationsView, setAdminModuleStatus } from '@host/lib/admin-operations';
+import { getAdminOperationsView, setAdminModuleStatus } from '@host/lib/admin-module-operations';
 import { renderHostPageSlotById } from '@host/lib/host-page-rendering';
 import { localizedPath } from '@host/lib/i18n';
 import { createAdminAction } from '@host/lib/admin-action';

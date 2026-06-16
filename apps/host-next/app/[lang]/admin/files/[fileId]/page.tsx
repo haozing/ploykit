@@ -1,5 +1,5 @@
 import { AdminFileDetailOperationsPage } from '@host/components/admin/AdminPages';
-import { getAdminFileDetailView } from '@host/lib/admin-operations';
+import { getAdminFileDetailView } from '@host/lib/admin-files';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';
 
 interface AdminFileDetailParams extends LanguageRouteParams {

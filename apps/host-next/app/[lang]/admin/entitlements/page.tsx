@@ -1,11 +1,11 @@
 import { AdminEntitlementsOperationsPage } from '@host/components/admin/AdminPages';
-import { listAdminEntitlements } from '@host/lib/admin-api';
 import {
-  getAdminCommercialView,
   grantAdminEntitlement,
+  listAdminEntitlements,
   overrideAdminEntitlement,
   revokeAdminEntitlement,
-} from '@host/lib/admin-operations';
+} from '@host/lib/admin-entitlements';
+import { getAdminCommercialView } from '@host/lib/admin-commercial';
 import { createAdminAction } from '@host/lib/admin-action';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';
 import { readAdminTableQuery, type RouteSearchParams } from '@host/lib/table-query';

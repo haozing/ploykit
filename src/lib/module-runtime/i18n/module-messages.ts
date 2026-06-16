@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import type { ModuleRuntimeHost } from '../host';
 
 export type ModuleMessageDictionary = Record<string, unknown>;
@@ -11,14 +9,6 @@ export interface ModuleTranslateOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function normalizeResourcePath(resourcePath: string): string {
-  const normalized = resourcePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
-  if (!normalized || normalized.includes('../')) {
-    throw new Error(`MODULE_LOCALE_PATH_UNSAFE: ${resourcePath}`);
-  }
-  return normalized;
 }
 
 function localeCandidates(language: string): string[] {
@@ -59,20 +49,13 @@ export function loadModuleLocaleMessages(
   }
 
   const matchedLocale = localeCandidates(language).find(
-    (candidate) => contract.resources.locales?.[candidate]
+    (candidate) => entry.messages?.[candidate] || contract.resources.locales?.[candidate]
   );
-  const declaredPath = matchedLocale ? contract.resources.locales?.[matchedLocale] : undefined;
-  if (!declaredPath) {
+  if (!matchedLocale) {
     return null;
   }
 
-  const rootDir = path.resolve(process.cwd(), entry.rootDir ?? path.join('modules', moduleId));
-  const filePath = path.join(rootDir, normalizeResourcePath(declaredPath));
-  if (!filePath.startsWith(rootDir) || !fs.existsSync(filePath)) {
-    return null;
-  }
-
-  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as ModuleMessageDictionary;
+  return entry.messages?.[matchedLocale] ?? null;
 }
 
 export function translateModuleMessage(

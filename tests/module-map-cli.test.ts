@@ -51,8 +51,38 @@ function writeWorkspaceModuleWithMissingDependency(t: TestContext): string {
   return moduleRoot;
 }
 
+function writeWorkspaceModuleTestFixture(t: TestContext): { moduleId: string; moduleRoot: string } {
+  const moduleId = `module-test-summary-${crypto.randomUUID().slice(0, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+  fs.mkdirSync(moduleRoot, { recursive: true });
+  fs.writeFileSync(
+    path.join(moduleRoot, 'module.ts'),
+    `
+      import { defineModule } from '@ploykit/module-sdk';
+
+      export default defineModule({
+        id: '${moduleId}',
+        name: 'Module Test Summary Fixture',
+        version: '0.1.0',
+      });
+    `,
+    'utf8'
+  );
+  t.after(() => {
+    fs.rmSync(moduleRoot, { recursive: true, force: true });
+    fs.rmSync(path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`), {
+      force: true,
+    });
+  });
+  return { moduleId, moduleRoot };
+}
+
 function writeWorkspaceModuleOutsideModules(t: TestContext): string {
-  const moduleRoot = path.join(process.cwd(), '.runtime', `workspace-module-${crypto.randomUUID().slice(0, 8)}`);
+  const moduleRoot = path.join(
+    process.cwd(),
+    '.runtime',
+    `workspace-module-${crypto.randomUUID().slice(0, 8)}`
+  );
   fs.mkdirSync(moduleRoot, { recursive: true });
   fs.writeFileSync(
     path.join(moduleRoot, 'module.ts'),
@@ -175,7 +205,11 @@ test('module contract validation internal command rejects explicit external modu
   const moduleRoot = writeExternalModule();
   t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
 
-  const result = runPloyKitCommand(['scripts/ploykit-module.mjs', 'validate-contract-internal', moduleRoot]);
+  const result = runPloyKitCommand([
+    'scripts/ploykit-module.mjs',
+    'validate-contract-internal',
+    moduleRoot,
+  ]);
   assert.equal(result.status, 1, result.stderr || result.stdout);
   assert.match(`${result.stdout}\n${result.stderr}`, /must live inside the PloyKit workspace/);
 });
@@ -200,7 +234,9 @@ test('module dependency check reports workspace npm dependencies missing from ho
   };
   assert.equal(body.success, false);
   assert.ok(
-    body.missing.some((dependency) => dependency.name === 'left-pad' && dependency.range === '^1.3.0')
+    body.missing.some(
+      (dependency) => dependency.name === 'left-pad' && dependency.range === '^1.3.0'
+    )
   );
 });
 
@@ -229,4 +265,70 @@ test('generated module map manifest omits external source metadata', () => {
       false
     );
   });
+});
+
+test('module map check reports drifted module digests with a fix command', () => {
+  withGeneratedModuleMapRestore(() => {
+    const scan = runPloyKitCommand(['scripts/generate-module-map.mjs']);
+    assert.equal(scan.status, 0, scan.stderr || scan.stdout);
+
+    const manifestFile = path.join(process.cwd(), 'src', 'lib', 'module-map.manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as {
+      modules: Array<{
+        id: string;
+        release?: {
+          sourceHash?: string;
+        };
+      }>;
+    };
+    assert.ok(manifest.modules.length > 0);
+
+    const driftedModule = manifest.modules[0];
+    driftedModule.release ??= {};
+    driftedModule.release.sourceHash =
+      '0000000000000000000000000000000000000000000000000000000000000000';
+    fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+    const result = runPloyKitCommand(['scripts/generate-module-map.mjs', '--check']);
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.match(result.stderr, /Drift summary:/);
+    assert.match(
+      result.stderr,
+      new RegExp(`${driftedModule.id}: .*sourceHash 000000000000 -> [a-f0-9]{12}`)
+    );
+    assert.match(result.stderr, /Fix command: npm run modules:scan/);
+  });
+});
+
+test('module test summary keeps stdout short while writing the detailed report', (t) => {
+  const { moduleId, moduleRoot } = writeWorkspaceModuleTestFixture(t);
+  const result = runPloyKitCommand(['scripts/module-test.mjs', moduleRoot, '--summary']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Module test summary:/);
+  assert.match(result.stdout, new RegExp(`${moduleId}: passed`));
+  assert.match(result.stdout, /\.runtime\/module-test-reports\/module-test-summary-[a-f0-9-]+\.json/);
+  assert.doesNotMatch(result.stdout, /"steps":/);
+
+  const reportFile = path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`);
+  const report = JSON.parse(fs.readFileSync(reportFile, 'utf8')) as {
+    success: boolean;
+    moduleId: string;
+    steps: Array<{ name: string; stdout: string }>;
+  };
+
+  assert.equal(report.success, true);
+  assert.equal(report.moduleId, moduleId);
+  assert.ok(report.steps.some((step) => step.name === 'doctor' && typeof step.stdout === 'string'));
+});
+
+test('module test help documents output modes, report files, and exit codes', () => {
+  const result = runPloyKitCommand(['scripts/module-test.mjs', '--help']);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /--summary\s+Print a compact human-readable summary/);
+  assert.match(result.stdout, /--json\s+Print the full JSON report/);
+  assert.match(result.stdout, /\.runtime\/module-test-reports\/<module-id>\.json/);
+  assert.match(result.stdout, /0 when every executed step passes, including warning-only doctor diagnostics/);
+  assert.match(result.stdout, /1 when target resolution fails or any doctor, fake-host, or real-host step fails/);
 });

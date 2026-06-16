@@ -1,7 +1,7 @@
 import { AdminRevenueOperationsPage } from '@host/components/admin/AdminPages';
 import { getAdminRevenue } from '@host/lib/admin-api';
 import { createAdminAction } from '@host/lib/admin-action';
-import { getAdminCommercialView } from '@host/lib/admin-operations';
+import { getAdminCommercialView } from '@host/lib/admin-commercial';
 import { reconcileHostBillingPaidOrderBenefits } from '@host/lib/commercial-provider';
 import { readLanguageAndRequireAdmin, type LanguageRouteParams } from '@host/lib/route-params';
 import { readAdminTableQuery, type RouteSearchParams } from '@host/lib/table-query';

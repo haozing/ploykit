@@ -1,4 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   applyStripeCheckoutCompletedEvent,
   createHostCommercialRuntimeFromStore,
@@ -254,14 +256,32 @@ if (!webhookSecret) {
   }
 }
 
+const checkedAt = new Date().toISOString();
+const outputDir = path.resolve(
+  process.cwd(),
+  '.runtime',
+  'stripe-smoke',
+  checkedAt.replace(/[:.]/g, '-')
+);
+const latestPath = path.resolve(process.cwd(), '.runtime', 'stripe-smoke', 'latest.json');
+const reportPath = path.join(outputDir, 'stripe-smoke.json');
 const result = {
   ok: checks.every((item) => item.ok),
   required,
   profile: mockStripe ? 'local-mock' : 'external-stripe',
   baseUrl: hitHttpWebhook ? baseUrl : undefined,
-  checkedAt: new Date().toISOString(),
+  checkedAt,
   checks,
+  artifacts: {
+    report: reportPath,
+    latest: latestPath,
+  },
 };
+
+fs.mkdirSync(outputDir, { recursive: true });
+fs.mkdirSync(path.dirname(latestPath), { recursive: true });
+fs.writeFileSync(reportPath, `${JSON.stringify(result, null, 2)}\n`);
+fs.copyFileSync(reportPath, latestPath);
 
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 process.exitCode = result.ok ? 0 : 1;

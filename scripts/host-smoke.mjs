@@ -54,6 +54,13 @@ async function request(path, options = {}) {
   }
 }
 
+function sameOriginHeaders(path) {
+  return {
+    origin: baseUrl,
+    referer: `${baseUrl}${path}`,
+  };
+}
+
 async function checkPage(id, path, options = {}) {
   const response = await request(path, {
     headers: options.cookie ? { cookie: options.cookie } : undefined,
@@ -72,7 +79,10 @@ async function checkPage(id, path, options = {}) {
 async function checkPublicToolApi() {
   const response = await request('/api/modules/public-tools/format-json', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...sameOriginHeaders('/zh/demo'),
+    },
     body: JSON.stringify({ source: '{"smoke":true}' }),
   });
   checks.push({
@@ -89,7 +99,10 @@ async function login() {
   const response = await request('/api/auth/login', {
     method: 'POST',
     redirect: 'manual',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      ...sameOriginHeaders('/zh/login'),
+    },
     body: formBody({
       email: 'admin@example.com',
       password: 'Admin@123456',
@@ -110,7 +123,7 @@ async function login() {
 
 async function main() {
   await checkPage('site-home', '/zh', { contains: 'PloyKit' });
-  await checkPage('auth-login-page', '/zh/login', { contains: 'admin@example.com' });
+  await checkPage('auth-login-page', '/zh/login', { contains: '登录' });
   await checkPage('public-demo-page', '/zh/demo', { contains: 'Capability Demo' });
   await checkPublicToolApi();
 

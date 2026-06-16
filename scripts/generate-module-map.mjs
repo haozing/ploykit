@@ -98,6 +98,65 @@ function scanFiles(root, dirName) {
   return files.sort();
 }
 
+function isInsideDirectory(root, file) {
+  const relative = path.relative(root, file);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function normalizeModuleResourcePath(moduleRoot, moduleId, resourcePath, kind) {
+  if (typeof resourcePath !== 'string') {
+    throw new Error(`Module ${moduleId} declares a non-string ${kind} resource path.`);
+  }
+
+  const normalized = resourcePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+  if (!normalized || normalized.split('/').includes('..')) {
+    throw new Error(`Module ${moduleId} declares an unsafe ${kind} resource path: ${resourcePath}`);
+  }
+
+  const file = path.resolve(moduleRoot, normalized);
+  if (!isInsideDirectory(moduleRoot, file)) {
+    throw new Error(
+      `Module ${moduleId} ${kind} resource must stay inside ${relativeToProject(moduleRoot)}: ${resourcePath}`
+    );
+  }
+  return { file, normalized: slash(path.relative(moduleRoot, file)) };
+}
+
+function readModuleLocaleMessages(root, definition, moduleId) {
+  const locales = definition.resources?.locales;
+  if (!locales || typeof locales !== 'object' || Array.isArray(locales)) {
+    return undefined;
+  }
+
+  const messages = {};
+  for (const [locale, resourcePath] of Object.entries(locales).sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
+    const { file, normalized } = normalizeModuleResourcePath(
+      root,
+      moduleId,
+      resourcePath,
+      'locale'
+    );
+    if (!fs.existsSync(file)) {
+      throw new Error(
+        `Module ${moduleId} locale "${locale}" points to a missing file: ${normalized}`
+      );
+    }
+
+    try {
+      messages[locale] = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Module ${moduleId} locale "${locale}" must be valid JSON (${normalized}): ${message}`
+      );
+    }
+  }
+
+  return Object.keys(messages).length > 0 ? messages : undefined;
+}
+
 function readDefaultExport(value) {
   let current = value;
   for (let index = 0; index < 5; index += 1) {
@@ -110,7 +169,10 @@ function readDefaultExport(value) {
 }
 
 async function readModuleDefinition(root) {
-  const loaded = await tsx.import(pathToFileURL(path.join(root, 'module.ts')).href, import.meta.url);
+  const loaded = await tsx.import(
+    pathToFileURL(path.join(root, 'module.ts')).href,
+    import.meta.url
+  );
   const definition = readDefaultExport(loaded);
   if (!definition || typeof definition !== 'object') {
     throw new Error(`Module ${relativeToProject(root)} did not export a module definition.`);
@@ -123,15 +185,15 @@ function readModuleSummary(root, definition) {
   const id =
     typeof definition.id === 'string'
       ? definition.id
-      : source.match(/\bid\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? path.basename(root);
+      : (source.match(/\bid\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? path.basename(root));
   const name =
     typeof definition.name === 'string'
       ? definition.name
-      : source.match(/\bname\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? id;
+      : (source.match(/\bname\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? id);
   const version =
     typeof definition.version === 'string'
       ? definition.version
-      : source.match(/\bversion\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? '0.0.0';
+      : (source.match(/\bversion\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? '0.0.0');
   return { id, name, version };
 }
 
@@ -165,7 +227,9 @@ function listSourceFiles(root) {
   }
 
   visit(root);
-  return files.sort((left, right) => slash(path.relative(root, left)).localeCompare(slash(path.relative(root, right))));
+  return files.sort((left, right) =>
+    slash(path.relative(root, left)).localeCompare(slash(path.relative(root, right)))
+  );
 }
 
 function hashFiles(root, files) {
@@ -214,9 +278,7 @@ function actionCommercialRequirements(definition) {
 }
 
 function collectEntitlements(requirements) {
-  return [
-    ...new Set(requirements.flatMap((requirement) => [...(requirement.entitlements ?? [])])),
-  ];
+  return [...new Set(requirements.flatMap((requirement) => [...(requirement.entitlements ?? [])]))];
 }
 
 function hasCredits(requirements) {
@@ -306,6 +368,10 @@ async function scanModules() {
         assets: scanFiles(root, 'assets'),
       });
       const latest = modules[modules.length - 1];
+      const messages = readModuleLocaleMessages(root, definition, summary.id);
+      if (messages) {
+        latest.messages = messages;
+      }
       const sourceFiles = listSourceFiles(root);
       latest.release = {
         generatedAt: GENERATED_AT,
@@ -331,6 +397,11 @@ async function scanModules() {
 
 function runtimeModuleInfo(moduleInfo) {
   const { root, ...rest } = moduleInfo;
+  return rest;
+}
+
+function manifestModuleInfo(moduleInfo) {
+  const { messages, ...rest } = runtimeModuleInfo(moduleInfo);
   return rest;
 }
 
@@ -387,6 +458,10 @@ function generateModuleMap(modules) {
       parts.push(`    assets: ${JSON.stringify(runtimeInfo.assets)},`);
     }
 
+    if (runtimeInfo.messages && Object.keys(runtimeInfo.messages).length > 0) {
+      parts.push(`    messages: ${JSON.stringify(runtimeInfo.messages)},`);
+    }
+
     return `  ${JSON.stringify(moduleInfo.id)}: {\n${parts.join('\n')}\n  }`;
   });
 
@@ -396,7 +471,10 @@ function generateModuleMap(modules) {
  *
  * Module count: ${modules.length}
  */
-import type { ModuleMapArtifact, ModuleRuntimeMapEntry } from './module-runtime';
+import type {
+  ModuleMapArtifact,
+  ModuleRuntimeMapEntry,
+} from './module-runtime/loader/module-map-types';
 
 export const MODULE_MAP: Record<string, ModuleRuntimeMapEntry> = {
 ${entries.join(',\n')}
@@ -411,17 +489,137 @@ export const MODULE_MAP_ARTIFACT: ModuleMapArtifact = {
 `;
 }
 
+function createManifestArtifact(modules) {
+  return {
+    version: 1,
+    buildId: BUILD_ID,
+    generatedAt: GENERATED_AT,
+    modules: modules.map(manifestModuleInfo),
+  };
+}
+
 function generateManifest(modules) {
-  return `${JSON.stringify(
-    {
-      version: 1,
-      buildId: BUILD_ID,
-      generatedAt: GENERATED_AT,
-      modules: modules.map(runtimeModuleInfo),
-    },
-    null,
-    2
-  )}\n`;
+  return `${JSON.stringify(createManifestArtifact(modules), null, 2)}\n`;
+}
+
+function readJsonFile(file) {
+  if (!fs.existsSync(file)) {
+    return { ok: false, reason: 'missing' };
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(fs.readFileSync(file, 'utf8')) };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function shortDigest(value) {
+  return typeof value === 'string' && value.length > 0 ? value.slice(0, 12) : '<none>';
+}
+
+function mapManifestModules(manifest) {
+  if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.modules)) {
+    return null;
+  }
+  return new Map(
+    manifest.modules
+      .filter((moduleInfo) => moduleInfo && typeof moduleInfo.id === 'string')
+      .map((moduleInfo) => [moduleInfo.id, moduleInfo])
+  );
+}
+
+function formatValue(value) {
+  return typeof value === 'string' && value.length > 0 ? value : '<none>';
+}
+
+function summarizeManifestDrift(existingManifest, nextManifest) {
+  const lines = [];
+
+  for (const field of ['buildId', 'generatedAt']) {
+    if (existingManifest?.[field] !== nextManifest[field]) {
+      lines.push(
+        `${field}: ${formatValue(existingManifest?.[field])} -> ${formatValue(nextManifest[field])}`
+      );
+    }
+  }
+
+  const existingModules = mapManifestModules(existingManifest);
+  const nextModules = mapManifestModules(nextManifest);
+  if (!existingModules || !nextModules) {
+    lines.push('module-map.manifest.json: existing manifest shape is invalid');
+    return lines;
+  }
+
+  const moduleIds = [...new Set([...existingModules.keys(), ...nextModules.keys()])].sort();
+  for (const id of moduleIds) {
+    const previous = existingModules.get(id);
+    const next = nextModules.get(id);
+    if (!previous) {
+      lines.push(`${id}: added at ${formatValue(next?.rootDir)}`);
+      continue;
+    }
+    if (!next) {
+      lines.push(`${id}: removed from ${formatValue(previous.rootDir)}`);
+      continue;
+    }
+
+    const changes = [];
+    if (previous.rootDir !== next.rootDir) {
+      changes.push(`rootDir ${formatValue(previous.rootDir)} -> ${formatValue(next.rootDir)}`);
+    }
+    if (previous.version !== next.version) {
+      changes.push(`version ${formatValue(previous.version)} -> ${formatValue(next.version)}`);
+    }
+
+    const previousRelease = previous.release ?? {};
+    const nextRelease = next.release ?? {};
+    for (const field of ['sourceHash', 'contractDigest']) {
+      if (previousRelease[field] !== nextRelease[field]) {
+        changes.push(
+          `${field} ${shortDigest(previousRelease[field])} -> ${shortDigest(nextRelease[field])}`
+        );
+      }
+    }
+
+    if (changes.length > 0) {
+      lines.push(`${id}: ${changes.join('; ')}`);
+    }
+  }
+
+  return lines;
+}
+
+function printModuleMapCheckFailure({ mapOk, manifestOk, nextManifest }) {
+  console.error('Module map check failed. Fix: run npm run modules:scan');
+  console.error('');
+  console.error('Drift summary:');
+
+  if (!fs.existsSync(SOURCE_MAP_FILE)) {
+    console.error('- src/lib/module-map.ts: missing generated file');
+  } else if (!mapOk) {
+    console.error('- src/lib/module-map.ts: generated import map differs');
+  }
+
+  const existingManifest = readJsonFile(SOURCE_MANIFEST_FILE);
+  if (!existingManifest.ok) {
+    console.error(`- src/lib/module-map.manifest.json: ${existingManifest.reason}`);
+  } else if (!manifestOk) {
+    const driftLines = summarizeManifestDrift(existingManifest.value, nextManifest);
+    if (driftLines.length === 0) {
+      console.error('- src/lib/module-map.manifest.json: generated manifest bytes differ');
+    } else {
+      for (const line of driftLines) {
+        console.error(`- ${line}`);
+      }
+    }
+  }
+
+  console.error('');
+  console.error('Fix command: npm run modules:scan');
 }
 
 function writeIfChanged(file, content) {
@@ -438,7 +636,8 @@ async function main() {
   const check = process.argv.includes('--check');
   const modules = await scanModules();
   const mapContent = generateModuleMap(modules);
-  const manifestContent = generateManifest(modules);
+  const nextManifest = createManifestArtifact(modules);
+  const manifestContent = `${JSON.stringify(nextManifest, null, 2)}\n`;
 
   if (check) {
     const mapOk =
@@ -447,7 +646,7 @@ async function main() {
       fs.existsSync(SOURCE_MANIFEST_FILE) &&
       fs.readFileSync(SOURCE_MANIFEST_FILE, 'utf8') === manifestContent;
     if (!mapOk || !manifestOk) {
-      console.error('Module map check failed. Fix: run npm run modules:scan');
+      printModuleMapCheckFailure({ mapOk, manifestOk, nextManifest });
       process.exit(1);
     }
     console.log('Module map check passed');

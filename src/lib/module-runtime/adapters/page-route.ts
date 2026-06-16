@@ -53,6 +53,24 @@ export interface ResolvedModulePageRouteResult {
   page: ResolvedModulePageRoute;
 }
 
+export interface ResolvedModulePageRouteMetadata {
+  moduleId: string;
+  kind: ModulePageRouteKind;
+  route: ModulePageRoute;
+  matchedPath: string;
+  routeSource: 'route' | 'alias' | 'publicAlias';
+  canonicalPath: string;
+  params: Record<string, string>;
+  contract: ModuleRuntimeContract;
+  metadata: unknown;
+}
+
+export interface ResolvedModulePageRouteMetadataResult {
+  ok: true;
+  status: 200;
+  page: ResolvedModulePageRouteMetadata;
+}
+
 export interface ModulePageRouteErrorContext {
   moduleId: string;
   kind: ModulePageRouteKind;
@@ -77,6 +95,19 @@ export type ResolveModulePageRouteResult =
   | ResolvedModulePageRouteResult
   | ModulePageRouteErrorResult;
 
+export type ResolveModulePageRouteMetadataResult =
+  | ResolvedModulePageRouteMetadataResult
+  | ModulePageRouteErrorResult;
+
+interface ResolvedModulePageRouteParts {
+  match: ModuleRuntimeRouteMatch;
+  route: ModulePageRoute;
+  contract: ModuleRuntimeContract;
+  params: Record<string, string>;
+  accessSession: ModuleRuntimeAccessSession;
+  user: ModuleUser | null;
+}
+
 function pageError(
   status: ModulePageRouteErrorResult['status'],
   code: string,
@@ -86,6 +117,12 @@ function pageError(
   return routeContext
     ? { ok: false, status, code, message, routeContext }
     : { ok: false, status, code, message };
+}
+
+function isModulePageRouteErrorResult(
+  value: ResolvedModulePageRouteParts | ModulePageRouteErrorResult
+): value is ModulePageRouteErrorResult {
+  return 'ok' in value && value.ok === false;
 }
 
 function moduleRouteContext(input: {
@@ -182,10 +219,10 @@ function createContext(
   );
 }
 
-export async function resolveModulePageRoute(
+function resolveModulePageRouteParts(
   host: ModuleRuntimeHost,
   input: ResolveModulePageRouteInput
-): Promise<ResolveModulePageRouteResult> {
+): ResolvedModulePageRouteParts | ModulePageRouteErrorResult {
   const match = findModuleRouteMatch(host.routes, input.kind, input.pathname);
   if (!match) {
     return pageError(404, 'MODULE_PAGE_ROUTE_NOT_FOUND', 'Module page route was not found.');
@@ -202,14 +239,6 @@ export async function resolveModulePageRoute(
   }
 
   const params = { ...match.params, ...input.params };
-  const baseRouteContext = moduleRouteContext({
-    match,
-    kind: input.kind,
-    route,
-    contract,
-    params,
-  });
-
   const accessDenied = checkModuleRuntimeAccess({
     kind: 'page',
     contract,
@@ -221,6 +250,37 @@ export async function resolveModulePageRoute(
   if (accessDenied) {
     return pageError(accessDenied.status, accessDenied.code, accessDenied.message);
   }
+
+  return {
+    match,
+    route,
+    contract,
+    params,
+    accessSession,
+    user,
+  };
+}
+
+export async function resolveModulePageRoute(
+  host: ModuleRuntimeHost,
+  input: ResolveModulePageRouteInput
+): Promise<ResolveModulePageRouteResult> {
+  const parts = resolveModulePageRouteParts(host, input);
+  if (isModulePageRouteErrorResult(parts)) {
+    return parts;
+  }
+  const { match, route, contract, params, accessSession, user } = parts;
+  const entry = host.getMapEntry(match.entry.moduleId);
+  if (!entry) {
+    return pageError(500, 'MODULE_PAGE_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.');
+  }
+  const baseRouteContext = moduleRouteContext({
+    match,
+    kind: input.kind,
+    route,
+    contract,
+    params,
+  });
 
   const componentLoader = resolveModuleEntryLoader(entry, 'pages', route.component);
   const loader = route.loader ? resolveModuleEntryLoader(entry, 'loaders', route.loader) : null;
@@ -313,6 +373,62 @@ export async function resolveModulePageRoute(
       contract,
       component,
       loaderData,
+      metadata,
+    },
+  };
+}
+
+export async function resolveModulePageRouteMetadata(
+  host: ModuleRuntimeHost,
+  input: ResolveModulePageRouteInput
+): Promise<ResolveModulePageRouteMetadataResult> {
+  const parts = resolveModulePageRouteParts(host, input);
+  if (isModulePageRouteErrorResult(parts)) {
+    return parts;
+  }
+  const { match, route, contract, params, accessSession, user } = parts;
+  const entry = host.getMapEntry(match.entry.moduleId);
+  if (!entry) {
+    return pageError(500, 'MODULE_PAGE_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.');
+  }
+  const metadataLoader = route.metadata
+    ? resolveModuleEntryLoader(entry, 'loaders', route.metadata)
+    : null;
+  if (route.metadata && !metadataLoader) {
+    return pageError(
+      500,
+      'MODULE_PAGE_METADATA_MISSING',
+      'Module page metadata is missing.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params })
+    );
+  }
+
+  const context = createContext(host, contract, route, input, match, params, user, accessSession);
+  let metadata: unknown;
+  try {
+    metadata = await resolveOptionalRouteExport(metadataLoader, context);
+  } catch (error) {
+    logModulePageHandlerError(error);
+    return pageError(
+      500,
+      'MODULE_PAGE_HANDLER_ERROR',
+      'Module page route failed.',
+      moduleRouteContext({ match, kind: input.kind, route, contract, params })
+    );
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    page: {
+      moduleId: match.entry.moduleId,
+      kind: input.kind,
+      route,
+      matchedPath: match.entry.path,
+      routeSource: match.entry.source,
+      canonicalPath: match.entry.canonicalPath,
+      params,
+      contract,
       metadata,
     },
   };

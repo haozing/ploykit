@@ -10,6 +10,8 @@ import { defaultProductId } from './default-scope';
 
 type HostRouteAuth = 'public' | 'user' | 'admin' | 'webhook' | 'module-runtime';
 type HostRouteScope = 'none' | 'product' | 'workspace' | 'module-runtime';
+// `same-origin` means Origin/Referer enforcement for browser mutations.
+// Token-based CSRF remains an explicit route-handler guard.
 type HostRouteCsrf = 'none' | 'same-origin' | 'signature' | 'module-runtime';
 type HostRouteOrigin = 'none' | 'same-origin' | 'signature' | 'module-runtime';
 type HostRouteCommercial = 'none' | 'local-or-provider' | 'module-runtime';

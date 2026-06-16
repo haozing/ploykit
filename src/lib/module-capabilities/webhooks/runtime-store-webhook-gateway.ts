@@ -136,7 +136,9 @@ function createWebhookRequest(input: {
   });
 }
 
-function normalizeWebhookHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+function normalizeWebhookHeaders(
+  headers: Record<string, string> | undefined
+): Record<string, string> {
   return redactSensitive(
     Object.fromEntries(
       Object.entries(headers ?? {}).map(([key, value]) => [key.toLowerCase(), String(value)])
@@ -174,6 +176,7 @@ export function createRuntimeStoreWebhookGateway(
       const existing = input.idempotencyKey
         ? await options.store.findWebhookReceiptByIdempotencyKey(
             options.productId,
+            options.workspaceId,
             input.moduleId,
             input.webhookName,
             input.idempotencyKey
@@ -187,7 +190,7 @@ export function createRuntimeStoreWebhookGateway(
       const receipt =
         existing?.status === 'rejected'
           ? await options.store.markWebhookReceipt(existing.id, 'received')
-          : existing ??
+          : (existing ??
             (await options.store.createWebhookReceipt({
               productId: options.productId,
               workspaceId: options.workspaceId,
@@ -200,7 +203,7 @@ export function createRuntimeStoreWebhookGateway(
               headers: normalizeWebhookHeaders(input.headers),
               bodyText: input.bodyText,
               bodyDigest: bodyDigest(input.bodyText),
-            }));
+            })));
 
       const providerName = input.signatureProvider ?? 'none';
       const provider = providers[providerName];
@@ -225,7 +228,13 @@ export function createRuntimeStoreWebhookGateway(
           ),
         };
       }
-      if (!provider.verify({ bodyText: input.bodyText, signature: input.signature, secret: secret ?? '' })) {
+      if (
+        !provider.verify({
+          bodyText: input.bodyText,
+          signature: input.signature,
+          secret: secret ?? '',
+        })
+      ) {
         return {
           duplicate: false,
           receipt: await options.store.markWebhookReceipt(
@@ -326,11 +335,7 @@ export function createRuntimeStoreWebhookRunner(
         retryBackoffMs: input.retryBackoffMs,
         handler: async (message) => {
           const payload = message.payload;
-          const definition = findWebhookDefinition(
-            host,
-            payload.moduleId,
-            payload.webhookName
-          );
+          const definition = findWebhookDefinition(host, payload.moduleId, payload.webhookName);
           const contract = host.getContract(payload.moduleId);
           if (!contract || !definition) {
             throw new Error(`MODULE_WEBHOOK_NOT_FOUND: ${payload.moduleId}.${payload.webhookName}`);

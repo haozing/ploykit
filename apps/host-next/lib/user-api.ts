@@ -6,6 +6,10 @@ import {
   verifyHostPassword,
 } from './auth';
 import { defaultProductId } from './default-scope';
+import {
+  cachedDashboardUserProfile,
+  invalidateDashboardShellCache,
+} from './dashboard-shell-cache';
 import { getHostCapabilitiesForSession } from './rbac';
 import { getHostRuntimeStore } from './runtime-store';
 
@@ -188,7 +192,7 @@ async function auditUserChange(
 }
 
 export async function getHostUserProfile(session: ModuleHostSession): Promise<HostUserProfile> {
-  return toPublicProfile(await currentUser(session));
+  return cachedDashboardUserProfile(session, async () => toPublicProfile(await currentUser(session)));
 }
 
 export async function updateHostUserProfile(
@@ -219,6 +223,7 @@ export async function updateHostUserProfile(
       profile,
     },
   });
+  invalidateDashboardShellCache('profile');
   await auditUserChange(session, 'host.user.profile.updated', {
     fields: Object.entries(normalizedInput)
       .filter(([, value]) => value !== undefined)
@@ -265,6 +270,7 @@ export async function updateHostUserPreferences(
       preferences: nextPreferences,
     },
   });
+  invalidateDashboardShellCache('profile');
   await auditUserChange(session, 'host.user.preferences.updated', {
     fields: [
       ...Object.keys(notificationPatch),
@@ -298,6 +304,7 @@ export async function changeHostUserPassword(
   for (const sessionId of revokedSessionIds) {
     await adapter.revokeSession(user.id, sessionId);
   }
+  invalidateDashboardShellCache('profile');
   await auditUserChange(session, 'host.user.password.changed', {
     revokedSessions: revokedSessionIds.length,
   });

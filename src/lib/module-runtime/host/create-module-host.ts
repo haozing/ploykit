@@ -32,6 +32,7 @@ import {
   dispatchModuleApiRoute,
   executeModuleAction,
   resolveModuleNavigation,
+  resolveModulePageRouteMetadata,
   resolveModulePageRoute,
   resolveModuleSurfaceContributions,
   type DispatchModuleApiRouteInput,
@@ -39,6 +40,7 @@ import {
   type ModulePageRouteKind,
   type ResolvedModuleNavigationItem,
   type ResolveModulePageRouteInput,
+  type ResolveModulePageRouteMetadataResult,
   type ResolveModulePageRouteResult,
   type ResolvedModuleSurfaceContribution,
   type VerifyModuleApiKeyHandler,
@@ -176,6 +178,9 @@ export interface ModuleHost {
     input: ExecuteModuleHostActionInput<TInput>
   ): Promise<TResult>;
   resolvePageRoute(input: ResolveModuleHostPageRouteInput): Promise<ResolveModulePageRouteResult>;
+  resolvePageRouteMetadata(
+    input: ResolveModuleHostPageRouteInput
+  ): Promise<ResolveModulePageRouteMetadataResult>;
   resolveSurfaceContributions(
     surfaceId: string,
     options?: ResolveModuleHostSurfaceContributionsOptions
@@ -483,6 +488,39 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
       const createContext = createContextFactory(runtime, options, hostSession);
 
       return resolveModulePageRoute(runtime, {
+        request: input.request,
+        kind: input.kind,
+        pathname: input.pathname,
+        params,
+        user: hostSession.user,
+        session: hostSession,
+        createContext(contextInput) {
+          return createContext({
+            moduleId: contextInput.moduleId,
+            request: contextInput.request,
+            user: contextInput.user,
+            session: contextInput.session as ModuleHostSession,
+            params: contextInput.params,
+          });
+        },
+      });
+    },
+    async resolvePageRouteMetadata(input) {
+      const params = input.params ?? {};
+      const hostSession = await resolveHostSession(
+        options,
+        {
+          operation: 'page',
+          request: input.request,
+          pathname: input.pathname,
+          routeKind: input.kind,
+          params,
+        },
+        input.session
+      );
+      const createContext = createContextFactory(runtime, options, hostSession);
+
+      return resolveModulePageRouteMetadata(runtime, {
         request: input.request,
         kind: input.kind,
         pathname: input.pathname,

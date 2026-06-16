@@ -29,7 +29,7 @@ npm run module:create -- my-full-product --template product --with service-backe
 presentation/SEO/theme/i18n、Data v2 表和 migration/test 骨架。`service-backed` 与 `background` 不再作为孤立产品模板，而是叠加在
 `product` 上的能力块。
 
-当前仓库的 CLI 仍保留 `basic`、`dashboard`、`crud`、`connector`、`signed-service`、`job`、`white-label`、`product-app`
+当前仓库的 CLI 仍保留 `ai-rag`、`basic`、`billing-aware`、`dashboard`、`crud`、`connector`、`signed-service`、`job`、`white-label`、`product-app`
 等历史模板；它们是兼容入口或拆分片段，不再作为新增模板的主要方向。新能力优先按上面的主模板/扩展模型设计，不要继续增加新的平级模板。
 
 服务端分离型产品模块（例如独立 Go Core + PloyKit 控制台）不要只按普通 dashboard 或 CRUD 模块处理。优先阅读
@@ -52,6 +52,18 @@ npm run module:test -- my-module
 npm run modules:check
 npm run typecheck
 ```
+
+## 默认模块等级
+
+仓库内置模块带有使用边界，不应把所有示例都当成 production-ready
+产品模块。当前默认等级如下：
+
+- Fixture：只用于测试运行时最小能力，例如 `hello`。
+- Demo：展示宿主能力广度，不承诺生产业务完整性，例如 `capability-demo`。
+- Reference：可作为真实产品模块骨架参考，例如 `public-tools-demo`、`cms-demo` 和 `white-label-site-demo`。
+
+`shop-demo` 和 `ai-rag-demo` 介于 Demo/Reference：它们可以作为商业链路或 AI/RAG
+骨架参考，但生产使用前必须补齐真实 provider、数据库、成本、并发、匿名策略和对账证据。
 
 有 Data v2 声明的模块还需要：
 
@@ -188,3 +200,12 @@ npm run module:evidence -- --module <id> --file ./scripts/e2e.ts --runner tsx --
 ```bash
 npm run module:test -- my-module --real
 ```
+
+日常排错可以使用短摘要，完整 JSON 报告仍会写入 `.runtime/module-test-reports`：
+
+```bash
+npm run module:test -- my-module --summary
+npm run module:test -- all --summary
+```
+
+退出码策略：target 解析失败，或 doctor、fake-host、real-host 任一步失败时返回非 0；doctor 只有 warning 诊断时保持通过。默认 stdout 输出完整 JSON，`--summary` 输出人读摘要，`--json` 可显式保留机器读取路径。

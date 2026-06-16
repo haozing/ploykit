@@ -6,7 +6,7 @@ import { drainHostWorker, getHostWorkerStatus } from '../apps/host-next/lib/work
 import { runHostConfigDoctor } from '../apps/host-next/lib/config-doctor';
 import { getHostRuntimeStore } from '../apps/host-next/lib/runtime-store';
 import { redactSensitive } from '../src/lib/module-runtime';
-import { runReleaseCandidateGate } from '../src/lib/module-runtime';
+import { runReleaseCandidateGate } from '../src/lib/module-runtime/release/rc-gate';
 import { verifyRuntimeStoreSchema } from '../src/lib/module-runtime/stores/runtime-store-migrations';
 
 const required = process.argv.includes('--required');

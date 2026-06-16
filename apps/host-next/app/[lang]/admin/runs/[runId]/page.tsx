@@ -1,5 +1,5 @@
 import { AdminRunDetailOperationsPage } from '@host/components/admin/AdminPages';
-import { getAdminRunDetail } from '@host/lib/admin-operations';
+import { getAdminRunDetail } from '@host/lib/admin-runs';
 import { renderHostPageSlotById } from '@host/lib/host-page-rendering';
 import { localizedPath } from '@host/lib/i18n';
 import {

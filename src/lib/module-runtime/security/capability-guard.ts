@@ -1,6 +1,5 @@
 import {
   Permission,
-  SystemOnlyPermissions,
   type CommercialSubject,
   type ModuleArtifactsApi,
   type ModuleAiApi,
@@ -38,226 +37,26 @@ import {
 } from '@ploykit/module-sdk';
 import type { ModuleRuntimeContract } from '../contract';
 import type { ModuleRuntimeAccessSession } from './session';
+import {
+  assertConfigDeclared,
+  assertOptionalSubjectAccess,
+  assertOwnUser,
+  assertPermission,
+  assertPrivilegedCommercialMaintenance,
+  assertResourceBindingDeclared,
+  assertResourceBindingWritePermission,
+  assertServiceDeclared,
+  assertSubjectAccess,
+  deny,
+  filterAccessibleSubjects,
+  subjectFromInput,
+  userCommercialSubject,
+} from './capability-guard-common';
 
 export interface GuardModuleContextCapabilitiesInput {
   context: ModuleContext;
   contract: ModuleRuntimeContract;
   session: ModuleRuntimeAccessSession;
-}
-
-function deny(code: string, message: string): never {
-  throw new Error(`${code}: ${message}`);
-}
-
-function hasSessionPermission(
-  session: ModuleRuntimeAccessSession,
-  permission: PermissionValue
-): boolean {
-  if (session.system || session.user?.role === 'admin') {
-    return true;
-  }
-  if (!Array.isArray(session.permissions)) {
-    return false;
-  }
-  return session.permissions.includes(permission);
-}
-
-function assertPermission(
-  contract: ModuleRuntimeContract,
-  session: ModuleRuntimeAccessSession,
-  permission: PermissionValue,
-  capabilityPath: string
-): void {
-  if (SystemOnlyPermissions.has(permission) && !session.system) {
-    deny(
-      'MODULE_CAPABILITY_SYSTEM_PERMISSION_REQUIRED',
-      `${capabilityPath} requires system-only permission "${permission}".`
-    );
-  }
-
-  if (!contract.permissions.includes(permission)) {
-    deny(
-      'MODULE_CAPABILITY_PERMISSION_NOT_DECLARED',
-      `${capabilityPath} requires module permission "${permission}".`
-    );
-  }
-
-  if (!hasSessionPermission(session, permission)) {
-    deny(
-      'MODULE_CAPABILITY_PERMISSION_DENIED',
-      `${capabilityPath} requires session permission "${permission}".`
-    );
-  }
-}
-
-function assertConfigDeclared(contract: ModuleRuntimeContract, key: string, secret: boolean): void {
-  const field = contract.definition.config?.[key];
-  if (!field || (secret && field.secret !== true)) {
-    deny(
-      secret ? 'MODULE_CAPABILITY_SECRET_NOT_DECLARED' : 'MODULE_CAPABILITY_CONFIG_NOT_DECLARED',
-      secret
-        ? `Secret "${key}" is not declared as a secret config field.`
-        : `Config field "${key}" is not declared.`
-    );
-  }
-}
-
-function assertServiceDeclared(contract: ModuleRuntimeContract, name: string): void {
-  if (!contract.definition.serviceRequirements?.[name]) {
-    deny(
-      'MODULE_CAPABILITY_SERVICE_NOT_DECLARED',
-      `Service "${name}" is not declared in serviceRequirements.`
-    );
-  }
-}
-
-function assertResourceBindingDeclared(contract: ModuleRuntimeContract, name: string): void {
-  if (!contract.definition.resourceBindings?.[name]) {
-    deny(
-      'MODULE_CAPABILITY_RESOURCE_BINDING_NOT_DECLARED',
-      `Resource binding "${name}" is not declared.`
-    );
-  }
-}
-
-function assertResourceBindingWritePermission(
-  contract: ModuleRuntimeContract,
-  session: ModuleRuntimeAccessSession,
-  capabilityPath: string
-): void {
-  if (!contract.permissions.includes(Permission.ResourceBindingsWrite)) {
-    deny(
-      'MODULE_CAPABILITY_PERMISSION_NOT_DECLARED',
-      `${capabilityPath} requires module permission "${Permission.ResourceBindingsWrite}".`
-    );
-  }
-  if (
-    session.system ||
-    session.user?.role === 'admin' ||
-    session.workspaceRole === 'owner' ||
-    session.workspaceRole === 'admin' ||
-    hasSessionPermission(session, Permission.ResourceBindingsWrite)
-  ) {
-    return;
-  }
-  deny(
-    'MODULE_CAPABILITY_PERMISSION_DENIED',
-    `${capabilityPath} requires workspace owner/admin or permission "${Permission.ResourceBindingsWrite}".`
-  );
-}
-
-function assertOwnUser(session: ModuleRuntimeAccessSession, userId: string, capabilityPath: string) {
-  assertSubjectAccess(session, { type: 'user', id: userId }, capabilityPath);
-}
-
-function sameCommercialSubject(left: CommercialSubject, right: CommercialSubject): boolean {
-  return left.type === right.type && left.id === right.id;
-}
-
-function canAccessSubject(
-  session: ModuleRuntimeAccessSession,
-  subject: CommercialSubject
-): boolean {
-  if (session.system || session.user?.role === 'admin') {
-    return true;
-  }
-
-  if (session.subject && sameCommercialSubject(session.subject, subject)) {
-    return true;
-  }
-
-  if (subject.type === 'user') {
-    const actorId = session.userId ?? session.user?.id;
-    return Boolean(actorId && actorId === subject.id);
-  }
-
-  if (subject.type === 'workspace') {
-    return Boolean(session.workspaceId && session.workspaceId === subject.id);
-  }
-
-  if (subject.type === 'organization') {
-    return Boolean(session.organizationId && session.organizationId === subject.id);
-  }
-
-  if (subject.type === 'apiKey') {
-    return Boolean(session.apiKeyId && session.apiKeyId === subject.id);
-  }
-
-  return false;
-}
-
-function assertSubjectAccess(
-  session: ModuleRuntimeAccessSession,
-  subject: CommercialSubject,
-  capabilityPath: string
-) {
-  if (canAccessSubject(session, subject)) {
-    return;
-  }
-
-  deny(
-    'MODULE_CAPABILITY_SUBJECT_SCOPE_DENIED',
-    `${capabilityPath} cannot target commercial subject "${subject.type}:${subject.id}".`
-  );
-}
-
-function userCommercialSubject(userId: string): CommercialSubject {
-  return { type: 'user', id: userId };
-}
-
-function subjectFromInput(
-  input: { subject?: CommercialSubject; userId?: string },
-  capabilityPath: string
-): CommercialSubject {
-  if (input.subject) {
-    return input.subject;
-  }
-  if (input.userId) {
-    return userCommercialSubject(input.userId);
-  }
-
-  deny(
-    'MODULE_CAPABILITY_SUBJECT_REQUIRED',
-    `${capabilityPath} requires a subject or userId.`
-  );
-}
-
-function assertOptionalSubjectAccess(
-  session: ModuleRuntimeAccessSession,
-  subject: CommercialSubject | undefined,
-  capabilityPath: string
-) {
-  if (subject) {
-    assertSubjectAccess(session, subject, capabilityPath);
-  }
-}
-
-function assertPrivilegedCommercialMaintenance(
-  session: ModuleRuntimeAccessSession,
-  capabilityPath: string
-) {
-  if (session.system || session.user?.role === 'admin') {
-    return;
-  }
-  deny(
-    'MODULE_CAPABILITY_BULK_COMMERCIAL_WRITE_DENIED',
-    `${capabilityPath} requires an admin or system session because it can mutate multiple commercial subjects.`
-  );
-}
-
-function filterAccessibleSubjects<TItem>(
-  session: ModuleRuntimeAccessSession,
-  items: readonly TItem[],
-  resolveSubject: (item: TItem) => CommercialSubject | undefined
-): TItem[] {
-  if (session.system || session.user?.role === 'admin') {
-    return [...items];
-  }
-
-  return items.filter((item) => {
-    const subject = resolveSubject(item);
-    return Boolean(subject && canAccessSubject(session, subject));
-  });
 }
 
 function guardDataDocument<TRecord>(
@@ -480,12 +279,7 @@ function guardServices(
 ): ModuleServicesApi {
   type GuardedServiceInvokeArgs =
     | [name: string, input: unknown, options?: ModuleServiceInvokeOptions]
-    | [
-        name: string,
-        operation: string,
-        input: unknown,
-        options?: ModuleServiceInvokeOptions
-      ];
+    | [name: string, operation: string, input: unknown, options?: ModuleServiceInvokeOptions];
 
   const invoke = (async (...args: GuardedServiceInvokeArgs): Promise<unknown> => {
     const [name, operationOrInput, inputOrOptions, options] = args;
@@ -901,10 +695,15 @@ function guardCommercialApis(input: {
       },
     } satisfies ModuleMeteringApi,
     credits: {
-      async balance(balanceInput: string | { subject: CommercialSubject; unit?: string }, unit?: string) {
+      async balance(
+        balanceInput: string | { subject: CommercialSubject; unit?: string },
+        unit?: string
+      ) {
         assertPermission(contract, session, Permission.CreditsRead, 'ctx.credits.balance');
         const subject =
-          typeof balanceInput === 'string' ? userCommercialSubject(balanceInput) : balanceInput.subject;
+          typeof balanceInput === 'string'
+            ? userCommercialSubject(balanceInput)
+            : balanceInput.subject;
         assertSubjectAccess(session, subject, 'ctx.credits.balance');
         return typeof balanceInput === 'string'
           ? context.credits.balance(balanceInput, unit)
@@ -912,7 +711,11 @@ function guardCommercialApis(input: {
       },
       async grant(creditInput) {
         assertPermission(contract, session, Permission.CreditsWrite, 'ctx.credits.grant');
-        assertSubjectAccess(session, subjectFromInput(creditInput, 'ctx.credits.grant'), 'ctx.credits.grant');
+        assertSubjectAccess(
+          session,
+          subjectFromInput(creditInput, 'ctx.credits.grant'),
+          'ctx.credits.grant'
+        );
         return context.credits.grant(creditInput);
       },
       async consume(creditInput) {
@@ -926,17 +729,29 @@ function guardCommercialApis(input: {
       },
       async adjust(creditInput) {
         assertPermission(contract, session, Permission.CreditsWrite, 'ctx.credits.adjust');
-        assertSubjectAccess(session, subjectFromInput(creditInput, 'ctx.credits.adjust'), 'ctx.credits.adjust');
+        assertSubjectAccess(
+          session,
+          subjectFromInput(creditInput, 'ctx.credits.adjust'),
+          'ctx.credits.adjust'
+        );
         return context.credits.adjust(creditInput);
       },
       async refund(creditInput) {
         assertPermission(contract, session, Permission.CreditsWrite, 'ctx.credits.refund');
-        assertSubjectAccess(session, subjectFromInput(creditInput, 'ctx.credits.refund'), 'ctx.credits.refund');
+        assertSubjectAccess(
+          session,
+          subjectFromInput(creditInput, 'ctx.credits.refund'),
+          'ctx.credits.refund'
+        );
         return context.credits.refund(creditInput);
       },
       async reserve(creditInput) {
         assertPermission(contract, session, Permission.CreditsConsume, 'ctx.credits.reserve');
-        assertSubjectAccess(session, subjectFromInput(creditInput, 'ctx.credits.reserve'), 'ctx.credits.reserve');
+        assertSubjectAccess(
+          session,
+          subjectFromInput(creditInput, 'ctx.credits.reserve'),
+          'ctx.credits.reserve'
+        );
         return context.credits.reserve(creditInput);
       },
       async commitReservation(reservationInput) {
@@ -1010,7 +825,10 @@ function guardCommercialApis(input: {
       },
     } satisfies ModuleBillingApi,
     entitlements: {
-      async has(hasInput: string | { subject: CommercialSubject; entitlement: string }, entitlement?: string) {
+      async has(
+        hasInput: string | { subject: CommercialSubject; entitlement: string },
+        entitlement?: string
+      ) {
         assertPermission(contract, session, Permission.EntitlementsRead, 'ctx.entitlements.has');
         const subject =
           typeof hasInput === 'string' ? userCommercialSubject(hasInput) : hasInput.subject;
@@ -1041,7 +859,12 @@ function guardCommercialApis(input: {
         return context.entitlements.grant(grantInput);
       },
       async revoke(revokeInput) {
-        assertPermission(contract, session, Permission.EntitlementsWrite, 'ctx.entitlements.revoke');
+        assertPermission(
+          contract,
+          session,
+          Permission.EntitlementsWrite,
+          'ctx.entitlements.revoke'
+        );
         await assertEntitlementIdAccess(revokeInput.id, 'ctx.entitlements.revoke');
         return context.entitlements.revoke(revokeInput);
       },
@@ -1056,14 +879,24 @@ function guardCommercialApis(input: {
         return context.entitlements.override(overrideInput);
       },
       async expire(expireInput) {
-        assertPermission(contract, session, Permission.EntitlementsWrite, 'ctx.entitlements.expire');
+        assertPermission(
+          contract,
+          session,
+          Permission.EntitlementsWrite,
+          'ctx.entitlements.expire'
+        );
         assertPrivilegedCommercialMaintenance(session, 'ctx.entitlements.expire');
         return context.entitlements.expire(expireInput);
       },
     } satisfies ModuleEntitlementsApi,
     commerce: {
       async createCheckout(checkoutInput) {
-        assertPermission(contract, session, Permission.CommerceWrite, 'ctx.commerce.createCheckout');
+        assertPermission(
+          contract,
+          session,
+          Permission.CommerceWrite,
+          'ctx.commerce.createCheckout'
+        );
         const targetSubject =
           checkoutInput.beneficiary ??
           checkoutInput.buyer ??
@@ -1084,7 +917,12 @@ function guardCommercialApis(input: {
         return order;
       },
       async applyCheckoutPaid(paidInput) {
-        assertPermission(contract, session, Permission.CommerceApply, 'ctx.commerce.applyCheckoutPaid');
+        assertPermission(
+          contract,
+          session,
+          Permission.CommerceApply,
+          'ctx.commerce.applyCheckoutPaid'
+        );
         return context.commerce.applyCheckoutPaid(paidInput);
       },
       async applyRefund(refundInput) {
@@ -1112,7 +950,12 @@ function guardCommercialApis(input: {
     } satisfies ModuleCommerceApi,
     redeemCodes: {
       async createBatch(batchInput) {
-        assertPermission(contract, session, Permission.RedeemCodesWrite, 'ctx.redeemCodes.createBatch');
+        assertPermission(
+          contract,
+          session,
+          Permission.RedeemCodesWrite,
+          'ctx.redeemCodes.createBatch'
+        );
         return context.redeemCodes.createBatch(batchInput);
       },
       async redeem(redeemInput) {

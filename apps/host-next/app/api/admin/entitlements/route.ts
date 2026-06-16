@@ -1,10 +1,11 @@
 import { apiOk, readJsonObject, requireApiSession, stringBody } from '@host/lib/api';
-import { listAdminEntitlements, readAdminApiQuery } from '@host/lib/admin-api';
 import {
   grantAdminEntitlement,
+  listAdminEntitlements,
   overrideAdminEntitlement,
+  readAdminApiQuery,
   revokeAdminEntitlement,
-} from '@host/lib/admin-operations';
+} from '@host/lib/admin-entitlements';
 import type { RuntimeStoreEntitlementStatus } from '@/lib/module-runtime';
 
 function statusBody(value: string | undefined): RuntimeStoreEntitlementStatus {

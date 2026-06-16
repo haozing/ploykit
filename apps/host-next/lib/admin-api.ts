@@ -1,20 +1,14 @@
 import { Permission } from '@ploykit/module-sdk';
-import type {
-  RuntimeStoreAuditRecord,
-  RuntimeStoreEntitlementStatus,
-  ModuleHostSession,
-} from '@/lib/module-runtime';
-import {
-  getAdminCommercialView,
-  getAdminFilesView,
-  getAdminOperationsView,
-  type AdminOperationsViewSnapshot,
-} from './admin-operations';
+import type { RuntimeStoreAuditRecord, ModuleHostSession } from '@/lib/module-runtime';
+import { getAdminCommercialView } from './admin-commercial';
+import { getAdminOperationsView, type AdminOperationsViewSnapshot } from './admin-module-operations';
+import { getAdminFilesView } from './admin-files';
 import {
   getAdminSearchTypeCapability,
   getAdminSearchTypeRisk,
   type AdminSearchResult,
 } from './admin-search-model';
+import { readAdminApiQuery, listAdminEntitlements, type AdminApiQuery } from './admin-entitlements';
 import { getAdminServiceConnectionsView } from './admin-service-connections';
 import { getHostRuntime } from './create-host';
 import { DEFAULT_HOST_PRODUCT_ID } from './default-scope';
@@ -26,29 +20,18 @@ import {
   type HostCapability,
 } from './rbac';
 
-export interface AdminApiQuery {
-  q?: string;
-  status?: string;
-  type?: string;
-  range?: string;
-  from?: string;
-  to?: string;
-  owner?: string;
-  mime?: string;
-  provider?: string;
-  path?: string;
-  minSize?: number;
-  maxSize?: number;
-  limit?: number;
-  offset?: number;
-}
+export { listAdminEntitlements, readAdminApiQuery, type AdminApiQuery };
 
 function matchesTextSearch(query: string | undefined, values: readonly unknown[]): boolean {
   const needle = query?.trim().toLowerCase();
   if (!needle) {
     return true;
   }
-  return values.some((value) => String(value ?? '').toLowerCase().includes(needle));
+  return values.some((value) =>
+    String(value ?? '')
+      .toLowerCase()
+      .includes(needle)
+  );
 }
 
 function matchesStatus(status: string | undefined, value: unknown): boolean {
@@ -85,41 +68,18 @@ function createAdminSearchResult(
   };
 }
 
-function matchedSearchFields(
-  query: string,
-  fields: Record<string, unknown>
-): string[] {
+function matchedSearchFields(query: string, fields: Record<string, unknown>): string[] {
   const needle = query.trim().toLowerCase();
   if (!needle) {
     return [];
   }
   return Object.entries(fields)
-    .filter(([, value]) => String(value ?? '').toLowerCase().includes(needle))
+    .filter(([, value]) =>
+      String(value ?? '')
+        .toLowerCase()
+        .includes(needle)
+    )
     .map(([field]) => field);
-}
-
-export function readAdminApiQuery(request: Request): AdminApiQuery {
-  const url = new URL(request.url);
-  const limit = Number(url.searchParams.get('limit') ?? '');
-  const offset = Number(url.searchParams.get('offset') ?? '');
-  const minSize = Number(url.searchParams.get('minSize') ?? '');
-  const maxSize = Number(url.searchParams.get('maxSize') ?? '');
-  return {
-    q: url.searchParams.get('q') ?? undefined,
-    status: url.searchParams.get('status') ?? undefined,
-    type: url.searchParams.get('type') ?? undefined,
-    range: url.searchParams.get('range') ?? undefined,
-    from: url.searchParams.get('from') ?? undefined,
-    to: url.searchParams.get('to') ?? undefined,
-    owner: url.searchParams.get('owner') ?? undefined,
-    mime: url.searchParams.get('mime') ?? undefined,
-    provider: url.searchParams.get('provider') ?? undefined,
-    path: url.searchParams.get('path') ?? undefined,
-    minSize: Number.isFinite(minSize) ? minSize : undefined,
-    maxSize: Number.isFinite(maxSize) ? maxSize : undefined,
-    limit: Number.isFinite(limit) ? limit : undefined,
-    offset: Number.isFinite(offset) ? offset : undefined,
-  };
 }
 
 export async function listAdminUsers(query: AdminApiQuery) {
@@ -151,33 +111,6 @@ export function listAdminPermissions() {
   };
 }
 
-export async function listAdminEntitlements(query: AdminApiQuery) {
-  const commercial = await getAdminCommercialView();
-  const filtered = commercial.entitlements.filter(
-    (grant) =>
-      matchesTextSearch(query.q, [
-        grant.id,
-        grant.entitlement,
-        grant.userId,
-        grant.subject.label,
-        grant.status,
-        grant.planId ?? '',
-      ]) && matchesStatus(query.status, grant.status)
-  );
-  const statusCounts: Record<RuntimeStoreEntitlementStatus, number> = {
-    active: 0,
-    revoked: 0,
-    expired: 0,
-  };
-  for (const grant of filtered) {
-    statusCounts[grant.status] += 1;
-  }
-  return {
-    ...page(filtered, query),
-    statusCounts,
-  };
-}
-
 function dateMs(value: string | undefined): number {
   const parsed = value ? new Date(value).getTime() : Number.NaN;
   return Number.isFinite(parsed) ? parsed : 0;
@@ -185,15 +118,16 @@ function dateMs(value: string | undefined): number {
 
 function resolveRange(query: AdminApiQuery = {}) {
   const now = Date.now();
-  const rangeDays = query.range === '24h'
-    ? 1
-    : query.range === '90d'
-      ? 90
-      : query.range === 'custom'
-        ? 30
-        : query.range === '30d'
+  const rangeDays =
+    query.range === '24h'
+      ? 1
+      : query.range === '90d'
+        ? 90
+        : query.range === 'custom'
           ? 30
-          : 7;
+          : query.range === '30d'
+            ? 30
+            : 7;
   const from = query.from ? new Date(query.from).getTime() : now - rangeDays * 24 * 60 * 60 * 1000;
   const to = query.to ? new Date(query.to).getTime() : now;
   return {
@@ -256,13 +190,19 @@ export async function getAdminAnalytics(query: AdminApiQuery = {}) {
   const refundedOrders = orders.filter((order) => order.status === 'refunded');
   const failedOrders = orders.filter((order) => order.status === 'failed');
   const users = identity.users.filter((user) => inRange(user.createdAt, range));
-  const usage = operations.snapshot.recent.usageRecords.filter((record) => inRange(record.createdAt, range));
+  const usage = operations.snapshot.recent.usageRecords.filter((record) =>
+    inRange(record.createdAt, range)
+  );
   const runs = operations.snapshot.recent.runs.filter((run) => inRange(run.createdAt, range));
   const receipts = operations.snapshot.recent.webhookReceipts.filter((receipt) =>
     inRange(receipt.createdAt, range)
   );
-  const outbox = operations.snapshot.recent.outbox.filter((record) => inRange(record.createdAt, range));
-  const auditLogs = operations.snapshot.recent.auditLogs.filter((record) => inRange(record.createdAt, range));
+  const outbox = operations.snapshot.recent.outbox.filter((record) =>
+    inRange(record.createdAt, range)
+  );
+  const auditLogs = operations.snapshot.recent.auditLogs.filter((record) =>
+    inRange(record.createdAt, range)
+  );
   const revenue = paidOrders.reduce((sum, order) => sum + order.amount, 0);
   const monthlyRevenue = paidOrders
     .filter((order) => {
@@ -332,15 +272,21 @@ export async function getAdminAnalytics(query: AdminApiQuery = {}) {
   users.forEach((user) => {
     ensureBucket(user.createdAt).signups += 1;
   });
-  runs.filter((run) => run.status === 'failed').forEach((run) => {
-    ensureBucket(run.createdAt).failedRuns += 1;
-  });
-  receipts.filter((receipt) => receipt.status === 'failed').forEach((receipt) => {
-    ensureBucket(receipt.createdAt).failedWebhooks += 1;
-  });
-  outbox.filter((record) => record.status === 'dead_letter').forEach((record) => {
-    ensureBucket(record.createdAt).deadLetters += 1;
-  });
+  runs
+    .filter((run) => run.status === 'failed')
+    .forEach((run) => {
+      ensureBucket(run.createdAt).failedRuns += 1;
+    });
+  receipts
+    .filter((receipt) => receipt.status === 'failed')
+    .forEach((receipt) => {
+      ensureBucket(receipt.createdAt).failedWebhooks += 1;
+    });
+  outbox
+    .filter((record) => record.status === 'dead_letter')
+    .forEach((record) => {
+      ensureBucket(record.createdAt).deadLetters += 1;
+    });
   auditLogs.forEach((record) => {
     const latency = Number(record.metadata.latencyMs);
     if (Number.isFinite(latency)) {
@@ -359,23 +305,30 @@ export async function getAdminAnalytics(query: AdminApiQuery = {}) {
       deadLetters: bucket.deadLetters,
       p95LatencyMs: percentile(bucket.latencySamples, 0.95),
     }));
-  const usageTrends = timeSeries.map((point) => ({ date: point.date, quantity: point.usageQuantity }));
+  const usageTrends = timeSeries.map((point) => ({
+    date: point.date,
+    quantity: point.usageQuantity,
+  }));
   const cohorts = Object.entries(
-    identity.users.reduce<Record<string, { size: number; retained: number; revenue: number }>>((acc, user) => {
-      const key = user.createdAt.slice(0, 7);
-      acc[key] ??= { size: 0, retained: 0, revenue: 0 };
-      acc[key].size += 1;
-      const hasActivity =
-        operations.snapshot.recent.usageRecords.some((record) => record.metadata.userId === user.id) ||
-        commercial.orders.some((order) => order.userId === user.id);
-      if (hasActivity) {
-        acc[key].retained += 1;
-      }
-      acc[key].revenue += commercial.orders
-        .filter((order) => order.userId === user.id && order.status === 'paid')
-        .reduce((sum, order) => sum + order.amount, 0);
-      return acc;
-    }, {})
+    identity.users.reduce<Record<string, { size: number; retained: number; revenue: number }>>(
+      (acc, user) => {
+        const key = user.createdAt.slice(0, 7);
+        acc[key] ??= { size: 0, retained: 0, revenue: 0 };
+        acc[key].size += 1;
+        const hasActivity =
+          operations.snapshot.recent.usageRecords.some(
+            (record) => record.metadata.userId === user.id
+          ) || commercial.orders.some((order) => order.userId === user.id);
+        if (hasActivity) {
+          acc[key].retained += 1;
+        }
+        acc[key].revenue += commercial.orders
+          .filter((order) => order.userId === user.id && order.status === 'paid')
+          .reduce((sum, order) => sum + order.amount, 0);
+        return acc;
+      },
+      {}
+    )
   ).map(([cohort, value]) => ({
     cohort,
     size: value.size,
@@ -421,7 +374,8 @@ export async function getAdminAnalytics(query: AdminApiQuery = {}) {
     growthMetrics: {
       signups: users.length,
       activation: identity.users.filter((user) => user.status === 'active').length,
-      trialConversion: identity.users.length > 0 ? activeSubscribers.size / identity.users.length : 0,
+      trialConversion:
+        identity.users.length > 0 ? activeSubscribers.size / identity.users.length : 0,
       upgrades: commercial.entitlements.filter((grant) => grant.source === 'order').length,
       downgrades: churnedEntitlements.length,
     },
@@ -484,34 +438,33 @@ export async function getAdminRevenue(query: AdminApiQuery) {
     }
     return acc;
   }, {});
-  const dailyBucketMap = commercial.orders.reduce(
-    (acc, order) => {
-      const day = dayKey(order.createdAt);
-      const bucket = acc.get(day) ?? {
-        day,
-        total: 0,
-        paid: 0,
-        refunded: 0,
-        failed: 0,
-        currencies: {} as Record<string, number>,
-      };
-      if (order.status === 'paid') {
-        bucket.total += order.amount;
-        bucket.paid += 1;
-        bucket.currencies[order.currency] = (bucket.currencies[order.currency] ?? 0) + order.amount;
-      }
-      if (order.status === 'refunded') {
-        bucket.refunded += 1;
-      }
-      if (order.status === 'failed') {
-        bucket.failed += 1;
-      }
-      acc.set(day, bucket);
-      return acc;
-    },
-    new Map<string, { day: string; total: number; paid: number; refunded: number; failed: number; currencies: Record<string, number> }>()
+  const dailyBucketMap = commercial.orders.reduce((acc, order) => {
+    const day = dayKey(order.createdAt);
+    const bucket = acc.get(day) ?? {
+      day,
+      total: 0,
+      paid: 0,
+      refunded: 0,
+      failed: 0,
+      currencies: {} as Record<string, number>,
+    };
+    if (order.status === 'paid') {
+      bucket.total += order.amount;
+      bucket.paid += 1;
+      bucket.currencies[order.currency] = (bucket.currencies[order.currency] ?? 0) + order.amount;
+    }
+    if (order.status === 'refunded') {
+      bucket.refunded += 1;
+    }
+    if (order.status === 'failed') {
+      bucket.failed += 1;
+    }
+    acc.set(day, bucket);
+    return acc;
+  }, new Map<string, { day: string; total: number; paid: number; refunded: number; failed: number; currencies: Record<string, number> }>());
+  const dailyBuckets = Array.from(dailyBucketMap.values()).sort((left, right) =>
+    left.day.localeCompare(right.day)
   );
-  const dailyBuckets = Array.from(dailyBucketMap.values()).sort((left, right) => left.day.localeCompare(right.day));
   const providerEvents = operations.snapshot.recent.auditLogs
     .filter(
       (record) =>
@@ -519,7 +472,13 @@ export async function getAdminRevenue(query: AdminApiQuery) {
         record.type.startsWith('commercial.reconcile.')
     )
     .slice(0, 20);
-  return { ...page(orders, query), totals, providerEvents, catalog: commercial.catalog, dailyBuckets };
+  return {
+    ...page(orders, query),
+    totals,
+    providerEvents,
+    catalog: commercial.catalog,
+    dailyBuckets,
+  };
 }
 
 export async function listAdminUsage(query: AdminApiQuery) {
@@ -564,34 +523,31 @@ export async function listAdminAudit(query: AdminApiQuery) {
   return page(
     records
       .filter(
-      (record) =>
-        matchesTextSearch(query.q, [
-          record.id,
-          record.type,
-          record.actorId ?? 'system',
-          record.moduleId ?? 'host',
-          record.productId,
-          record.workspaceId ?? '',
-          record.integrity?.category ?? '',
-          record.integrity?.risk ?? '',
-          record.integrity?.resourceType ?? '',
-          record.integrity?.resourceId ?? '',
-          record.integrity?.correlationId ?? '',
-          record.integrity?.recordHash ?? '',
-          JSON.stringify(record.metadata),
-        ]) &&
-        (!query.type || query.type === 'audit' || record.type.includes(query.type)) &&
-        matchesAuditStatus(query.status, record)
+        (record) =>
+          matchesTextSearch(query.q, [
+            record.id,
+            record.type,
+            record.actorId ?? 'system',
+            record.moduleId ?? 'host',
+            record.productId,
+            record.workspaceId ?? '',
+            record.integrity?.category ?? '',
+            record.integrity?.risk ?? '',
+            record.integrity?.resourceType ?? '',
+            record.integrity?.resourceId ?? '',
+            record.integrity?.correlationId ?? '',
+            record.integrity?.recordHash ?? '',
+            JSON.stringify(record.metadata),
+          ]) &&
+          (!query.type || query.type === 'audit' || record.type.includes(query.type)) &&
+          matchesAuditStatus(query.status, record)
       )
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     query
   );
 }
 
-function matchesAuditStatus(
-  status: string | undefined,
-  record: RuntimeStoreAuditRecord
-): boolean {
+function matchesAuditStatus(status: string | undefined, record: RuntimeStoreAuditRecord): boolean {
   const needle = status?.trim().toLowerCase();
   if (!needle) {
     return true;
@@ -606,7 +562,9 @@ function matchesAuditStatus(
   if (['danger', 'dangerous', 'high', 'sensitive'].includes(needle)) {
     return risk === 'high' || metadata.includes(needle) || type.includes(needle);
   }
-  return risk === needle || category === needle || metadata.includes(needle) || type.includes(needle);
+  return (
+    risk === needle || category === needle || metadata.includes(needle) || type.includes(needle)
+  );
 }
 
 export async function listAdminFiles(query: AdminApiQuery) {
@@ -673,18 +631,20 @@ function searchSnapshot(
     ...(canSearchType('module')
       ? snapshot.modules
           .filter((module) => matchesTextSearch(query, [module.id, module.name]))
-          .map((module) => createAdminSearchResult('module', module.id, module.name, {
-            status: module.status,
-            updatedAt: module.activity.lastActivityAt ?? undefined,
-            description: `${module.runtimeState} · ${module.health.status}`,
-            matchedFields: matchedSearchFields(query, {
-              id: module.id,
-              name: module.name,
+          .map((module) =>
+            createAdminSearchResult('module', module.id, module.name, {
               status: module.status,
-              runtime: module.runtimeState,
-              health: module.health.status,
-            }),
-          }))
+              updatedAt: module.activity.lastActivityAt ?? undefined,
+              description: `${module.runtimeState} · ${module.health.status}`,
+              matchedFields: matchedSearchFields(query, {
+                id: module.id,
+                name: module.name,
+                status: module.status,
+                runtime: module.runtimeState,
+                health: module.health.status,
+              }),
+            })
+          )
       : []),
     ...(canSearchType('run')
       ? snapshot.recent.runs
@@ -740,7 +700,7 @@ export async function searchAdmin(
   }
   const results = [
     ...searchSnapshot(operations.snapshot, q, capabilities),
-    ...(capabilities?.includes(getAdminSearchTypeCapability('user')) ?? true
+    ...((capabilities?.includes(getAdminSearchTypeCapability('user')) ?? true)
       ? users.users
           .filter((user) => matchesTextSearch(q, [user.id, user.email, user.role, user.status]))
           .map((user) =>
@@ -758,7 +718,7 @@ export async function searchAdmin(
             })
           )
       : []),
-    ...(capabilities?.includes(getAdminSearchTypeCapability('file')) ?? true
+    ...((capabilities?.includes(getAdminSearchTypeCapability('file')) ?? true)
       ? files.files
           .filter((file) => matchesTextSearch(q, [file.id, file.name, file.moduleId]))
           .map((file) =>
@@ -776,9 +736,11 @@ export async function searchAdmin(
             })
           )
       : []),
-    ...(capabilities?.includes(getAdminSearchTypeCapability('order')) ?? true
+    ...((capabilities?.includes(getAdminSearchTypeCapability('order')) ?? true)
       ? commercial.orders
-          .filter((order) => matchesTextSearch(q, [order.id, order.sku, order.userId, order.status]))
+          .filter((order) =>
+            matchesTextSearch(q, [order.id, order.sku, order.userId, order.status])
+          )
           .map((order) =>
             createAdminSearchResult('order', order.id, order.sku, {
               status: order.status,

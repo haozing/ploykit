@@ -2,6 +2,7 @@ import type { ModuleRuntimeContract } from '../contract';
 import type { ModuleProductDefinition, ModuleQualityDefinition } from '@ploykit/module-sdk';
 
 export type ModuleLoader = () => Promise<unknown>;
+export type ModuleMapLocaleMessages = Record<string, unknown>;
 
 export interface ModuleMapCapabilitySummary {
   routes: number;
@@ -40,6 +41,7 @@ export interface ModuleRuntimeMapEntry {
   events?: Record<string, ModuleLoader>;
   webhooks?: Record<string, ModuleLoader>;
   assets?: readonly string[];
+  messages?: Record<string, ModuleMapLocaleMessages>;
   runtimeContract?: ModuleRuntimeContract;
 }
 

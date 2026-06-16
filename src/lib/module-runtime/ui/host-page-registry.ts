@@ -114,6 +114,7 @@ export const HOST_PAGE_REGISTRY = [
   dashboardPage('dashboard.tasks', ['header.actions', 'main.before', 'main.after', 'side']),
   dashboardPage('dashboard.task-detail', ['header.actions', 'main.before', 'main.after', 'side']),
   dashboardPage('dashboard.workspaces', ['header.actions', 'main.before', 'main.after', 'side']),
+  dashboardPage('dashboard.module-route', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.overview', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.analytics', ['header.actions', 'main.before', 'main.after', 'side']),
   adminPage('admin.audit', ['header.actions', 'main.before', 'main.after', 'side']),

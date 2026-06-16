@@ -208,6 +208,7 @@ const checks = [
   runCheck('files-reconcile', 'host:files-reconcile-smoke'),
   runCheck('s3-local-minio', 'host:s3-local-smoke'),
   runCheck('ai-rag-local', 'host:ai-rag-local-smoke'),
+  runCheck('ai-rag-policy', 'host:ai-rag-policy-smoke', [...(required ? ['--required'] : [])]),
   runCheck('ai-webhook-local', 'host:ai-webhook-local-smoke'),
   runCheck('rag-provider', 'host:rag-provider-smoke'),
   runCheck('stripe-local-mock', 'host:stripe-local-smoke'),
