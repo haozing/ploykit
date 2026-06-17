@@ -89,7 +89,7 @@ export function createInMemoryExecutionRuntimeStore({
   return {
     async createRun<TInput = unknown>(input: CreateRuntimeStoreRunInput<TInput>) {
       const idempotencyKey = input.idempotencyKey
-        ? `${input.productId}:${input.workspaceId ?? ''}:${input.moduleId}:${input.idempotencyKey}`
+        ? `${input.productId}:${input.environmentId ?? ''}:${input.workspaceId ?? ''}:${input.moduleId}:${input.idempotencyKey}`
         : null;
       if (idempotencyKey) {
         const existingId = runIdempotency.get(idempotencyKey);
@@ -109,6 +109,7 @@ export function createInMemoryExecutionRuntimeStore({
       const run: ModuleRunRecord<TInput> = {
         id: input.id ?? createId('run'),
         productId: input.productId,
+        environmentId: input.environmentId ?? null,
         workspaceId: input.workspaceId ?? null,
         moduleId: input.moduleId,
         kind: input.kind,
@@ -137,6 +138,10 @@ export function createInMemoryExecutionRuntimeStore({
     async listRuns(query = {}) {
       return [...runs.values()]
         .filter((run) => !query.productId || run.productId === query.productId)
+        .filter(
+          (run) =>
+            query.environmentId === undefined || (run.environmentId ?? null) === query.environmentId
+        )
         .filter(
           (run) =>
             query.workspaceId === undefined || (run.workspaceId ?? null) === query.workspaceId
@@ -183,7 +188,7 @@ export function createInMemoryExecutionRuntimeStore({
     },
     async enqueueOutbox<TPayload = unknown>(input: EnqueueRuntimeStoreOutboxInput<TPayload>) {
       const idempotencyKey = input.idempotencyKey
-        ? `${input.productId}:${input.workspaceId ?? ''}:${input.name}:${input.idempotencyKey}`
+        ? `${input.productId}:${input.environmentId ?? ''}:${input.workspaceId ?? ''}:${input.name}:${input.idempotencyKey}`
         : null;
       if (idempotencyKey) {
         const existingId = outboxIdempotency.get(idempotencyKey);
@@ -196,6 +201,7 @@ export function createInMemoryExecutionRuntimeStore({
       const record: RuntimeStoreOutboxRecord<TPayload> = {
         id: createId('outbox'),
         productId: input.productId,
+        environmentId: input.environmentId ?? null,
         workspaceId: input.workspaceId,
         moduleId: input.moduleId,
         name: input.name,
@@ -220,6 +226,11 @@ export function createInMemoryExecutionRuntimeStore({
         .filter((record) => !query.productId || record.productId === query.productId)
         .filter(
           (record) =>
+            query.environmentId === undefined ||
+            (record.environmentId ?? null) === query.environmentId
+        )
+        .filter(
+          (record) =>
             query.workspaceId === undefined || (record.workspaceId ?? null) === query.workspaceId
         )
         .filter((record) => !query.status || record.status === query.status)
@@ -233,6 +244,11 @@ export function createInMemoryExecutionRuntimeStore({
       const leaseExpiresAt = iso(() => new Date(timestamp + (query.leaseMs ?? 60_000)));
       return [...outbox.values()]
         .filter((record) => !query.productId || record.productId === query.productId)
+        .filter(
+          (record) =>
+            query.environmentId === undefined ||
+            (record.environmentId ?? null) === query.environmentId
+        )
         .filter(
           (record) =>
             query.workspaceId === undefined || (record.workspaceId ?? null) === query.workspaceId

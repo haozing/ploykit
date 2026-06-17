@@ -78,6 +78,10 @@ export interface ModuleApiRoute extends ModuleRouteBase {
   handler: string;
   methods?: readonly ModuleHttpMethod[];
   machineAuth?: 'apiKey' | 'user-or-apiKey';
+  idempotency?: {
+    required?: boolean;
+    keyFrom?: 'request';
+  };
   anonymousPolicy?: {
     rateLimit?: {
       bucket: 'ip' | 'userAgent' | 'route' | 'module' | 'method' | readonly string[];

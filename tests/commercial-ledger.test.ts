@@ -114,6 +114,21 @@ test('P15 commercial ledger supports idempotent usage, metering, credits, orders
   assert.equal((await moduleCommercial.credits.balance('user-1')).balance, 6);
   assert.equal(await moduleCommercial.billing.hasEntitlement('user-1', 'starter'), true);
 
+  await commercial.admin.createRedeemCode({
+    session: adminSession,
+    code: 'SINGLE_USE',
+    entitlement: 'single',
+    maxRedemptions: 1,
+  });
+  assert.deepEqual(await moduleCommercial.billing.redeemCode('SINGLE_USE', 'user-2'), {
+    ok: true,
+    entitlement: 'single',
+  });
+  assert.deepEqual(await moduleCommercial.billing.redeemCode('SINGLE_USE', 'user-3'), {
+    ok: false,
+    entitlement: undefined,
+  });
+
   const checkout = await moduleCommercial.commerce.createCheckout({
     userId: 'user-1',
     sku: 'credits_10',

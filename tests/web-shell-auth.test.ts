@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHostRequest } from '../apps/host-next/lib/paths';
+import { createHostSessionCookie } from '../apps/host-next/lib/auth';
 import { POST as registerUserApi } from '../apps/host-next/app/api/auth/register/route';
 import {
   passwordResetResponseData,
@@ -14,6 +15,28 @@ function restoreEnv(name: string, value: string | undefined): void {
   }
   process.env[name] = value;
 }
+
+test('X9 auth session cookies require explicit production secret but allow dev fallback', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousAuthSecret = process.env.PLOYKIT_AUTH_SECRET;
+  const previousMediaSecret = process.env.PLOYKIT_MEDIA_SECRET;
+
+  try {
+    Reflect.set(process.env, 'NODE_ENV', 'production');
+    delete process.env.PLOYKIT_AUTH_SECRET;
+    delete process.env.PLOYKIT_MEDIA_SECRET;
+    assert.throws(() => createHostSessionCookie('demo-admin'), /PLOYKIT_AUTH_SECRET_REQUIRED/);
+
+    Reflect.set(process.env, 'NODE_ENV', 'development');
+    const cookie = createHostSessionCookie('demo-admin');
+    assert.match(cookie, /^ploykit_session=/);
+    assert.equal(cookie.includes('Secure'), false);
+  } finally {
+    restoreEnv('NODE_ENV', previousNodeEnv);
+    restoreEnv('PLOYKIT_AUTH_SECRET', previousAuthSecret);
+    restoreEnv('PLOYKIT_MEDIA_SECRET', previousMediaSecret);
+  }
+});
 
 test('X9 auth transactional routes use the host email provider contract', async () => {
   const previousProvider = process.env.PLOYKIT_EMAIL_PROVIDER;

@@ -46,6 +46,16 @@ test('P16 commercial primitives are subject-first, idempotent and lifecycle awar
       .balance,
     10
   );
+  await assert.rejects(
+    () =>
+      moduleCommercial.credits.grant({
+        subject: workspaceSubject,
+        amount: 1.5,
+        unit: 'ai-credit',
+        idempotencyKey: 'grant-fractional',
+      }),
+    /MODULE_COMMERCIAL_INVALID_AMOUNT/
+  );
 
   const reservation = await moduleCommercial.credits.reserve({
     subject: workspaceSubject,
@@ -119,6 +129,44 @@ test('P16 commercial primitives are subject-first, idempotent and lifecycle awar
     )?.direction,
     'release'
   );
+  const expiredReservation = await moduleCommercial.credits.reserve({
+    subject: workspaceSubject,
+    amount: 2,
+    unit: 'ai-credit',
+    source: 'task',
+    sourceId: 'task-expired',
+    idempotencyKey: 'reserve-task-expired',
+    expiresAt: '2026-05-19T09:59:00.000Z',
+  });
+  assert.equal(expiredReservation.expiresAt, '2026-05-19T09:59:00.000Z');
+  await assert.rejects(
+    () =>
+      moduleCommercial.credits.commitReservation({
+        reservationId: expiredReservation.id,
+        finalAmount: 2,
+      }),
+    /MODULE_CREDITS_RESERVATION_EXPIRED/
+  );
+  assert.equal(
+    (await moduleCommercial.credits.balance({ subject: workspaceSubject, unit: 'ai-credit' }))
+      .balance,
+    7
+  );
+  assert.equal((await store.getCreditReservation(expiredReservation.id))?.status, 'released');
+  assert.equal(
+    (
+      await moduleCommercial.credits.listLedger({
+        subject: workspaceSubject,
+        unit: 'ai-credit',
+      })
+    ).find(
+      (entry) =>
+        entry.reservationId === expiredReservation.id &&
+        entry.reason === 'reserve.expired' &&
+        entry.direction === 'release'
+    )?.direction,
+    'release'
+  );
   assert.equal(
     (
       await moduleCommercial.credits.commitReservation({
@@ -159,6 +207,60 @@ test('P16 commercial primitives are subject-first, idempotent and lifecycle awar
     7
   );
 
+  const refundSubject = { type: 'user' as const, id: 'refund-wallet' };
+  await moduleCommercial.credits.grant({
+    subject: refundSubject,
+    amount: 10,
+    unit: 'ai-credit',
+    source: 'order',
+    sourceId: 'order-refund-1',
+    idempotencyKey: 'grant-refund-wallet',
+  });
+  await moduleCommercial.credits.consume({
+    subject: refundSubject,
+    amount: 7,
+    unit: 'ai-credit',
+    idempotencyKey: 'consume-before-refund-revoke',
+  });
+  const refundableGrant = (
+    await moduleCommercial.credits.listLedger({
+      subject: refundSubject,
+      unit: 'ai-credit',
+      source: 'order',
+      sourceId: 'order-refund-1',
+    })
+  ).find((entry) => entry.amount === 10)!;
+  const refundRevoke = await moduleCommercial.credits.refundRevoke({
+    subject: refundSubject,
+    grantLedgerId: refundableGrant.id,
+    amount: 8,
+    unit: 'ai-credit',
+    idempotencyKey: 'refund-revoke-order-1',
+    metadata: { refundId: 'refund-1' },
+  });
+  assert.equal(refundRevoke.revoked, 3);
+  assert.equal(refundRevoke.unrecovered, 5);
+  assert.equal(refundRevoke.balance.balance, 0);
+  assert.deepEqual(refundRevoke.relatedLedgerIds, [refundableGrant.id]);
+  const refundRevokeReplay = await moduleCommercial.credits.refundRevoke({
+    subject: refundSubject,
+    grantLedgerId: refundableGrant.id,
+    amount: 8,
+    unit: 'ai-credit',
+    idempotencyKey: 'refund-revoke-order-1',
+  });
+  assert.equal(refundRevokeReplay.revoked, 3);
+  assert.equal(refundRevokeReplay.unrecovered, 5);
+  const refundRevokeEntry = (
+    await moduleCommercial.credits.listLedger({
+      subject: refundSubject,
+      unit: 'ai-credit',
+    })
+  ).find((entry) => entry.reason === 'refund_revoke');
+  assert.equal(refundRevokeEntry?.amount, -3);
+  assert.equal(refundRevokeEntry?.direction, 'revoke');
+  assert.equal(refundRevokeEntry?.metadata.unrecoveredAmount, 5);
+
   const charge = await moduleCommercial.metering.charge({
     subject: workspaceSubject,
     meter: 'ai.generate',
@@ -191,6 +293,14 @@ test('P16 commercial primitives are subject-first, idempotent and lifecycle awar
       .balance,
     5
   );
+  const fractionalQuantityCharge = await moduleCommercial.metering.charge({
+    subject: workspaceSubject,
+    meter: 'bandwidth.gb',
+    quantity: 0.5,
+    unit: 'gb',
+    idempotencyKey: 'metering-fractional-quantity',
+  });
+  assert.equal(fractionalQuantityCharge.quantity, 0.5);
 
   await assert.rejects(
     () =>
@@ -280,6 +390,18 @@ test('P16 commercial primitives are subject-first, idempotent and lifecycle awar
       entitlement: 'feature.pro',
     }),
     false
+  );
+
+  await assert.rejects(
+    () =>
+      moduleCommercial.commerce.createCheckout({
+        buyer: userSubject,
+        beneficiary: workspaceSubject,
+        sku: 'team_pack',
+        amount: 25.5,
+        currency: 'usd',
+      }),
+    /MODULE_COMMERCIAL_INVALID_AMOUNT/
   );
 
   const checkout = await moduleCommercial.commerce.createCheckout({

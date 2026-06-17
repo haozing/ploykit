@@ -86,6 +86,7 @@ test('P19 provider failure releases reserved credits without committed metering'
     userId: 'user-1',
     amount: 1,
   });
+  const audits: { type: string; metadata?: Record<string, unknown> }[] = [];
   const ai = createProviderModuleAiRuntime({
     registry: createModuleAiProviderRegistry({
       providers: [provider],
@@ -97,6 +98,9 @@ test('P19 provider failure releases reserved credits without committed metering'
     metering: (moduleId) => commercial.forModule(moduleId).metering,
     credits: (moduleId) => commercial.forModule(moduleId).credits,
     userId: 'user-1',
+    audit: (record) => {
+      audits.push(record);
+    },
   });
 
   await assert.rejects(() => ai.forModule('ai-test').generateText({ prompt: 'fail' }));
@@ -104,6 +108,8 @@ test('P19 provider failure releases reserved credits without committed metering'
   assert.equal((await commercial.forModule('ai-test').credits.balance('user-1')).balance, 1);
   assert.equal((await store.listMetering({ status: 'committed' })).length, 0);
   assert.equal((await store.listCreditReservations({ status: 'released' })).length, 1);
+  assert.equal(audits[0]?.type, 'ai.generateText.failed');
+  assert.equal(audits[0]?.metadata?.errorCategory, 'provider');
 });
 
 test('K7 host AI webhook provider signs requests and normalizes provider responses', async () => {
@@ -168,6 +174,7 @@ test('P8 host static AI provider uses cost guard and records invocation evidence
     amount: 3,
     unit: 'ai-credit',
   });
+  const audits: { type: string; metadata?: Record<string, unknown> }[] = [];
   const ai = createHostModuleAiApi({
     moduleId: 'ai-test',
     session: {
@@ -180,9 +187,12 @@ test('P8 host static AI provider uses cost guard and records invocation evidence
     recordProviderInvocation: async (record) => {
       await store.recordProviderInvocation(record);
     },
+    audit: (record) => {
+      audits.push(record);
+    },
     env: {
       PLOYKIT_AI_PROVIDER: 'static',
-      PLOYKIT_AI_GENERATE_TEXT_CREDITS: '1',
+      PLOYKIT_AI_GENERATE_TEXT_CREDITS: '2',
       PLOYKIT_AI_EMBED_TEXT_CREDITS: '1',
     },
   });
@@ -196,11 +206,66 @@ test('P8 host static AI provider uses cost guard and records invocation evidence
 
   assert.equal(text.text, 'demo-ai: hello static');
   assert.equal(embedding.embedding.length, 3);
-  assert.equal((await commercial.forModule('ai-test').credits.balance('user-1', 'ai-credit')).balance, 1);
+  assert.equal(
+    (await commercial.forModule('ai-test').credits.balance('user-1', 'ai-credit')).balance,
+    0
+  );
   assert.equal((await store.listUsage({ productId: 'product-a', moduleId: 'ai-test' })).length, 2);
   assert.equal(invocations.length, 2);
+  assert.ok(audits.some((record) => record.type === 'host.ai.high_cost_invocation'));
   assert.deepEqual(
     invocations.map((record) => record.operation).sort(),
     ['embedText', 'generateText']
+  );
+});
+
+test('P8 host AI bills machine subjects separately from anonymous traffic', async () => {
+  const store = createInMemoryRuntimeStore();
+  const commercial = createRuntimeStoreCommercialRuntime({
+    store,
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+  });
+  await commercial.admin.grantCredits({
+    session: { user: { id: 'admin-1', role: 'admin' } },
+    userId: 'apiKey:key-1',
+    amount: 2,
+    unit: 'ai-credit',
+  });
+  const ai = createHostModuleAiApi({
+    moduleId: 'ai-test',
+    session: {
+      user: null,
+      authKind: 'apiKey',
+      apiKeyId: 'key-1',
+      productId: 'product-a',
+      workspaceId: 'workspace-a',
+    },
+    commercialForModule: (moduleId) => commercial.forModule(moduleId),
+    env: {
+      PLOYKIT_AI_PROVIDER: 'static',
+      PLOYKIT_AI_GENERATE_TEXT_CREDITS: '1',
+    },
+  });
+
+  await ai.generateText({ prompt: 'machine', idempotencyKey: 'host-ai-machine-1' });
+
+  assert.equal(
+    (await commercial.forModule('ai-test').credits.balance('apiKey:key-1', 'ai-credit')).balance,
+    1
+  );
+  assert.equal(
+    (await commercial.forModule('ai-test').credits.balance('anonymous', 'ai-credit')).balance,
+    0
+  );
+  assert.throws(
+    () =>
+      createHostModuleAiApi({
+        moduleId: 'ai-test',
+        session: { user: null },
+        commercialForModule: (moduleId) => commercial.forModule(moduleId),
+        env: { PLOYKIT_AI_PROVIDER: 'static' },
+      }),
+    /HOST_AI_BILLING_SUBJECT_REQUIRED/
   );
 });

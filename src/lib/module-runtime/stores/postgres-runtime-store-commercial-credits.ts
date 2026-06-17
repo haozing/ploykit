@@ -176,9 +176,9 @@ export function createPostgresCommercialCreditStore(
       const result = await database.query<Row>(
         `insert into module_credit_reservations (
           id, product_id, workspace_id, user_id, amount_reserved, amount_committed,
-          unit, status, reason, source, source_id, idempotency_key, metadata
+          unit, status, reason, source, source_id, idempotency_key, expires_at, metadata
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz, $14::jsonb)
         on conflict (product_id, (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
         where idempotency_key is not null
         do update set metadata = module_credit_reservations.metadata
@@ -196,6 +196,7 @@ export function createPostgresCommercialCreditStore(
           input.source ?? null,
           input.sourceId ?? null,
           input.idempotencyKey ?? null,
+          input.expiresAt ?? null,
           json(input.metadata ?? {}),
         ]
       );
@@ -234,6 +235,7 @@ export function createPostgresCommercialCreditStore(
            and ($5::text is null or status = $5)
            and ($6::text is null or source = $6)
            and ($7::text is null or source_id = $7)
+           and ($8::timestamptz is null or expires_at <= $8::timestamptz)
          order by created_at desc`,
         [
           query.productId ?? null,
@@ -243,6 +245,7 @@ export function createPostgresCommercialCreditStore(
           query.status ?? null,
           query.source ?? null,
           query.sourceId ?? null,
+          query.expiresBefore ?? null,
         ]
       );
       return result.rows.map(mapCreditReservation);

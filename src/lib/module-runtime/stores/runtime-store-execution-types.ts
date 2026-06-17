@@ -14,6 +14,7 @@ export interface CreateRuntimeStoreRunInput<TInput = unknown> extends RuntimeSto
 
 export interface ListRuntimeStoreRunsQuery {
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   moduleId?: string;
   status?: ModuleRunStatus;
@@ -32,6 +33,7 @@ export type RuntimeStoreOutboxStatus =
 export interface RuntimeStoreOutboxRecord<TPayload = unknown> {
   id: string;
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   moduleId?: string | null;
   name: string;
@@ -65,6 +67,7 @@ export type RuntimeStoreDeliveryStatus =
 export interface RuntimeStoreDeliveryRecord {
   id: string;
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   moduleId?: string | null;
   actorId?: string | null;

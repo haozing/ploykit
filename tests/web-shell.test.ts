@@ -309,7 +309,7 @@ test('A8/A9 admin analytics, edge access and audit retention expose operational 
   );
   const exportBody = (await jsonExport.json()) as { items: unknown[] };
   await new Promise((resolve) => setTimeout(resolve, 20));
-  const analytics = await getAdminAnalytics({ range: '90d' });
+  const analytics = await getAdminAnalytics({ range: '90d' }, { session: createDemoHostSession() });
   await applyAdminAuditRetention(session, {
     retentionDays: 30,
     mode: 'archive',

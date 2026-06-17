@@ -18,6 +18,7 @@ import { createCommercialLedgerRisk } from './commercial-ledger-risk';
 import { createCommercialLedgerSubscriptions } from './commercial-ledger-subscriptions';
 import { createCommercialLedgerTax } from './commercial-ledger-tax';
 import { createCommercialProviderRuntime } from './commercial-ledger-provider';
+import type { RuntimeStore } from '../../module-runtime/stores';
 import type {
   CommercialGuardResult,
   CommercialSkuDefinition,
@@ -85,6 +86,16 @@ export async function checkRuntimeStoreCommercialRequirement(
 export function createRuntimeStoreCommercialRuntime(
   options: CreateRuntimeStoreCommercialRuntimeOptions
 ): RuntimeStoreCommercialRuntime {
+  return createRuntimeStoreCommercialRuntimeInternal(options, options.store, true);
+}
+
+type CommercialProviderRuntime = RuntimeStoreCommercialRuntime['provider'];
+
+function createRuntimeStoreCommercialRuntimeInternal(
+  options: CreateRuntimeStoreCommercialRuntimeOptions,
+  store: RuntimeStore,
+  wrapProviderMutations: boolean
+): RuntimeStoreCommercialRuntime {
   const now = options.now ?? (() => new Date());
   const planCatalog = options.planCatalog ?? [];
   const skuCatalog = options.skuCatalog ?? {};
@@ -94,18 +105,18 @@ export function createRuntimeStoreCommercialRuntime(
   };
 
   const ledgerSubscriptions = createCommercialLedgerSubscriptions({
-    store: options.store,
+    store,
     scope,
     planCatalog,
   });
 
   const ledgerCredits = createCommercialLedgerCredits({
-    store: options.store,
+    store,
     scope,
   });
 
   const ledgerBenefits = createCommercialLedgerBenefits({
-    store: options.store,
+    store,
     scope,
     planCatalog,
     skuCatalog,
@@ -113,7 +124,7 @@ export function createRuntimeStoreCommercialRuntime(
   });
 
   const ledgerTax = createCommercialLedgerTax({
-    store: options.store,
+    store,
     scope,
     now,
   });
@@ -125,14 +136,14 @@ export function createRuntimeStoreCommercialRuntime(
   });
 
   const ledgerFacts = createCommercialLedgerFacts({
-    store: options.store,
+    store,
     scope,
     skuCatalog,
     loadInvoiceTaxSnapshot: ledgerTax.loadInvoiceTaxSnapshot,
   });
 
   const ledgerCommerce = createCommercialLedgerCommerce({
-    store: options.store,
+    store,
     scope,
     applySkuBenefits: ledgerBenefits.applySkuBenefits,
     reverseOrderBenefits: ledgerBenefits.reverseOrderBenefits,
@@ -140,25 +151,44 @@ export function createRuntimeStoreCommercialRuntime(
   });
 
   const ledgerRedeem = createCommercialLedgerRedeem({
-    store: options.store,
+    store,
     scope,
     now,
     recordCredit: ledgerCredits.recordCredit,
   });
 
   const ledgerBilling = createCommercialLedgerBilling({
-    store: options.store,
+    store,
     scope,
     planCatalog,
     now,
     redeemCode: ledgerRedeem.redeemCode,
   });
 
+  const provider = createCommercialProviderRuntime({
+    store,
+    scope,
+    planCatalog,
+    skuCatalog,
+    now,
+    requireScopedOrder: ledgerCommerce.requireScopedOrder,
+    assertPaidInputMatchesOrder: ledgerCommerce.assertPaidInputMatchesOrder,
+    applySkuBenefits: ledgerBenefits.applySkuBenefits,
+    recordCommercialDomainFacts: ledgerFacts.recordCommercialDomainFacts,
+    publishOrderStatusEvent: ledgerEvents.publishOrderStatusEvent,
+    recordRefundDomainFacts: ledgerFacts.recordRefundDomainFacts,
+    reverseOrderBenefits: ledgerBenefits.reverseOrderBenefits,
+    expectedMissingBenefits: ledgerBenefits.expectedMissingBenefits,
+    findCurrentSubscription: ledgerSubscriptions.findCurrentSubscription,
+    subscriptionLastEventAt: ledgerSubscriptions.subscriptionLastEventAt,
+    syncSubscriptionEntitlements: ledgerSubscriptions.syncSubscriptionEntitlements,
+  });
+
   return {
     forModule(moduleId: string) {
       const credits: ModuleCreditsApi = ledgerCredits.credits;
       const { usage, metering } = createCommercialLedgerMetering({
-        store: options.store,
+        store,
         scope,
         moduleId,
         credits,
@@ -173,7 +203,7 @@ export function createRuntimeStoreCommercialRuntime(
       const redeemCodes = ledgerRedeem.redeemCodes;
 
       const risk = createCommercialLedgerRisk({
-        store: options.store,
+        store,
         scope,
         moduleId,
         now,
@@ -182,29 +212,61 @@ export function createRuntimeStoreCommercialRuntime(
       return { usage, metering, credits, billing, entitlements, commerce, redeemCodes, risk };
     },
     admin: createCommercialAdminRuntime({
-      store: options.store,
+      store,
       scope,
       creditBalance: ledgerCredits.creditBalance,
       recordCredit: ledgerCredits.recordCredit,
       validateTaxProfile: ledgerTax.validateTaxProfile,
     }),
-    provider: createCommercialProviderRuntime({
-      store: options.store,
-      scope,
-      planCatalog,
-      skuCatalog,
-      now,
-      requireScopedOrder: ledgerCommerce.requireScopedOrder,
-      assertPaidInputMatchesOrder: ledgerCommerce.assertPaidInputMatchesOrder,
-      applySkuBenefits: ledgerBenefits.applySkuBenefits,
-      recordCommercialDomainFacts: ledgerFacts.recordCommercialDomainFacts,
-      publishOrderStatusEvent: ledgerEvents.publishOrderStatusEvent,
-      recordRefundDomainFacts: ledgerFacts.recordRefundDomainFacts,
-      reverseOrderBenefits: ledgerBenefits.reverseOrderBenefits,
-      expectedMissingBenefits: ledgerBenefits.expectedMissingBenefits,
-      findCurrentSubscription: ledgerSubscriptions.findCurrentSubscription,
-      subscriptionLastEventAt: ledgerSubscriptions.subscriptionLastEventAt,
-      syncSubscriptionEntitlements: ledgerSubscriptions.syncSubscriptionEntitlements,
-    }),
+    provider: wrapProviderMutations
+      ? createTransactionalCommercialProvider(options, store, provider)
+      : provider,
+  };
+}
+
+function createTransactionalCommercialProvider(
+  options: CreateRuntimeStoreCommercialRuntimeOptions,
+  store: RuntimeStore,
+  provider: CommercialProviderRuntime
+): CommercialProviderRuntime {
+  async function runInTransaction<T>(
+    operation: (provider: CommercialProviderRuntime) => Promise<T>
+  ): Promise<T> {
+    if (!store.transaction) {
+      return operation(provider);
+    }
+    return store.transaction((txStore) =>
+      operation(
+        createRuntimeStoreCommercialRuntimeInternal(
+          {
+            ...options,
+            store: txStore,
+          },
+          txStore,
+          false
+        ).provider
+      )
+    );
+  }
+
+  return {
+    applyCheckoutPaid(input) {
+      return runInTransaction((txProvider) => txProvider.applyCheckoutPaid(input));
+    },
+    applyRefund(input) {
+      return runInTransaction((txProvider) => txProvider.applyRefund(input));
+    },
+    reconcileOrders(input) {
+      return provider.reconcileOrders(input);
+    },
+    reconcilePaidOrderBenefits(input) {
+      return runInTransaction((txProvider) => txProvider.reconcilePaidOrderBenefits(input));
+    },
+    recordSettlement(input) {
+      return runInTransaction((txProvider) => txProvider.recordSettlement(input));
+    },
+    recordSubscriptionEvent(input) {
+      return runInTransaction((txProvider) => txProvider.recordSubscriptionEvent(input));
+    },
   };
 }

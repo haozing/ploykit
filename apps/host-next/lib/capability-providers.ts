@@ -1149,11 +1149,29 @@ export function createHostCapabilityProviders(input: {
         store: input.runtimeStore.store,
         session: hostSession,
       }),
-    http: ({ contract }) =>
+    http: ({ contract, hostSession }) =>
       createModuleHttpApi({
         moduleId: contract.id,
         allowedOrigins: contract.egress.map(normalizeEgressOrigin),
         maxBodyBytes: 1024 * 1024,
+        audit: async (event) => {
+          await input.runtimeStore.store.recordAudit({
+            productId: defaultProductId(hostSession.productId),
+            workspaceId: hostSession.workspaceId ?? null,
+            actorId: hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id,
+            moduleId: contract.id,
+            type: 'module.http.fetch',
+            metadata: {
+              method: event.method,
+              origin: event.origin,
+              path: event.path,
+              ok: event.ok,
+              status: event.status,
+              durationMs: event.durationMs,
+              errorCode: event.errorCode,
+            },
+          });
+        },
       }),
     jobs: ({ contract, hostSession }) =>
       createScopedJobsApi({

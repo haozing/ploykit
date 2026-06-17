@@ -1,4 +1,5 @@
 import { normalizeRuntimeStoreEntitlementGrant } from '@/lib/module-capabilities/commercial/commercial-ledger';
+import type { ModuleHostSession } from '@/lib/module-runtime';
 import type {
   RuntimeStoreApiKeyRecord,
   RuntimeStoreAuditRecord,
@@ -13,9 +14,8 @@ import type {
 } from '@/lib/module-runtime/stores/runtime-store-types';
 import { loadHostBillingCatalog, type HostBillingCatalog } from './commercial-provider';
 import { getHostRuntime } from './create-host';
-import { DEFAULT_HOST_PRODUCT_ID } from './default-scope';
-
-const DEMO_PRODUCT_ID = DEFAULT_HOST_PRODUCT_ID;
+import { defaultProductId } from './default-scope';
+import { requireCapability } from './rbac';
 
 export interface AdminCommercialSubjectView {
   type: 'user' | 'workspace' | 'organization' | 'apiKey';
@@ -313,8 +313,12 @@ function toAdminRedeemAttempt(record: RuntimeStoreAuditRecord): AdminCommercialR
   };
 }
 
-export async function getAdminCommercialView(): Promise<AdminCommercialView> {
+export async function getAdminCommercialView(
+  session: ModuleHostSession
+): Promise<AdminCommercialView> {
+  requireCapability(session, 'billing.read');
   const hostRuntime = await getHostRuntime();
+  const productId = defaultProductId(session.productId);
   const [
     orders,
     rawEntitlements,
@@ -332,24 +336,24 @@ export async function getAdminCommercialView(): Promise<AdminCommercialView> {
     invoices,
     subscriptions,
   ] = await Promise.all([
-    hostRuntime.runtimeStore.store.listCommercialOrders({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listEntitlements({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listCreditLedger({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listCreditReservations({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listRedeemCodes({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listRedeemRedemptions({ productId: DEMO_PRODUCT_ID }),
+    hostRuntime.runtimeStore.store.listCommercialOrders({ productId }),
+    hostRuntime.runtimeStore.store.listEntitlements({ productId }),
+    hostRuntime.runtimeStore.store.listCreditLedger({ productId }),
+    hostRuntime.runtimeStore.store.listCreditReservations({ productId }),
+    hostRuntime.runtimeStore.store.listRedeemCodes({ productId }),
+    hostRuntime.runtimeStore.store.listRedeemRedemptions({ productId }),
     hostRuntime.runtimeStore.store.listAudit({
-      productId: DEMO_PRODUCT_ID,
+      productId,
       type: 'commercial.redeem_code.attempt',
     }),
-    hostRuntime.runtimeStore.store.listApiKeys({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listRiskEvents({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listRiskBlocks({ productId: DEMO_PRODUCT_ID }),
-    loadHostBillingCatalog(hostRuntime.runtimeStore.store, DEMO_PRODUCT_ID),
-    hostRuntime.runtimeStore.store.listHostUsers({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listUsage({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listInvoices({ productId: DEMO_PRODUCT_ID }),
-    hostRuntime.runtimeStore.store.listSubscriptions({ productId: DEMO_PRODUCT_ID }),
+    hostRuntime.runtimeStore.store.listApiKeys({ productId }),
+    hostRuntime.runtimeStore.store.listRiskEvents({ productId }),
+    hostRuntime.runtimeStore.store.listRiskBlocks({ productId }),
+    loadHostBillingCatalog(hostRuntime.runtimeStore.store, productId),
+    hostRuntime.runtimeStore.store.listHostUsers({ productId }),
+    hostRuntime.runtimeStore.store.listUsage({ productId }),
+    hostRuntime.runtimeStore.store.listInvoices({ productId }),
+    hostRuntime.runtimeStore.store.listSubscriptions({ productId }),
   ]);
   const entitlements = rawEntitlements.map((grant) => {
     const normalized = normalizeRuntimeStoreEntitlementGrant(grant);
@@ -426,12 +430,12 @@ export async function getAdminCommercialView(): Promise<AdminCommercialView> {
     users.map(async (user) => ({
       user,
       billingAccount: await hostRuntime.runtimeStore.store.getBillingAccount(
-        DEMO_PRODUCT_ID,
+        productId,
         user.id,
         user.workspaceId ?? null
       ),
       taxProfile: await hostRuntime.runtimeStore.store.getTaxProfile(
-        DEMO_PRODUCT_ID,
+        productId,
         user.id,
         user.workspaceId ?? null
       ),

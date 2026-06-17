@@ -1,6 +1,7 @@
 import {
   createInMemoryRateLimiter,
   createRateLimitBucket,
+  type RateLimiter,
   type RateLimitRule,
 } from '@/lib/module-runtime/security/rate-limit';
 import { createSecurityHeaders } from '@/lib/module-runtime/security/headers';
@@ -415,7 +416,7 @@ const ROUTE_CATALOG: readonly HostRouteCatalogEntry[] = [
   ...ADMIN_API_ROUTES,
 ] as const;
 
-const rateLimiter = createInMemoryRateLimiter();
+let rateLimiter: RateLimiter = createInMemoryRateLimiter();
 
 function routeById(routeId: string): HostRouteCatalogEntry {
   const route = ROUTE_CATALOG.find((entry) => entry.id === routeId);
@@ -538,27 +539,29 @@ function checkOrigin(request: Request, route: HostRouteCatalogEntry): Response |
   return null;
 }
 
-function checkRateLimit(
+async function checkRateLimit(
   request: Request,
   route: HostRouteCatalogEntry,
   options: HostSecurityCheckOptions
-): Response | null {
+): Promise<Response | null> {
   if (!route.rateLimit) {
     return null;
   }
 
-  const result = rateLimiter.check({
-    bucket: createRateLimitBucket({
-      kind: route.rateLimit.kind,
-      productId: defaultProductId(options.session?.productId),
-      workspaceId: options.session?.workspaceId,
-      userId: options.session?.userId,
-      ipPrefix: ipPrefix(request),
-      route: route.id,
-    }),
-    rule: route.rateLimit.rule,
-    cost: options.cost,
-  });
+  const result = await Promise.resolve(
+    rateLimiter.check({
+      bucket: createRateLimitBucket({
+        kind: route.rateLimit.kind,
+        productId: defaultProductId(options.session?.productId),
+        workspaceId: options.session?.workspaceId,
+        userId: options.session?.userId,
+        ipPrefix: ipPrefix(request),
+        route: route.id,
+      }),
+      rule: route.rateLimit.rule,
+      cost: options.cost,
+    })
+  );
   if (result.ok) {
     return null;
   }
@@ -658,7 +661,13 @@ export function auditHostRouteSecurityCatalog(
 }
 
 export function resetHostSecurityRateLimiter(): void {
-  rateLimiter.reset();
+  if (rateLimiter.reset) {
+    void rateLimiter.reset();
+  }
+}
+
+export function setHostSecurityRateLimiterForRuntime(next: RateLimiter): void {
+  rateLimiter = next;
 }
 
 export async function checkHostRouteSecurity(
@@ -671,7 +680,7 @@ export async function checkHostRouteSecurity(
   if (!route.methods.some((candidate) => candidate.toUpperCase() === method)) {
     return jsonSecurityResponse(405, 'HOST_ROUTE_METHOD_UNREGISTERED', 'Route method is not registered.');
   }
-  return checkOrigin(request, route) ?? checkRateLimit(request, route, options);
+  return checkOrigin(request, route) ?? (await checkRateLimit(request, route, options));
 }
 
 export function getHostSecurityHeaders(): Record<string, string> {

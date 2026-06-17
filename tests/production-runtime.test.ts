@@ -388,12 +388,21 @@ test('observability redacts secrets from logs and connector records', () => {
 
 test('module http runtime enforces egress origin, method, and body size', async () => {
   const calls: string[] = [];
+  const auditEvents: { ok: boolean; origin: string; path: string; status?: number }[] = [];
   const http = createModuleHttpApi({
     moduleId: 'prod-test',
     allowedOrigins: ['https://api.example.com'],
     allowedMethods: ['POST'],
     maxBodyBytes: 10,
     resolveHost: async () => ['203.0.113.10'],
+    audit: (event) => {
+      auditEvents.push({
+        ok: event.ok,
+        origin: event.origin,
+        path: event.path,
+        status: event.status,
+      });
+    },
     fetchImpl: async (input) => {
       calls.push(input instanceof Request ? input.url : String(input));
       return Response.json({ ok: true });
@@ -419,6 +428,9 @@ test('module http runtime enforces egress origin, method, and body size', async 
     )
   );
   assert.equal(calls.length, 1);
+  assert.equal(auditEvents.filter((event) => event.ok).length, 1);
+  assert.ok(auditEvents.some((event) => event.origin === 'https://evil.example.com'));
+  assert.ok(auditEvents.every((event) => event.path === '/run'));
 });
 
 test('module http runtime blocks sensitive headers, private networks, redirects, response size and timeout', async () => {

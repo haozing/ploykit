@@ -5,7 +5,11 @@ import type {
   RuntimeStoreCreditLedgerEntry,
   RuntimeStoreEntitlementGrant,
 } from '../../module-runtime/stores';
-import { assertPositive, isExpired, uniqueEntitlements } from './commercial-ledger-utils';
+import {
+  assertPositiveIntegerAmount,
+  isExpired,
+  uniqueEntitlements,
+} from './commercial-ledger-utils';
 import type { CommercialSkuDefinition } from './commercial-ledger-types';
 
 interface CreateCommercialLedgerBenefitsInput {
@@ -52,7 +56,7 @@ export function createCommercialLedgerBenefits({
     const entitlements: RuntimeStoreEntitlementGrant[] = [];
 
     if (sku?.credits) {
-      assertPositive(sku.credits.amount, 'order.credits');
+      assertPositiveIntegerAmount(sku.credits.amount, 'order.credits');
       credits.push(
         await store.recordCreditLedger({
           ...scope,
@@ -96,7 +100,7 @@ export function createCommercialLedgerBenefits({
     const revokedEntitlements: RuntimeStoreEntitlementGrant[] = [];
 
     if (sku?.credits) {
-      assertPositive(sku.credits.amount, 'refund.credits');
+      assertPositiveIntegerAmount(sku.credits.amount, 'refund.credits');
       credits.push(
         await store.recordCreditLedger({
           ...scope,

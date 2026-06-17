@@ -7,9 +7,15 @@ export interface RuntimeAuditIntegrity {
   schemaVersion: 1;
   category: string;
   risk: RuntimeAuditRisk;
+  actorKind?: string;
+  decision?: 'allow' | 'deny' | 'success' | 'failure';
   resourceType?: string;
   resourceId?: string;
   correlationId?: string;
+  ipHash?: string;
+  userAgentHash?: string;
+  beforeHash?: string;
+  afterHash?: string;
   previousHash?: string | null;
   recordHash: string;
 }
@@ -61,6 +67,10 @@ function sha256(value: unknown): string {
   return `sha256:${createHash('sha256').update(stableJson(value)).digest('hex')}`;
 }
 
+function sha256String(value: string): string {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
 function categoryForType(type: string): string {
   if (type.startsWith('admin.')) {
     return 'admin';
@@ -103,6 +113,80 @@ function riskForType(type: string, metadata: Record<string, unknown>): RuntimeAu
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function actorKindFromMetadata(
+  metadata: Record<string, unknown>,
+  actorId?: string | null
+): string | undefined {
+  const explicit =
+    stringValue(metadata.actorKind) ??
+    stringValue(metadata.actor_kind) ??
+    stringValue(metadata.authKind) ??
+    stringValue(metadata.auth_kind);
+  if (explicit) {
+    return explicit;
+  }
+  if (actorId?.startsWith('apiKey:')) {
+    return 'apiKey';
+  }
+  if (actorId) {
+    return 'user';
+  }
+  return undefined;
+}
+
+function decisionFromMetadata(
+  type: string,
+  metadata: Record<string, unknown>
+): RuntimeAuditIntegrity['decision'] {
+  const explicit = stringValue(metadata.decision);
+  if (
+    explicit === 'allow' ||
+    explicit === 'deny' ||
+    explicit === 'success' ||
+    explicit === 'failure'
+  ) {
+    return explicit;
+  }
+  const haystack = `${type} ${stableJson(metadata)}`.toLowerCase();
+  if (['denied', 'deny', 'blocked', 'rejected'].some((token) => haystack.includes(token))) {
+    return 'deny';
+  }
+  if (['failed', 'failure', 'error'].some((token) => haystack.includes(token))) {
+    return 'failure';
+  }
+  if (['allowed', 'allow'].some((token) => haystack.includes(token))) {
+    return 'allow';
+  }
+  return 'success';
+}
+
+function rawStringValue(metadata: Record<string, unknown>, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = stringValue(metadata[key]);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function explicitHashOrValueHash(
+  metadata: Record<string, unknown>,
+  hashKeys: readonly string[],
+  valueKeys: readonly string[]
+): string | undefined {
+  const explicit = rawStringValue(metadata, hashKeys);
+  if (explicit) {
+    return explicit.startsWith('sha256:') ? explicit : sha256String(explicit);
+  }
+  for (const key of valueKeys) {
+    if (metadata[key] !== undefined) {
+      return sha256(metadata[key]);
+    }
+  }
+  return undefined;
 }
 
 function resourceFromMetadata(metadata: Record<string, unknown>): {
@@ -153,8 +237,28 @@ export function createAuditEnvelope(input: RuntimeAuditEnvelopeInput): {
     schemaVersion: 1,
     category: categoryForType(input.type),
     risk: riskForType(input.type, metadata),
+    actorKind: actorKindFromMetadata(input.metadata ?? {}, input.actorId),
+    decision: decisionFromMetadata(input.type, input.metadata ?? {}),
     ...resource,
     correlationId: correlationFromMetadata(metadata),
+    ipHash: explicitHashOrValueHash(input.metadata ?? {}, ['ipHash', 'ip_hash'], [
+      'ip',
+      'ipAddress',
+      'ip_address',
+      'remoteAddress',
+      'remote_address',
+    ]),
+    userAgentHash: explicitHashOrValueHash(
+      input.metadata ?? {},
+      ['userAgentHash', 'user_agent_hash', 'uaHash', 'ua_hash'],
+      ['userAgent', 'user_agent', 'ua']
+    ),
+    beforeHash: explicitHashOrValueHash(input.metadata ?? {}, ['beforeHash', 'before_hash'], [
+      'before',
+    ]),
+    afterHash: explicitHashOrValueHash(input.metadata ?? {}, ['afterHash', 'after_hash'], [
+      'after',
+    ]),
     previousHash: input.previousHash ?? null,
     recordHash: sha256(integrityBase),
   };
@@ -166,6 +270,26 @@ export function createAuditEnvelope(input: RuntimeAuditEnvelopeInput): {
       _audit: integrity,
     },
   };
+}
+
+export function verifyAuditEnvelope(
+  input: RuntimeAuditEnvelopeInput & { integrity?: RuntimeAuditIntegrity }
+): boolean {
+  if (!input.integrity?.recordHash) {
+    return false;
+  }
+  const expected = createAuditEnvelope({
+    id: input.id,
+    productId: input.productId,
+    workspaceId: input.workspaceId ?? null,
+    moduleId: input.moduleId ?? null,
+    actorId: input.actorId ?? null,
+    type: input.type,
+    metadata: input.metadata ?? {},
+    createdAt: input.createdAt,
+    previousHash: input.integrity.previousHash ?? null,
+  });
+  return expected.integrity.recordHash === input.integrity.recordHash;
 }
 
 export function splitAuditEnvelope(metadata: Record<string, unknown> | undefined): {
@@ -192,9 +316,21 @@ export function splitAuditEnvelope(metadata: Record<string, unknown> | undefined
         record.risk === 'high' || record.risk === 'medium' || record.risk === 'low'
           ? record.risk
           : 'low',
+      actorKind: stringValue(record.actorKind),
+      decision:
+        record.decision === 'allow' ||
+        record.decision === 'deny' ||
+        record.decision === 'success' ||
+        record.decision === 'failure'
+          ? record.decision
+          : undefined,
       resourceType: stringValue(record.resourceType),
       resourceId: stringValue(record.resourceId),
       correlationId: stringValue(record.correlationId),
+      ipHash: stringValue(record.ipHash),
+      userAgentHash: stringValue(record.userAgentHash),
+      beforeHash: stringValue(record.beforeHash),
+      afterHash: stringValue(record.afterHash),
       previousHash: stringValue(record.previousHash) ?? null,
       recordHash,
     },

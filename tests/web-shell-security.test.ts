@@ -113,6 +113,7 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
     'PLOYKIT_MODULE_WEBHOOK_SECRET',
     'PLOYKIT_MODULE_WEBHOOK_SECRET_CAPABILITY_DEMO',
     'PLOYKIT_MODULE_WEBHOOK_SECRET_CAPABILITY_DEMO_INGEST',
+    'PLOYKIT_MODULE_WEBHOOK_SECRET_DEV_HMAC_SHA256_CAP_CONN',
   ];
   const previous = new Map(secretKeys.map((key) => [key, process.env[key]]));
   const body = JSON.stringify({ source: 'signed-route-test' });
@@ -171,6 +172,26 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
         params: Promise.resolve({ path: ['capability-demo', 'webhook'] }),
       }
     );
+    process.env.PLOYKIT_MODULE_WEBHOOK_SECRET_DEV_HMAC_SHA256_CAP_CONN = 'connection-secret';
+    const connectionBody = JSON.stringify({ source: 'connection-secret-test' });
+    const connectionSignature = `sha256=${createHmac('sha256', 'connection-secret')
+      .update(connectionBody)
+      .digest('hex')}`;
+    const acceptedConnectionSecret = await receiveModuleWebhook(
+      createHostRequest('/api/module-webhooks/capability-demo/webhook?connection=cap-conn', {
+        method: 'POST',
+        body: connectionBody,
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': `${idempotencyKey}-connection`,
+          'x-ploykit-signature': connectionSignature,
+          'x-ploykit-connection-slug': 'cap-conn',
+        },
+      }),
+      {
+        params: Promise.resolve({ path: ['capability-demo', 'webhook'] }),
+      }
+    );
     const tooLarge = await receiveModuleWebhook(
       createHostRequest('/api/module-webhooks/capability-demo/workflow/webhook', {
         method: 'POST',
@@ -188,6 +209,7 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
     assert.equal(missingSecret.status, 401);
     assert.equal(accepted.status, 200);
     assert.equal(acceptedGithubHeader.status, 200);
+    assert.equal(acceptedConnectionSecret.status, 200);
     assert.equal(tooLarge.status, 413);
     assert.equal(
       ((await accepted.json()) as { receipt: { status: string } }).receipt.status,
@@ -195,6 +217,10 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
     );
     assert.equal(
       ((await acceptedGithubHeader.json()) as { receipt: { status: string } }).receipt.status,
+      'received'
+    );
+    assert.equal(
+      ((await acceptedConnectionSecret.json()) as { receipt: { status: string } }).receipt.status,
       'received'
     );
   } finally {
@@ -443,4 +469,16 @@ test('X11 config doctor exposes route, provider, metrics and retention readiness
   assert.ok(report.metrics.providersTotal >= 5);
   assert.ok(report.providerReadiness.some((provider) => provider.id === 'security'));
   assert.match(report.retention.files, /expiresAt/);
+});
+
+test('X11 config doctor requires production retention windows', async () => {
+  const report = await runHostConfigDoctor({
+    projectRoot: process.cwd(),
+    required: true,
+    env: { ...process.env, PLOYKIT_AUDIT_RETENTION_DAYS: '', PLOYKIT_RUN_LOG_RETENTION_DAYS: '' },
+  });
+  const codes = report.diagnostics.map((diagnostic) => diagnostic.code);
+
+  assert.ok(codes.includes('HOST_AUDIT_RETENTION_REQUIRED'));
+  assert.ok(codes.includes('HOST_RUN_LOG_RETENTION_REQUIRED'));
 });

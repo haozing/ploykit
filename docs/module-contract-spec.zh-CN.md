@@ -37,6 +37,9 @@
 - 使用 `ctx.*` 能力必须声明匹配 `Permission.*`。
 - 普通外部 HTTP 必须使用 `ctx.http.fetch(...)`、`Permission.ExternalHttp` 和精确
   `egress` origin。
+- `egress` 只由 `ctx.http.fetch(...)` 消费。runtime 会按 origin allowlist、DNS pinning、私网
+  拦截、敏感 header、redirect、body/response size 和 timeout 执行强制；直接在模块中使用普通
+  `fetch` 不属于允许的 runtime 能力模型。
 - 需要 service secret、runtime signing、动态 claims 或强审计的 privileged external service
   必须使用 `ctx.services.invoke(...)` 和 `Permission.ServicesInvoke`，具体 v2 方案见
   [模块受控外部服务调用修复计划](module-service-invocation-plan.zh-CN.md)。
@@ -44,6 +47,17 @@
 - `surface.mode: "replace"` 必须声明 `Permission.SurfaceOverride`，白牌替换还必须在 `presentation.replaces` 中声明目标。
 - public site route 必须声明 metadata loader 和显式 cache 策略。
 - public API 必须声明 `anonymousPolicy`，并提供 rate limit。
+- 写入型 API route 可以声明 `idempotency: { required: true, keyFrom: "request" }`。runtime 会要求
+  `Idempotency-Key`/`X-Idempotency-Key` 请求头，按 product + environment + workspace + route
+  分域缓存首个响应；同 key 不同请求体返回 400，原请求处理中返回 409，完成后 replay 首次响应。
+
+`scope.roles` 是模块声明自己期望的宿主角色语义，用于目录、安装前检查、Admin UI 和宿主集成文档。
+它不会自动扩展 host RBAC，也不会替代 route/action/surface 上的 `auth`、`permissions`、
+`commercial` 和 `anonymousPolicy` 守卫。需要运行时强制的访问控制必须落在这些可执行字段上。
+
+`actions.*.sideEffect` 是可执行元数据：validator 会用它要求 destructive/billing action 显式
+确认，并要求 external/billing action 使用 idempotency。它不是事务边界，也不会自动回滚 handler
+中的外部副作用；需要原子性时应使用宿主账本事务、Data v2 transaction 或显式补偿与 audit。
 
 ## 商业契约边界
 

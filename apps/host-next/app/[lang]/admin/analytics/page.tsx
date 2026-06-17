@@ -10,12 +10,17 @@ export default async function AdminAnalyticsPage({
   params: Promise<LanguageRouteParams>;
   searchParams?: Promise<RouteSearchParams>;
 }) {
-  const [lang] = await readLanguageAndRequireAdmin(params, '/admin/analytics');
+  const [lang, session] = await readLanguageAndRequireAdmin(params, '/admin/analytics');
   const query = await readAdminTableQuery(searchParams);
   return (
     <AdminAnalyticsOperationsPage
       lang={lang}
-      analytics={await getAdminAnalytics({ range: query.range, from: query.from, to: query.to })}
+      analytics={
+        await getAdminAnalytics(
+          { range: query.range, from: query.from, to: query.to },
+          { session }
+        )
+      }
       query={query}
     />
   );

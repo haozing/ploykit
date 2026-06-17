@@ -6,6 +6,7 @@ import {
 import { createRuntimeStoreWebhookGateway } from '@/lib/module-capabilities/webhooks/runtime-store-webhook-gateway';
 import { getHostRuntime } from '@host/lib/create-host';
 import {
+  DEFAULT_HOST_ENVIRONMENT_ID,
   DEFAULT_HOST_PRODUCT_ID,
   DEFAULT_HOST_WORKSPACE_ID,
 } from '@host/lib/default-scope';
@@ -58,6 +59,18 @@ function runtimeStoreSignatureProvider(signature: string | undefined): string {
   return signature ?? 'none';
 }
 
+function readConnectionSlug(request: Request): string | undefined {
+  const header =
+    request.headers.get('x-ploykit-connection-slug') ??
+    request.headers.get('x-connection-slug') ??
+    undefined;
+  if (header?.trim()) {
+    return header.trim();
+  }
+  const url = new URL(request.url);
+  return url.searchParams.get('connection')?.trim() || undefined;
+}
+
 function envNamePart(value: string): string {
   return value
     .replace(/[^a-zA-Z0-9]+/g, '_')
@@ -65,14 +78,38 @@ function envNamePart(value: string): string {
     .toUpperCase();
 }
 
-function readModuleWebhookSecret(input: { moduleId: string; webhookName: string }): string | null {
+function readModuleWebhookSecret(input: {
+  moduleId: string;
+  webhookName: string;
+  provider?: string;
+  connectionSlug?: string;
+  environmentId?: string | null;
+}): string | null {
   const moduleKey = envNamePart(input.moduleId);
   const webhookKey = envNamePart(input.webhookName);
+  const providerKey = input.provider ? envNamePart(input.provider) : null;
+  const connectionKey = input.connectionSlug ? envNamePart(input.connectionSlug) : null;
+  const environmentKey = input.environmentId ? envNamePart(input.environmentId) : null;
   const candidates = [
+    environmentKey && providerKey && connectionKey
+      ? `PLOYKIT_MODULE_WEBHOOK_SECRET_${environmentKey}_${providerKey}_${connectionKey}`
+      : null,
+    environmentKey && moduleKey && webhookKey && connectionKey
+      ? `PLOYKIT_MODULE_WEBHOOK_SECRET_${environmentKey}_${moduleKey}_${webhookKey}_${connectionKey}`
+      : null,
+    environmentKey && moduleKey && webhookKey
+      ? `PLOYKIT_MODULE_WEBHOOK_SECRET_${environmentKey}_${moduleKey}_${webhookKey}`
+      : null,
+    providerKey && connectionKey
+      ? `PLOYKIT_MODULE_WEBHOOK_SECRET_${providerKey}_${connectionKey}`
+      : null,
+    moduleKey && webhookKey && connectionKey
+      ? `PLOYKIT_MODULE_WEBHOOK_SECRET_${moduleKey}_${webhookKey}_${connectionKey}`
+      : null,
     `PLOYKIT_MODULE_WEBHOOK_SECRET_${moduleKey}_${webhookKey}`,
     `PLOYKIT_MODULE_WEBHOOK_SECRET_${moduleKey}`,
     'PLOYKIT_MODULE_WEBHOOK_SECRET',
-  ];
+  ].filter((key): key is string => Boolean(key));
   for (const key of candidates) {
     const value = process.env[key]?.trim();
     if (value) {
@@ -181,6 +218,9 @@ export async function POST(request: Request, context: ModuleWebhookRouteContext)
     signature: readSignature(request, matched.webhook.signature),
     headers: Object.fromEntries(request.headers.entries()),
     signatureProvider: runtimeStoreSignatureProvider(matched.webhook.signature),
+    provider: runtimeStoreSignatureProvider(matched.webhook.signature),
+    connectionSlug: readConnectionSlug(request),
+    environmentId: DEFAULT_HOST_ENVIRONMENT_ID,
   });
 
   if (result.receipt.status === 'rejected') {

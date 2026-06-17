@@ -5,6 +5,7 @@ import { createInMemoryConfigRuntimeStore } from './memory-runtime-store-config'
 import { createInMemoryExecutionRuntimeStore } from './memory-runtime-store-execution';
 import { createInMemoryFinanceRuntimeStore } from './memory-runtime-store-finance';
 import { createInMemoryFilesRuntimeStore } from './memory-runtime-store-files';
+import { createInMemoryIdempotencyRuntimeStore } from './memory-runtime-store-idempotency';
 import { createInMemoryIdentityRuntimeStore } from './memory-runtime-store-identity';
 import { createInMemoryNotificationsRuntimeStore } from './memory-runtime-store-notifications';
 import { createInMemoryObservabilityRuntimeStore } from './memory-runtime-store-observability';
@@ -29,6 +30,7 @@ export function createInMemoryRuntimeStore(
   const executionStore = createInMemoryExecutionRuntimeStore({ now, createId });
   const financeStore = createInMemoryFinanceRuntimeStore({ now, createId });
   const filesStore = createInMemoryFilesRuntimeStore({ now, createId });
+  const idempotencyStore = createInMemoryIdempotencyRuntimeStore({ now, createId });
   const identityStore = createInMemoryIdentityRuntimeStore({ now, createId });
   const notificationsStore = createInMemoryNotificationsRuntimeStore({ now, createId });
   const observabilityStore = createInMemoryObservabilityRuntimeStore({ now, createId });
@@ -45,6 +47,7 @@ export function createInMemoryRuntimeStore(
     ...executionStore,
     ...financeStore,
     ...filesStore,
+    ...idempotencyStore,
     ...identityStore,
     ...notificationsStore,
     ...observabilityStore,

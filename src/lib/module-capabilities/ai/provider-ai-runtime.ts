@@ -47,6 +47,37 @@ function userIdFor(
   return typeof value === 'function' ? value(moduleId) : value;
 }
 
+function classifyAiError(error: unknown): { code: string; category: string; message: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = message.match(/^([A-Z][A-Z0-9_]+)/)?.[1] ?? 'AI_PROVIDER_ERROR';
+  const normalized = `${code} ${message}`.toLowerCase();
+  if (
+    normalized.includes('quota') ||
+    normalized.includes('rate_limit') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('429')
+  ) {
+    return { code, category: 'quota', message };
+  }
+  if (
+    normalized.includes('policy') ||
+    normalized.includes('safety') ||
+    normalized.includes('moderation') ||
+    normalized.includes('blocked')
+  ) {
+    return { code, category: 'policy', message };
+  }
+  if (
+    normalized.includes('timeout') ||
+    normalized.includes('network') ||
+    normalized.includes('econn') ||
+    normalized.includes('fetch')
+  ) {
+    return { code, category: 'transport', message };
+  }
+  return { code, category: 'provider', message };
+}
+
 export function createProviderModuleAiRuntime(
   options: CreateProviderModuleAiRuntimeOptions
 ): ProviderModuleAiRuntime {
@@ -98,13 +129,16 @@ export function createProviderModuleAiRuntime(
               });
               return result;
             } catch (error) {
+              const classified = classifyAiError(error);
               await options.audit?.({
                 moduleId,
                 type: 'ai.generateText.failed',
                 metadata: {
                   providerId: resolved.provider.id,
                   model: resolved.model,
-                  message: error instanceof Error ? error.message : String(error),
+                  message: classified.message,
+                  errorCode: classified.code,
+                  errorCategory: classified.category,
                 },
               });
               throw error;
@@ -160,13 +194,16 @@ export function createProviderModuleAiRuntime(
               });
               return result;
             } catch (error) {
+              const classified = classifyAiError(error);
               await options.audit?.({
                 moduleId,
                 type: 'ai.embedText.failed',
                 metadata: {
                   providerId: resolved.provider.id,
                   model: resolved.model,
-                  message: error instanceof Error ? error.message : String(error),
+                  message: classified.message,
+                  errorCode: classified.code,
+                  errorCategory: classified.category,
                 },
               });
               throw error;

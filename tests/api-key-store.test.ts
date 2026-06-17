@@ -8,6 +8,7 @@ import {
   createHostModuleApiKeysApi,
 } from '../apps/host-next/lib/capability-providers';
 import {
+  DEFAULT_HOST_ENVIRONMENT_ID,
   DEFAULT_HOST_PRODUCT_ID,
   DEFAULT_HOST_WORKSPACE_ID,
 } from '../apps/host-next/lib/default-scope';
@@ -43,8 +44,10 @@ test('host API keys use runtime store hashes and produce machine access sessions
   assert.ok(created.key?.startsWith('pk_'));
 
   const stored = (await store.listApiKeys({ productId: DEFAULT_HOST_PRODUCT_ID }))[0]!;
+  assert.equal(stored.environmentId, DEFAULT_HOST_ENVIRONMENT_ID);
   assert.equal(stored.prefix, created.prefix);
   assert.notEqual(stored.keyHash, created.key);
+  assert.equal(stored.createdBy, 'owner-1');
   assert.equal(stored.ownerSubjectType, 'workspace');
   assert.equal(stored.ownerSubjectId, DEFAULT_HOST_WORKSPACE_ID);
 
@@ -65,6 +68,19 @@ test('host API keys use runtime store hashes and produce machine access sessions
       permissions: [Permission.CreditsRead],
     }),
     /MODULE_API_KEY_MODULE_SCOPE_DENIED/
+  );
+  await assert.rejects(
+    apiKeys.create({
+      name: 'Wrong environment key',
+      scope: {
+        productId: DEFAULT_HOST_PRODUCT_ID,
+        environmentId: 'live',
+        workspaceId: DEFAULT_HOST_WORKSPACE_ID,
+        moduleId: contract.id,
+      },
+      permissions: [Permission.CreditsRead],
+    }),
+    /MODULE_API_KEY_ENVIRONMENT_SCOPE_DENIED/
   );
   await assert.rejects(
     apiKeys.create({
@@ -115,9 +131,21 @@ test('host API keys use runtime store hashes and produce machine access sessions
   const verified = await apiKeys.verify(created.key!);
   assert.equal(verified.ok, true);
   assert.equal(verified.apiKeyId, created.id);
+  assert.equal(verified.environmentId, DEFAULT_HOST_ENVIRONMENT_ID);
   assert.deepEqual(verified.subject, { type: 'workspace', id: DEFAULT_HOST_WORKSPACE_ID });
   assert.deepEqual(verified.permissions, [Permission.CreditsRead]);
   assert.ok((await store.getApiKey({ id: created.id }))?.lastUsedAt);
+  await store.updateApiKey(created.id, {
+    status: 'rotating',
+    rateLimit: { windowMs: 60000, limit: 120 },
+  });
+  assert.equal((await apiKeys.verify(created.key!)).ok, true);
+  assert.equal((await apiKeys.list({ status: 'rotating' })).length, 1);
+  assert.deepEqual((await store.getApiKey({ id: created.id }))?.rateLimit, {
+    windowMs: 60000,
+    limit: 120,
+  });
+  await store.updateApiKey(created.id, { status: 'active', rateLimit: null });
 
   const verifier = createHostModuleApiKeyVerifier({ store });
   const machine = await verifier({
@@ -219,11 +247,59 @@ test('host API keys use runtime store hashes and produce machine access sessions
     altProductWorkspaceId
   );
 
+  const liveSession = {
+    ...session,
+    environmentId: 'live',
+    user: { id: 'owner-4', role: 'admin' },
+    userId: 'owner-4',
+    actorId: 'owner-4',
+  } as ModuleHostSession;
+  const liveApiKeys = createHostModuleApiKeysApi({ contract, store, session: liveSession });
+  const liveCreated = await liveApiKeys.create({
+    name: 'Live worker key',
+    owner: { type: 'workspace', id: DEFAULT_HOST_WORKSPACE_ID },
+    scope: {
+      productId: DEFAULT_HOST_PRODUCT_ID,
+      environmentId: 'live',
+      workspaceId: DEFAULT_HOST_WORKSPACE_ID,
+      moduleId: contract.id,
+    },
+    permissions: [Permission.CreditsRead],
+  });
+  assert.equal(
+    (
+      await verifier({
+        apiKey: liveCreated.key!,
+        moduleId: contract.id,
+        route: {} as never,
+        host: {} as never,
+        request: new Request('https://example.test/api'),
+        params: {},
+        session: { user: null, productId: DEFAULT_HOST_PRODUCT_ID, environmentId: 'dev' },
+      })
+    ).ok,
+    false
+  );
+  const liveMachine = await verifier({
+    apiKey: liveCreated.key!,
+    moduleId: contract.id,
+    route: {} as never,
+    host: {} as never,
+    request: new Request('https://example.test/api'),
+    params: {},
+    session: { user: null, productId: DEFAULT_HOST_PRODUCT_ID, environmentId: 'live' },
+  });
+  assert.equal(liveMachine.ok, true);
+  assert.equal(liveMachine.ok ? liveMachine.session?.environmentId : undefined, 'live');
+
   const rotated = await apiKeys.rotate({ id: created.id });
-  assert.equal((await apiKeys.verify(created.key!)).ok, false);
+  assert.notEqual(rotated.id, created.id);
+  assert.equal((await apiKeys.verify(created.key!)).ok, true);
   assert.equal((await apiKeys.verify(rotated.key)).ok, true);
+  assert.equal((await apiKeys.list({ status: 'rotating' })).length, 1);
 
   await apiKeys.revoke({ id: created.id, reason: 'test' });
+  assert.equal((await apiKeys.verify(created.key!)).ok, false);
   assert.equal((await apiKeys.verify(rotated.key)).ok, false);
-  assert.equal((await apiKeys.list({ status: 'revoked' })).length, 1);
+  assert.equal((await apiKeys.list({ status: 'revoked' })).length, 2);
 });

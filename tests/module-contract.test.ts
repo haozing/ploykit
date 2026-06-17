@@ -48,6 +48,25 @@ test('module contract rejects unsupported contract schema versions', () => {
   assert.ok(codes.includes('MODULE_CONTRACT_VERSION_UNSUPPORTED'));
 });
 
+test('module contract rejects permissions reserved without runtime capabilities', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'reserved-permission-test',
+      name: 'Reserved Permission Test',
+      version: '0.1.0',
+      permissions: [Permission.ConfigWrite, Permission.SecretsWrite],
+      actions: {
+        updateConfig: {
+          handler: './actions/update-config',
+          permissions: [Permission.ConfigWrite],
+        },
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_PERMISSION_RESERVED_RUNTIME'));
+});
+
 test('module contract validates v2 signed service policies', () => {
   const valid = codesFor(
     defineModule({
@@ -287,6 +306,37 @@ test('module contract rejects public machine-auth API routes', () => {
   );
 
   assert.ok(codes.includes('MODULE_API_MACHINE_AUTH_NOT_PUBLIC'));
+});
+
+test('module contract validates API route idempotency declarations', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'api-idempotency-test',
+      name: 'API Idempotency Test',
+      version: '0.1.0',
+      routes: {
+        api: [
+          {
+            path: '/missing-key-source',
+            handler: './api/missing-key-source',
+            auth: 'auth',
+            methods: ['POST'],
+            idempotency: { required: true },
+          },
+          {
+            path: '/invalid-key-source',
+            handler: './api/invalid-key-source',
+            auth: 'auth',
+            methods: ['POST'],
+            idempotency: { required: true, keyFrom: 'body' as never },
+          },
+        ],
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_API_IDEMPOTENCY_KEY_SOURCE_REQUIRED'));
+  assert.ok(codes.includes('MODULE_API_IDEMPOTENCY_KEY_SOURCE_INVALID'));
 });
 
 test('module contract validates public API anonymous policy details', () => {

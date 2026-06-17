@@ -177,10 +177,13 @@ function enumerateDays(range: ReturnType<typeof resolveRange>) {
   return days;
 }
 
-export async function getAdminAnalytics(query: AdminApiQuery = {}) {
+export async function getAdminAnalytics(
+  query: AdminApiQuery = {},
+  options: { session: ModuleHostSession }
+) {
   const [operations, commercial, files, identity] = await Promise.all([
     getAdminOperationsView(),
-    getAdminCommercialView(),
+    getAdminCommercialView(options.session),
     getAdminFilesView(),
     getHostIdentityOperationsView(),
   ]);
@@ -422,9 +425,12 @@ export async function getAdminAnalytics(query: AdminApiQuery = {}) {
   };
 }
 
-export async function getAdminRevenue(query: AdminApiQuery) {
+export async function getAdminRevenue(
+  query: AdminApiQuery,
+  options: { session: ModuleHostSession }
+) {
   const [commercial, operations] = await Promise.all([
-    getAdminCommercialView(),
+    getAdminCommercialView(options.session),
     getAdminOperationsView(),
   ]);
   const orders = commercial.orders.filter(
@@ -685,14 +691,14 @@ function searchSnapshot(
 
 export async function searchAdmin(
   query: AdminApiQuery,
-  options: { session?: ModuleHostSession } = {}
+  options: { session: ModuleHostSession }
 ) {
-  const capabilities = options.session ? getHostCapabilitiesForSession(options.session) : undefined;
+  const capabilities = getHostCapabilitiesForSession(options.session);
   const [operations, users, files, commercial] = await Promise.all([
     getAdminOperationsView(),
     getHostIdentityOperationsView(),
     getAdminFilesView(),
-    getAdminCommercialView(),
+    getAdminCommercialView(options.session),
   ]);
   const q = query.q?.trim() ?? '';
   if (!q) {

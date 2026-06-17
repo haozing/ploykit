@@ -17,6 +17,7 @@ import { getHostRuntimeStore } from './runtime-store';
 import {
   DEFAULT_HOST_PRODUCT_ID,
   DEFAULT_HOST_PRODUCT_SCOPE_PROFILE,
+  DEFAULT_HOST_ENVIRONMENT_ID,
   DEFAULT_HOST_WORKSPACE_ID,
 } from './default-scope';
 import { readHostSettingsView } from './host-settings';
@@ -882,6 +883,7 @@ export function createHostSessionForUser(
     actorId: user.id,
     authSessionId: options.authSessionId,
     productId: user.productId,
+    environmentId: DEFAULT_HOST_ENVIRONMENT_ID,
     workspaceId: user.workspaceId,
     workspaceRole: user.workspaceRole,
     productScopeProfile: DEFAULT_HOST_PRODUCT_SCOPE_PROFILE,
@@ -898,6 +900,7 @@ export function createAnonymousHostSession(): ModuleHostSession {
   return {
     ...createAnonymousModuleHostSession(),
     productId: DEFAULT_PRODUCT_ID,
+    environmentId: DEFAULT_HOST_ENVIRONMENT_ID,
     workspaceId: DEFAULT_WORKSPACE_ID,
     productScopeProfile: DEFAULT_HOST_PRODUCT_SCOPE_PROFILE,
     data: null,

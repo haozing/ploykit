@@ -100,6 +100,15 @@ import type {
   RuntimeStoreHostUserStatus,
   RuntimeStoreMembership,
 } from './runtime-store-identity-types';
+import type {
+  BeginRuntimeStoreIdempotencyKeyInput,
+  CompleteRuntimeStoreIdempotencyKeyInput,
+  DeleteExpiredRuntimeStoreIdempotencyKeysQuery,
+  ListRuntimeStoreIdempotencyKeysQuery,
+  RuntimeStoreIdempotencyBeginResult,
+  RuntimeStoreIdempotencyRecord,
+  RuntimeStoreIdempotencyStatus,
+} from './runtime-store-idempotency-types';
 import type { RuntimeStoreRiskBlock, RuntimeStoreRiskEvent } from './runtime-store-risk-types';
 import type { RuntimeStoreFileRecord } from './runtime-store-file-types';
 import type {
@@ -209,6 +218,16 @@ export type {
   RuntimeStoreMembership,
 } from './runtime-store-identity-types';
 
+export type {
+  BeginRuntimeStoreIdempotencyKeyInput,
+  CompleteRuntimeStoreIdempotencyKeyInput,
+  DeleteExpiredRuntimeStoreIdempotencyKeysQuery,
+  ListRuntimeStoreIdempotencyKeysQuery,
+  RuntimeStoreIdempotencyBeginResult,
+  RuntimeStoreIdempotencyRecord,
+  RuntimeStoreIdempotencyStatus,
+} from './runtime-store-idempotency-types';
+
 export type { RuntimeStoreRiskBlock, RuntimeStoreRiskEvent } from './runtime-store-risk-types';
 
 export type { RuntimeStoreFileRecord } from './runtime-store-file-types';
@@ -227,6 +246,20 @@ export type {
 
 export interface RuntimeStore {
   ensureSchema?(): Promise<void>;
+  transaction?<T>(callback: (tx: RuntimeStore) => Promise<T>): Promise<T>;
+  beginIdempotencyKey(
+    input: BeginRuntimeStoreIdempotencyKeyInput
+  ): Promise<RuntimeStoreIdempotencyBeginResult>;
+  completeIdempotencyKey(
+    input: CompleteRuntimeStoreIdempotencyKeyInput
+  ): Promise<RuntimeStoreIdempotencyRecord>;
+  getIdempotencyKey(id: string): Promise<RuntimeStoreIdempotencyRecord | null>;
+  listIdempotencyKeys(
+    query?: ListRuntimeStoreIdempotencyKeysQuery
+  ): Promise<RuntimeStoreIdempotencyRecord[]>;
+  deleteExpiredIdempotencyKeys(
+    query?: DeleteExpiredRuntimeStoreIdempotencyKeysQuery
+  ): Promise<number>;
   createRun<TInput = unknown>(
     input: CreateRuntimeStoreRunInput<TInput>
   ): Promise<ModuleRunRecord<TInput>>;
@@ -252,6 +285,7 @@ export interface RuntimeStore {
   ): Promise<RuntimeStoreOutboxRecord<TPayload>>;
   listOutbox(query?: {
     productId?: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     status?: RuntimeStoreOutboxStatus;
     name?: string;
@@ -259,6 +293,7 @@ export interface RuntimeStore {
   }): Promise<RuntimeStoreOutboxRecord[]>;
   claimOutbox(query?: {
     productId?: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     name?: string;
     namePrefix?: string;
@@ -456,6 +491,7 @@ export interface RuntimeStore {
       source?: string;
       sourceId?: string;
       idempotencyKey?: string;
+      expiresAt?: string;
       metadata?: Record<string, unknown>;
     }
   ): Promise<RuntimeStoreCreditReservation>;
@@ -476,6 +512,7 @@ export interface RuntimeStore {
     status?: RuntimeStoreCreditReservationStatus;
     source?: string;
     sourceId?: string;
+    expiresBefore?: string;
   }): Promise<RuntimeStoreCreditReservation[]>;
   grantEntitlement(
     input: RuntimeStoreScope & {
@@ -691,6 +728,7 @@ export interface RuntimeStore {
       creditsAmount?: number;
       creditsUnit?: string;
       idempotencyKey?: string;
+      maxRedemptions?: number;
       metadata?: Record<string, unknown>;
     }
   ): Promise<RuntimeStoreRedeemRedemption>;
@@ -702,11 +740,13 @@ export interface RuntimeStore {
   createApiKey(input: CreateRuntimeStoreApiKeyInput): Promise<RuntimeStoreApiKeyRecord>;
   getApiKey(input: {
     productId?: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     id: string;
   }): Promise<RuntimeStoreApiKeyRecord | null>;
   findApiKeyByHash(input: {
     productId?: string;
+    environmentId?: string | null;
     prefix?: string;
     keyHash: string;
   }): Promise<RuntimeStoreApiKeyRecord | null>;
@@ -719,11 +759,13 @@ export interface RuntimeStore {
       expiresAt?: string | null;
       revokedAt?: string | null;
       lastUsedAt?: string | null;
+      rateLimit?: Record<string, unknown> | null;
       metadata?: Record<string, unknown>;
     }
   ): Promise<RuntimeStoreApiKeyRecord>;
   listApiKeys(query?: {
     productId?: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     moduleId?: string | null;
     ownerSubjectType?: RuntimeStoreApiKeyRecord['ownerSubjectType'];

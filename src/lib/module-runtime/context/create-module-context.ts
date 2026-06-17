@@ -417,6 +417,9 @@ function createUnavailableCreditsApi(): ModuleCreditsApi {
     async revokeBySource() {
       return unavailableCapability('credits.revokeBySource');
     },
+    async refundRevoke() {
+      return unavailableCapability('credits.refundRevoke');
+    },
     async listLedger() {
       return unavailableCapability('credits.listLedger');
     },

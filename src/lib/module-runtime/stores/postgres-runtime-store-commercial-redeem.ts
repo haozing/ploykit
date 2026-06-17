@@ -87,28 +87,73 @@ export function createPostgresCommercialRedeemStore(
       return result.rows.map(mapRedeemCode);
     },
     async recordRedeemRedemption(input) {
-      const result = await database.query<Row>(
-        `insert into module_redeem_redemptions (
-          id, product_id, code, user_id, entitlement, credits_amount, credits_unit,
-          idempotency_key, metadata
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
-        on conflict (product_id, code, user_id)
-        do update set metadata = module_redeem_redemptions.metadata
-        returning *`,
-        [
-          createId('redemption'),
-          input.productId,
-          input.code,
-          input.userId,
-          input.entitlement ?? null,
-          input.creditsAmount ?? null,
-          input.creditsUnit ?? null,
-          input.idempotencyKey ?? null,
-          json(input.metadata ?? {}),
-        ]
-      );
-      return mapRedeemRedemption(result.rows[0]!);
+      const write = async (executor: ModuleDataPostgresExecutor) => {
+        const result = await executor.query<Row>(
+          `insert into module_redeem_redemptions (
+            id, product_id, code, user_id, entitlement, credits_amount, credits_unit,
+            idempotency_key, metadata
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+          on conflict (product_id, code, user_id)
+          do update set metadata = module_redeem_redemptions.metadata
+          returning *`,
+          [
+            createId('redemption'),
+            input.productId,
+            input.code,
+            input.userId,
+            input.entitlement ?? null,
+            input.creditsAmount ?? null,
+            input.creditsUnit ?? null,
+            input.idempotencyKey ?? null,
+            json(input.metadata ?? {}),
+          ]
+        );
+        return mapRedeemRedemption(result.rows[0]!);
+      };
+
+      const maxRedemptions = input.maxRedemptions;
+      if (!maxRedemptions) {
+        return write(database);
+      }
+      if (!database.transaction) {
+        throw new Error(
+          'RUNTIME_STORE_TRANSACTION_REQUIRED: redeem limit enforcement requires database.transaction'
+        );
+      }
+
+      return database.transaction(async (tx) => {
+        await tx.query(
+          `select pg_advisory_xact_lock(
+            hashtext($1::text),
+            hashtext($2::text)
+          )`,
+          [input.productId, input.code]
+        );
+
+        const existing = await tx.query<Row>(
+          `select *
+           from module_redeem_redemptions
+           where product_id = $1 and code = $2 and user_id = $3
+           limit 1`,
+          [input.productId, input.code, input.userId]
+        );
+        if (existing.rows[0]) {
+          return mapRedeemRedemption(existing.rows[0]);
+        }
+
+        const count = await tx.query<{ total: string | number }>(
+          `select count(*) as total
+           from module_redeem_redemptions
+           where product_id = $1 and code = $2`,
+          [input.productId, input.code]
+        );
+        if (Number(count.rows[0]?.total ?? 0) >= maxRedemptions) {
+          throw new Error('MODULE_REDEEM_CODE_REDEMPTION_LIMIT_EXCEEDED');
+        }
+
+        return write(tx);
+      });
     },
     async listRedeemRedemptions(query = {}) {
       const result = await database.query<Row>(

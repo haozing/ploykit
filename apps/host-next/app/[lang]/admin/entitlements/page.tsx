@@ -85,11 +85,11 @@ export default async function AdminEntitlementsPage({
   params: Promise<LanguageRouteParams>;
   searchParams?: Promise<RouteSearchParams>;
 }) {
-  const [lang] = await readLanguageAndRequireAdmin(params, '/admin/entitlements');
+  const [lang, session] = await readLanguageAndRequireAdmin(params, '/admin/entitlements');
   const query = await readAdminTableQuery(searchParams);
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 20;
-  const commercial = await getAdminCommercialView();
+  const commercial = await getAdminCommercialView(session);
   return (
     <AdminEntitlementsOperationsPage
       lang={lang}

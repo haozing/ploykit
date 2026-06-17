@@ -324,7 +324,7 @@ export function createHostModuleAiApi(input: {
       embedding: { providerId, model: config.embeddingModel },
     },
   });
-  const userId = input.session.userId ?? input.session.user?.id ?? 'anonymous';
+  const userId = aiBillingSubjectId(input.session);
   async function recordProviderInvocation(record: RecordRuntimeStoreProviderInvocationInput) {
     if (input.recordProviderInvocation) {
       await input.recordProviderInvocation(record);
@@ -365,6 +365,22 @@ export function createHostModuleAiApi(input: {
       });
     },
     evidence: async (record) => {
+      const credits = Number(record.cost.credits);
+      if (Number.isFinite(credits) && credits > 1) {
+        await input.audit?.({
+          moduleId: record.moduleId,
+          type: 'host.ai.high_cost_invocation',
+          metadata: {
+            providerId: record.providerId,
+            operation: record.operation,
+            model: record.model,
+            credits,
+            unit: record.cost.unit,
+            latencyMs: record.latencyMs,
+            idempotencyKey: record.idempotencyKey,
+          },
+        });
+      }
       await recordProviderInvocation({
         productId: defaultProductId(input.session.productId),
         workspaceId: input.session.workspaceId ?? null,
@@ -383,4 +399,23 @@ export function createHostModuleAiApi(input: {
     },
   });
   return runtime.forModule(input.moduleId);
+}
+
+function aiBillingSubjectId(session: ModuleHostSession): string {
+  const userId = session.userId ?? session.user?.id;
+  if (userId) {
+    return userId;
+  }
+  if (session.subject) {
+    return session.subject.type === 'user'
+      ? session.subject.id
+      : `${session.subject.type}:${session.subject.id}`;
+  }
+  if (session.apiKeyId) {
+    return `apiKey:${session.apiKeyId}`;
+  }
+  if (session.workspaceId) {
+    return `workspace:${session.workspaceId}`;
+  }
+  throw new Error('HOST_AI_BILLING_SUBJECT_REQUIRED');
 }

@@ -5,7 +5,8 @@ import type {
 } from '../../module-runtime/stores';
 import {
   assertAdmin,
-  assertPositive,
+  assertIntegerAmount,
+  assertPositiveIntegerAmount,
   hashRedeemCode,
   maskRedeemCode,
 } from './commercial-ledger-utils';
@@ -43,7 +44,7 @@ export function createCommercialAdminRuntime({
   return {
     async grantCredits(input) {
       assertAdmin(input.session);
-      assertPositive(input.amount, 'admin.grantCredits');
+      assertPositiveIntegerAmount(input.amount, 'admin.grantCredits');
       const balance = await recordCredit({
         userId: input.userId,
         amount: input.amount,
@@ -63,6 +64,7 @@ export function createCommercialAdminRuntime({
     },
     async adjustCredits(input) {
       assertAdmin(input.session);
+      assertIntegerAmount(input.amount, 'admin.adjustCredits');
       const balance = await recordCredit({
         userId: input.userId,
         amount: input.amount,

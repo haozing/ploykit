@@ -1,3 +1,8 @@
+import { createHash } from 'node:crypto';
+import { createRuntimeLogger } from '@/lib/module-runtime/observability/logger';
+import type { RuntimeStore } from '@/lib/module-runtime/stores/runtime-store-types';
+import { DEFAULT_HOST_ENVIRONMENT_ID, DEFAULT_HOST_PRODUCT_ID } from './default-scope';
+
 interface ModuleActionRouteContext {
   params: Promise<{
     moduleId: string;
@@ -21,6 +26,14 @@ interface ModuleActionHost {
 export interface ModuleActionRouteDependencies {
   getModuleHost(): Promise<ModuleActionHost>;
   checkHostRouteSecurity(request: Request, routeId: 'module.action'): Promise<Response | null>;
+  getRuntimeStore?(): Promise<RuntimeStore>;
+  idempotencyScope?:
+    | { productId: string; environmentId?: string | null; workspaceId?: string | null }
+    | ((request: Request) => {
+        productId: string;
+        environmentId?: string | null;
+        workspaceId?: string | null;
+      });
 }
 
 interface ActionPayload {
@@ -340,10 +353,187 @@ function actionErrorResponse(error: unknown): Response {
   );
 }
 
+const moduleActionRouteLogger = createRuntimeLogger({
+  sink(record) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[module-action-route]', record);
+    }
+  },
+});
+
+function errorMetadata(error: unknown): Record<string, unknown> {
+  return error instanceof Error
+    ? { name: error.name, message: error.message, stack: error.stack }
+    : { error };
+}
+
 function logModuleActionRouteError(error: unknown): void {
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('[module-action-route] action failed', error);
+  moduleActionRouteLogger.error('Module action route failed.', errorMetadata(error));
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return item;
+    }
+    return Object.keys(item as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = (item as Record<string, unknown>)[key];
+        return acc;
+      }, {});
+  });
+}
+
+function actionRequestHash(input: {
+  moduleId: string;
+  name: string;
+  payload: ActionPayload;
+}): string {
+  const body = stableStringify({
+    moduleId: input.moduleId,
+    name: input.name,
+    input: input.payload.input,
+    confirmed: input.payload.confirmed,
+  });
+  return `sha256:${createHash('sha256').update(body).digest('hex')}`;
+}
+
+function responseHeadersRecord(response: Response): Record<string, string> {
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  return headers;
+}
+
+async function responseBodyBase64(response: Response): Promise<string> {
+  const body = await response.clone().arrayBuffer();
+  return Buffer.from(body).toString('base64');
+}
+
+function responseFromIdempotencyRecord(record: {
+  responseStatus?: number;
+  responseHeaders?: Record<string, string>;
+  responseBodyBase64?: string;
+}): Response {
+  const headers = new Headers(record.responseHeaders ?? {});
+  headers.set('x-ploykit-idempotency-replay', 'true');
+  const body = record.responseBodyBase64
+    ? Buffer.from(record.responseBodyBase64, 'base64')
+    : null;
+  return new Response(body, {
+    status: record.responseStatus ?? 200,
+    headers,
+  });
+}
+
+function idempotencyErrorResponse(code: string, message: string, status: number): Response {
+  return Response.json(
+    {
+      ok: false,
+      code,
+      message,
+    },
+    { status }
+  );
+}
+
+function actionSuccessResponse(
+  request: Request,
+  payload: ActionPayload,
+  result: unknown
+): Response {
+  if (isActionFailureEnvelope(result)) {
+    const { code } = actionFailureEnvelopeDetails(result);
+    if (payload.redirectOnComplete) {
+      return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'error', code), 303);
+    }
+    return actionErrorResponse(result);
   }
+
+  if (payload.redirectOnComplete) {
+    return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'ok'), 303);
+  }
+
+  return Response.json({ ok: true, result });
+}
+
+function moduleActionIdempotencyScope(
+  request: Request,
+  dependencies: ModuleActionRouteDependencies
+): { productId: string; environmentId?: string | null; workspaceId?: string | null } {
+  if (typeof dependencies.idempotencyScope === 'function') {
+    return dependencies.idempotencyScope(request);
+  }
+  return (
+    dependencies.idempotencyScope ?? {
+      productId: DEFAULT_HOST_PRODUCT_ID,
+      environmentId: DEFAULT_HOST_ENVIRONMENT_ID,
+    }
+  );
+}
+
+async function runWithActionIdempotency(input: {
+  request: Request;
+  moduleId: string;
+  name: string;
+  payload: ActionPayload;
+  idempotencyKey?: string;
+  dependencies: ModuleActionRouteDependencies;
+  execute: () => Promise<Response>;
+}): Promise<Response> {
+  if (!input.idempotencyKey || !input.dependencies.getRuntimeStore) {
+    return input.execute();
+  }
+
+  const store = await input.dependencies.getRuntimeStore();
+  const scope = moduleActionIdempotencyScope(input.request, input.dependencies);
+  const begin = await store.beginIdempotencyKey({
+    productId: scope.productId,
+    environmentId: scope.environmentId,
+    workspaceId: scope.workspaceId,
+    namespace: `action:${input.moduleId}:${input.name}`,
+    key: input.idempotencyKey,
+    requestHash: actionRequestHash(input),
+    recoverLockedBefore: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    metadata: {
+      route: 'module.action',
+      moduleId: input.moduleId,
+      actionName: input.name,
+    },
+  });
+
+  if (begin.outcome === 'conflict') {
+    return idempotencyErrorResponse(
+      'MODULE_ACTION_IDEMPOTENCY_CONFLICT',
+      'MODULE_ACTION_IDEMPOTENCY_CONFLICT: idempotency key was already used with a different request payload.',
+      400
+    );
+  }
+  if (begin.outcome === 'in_progress') {
+    return idempotencyErrorResponse(
+      'MODULE_ACTION_IDEMPOTENCY_IN_PROGRESS',
+      'MODULE_ACTION_IDEMPOTENCY_IN_PROGRESS: original request is still in progress.',
+      409
+    );
+  }
+  if (begin.outcome === 'replay') {
+    return responseFromIdempotencyRecord(begin.record);
+  }
+
+  const response = await input.execute();
+  try {
+    await store.completeIdempotencyKey({
+      id: begin.record.id,
+      responseStatus: response.status,
+      responseHeaders: responseHeadersRecord(response),
+      responseBodyBase64: await responseBodyBase64(response),
+    });
+  } catch (error) {
+    logModuleActionRouteError(error);
+  }
+  return response;
 }
 
 export async function handleModuleActionPost(
@@ -362,28 +552,26 @@ export async function handleModuleActionPost(
 
   try {
     payload = await readActionPayload(request);
-    const result = await host.executeAction({
+    const idempotencyKey = payload.idempotencyKey ?? readIdempotencyKey(request);
+    return await runWithActionIdempotency({
+      request,
       moduleId,
       name,
-      input: payload.input,
-      request,
-      confirmed: payload.confirmed ?? readActionConfirmed(request),
-      idempotencyKey: payload.idempotencyKey ?? readIdempotencyKey(request),
+      payload,
+      idempotencyKey,
+      dependencies,
+      async execute() {
+        const result = await host.executeAction({
+          moduleId,
+          name,
+          input: payload.input,
+          request,
+          confirmed: payload.confirmed ?? readActionConfirmed(request),
+          idempotencyKey,
+        });
+        return actionSuccessResponse(request, payload, result);
+      },
     });
-
-    if (isActionFailureEnvelope(result)) {
-      const { code } = actionFailureEnvelopeDetails(result);
-      if (payload.redirectOnComplete) {
-        return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'error', code), 303);
-      }
-      return actionErrorResponse(result);
-    }
-
-    if (payload.redirectOnComplete) {
-      return Response.redirect(safeRedirectTarget(request, payload.redirectTo, 'ok'), 303);
-    }
-
-    return Response.json({ ok: true, result });
   } catch (error) {
     logModuleActionRouteError(error);
     if (payload.redirectOnComplete) {

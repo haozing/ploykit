@@ -10,7 +10,12 @@ import type {
   RuntimeStoreApiKeyRecord,
 } from '@/lib/module-runtime/stores/runtime-store-types';
 import type { CommercialSubject, ModuleApiKeysApi, PermissionValue } from '@ploykit/module-sdk';
-import { DEFAULT_HOST_PRODUCT_ID, defaultProductId } from './default-scope';
+import {
+  DEFAULT_HOST_ENVIRONMENT_ID,
+  DEFAULT_HOST_PRODUCT_ID,
+  defaultEnvironmentId,
+  defaultProductId,
+} from './default-scope';
 
 function createHostApiKeySecret(): string {
   return `pk_${randomBytes(24).toString('base64url')}`;
@@ -22,6 +27,11 @@ function hashHostApiKey(value: string): string {
 
 function hostApiKeyPrefix(value: string): string {
   return value.slice(0, 12);
+}
+
+function apiKeyRotationGraceMs(): number {
+  const raw = Number(process.env.PLOYKIT_API_KEY_ROTATION_GRACE_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 24 * 60 * 60 * 1000;
 }
 
 function defaultApiKeyOwner(session: ModuleHostSession): CommercialSubject | undefined {
@@ -85,22 +95,38 @@ function assertApiKeyOwnerAllowed(
 function effectiveApiKeyStatus(
   record: RuntimeStoreApiKeyRecord,
   now: Date = new Date()
-): 'active' | 'revoked' | 'expired' {
+): 'active' | 'rotating' | 'revoked' | 'expired' {
   if (record.status === 'revoked' || record.revokedAt) {
     return 'revoked';
   }
   if (record.expiresAt && new Date(record.expiresAt).getTime() <= now.getTime()) {
     return 'expired';
   }
+  if (record.status === 'rotating') {
+    return 'rotating';
+  }
   return 'active';
 }
 
 function apiKeyScopeMatches(
   record: RuntimeStoreApiKeyRecord,
-  scope: { productId?: string; workspaceId?: string | null; moduleId?: string }
+  scope: {
+    productId?: string;
+    environmentId?: string | null;
+    workspaceId?: string | null;
+    moduleId?: string;
+  }
 ): boolean {
   const productId = defaultProductId(scope.productId);
+  const environmentId = defaultEnvironmentId(scope.environmentId);
   if (record.productId && record.productId !== productId) {
+    return false;
+  }
+  if (
+    record.environmentId !== undefined &&
+    record.environmentId !== null &&
+    record.environmentId !== environmentId
+  ) {
     return false;
   }
   if (
@@ -123,6 +149,16 @@ function apiKeyOwnerFromRecord(record: RuntimeStoreApiKeyRecord): CommercialSubj
     return undefined;
   }
   return { type: record.ownerSubjectType, id: record.ownerSubjectId };
+}
+
+function rotationRootId(record: RuntimeStoreApiKeyRecord): string {
+  return typeof record.metadata.rotationRootId === 'string'
+    ? record.metadata.rotationRootId
+    : record.id;
+}
+
+function inRotationFamily(record: RuntimeStoreApiKeyRecord, rootId: string): boolean {
+  return record.id === rootId || record.metadata.rotationRootId === rootId;
 }
 
 function apiKeyOwnerFields(owner: CommercialSubject | undefined): {
@@ -152,13 +188,18 @@ function assertApiKeyPermissionsDeclared(
 function assertApiKeyCreateScopeAllowed(input: {
   contract: ModuleRuntimeContract;
   currentProductId: string;
+  currentEnvironmentId: string;
   currentWorkspaceId: string | null;
   productId: string;
+  environmentId: string | null | undefined;
   workspaceId: string | null | undefined;
   moduleId: string | null | undefined;
 }): void {
   if (input.productId !== input.currentProductId) {
     throw new Error(`MODULE_API_KEY_PRODUCT_SCOPE_DENIED: ${input.productId}`);
+  }
+  if ((input.environmentId ?? null) !== input.currentEnvironmentId) {
+    throw new Error(`MODULE_API_KEY_ENVIRONMENT_SCOPE_DENIED: ${input.environmentId ?? 'global'}`);
   }
   if ((input.workspaceId ?? null) !== input.currentWorkspaceId) {
     throw new Error(`MODULE_API_KEY_WORKSPACE_SCOPE_DENIED: ${input.workspaceId ?? 'global'}`);
@@ -171,11 +212,15 @@ function assertApiKeyCreateScopeAllowed(input: {
 function assertApiKeyRecordManageable(input: {
   contract: ModuleRuntimeContract;
   currentProductId: string;
+  currentEnvironmentId: string;
   currentWorkspaceId: string | null;
   record: RuntimeStoreApiKeyRecord;
 }): void {
   if (
     input.record.productId !== input.currentProductId ||
+    (input.record.environmentId !== undefined &&
+      input.record.environmentId !== null &&
+      input.record.environmentId !== input.currentEnvironmentId) ||
     (input.record.workspaceId ?? null) !== input.currentWorkspaceId ||
     (input.record.moduleId ?? null) !== input.contract.id
   ) {
@@ -187,6 +232,7 @@ async function verifyStoredApiKey(input: {
   store: RuntimeStore;
   apiKey: string;
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   moduleId?: string;
 }): Promise<RuntimeStoreApiKeyRecord | null> {
@@ -194,10 +240,12 @@ async function verifyStoredApiKey(input: {
   const keyHash = hashHostApiKey(input.apiKey);
   const record = await input.store.findApiKeyByHash({
     productId: input.productId,
+    environmentId: input.environmentId,
     prefix,
     keyHash,
   });
-  if (!record || effectiveApiKeyStatus(record) !== 'active') {
+  const status = record ? effectiveApiKeyStatus(record) : 'revoked';
+  if (!record || (status !== 'active' && status !== 'rotating')) {
     return null;
   }
   if (!apiKeyScopeMatches(record, input)) {
@@ -212,11 +260,13 @@ export function createHostModuleApiKeysApi(input: {
   session: ModuleHostSession;
 }): ModuleApiKeysApi {
   const productId = defaultProductId(input.session.productId);
+  const environmentId = defaultEnvironmentId(input.session.environmentId);
   const workspaceId = input.session.workspaceId ?? null;
 
   async function getRecord(id: string): Promise<RuntimeStoreApiKeyRecord> {
     const record = await input.store.getApiKey({
       productId,
+      environmentId,
       id,
     });
     if (!record || record.productId !== productId) {
@@ -225,6 +275,7 @@ export function createHostModuleApiKeysApi(input: {
     assertApiKeyRecordManageable({
       contract: input.contract,
       currentProductId: productId,
+      currentEnvironmentId: environmentId,
       currentWorkspaceId: workspaceId,
       record,
     });
@@ -237,12 +288,14 @@ export function createHostModuleApiKeysApi(input: {
       const owner = createInput.owner ?? defaultApiKeyOwner(input.session);
       const requestedScope = {
         productId: defaultProductId(createInput.scope?.productId ?? productId),
+        environmentId: defaultEnvironmentId(createInput.scope?.environmentId ?? environmentId),
         workspaceId: createInput.scope?.workspaceId ?? workspaceId,
         moduleId: createInput.scope?.moduleId ?? input.contract.id,
       };
       assertApiKeyCreateScopeAllowed({
         contract: input.contract,
         currentProductId: productId,
+        currentEnvironmentId: environmentId,
         currentWorkspaceId: workspaceId,
         ...requestedScope,
       });
@@ -254,12 +307,14 @@ export function createHostModuleApiKeysApi(input: {
       const record = await input.store.createApiKey({
         id: `api_key_${randomUUID()}`,
         productId: requestedScope.productId,
+        environmentId: requestedScope.environmentId,
         workspaceId: requestedScope.workspaceId,
         moduleId: requestedScope.moduleId,
         name: createInput.name,
         prefix: hostApiKeyPrefix(key),
         keyHash: hashHostApiKey(key),
         ...apiKeyOwnerFields(owner),
+        createdBy: input.session.actorId ?? input.session.userId ?? input.session.user?.id,
         permissions: createInput.permissions as readonly PermissionValue[] | undefined,
         status: 'active',
         expiresAt: createInput.expiresAt,
@@ -277,6 +332,7 @@ export function createHostModuleApiKeysApi(input: {
           owner: apiKeyOwnerFromRecord(record),
           scope: {
             productId: record.productId,
+            environmentId: record.environmentId,
             workspaceId: record.workspaceId,
             moduleId: record.moduleId,
           },
@@ -292,48 +348,128 @@ export function createHostModuleApiKeysApi(input: {
     },
     async rotate(rotateInput) {
       const existing = await getRecord(rotateInput.id);
+      const status = effectiveApiKeyStatus(existing);
+      if (status === 'revoked' || status === 'expired') {
+        throw new Error(`MODULE_API_KEY_ROTATE_DENIED: ${existing.id}:${status}`);
+      }
       const key = createHostApiKeySecret();
-      const record = await input.store.updateApiKey(existing.id, {
-        prefix: hostApiKeyPrefix(key),
-        keyHash: hashHostApiKey(key),
-        status: 'active',
-        revokedAt: null,
-      });
+      const nextId = `api_key_${randomUUID()}`;
+      const rootId = rotationRootId(existing);
+      const graceExpiresAt = new Date(Date.now() + apiKeyRotationGraceMs()).toISOString();
+      const existingExpiresAt =
+        existing.expiresAt && new Date(existing.expiresAt).getTime() < new Date(graceExpiresAt).getTime()
+          ? existing.expiresAt
+          : graceExpiresAt;
+
+      const rotateWithStore = async (store: RuntimeStore) => {
+        const record = await store.createApiKey({
+          id: nextId,
+          productId: existing.productId,
+          environmentId: existing.environmentId ?? null,
+          workspaceId: existing.workspaceId ?? null,
+          moduleId: existing.moduleId ?? null,
+          name: existing.name,
+          prefix: hostApiKeyPrefix(key),
+          keyHash: hashHostApiKey(key),
+          ownerSubjectType: existing.ownerSubjectType,
+          ownerSubjectId: existing.ownerSubjectId,
+          createdBy: input.session.actorId ?? input.session.userId ?? input.session.user?.id,
+          permissions: existing.permissions,
+          rateLimit: existing.rateLimit,
+          status: 'active',
+          expiresAt: existing.expiresAt,
+          metadata: {
+            ...existing.metadata,
+            rotationRootId: rootId,
+            rotatedFromId: existing.id,
+          },
+        });
+        await store.updateApiKey(existing.id, {
+          status: 'rotating',
+          expiresAt: existingExpiresAt,
+          metadata: {
+            rotationRootId: rootId,
+            rotatedToId: record.id,
+            rotationGraceExpiresAt: existingExpiresAt,
+          },
+        });
+        return record;
+      };
+      const record = input.store.transaction
+        ? await input.store.transaction(rotateWithStore)
+        : await rotateWithStore(input.store);
       await input.store.recordAudit({
         productId,
         workspaceId,
         moduleId: input.contract.id,
         actorId: input.session.actorId ?? input.session.userId ?? input.session.user?.id,
         type: 'api_key.rotated',
-        metadata: { apiKeyId: record.id, prefix: record.prefix },
+        metadata: {
+          apiKeyId: record.id,
+          rotatedFromId: existing.id,
+          rotationRootId: rootId,
+          prefix: record.prefix,
+          graceExpiresAt: existingExpiresAt,
+        },
       });
       return { id: record.id, key, prefix: record.prefix };
     },
     async revoke(revokeInput) {
       const existing = await getRecord(revokeInput.id);
-      const record = await input.store.updateApiKey(existing.id, {
-        status: 'revoked',
-        revokedAt: new Date().toISOString(),
-        metadata: {
-          ...existing.metadata,
-          revokeReason: revokeInput.reason,
-        },
-      });
+      const rootId = rotationRootId(existing);
+      const family = (await input.store.listApiKeys({ productId }))
+        .filter((record) =>
+          apiKeyScopeMatches(record, {
+            productId,
+            environmentId,
+            workspaceId,
+            moduleId: input.contract.id,
+          })
+        )
+        .filter((record) => inRotationFamily(record, rootId));
+      const revokedAt = new Date().toISOString();
+      const revokeWithStore = async (store: RuntimeStore) => {
+        for (const record of family.length > 0 ? family : [existing]) {
+          await store.updateApiKey(record.id, {
+            status: 'revoked',
+            revokedAt,
+            metadata: {
+              revokeReason: revokeInput.reason,
+              rotationRootId: rootId,
+            },
+          });
+        }
+      };
+      if (input.store.transaction) {
+        await input.store.transaction(revokeWithStore);
+      } else {
+        await revokeWithStore(input.store);
+      }
       await input.store.recordAudit({
         productId,
         workspaceId,
         moduleId: input.contract.id,
         actorId: input.session.actorId ?? input.session.userId ?? input.session.user?.id,
         type: 'api_key.revoked',
-        metadata: { apiKeyId: record.id, prefix: record.prefix, reason: revokeInput.reason },
+        metadata: {
+          apiKeyId: existing.id,
+          apiKeyIds: (family.length > 0 ? family : [existing]).map((record) => record.id),
+          prefix: existing.prefix,
+          reason: revokeInput.reason,
+        },
       });
-      return { id: record.id, revoked: true };
+      return { id: existing.id, revoked: true };
     },
     async list(listInput = {}) {
       const records = await input.store.listApiKeys({ productId });
       return records
         .filter((record) =>
-          apiKeyScopeMatches(record, { productId, workspaceId, moduleId: input.contract.id })
+          apiKeyScopeMatches(record, {
+            productId,
+            environmentId,
+            workspaceId,
+            moduleId: input.contract.id,
+          })
         )
         .filter(
           (record) =>
@@ -362,6 +498,7 @@ export function createHostModuleApiKeysApi(input: {
         store: input.store,
         apiKey,
         productId,
+        environmentId,
         workspaceId,
         moduleId: input.contract.id,
       });
@@ -374,6 +511,7 @@ export function createHostModuleApiKeysApi(input: {
       return {
         ok: true,
         productId: record.productId,
+        environmentId: record.environmentId ?? undefined,
         workspaceId: record.workspaceId ?? undefined,
         apiKeyId: record.id,
         subject: apiKeyOwnerFromRecord(record),
@@ -398,6 +536,9 @@ export function createHostModuleApiKeyVerifier(input: {
       store: input.store,
       apiKey: verifyInput.apiKey,
       productId: defaultProductId(verifyInput.session?.productId ?? DEFAULT_HOST_PRODUCT_ID),
+      environmentId: defaultEnvironmentId(
+        verifyInput.session?.environmentId ?? DEFAULT_HOST_ENVIRONMENT_ID
+      ),
       workspaceId: undefined,
       moduleId: verifyInput.moduleId,
     });
@@ -417,6 +558,7 @@ export function createHostModuleApiKeyVerifier(input: {
       session: {
         user: null,
         productId: record.productId,
+        environmentId: record.environmentId ?? undefined,
         workspaceId: record.workspaceId ?? undefined,
         authKind: 'apiKey',
         apiKeyId: record.id,

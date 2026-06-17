@@ -100,6 +100,7 @@ export interface PermissionRegistryEntry {
   risk: PermissionRiskLevel;
   scope: PermissionScopeLevel;
   ctxCapability?: string;
+  runtime?: 'request' | 'system' | 'reserved';
   suggestedTemplate?: 'basic' | 'dashboard' | 'crud' | 'connector' | 'job' | 'white-label';
 }
 
@@ -115,6 +116,13 @@ export const SystemOnlyPermissions = new Set<PermissionValue>([
 export const ModulePermissionValues = new Set<PermissionValue>(
   Object.values(Permission) as PermissionValue[]
 );
+
+export const ReservedRuntimePermissions = new Set<PermissionValue>([
+  Permission.ConfigWrite,
+  Permission.SecretsWrite,
+  Permission.SubjectsRead,
+  Permission.ConnectorsManage,
+]);
 
 export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry> = {
   [Permission.DataDocumentRead]: {
@@ -415,7 +423,7 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     labelKey: 'permissions.providers.connectorsManage',
     risk: 'high',
     scope: 'workspace',
-    ctxCapability: 'ctx.connectors',
+    runtime: 'reserved',
     suggestedTemplate: 'connector',
   },
   [Permission.ConnectorsInvoke]: {
@@ -450,7 +458,7 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     labelKey: 'permissions.security.secretsWrite',
     risk: 'critical',
     scope: 'workspace',
-    ctxCapability: 'ctx.secrets',
+    runtime: 'reserved',
   },
   [Permission.ConfigRead]: {
     value: Permission.ConfigRead,
@@ -466,7 +474,7 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     labelKey: 'permissions.providers.configWrite',
     risk: 'high',
     scope: 'workspace',
-    ctxCapability: 'ctx.config',
+    runtime: 'reserved',
   },
   [Permission.AiGenerate]: {
     value: Permission.AiGenerate,
@@ -526,7 +534,7 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     labelKey: 'permissions.commerce.subjectsRead',
     risk: 'medium',
     scope: 'workspace',
-    ctxCapability: 'ctx.subjects',
+    runtime: 'reserved',
   },
   [Permission.MeteringWrite]: {
     value: Permission.MeteringWrite,
@@ -711,6 +719,7 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     labelKey: 'permissions.system.unsafeInternalResource',
     risk: 'critical',
     scope: 'system',
+    runtime: 'system',
   },
 };
 

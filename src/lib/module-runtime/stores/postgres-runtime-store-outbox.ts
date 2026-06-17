@@ -33,17 +33,24 @@ export function createPostgresOutboxStore(
     async enqueueOutbox<TPayload = unknown>(input: EnqueueRuntimeStoreOutboxInput<TPayload>) {
       const result = await database.query<Row>(
         `insert into module_outbox (
-          id, product_id, workspace_id, module_id, name, payload, metadata, status,
+          id, product_id, environment_id, workspace_id, module_id, name, payload, metadata, status,
           idempotency_key, scheduled_at, priority
         )
-        values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'queued', $8, $9, $10)
-        on conflict (product_id, (coalesce(workspace_id, ''::text)), name, idempotency_key)
+        values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, 'queued', $9, $10, $11)
+        on conflict (
+          product_id,
+          (coalesce(environment_id, ''::text)),
+          (coalesce(workspace_id, ''::text)),
+          name,
+          idempotency_key
+        )
         where idempotency_key is not null
         do update set updated_at = module_outbox.updated_at
         returning *`,
         [
           createId('outbox'),
           input.productId,
+          input.environmentId ?? null,
           input.workspaceId ?? null,
           input.moduleId ?? null,
           input.name,
@@ -60,13 +67,15 @@ export function createPostgresOutboxStore(
       const result = await database.query<Row>(
         `select * from module_outbox
          where ($1::text is null or product_id = $1)
-           and ($2::text is null or coalesce(workspace_id, ''::text) = $2)
-           and ($3::text is null or status = $3)
-           and ($4::text is null or name = $4)
-           and ($5::text is null or name like $5 || '%')
+           and ($2::text is null or coalesce(environment_id, ''::text) = $2)
+           and ($3::text is null or coalesce(workspace_id, ''::text) = $3)
+           and ($4::text is null or status = $4)
+           and ($5::text is null or name = $5)
+           and ($6::text is null or name like $6 || '%')
          order by created_at asc`,
         [
           query.productId ?? null,
+          runtimeWorkspaceFilter(query.environmentId),
           runtimeWorkspaceFilter(query.workspaceId),
           query.status ?? null,
           query.name ?? null,
@@ -81,28 +90,30 @@ export function createPostgresOutboxStore(
            select id
            from module_outbox
            where ($1::text is null or product_id = $1)
-           and ($2::text is null or coalesce(workspace_id, ''::text) = $2)
-           and ($3::text is null or name = $3)
-           and ($4::text is null or name like $4 || '%')
+           and ($2::text is null or coalesce(environment_id, ''::text) = $2)
+           and ($3::text is null or coalesce(workspace_id, ''::text) = $3)
+           and ($4::text is null or name = $4)
+           and ($5::text is null or name like $5 || '%')
            and (
-             (status = any($5::text[]) and (scheduled_at is null or scheduled_at <= now()))
+             (status = any($6::text[]) and (scheduled_at is null or scheduled_at <= now()))
              or (status = 'processing' and lease_expires_at is not null and lease_expires_at <= now())
            )
           order by priority desc, coalesce(scheduled_at, created_at), created_at asc
-           limit $6
+           limit $7
            for update skip locked
          )
          update module_outbox
          set status = 'processing',
              attempts = attempts + 1,
-             lease_owner = $7,
-             lease_expires_at = now() + ($8::text || ' milliseconds')::interval,
+             lease_owner = $8,
+             lease_expires_at = now() + ($9::text || ' milliseconds')::interval,
              heartbeat_at = now(),
              updated_at = now()
          where id in (select id from picked)
          returning *`,
         [
           query.productId ?? null,
+          runtimeWorkspaceFilter(query.environmentId),
           runtimeWorkspaceFilter(query.workspaceId),
           query.name ?? null,
           query.namePrefix ?? null,

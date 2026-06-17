@@ -327,6 +327,7 @@ export function createInMemoryCommercialRuntimeStore({
         source: input.source,
         sourceId: input.sourceId,
         idempotencyKey: input.idempotencyKey,
+        expiresAt: input.expiresAt,
         metadata: input.metadata ?? {},
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -367,6 +368,11 @@ export function createInMemoryCommercialRuntimeStore({
         .filter((record) => !query.status || record.status === query.status)
         .filter((record) => !query.source || record.source === query.source)
         .filter((record) => !query.sourceId || record.sourceId === query.sourceId)
+        .filter(
+          (record) =>
+            !query.expiresBefore ||
+            Boolean(record.expiresAt && record.expiresAt <= query.expiresBefore)
+        )
         .map((record) => clone(record));
     },
     async grantEntitlement(input) {

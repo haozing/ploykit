@@ -48,6 +48,7 @@ export interface RuntimeStoreCreditReservation {
   source?: string;
   sourceId?: string;
   idempotencyKey?: string;
+  expiresAt?: string;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;

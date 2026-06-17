@@ -6,7 +6,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import type { RuntimeStore } from '../../module-runtime/stores';
 import {
-  assertPositive,
+  assertPositiveIntegerAmount,
   hashRedeemCode,
   isExpired,
   maskRedeemCode,
@@ -90,16 +90,27 @@ export function createCommercialLedgerRedeem({
     }
 
     const idempotencyKey = `redeem:${codeHash}:${userId}`;
-    await store.recordRedeemRedemption({
-      ...scope,
-      code: codeHash,
-      userId,
-      entitlement: redeemCodeRecord.entitlement,
-      creditsAmount: redeemCodeRecord.creditsAmount,
-      creditsUnit: redeemCodeRecord.creditsUnit,
-      idempotencyKey,
-      metadata: redeemRedemptionMetadata(redeemCodeRecord.metadata),
-    });
+    try {
+      await store.recordRedeemRedemption({
+        ...scope,
+        code: codeHash,
+        userId,
+        entitlement: redeemCodeRecord.entitlement,
+        creditsAmount: redeemCodeRecord.creditsAmount,
+        creditsUnit: redeemCodeRecord.creditsUnit,
+        idempotencyKey,
+        maxRedemptions: redeemCodeRecord.maxRedemptions,
+        metadata: redeemRedemptionMetadata(redeemCodeRecord.metadata),
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes('MODULE_REDEEM_CODE_REDEMPTION_LIMIT_EXCEEDED')
+      ) {
+        return { ok: false, reason: 'redemption_limit_exceeded' };
+      }
+      throw error;
+    }
 
     if (redeemCodeRecord.entitlement) {
       await store.grantEntitlement({
@@ -146,7 +157,7 @@ export function createCommercialLedgerRedeem({
         throw new Error('MODULE_REDEEM_CODES_INVALID_MAX_REDEMPTIONS');
       }
       if (input.credits) {
-        assertPositive(input.credits.amount, 'redeemCodes.createBatch.credits');
+        assertPositiveIntegerAmount(input.credits.amount, 'redeemCodes.createBatch.credits');
       }
       const batchId = `redeem_batch_${randomUUID()}`;
       const codes: ModuleRedeemCodeRecord[] = [];

@@ -11,6 +11,8 @@ const defaultWorkspace =
 
 export const DEFAULT_HOST_PRODUCT_ID = defaultProduct?.id ?? 'demo-product';
 export const DEFAULT_HOST_WORKSPACE_ID = defaultWorkspace?.id ?? 'demo-workspace';
+export const DEFAULT_HOST_ENVIRONMENT_ID =
+  process.env.PLOYKIT_ENVIRONMENT_ID ?? (process.env.NODE_ENV === 'production' ? 'live' : 'dev');
 export const DEFAULT_HOST_PRODUCT_SCOPE_PROFILE = defaultProduct?.profile ?? 'hidden-default';
 export const DEFAULT_HOST_ADMIN_USER_ID = 'demo-admin';
 export const DEFAULT_HOST_USER_ID = 'demo-user';
@@ -21,4 +23,8 @@ export function defaultProductId(productId: string | null | undefined): string {
 
 export function defaultWorkspaceId(workspaceId: string | null | undefined): string {
   return workspaceId ?? DEFAULT_HOST_WORKSPACE_ID;
+}
+
+export function defaultEnvironmentId(environmentId: string | null | undefined): string {
+  return environmentId ?? DEFAULT_HOST_ENVIRONMENT_ID;
 }

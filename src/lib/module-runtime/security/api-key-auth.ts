@@ -6,6 +6,7 @@ export interface StaticModuleApiKeyRecord {
   id?: string;
   user: ModuleUser | null;
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string;
   moduleId?: string;
   subject?: CommercialSubject;
@@ -21,6 +22,7 @@ export interface StaticModuleApiKeyVerificationInput {
   apiKey: string;
   moduleId?: string;
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string;
 }
 
@@ -41,6 +43,14 @@ export function createStaticModuleApiKeyVerifier(records: readonly StaticModuleA
     if (record.productId && input.productId && record.productId !== input.productId) {
       return { ok: false };
     }
+    if (
+      record.environmentId !== undefined &&
+      record.environmentId !== null &&
+      input.environmentId !== undefined &&
+      record.environmentId !== input.environmentId
+    ) {
+      return { ok: false };
+    }
     if (record.workspaceId && input.workspaceId && record.workspaceId !== input.workspaceId) {
       return { ok: false };
     }
@@ -50,6 +60,7 @@ export function createStaticModuleApiKeyVerifier(records: readonly StaticModuleA
       session: {
         user: record.user,
         productId: record.productId,
+        environmentId: record.environmentId,
         workspaceId: record.workspaceId,
         userId: record.user?.id,
         actorId: record.user?.id,

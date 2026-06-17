@@ -305,6 +305,23 @@ test('Data v2 memory runtime supports table upsert without a Postgres store', as
     await workspaceB.table('demo_notes').findOne({ where: { title: 'memory-runtime-post' } }),
     null
   );
+
+  const beforeRollback = await workspaceA.table('demo_notes').count();
+  await assert.rejects(
+    workspaceA.transaction(async (tx) => {
+      await tx.table('demo_notes').insert({
+        title: 'memory-rollback',
+        body: 'should not persist',
+      });
+      throw new Error('memory rollback sentinel');
+    }),
+    /memory rollback sentinel/
+  );
+  assert.equal(await workspaceA.table('demo_notes').count(), beforeRollback);
+  assert.equal(
+    await workspaceA.table('demo_notes').findOne({ where: { title: 'memory-rollback' } }),
+    null
+  );
 });
 
 async function queryAsSession<TRecord extends QueryResultRow = Record<string, unknown>>(

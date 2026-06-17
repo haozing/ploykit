@@ -47,7 +47,7 @@ test('P18 csrf guard rejects bad origins and invalid tokens', () => {
   );
 });
 
-test('P18 rate limiter scopes by product workspace user ip route and cost', () => {
+test('P18 rate limiter scopes by product workspace user ip route and cost', async () => {
   const limiter = createInMemoryRateLimiter({
     now: () => new Date('2026-05-19T00:00:00.000Z'),
   });
@@ -60,8 +60,14 @@ test('P18 rate limiter scopes by product workspace user ip route and cost', () =
     route: '/api/ai',
   });
 
-  assert.equal(limiter.check({ bucket, rule: { limit: 3, windowMs: 60_000 }, cost: 2 }).ok, true);
-  assert.equal(limiter.check({ bucket, rule: { limit: 3, windowMs: 60_000 }, cost: 2 }).ok, false);
+  assert.equal(
+    (await limiter.check({ bucket, rule: { limit: 3, windowMs: 60_000 }, cost: 2 })).ok,
+    true
+  );
+  assert.equal(
+    (await limiter.check({ bucket, rule: { limit: 3, windowMs: 60_000 }, cost: 2 })).ok,
+    false
+  );
 });
 
 test('P18 redaction covers nested secrets before admin or browser exposure', () => {

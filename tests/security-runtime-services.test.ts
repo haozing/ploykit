@@ -218,6 +218,15 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
   assert.equal(invocations.length, 1);
   assert.equal(invocations[0]?.kind, 'service');
   assert.equal(invocations[0]?.status, 'succeeded');
+  const usage = await store.listUsage({
+    productId: 'product-a',
+    moduleId: contract.id,
+    meter: 'egress.call',
+  });
+  assert.equal(usage.length, 1);
+  assert.equal(usage[0]?.quantity, 1);
+  assert.equal(usage[0]?.metadata.service, 'signedAdmin');
+  assert.equal(usage[0]?.metadata.operation, 'admin.request');
   const serializedMetadata = JSON.stringify(invocations[0]?.metadata);
   assert.ok(!serializedMetadata.includes('input-token'));
   assert.ok(!serializedMetadata.includes('upstream-token'));

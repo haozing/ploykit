@@ -96,11 +96,33 @@ function assertNonNegative(amount: number, operation: string): void {
   }
 }
 
+function assertIntegerAmount(amount: number, operation: string): void {
+  if (!Number.isSafeInteger(amount)) {
+    throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation} must be a safe integer`);
+  }
+}
+
+function assertPositiveIntegerAmount(amount: number, operation: string): void {
+  assertPositive(amount, operation);
+  assertIntegerAmount(amount, operation);
+}
+
+function assertNonNegativeIntegerAmount(amount: number, operation: string): void {
+  assertNonNegative(amount, operation);
+  assertIntegerAmount(amount, operation);
+}
+
 function creditLedgerDirection(input: {
   amount: number;
   reason: string;
   multiplier: 1 | -1;
 }): ModuleCreditsLedgerEntry['direction'] {
+  if (input.reason.includes('refund_revoke')) {
+    return 'revoke';
+  }
+  if (input.reason.includes('expired')) {
+    return 'release';
+  }
   if (input.reason.includes('release')) {
     return 'release';
   }
@@ -249,6 +271,7 @@ export function createInMemoryModuleCommercialRuntime(
     sourceId?: string;
     metadata?: Record<string, unknown>;
   }): ModuleCreditsBalance {
+    assertIntegerAmount(input.amount, input.reason ?? 'credits.adjust');
     if (input.idempotencyKey) {
       const existing = creditIdempotency.get(input.idempotencyKey);
       if (existing) {
@@ -366,7 +389,7 @@ export function createInMemoryModuleCommercialRuntime(
         const quantity = input.quantity ?? 1;
         assertPositive(quantity, 'metering.charge.quantity');
         if (input.credits) {
-          assertPositive(input.credits.amount, 'metering.charge.credits');
+          assertPositiveIntegerAmount(input.credits.amount, 'metering.charge.credits');
         }
         if (input.credits && !input.reservationId) {
           const current = currentBalance(
@@ -446,18 +469,60 @@ export function createInMemoryModuleCommercialRuntime(
       },
     };
 
+    function isReservationExpired(reservation: ModuleCreditsReservation): boolean {
+      return Boolean(
+        reservation.expiresAt && new Date(reservation.expiresAt).getTime() <= now().getTime()
+      );
+    }
+
+    function releaseExpiredReservations(subject: CommercialSubject, unit: string): void {
+      for (const reservation of reservations.values()) {
+        if (
+          reservation.status !== 'reserved' ||
+          reservation.unit !== unit ||
+          subjectToUserId(reservation.subject) !== subjectToUserId(subject) ||
+          !isReservationExpired(reservation)
+        ) {
+          continue;
+        }
+        const releasable = reservation.amountReserved - reservation.amountCommitted;
+        if (releasable > 0) {
+          adjustBalance({
+            subject: reservation.subject,
+            amount: releasable,
+            unit: reservation.unit,
+            multiplier: 1,
+            reason: 'reserve.expired',
+            idempotencyKey: `reserve:expired:${reservation.id}`,
+            metadata: { reservationId: reservation.id, expiredAt: reservation.expiresAt },
+          });
+        }
+        reservations.set(reservation.id, {
+          ...reservation,
+          status: 'released',
+          metadata: {
+            ...reservation.metadata,
+            expiredAt: reservation.expiresAt,
+            releaseReason: 'reserve.expired',
+          },
+          updatedAt: toIso(now),
+        });
+      }
+    }
+
     const credits: ModuleCreditsApi = {
       async balance(input, unit = 'credit') {
         const subject = typeof input === 'string' ? userSubject(input) : input.subject;
         const resolvedUnit = typeof input === 'string' ? unit : (input.unit ?? unit);
+        releaseExpiredReservations(subject, resolvedUnit);
         return { ...currentBalance(subjectToUserId(subject), resolvedUnit) };
       },
       async grant(input) {
-        assertPositive(input.amount, 'credits.grant');
+        assertPositiveIntegerAmount(input.amount, 'credits.grant');
         return adjustBalance({ ...input, multiplier: 1, reason: input.reason ?? 'grant' });
       },
       async consume(input) {
-        assertPositive(input.amount, 'credits.consume');
+        assertPositiveIntegerAmount(input.amount, 'credits.consume');
         const subject = subjectFromInput(input);
         const current = currentBalance(subjectToUserId(subject), input.unit ?? 'credit');
         if (current.balance < input.amount) {
@@ -469,11 +534,11 @@ export function createInMemoryModuleCommercialRuntime(
         return adjustBalance({ ...input, multiplier: 1, reason: input.reason ?? 'adjust' });
       },
       async refund(input) {
-        assertPositive(input.amount, 'credits.refund');
+        assertPositiveIntegerAmount(input.amount, 'credits.refund');
         return adjustBalance({ ...input, multiplier: 1, reason: input.reason ?? 'refund' });
       },
       async reserve(input) {
-        assertPositive(input.amount, 'credits.reserve');
+        assertPositiveIntegerAmount(input.amount, 'credits.reserve');
         if (input.idempotencyKey) {
           const existing = [...reservations.values()].find(
             (reservation) => reservation.idempotencyKey === input.idempotencyKey
@@ -483,6 +548,7 @@ export function createInMemoryModuleCommercialRuntime(
           }
         }
         const subject = subjectFromInput(input);
+        releaseExpiredReservations(subject, input.unit ?? 'credit');
         const current = currentBalance(subjectToUserId(subject), input.unit ?? 'credit');
         if (current.balance < input.amount) {
           throw new Error('MODULE_CREDITS_INSUFFICIENT');
@@ -497,6 +563,7 @@ export function createInMemoryModuleCommercialRuntime(
           source: input.source,
           sourceId: input.sourceId,
           idempotencyKey: input.idempotencyKey,
+          expiresAt: input.expiresAt,
           metadata: input.metadata ?? {},
           createdAt: toIso(now),
           updatedAt: toIso(now),
@@ -522,8 +589,12 @@ export function createInMemoryModuleCommercialRuntime(
         if (reservation.status === 'released') {
           throw new Error(`MODULE_CREDITS_RESERVATION_RELEASED: ${input.reservationId}`);
         }
+        if (isReservationExpired(reservation)) {
+          releaseExpiredReservations(reservation.subject, reservation.unit);
+          throw new Error(`MODULE_CREDITS_RESERVATION_EXPIRED: ${input.reservationId}`);
+        }
         const finalAmount = input.finalAmount ?? reservation.amountReserved;
-        assertNonNegative(finalAmount, 'credits.commitReservation.finalAmount');
+        assertNonNegativeIntegerAmount(finalAmount, 'credits.commitReservation.finalAmount');
         if (finalAmount < reservation.amountReserved) {
           adjustBalance({
             subject: reservation.subject,
@@ -604,6 +675,82 @@ export function createInMemoryModuleCommercialRuntime(
           }
         }
         return { revoked: matching.length };
+      },
+      async refundRevoke(input) {
+        if (!input.grantLedgerId && (!input.source || !input.sourceId)) {
+          throw new Error('MODULE_CREDITS_REFUND_REVOKE_TARGET_REQUIRED');
+        }
+        if (input.amount !== undefined) {
+          assertPositiveIntegerAmount(input.amount, 'credits.refundRevoke.amount');
+        }
+        const requestedSubject =
+          input.subject || input.userId ? subjectFromInput(input) : undefined;
+        const matching = creditLedger.filter((entry) => {
+          if (entry.amount <= 0 || entry.status !== 'available') {
+            return false;
+          }
+          if (input.unit && entry.unit !== input.unit) {
+            return false;
+          }
+          if (
+            requestedSubject &&
+            subjectToUserId(entry.subject) !== subjectToUserId(requestedSubject)
+          ) {
+            return false;
+          }
+          if (input.grantLedgerId) {
+            return entry.id === input.grantLedgerId;
+          }
+          return entry.source === input.source && entry.sourceId === input.sourceId;
+        });
+        const first = matching[0];
+        if (!first) {
+          if (!requestedSubject) {
+            throw new Error('MODULE_CREDITS_REFUND_REVOKE_TARGET_NOT_FOUND');
+          }
+          return {
+            revoked: 0,
+            unrecovered: input.amount ?? 0,
+            balance: currentBalance(subjectToUserId(requestedSubject), input.unit),
+            relatedLedgerIds: [],
+          };
+        }
+        const subject = first.subject;
+        releaseExpiredReservations(subject, input.unit ?? first.unit);
+        const relatedLedgerIds = matching.map((entry) => entry.id);
+        const eligibleAmount = matching.reduce((sum, entry) => sum + entry.amount, 0);
+        const targetAmount = input.amount ?? eligibleAmount;
+        const cappedTargetAmount = Math.min(targetAmount, eligibleAmount);
+        const current = currentBalance(subjectToUserId(subject), input.unit ?? first.unit);
+        const revoked = Math.min(cappedTargetAmount, Math.max(0, current.balance));
+        const unrecovered = targetAmount - revoked;
+        if (revoked > 0) {
+          adjustBalance({
+            subject,
+            amount: revoked,
+            unit: input.unit ?? first.unit,
+            multiplier: -1,
+            reason: input.reason ?? 'refund_revoke',
+            source: input.source ?? first.source,
+            sourceId: input.sourceId ?? first.sourceId,
+            idempotencyKey: input.idempotencyKey,
+            metadata: {
+              ...(input.metadata ?? {}),
+              relatedLedgerId: relatedLedgerIds[0],
+              relatedLedgerIds,
+              refundRevoke: true,
+              requestedAmount: targetAmount,
+              eligibleAmount,
+              unrecoveredAmount: unrecovered,
+            },
+          });
+        }
+        return {
+          revoked,
+          unrecovered,
+          balance: currentBalance(subjectToUserId(subject), input.unit ?? first.unit),
+          relatedLedgerIds,
+        };
       },
       async listLedger(input = {}) {
         const subject = input.subject ?? (input.userId ? userSubject(input.userId) : undefined);
@@ -730,6 +877,7 @@ export function createInMemoryModuleCommercialRuntime(
 
     const commerce: ModuleCommerceApi = {
       async createCheckout(input) {
+        assertPositiveIntegerAmount(input.amount, 'commerce.createCheckout.amount');
         if (input.idempotencyKey) {
           const existingId = checkoutIdempotency.get(input.idempotencyKey);
           if (existingId) {
@@ -761,6 +909,7 @@ export function createInMemoryModuleCommercialRuntime(
         return checkout ? { ...checkout } : null;
       },
       async applyCheckoutPaid(input) {
+        assertPositiveIntegerAmount(input.amount, 'commerce.applyCheckoutPaid.amount');
         const checkout = await commerce.createCheckout(input);
         const paid = { ...checkout, status: 'paid' as const };
         checkouts.set(paid.id, paid);
@@ -799,7 +948,7 @@ export function createInMemoryModuleCommercialRuntime(
           throw new Error('MODULE_REDEEM_CODES_INVALID_MAX_REDEMPTIONS');
         }
         if (input.credits) {
-          assertPositive(input.credits.amount, 'redeemCodes.createBatch.credits');
+          assertPositiveIntegerAmount(input.credits.amount, 'redeemCodes.createBatch.credits');
         }
         const batchId = `redeem_batch_${randomUUID()}`;
         const codes: ModuleRedeemCodeRecord[] = [];

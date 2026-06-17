@@ -1,6 +1,11 @@
 import { createModuleDiagnostic, type ModuleDiagnostic } from './diagnostics';
 import { validateAnonymousPolicy } from './validator-anonymous-policy';
-import { ModulePermissionValues, SystemOnlyPermissions, type PermissionValue } from './permissions';
+import {
+  ModulePermissionValues,
+  ReservedRuntimePermissions,
+  SystemOnlyPermissions,
+  type PermissionValue,
+} from './permissions';
 import type {
   ModuleApiRoute,
   ModuleCommercialRequirement,
@@ -115,6 +120,15 @@ function validatePermissionList(
         `System permission "${permission}" can only be executed by CLI or host system context.`,
         itemPath,
         'Keep it only when the capability is used outside request runtime.'
+      );
+    }
+    if (ReservedRuntimePermissions.has(permissionValue)) {
+      addError(
+        diagnostics,
+        'MODULE_PERMISSION_RESERVED_RUNTIME',
+        `Permission "${permission}" is reserved and has no request runtime capability.`,
+        itemPath,
+        'Remove it until the host exposes and guards the matching capability.'
       );
     }
   }
@@ -559,6 +573,26 @@ function validateApiRoute(
 
   if (route.auth === 'public') {
     validateAnonymousPolicy(diagnostics, route, path);
+  }
+
+  if (route.idempotency?.required && !route.idempotency.keyFrom) {
+    addError(
+      diagnostics,
+      'MODULE_API_IDEMPOTENCY_KEY_SOURCE_REQUIRED',
+      'Idempotent API routes must declare idempotency.keyFrom.',
+      `${path}.idempotency.keyFrom`,
+      'Use "request" to require an Idempotency-Key request header.'
+    );
+  }
+
+  if (route.idempotency?.keyFrom && route.idempotency.keyFrom !== 'request') {
+    addError(
+      diagnostics,
+      'MODULE_API_IDEMPOTENCY_KEY_SOURCE_INVALID',
+      `API route idempotency.keyFrom "${route.idempotency.keyFrom}" is not supported.`,
+      `${path}.idempotency.keyFrom`,
+      'Use "request".'
+    );
   }
 }
 

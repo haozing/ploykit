@@ -5,6 +5,7 @@ import {
   type ModuleActionExecuteInput,
   type ModuleActionRouteDependencies,
 } from '../apps/host-next/lib/module-action-route';
+import { createInMemoryRuntimeStore } from '../src/lib/module-runtime';
 
 function actionContext(moduleId = 'fixture-module', name = 'saveSettings') {
   return {
@@ -13,7 +14,8 @@ function actionContext(moduleId = 'fixture-module', name = 'saveSettings') {
 }
 
 function dependencies(
-  onExecute: (input: ModuleActionExecuteInput) => Promise<unknown> | unknown
+  onExecute: (input: ModuleActionExecuteInput) => Promise<unknown> | unknown,
+  overrides: Partial<ModuleActionRouteDependencies> = {}
 ): ModuleActionRouteDependencies {
   return {
     async getModuleHost() {
@@ -26,6 +28,7 @@ function dependencies(
     async checkHostRouteSecurity() {
       return null;
     },
+    ...overrides,
   };
 }
 
@@ -105,6 +108,54 @@ test('module action route returns a structured error for invalid JSON request bo
     code: 'MODULE_ACTION_PAYLOAD_INVALID',
     message: 'MODULE_ACTION_PAYLOAD_INVALID: Invalid JSON request body.',
   });
+});
+
+test('module action route replays completed idempotent responses and rejects payload conflicts', async () => {
+  let id = 0;
+  let calls = 0;
+  const store = createInMemoryRuntimeStore({
+    now: () => new Date('2026-05-19T00:00:00.000Z'),
+    createId: (prefix) => `${prefix}_${++id}`,
+  });
+  const deps = dependencies(
+    () => {
+      calls += 1;
+      return { charged: calls };
+    },
+    {
+      async getRuntimeStore() {
+        return store;
+      },
+      idempotencyScope: { productId: 'product-a', environmentId: 'dev', workspaceId: 'workspace-a' },
+    }
+  );
+
+  const request = (amount: number) =>
+    new Request('http://localhost/api/module-actions/fixture-module/charge', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'charge-key-1',
+      },
+      body: JSON.stringify({ amount }),
+    });
+
+  const first = await handleModuleActionPost(request(10), actionContext('fixture-module', 'charge'), deps);
+  const replay = await handleModuleActionPost(request(10), actionContext('fixture-module', 'charge'), deps);
+  const conflict = await handleModuleActionPost(
+    request(20),
+    actionContext('fixture-module', 'charge'),
+    deps
+  );
+
+  assert.equal(calls, 1);
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { ok: true, result: { charged: 1 } });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.headers.get('x-ploykit-idempotency-replay'), 'true');
+  assert.deepEqual(await replay.json(), { ok: true, result: { charged: 1 } });
+  assert.equal(conflict.status, 400);
+  assert.equal(((await conflict.json()) as { code: string }).code, 'MODULE_ACTION_IDEMPOTENCY_CONFLICT');
 });
 
 test('module action route redirects form payload parse errors through the form completion path', async () => {

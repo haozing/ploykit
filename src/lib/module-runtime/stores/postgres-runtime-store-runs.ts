@@ -58,17 +58,24 @@ export function createPostgresRunStore(
       const id = input.id ?? createId('run');
       const result = await database.query<Row>(
         `insert into module_runs (
-          id, product_id, workspace_id, module_id, kind, name, status, progress,
+          id, product_id, environment_id, workspace_id, module_id, kind, name, status, progress,
           attempt, max_attempts, input, cost_ref, idempotency_key
         )
-        values ($1, $2, $3, $4, $5, $6, 'queued', 0, 0, $7, $8::jsonb, $9, $10)
-        on conflict (product_id, (coalesce(workspace_id, ''::text)), module_id, idempotency_key)
+        values ($1, $2, $3, $4, $5, $6, $7, 'queued', 0, 0, $8, $9::jsonb, $10, $11)
+        on conflict (
+          product_id,
+          (coalesce(environment_id, ''::text)),
+          (coalesce(workspace_id, ''::text)),
+          module_id,
+          idempotency_key
+        )
         where idempotency_key is not null
         do update set updated_at = module_runs.updated_at
         returning *`,
         [
           id,
           input.productId,
+          input.environmentId ?? null,
           input.workspaceId ?? null,
           input.moduleId,
           input.kind,
@@ -89,14 +96,16 @@ export function createPostgresRunStore(
       const result = await database.query<Row>(
         `select * from module_runs
          where ($1::text is null or product_id = $1)
-           and ($2::text is null or coalesce(workspace_id, ''::text) = $2)
-           and ($3::text is null or module_id = $3)
-           and ($4::text is null or status = $4)
-           and ($5::text is null or kind = $5)
-           and ($6::text is null or idempotency_key = $6)
+           and ($2::text is null or coalesce(environment_id, ''::text) = $2)
+           and ($3::text is null or coalesce(workspace_id, ''::text) = $3)
+           and ($4::text is null or module_id = $4)
+           and ($5::text is null or status = $5)
+           and ($6::text is null or kind = $6)
+           and ($7::text is null or idempotency_key = $7)
          order by created_at desc`,
         [
           query.productId ?? null,
+          runtimeWorkspaceFilter(query.environmentId),
           runtimeWorkspaceFilter(query.workspaceId),
           query.moduleId ?? null,
           query.status ?? null,

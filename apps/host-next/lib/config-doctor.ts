@@ -76,6 +76,14 @@ function productionProfile(env: NodeJS.ProcessEnv): boolean {
   return env.NODE_ENV === 'production' || env.PLOYKIT_PROFILE === 'production';
 }
 
+function readPositiveRetentionDays(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 3650 ? parsed : null;
+}
+
 function collectProviderReadiness(health: HostRuntimeHealth): HostProviderReadiness[] {
   const emailStatus =
     health.providers.email.mode === 'webhook'
@@ -276,7 +284,7 @@ export async function runHostConfigDoctor(
   if (productionProfile(env) && health.providers.ai.mode !== 'webhook') {
     diagnostics.push(
       diagnostic(
-        'warning',
+        'error',
         'HOST_AI_PROVIDER_NOT_PRODUCTION',
         'Production profile is using a local/static AI provider.',
         'PLOYKIT_AI_PROVIDER',
@@ -335,6 +343,31 @@ export async function runHostConfigDoctor(
     }
   }
 
+  if (productionProfile(env) || required) {
+    if (readPositiveRetentionDays(env.PLOYKIT_AUDIT_RETENTION_DAYS) === null) {
+      diagnostics.push(
+        diagnostic(
+          'error',
+          'HOST_AUDIT_RETENTION_REQUIRED',
+          'Production profile requires an explicit audit log retention window.',
+          'PLOYKIT_AUDIT_RETENTION_DAYS',
+          'Set PLOYKIT_AUDIT_RETENTION_DAYS to an integer number of days between 1 and 3650.'
+        )
+      );
+    }
+    if (readPositiveRetentionDays(env.PLOYKIT_RUN_LOG_RETENTION_DAYS) === null) {
+      diagnostics.push(
+        diagnostic(
+          'error',
+          'HOST_RUN_LOG_RETENTION_REQUIRED',
+          'Production profile requires an explicit run log retention window.',
+          'PLOYKIT_RUN_LOG_RETENTION_DAYS',
+          'Set PLOYKIT_RUN_LOG_RETENTION_DAYS to an integer number of days between 1 and 3650.'
+        )
+      );
+    }
+  }
+
   const metrics: HostMetricsSnapshot = {
     routeCatalogEntries: routeSecurity.catalogEntries,
     apiRoutesDiscovered: routeSecurity.actualRoutes,
@@ -356,11 +389,11 @@ export async function runHostConfigDoctor(
     metrics,
     retention: {
       files: 'File records support expiresAt plus deleted/quarantined/archive cleanup paths.',
-      auditLogs: env.PLOYKIT_AUDIT_RETENTION_DAYS
-        ? `${env.PLOYKIT_AUDIT_RETENTION_DAYS} days`
+      auditLogs: readPositiveRetentionDays(env.PLOYKIT_AUDIT_RETENTION_DAYS)
+        ? `${readPositiveRetentionDays(env.PLOYKIT_AUDIT_RETENTION_DAYS)} days`
         : 'retain in runtime store; export/archive policy required before production',
-      runLogs: env.PLOYKIT_RUN_LOG_RETENTION_DAYS
-        ? `${env.PLOYKIT_RUN_LOG_RETENTION_DAYS} days`
+      runLogs: readPositiveRetentionDays(env.PLOYKIT_RUN_LOG_RETENTION_DAYS)
+        ? `${readPositiveRetentionDays(env.PLOYKIT_RUN_LOG_RETENTION_DAYS)} days`
         : 'retain in runtime store; cleanup policy required before production',
       outbox:
         'Processed/dead-letter outbox records are visible in Admin and can be replayed or discarded.',

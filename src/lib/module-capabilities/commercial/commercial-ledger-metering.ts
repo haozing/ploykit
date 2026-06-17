@@ -6,7 +6,12 @@ import {
   type CommercialSubject,
 } from '@ploykit/module-sdk';
 import type { RuntimeStore } from '../../module-runtime/stores';
-import { assertPositive, toMeteringAuthorization, toUsageRecord } from './commercial-ledger-utils';
+import {
+  assertPositive,
+  assertPositiveIntegerAmount,
+  toMeteringAuthorization,
+  toUsageRecord,
+} from './commercial-ledger-utils';
 
 interface CreateCommercialLedgerMeteringInput {
   store: RuntimeStore;
@@ -80,7 +85,7 @@ export function createCommercialLedgerMetering({
       const quantity = input.quantity ?? 1;
       assertPositive(quantity, 'metering.charge.quantity');
       if (input.credits) {
-        assertPositive(input.credits.amount, 'metering.charge.credits');
+        assertPositiveIntegerAmount(input.credits.amount, 'metering.charge.credits');
       }
       if (input.credits && !input.reservationId) {
         const currentBalance = await creditBalance({

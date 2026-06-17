@@ -9,6 +9,7 @@ import type { ProductScopeProfile } from '../scope';
 export interface ModuleRuntimeAccessSession {
   user: ModuleUser | null;
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string;
   organizationId?: string;
   userId?: string;

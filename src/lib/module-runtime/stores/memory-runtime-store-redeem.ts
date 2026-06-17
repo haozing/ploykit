@@ -112,6 +112,14 @@ export function createInMemoryRedeemRuntimeStore({
           return clone(redemptions.get(existingId)!);
         }
       }
+      if (input.maxRedemptions) {
+        const redemptionCount = [...redemptions.values()].filter(
+          (record) => record.productId === input.productId && record.code === input.code
+        ).length;
+        if (redemptionCount >= input.maxRedemptions) {
+          throw new Error('MODULE_REDEEM_CODE_REDEMPTION_LIMIT_EXCEEDED');
+        }
+      }
       const redemption: RuntimeStoreRedeemRedemption = {
         id: createId('redemption'),
         productId: input.productId,

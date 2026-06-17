@@ -13,7 +13,12 @@ import {
   validateLifecycle,
 } from './validator-runtime-metadata';
 import { validateSurfaces } from './validator-surfaces';
-import { ModulePermissionValues, SystemOnlyPermissions, type PermissionValue } from './permissions';
+import {
+  ModulePermissionValues,
+  ReservedRuntimePermissions,
+  SystemOnlyPermissions,
+  type PermissionValue,
+} from './permissions';
 import type { ModuleDefinition } from './types';
 
 const MODULE_ID_PATTERN = /^[a-z0-9-]+$/;
@@ -169,6 +174,15 @@ function validatePermissionList(
         `System permission "${permission}" can only be executed by CLI or host system context.`,
         itemPath,
         'Keep it only when the capability is used outside request runtime.'
+      );
+    }
+    if (ReservedRuntimePermissions.has(permissionValue)) {
+      addError(
+        diagnostics,
+        'MODULE_PERMISSION_RESERVED_RUNTIME',
+        `Permission "${permission}" is reserved and has no request runtime capability.`,
+        itemPath,
+        'Remove it until the host exposes and guards the matching capability.'
       );
     }
   }

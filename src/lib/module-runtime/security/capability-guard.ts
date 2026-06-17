@@ -656,6 +656,22 @@ function guardCommercialApis(input: {
     }
   }
 
+  async function assertCreditGrantAccess(grantLedgerId: string, capabilityPath: string) {
+    const entry = (await context.credits.listLedger()).find(
+      (candidate) => candidate.id === grantLedgerId
+    );
+    if (entry) {
+      assertSubjectAccess(session, entry.subject, capabilityPath);
+      return;
+    }
+    if (!session.system && session.user?.role !== 'admin') {
+      deny(
+        'MODULE_CAPABILITY_SUBJECT_SCOPE_DENIED',
+        `${capabilityPath} cannot resolve commercial subject for credit grant "${grantLedgerId}".`
+      );
+    }
+  }
+
   return {
     usage: {
       async record(recordInput) {
@@ -788,6 +804,27 @@ function guardCommercialApis(input: {
           'ctx.credits.revokeBySource'
         );
         return context.credits.revokeBySource(revokeInput);
+      },
+      async refundRevoke(revokeInput) {
+        assertPermission(contract, session, Permission.CreditsWrite, 'ctx.credits.refundRevoke');
+        if (revokeInput.subject || revokeInput.userId) {
+          assertSubjectAccess(
+            session,
+            subjectFromInput(revokeInput, 'ctx.credits.refundRevoke'),
+            'ctx.credits.refundRevoke'
+          );
+        }
+        if (revokeInput.source && revokeInput.sourceId) {
+          await assertCreditSourceAccess(
+            revokeInput.source,
+            revokeInput.sourceId,
+            'ctx.credits.refundRevoke'
+          );
+        }
+        if (revokeInput.grantLedgerId) {
+          await assertCreditGrantAccess(revokeInput.grantLedgerId, 'ctx.credits.refundRevoke');
+        }
+        return context.credits.refundRevoke(revokeInput);
       },
       async listLedger(ledgerInput) {
         assertPermission(contract, session, Permission.CreditsRead, 'ctx.credits.listLedger');

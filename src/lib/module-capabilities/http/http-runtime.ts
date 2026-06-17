@@ -16,6 +16,18 @@ export interface ModuleHttpRuntimeOptions {
   redirect?: 'deny' | 'manual' | 'follow-same-origin';
   allowPrivateNetwork?: boolean;
   resolveHost?: (hostname: string) => Promise<readonly string[]>;
+  audit?: (event: ModuleHttpAuditEvent) => void | Promise<void>;
+}
+
+export interface ModuleHttpAuditEvent {
+  moduleId: string;
+  method: string;
+  origin: string;
+  path: string;
+  ok: boolean;
+  status?: number;
+  durationMs: number;
+  errorCode?: string;
 }
 
 const SENSITIVE_HEADERS = new Set([
@@ -178,6 +190,25 @@ async function resolvePinnedAddresses(
 
 function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error('MODULE_HTTP_TIMEOUT');
+}
+
+function errorCode(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message.match(/^(MODULE_HTTP_[A-Z0-9_]+)/)?.[1] ?? error.name;
+  }
+  return 'MODULE_HTTP_ERROR';
+}
+
+async function emitAudit(
+  options: ModuleHttpRuntimeOptions,
+  event: Omit<ModuleHttpAuditEvent, 'moduleId'>
+): Promise<void> {
+  if (!options.audit) {
+    return;
+  }
+  await Promise.resolve(options.audit({ moduleId: options.moduleId, ...event })).catch(
+    () => undefined
+  );
 }
 
 function createRuntimeAbortSignal(
@@ -459,6 +490,8 @@ export function createModuleHttpApi(options: ModuleHttpRuntimeOptions): ModuleHt
       const method = requestMethod(input, init);
       const headers = requestHeaders(input, init);
       const customFetchImpl = options.fetchImpl;
+      const startedAt = Date.now();
+      let responseStatus: number | undefined;
       const abort = createRuntimeAbortSignal(
         timeoutMs,
         init?.signal ?? (input instanceof Request ? input.signal : undefined)
@@ -514,6 +547,7 @@ export function createModuleHttpApi(options: ModuleHttpRuntimeOptions): ModuleHt
               }),
           abort.signal
         );
+        responseStatus = response.status;
 
         const location = response.headers.get('location');
         if (location && response.status >= 300 && response.status < 400) {
@@ -537,7 +571,27 @@ export function createModuleHttpApi(options: ModuleHttpRuntimeOptions): ModuleHt
           }
         }
 
-        return responseWithinLimit(response, maxResponseBytes, abort.signal);
+        const limitedResponse = await responseWithinLimit(response, maxResponseBytes, abort.signal);
+        await emitAudit(options, {
+          method,
+          origin: url.origin,
+          path: url.pathname,
+          ok: true,
+          status: limitedResponse.status,
+          durationMs: Date.now() - startedAt,
+        });
+        return limitedResponse;
+      } catch (error) {
+        await emitAudit(options, {
+          method,
+          origin: url.origin,
+          path: url.pathname,
+          ok: false,
+          status: responseStatus,
+          durationMs: Date.now() - startedAt,
+          errorCode: errorCode(error),
+        });
+        throw error;
       } finally {
         abort.cleanup();
       }

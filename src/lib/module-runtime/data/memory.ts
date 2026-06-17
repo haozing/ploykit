@@ -158,6 +158,17 @@ export function createMemoryModuleDataStore(): MemoryModuleDataStore {
   return { collections: new Map() };
 }
 
+function cloneCollections(
+  collections: Map<string, Map<string, DataRecord>>
+): Map<string, Map<string, DataRecord>> {
+  return new Map(
+    [...collections.entries()].map(([key, records]) => [
+      key,
+      new Map([...records.entries()].map(([id, record]) => [id, clone(record)])),
+    ])
+  );
+}
+
 class MemoryModuleDataRuntime {
   private readonly data: ModuleDataDefinition;
   private readonly now: () => Date;
@@ -188,8 +199,15 @@ class MemoryModuleDataRuntime {
         ),
       table: <TRecord = DataRecord>(name: string) =>
         new MemoryDataCollection<TRecord>(this, 'table', name, this.getTableDefinition(name)),
-      transaction: async <T>(callback: (tx: ModuleDataApi) => Promise<T>): Promise<T> =>
-        callback(this.createApi()),
+      transaction: async <T>(callback: (tx: ModuleDataApi) => Promise<T>): Promise<T> => {
+        const snapshot = cloneCollections(this.options.store.collections);
+        try {
+          return await callback(this.createApi());
+        } catch (error) {
+          this.options.store.collections = snapshot;
+          throw error;
+        }
+      },
       tableRef: (name: string): ModuleDataSqlFragment => ({
         text: `"${moduleDataPhysicalTableName(this.moduleId, name)}"`,
         values: [],

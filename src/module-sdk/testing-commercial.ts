@@ -172,6 +172,20 @@ export function createTestingCreditsApi(): ModuleCreditsApi {
     async revokeBySource() {
       return { revoked: 0 };
     },
+    async refundRevoke(input) {
+      const subject = subjectFromInput(input);
+      return {
+        revoked: 0,
+        unrecovered: input.amount ?? 0,
+        balance: {
+          subject,
+          userId: subject.type === 'user' ? subject.id : undefined,
+          unit: input.unit ?? 'credit',
+          balance: 0,
+        },
+        relatedLedgerIds: [],
+      };
+    },
     async listLedger() {
       return [];
     },

@@ -3,6 +3,7 @@ import type { ModuleRuntimeContract } from '../contract';
 import { createModuleRuntimeContext } from '../context';
 import type { ModuleRuntimeHost } from '../host';
 import { resolveModuleEntryLoader } from '../loader';
+import { createRuntimeLogger } from '../observability/logger';
 import {
   findModuleRouteMatch,
   type ModuleRuntimeRouteKind,
@@ -158,10 +159,22 @@ async function resolveErrorMetadata(
   }
 }
 
+const modulePageRouteLogger = createRuntimeLogger({
+  sink(record) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[module-page-route]', record);
+    }
+  },
+});
+
+function errorMetadata(error: unknown): Record<string, unknown> {
+  return error instanceof Error
+    ? { name: error.name, message: error.message, stack: error.stack }
+    : { error };
+}
+
 function logModulePageHandlerError(error: unknown): void {
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('[module-page-route] handler failed', error);
-  }
+  modulePageRouteLogger.error('Module page route handler failed.', errorMetadata(error));
 }
 
 async function loadDefaultExport(loader: () => Promise<unknown>): Promise<unknown> {

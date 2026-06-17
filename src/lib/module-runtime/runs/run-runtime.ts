@@ -26,6 +26,7 @@ export interface ModuleRunError {
 export interface ModuleRunRecord<TInput = unknown, TResult = unknown> {
   id: string;
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   moduleId: string;
   kind: ModuleRunKind;

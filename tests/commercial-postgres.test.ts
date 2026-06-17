@@ -557,6 +557,19 @@ test('P15 Postgres commercial runtime persists credits, orders, entitlements and
     assert.equal(raceResults.filter((result) => result.status === 'fulfilled').length, 1);
     assert.equal(raceResults.filter((result) => result.status === 'rejected').length, 1);
     assert.equal((await raceCommercial.credits.balance('user-race')).balance, 0);
+    await commercial.admin.createRedeemCode({
+      session: { user: { id: 'admin-1', role: 'admin' }, actorId: 'admin-1' },
+      code: 'PG_SINGLE_USE',
+      entitlement: 'postgres-single',
+      maxRedemptions: 1,
+    });
+    const redeemRaceResults = await Promise.all([
+      moduleCommercial.billing.redeemCode('PG_SINGLE_USE', 'redeem-user-1'),
+      moduleCommercial.billing.redeemCode('PG_SINGLE_USE', 'redeem-user-2'),
+    ]);
+    assert.equal(redeemRaceResults.filter((result) => result.ok).length, 1);
+    assert.equal(redeemRaceResults.filter((result) => !result.ok).length, 1);
+    assert.equal((await store.listRedeemRedemptions({ productId: 'product-a' })).length, 1);
     await store.recordCreditLedger({
       productId: 'product-a',
       workspaceId: 'workspace-a',

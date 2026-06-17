@@ -15,6 +15,10 @@ import {
   createMemoryModuleDataStore,
   type MemoryModuleDataStore,
 } from '@/lib/module-runtime/data';
+import {
+  createInMemoryRateLimiter,
+  createPostgresSlidingWindowRateLimiter,
+} from '@/lib/module-runtime/security/rate-limit';
 import type { PermissionValue } from '@ploykit/module-sdk';
 import {
   createHostCommercialRuntimeFromStore,
@@ -48,6 +52,7 @@ import {
 } from './default-scope';
 import { getDefaultModuleCatalogSeed } from './default-module-catalog';
 import { invalidateDashboardShellCache } from './dashboard-shell-cache';
+import { setHostSecurityRateLimiterForRuntime } from './security';
 
 function sessionWithPermissions(
   session: ModuleHostSession,
@@ -134,6 +139,14 @@ async function ensureHostDemoCreditsSeeded(runtimeStore: HostRuntimeStoreHandle)
   });
 }
 
+function configureHostSecurityRateLimiter(runtimeStore: HostRuntimeStoreHandle): void {
+  setHostSecurityRateLimiterForRuntime(
+    runtimeStore.database
+      ? createPostgresSlidingWindowRateLimiter({ database: runtimeStore.database })
+      : createInMemoryRateLimiter()
+  );
+}
+
 export interface HostRuntime {
   runtimeStore: HostRuntimeStoreHandle;
   fileStorage: HostFileStorageHandle;
@@ -186,6 +199,7 @@ async function createModuleHostForRuntime(input: {
     verifyApiKey: createHostModuleApiKeyVerifier({
       store: input.runtimeStore.store,
     }),
+    runtimeStore: input.runtimeStore.store,
     data: input.runtimeStore.database
       ? {
           database: input.runtimeStore.database,
@@ -234,6 +248,7 @@ export async function createHostRuntime(): Promise<HostRuntime> {
     getHostRuntimeStore(),
     getHostFileStorage(),
   ]);
+  configureHostSecurityRateLimiter(runtimeStore);
   await ensureHostCatalogSeeded(runtimeStore);
   await ensureHostDemoCreditsSeeded(runtimeStore);
   await applyHostDevRuntimeSeed(runtimeStore);

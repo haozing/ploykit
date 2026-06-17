@@ -7,6 +7,7 @@ export {
   PermissionRegistryEntries,
   SystemOnlyPermissions,
   ModulePermissionValues,
+  ReservedRuntimePermissions,
 } from './permissions';
 export {
   table,

@@ -6,5 +6,7 @@ export async function GET(request: Request) {
   if (resolved instanceof Response) {
     return resolved;
   }
-  return apiOk({ analytics: await getAdminAnalytics(readAdminApiQuery(request)) });
+  return apiOk({
+    analytics: await getAdminAnalytics(readAdminApiQuery(request), { session: resolved.session }),
+  });
 }

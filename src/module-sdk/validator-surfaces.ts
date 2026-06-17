@@ -2,6 +2,7 @@ import { createModuleDiagnostic, type ModuleDiagnostic } from './diagnostics';
 import {
   ModulePermissionValues,
   Permission,
+  ReservedRuntimePermissions,
   SystemOnlyPermissions,
   type PermissionValue,
 } from './permissions';
@@ -99,6 +100,15 @@ function validatePermissionList(
         `System permission "${permission}" can only be executed by CLI or host system context.`,
         itemPath,
         'Keep it only when the capability is used outside request runtime.'
+      );
+    }
+    if (ReservedRuntimePermissions.has(permissionValue)) {
+      addError(
+        diagnostics,
+        'MODULE_PERMISSION_RESERVED_RUNTIME',
+        `Permission "${permission}" is reserved and has no request runtime capability.`,
+        itemPath,
+        'Remove it until the host exposes and guards the matching capability.'
       );
     }
   }

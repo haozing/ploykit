@@ -12,9 +12,15 @@ export interface RuntimeStoreAuditRecord {
     schemaVersion: 1;
     category: string;
     risk: 'low' | 'medium' | 'high';
+    actorKind?: string;
+    decision?: 'allow' | 'deny' | 'success' | 'failure';
     resourceType?: string;
     resourceId?: string;
     correlationId?: string;
+    ipHash?: string;
+    userAgentHash?: string;
+    beforeHash?: string;
+    afterHash?: string;
     previousHash?: string | null;
     recordHash: string;
   };

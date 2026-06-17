@@ -54,6 +54,31 @@ journal 检查。
 Postgres baseline、`pg_dump`/`pg_restore`、托管快照和 WAL/PITR 演练的上线口径见
 [Postgres Baseline 与 PITR 运维手册](postgres-baseline-pitr-runbook.zh-CN.md)。
 
+## 迁移失败、回滚与 backfill
+
+runtime store migration 采用 forward-only 策略：已经发布并进入
+`module_runtime_migrations` journal 的 SQL 文件不得改写或重排；修复必须新增后续 migration。
+
+生产执行顺序：
+
+1. 先取得可恢复备份，并保存备份证据路径。
+2. 执行 `npm run runtime:stores:verify -- --database-url <url>`，确认当前 journal 无
+   missing、failed 或 checksum drift。
+3. 执行 `npm run runtime:stores:migrate -- --dry-run --require-backup --backup-evidence <path>`。
+4. 对会新增 `unique` / `not null` / foreign key 的 migration，先写并运行前置查询，证明现有
+   数据无重复、空值或孤儿记录；若存在脏数据，先用独立 backfill/cleanup migration 处理。
+5. 正式执行 `npm run runtime:stores:migrate -- --require-backup --backup-evidence <path>`。
+6. 执行 `npm run runtime:stores:verify -- --database-url <url>` 和相关 smoke。
+
+失败处理：
+
+- 不要手动把 failed journal 改成 applied，也不要改写已经发布的 migration 文件。
+- 若 DDL 在事务中失败且无数据变更，修正问题后新增 forward-fix migration，再重新执行。
+- 若 migration 已产生部分业务影响，优先从备份或 PITR 恢复到升级前时间点；不能恢复时，必须写
+  compensating migration，并附带抽样校验和审计说明。
+- backfill migration 应记录输入范围、批次大小、重复/跳过数量和校验查询；高风险 backfill 应先在
+  restored/staging 库跑完并保存报告。
+
 ## 常用验证
 
 ```bash

@@ -20,6 +20,7 @@ import type {
   RuntimeStoreEntitlementGrant,
   RuntimeStoreFileRecord,
   RuntimeStoreHostUser,
+  RuntimeStoreIdempotencyRecord,
   RuntimeStoreInvoiceRecord,
   RuntimeStoreMembership,
   RuntimeStoreMeteringLedgerEntry,
@@ -59,6 +60,7 @@ export function mapRun(row: Row, logs: ModuleRunLogEntry[] = []): ModuleRunRecor
   return {
     id: row.id,
     productId: row.product_id,
+    environmentId: row.environment_id ?? null,
     workspaceId: row.workspace_id ?? null,
     moduleId: row.module_id,
     kind: row.kind,
@@ -86,6 +88,7 @@ export function mapOutbox(row: Row): RuntimeStoreOutboxRecord {
   return {
     id: row.id,
     productId: row.product_id,
+    environmentId: row.environment_id ?? null,
     workspaceId: row.workspace_id,
     moduleId: row.module_id,
     name: row.name,
@@ -106,10 +109,35 @@ export function mapOutbox(row: Row): RuntimeStoreOutboxRecord {
   };
 }
 
+export function mapIdempotencyKey(row: Row): RuntimeStoreIdempotencyRecord {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    environmentId: row.environment_id ?? null,
+    workspaceId: row.workspace_id ?? null,
+    namespace: row.namespace,
+    key: row.idempotency_key,
+    requestHash: row.request_hash,
+    status: row.status,
+    lockedAt: toIso(row.locked_at)!,
+    expiresAt: toIso(row.expires_at)!,
+    responseStatus:
+      row.response_status === null || row.response_status === undefined
+        ? undefined
+        : Number(row.response_status),
+    responseHeaders: row.response_headers ?? undefined,
+    responseBodyBase64: row.response_body_base64 ?? undefined,
+    metadata: row.metadata ?? {},
+    createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at)!,
+  };
+}
+
 export function mapDelivery(row: Row): RuntimeStoreDeliveryRecord {
   return {
     id: row.id,
     productId: row.product_id,
+    environmentId: row.environment_id ?? null,
     workspaceId: row.workspace_id ?? null,
     moduleId: row.module_id ?? null,
     actorId: row.actor_id ?? null,
@@ -304,6 +332,7 @@ export function mapCreditReservation(row: Row): RuntimeStoreCreditReservation {
     source: row.source ?? undefined,
     sourceId: row.source_id ?? undefined,
     idempotencyKey: row.idempotency_key ?? undefined,
+    expiresAt: toIso(row.expires_at),
     metadata: row.metadata ?? {},
     createdAt: toIso(row.created_at)!,
     updatedAt: toIso(row.updated_at)!,
@@ -635,7 +664,9 @@ export function mapApiKey(row: Row): RuntimeStoreApiKeyRecord {
     keyHash: row.key_hash,
     ownerSubjectType: row.owner_subject_type ?? undefined,
     ownerSubjectId: row.owner_subject_id ?? undefined,
+    createdBy: row.created_by ?? undefined,
     permissions: row.permissions ?? [],
+    rateLimit: row.rate_limit ?? undefined,
     status: row.status,
     expiresAt: toIso(row.expires_at),
     revokedAt: toIso(row.revoked_at),

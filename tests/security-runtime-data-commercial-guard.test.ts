@@ -130,6 +130,20 @@ test('runtime capability guard blocks undeclared permissions and cross-user cred
         async revokeBySource() {
           return { revoked: 0 };
         },
+        async refundRevoke(input) {
+          const subject = input.subject ?? { type: 'user' as const, id: input.userId ?? 'test-user' };
+          return {
+            revoked: 0,
+            unrecovered: input.amount ?? 0,
+            balance: {
+              subject,
+              userId: subject.type === 'user' ? subject.id : undefined,
+              unit: input.unit ?? 'credit',
+              balance: 10,
+            },
+            relatedLedgerIds: [],
+          };
+        },
         async listLedger() {
           return [];
         },
@@ -531,6 +545,9 @@ test('runtime capability guard protects subject-scoped entitlements, redeem code
         },
         async revokeBySource() {
           throw new Error('CREDIT_REVOKE_SHOULD_NOT_RUN');
+        },
+        async refundRevoke() {
+          throw new Error('CREDIT_REFUND_REVOKE_SHOULD_NOT_RUN');
         },
         async listLedger() {
           return [

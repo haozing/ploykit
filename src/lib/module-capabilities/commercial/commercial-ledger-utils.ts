@@ -120,6 +120,12 @@ export function toCreditBalance(balance: {
 export function creditLedgerDirection(
   record: RuntimeStoreCreditLedgerEntry
 ): ModuleCreditsLedgerEntry['direction'] {
+  if (record.reason.includes('refund_revoke')) {
+    return 'revoke';
+  }
+  if (record.reason.includes('expired')) {
+    return 'release';
+  }
   if (record.reason.includes('release')) {
     return 'release';
   }
@@ -192,6 +198,7 @@ export function toCreditsReservation(
     source: record.source,
     sourceId: record.sourceId,
     idempotencyKey: record.idempotencyKey,
+    expiresAt: record.expiresAt,
     metadata: record.metadata,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -338,6 +345,22 @@ export function assertNonNegative(amount: number, operation: string): void {
   if (!Number.isFinite(amount) || amount < 0) {
     throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation}`);
   }
+}
+
+export function assertIntegerAmount(amount: number, operation: string): void {
+  if (!Number.isSafeInteger(amount)) {
+    throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation} must be a safe integer`);
+  }
+}
+
+export function assertPositiveIntegerAmount(amount: number, operation: string): void {
+  assertPositive(amount, operation);
+  assertIntegerAmount(amount, operation);
+}
+
+export function assertNonNegativeIntegerAmount(amount: number, operation: string): void {
+  assertNonNegative(amount, operation);
+  assertIntegerAmount(amount, operation);
 }
 
 export function metadataObject(value: unknown): Record<string, unknown> {

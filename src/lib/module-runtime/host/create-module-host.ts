@@ -53,6 +53,7 @@ import {
 } from '../data';
 import type { ModuleRuntimeContract } from '../contract';
 import type { ModuleMapArtifact } from '../loader';
+import type { RuntimeStore } from '../stores/runtime-store-types';
 import {
   createModuleRuntimeHost,
   type CreateModuleRuntimeHostOptions,
@@ -135,6 +136,7 @@ export interface CreateModuleHostOptions extends CreateModuleRuntimeHostOptions 
   artifact: ModuleMapArtifact;
   resolveSession?: ModuleHostSessionResolver;
   verifyApiKey?: VerifyModuleApiKeyHandler;
+  runtimeStore?: RuntimeStore;
   data?: CreateModuleHostDataOptions;
   capabilities?: CreateModuleHostCapabilitiesOptions;
   createDataApi?: ModuleRuntimeDataApiFactory;
@@ -426,6 +428,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         user: hostSession.user,
         session: hostSession,
         verifyApiKey: options.verifyApiKey,
+        runtimeStore: options.runtimeStore,
         createContext(contextInput) {
           return createContext({
             moduleId: contextInput.moduleId,

@@ -9,6 +9,7 @@ import {
   subjectFromCommercialInput,
   subjectToStoredUserId,
   subscriptionStatusForEvent,
+  assertPositiveIntegerAmount,
   toCheckout,
   toCreditLedgerEntry,
   toEntitlementGrant,
@@ -93,6 +94,7 @@ export function createCommercialLedgerCommerce({
 
   const commerce: ModuleCommerceApi = {
     async createCheckout(input) {
+      assertPositiveIntegerAmount(input.amount, 'commerce.createCheckout.amount');
       const beneficiary = input.beneficiary ?? input.buyer ?? subjectFromCommercialInput(input);
       const order = await store.createCommercialOrder({
         ...scope,
@@ -113,6 +115,7 @@ export function createCommercialLedgerCommerce({
       return order ? toCheckout(order) : null;
     },
     async applyCheckoutPaid(input) {
+      assertPositiveIntegerAmount(input.amount, 'commerce.applyCheckoutPaid.amount');
       const beneficiary = input.beneficiary ?? input.buyer ?? subjectFromCommercialInput(input);
       let order = input.orderId
         ? await requireScopedOrder(input.orderId, 'MODULE_COMMERCIAL_PAID')
@@ -171,6 +174,7 @@ export function createCommercialLedgerCommerce({
       if (!order) {
         throw new Error(`MODULE_COMMERCIAL_REFUND_ORDER_NOT_FOUND: ${input.providerRef}`);
       }
+      assertPositiveIntegerAmount(input.amount ?? order.amount, 'commerce.applyRefund.amount');
       const refundedOrder = await store.updateCommercialOrderStatus(order.id, 'refunded', {
         provider: input.provider,
         providerRef: input.providerRef,

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   action,
   createTestingModuleContext,
+  defineApi,
   defineModule,
   Permission,
   table,
@@ -11,6 +12,7 @@ import {
 } from '@ploykit/module-sdk';
 import {
   createModuleHost,
+  createInMemoryRuntimeStore,
   createModuleRuntimeHostSnapshot,
   resetModuleAnonymousPolicyRateLimitsForTests,
   type ModuleDataPostgresExecutor,
@@ -606,6 +608,111 @@ test('createModuleHost enforces anonymous API route policy before handlers run',
   assert.equal(
     ((await highCost.json()) as { code: string }).code,
     'MODULE_API_ANONYMOUS_HIGH_COST_DENIED'
+  );
+});
+
+test('createModuleHost enforces API route idempotency metadata', async () => {
+  let calls = 0;
+  const runtimeStore = createInMemoryRuntimeStore({
+    now: () => new Date('2026-06-17T00:00:00.000Z'),
+    createId: (prefix) => `${prefix}_${calls + 1}`,
+  });
+  const idempotencyModule = defineModule({
+    id: 'api-idempotency-test',
+    name: 'API Idempotency Test',
+    version: '0.1.0',
+    routes: {
+      api: [
+        {
+          path: '/charge',
+          handler: './api/charge',
+          auth: 'auth',
+          methods: ['POST'],
+          idempotency: { required: true, keyFrom: 'request' },
+        },
+      ],
+    },
+  });
+  const host = await createModuleHost({
+    runtimeStore,
+    artifact: {
+      kind: 'source',
+      modules: {
+        'api-idempotency-test': {
+          module: async () => ({ default: idempotencyModule }),
+          apis: {
+            'api/charge': async () => ({
+              default: defineApi({
+                async post(ctx) {
+                  calls += 1;
+                  const input = await ctx.request.json<{ amount: number }>();
+                  return ctx.json({ ok: true, calls, amount: input.amount }, { status: 201 });
+                },
+              }),
+            }),
+          },
+        },
+      },
+    },
+  });
+  const session = {
+    user: { id: 'user_api_idem', role: 'user' as const },
+    userId: 'user_api_idem',
+    productId: 'product-api',
+    environmentId: 'dev',
+    workspaceId: 'workspace-api',
+    permissions: [],
+  };
+
+  const missingKey = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/api-idempotency-test/charge', {
+      method: 'POST',
+      body: JSON.stringify({ amount: 10 }),
+    }),
+    pathname: '/charge',
+    session,
+  });
+  assert.equal(missingKey.status, 400);
+  assert.equal(((await missingKey.json()) as { code: string }).code, 'MODULE_API_IDEMPOTENCY_KEY_REQUIRED');
+
+  const first = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/api-idempotency-test/charge', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'charge-1' },
+      body: JSON.stringify({ amount: 10 }),
+    }),
+    pathname: '/charge',
+    session,
+  });
+  const replay = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/api-idempotency-test/charge', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'charge-1' },
+      body: JSON.stringify({ amount: 10 }),
+    }),
+    pathname: '/charge',
+    session,
+  });
+  const conflict = await host.dispatchApiRoute({
+    request: new Request('http://localhost/api/modules/api-idempotency-test/charge', {
+      method: 'POST',
+      headers: { 'idempotency-key': 'charge-1' },
+      body: JSON.stringify({ amount: 25 }),
+    }),
+    pathname: '/charge',
+    session,
+  });
+
+  assert.equal(first.status, 201);
+  assert.deepEqual(await first.json(), { ok: true, calls: 1, amount: 10 });
+  assert.equal(replay.status, 201);
+  assert.equal(replay.headers.get('x-ploykit-idempotency-replay'), 'true');
+  assert.deepEqual(await replay.json(), { ok: true, calls: 1, amount: 10 });
+  assert.equal(calls, 1);
+  assert.equal(conflict.status, 400);
+  assert.equal(
+    ((await conflict.json()) as { code: string }).code,
+    'MODULE_API_IDEMPOTENCY_CONFLICT'
   );
 });
 

@@ -144,9 +144,9 @@ export default async function AdminBillingPage({
   params: Promise<LanguageRouteParams>;
   searchParams?: Promise<RouteSearchParams>;
 }) {
-  const [lang] = await readLanguageAndRequireAdmin(params, '/admin/billing');
+  const [lang, session] = await readLanguageAndRequireAdmin(params, '/admin/billing');
   const query = await readAdminTableQuery(searchParams);
-  const commercial = await getAdminCommercialView();
+  const commercial = await getAdminCommercialView(session);
   return (
     <AdminBillingOperationsPage
       lang={lang}

@@ -1,11 +1,12 @@
 import type { ModuleWorkspaceRole, PermissionValue } from '@ploykit/module-sdk';
 import type { RuntimeStoreScope } from './runtime-store-common-types';
 
-export type RuntimeStoreApiKeyStatus = 'active' | 'revoked';
+export type RuntimeStoreApiKeyStatus = 'active' | 'rotating' | 'revoked';
 
 export interface RuntimeStoreApiKeyRecord {
   id: string;
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   moduleId?: string | null;
   name: string;
@@ -13,7 +14,9 @@ export interface RuntimeStoreApiKeyRecord {
   keyHash: string;
   ownerSubjectType?: 'user' | 'workspace' | 'organization' | 'apiKey';
   ownerSubjectId?: string;
+  createdBy?: string;
   permissions: readonly PermissionValue[];
+  rateLimit?: Record<string, unknown>;
   status: RuntimeStoreApiKeyStatus;
   expiresAt?: string;
   revokedAt?: string;
@@ -30,7 +33,9 @@ export interface CreateRuntimeStoreApiKeyInput extends RuntimeStoreScope {
   keyHash: string;
   ownerSubjectType?: RuntimeStoreApiKeyRecord['ownerSubjectType'];
   ownerSubjectId?: string;
+  createdBy?: string;
   permissions?: readonly PermissionValue[];
+  rateLimit?: Record<string, unknown>;
   status?: RuntimeStoreApiKeyStatus;
   expiresAt?: string;
   revokedAt?: string;

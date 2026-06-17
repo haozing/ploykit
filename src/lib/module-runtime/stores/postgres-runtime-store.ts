@@ -12,6 +12,7 @@ import { createPostgresCommercialRevenueStore } from './postgres-runtime-store-c
 import { createPostgresCommercialSubscriptionStore } from './postgres-runtime-store-commercial-subscriptions';
 import { createPostgresCommercialTaxStore } from './postgres-runtime-store-commercial-tax';
 import { createPostgresFileStore } from './postgres-runtime-store-files';
+import { createPostgresIdempotencyStore } from './postgres-runtime-store-idempotency';
 import { createPostgresIdentityStore } from './postgres-runtime-store-identity';
 import { createPostgresMeteringStore } from './postgres-runtime-store-metering';
 import { createPostgresNotificationStore } from './postgres-runtime-store-notifications';
@@ -54,6 +55,7 @@ export function createPostgresRuntimeStore(
   });
   const commercialTaxStore = createPostgresCommercialTaxStore({ database, createId });
   const fileStore = createPostgresFileStore({ database, createId });
+  const idempotencyStore = createPostgresIdempotencyStore({ database, createId });
   const identityStore = createPostgresIdentityStore({ database, createId });
   const meteringStore = createPostgresMeteringStore({ database, createId });
   const notificationStore = createPostgresNotificationStore({ database, createId });
@@ -70,6 +72,19 @@ export function createPostgresRuntimeStore(
     ensureSchema() {
       return applyRuntimeStoreMigration(database);
     },
+    async transaction<T>(callback: (tx: RuntimeStore) => Promise<T>): Promise<T> {
+      if (!database.transaction) {
+        throw new Error('RUNTIME_STORE_TRANSACTION_REQUIRED: database.transaction is required');
+      }
+      return database.transaction((tx) =>
+        callback(
+          createPostgresRuntimeStore({
+            database: tx,
+            createId,
+          })
+        )
+      );
+    },
     ...auditStore,
     ...catalogStore,
     ...configStore,
@@ -82,6 +97,7 @@ export function createPostgresRuntimeStore(
     ...commercialSubscriptionStore,
     ...commercialTaxStore,
     ...fileStore,
+    ...idempotencyStore,
     ...identityStore,
     ...meteringStore,
     ...notificationStore,

@@ -10,7 +10,7 @@ import type {
   RuntimeStoreSubscriptionStatus,
 } from '../../module-runtime/stores';
 import {
-  assertPositive,
+  assertPositiveIntegerAmount,
   isRevenueInvoice,
   isWithinPeriod,
   subscriptionStatusForEvent,
@@ -114,6 +114,7 @@ export function createCommercialProviderRuntime({
 }: CreateCommercialProviderRuntimeInput): RuntimeStoreCommercialRuntime['provider'] {
   return {
     async applyCheckoutPaid(input) {
+      assertPositiveIntegerAmount(input.amount, 'provider.paid.amount');
       const sku = skuCatalog[input.sku];
       if (sku?.planId) {
         await store.upsertCommercialCatalogItem({
@@ -225,7 +226,7 @@ export function createCommercialProviderRuntime({
         throw new Error(`MODULE_COMMERCIAL_REFUND_ORDER_NOT_FOUND: ${input.providerRef}`);
       }
       const amount = input.amount ?? order.amount;
-      assertPositive(amount, 'refund.amount');
+      assertPositiveIntegerAmount(amount, 'refund.amount');
       const currency = input.currency ?? order.currency;
       if (currency !== order.currency) {
         throw new Error(`MODULE_COMMERCIAL_REFUND_CURRENCY_MISMATCH: ${currency}`);

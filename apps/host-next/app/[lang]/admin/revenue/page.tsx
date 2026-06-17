@@ -19,11 +19,11 @@ export default async function AdminRevenuePage({
   params: Promise<LanguageRouteParams>;
   searchParams?: Promise<RouteSearchParams>;
 }) {
-  const [lang] = await readLanguageAndRequireAdmin(params, '/admin/revenue');
+  const [lang, session] = await readLanguageAndRequireAdmin(params, '/admin/revenue');
   const query = await readAdminTableQuery(searchParams);
   const [revenue, commercial] = await Promise.all([
-    getAdminRevenue({ q: query.q, status: query.status }),
-    getAdminCommercialView(),
+    getAdminRevenue({ q: query.q, status: query.status }, { session }),
+    getAdminCommercialView(session),
   ]);
   return (
     <AdminRevenueOperationsPage

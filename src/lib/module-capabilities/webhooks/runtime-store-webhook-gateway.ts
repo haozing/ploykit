@@ -24,6 +24,10 @@ import {
 export type RuntimeWebhookSecretResolver = (input: {
   moduleId: string;
   webhookName: string;
+  provider?: string;
+  connectionSlug?: string;
+  environmentId?: string | null;
+  headers?: Record<string, string>;
 }) => string | null | undefined | Promise<string | null | undefined>;
 
 export interface RuntimeStoreWebhookGateway {
@@ -38,6 +42,9 @@ export interface RuntimeStoreWebhookGateway {
     signature?: string;
     headers?: Record<string, string>;
     signatureProvider?: string;
+    provider?: string;
+    connectionSlug?: string;
+    environmentId?: string | null;
     maxAttempts?: number;
   }): Promise<{ duplicate: boolean; receipt: RuntimeStoreWebhookReceipt }>;
   replay(receiptId: string): Promise<RuntimeStoreWebhookReceipt>;
@@ -173,8 +180,9 @@ export function createRuntimeStoreWebhookGateway(
   return {
     queue,
     async receive(input) {
+      const receiveWithStore = async (store: RuntimeStore) => {
       const existing = input.idempotencyKey
-        ? await options.store.findWebhookReceiptByIdempotencyKey(
+        ? await store.findWebhookReceiptByIdempotencyKey(
             options.productId,
             options.workspaceId,
             input.moduleId,
@@ -183,15 +191,15 @@ export function createRuntimeStoreWebhookGateway(
           )
         : null;
       if (existing && existing.status !== 'rejected') {
-        const receipt = await options.store.markWebhookReceipt(existing.id, 'duplicate');
+        const receipt = await store.markWebhookReceipt(existing.id, 'duplicate');
         return { duplicate: true, receipt };
       }
 
       const receipt =
         existing?.status === 'rejected'
-          ? await options.store.markWebhookReceipt(existing.id, 'received')
+          ? await store.markWebhookReceipt(existing.id, 'received')
           : (existing ??
-            (await options.store.createWebhookReceipt({
+            (await store.createWebhookReceipt({
               productId: options.productId,
               workspaceId: options.workspaceId,
               moduleId: input.moduleId,
@@ -207,11 +215,21 @@ export function createRuntimeStoreWebhookGateway(
 
       const providerName = input.signatureProvider ?? 'none';
       const provider = providers[providerName];
-      const secret = providerName === 'none' ? '' : await options.secretResolver?.(input);
+      const secret =
+        providerName === 'none'
+          ? ''
+          : await options.secretResolver?.({
+              moduleId: input.moduleId,
+              webhookName: input.webhookName,
+              provider: input.provider ?? providerName,
+              connectionSlug: input.connectionSlug,
+              environmentId: input.environmentId,
+              headers: input.headers,
+            });
       if (!provider) {
         return {
           duplicate: false,
-          receipt: await options.store.markWebhookReceipt(
+          receipt: await store.markWebhookReceipt(
             receipt.id,
             'rejected',
             `Webhook signature provider "${providerName}" is not supported.`
@@ -221,7 +239,7 @@ export function createRuntimeStoreWebhookGateway(
       if (providerName !== 'none' && !secret) {
         return {
           duplicate: false,
-          receipt: await options.store.markWebhookReceipt(
+          receipt: await store.markWebhookReceipt(
             receipt.id,
             'rejected',
             'Webhook secret is not configured.'
@@ -237,7 +255,7 @@ export function createRuntimeStoreWebhookGateway(
       ) {
         return {
           duplicate: false,
-          receipt: await options.store.markWebhookReceipt(
+          receipt: await store.markWebhookReceipt(
             receipt.id,
             'rejected',
             'Webhook signature rejected.'
@@ -245,7 +263,7 @@ export function createRuntimeStoreWebhookGateway(
         };
       }
 
-      await options.store.enqueueOutbox({
+      await store.enqueueOutbox({
         productId: options.productId,
         workspaceId: options.workspaceId,
         moduleId: input.moduleId,
@@ -265,18 +283,26 @@ export function createRuntimeStoreWebhookGateway(
         },
         metadata: {
           maxAttempts: input.maxAttempts ?? 3,
+          provider: input.provider ?? providerName,
+          connectionSlug: input.connectionSlug,
+          environmentId: input.environmentId,
         },
       });
       return {
         duplicate: false,
         receipt:
           (
-            await options.store.listWebhookReceipts({
+            await store.listWebhookReceipts({
               productId: options.productId,
               moduleId: input.moduleId,
             })
           ).find((candidate) => candidate.id === receipt.id) ?? receipt,
       };
+      };
+
+      return options.store.transaction
+        ? options.store.transaction((tx) => receiveWithStore(tx))
+        : receiveWithStore(options.store);
     },
     async replay(receiptId) {
       const receipt = (
@@ -355,6 +381,22 @@ export function createRuntimeStoreWebhookRunner(
           }
 
           const receipt = await options.store.markWebhookReceipt(payload.receiptId, 'processing');
+          const delivered = payload.replay
+            ? undefined
+            : (
+                await options.store.listDeliveries({
+                  productId: options.productId,
+                  workspaceId: options.workspaceId,
+                  moduleId: payload.moduleId,
+                  kind: 'webhook',
+                  receiptId: payload.receiptId,
+                  status: 'delivered',
+                })
+              ).find((record) => record.source === 'webhook-handler');
+          if (delivered) {
+            await options.store.markWebhookReceipt(payload.receiptId, 'processed');
+            return;
+          }
           const bodyText = payload.bodyText ?? receipt.bodyText ?? '';
           const request = createWebhookRequest({
             path: payload.path ?? receipt.path,
@@ -380,6 +422,24 @@ export function createRuntimeStoreWebhookRunner(
 
           try {
             await handler(ctx, event);
+            await options.store.recordDelivery({
+              productId: options.productId,
+              workspaceId: options.workspaceId,
+              moduleId: payload.moduleId,
+              kind: 'webhook',
+              source: 'webhook-handler',
+              target: `${payload.moduleId}.${payload.webhookName}`,
+              status: 'delivered',
+              attempts: message.attempts,
+              outboxId: message.id,
+              receiptId: payload.receiptId,
+              correlationId: payload.receiptId,
+              causationId: payload.replay ? `replay:${payload.receiptId}` : payload.bodyDigest,
+              metadata: {
+                webhookName: payload.webhookName,
+                replay: payload.replay === true,
+              },
+            });
             await options.store.markWebhookReceipt(payload.receiptId, 'processed');
           } catch (error) {
             await options.store.markWebhookReceipt(

@@ -51,9 +51,19 @@ export function createInMemoryIdentityRuntimeStore({
     async createApiKey(input) {
       const timestamp = iso(now);
       const id = input.id ?? createId('api_key');
+      if (apiKeys.has(id)) {
+        throw new Error(`RUNTIME_STORE_API_KEY_ALREADY_EXISTS: ${id}`);
+      }
+      const keyHashCollision = [...apiKeys.values()].find(
+        (candidate) => candidate.keyHash === input.keyHash
+      );
+      if (keyHashCollision) {
+        throw new Error(`RUNTIME_STORE_API_KEY_HASH_ALREADY_EXISTS: ${input.prefix}`);
+      }
       const record: RuntimeStoreApiKeyRecord = {
         id,
         productId: input.productId,
+        environmentId: input.environmentId ?? null,
         workspaceId: input.workspaceId ?? null,
         moduleId: input.moduleId ?? null,
         name: input.name,
@@ -61,7 +71,9 @@ export function createInMemoryIdentityRuntimeStore({
         keyHash: input.keyHash,
         ownerSubjectType: input.ownerSubjectType,
         ownerSubjectId: input.ownerSubjectId,
+        createdBy: input.createdBy,
         permissions: input.permissions ?? [],
+        rateLimit: input.rateLimit,
         status: input.status ?? 'active',
         expiresAt: input.expiresAt,
         revokedAt: input.revokedAt,
@@ -78,6 +90,10 @@ export function createInMemoryIdentityRuntimeStore({
       if (
         !record ||
         (input.productId && record.productId !== input.productId) ||
+        (input.environmentId !== undefined &&
+          record.environmentId !== undefined &&
+          record.environmentId !== null &&
+          record.environmentId !== input.environmentId) ||
         (input.workspaceId !== undefined && record.workspaceId !== input.workspaceId)
       ) {
         return null;
@@ -90,7 +106,11 @@ export function createInMemoryIdentityRuntimeStore({
           (candidate) =>
             candidate.keyHash === input.keyHash &&
             (!input.prefix || candidate.prefix === input.prefix) &&
-            (!input.productId || candidate.productId === input.productId)
+            (!input.productId || candidate.productId === input.productId) &&
+            (input.environmentId === undefined ||
+              candidate.environmentId === undefined ||
+              candidate.environmentId === null ||
+              candidate.environmentId === input.environmentId)
         ) ?? null;
       return record ? clone(record) : null;
     },
@@ -108,6 +128,7 @@ export function createInMemoryIdentityRuntimeStore({
         revokedAt: patch.revokedAt === null ? undefined : (patch.revokedAt ?? previous.revokedAt),
         lastUsedAt:
           patch.lastUsedAt === null ? undefined : (patch.lastUsedAt ?? previous.lastUsedAt),
+        rateLimit: patch.rateLimit === null ? undefined : (patch.rateLimit ?? previous.rateLimit),
         metadata: { ...previous.metadata, ...(patch.metadata ?? {}) },
         updatedAt: iso(now),
       };
@@ -117,6 +138,10 @@ export function createInMemoryIdentityRuntimeStore({
     async listApiKeys(query = {}) {
       return [...apiKeys.values()]
         .filter((record) => !query.productId || record.productId === query.productId)
+        .filter(
+          (record) =>
+            query.environmentId === undefined || (record.environmentId ?? null) === query.environmentId
+        )
         .filter(
           (record) => query.workspaceId === undefined || record.workspaceId === query.workspaceId
         )

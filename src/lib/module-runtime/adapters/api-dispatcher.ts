@@ -4,16 +4,19 @@ import type {
   ModuleContext,
   ModuleUser,
 } from '@ploykit/module-sdk';
+import { createHash } from 'node:crypto';
 import { createModuleRuntimeContext } from '../context';
 import { resolveModuleEntryLoader } from '../loader';
 import { findModuleRouteMatch } from '../routes';
 import type { ModuleRuntimeHost } from '../host';
+import type { RuntimeStore } from '../stores/runtime-store-types';
 import {
   checkModuleRuntimeAccess,
   mergeModuleRuntimeAccessSession,
   type ModuleRuntimeAccessSession,
 } from '../security';
 import { checkModuleAnonymousPolicy } from '../security/anonymous-policy';
+import { createRuntimeLogger } from '../observability/logger';
 import { asModuleApiDefinition } from './module-export';
 
 export interface DispatchModuleApiRouteInput {
@@ -23,6 +26,7 @@ export interface DispatchModuleApiRouteInput {
   session?: ModuleRuntimeAccessSession;
   params?: Record<string, string>;
   verifyApiKey?: VerifyModuleApiKeyHandler;
+  runtimeStore?: RuntimeStore;
   createContext?: (input: CreateModuleApiContextInput) => ModuleContext;
 }
 
@@ -71,10 +75,204 @@ function jsonError(status: number, code: string, message: string): Response {
   return Response.json({ ok: false, code, message }, { status });
 }
 
+const moduleApiRouteLogger = createRuntimeLogger({
+  sink(record) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[module-api-route]', record);
+    }
+  },
+});
+
+function errorMetadata(error: unknown): Record<string, unknown> {
+  return error instanceof Error
+    ? { name: error.name, message: error.message, stack: error.stack }
+    : { error };
+}
+
 function logModuleApiHandlerError(error: unknown): void {
-  if (process.env.NODE_ENV !== 'production') {
-    console.error('[module-api-route] handler failed', error);
+  moduleApiRouteLogger.error('Module API handler failed.', errorMetadata(error));
+}
+
+function readIdempotencyKey(request: Request): string | undefined {
+  return (
+    request.headers.get('idempotency-key')?.trim() ||
+    request.headers.get('x-idempotency-key')?.trim() ||
+    request.headers.get('x-ploykit-idempotency-key')?.trim() ||
+    undefined
+  );
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return item;
+    }
+    return Object.keys(item as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = (item as Record<string, unknown>)[key];
+        return acc;
+      }, {});
+  });
+}
+
+async function apiRequestHash(input: {
+  request: Request;
+  moduleId: string;
+  route: ModuleApiRoute;
+  params: Record<string, string>;
+}): Promise<string> {
+  const body = Buffer.from(await input.request.clone().arrayBuffer()).toString('base64');
+  const url = new URL(input.request.url);
+  return `sha256:${createHash('sha256')
+    .update(
+      stableStringify({
+        moduleId: input.moduleId,
+        route: input.route.path,
+        method: input.request.method.toUpperCase(),
+        search: url.search,
+        params: input.params,
+        body,
+      })
+    )
+    .digest('hex')}`;
+}
+
+function responseHeadersRecord(response: Response): Record<string, string> {
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  return headers;
+}
+
+async function responseBodyBase64(response: Response): Promise<string> {
+  const body = await response.clone().arrayBuffer();
+  return Buffer.from(body).toString('base64');
+}
+
+function responseFromIdempotencyRecord(record: {
+  responseStatus?: number;
+  responseHeaders?: Record<string, string>;
+  responseBodyBase64?: string;
+}): Response {
+  const headers = new Headers(record.responseHeaders ?? {});
+  headers.set('x-ploykit-idempotency-replay', 'true');
+  const body = record.responseBodyBase64
+    ? Buffer.from(record.responseBodyBase64, 'base64')
+    : null;
+  return new Response(body, {
+    status: record.responseStatus ?? 200,
+    headers,
+  });
+}
+
+function moduleApiIdempotencyScope(
+  session: ModuleRuntimeAccessSession
+): { productId: string; environmentId?: string | null; workspaceId?: string | null } | null {
+  const productId = session.productId;
+  if (!productId) {
+    return null;
   }
+  return {
+    productId,
+    environmentId: session.environmentId ?? null,
+    workspaceId:
+      session.workspaceId ??
+      (session.subject?.type === 'workspace' ? session.subject.id : undefined) ??
+      null,
+  };
+}
+
+async function runWithApiIdempotency(input: {
+  request: Request;
+  moduleId: string;
+  route: ModuleApiRoute;
+  params: Record<string, string>;
+  session: ModuleRuntimeAccessSession;
+  store?: RuntimeStore;
+  execute: () => Response | Promise<Response>;
+}): Promise<Response> {
+  if (!input.route.idempotency) {
+    return input.execute();
+  }
+
+  const idempotencyKey = readIdempotencyKey(input.request);
+  if (input.route.idempotency?.required && !idempotencyKey) {
+    return jsonError(
+      400,
+      'MODULE_API_IDEMPOTENCY_KEY_REQUIRED',
+      'Idempotency key is required for this API route.'
+    );
+  }
+  if (!idempotencyKey) {
+    return input.execute();
+  }
+  if (!input.store) {
+    if (input.route.idempotency?.required) {
+      return jsonError(
+        500,
+        'MODULE_API_IDEMPOTENCY_STORE_MISSING',
+        'API idempotency store is not configured.'
+      );
+    }
+    return input.execute();
+  }
+  const scope = moduleApiIdempotencyScope(input.session);
+  if (!scope) {
+    return jsonError(
+      500,
+      'MODULE_API_IDEMPOTENCY_SCOPE_MISSING',
+      'API idempotency scope is not configured.'
+    );
+  }
+
+  const begin = await input.store.beginIdempotencyKey({
+    productId: scope.productId,
+    environmentId: scope.environmentId,
+    workspaceId: scope.workspaceId,
+    namespace: `api:${input.moduleId}:${input.route.path}:${input.request.method.toUpperCase()}`,
+    key: idempotencyKey,
+    requestHash: await apiRequestHash(input),
+    recoverLockedBefore: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    metadata: {
+      route: 'module.api',
+      moduleId: input.moduleId,
+      routePath: input.route.path,
+      method: input.request.method.toUpperCase(),
+    },
+  });
+
+  if (begin.outcome === 'conflict') {
+    return jsonError(
+      400,
+      'MODULE_API_IDEMPOTENCY_CONFLICT',
+      'Idempotency key was already used with a different request payload.'
+    );
+  }
+  if (begin.outcome === 'in_progress') {
+    return jsonError(
+      409,
+      'MODULE_API_IDEMPOTENCY_IN_PROGRESS',
+      'Original request is still in progress.'
+    );
+  }
+  if (begin.outcome === 'replay') {
+    return responseFromIdempotencyRecord(begin.record);
+  }
+
+  const response = await input.execute();
+  try {
+    await input.store.completeIdempotencyKey({
+      id: begin.record.id,
+      responseStatus: response.status,
+      responseHeaders: responseHeadersRecord(response),
+      responseBodyBase64: await responseBodyBase64(response),
+    });
+  } catch (error) {
+    logModuleApiHandlerError(error);
+  }
+  return response;
 }
 
 function routeAllowsMethod(route: ModuleApiRoute, method: string): boolean {
@@ -256,10 +454,18 @@ export async function dispatchModuleApiRoute(
         session: accessSession,
       }),
       session: accessSession,
-    });
+  });
 
   try {
-    return await handler(context);
+    return await runWithApiIdempotency({
+      request: input.request,
+      moduleId: match.entry.moduleId,
+      route,
+      params,
+      session: accessSession,
+      store: input.runtimeStore,
+      execute: () => handler(context),
+    });
   } catch (error) {
     logModuleApiHandlerError(error);
     return jsonError(500, 'MODULE_API_HANDLER_ERROR', 'Module API handler failed.');

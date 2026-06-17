@@ -1,7 +1,7 @@
 const SENSITIVE_KEY_PATTERN =
   /secret|token|password|passwd|authorization|signature|api[_-]?key|credit[_-]?card|card[_-]?number|private[_-]?key|client[_-]?secret|access[_-]?key/i;
 const AUDIT_SENSITIVE_KEY_PATTERN =
-  /secret|token|password|passwd|authorization|signature|api[_-]?key|credit[_-]?card|card[_-]?number|private[_-]?key|client[_-]?secret|access[_-]?key|tax[_-]?id|vat[_-]?id|ssn|email|phone|body[_-]?text|raw[_-]?body|request[_-]?body|response[_-]?body|payload|html/i;
+  /secret|token|password|passwd|authorization|signature|api[_-]?key|credit[_-]?card|card[_-]?number|private[_-]?key|client[_-]?secret|access[_-]?key|tax[_-]?id|vat[_-]?id|ssn|email|phone|ip[_-]?address|remote[_-]?address|user[_-]?agent|body[_-]?text|raw[_-]?body|request[_-]?body|response[_-]?body|payload|html/i;
 const SENSITIVE_NORMALIZED_KEYS = new Set([
   'databaseurl',
   'postgresurl',
@@ -22,7 +22,14 @@ function isAuditSensitiveKey(key: string): boolean {
   if (normalized.endsWith('configured') || normalized.endsWith('ready')) {
     return false;
   }
-  return AUDIT_SENSITIVE_KEY_PATTERN.test(key) || SENSITIVE_NORMALIZED_KEYS.has(normalized);
+  return (
+    AUDIT_SENSITIVE_KEY_PATTERN.test(key) ||
+    SENSITIVE_NORMALIZED_KEYS.has(normalized) ||
+    normalized === 'ip' ||
+    normalized === 'ua' ||
+    normalized === 'before' ||
+    normalized === 'after'
+  );
 }
 
 function redactSensitiveString(value: string): string {

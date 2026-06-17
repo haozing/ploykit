@@ -167,7 +167,7 @@ test('A8 admin entitlement views normalize expiry and paginate the ledger', asyn
     idempotencyKey: `pagination-expired-${suffix}`,
   });
 
-  const commercial = await getAdminCommercialView();
+  const commercial = await getAdminCommercialView(createDemoHostSession());
   const activeGrant = commercial.entitlements.find(
     (grant) => grant.entitlement === `${entitlementBase}.active`
   );
@@ -244,7 +244,7 @@ test('A8 admin commercial view redacts commercial secret metadata', async () => 
     },
   });
 
-  const commercial = await getAdminCommercialView();
+  const commercial = await getAdminCommercialView(createDemoHostSession());
   const code = commercial.redeemCodes.find(
     (record) => record.codeHashPrefix === codeHash.slice(0, 12)
   );
@@ -493,7 +493,7 @@ test('A7 admin billing catalog changes feed runtime entitlements and user billin
     workspaceRole: 'editor',
     permissions: [],
   } as any);
-  const commercialView = await getAdminCommercialView();
+  const commercialView = await getAdminCommercialView(createDemoHostSession());
   const syncResult = await syncHostBillingSkuToStripe(session, skuId);
 
   assert.equal(paid.order.status, 'paid');

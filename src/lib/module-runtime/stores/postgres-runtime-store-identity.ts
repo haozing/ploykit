@@ -33,16 +33,17 @@ export function createPostgresIdentityStore(
       const id = input.id ?? createId('api_key');
       const result = await database.query<Row>(
         `insert into module_api_keys (
-          id, product_id, workspace_id, module_id, name, prefix, key_hash,
-          owner_subject_type, owner_subject_id, permissions, status, expires_at,
-          revoked_at, last_used_at, metadata
+          id, product_id, environment_id, workspace_id, module_id, name, prefix, key_hash,
+          owner_subject_type, owner_subject_id, created_by, permissions, rate_limit,
+          status, expires_at, revoked_at, last_used_at, metadata
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12::timestamptz,
-          $13::timestamptz, $14::timestamptz, $15::jsonb)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb,
+          $14, $15::timestamptz, $16::timestamptz, $17::timestamptz, $18::jsonb)
         returning *`,
         [
           id,
           input.productId,
+          input.environmentId ?? null,
           input.workspaceId ?? null,
           input.moduleId ?? null,
           input.name,
@@ -50,7 +51,9 @@ export function createPostgresIdentityStore(
           input.keyHash,
           input.ownerSubjectType ?? null,
           input.ownerSubjectId ?? null,
+          input.createdBy ?? null,
           json(input.permissions ?? []),
+          json(input.rateLimit ?? null),
           input.status ?? 'active',
           input.expiresAt ?? null,
           input.revokedAt ?? null,
@@ -65,8 +68,14 @@ export function createPostgresIdentityStore(
         `select * from module_api_keys
          where id = $1
            and ($2::text is null or product_id = $2)
-           and ($3::text is null or coalesce(workspace_id, ''::text) = $3)`,
-        [input.id, input.productId ?? null, runtimeWorkspaceFilter(input.workspaceId)]
+           and ($3::text is null or environment_id is null or coalesce(environment_id, ''::text) = $3)
+           and ($4::text is null or coalesce(workspace_id, ''::text) = $4)`,
+        [
+          input.id,
+          input.productId ?? null,
+          runtimeWorkspaceFilter(input.environmentId),
+          runtimeWorkspaceFilter(input.workspaceId),
+        ]
       );
       return result.rows[0] ? mapApiKey(result.rows[0]) : null;
     },
@@ -76,9 +85,15 @@ export function createPostgresIdentityStore(
          where key_hash = $1
            and ($2::text is null or prefix = $2)
            and ($3::text is null or product_id = $3)
+           and ($4::text is null or environment_id is null or coalesce(environment_id, ''::text) = $4)
          order by created_at desc
          limit 1`,
-        [input.keyHash, input.prefix ?? null, input.productId ?? null]
+        [
+          input.keyHash,
+          input.prefix ?? null,
+          input.productId ?? null,
+          runtimeWorkspaceFilter(input.environmentId),
+        ]
       );
       return result.rows[0] ? mapApiKey(result.rows[0]) : null;
     },
@@ -91,7 +106,8 @@ export function createPostgresIdentityStore(
              expires_at = case when $5::boolean then null else coalesce($6::timestamptz, expires_at) end,
              revoked_at = case when $7::boolean then null else coalesce($8::timestamptz, revoked_at) end,
              last_used_at = case when $9::boolean then null else coalesce($10::timestamptz, last_used_at) end,
-             metadata = metadata || $11::jsonb,
+             rate_limit = case when $11::boolean then null else coalesce($12::jsonb, rate_limit) end,
+             metadata = metadata || $13::jsonb,
              updated_at = now()
          where id = $1
          returning *`,
@@ -106,6 +122,8 @@ export function createPostgresIdentityStore(
           patch.revokedAt ?? null,
           patch.lastUsedAt === null,
           patch.lastUsedAt ?? null,
+          patch.rateLimit === null,
+          json(patch.rateLimit ?? null),
           json(redactSensitive(patch.metadata ?? {})),
         ]
       );
@@ -118,14 +136,16 @@ export function createPostgresIdentityStore(
       const result = await database.query<Row>(
         `select * from module_api_keys
          where ($1::text is null or product_id = $1)
-           and ($2::text is null or coalesce(workspace_id, ''::text) = $2)
-           and ($3::text is null or coalesce(module_id, ''::text) = $3)
-           and ($4::text is null or owner_subject_type = $4)
-           and ($5::text is null or owner_subject_id = $5)
-           and ($6::text is null or status = $6)
+           and ($2::text is null or coalesce(environment_id, ''::text) = $2)
+           and ($3::text is null or coalesce(workspace_id, ''::text) = $3)
+           and ($4::text is null or coalesce(module_id, ''::text) = $4)
+           and ($5::text is null or owner_subject_type = $5)
+           and ($6::text is null or owner_subject_id = $6)
+           and ($7::text is null or status = $7)
          order by created_at desc`,
         [
           query.productId ?? null,
+          runtimeWorkspaceFilter(query.environmentId),
           runtimeWorkspaceFilter(query.workspaceId),
           query.moduleId === undefined ? null : (query.moduleId ?? ''),
           query.ownerSubjectType ?? null,

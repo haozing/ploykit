@@ -9,6 +9,7 @@ import type {
 } from '@ploykit/module-sdk';
 import type { ModuleRuntimeContract } from '../../module-runtime/contract';
 import type { ModuleHostSession } from '../../module-runtime/host/session';
+import { createModuleCapabilityMeter } from '../../module-runtime/metering';
 import type {
   RuntimeStore,
   RuntimeStoreResourceBindingRecord,
@@ -938,6 +939,44 @@ async function recordServiceInvocation(input: {
     correlationId: input.correlationId,
     error: input.error ? errorInfo(input.error) : undefined,
     metadata,
+  });
+  const recordUsage = (usageInput: {
+    meter: string;
+    quantity?: number;
+    unit?: string;
+    idempotencyKey?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    input.store.recordUsage({
+      productId: productId(input.session),
+      workspaceId: workspaceId(input.session, input.connection),
+      moduleId: input.contract.id,
+      meter: usageInput.meter,
+      quantity: usageInput.quantity,
+      unit: usageInput.unit,
+      idempotencyKey: usageInput.idempotencyKey,
+      metadata: usageInput.metadata,
+    });
+  const usage = {
+    record: recordUsage,
+    increment: recordUsage,
+  };
+  await createModuleCapabilityMeter(usage).record({
+    kind: 'egress.call',
+    quantity: input.attempts ?? 1,
+    idempotencyKey: `service:${input.correlationId}:${input.serviceName}:${input.operationName}:${input.status}`,
+    metadata: {
+      provider: input.providerId,
+      service: input.serviceName,
+      operation: input.operationName,
+      status: input.status,
+      target: input.target,
+      serviceConnectionId: input.connection?.connectionId,
+      responseStatus: input.responseStatus,
+      responseBytes: input.responseBytes,
+      latencyMs,
+      correlationId: input.correlationId,
+    },
   });
   await input.store.recordAudit({
     productId: productId(input.session),

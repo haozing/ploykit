@@ -247,6 +247,7 @@ export interface ModuleCreditsReservation {
   source?: string;
   sourceId?: string;
   idempotencyKey?: string;
+  expiresAt?: string;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -294,6 +295,23 @@ export interface ModuleCreditsApi {
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
   }): Promise<{ revoked: number }>;
+  refundRevoke(input: {
+    grantLedgerId?: string;
+    source?: string;
+    sourceId?: string;
+    subject?: CommercialSubject;
+    userId?: string;
+    amount?: number;
+    unit?: string;
+    reason?: string;
+    idempotencyKey?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{
+    revoked: number;
+    unrecovered: number;
+    balance: ModuleCreditsBalance;
+    relatedLedgerIds: readonly string[];
+  }>;
   listLedger(input?: {
     subject?: CommercialSubject;
     userId?: string;
@@ -879,6 +897,7 @@ export interface ModuleApiKeyVerificationResult {
   ok: boolean;
   user?: ModuleUser | null;
   productId?: string;
+  environmentId?: string;
   workspaceId?: string;
   apiKeyId?: string;
   subject?: CommercialSubject;
@@ -891,6 +910,7 @@ export interface ModuleApiKeysApi {
     owner?: CommercialSubject;
     scope?: {
       productId?: string;
+      environmentId?: string | null;
       workspaceId?: string | null;
       moduleId?: string;
     };
@@ -906,13 +926,16 @@ export interface ModuleApiKeysApi {
   }>;
   rotate(input: { id: string }): Promise<{ id: string; key: string; prefix: string }>;
   revoke(input: { id: string; reason?: string }): Promise<{ id: string; revoked: true }>;
-  list(input?: { owner?: CommercialSubject; status?: 'active' | 'revoked' | 'expired' }): Promise<
+  list(input?: {
+    owner?: CommercialSubject;
+    status?: 'active' | 'rotating' | 'revoked' | 'expired';
+  }): Promise<
     {
       id: string;
       name: string;
       prefix: string;
       owner?: CommercialSubject;
-      status: 'active' | 'revoked' | 'expired';
+      status: 'active' | 'rotating' | 'revoked' | 'expired';
       lastUsedAt?: string;
       expiresAt?: string;
       metadata: Record<string, unknown>;
