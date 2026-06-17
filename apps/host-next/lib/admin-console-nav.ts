@@ -5,6 +5,7 @@ import type { ModuleHostSession } from '@/lib/module-runtime';
 import { createAnonymousModuleHostSession } from '@/lib/module-runtime/host/session';
 import { translateModuleMessage } from '@/lib/module-runtime/i18n';
 import { getModuleHost } from './module-host';
+import { resolveModuleNavigationIconKey } from './module-navigation-icons';
 import { adminHref } from './paths';
 
 export type AdminConsoleAudience = 'business-operations' | 'technical-operations';
@@ -397,7 +398,7 @@ export async function resolveAdminNavItems(
         label: moduleAdminNavigationLabel(host, item, lang),
         detail: contract?.description ?? item.moduleId,
         group: moduleAdminNavigationGroupLabel(host, item, lang),
-        icon: (item.item.icon as NavIconKey | undefined) ?? 'package',
+        icon: resolveModuleNavigationIconKey(item.moduleId, item.item.icon) ?? 'package',
         source: 'module',
         requires: {
           capabilities: ['admin.access'],

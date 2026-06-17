@@ -2,66 +2,30 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ComponentType } from 'react';
-import {
-  Activity,
-  BadgeDollarSign,
-  BarChart3,
-  Cable,
-  CircleDollarSign,
-  CreditCard,
-  FileText,
-  FolderOpen,
-  Gauge,
-  LayoutDashboard,
-  Package,
-  Search,
-  Settings,
-  ShieldCheck,
-  SquareTerminal,
-  Users,
-} from 'lucide-react';
+import { HOST_CORE_ICON_FALLBACK, MODULE_ICONS } from '@/lib/generated/module-icons';
 import { cn } from '@host/components/ui/cn';
-import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
+import type { SupportedLanguage } from '@host/lib/i18n';
 import type { AppFrameLabels } from './AppFrame';
+import { isActiveNavHref, resolveActiveNavItem, resolveNavHref } from './nav-active';
 import type { NavGroup, NavIconKey } from './types';
 
-const navIcons: Record<
-  NavIconKey,
-  ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
-> = {
-  activity: Activity,
-  badgeDollarSign: BadgeDollarSign,
-  barChart3: BarChart3,
-  cable: Cable,
-  circleDollarSign: CircleDollarSign,
-  creditCard: CreditCard,
-  fileText: FileText,
-  folderOpen: FolderOpen,
-  gauge: Gauge,
-  layoutDashboard: LayoutDashboard,
-  package: Package,
-  search: Search,
-  settings: Settings,
-  shieldCheck: ShieldCheck,
-  squareTerminal: SquareTerminal,
-  users: Users,
-};
+const warnedMissingIcons = new Set<string>();
 
-function normalizePath(path: string): string {
-  return path.replace(/\/$/, '') || '/';
-}
-
-function isActivePath(currentPath: string, href: string): boolean {
-  const normalizedCurrent = normalizePath(currentPath);
-  const normalizedHref = normalizePath(href);
-  if (normalizedCurrent === normalizedHref) {
-    return true;
+export function resolveSidebarNavIcon(icon: NavIconKey | undefined) {
+  if (!icon) {
+    return undefined;
   }
-  if (normalizedHref.endsWith('/admin') || normalizedHref.endsWith('/dashboard')) {
-    return false;
+  const Icon = MODULE_ICONS[icon];
+  if (Icon) {
+    return Icon;
   }
-  return normalizedCurrent.startsWith(`${normalizedHref}/`);
+  if (process.env.NODE_ENV !== 'production' && !warnedMissingIcons.has(icon)) {
+    warnedMissingIcons.add(icon);
+    console.warn(
+      `Navigation icon "${icon}" is not registered; falling back to "${HOST_CORE_ICON_FALLBACK}".`
+    );
+  }
+  return MODULE_ICONS[HOST_CORE_ICON_FALLBACK];
 }
 
 export function Sidebar({
@@ -81,6 +45,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const currentPath = activePath ?? pathname;
+  const activeNavItem = resolveActiveNavItem(lang, groups, currentPath);
 
   return (
     <aside
@@ -115,9 +80,9 @@ export function Sidebar({
             </h2>
             <div className="space-y-1">
               {group.items.map((item) => {
-                const href = item.localized === false ? item.href : localizedPath(lang, item.href);
-                const active = isActivePath(currentPath, href);
-                const Icon = item.icon ? navIcons[item.icon] : undefined;
+                const href = resolveNavHref(lang, item);
+                const active = isActiveNavHref(activeNavItem, href);
+                const Icon = resolveSidebarNavIcon(item.icon);
                 return (
                   <Link
                     key={item.href}

@@ -3,6 +3,8 @@ import type { ModuleDefinition } from './types';
 
 const I18N_NAMESPACE_PATTERN = /^[a-z][a-z0-9_-]*$/;
 const LOCAL_PATH_PATTERN = /^\.\/(?!\.)(?!.*(?:^|\/)\.\.(?:\/|$))/;
+const MODULE_ICON_KEY_PATTERN = /^[a-z][A-Za-z0-9]*$/;
+const MODULE_LUCIDE_ICON_NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
 
 function addError(
   diagnostics: ModuleDiagnostic[],
@@ -49,6 +51,62 @@ export function validateResources(
       localePath,
       `resources.locales.${locale}`,
       'Locale resource'
+    );
+  }
+
+  for (const [key, icon] of Object.entries(definition.resources?.icons ?? {})) {
+    const iconPath = `resources.icons.${key}`;
+    if (!MODULE_ICON_KEY_PATTERN.test(key)) {
+      addError(
+        diagnostics,
+        'MODULE_ICON_KEY_INVALID',
+        `Icon key "${key}" must use camelCase and start with a letter.`,
+        iconPath,
+        'Use a key like "taskList" or "workerToken".'
+      );
+    }
+
+    if (icon.kind === 'lucide') {
+      if (!icon.name) {
+        addError(
+          diagnostics,
+          'MODULE_ICON_LUCIDE_NAME_REQUIRED',
+          'Lucide icon resources must declare a component name.',
+          `${iconPath}.name`,
+          'Add a lucide-react component name like "ListChecks".'
+        );
+      } else if (!MODULE_LUCIDE_ICON_NAME_PATTERN.test(icon.name)) {
+        addError(
+          diagnostics,
+          'MODULE_ICON_LUCIDE_NAME_INVALID',
+          `Lucide icon name "${icon.name}" must be a PascalCase component name.`,
+          `${iconPath}.name`,
+          'Use the exported lucide-react component name, for example "ListChecks".'
+        );
+      }
+      continue;
+    }
+
+    if (icon.kind === 'svg') {
+      validateLocalModulePath(diagnostics, icon.path, `${iconPath}.path`, 'Icon SVG');
+      if (icon.path && !icon.path.endsWith('.svg')) {
+        addError(
+          diagnostics,
+          'MODULE_ICON_SVG_PATH_INVALID',
+          `SVG icon path "${icon.path}" must point to a .svg file.`,
+          `${iconPath}.path`,
+          'Use a module-local SVG file path such as "./assets/icons/task.svg".'
+        );
+      }
+      continue;
+    }
+
+    addError(
+      diagnostics,
+      'MODULE_ICON_KIND_INVALID',
+      `Icon resource "${key}" must use kind "lucide" or "svg".`,
+      `${iconPath}.kind`,
+      'Declare kind: "lucide" with name, or kind: "svg" with path.'
     );
   }
 

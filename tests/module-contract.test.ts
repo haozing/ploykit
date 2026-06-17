@@ -577,3 +577,52 @@ test('module contract validates data relation references and governance models',
   assert.ok(codes.includes('MODULE_DATA_GRANT_MODEL_UNKNOWN'));
   assert.ok(codes.includes('MODULE_DATA_CHECK_MODEL_UNKNOWN'));
 });
+
+test('module contract validates module icon resources', () => {
+  const validCodes = codesFor(
+    defineModule({
+      id: 'icon-resource-test',
+      name: 'Icon Resource Test',
+      version: '0.1.0',
+      resources: {
+        icons: {
+          taskList: {
+            kind: 'lucide',
+            name: 'ListChecks',
+          },
+          workerToken: {
+            kind: 'svg',
+            path: './assets/icons/worker-token.svg',
+          },
+        },
+      },
+    })
+  );
+  const invalidCodes = codesFor(
+    defineModule({
+      id: 'bad-icon-resource-test',
+      name: 'Bad Icon Resource Test',
+      version: '0.1.0',
+      resources: {
+        icons: {
+          task_list: {
+            kind: 'lucide',
+            name: 'clipboard-list',
+          },
+          report: {
+            kind: 'svg',
+            path: '../icons/report.png',
+          },
+          mystery: { kind: 'emoji' } as never,
+        },
+      },
+    })
+  );
+
+  assert.deepEqual(validCodes, []);
+  assert.ok(invalidCodes.includes('MODULE_ICON_KEY_INVALID'));
+  assert.ok(invalidCodes.includes('MODULE_ICON_LUCIDE_NAME_INVALID'));
+  assert.ok(invalidCodes.includes('MODULE_LOCAL_PATH_INVALID'));
+  assert.ok(invalidCodes.includes('MODULE_ICON_SVG_PATH_INVALID'));
+  assert.ok(invalidCodes.includes('MODULE_ICON_KIND_INVALID'));
+});

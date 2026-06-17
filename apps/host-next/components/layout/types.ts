@@ -1,22 +1,7 @@
 import type { ReactNode } from 'react';
+import type { ModuleIconKey } from '@/lib/generated/module-icons';
 
-export type NavIconKey =
-  | 'activity'
-  | 'badgeDollarSign'
-  | 'barChart3'
-  | 'cable'
-  | 'circleDollarSign'
-  | 'creditCard'
-  | 'fileText'
-  | 'folderOpen'
-  | 'gauge'
-  | 'layoutDashboard'
-  | 'package'
-  | 'search'
-  | 'settings'
-  | 'shieldCheck'
-  | 'squareTerminal'
-  | 'users';
+export type NavIconKey = ModuleIconKey;
 
 export interface NavItem {
   href: string;
