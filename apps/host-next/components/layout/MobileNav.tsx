@@ -6,40 +6,10 @@ import { ChevronRight, Menu, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@host/components/ui/cn';
-import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
+import type { SupportedLanguage } from '@host/lib/i18n';
 import type { AppFrameLabels } from './AppFrame';
+import { isActiveNavHref, resolveActiveNavItem, resolveNavHref } from './nav-active';
 import type { NavGroup } from './types';
-
-function normalizePath(path: string): string {
-  return path.replace(/\/$/, '') || '/';
-}
-
-function isActivePath(currentPath: string, href: string): boolean {
-  const normalizedCurrent = normalizePath(currentPath);
-  const normalizedHref = normalizePath(href);
-  if (normalizedCurrent === normalizedHref) {
-    return true;
-  }
-  if (normalizedHref.endsWith('/admin') || normalizedHref.endsWith('/dashboard')) {
-    return false;
-  }
-  return normalizedCurrent.startsWith(`${normalizedHref}/`);
-}
-
-function resolveActiveItem(lang: SupportedLanguage, groups: readonly NavGroup[], pathname: string) {
-  for (const group of groups) {
-    for (const item of group.items) {
-      const href = item.localized === false ? item.href : localizedPath(lang, item.href);
-      if (isActivePath(pathname, href)) {
-        return { group, item };
-      }
-    }
-  }
-  return {
-    group: groups[0],
-    item: groups[0]?.items[0],
-  };
-}
 
 export function MobileNav({
   area,
@@ -61,7 +31,9 @@ export function MobileNav({
   const closeRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const currentPath = activePath ?? pathname;
-  const active = resolveActiveItem(lang, groups, currentPath);
+  const activeNavItem = resolveActiveNavItem(lang, groups, currentPath);
+  const activeGroup = activeNavItem?.group ?? groups[0];
+  const activeItem = activeNavItem?.item ?? groups[0]?.items[0];
 
   useEffect(() => setMounted(true), []);
 
@@ -159,9 +131,8 @@ export function MobileNav({
               </h2>
               <div className="space-y-1">
                 {group.items.map((item) => {
-                  const href =
-                    item.localized === false ? item.href : localizedPath(lang, item.href);
-                  const activeItem = isActivePath(currentPath, href);
+                  const href = resolveNavHref(lang, item);
+                  const itemActive = isActiveNavHref(activeNavItem, href);
                   return (
                     <Link
                       key={`${group.id}:${item.href}`}
@@ -169,10 +140,10 @@ export function MobileNav({
                       className={cn(
                         'flex min-h-10 items-center justify-between gap-3 rounded-admin-md px-3 py-2 text-sm font-semibold text-admin-text-muted transition',
                         'hover:bg-admin-surface-muted hover:text-admin-text',
-                        activeItem &&
+                        itemActive &&
                           'bg-admin-primary-soft text-admin-primary ring-1 ring-admin-primary/10'
                       )}
-                      aria-current={activeItem ? 'page' : undefined}
+                      aria-current={itemActive ? 'page' : undefined}
                       onClick={() => setOpen(false)}
                     >
                       <span className="min-w-0">
@@ -196,7 +167,10 @@ export function MobileNav({
   ) : null;
 
   return (
-    <div className="border-b border-admin-border bg-admin-surface/95 px-4 py-3 backdrop-blur lg:hidden" data-host-mobile-nav={area}>
+    <div
+      className="border-b border-admin-border bg-admin-surface/95 px-4 py-3 backdrop-blur lg:hidden"
+      data-host-mobile-nav={area}
+    >
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
@@ -211,10 +185,10 @@ export function MobileNav({
         </button>
         <div className="min-w-0 text-right">
           <p className="truncate text-[11px] font-semibold text-admin-text-subtle">
-            {active.group?.label ?? labels.navigation}
+            {activeGroup?.label ?? labels.navigation}
           </p>
           <p className="truncate text-sm font-semibold text-admin-text">
-            {active.item?.label ?? labels.overview}
+            {activeItem?.label ?? labels.overview}
           </p>
         </div>
       </div>

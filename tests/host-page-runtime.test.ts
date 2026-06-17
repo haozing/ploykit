@@ -8,6 +8,9 @@ import {
   validateModuleHostPageOverride,
   type ModuleMapArtifact,
 } from '../src/lib/module-runtime';
+import { resolveActiveNavItem } from '../apps/host-next/components/layout/nav-active';
+import type { NavGroup } from '../apps/host-next/components/layout/types';
+import { resolveModuleNavigationIconKey } from '../apps/host-next/lib/module-navigation-icons';
 
 test('P5 validates host page override requirements', () => {
   const diagnostics = validateModuleHostPageOverride('host.page:dashboard.home', {
@@ -432,4 +435,32 @@ test('P5 surface rendering can reuse preloaded page presentation metadata', asyn
 
   assert.equal(loaderCalls, 0);
   assert.deepEqual(surface.replace[0]?.rendered, { title: 'Preloaded metadata' });
+});
+
+test('host layout navigation active state prefers the deepest matching item', () => {
+  const groups: readonly NavGroup[] = [
+    {
+      id: 'start',
+      label: '开始',
+      items: [
+        { href: '/dashboard/example', label: '概览', localized: false },
+        { href: '/dashboard/example/jobs', label: '任务', localized: false },
+        { href: '/dashboard/example/workers', label: 'Worker', localized: false },
+      ],
+    },
+  ];
+
+  const jobs = resolveActiveNavItem('zh', groups, '/dashboard/example/jobs/job-1');
+  assert.equal(jobs?.item.href, '/dashboard/example/jobs');
+
+  const workers = resolveActiveNavItem('zh', groups, '/dashboard/example/workers?tab=pools');
+  assert.equal(workers?.item.href, '/dashboard/example/workers');
+
+  const overview = resolveActiveNavItem('zh', groups, '/dashboard/example');
+  assert.equal(overview?.item.href, '/dashboard/example');
+});
+
+test('host module navigation icon resolver keeps core aliases and drops unknown icons', () => {
+  assert.equal(resolveModuleNavigationIconKey('example', 'layoutDashboard'), 'layoutDashboard');
+  assert.equal(resolveModuleNavigationIconKey('example', 'missingIcon'), undefined);
 });

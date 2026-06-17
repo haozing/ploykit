@@ -101,6 +101,38 @@ function writeWorkspaceModuleOutsideModules(t: TestContext): string {
   return moduleRoot;
 }
 
+function writeWorkspaceModuleWithNavigationIcon(t: TestContext): string {
+  const moduleId = `icon-fixture-${crypto.randomUUID().slice(0, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+  fs.mkdirSync(moduleRoot, { recursive: true });
+  fs.writeFileSync(
+    path.join(moduleRoot, 'module.ts'),
+    `
+      import { defineModule } from '@ploykit/module-sdk';
+
+      export default defineModule({
+        id: '${moduleId}',
+        name: 'Icon Fixture',
+        version: '0.1.0',
+        resources: {
+          icons: {
+            listChecks: { kind: 'lucide', name: 'ListChecks' },
+          },
+        },
+        navigation: {
+          location: 'dashboard.sidebar',
+          fallbackLabel: 'Icon Fixture',
+          path: '/icon-fixture',
+          icon: 'listChecks',
+        },
+      });
+    `,
+    'utf8'
+  );
+  t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
+  return moduleId;
+}
+
 function runPloyKitCommand(args: string[]) {
   return childProcess.spawnSync(process.execPath, args, {
     cwd: process.cwd(),
@@ -131,18 +163,41 @@ function runModuleSourceImport(cwd: string) {
 }
 
 function withGeneratedModuleMapRestore<T>(run: () => T): T {
-  const files = [
+  const alwaysTrackedFiles = [
     path.join(process.cwd(), 'src', 'lib', 'module-map.ts'),
     path.join(process.cwd(), 'src', 'lib', 'module-map.manifest.json'),
   ];
-  const originals = files.map((file) => fs.readFileSync(file, 'utf8'));
+  const files = new Set([...alwaysTrackedFiles, ...generatedModuleIconFiles()]);
+  const originals = new Map(
+    Array.from(files, (file) => [file, fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null])
+  );
   try {
     return run();
   } finally {
-    for (const [index, file] of files.entries()) {
-      fs.writeFileSync(file, originals[index], 'utf8');
+    for (const file of new Set([...generatedModuleIconFiles(), ...originals.keys()])) {
+      const original = originals.get(file);
+      if (original === undefined || original === null) {
+        fs.rmSync(file, { force: true });
+        continue;
+      }
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, original, 'utf8');
     }
   }
+}
+
+function generatedModuleIconFiles(): string[] {
+  const registry = path.join(process.cwd(), 'src', 'lib', 'generated', 'module-icons.ts');
+  const componentDir = path.join(process.cwd(), 'src', 'lib', 'generated', 'module-icons');
+  const files = [registry];
+  if (fs.existsSync(componentDir)) {
+    for (const entry of fs.readdirSync(componentDir, { withFileTypes: true })) {
+      if (entry.isFile()) {
+        files.push(path.join(componentDir, entry.name));
+      }
+    }
+  }
+  return files;
 }
 
 test('module source discovery rejects configured sources outside the workspace', (t) => {
@@ -300,6 +355,23 @@ test('module map check reports drifted module digests with a fix command', () =>
   });
 });
 
+test('generated module icon registry includes host core and declared module navigation icons', (t) => {
+  withGeneratedModuleMapRestore(() => {
+    const moduleId = writeWorkspaceModuleWithNavigationIcon(t);
+    const scan = runPloyKitCommand(['scripts/generate-module-map.mjs']);
+    assert.equal(scan.status, 0, scan.stderr || scan.stdout);
+
+    const registry = fs.readFileSync(
+      path.join(process.cwd(), 'src', 'lib', 'generated', 'module-icons.ts'),
+      'utf8'
+    );
+    assert.match(registry, /export const HOST_CORE_ICON_FALLBACK = "activity"/);
+    assert.match(registry, /"layoutDashboard": LayoutDashboard/);
+    assert.match(registry, new RegExp(`"${moduleId}:listChecks": ListChecks`));
+    assert.doesNotMatch(registry, /"listChecks": ListChecks/);
+  });
+});
+
 test('module test summary keeps stdout short while writing the detailed report', (t) => {
   const { moduleId, moduleRoot } = writeWorkspaceModuleTestFixture(t);
   const result = runPloyKitCommand(['scripts/module-test.mjs', moduleRoot, '--summary']);
@@ -307,10 +379,18 @@ test('module test summary keeps stdout short while writing the detailed report',
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Module test summary:/);
   assert.match(result.stdout, new RegExp(`${moduleId}: passed`));
-  assert.match(result.stdout, /\.runtime\/module-test-reports\/module-test-summary-[a-f0-9-]+\.json/);
+  assert.match(
+    result.stdout,
+    /\.runtime\/module-test-reports\/module-test-summary-[a-f0-9-]+\.json/
+  );
   assert.doesNotMatch(result.stdout, /"steps":/);
 
-  const reportFile = path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`);
+  const reportFile = path.join(
+    process.cwd(),
+    '.runtime',
+    'module-test-reports',
+    `${moduleId}.json`
+  );
   const report = JSON.parse(fs.readFileSync(reportFile, 'utf8')) as {
     success: boolean;
     moduleId: string;
@@ -329,6 +409,12 @@ test('module test help documents output modes, report files, and exit codes', ()
   assert.match(result.stdout, /--summary\s+Print a compact human-readable summary/);
   assert.match(result.stdout, /--json\s+Print the full JSON report/);
   assert.match(result.stdout, /\.runtime\/module-test-reports\/<module-id>\.json/);
-  assert.match(result.stdout, /0 when every executed step passes, including warning-only doctor diagnostics/);
-  assert.match(result.stdout, /1 when target resolution fails or any doctor, fake-host, or real-host step fails/);
+  assert.match(
+    result.stdout,
+    /0 when every executed step passes, including warning-only doctor diagnostics/
+  );
+  assert.match(
+    result.stdout,
+    /1 when target resolution fails or any doctor, fake-host, or real-host step fails/
+  );
 });

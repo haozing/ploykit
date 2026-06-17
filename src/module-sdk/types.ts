@@ -14,7 +14,12 @@ export type ModuleActionSideEffect =
   | 'external'
   | 'billing'
   | 'destructive';
-export type ModuleSurfaceVisibility = 'always' | 'authenticated' | 'admin' | 'permission' | 'feature';
+export type ModuleSurfaceVisibility =
+  | 'always'
+  | 'authenticated'
+  | 'admin'
+  | 'permission'
+  | 'feature';
 
 export interface ModuleContractPartsDefinition {
   data?: string;
@@ -179,6 +184,17 @@ export interface ModuleSurfaceDefinition {
 
 export interface ModuleResourcesDefinition {
   locales?: Record<string, string>;
+  icons?: Record<
+    string,
+    | {
+        kind: 'lucide';
+        name: string;
+      }
+    | {
+        kind: 'svg';
+        path: string;
+      }
+  >;
   assets?: readonly {
     path: string;
     kind?: 'asset' | 'worker' | 'wasm';

@@ -28,6 +28,7 @@ import {
 } from '@host/lib/dashboard-timing';
 import { applyModuleSelfServiceSessionPermissions } from '@host/lib/create-host';
 import { getModuleHost } from '@host/lib/module-host';
+import { resolveModuleNavigationIconKey } from '@host/lib/module-navigation-icons';
 import { createHostRequest, dashboardHref, modulePathFromSegments } from '@host/lib/paths';
 import { getHostUserProfile } from '@host/lib/user-api';
 import {
@@ -147,7 +148,7 @@ function dashboardNavGroups(
     group.items.push({
       href: dashboardHref(item.item.path),
       label: moduleNavigationLabel(host, item, lang),
-      icon: item.item.icon as NavItem['icon'],
+      icon: resolveModuleNavigationIconKey(item.moduleId, item.item.icon),
       localized: false,
     });
     grouped.set(id, group);
