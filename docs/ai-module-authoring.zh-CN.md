@@ -1,5 +1,7 @@
 # AI 辅助模块开发
 
+> Legacy human doc: 本文保留给人阅读。LLM 编写模块时，以 `AGENTS.md` 和 `docs/llm/` 为当前事实源；如果本文与 LLM wiki 冲突，优先使用 LLM wiki。
+
 AI 可以写 PloyKit 模块，但必须让它在仓库内模块边界里工作：只改 `modules/<id>/`，从 `module.ts` 开始理解契约，按 doctor 诊断循环修复。
 
 如果任务只是模块接入，默认写权限只开放 `modules/<id>/`、模块本地生成文件和测试，以及 module-map 生成文件；不要修改 `apps/host-next/*`、`src/lib/module-runtime/*`、`src/module-sdk/*`、`scripts/host-*`。确实缺少宿主扩展点时，不要用 `moduleId === '<id>'`、`import modules/<id>`、硬编码 `<module-root>` 或把模块路由塞进宿主脚本来完成需求；先报告需要通用 registry/contribution seam，再做宿主级抽象。

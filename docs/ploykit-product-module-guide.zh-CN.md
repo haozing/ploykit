@@ -1,5 +1,7 @@
 # PloyKit 完整产品模块宿主指南
 
+> Legacy human doc: 本文保留给人阅读。LLM 编写模块时，以 `AGENTS.md` 和 `docs/llm/` 为当前事实源；如果本文与 LLM wiki 冲突，优先使用 LLM wiki。
+
 > 本文说明宿主如何承载完整产品模块，以及模块作者如何声明 Site、Console、Admin 三层产品形态。
 
 ## 1. 目标

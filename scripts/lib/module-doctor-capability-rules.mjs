@@ -33,7 +33,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
           'data.sql.write',
         ],
         code: 'MODULE_DATA_PERMISSION_MISSING',
-        fix: 'Add the matching Data permission to module.ts.',
+        fix: 'Add the matching Data permission to module.ts. For scoped CRUD, follow docs/llm/recipes/multi-tenant-crud.md.',
       },
       {
         token: 'ctx.files',
@@ -103,7 +103,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
           'jobs.register',
         ],
         code: 'MODULE_JOBS_PERMISSION_MISSING',
-        fix: 'Add Permission.JobsEnqueue or Permission.JobsRegister to module.ts.',
+        fix: 'Add Permission.JobsEnqueue or Permission.JobsRegister to module.ts. For long work, follow docs/llm/recipes/background-job.md.',
       },
       {
         token: 'ctx.events',
@@ -139,7 +139,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
         token: 'ctx.services',
         permissions: ['Permission.ServicesInvoke', 'services.invoke'],
         code: 'MODULE_SERVICES_PERMISSION_MISSING',
-        fix: 'Add Permission.ServicesInvoke to module.ts.',
+        fix: 'Add Permission.ServicesInvoke to module.ts and declare serviceRequirements. Follow docs/llm/recipes/service-backed.md.',
       },
       {
         token: 'ctx.secrets',
@@ -184,7 +184,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
         token: 'ctx.http',
         permissions: ['Permission.ExternalHttp', 'http.external'],
         code: 'MODULE_HTTP_PERMISSION_MISSING',
-        fix: 'Add Permission.ExternalHttp and a narrow egress origin to module.ts.',
+        fix: 'Add Permission.ExternalHttp and a narrow egress origin to module.ts. For controlled services, use docs/llm/recipes/service-backed.md instead.',
       },
       {
         token: 'ctx.cache',
@@ -220,7 +220,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
         token: 'ctx.metering',
         permissions: ['Permission.MeteringWrite', 'metering.write'],
         code: 'MODULE_METERING_PERMISSION_MISSING',
-        fix: 'Add Permission.MeteringWrite to module.ts.',
+        fix: 'Add Permission.MeteringWrite to module.ts. For charging/reserving, follow docs/llm/recipes/billing-charge.md.',
       },
       {
         token: 'ctx.credits',
@@ -233,7 +233,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
           'credits.write',
         ],
         code: 'MODULE_CREDITS_PERMISSION_MISSING',
-        fix: 'Add the matching Credits permission to module.ts.',
+        fix: 'Add the matching Credits permission to module.ts. For charge/reserve flows, follow docs/llm/recipes/billing-charge.md.',
       },
       {
         token: 'ctx.billing',
@@ -255,7 +255,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
           'commerce.write',
         ],
         code: 'MODULE_COMMERCE_PERMISSION_MISSING',
-        fix: 'Add Permission.CommerceRead or Permission.CommerceWrite to module.ts.',
+        fix: 'Add the matching Commerce permission to module.ts. Do not create module-owned commercial authority; see docs/llm/concepts/commercial-integrity.md.',
       },
     ];
 
@@ -297,7 +297,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
         hasDeclaration: /\bserviceRequirements\s*:/.test(moduleSource),
         code: 'MODULE_SERVICE_REQUIREMENT_MISSING',
         pathValue: 'serviceRequirements',
-        fix: 'Declare serviceRequirements in module.ts so provider readiness can be checked.',
+        fix: 'Declare serviceRequirements in module.ts so provider readiness can be checked. Follow docs/llm/recipes/service-backed.md.',
       },
       {
         token: 'ctx.resourceBindings',
@@ -344,7 +344,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
           'MODULE_PRIVILEGED_HTTP_FORBIDDEN',
           'Modules that declare privileged serviceRequirements must not call the same service through ctx.http.fetch.',
           'serviceRequirements',
-          'Use ctx.services.invoke(serviceName, operationName, input) so runtime can sign, redact and audit the request.'
+          'Use ctx.services.invoke(serviceName, operationName, input) so runtime can sign, redact and audit the request. See docs/llm/recipes/service-backed.md.'
         )
       );
     }
@@ -358,7 +358,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
           'MODULE_SECRET_LITERAL_FORBIDDEN',
           'Module source appears to construct privileged service credentials or signature headers.',
           'serviceRequirements',
-          'Declare service secrets in serviceRequirements and let runtime inject bearer/HMAC headers.'
+          'Declare service secrets in serviceRequirements and let runtime inject bearer/HMAC headers. See docs/llm/concepts/service-contract-first.md.'
         )
       );
     }

@@ -1,5 +1,7 @@
 # module.ts 契约规范
 
+> Legacy human doc: 本文保留给人阅读。LLM 编写模块时，以 `AGENTS.md` 和 `docs/llm/` 为当前事实源；如果本文与 LLM wiki 冲突，优先使用 LLM wiki。
+
 `module.ts` 是 PloyKit 模块的唯一能力声明入口。模块作者通过 `defineModule(...)` 输出 `ModuleDefinition`；host 通过 module map 加载它，归一化为 runtime contract，然后装配 routes、actions、surfaces、Data v2、background handlers、providers、commercial guard 和 lifecycle。
 
 ## 版本

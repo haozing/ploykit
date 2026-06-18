@@ -13,7 +13,7 @@
   "type": "module",
   "scripts": {
     "modules:scan": "node scripts/generate-module-map.mjs",
-    "modules:check": "node scripts/generate-module-map.mjs --check && node scripts/host-boundary-check.mjs && node scripts/ploykit-module.mjs check",
+    "modules:check": "node scripts/generate-module-map.mjs --check && node scripts/generate-llm-wiki.mjs --check && node scripts/host-boundary-check.mjs && node scripts/ploykit-module.mjs check",
     "modules:apply": "node scripts/module-deps.mjs --install && node scripts/generate-module-map.mjs && node scripts/ploykit-module.mjs check",
     "modules:deps": "node scripts/module-deps.mjs",
     "modules:templates": "node scripts/ploykit-module.mjs templates",
@@ -28,6 +28,8 @@
     "module:quality": "node scripts/module-quality.mjs",
     "module:service-contract": "node scripts/module-service-contract.mjs",
     "module:test": "node scripts/module-test.mjs",
+    "llm-wiki:generate": "node scripts/generate-llm-wiki.mjs",
+    "llm-wiki:check": "node scripts/generate-llm-wiki.mjs --check",
     "data:plan": "node scripts/module-data.mjs plan",
     "data:generate": "node scripts/module-data.mjs generate",
     "data:migrate": "node scripts/module-data.mjs migrate",
@@ -165,6 +167,9 @@
   },
   "overrides": {
     "postcss": "^8.5.15"
+  },
+  "overridesMeta": {
+    "postcss": "Keep transitive PostCSS consumers on the patched 8.x line while Tailwind 4 uses its own PostCSS-compatible package."
   },
   "engines": {
     "node": ">=22 <26",

@@ -23,27 +23,27 @@ import {
   Users,
 } from 'lucide-react';
 
-export const HOST_CORE_ICON_FALLBACK = 'activity';
+export const HOST_CORE_ICON_FALLBACK = "activity";
 
 export type ModuleIconComponent = LucideIcon | ComponentType<SVGProps<SVGSVGElement>>;
 
 export const MODULE_ICONS = {
-  activity: Activity,
-  badgeDollarSign: BadgeDollarSign,
-  barChart3: BarChart3,
-  cable: Cable,
-  circleDollarSign: CircleDollarSign,
-  creditCard: CreditCard,
-  fileText: FileText,
-  folderOpen: FolderOpen,
-  gauge: Gauge,
-  layoutDashboard: LayoutDashboard,
-  package: Package,
-  search: Search,
-  settings: Settings,
-  shieldCheck: ShieldCheck,
-  squareTerminal: SquareTerminal,
-  users: Users,
+  "activity": Activity,
+  "badgeDollarSign": BadgeDollarSign,
+  "barChart3": BarChart3,
+  "cable": Cable,
+  "circleDollarSign": CircleDollarSign,
+  "creditCard": CreditCard,
+  "fileText": FileText,
+  "folderOpen": FolderOpen,
+  "gauge": Gauge,
+  "layoutDashboard": LayoutDashboard,
+  "package": Package,
+  "search": Search,
+  "settings": Settings,
+  "shieldCheck": ShieldCheck,
+  "squareTerminal": SquareTerminal,
+  "users": Users,
 } satisfies Record<string, ModuleIconComponent>;
 
 export type ModuleIconKey = keyof typeof MODULE_ICONS;

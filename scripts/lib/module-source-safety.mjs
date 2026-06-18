@@ -96,7 +96,7 @@ export function checkModuleSourceSafety({
             'MODULE_HOST_IMPORT_FORBIDDEN',
             'Module code must not import host internals.',
             projectPath,
-            'Use @ploykit/module-sdk and ctx capabilities instead.'
+            'Use @ploykit/module-sdk and ctx capabilities instead. Start at docs/llm/capability-usage.md.'
           )
         );
       }
@@ -110,7 +110,7 @@ export function checkModuleSourceSafety({
               'MODULE_SOURCE_IMPORT_ESCAPES_ROOT',
               `Module source import "${specifier}" must not escape the module root.`,
               projectPath,
-              'Move shared code inside the module root or expose it through @ploykit/module-sdk.'
+              'Move shared code inside the module root or expose it through @ploykit/module-sdk. See AGENTS.md for the host/module boundary.'
             )
           );
         }
@@ -123,7 +123,7 @@ export function checkModuleSourceSafety({
             'MODULE_NODE_BUILTIN_FORBIDDEN',
             `Module code must not import Node builtin "${specifier}".`,
             projectPath,
-            'Move privileged IO into a host service or connector capability.'
+            'Move privileged IO into a host service or connector capability. For service calls, follow docs/llm/recipes/service-backed.md.'
           )
         );
       }
@@ -136,7 +136,7 @@ export function checkModuleSourceSafety({
           'MODULE_PROCESS_ENV_FORBIDDEN',
           'Module code must not read process.env directly.',
           projectPath,
-          'Use ctx.config or ctx.secrets.'
+          'Use ctx.config or ctx.secrets; declare the contract in module.ts first. See docs/llm/contract.generated.md.'
         )
       );
     }
@@ -148,7 +148,7 @@ export function checkModuleSourceSafety({
           'MODULE_DYNAMIC_CTX_ACCESS_FORBIDDEN',
           'Module code must not access ctx with dynamic property names.',
           projectPath,
-          'Use explicit ctx capabilities so doctor can map permissions.'
+          'Use explicit ctx capabilities so doctor can map permissions. See docs/llm/capabilities.generated.md.'
         )
       );
     }
@@ -172,7 +172,7 @@ export function checkModuleSourceSafety({
           'MODULE_DYNAMIC_IMPORT_FORBIDDEN',
           'Module code must not use dynamic import specifiers.',
           projectPath,
-          'Use static imports so doctor can validate source boundaries.'
+          'Use static imports so doctor can validate source boundaries. See AGENTS.md.'
         )
       );
     }
@@ -184,7 +184,7 @@ export function checkModuleSourceSafety({
           'MODULE_DYNAMIC_REQUIRE_FORBIDDEN',
           'Module code must not use dynamic require specifiers.',
           projectPath,
-          'Use static imports so doctor can validate source boundaries.'
+          'Use static imports so doctor can validate source boundaries. See AGENTS.md.'
         )
       );
     }
@@ -196,7 +196,7 @@ export function checkModuleSourceSafety({
           'MODULE_RAW_FETCH_FORBIDDEN',
           'Module code must not call global fetch directly.',
           projectPath,
-          'Use ctx.http.fetch and declare Permission.ExternalHttp with a narrow egress origin.'
+          'Use ctx.http.fetch and declare Permission.ExternalHttp with a narrow egress origin. For controlled services, follow docs/llm/recipes/service-backed.md.'
         )
       );
     }

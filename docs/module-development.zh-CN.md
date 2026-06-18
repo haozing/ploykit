@@ -1,5 +1,7 @@
 # 模块开发指南
 
+> Legacy human doc: 本文保留给人阅读。LLM 编写模块时，以 `AGENTS.md` 和 `docs/llm/` 为当前事实源；如果本文与 LLM wiki 冲突，优先使用 LLM wiki。
+
 PloyKit 的模块是一等本地源码模块。模块只依赖 `@ploykit/module-sdk`、自己的目录文件和宿主注入的 `ctx.*` capability，不导入宿主 `src/lib/*`，不直接读数据库，不直接读 `process.env`。
 
 模块按可信本地源码处理。PloyKit 的 `ctx.*` guard 是能力 API 层约束，不是
