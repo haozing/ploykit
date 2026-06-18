@@ -62,6 +62,7 @@ export interface CommercialOrderEventPublisher {
 export interface CreateRuntimeStoreCommercialRuntimeOptions {
   store: RuntimeStore;
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   planCatalog?: readonly ModuleBillingPlan[];
   skuCatalog?: Record<string, CommercialSkuDefinition>;

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHostRequest } from '../apps/host-next/lib/paths';
-import { createHostSessionCookie } from '../apps/host-next/lib/auth';
+import {
+  createHostSessionCookie,
+  readHostSessionCookie,
+} from '../apps/host-next/lib/auth';
 import { POST as registerUserApi } from '../apps/host-next/app/api/auth/register/route';
 import {
   passwordResetResponseData,
@@ -20,12 +23,20 @@ test('X9 auth session cookies require explicit production secret but allow dev f
   const previousNodeEnv = process.env.NODE_ENV;
   const previousAuthSecret = process.env.PLOYKIT_AUTH_SECRET;
   const previousMediaSecret = process.env.PLOYKIT_MEDIA_SECRET;
+  const previousSecretRef = process.env.PLOYKIT_AUTH_SECRET_REF;
+  const previousKeyRefs = process.env.PLOYKIT_AUTH_KEY_REFS;
+  const previousVerifyRefs = process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS;
+  const previousKeyId = process.env.PLOYKIT_AUTH_KEY_ID;
 
   try {
     Reflect.set(process.env, 'NODE_ENV', 'production');
     delete process.env.PLOYKIT_AUTH_SECRET;
     delete process.env.PLOYKIT_MEDIA_SECRET;
-    assert.throws(() => createHostSessionCookie('demo-admin'), /PLOYKIT_AUTH_SECRET_REQUIRED/);
+    delete process.env.PLOYKIT_AUTH_SECRET_REF;
+    delete process.env.PLOYKIT_AUTH_KEY_REFS;
+    delete process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS;
+    delete process.env.PLOYKIT_AUTH_KEY_ID;
+    assert.throws(() => createHostSessionCookie('demo-admin'), /PLOYKIT_AUTH_KEY_RING_REQUIRED/);
 
     Reflect.set(process.env, 'NODE_ENV', 'development');
     const cookie = createHostSessionCookie('demo-admin');
@@ -35,6 +46,43 @@ test('X9 auth session cookies require explicit production secret but allow dev f
     restoreEnv('NODE_ENV', previousNodeEnv);
     restoreEnv('PLOYKIT_AUTH_SECRET', previousAuthSecret);
     restoreEnv('PLOYKIT_MEDIA_SECRET', previousMediaSecret);
+    restoreEnv('PLOYKIT_AUTH_SECRET_REF', previousSecretRef);
+    restoreEnv('PLOYKIT_AUTH_KEY_REFS', previousKeyRefs);
+    restoreEnv('PLOYKIT_AUTH_VERIFY_SECRET_REFS', previousVerifyRefs);
+    restoreEnv('PLOYKIT_AUTH_KEY_ID', previousKeyId);
+  }
+});
+
+test('X9 auth session cookies include kid and verify rotated key refs', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousSecret = process.env.PLOYKIT_AUTH_TEST_SECRET;
+  const previousNextSecret = process.env.PLOYKIT_AUTH_TEST_SECRET_NEXT;
+  const previousKeyRefs = process.env.PLOYKIT_AUTH_KEY_REFS;
+  const previousSecretRef = process.env.PLOYKIT_AUTH_SECRET_REF;
+  const previousVerifyRefs = process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS;
+
+  try {
+    Reflect.set(process.env, 'NODE_ENV', 'production');
+    process.env.PLOYKIT_AUTH_TEST_SECRET = 'test-current-secret';
+    process.env.PLOYKIT_AUTH_KEY_REFS = 'current=env:PLOYKIT_AUTH_TEST_SECRET';
+    delete process.env.PLOYKIT_AUTH_SECRET_REF;
+    delete process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS;
+    const cookie = createHostSessionCookie('demo-admin');
+    assert.match(decodeURIComponent(cookie), /^ploykit_session=v3\.current\./);
+    assert.equal(readHostSessionCookie(cookie)?.userId, 'demo-admin');
+
+    process.env.PLOYKIT_AUTH_TEST_SECRET_NEXT = 'test-next-secret';
+    process.env.PLOYKIT_AUTH_KEY_REFS = 'next=env:PLOYKIT_AUTH_TEST_SECRET_NEXT';
+    process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS = 'current=env:PLOYKIT_AUTH_TEST_SECRET';
+    assert.equal(readHostSessionCookie(cookie)?.userId, 'demo-admin');
+    assert.match(decodeURIComponent(createHostSessionCookie('demo-admin')), /^ploykit_session=v3\.next\./);
+  } finally {
+    restoreEnv('NODE_ENV', previousNodeEnv);
+    restoreEnv('PLOYKIT_AUTH_TEST_SECRET', previousSecret);
+    restoreEnv('PLOYKIT_AUTH_TEST_SECRET_NEXT', previousNextSecret);
+    restoreEnv('PLOYKIT_AUTH_KEY_REFS', previousKeyRefs);
+    restoreEnv('PLOYKIT_AUTH_SECRET_REF', previousSecretRef);
+    restoreEnv('PLOYKIT_AUTH_VERIFY_SECRET_REFS', previousVerifyRefs);
   }
 });
 

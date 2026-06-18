@@ -100,8 +100,8 @@ const checks = [
     ok: required ? health.auth.secretConfigured : true,
     severity: health.auth.secretConfigured ? 'pass' : 'warning',
     detail: health.auth.secretConfigured
-      ? 'Host auth secret is configured.'
-      : 'Host uses the development signed-cookie secret.',
+      ? 'Host auth key ring is configured.'
+      : 'Host uses a volatile development signed-cookie key.',
   },
   {
     id: 'runtime-store-durability',

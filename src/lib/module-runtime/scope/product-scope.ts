@@ -14,6 +14,7 @@ export interface ModuleRuntimeScopeContext {
   profile: ProductScopeProfile;
   resource: ModuleRuntimeScopeResource;
   productId: string | null;
+  environmentId: string | null;
   workspaceId: string | null;
   userId: string | null;
   actorId: string | null;
@@ -34,6 +35,7 @@ export function resolveModuleRuntimeScope(
     profile: session.productScopeProfile ?? 'hidden-default',
     resource: input.resource ?? input.definition?.resource ?? 'workspace',
     productId: session.productId ?? null,
+    environmentId: session.environmentId ?? null,
     workspaceId: session.workspaceId ?? null,
     userId: session.user?.id ?? session.userId ?? null,
     actorId: session.actorId ?? session.user?.id ?? session.userId ?? null,

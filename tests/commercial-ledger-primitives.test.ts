@@ -56,6 +56,30 @@ test('P16 commercial primitives are subject-first, idempotent and lifecycle awar
       }),
     /MODULE_COMMERCIAL_INVALID_AMOUNT/
   );
+  await assert.rejects(
+    () =>
+      moduleCommercial.credits.grant({
+        subject: workspaceSubject,
+        amount: '1.5',
+        unit: 'ai-credit',
+        idempotencyKey: 'grant-decimal-string',
+      }),
+    /MODULE_COMMERCIAL_INVALID_AMOUNT/
+  );
+  await moduleCommercial.credits.grant({
+    subject: workspaceSubject,
+    amount: '2',
+    unit: 'ai-credit',
+    source: 'manual',
+    sourceId: 'grant-string',
+    idempotencyKey: 'grant-string',
+  });
+  await moduleCommercial.credits.consume({
+    subject: workspaceSubject,
+    amount: 2n,
+    unit: 'ai-credit',
+    idempotencyKey: 'consume-bigint',
+  });
 
   const reservation = await moduleCommercial.credits.reserve({
     subject: workspaceSubject,

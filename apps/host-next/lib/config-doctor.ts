@@ -132,7 +132,7 @@ function collectProviderReadiness(health: HostRuntimeHealth): HostProviderReadin
       'auth',
       health.auth.mode,
       health.auth.secretConfigured ? 'ready' : 'warning',
-      health.auth.secretConfigured ? 'signed cookie secret configured' : 'development secret'
+      health.auth.secretConfigured ? 'auth key ring configured' : 'volatile development key'
     ),
     readiness(
       'ai',
@@ -209,9 +209,9 @@ export async function runHostConfigDoctor(
         diagnostic(
           'error',
           'HOST_AUTH_SECRET_REQUIRED',
-          'Production profile requires an explicit auth/media signing secret.',
-          'PLOYKIT_AUTH_SECRET',
-          'Set PLOYKIT_AUTH_SECRET or PLOYKIT_MEDIA_SECRET.'
+          'Production profile requires an explicit auth signing key ring.',
+          'PLOYKIT_AUTH_SECRET_REF',
+          'Set PLOYKIT_AUTH_SECRET_REF=env:PLOYKIT_AUTH_SECRET or PLOYKIT_AUTH_KEY_REFS=current=env:PLOYKIT_AUTH_SECRET.'
         )
       );
     }

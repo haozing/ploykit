@@ -12,6 +12,13 @@ import {
 } from '@ploykit/module-sdk';
 import { createModuleHost } from '../src/lib/module-runtime';
 
+function testCreditAmount(value: number | bigint | string | undefined): number {
+  if (value === undefined) {
+    return 0;
+  }
+  return typeof value === 'bigint' ? Number(value) : Number(value);
+}
+
 test('runtime capability guard blocks undeclared permissions and cross-user credit consumption', async () => {
   const guardedModule = defineModule({
     id: 'capability-guard-test',
@@ -97,22 +104,22 @@ test('runtime capability guard blocks undeclared permissions and cross-user cred
           };
         },
         async grant(input) {
-          return { userId: input.userId, unit: input.unit ?? 'credit', balance: input.amount };
+          return { userId: input.userId, unit: input.unit ?? 'credit', balance: testCreditAmount(input.amount) };
         },
         async consume(input) {
           return { userId: input.userId, unit: input.unit ?? 'credit', balance: 9 };
         },
         async adjust(input) {
-          return { userId: input.userId, unit: input.unit ?? 'credit', balance: input.amount };
+          return { userId: input.userId, unit: input.unit ?? 'credit', balance: testCreditAmount(input.amount) };
         },
         async refund(input) {
-          return { userId: input.userId, unit: input.unit ?? 'credit', balance: input.amount };
+          return { userId: input.userId, unit: input.unit ?? 'credit', balance: testCreditAmount(input.amount) };
         },
         async reserve(input) {
           return {
             id: 'test-reservation',
             subject: input.subject ?? { type: 'user', id: input.userId ?? 'test-user' },
-            amountReserved: input.amount,
+            amountReserved: testCreditAmount(input.amount),
             amountCommitted: 0,
             unit: input.unit ?? 'credit',
             status: 'reserved',
@@ -134,7 +141,7 @@ test('runtime capability guard blocks undeclared permissions and cross-user cred
           const subject = input.subject ?? { type: 'user' as const, id: input.userId ?? 'test-user' };
           return {
             revoked: 0,
-            unrecovered: input.amount ?? 0,
+            unrecovered: testCreditAmount(input.amount),
             balance: {
               subject,
               userId: subject.type === 'user' ? subject.id : undefined,

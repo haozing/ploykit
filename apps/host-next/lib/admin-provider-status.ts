@@ -303,7 +303,7 @@ function statusAction(provider: HostProviderReadiness, matrix: AdminProviderMatr
     return 'Set DATABASE_URL and run runtime store migrations before production.';
   }
   if (provider.id === 'auth' && provider.status !== 'ready') {
-    return 'Set PLOYKIT_AUTH_SECRET before production.';
+    return 'Set PLOYKIT_AUTH_SECRET_REF or PLOYKIT_AUTH_KEY_REFS before production.';
   }
   if (provider.id === 'billing' && provider.status !== 'ready') {
     return 'Use local ledger for development; configure Stripe required matrix for paid production.';

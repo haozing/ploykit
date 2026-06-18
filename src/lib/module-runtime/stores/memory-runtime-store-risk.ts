@@ -6,7 +6,7 @@ import type {
 
 type InMemoryRiskRuntimeStore = Pick<
   RuntimeStore,
-  'recordRiskEvent' | 'upsertRiskBlock' | 'listRiskEvents' | 'listRiskBlocks'
+  'recordRiskEvent' | 'upsertRiskBlock' | 'releaseRiskBlock' | 'listRiskEvents' | 'listRiskBlocks'
 >;
 
 interface CreateInMemoryRiskRuntimeStoreInput {
@@ -41,10 +41,12 @@ export function createInMemoryRiskRuntimeStore({
         subjectId: input.subjectId,
         type: input.type,
         severity: input.severity ?? 'medium',
+        status: input.status ?? 'open',
         source: input.source,
         sourceId: input.sourceId,
         metadata: input.metadata ?? {},
         createdAt: iso(now),
+        updatedAt: iso(now),
       };
       riskEvents.set(record.id, record);
       return clone(record);
@@ -65,7 +67,8 @@ export function createInMemoryRiskRuntimeStore({
           record.workspaceId === (input.workspaceId ?? null) &&
           record.subjectType === input.subjectType &&
           record.subjectId === input.subjectId &&
-          (record.scope ?? '') === (input.scope ?? '')
+          (record.scope ?? '') === (input.scope ?? '') &&
+          !record.releasedAt
       );
       const timestamp = iso(now);
       const record: RuntimeStoreRiskBlock = {
@@ -77,6 +80,9 @@ export function createInMemoryRiskRuntimeStore({
         scope: input.scope,
         reason: input.reason,
         expiresAt: input.expiresAt,
+        releasedAt: existing?.releasedAt,
+        releasedBy: existing?.releasedBy,
+        releaseReason: existing?.releaseReason,
         idempotencyKey: input.idempotencyKey,
         metadata: { ...(existing?.metadata ?? {}), ...(input.metadata ?? {}) },
         createdAt: existing?.createdAt ?? timestamp,
@@ -87,6 +93,23 @@ export function createInMemoryRiskRuntimeStore({
         riskBlockIdempotency.set(key, record.id);
       }
       return clone(record);
+    },
+    async releaseRiskBlock(id, patch = {}) {
+      const previous = riskBlocks.get(id);
+      if (!previous) {
+        throw new Error(`RUNTIME_STORE_RISK_BLOCK_NOT_FOUND: ${id}`);
+      }
+      const timestamp = patch.releasedAt ?? iso(now);
+      const next: RuntimeStoreRiskBlock = {
+        ...previous,
+        releasedAt: timestamp,
+        releasedBy: patch.releasedBy,
+        releaseReason: patch.reason,
+        metadata: { ...previous.metadata, ...(patch.metadata ?? {}) },
+        updatedAt: timestamp,
+      };
+      riskBlocks.set(id, next);
+      return clone(next);
     },
     async listRiskEvents(query = {}) {
       return [...riskEvents.values()]
@@ -99,6 +122,7 @@ export function createInMemoryRiskRuntimeStore({
         .filter((record) => !query.subjectId || record.subjectId === query.subjectId)
         .filter((record) => !query.type || record.type === query.type)
         .filter((record) => !query.severity || record.severity === query.severity)
+        .filter((record) => !query.status || record.status === query.status)
         .filter((record) => !query.source || record.source === query.source)
         .filter((record) => !query.sourceId || record.sourceId === query.sourceId)
         .map((record) => clone(record));
@@ -114,6 +138,7 @@ export function createInMemoryRiskRuntimeStore({
         .filter(
           (record) => query.scope === undefined || (record.scope ?? '') === (query.scope ?? '')
         )
+        .filter((record) => query.includeReleased || !record.releasedAt)
         .map((record) => clone(record));
     },
   };

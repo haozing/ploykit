@@ -15,6 +15,7 @@ export interface ModuleScopeContext {
   profile: ModuleProductScopeProfile;
   resource: ModuleScopeResource;
   productId: string | null;
+  environmentId: string | null;
   workspaceId: string | null;
   userId: string | null;
   actorId: string | null;
@@ -121,8 +122,34 @@ export interface ModuleResourceBindingsApi {
   ): Promise<TBinding>;
 }
 
+export type ModuleAuditActorKind =
+  | 'platform_user'
+  | 'api_key'
+  | 'hosted_user'
+  | 'system'
+  | 'webhook';
+
+export type ModuleAuditDecision = 'allow' | 'deny' | 'success' | 'failure' | 'noop';
+
+export interface ModuleAuditRecordInput {
+  actorKind: ModuleAuditActorKind;
+  actorId?: string;
+  action: string;
+  category: string;
+  targetKind?: string;
+  targetId?: string;
+  decision: ModuleAuditDecision;
+  reasonCode?: string;
+  requestId?: string;
+  traceId?: string;
+  beforeHash?: string;
+  afterHash?: string;
+  metadata?: Record<string, unknown>;
+  sync?: boolean;
+}
+
 export interface ModuleAuditApi {
-  record(type: string, metadata?: Record<string, unknown>): Promise<void>;
+  record(input: ModuleAuditRecordInput | string, metadata?: Record<string, unknown>): Promise<void>;
 }
 
 export interface ModuleHttpApi {
@@ -237,6 +264,8 @@ export interface ModuleCreditsLedgerEntry {
   createdAt: string;
 }
 
+export type ModuleCreditsAmountInput = number | bigint | string;
+
 export interface ModuleCreditsReservation {
   id: string;
   subject: CommercialSubject;
@@ -256,7 +285,7 @@ export interface ModuleCreditsReservation {
 export interface ModuleCreditsMutationInput {
   subject?: CommercialSubject;
   userId?: string;
-  amount: number;
+  amount: ModuleCreditsAmountInput;
   unit?: string;
   reason?: string;
   source?: string;
@@ -278,7 +307,7 @@ export interface ModuleCreditsApi {
   reserve(input: ModuleCreditsMutationInput): Promise<ModuleCreditsReservation>;
   commitReservation(input: {
     reservationId: string;
-    finalAmount?: number;
+    finalAmount?: ModuleCreditsAmountInput;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
   }): Promise<ModuleCreditsBalance>;
@@ -301,7 +330,7 @@ export interface ModuleCreditsApi {
     sourceId?: string;
     subject?: CommercialSubject;
     userId?: string;
-    amount?: number;
+    amount?: ModuleCreditsAmountInput;
     unit?: string;
     reason?: string;
     idempotencyKey?: string;
@@ -530,10 +559,12 @@ export interface ModuleRiskEvent {
   subject?: CommercialSubject;
   type: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'acknowledged' | 'resolved' | 'ignored';
   source?: string;
   sourceId?: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface ModuleRiskApi {
@@ -541,6 +572,7 @@ export interface ModuleRiskApi {
     subject?: CommercialSubject;
     type: string;
     severity?: ModuleRiskEvent['severity'];
+    status?: ModuleRiskEvent['status'];
     source?: string;
     sourceId?: string;
     metadata?: Record<string, unknown>;

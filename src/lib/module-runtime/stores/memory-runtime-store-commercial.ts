@@ -47,6 +47,7 @@ interface CreateInMemoryCommercialRuntimeStoreInput {
 
 interface MemoryCreditLedgerWriteInput {
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   userId: string;
   amount: number;
@@ -104,36 +105,43 @@ export function createInMemoryCommercialRuntimeStore({
 
   function creditLedgerIdempotencyKey(input: {
     productId: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     userId: string;
     unit: string;
     idempotencyKey?: string;
   }): string | null {
     return input.idempotencyKey
-      ? `${input.productId}:${input.workspaceId ?? ''}:${input.userId}:${input.unit}:${input.idempotencyKey}`
+      ? `${input.productId}:${input.environmentId ?? ''}:${input.workspaceId ?? ''}:${input.userId}:${input.unit}:${input.idempotencyKey}`
       : null;
   }
 
   function creditReservationIdempotencyKey(input: {
     productId: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     userId: string;
     unit: string;
     idempotencyKey?: string;
   }): string | null {
     return input.idempotencyKey
-      ? `${input.productId}:${input.workspaceId ?? ''}:${input.userId}:${input.unit}:${input.idempotencyKey}`
+      ? `${input.productId}:${input.environmentId ?? ''}:${input.workspaceId ?? ''}:${input.userId}:${input.unit}:${input.idempotencyKey}`
       : null;
   }
 
   function availableCreditBalance(input: {
     productId: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     userId: string;
     unit: string;
   }): number {
     return [...creditLedger.values()]
       .filter((record) => record.productId === input.productId)
+      .filter(
+        (record) =>
+          input.environmentId === undefined || (record.environmentId ?? null) === input.environmentId
+      )
       .filter(
         (record) => input.workspaceId === undefined || record.workspaceId === input.workspaceId
       )
@@ -155,6 +163,7 @@ export function createInMemoryCommercialRuntimeStore({
     const record: RuntimeStoreCreditLedgerEntry = {
       id: createId('credit'),
       productId: input.productId,
+      environmentId: input.environmentId ?? null,
       workspaceId: input.workspaceId,
       userId: input.userId,
       amount: input.amount,
@@ -289,6 +298,11 @@ export function createInMemoryCommercialRuntimeStore({
       return [...creditLedger.values()]
         .filter((record) => !query.productId || record.productId === query.productId)
         .filter(
+          (record) =>
+            query.environmentId === undefined ||
+            (record.environmentId ?? null) === query.environmentId
+        )
+        .filter(
           (record) => query.workspaceId === undefined || record.workspaceId === query.workspaceId
         )
         .filter((record) => !query.userId || record.userId === query.userId)
@@ -317,6 +331,7 @@ export function createInMemoryCommercialRuntimeStore({
       const record: RuntimeStoreCreditReservation = {
         id: input.id ?? createId('credit_reservation'),
         productId: input.productId,
+        environmentId: input.environmentId ?? null,
         workspaceId: input.workspaceId ?? null,
         userId: input.userId,
         amountReserved: input.amountReserved,
@@ -360,6 +375,11 @@ export function createInMemoryCommercialRuntimeStore({
     async listCreditReservations(query = {}) {
       return [...creditReservations.values()]
         .filter((record) => !query.productId || record.productId === query.productId)
+        .filter(
+          (record) =>
+            query.environmentId === undefined ||
+            (record.environmentId ?? null) === query.environmentId
+        )
         .filter(
           (record) => query.workspaceId === undefined || record.workspaceId === query.workspaceId
         )

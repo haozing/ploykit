@@ -292,6 +292,7 @@ export async function createHostRuntime(): Promise<HostRuntime> {
       return createHostCommercialRuntimeFromStore({
         store: runtimeStore.store,
         productId: session?.productId,
+        environmentId: session?.environmentId ?? null,
         workspaceId: session?.workspaceId ?? null,
         catalog: billingCatalog,
       });

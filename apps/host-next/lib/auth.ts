@@ -8,6 +8,7 @@ import {
 } from '@/lib/module-runtime/host/session';
 import type {
   RuntimeStore,
+  RuntimeStoreAuthSession,
   RuntimeStoreHostUser,
   RuntimeStoreHostUserStatus,
 } from '@/lib/module-runtime/stores/runtime-store-types';
@@ -24,7 +25,7 @@ import { readHostSettingsView } from './host-settings';
 
 export const HOST_AUTH_COOKIE = 'ploykit_session';
 
-const DEV_AUTH_SECRET = 'ploykit-dev-auth-secret';
+const DEV_AUTH_SECRET_KEY = Symbol.for('ploykit.host.auth.devSecret');
 const DEFAULT_PRODUCT_ID = DEFAULT_HOST_PRODUCT_ID;
 const DEFAULT_WORKSPACE_ID = DEFAULT_HOST_WORKSPACE_ID;
 const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -193,6 +194,23 @@ function demoModuleEntitlements(): readonly string[] {
   return envFlag(process.env.PLOYKIT_ENABLE_DEMO_MODULES) ? [DEMO_MODULES_ENTITLEMENT] : [];
 }
 
+interface HostAuthSigningKey {
+  kid: string;
+  secret: string;
+  source: string;
+  verifyOnly?: boolean;
+}
+
+interface HostAuthKeyRing {
+  active: HostAuthSigningKey;
+  keys: HostAuthSigningKey[];
+  configured: boolean;
+}
+
+type HostAuthDevSecretGlobal = typeof globalThis & {
+  [DEV_AUTH_SECRET_KEY]?: string;
+};
+
 export async function getHostAuthPolicyForStore(store: RuntimeStore): Promise<HostAuthPolicy> {
   const base = envAuthPolicy();
   const settings = await readHostSettingsView(store, DEFAULT_PRODUCT_ID);
@@ -203,16 +221,118 @@ export async function getHostAuthPolicyForStore(store: RuntimeStore): Promise<Ho
   };
 }
 
-function authSecret(): string {
-  const secret = process.env.PLOYKIT_AUTH_SECRET ?? process.env.PLOYKIT_MEDIA_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
-    throw new Error('PLOYKIT_AUTH_SECRET_REQUIRED');
-  }
-  return secret ?? DEV_AUTH_SECRET;
+function productionProfile(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'production' || env.PLOYKIT_PROFILE === 'production';
 }
 
-function signSessionPayload(payload: string): string {
-  return createHmac('sha256', authSecret()).update(payload).digest('base64url');
+function validateKid(kid: string): string {
+  const normalized = kid.trim();
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(normalized)) {
+    throw new Error(`PLOYKIT_AUTH_KEY_ID_INVALID: ${kid}`);
+  }
+  return normalized;
+}
+
+function parseKeyRefList(value: string | undefined): { kid: string; ref: string }[] {
+  return (value ?? '')
+    .split(/[\n,;]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separator = entry.indexOf('=');
+      if (separator <= 0 || separator === entry.length - 1) {
+        throw new Error(`PLOYKIT_AUTH_KEY_REF_INVALID: ${entry}`);
+      }
+      return {
+        kid: validateKid(entry.slice(0, separator)),
+        ref: entry.slice(separator + 1).trim(),
+      };
+    });
+}
+
+function resolveSecretRef(ref: string, env: NodeJS.ProcessEnv): { secret: string; source: string } {
+  const [scheme, ...rest] = ref.split(':');
+  const body = rest.join(':').trim();
+  if (scheme === 'env') {
+    const value = env[body];
+    if (!body || !value) {
+      throw new Error(`PLOYKIT_AUTH_SECRET_REF_MISSING: ${ref}`);
+    }
+    return { secret: value, source: `env:${body}` };
+  }
+  if (scheme === 'raw') {
+    if (!body) {
+      throw new Error(`PLOYKIT_AUTH_SECRET_REF_MISSING: ${ref}`);
+    }
+    return { secret: body, source: 'raw' };
+  }
+  throw new Error(`PLOYKIT_AUTH_SECRET_REF_UNSUPPORTED: ${ref}`);
+}
+
+function devAuthSecret(): string {
+  const state = globalThis as HostAuthDevSecretGlobal;
+  state[DEV_AUTH_SECRET_KEY] ??= randomBytes(32).toString('base64url');
+  return state[DEV_AUTH_SECRET_KEY]!;
+}
+
+export function hasHostAuthKeyRingConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.PLOYKIT_AUTH_KEY_REFS?.trim() || env.PLOYKIT_AUTH_SECRET_REF?.trim());
+}
+
+export function resolveHostAuthKeyRing(env: NodeJS.ProcessEnv = process.env): HostAuthKeyRing {
+  const activeRefs = parseKeyRefList(
+    env.PLOYKIT_AUTH_KEY_REFS ??
+      (env.PLOYKIT_AUTH_SECRET_REF
+        ? `${validateKid(env.PLOYKIT_AUTH_KEY_ID ?? 'auth-current')}=${env.PLOYKIT_AUTH_SECRET_REF}`
+        : undefined)
+  );
+  const verifyRefs = parseKeyRefList(env.PLOYKIT_AUTH_VERIFY_SECRET_REFS);
+  const keys: HostAuthSigningKey[] = [
+    ...activeRefs.map((entry) => ({
+      kid: entry.kid,
+      ...resolveSecretRef(entry.ref, env),
+    })),
+    ...verifyRefs.map((entry) => ({
+      kid: entry.kid,
+      ...resolveSecretRef(entry.ref, env),
+      verifyOnly: true,
+    })),
+  ];
+  const active = keys.find((key) => !key.verifyOnly);
+  if (active) {
+    return { active, keys, configured: true };
+  }
+  if (productionProfile(env) || env.PLOYKIT_AUTH_ALLOW_DEV_SECRET === '0') {
+    throw new Error('PLOYKIT_AUTH_KEY_RING_REQUIRED');
+  }
+  const devKey: HostAuthSigningKey = {
+    kid: 'dev',
+    secret: devAuthSecret(),
+    source: 'volatile-dev',
+  };
+  return { active: devKey, keys: [devKey], configured: false };
+}
+
+function signWithSecret(secret: string, payload: string): string {
+  return createHmac('sha256', secret).update(payload).digest('base64url');
+}
+
+function signSessionPayload(payload: string): { kid: string; signature: string } {
+  const key = resolveHostAuthKeyRing().active;
+  return {
+    kid: key.kid,
+    signature: signWithSecret(key.secret, payload),
+  };
+}
+
+function verifySessionPayload(
+  kid: string | undefined,
+  payload: string,
+  signature: string
+): boolean {
+  const ring = resolveHostAuthKeyRing();
+  const keys = kid ? ring.keys.filter((key) => key.kid === kid) : ring.keys;
+  return keys.some((key) => safeEqual(signature, signWithSecret(key.secret, payload)));
 }
 
 function safeEqual(left: string, right: string): boolean {
@@ -223,20 +343,28 @@ function safeEqual(left: string, right: string): boolean {
 
 function encodeSessionCookieValue(userId: string, sessionId?: string, expiresAt?: string): string {
   const payload = Buffer.from(JSON.stringify({ userId, sessionId, expiresAt }), 'utf8').toString('base64url');
-  return `v2.${payload}.${signSessionPayload(payload)}`;
+  const signed = signSessionPayload(payload);
+  return `v3.${signed.kid}.${payload}.${signed.signature}`;
 }
 
 function decodeSessionCookieValue(value: string | undefined): DecodedHostSessionCookie | undefined {
-  const [version, payload, signature, ...rest] = (value ?? '').split('.');
-  if ((version !== 'v1' && version !== 'v2') || !payload || !signature || rest.length > 0) {
+  const parts = (value ?? '').split('.');
+  const [version] = parts;
+  const kid = version === 'v3' ? parts[1] : undefined;
+  const payload = version === 'v3' ? parts[2] : parts[1];
+  const signature = version === 'v3' ? parts[3] : parts[2];
+  const validShape =
+    (version === 'v3' && parts.length === 4 && kid && payload && signature) ||
+    ((version === 'v1' || version === 'v2') && parts.length === 3 && payload && signature);
+  if (!validShape) {
     return undefined;
   }
-  if (!safeEqual(signature, signSessionPayload(payload))) {
+  if (!verifySessionPayload(kid, payload!, signature!)) {
     return undefined;
   }
 
   try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+    const decoded = JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')) as {
       userId?: unknown;
       sessionId?: unknown;
       expiresAt?: unknown;
@@ -254,7 +382,8 @@ function decodeSessionCookieValue(value: string | undefined): DecodedHostSession
 }
 
 function tokenHash(token: string): string {
-  return createHmac('sha256', authSecret()).update(token).digest('base64url');
+  const key = resolveHostAuthKeyRing().active;
+  return `v2.${key.kid}.${signWithSecret(key.secret, token)}`;
 }
 
 function createToken(): string {
@@ -409,28 +538,41 @@ function withAuthMetadata(
   };
 }
 
-function activeSessions(user: RuntimeStoreHostUser): HostAuthSessionRecord[] {
-  return readAuthMetadata(user).sessions.filter(
-    (session) => !session.revokedAt && isFuture(session.expiresAt)
-  );
+function authSessionToHostRecord(session: RuntimeStoreAuthSession): HostAuthSessionRecord {
+  return {
+    id: session.id,
+    userId: session.subjectId,
+    createdAt: session.createdAt,
+    expiresAt: session.expiresAt ?? session.createdAt,
+    revokedAt: session.revokedAt,
+    userAgent: typeof session.metadata.userAgent === 'string' ? session.metadata.userAgent : undefined,
+  };
 }
 
-function isSessionActive(
+function isStoredAuthSessionActive(session: RuntimeStoreAuthSession): boolean {
+  return session.status === 'active' && (!session.expiresAt || isFuture(session.expiresAt));
+}
+
+async function isSessionActive(
+  store: RuntimeStore,
   user: RuntimeStoreHostUser,
-  sessionId: string | undefined,
-  cookieExpiresAt?: string
-): boolean {
+  sessionId: string | undefined
+): Promise<boolean> {
   if (!sessionId) {
     return process.env.NODE_ENV !== 'production';
   }
-  const auth = readAuthMetadata(user);
-  if (activeSessions(user).some((session) => session.id === sessionId)) {
+  const session = await store.getAuthSession(sessionId);
+  if (
+    session &&
+    session.productId === user.productId &&
+    session.subjectType === 'hosted_user' &&
+    session.subjectId === user.id &&
+    isStoredAuthSessionActive(session)
+  ) {
+    await store.touchAuthSession(session.id).catch(() => undefined);
     return true;
   }
-  if (auth.sessions.length > 0) {
-    return false;
-  }
-  return Boolean(cookieExpiresAt && isFuture(cookieExpiresAt));
+  return false;
 }
 
 export function createHostPasswordHash(
@@ -556,15 +698,26 @@ function tokenMailLog(
   };
 }
 
+function tokenHashMatches(storedHash: string, token: string): boolean {
+  const [version, kid, digest, ...rest] = storedHash.split('.');
+  if (version === 'v2' && kid && digest && rest.length === 0) {
+    const key = resolveHostAuthKeyRing().keys.find((candidate) => candidate.kid === kid);
+    return Boolean(key && safeEqual(digest, signWithSecret(key.secret, token)));
+  }
+  return resolveHostAuthKeyRing().keys.some((key) =>
+    safeEqual(storedHash, signWithSecret(key.secret, token))
+  );
+}
+
 function hasUsableToken(tokens: readonly HostAuthTokenRecord[], token: string): boolean {
-  const hash = tokenHash(token);
-  return tokens.some((item) => item.tokenHash === hash && !item.usedAt && isFuture(item.expiresAt));
+  return tokens.some(
+    (item) => tokenHashMatches(item.tokenHash, token) && !item.usedAt && isFuture(item.expiresAt)
+  );
 }
 
 function markTokenUsed(tokens: readonly HostAuthTokenRecord[], token: string): HostAuthTokenRecord[] {
-  const hash = tokenHash(token);
   return tokens.map((item) =>
-    item.tokenHash === hash && !item.usedAt
+    tokenHashMatches(item.tokenHash, token) && !item.usedAt
       ? {
           ...item,
           usedAt: nowIso(),
@@ -610,22 +763,29 @@ export function createRuntimeStoreHostAuthAdapter(store: RuntimeStore): HostAuth
     },
 
     async createSession(user, input = {}) {
-      const auth = readAuthMetadata(user);
       const policy = await getHostAuthPolicyForStore(store);
+      const expiresAt = expiresIso(policy.sessionTtlMs);
       const session: HostAuthSessionRecord = {
         id: `session-${randomBytes(12).toString('hex')}`,
         userId: user.id,
         createdAt: nowIso(),
-        expiresAt: expiresIso(policy.sessionTtlMs),
+        expiresAt,
         userAgent: input.userAgent,
       };
-      const saved = await store.upsertHostUser(
-        withAuthMetadata(user, {
-          ...auth,
-          sessions: [...activeSessions(user), session].slice(-20),
-        })
-      );
-      await recordAuthAudit(store, saved, 'host.auth.session.created', {
+      await store.createAuthSession({
+        id: session.id,
+        productId: user.productId,
+        environmentId: DEFAULT_HOST_ENVIRONMENT_ID,
+        workspaceId: user.workspaceId,
+        subjectType: 'hosted_user',
+        subjectId: user.id,
+        sessionType: 'browser',
+        expiresAt,
+        metadata: {
+          userAgent: input.userAgent,
+        },
+      });
+      await recordAuthAudit(store, user, 'host.auth.session.created', {
         sessionId: session.id,
       });
       return {
@@ -639,18 +799,17 @@ export function createRuntimeStoreHostAuthAdapter(store: RuntimeStore): HostAuth
       if (!user) {
         return;
       }
-      const auth = readAuthMetadata(user);
-      const saved = await store.upsertHostUser(
-        withAuthMetadata(user, {
-          ...auth,
-          sessions: auth.sessions.map((session) =>
-            session.id === sessionId && !session.revokedAt
-              ? { ...session, revokedAt: nowIso() }
-              : session
-          ),
-        })
-      );
-      await recordAuthAudit(store, saved, 'host.auth.session.revoked', {
+      const session = await store.getAuthSession(sessionId);
+      if (
+        session?.subjectType === 'hosted_user' &&
+        session.subjectId === user.id &&
+        session.productId === user.productId
+      ) {
+        await store
+          .revokeAuthSession(sessionId, { reason: 'user_requested' })
+          .catch(() => undefined);
+      }
+      await recordAuthAudit(store, user, 'host.auth.session.revoked', {
         sessionId,
       });
     },
@@ -661,7 +820,9 @@ export function createRuntimeStoreHostAuthAdapter(store: RuntimeStore): HostAuth
         return createAnonymousHostSession();
       }
       const user = await store.getHostUser(decoded.userId);
-      return user && user.status === 'active' && isSessionActive(user, decoded.sessionId, decoded.expiresAt)
+      return user &&
+        user.status === 'active' &&
+        (await isSessionActive(store, user, decoded.sessionId))
         ? createHostSessionForUser(user, { authSessionId: decoded.sessionId })
         : createAnonymousHostSession();
     },
@@ -774,12 +935,15 @@ export function createRuntimeStoreHostAuthAdapter(store: RuntimeStore): HostAuth
           {
             ...auth,
             passwordResetTokens: markTokenUsed(auth.passwordResetTokens, token),
-            sessions: auth.sessions.map((session) =>
-              session.revokedAt ? session : { ...session, revokedAt: nowIso() }
-            ),
           }
         )
       );
+      await store.revokeAuthSessions({
+        productId: saved.productId,
+        subjectType: 'hosted_user',
+        subjectId: saved.id,
+        reason: 'password_reset',
+      });
       await recordAuthAudit(store, saved, 'host.auth.password_reset.completed', {});
       return saved;
     },
@@ -809,7 +973,16 @@ export function createRuntimeStoreHostAuthAdapter(store: RuntimeStore): HostAuth
 
     async listSessions(userId) {
       const user = await store.getHostUser(userId);
-      return user ? activeSessions(user) : [];
+      if (!user) {
+        return [];
+      }
+      const sessions = await store.listAuthSessions({
+        productId: user.productId,
+        subjectType: 'hosted_user',
+        subjectId: user.id,
+        status: 'active',
+      });
+      return sessions.filter(isStoredAuthSessionActive).map(authSessionToHostRecord);
     },
   };
 }

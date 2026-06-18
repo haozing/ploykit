@@ -101,6 +101,7 @@ function createRuntimeStoreCommercialRuntimeInternal(
   const skuCatalog = options.skuCatalog ?? {};
   const scope = {
     productId: options.productId,
+    environmentId: options.environmentId ?? null,
     workspaceId: options.workspaceId,
   };
 

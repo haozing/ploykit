@@ -92,13 +92,29 @@ import type {
   UpsertRuntimeStoreRagSourceInput,
 } from './runtime-store-rag-types';
 import type {
+  CreateRuntimeStoreAuthSessionInput,
   CreateRuntimeStoreApiKeyInput,
+  RuntimeStoreAuthSession,
+  RuntimeStoreAuthSessionStatus,
+  RuntimeStoreAuthSessionSubjectType,
   RuntimeStoreApiKeyRecord,
   RuntimeStoreApiKeyStatus,
   RuntimeStoreHostUser,
   RuntimeStoreHostUserRole,
   RuntimeStoreHostUserStatus,
   RuntimeStoreMembership,
+  RuntimeStorePlatformUser,
+  RuntimeStorePlatformUserStatus,
+  RuntimeStoreUserIdentity,
+  RuntimeStoreUserIdentityStatus,
+  RuntimeStoreWorkspaceInvite,
+  RuntimeStoreWorkspaceInviteStatus,
+  RuntimeStoreWorkspaceMember,
+  RuntimeStoreWorkspaceMemberStatus,
+  UpsertRuntimeStorePlatformUserInput,
+  UpsertRuntimeStoreUserIdentityInput,
+  UpsertRuntimeStoreWorkspaceInviteInput,
+  UpsertRuntimeStoreWorkspaceMemberInput,
 } from './runtime-store-identity-types';
 import type {
   BeginRuntimeStoreIdempotencyKeyInput,
@@ -209,13 +225,29 @@ export type {
 } from './runtime-store-rag-types';
 
 export type {
+  CreateRuntimeStoreAuthSessionInput,
   CreateRuntimeStoreApiKeyInput,
+  RuntimeStoreAuthSession,
+  RuntimeStoreAuthSessionStatus,
+  RuntimeStoreAuthSessionSubjectType,
   RuntimeStoreApiKeyRecord,
   RuntimeStoreApiKeyStatus,
   RuntimeStoreHostUser,
   RuntimeStoreHostUserRole,
   RuntimeStoreHostUserStatus,
   RuntimeStoreMembership,
+  RuntimeStorePlatformUser,
+  RuntimeStorePlatformUserStatus,
+  RuntimeStoreUserIdentity,
+  RuntimeStoreUserIdentityStatus,
+  RuntimeStoreWorkspaceInvite,
+  RuntimeStoreWorkspaceInviteStatus,
+  RuntimeStoreWorkspaceMember,
+  RuntimeStoreWorkspaceMemberStatus,
+  UpsertRuntimeStorePlatformUserInput,
+  UpsertRuntimeStoreUserIdentityInput,
+  UpsertRuntimeStoreWorkspaceInviteInput,
+  UpsertRuntimeStoreWorkspaceMemberInput,
 } from './runtime-store-identity-types';
 
 export type {
@@ -468,6 +500,7 @@ export interface RuntimeStore {
   ): Promise<RuntimeStoreCreditLedgerEntry>;
   listCreditLedger(query?: {
     productId?: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     userId?: string;
     unit?: string;
@@ -475,6 +508,7 @@ export interface RuntimeStore {
   }): Promise<RuntimeStoreCreditLedgerEntry[]>;
   getCreditBalance(query: {
     productId: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     userId: string;
     unit?: string;
@@ -506,6 +540,7 @@ export interface RuntimeStore {
   ): Promise<RuntimeStoreCreditReservation>;
   listCreditReservations(query?: {
     productId?: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
     userId?: string;
     unit?: string;
@@ -779,6 +814,7 @@ export interface RuntimeStore {
       subjectId?: string;
       type: string;
       severity?: RuntimeStoreRiskEvent['severity'];
+      status?: RuntimeStoreRiskEvent['status'];
       source?: string;
       sourceId?: string;
       metadata?: Record<string, unknown>;
@@ -796,6 +832,15 @@ export interface RuntimeStore {
       metadata?: Record<string, unknown>;
     }
   ): Promise<RuntimeStoreRiskBlock>;
+  releaseRiskBlock(
+    id: string,
+    patch?: {
+      releasedAt?: string;
+      releasedBy?: string;
+      reason?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<RuntimeStoreRiskBlock>;
   listRiskEvents(query?: {
     productId?: string;
     workspaceId?: string | null;
@@ -804,6 +849,7 @@ export interface RuntimeStore {
     subjectId?: string;
     type?: string;
     severity?: RuntimeStoreRiskEvent['severity'];
+    status?: RuntimeStoreRiskEvent['status'];
     source?: string;
     sourceId?: string;
   }): Promise<RuntimeStoreRiskEvent[]>;
@@ -813,6 +859,7 @@ export interface RuntimeStore {
     subjectType?: RuntimeStoreRiskBlock['subjectType'];
     subjectId?: string;
     scope?: string;
+    includeReleased?: boolean;
   }): Promise<RuntimeStoreRiskBlock[]>;
   createFile(
     input: RuntimeStoreScope & {
@@ -915,6 +962,110 @@ export interface RuntimeStore {
     status: RuntimeStoreHostUserStatus,
     metadata?: Record<string, unknown>
   ): Promise<RuntimeStoreHostUser>;
+  upsertPlatformUser(input: UpsertRuntimeStorePlatformUserInput): Promise<RuntimeStorePlatformUser>;
+  getPlatformUser(id: string): Promise<RuntimeStorePlatformUser | null>;
+  findPlatformUserByEmail(email: string): Promise<RuntimeStorePlatformUser | null>;
+  listPlatformUsers(query?: {
+    status?: RuntimeStorePlatformUserStatus;
+  }): Promise<RuntimeStorePlatformUser[]>;
+  updatePlatformUserStatus(
+    id: string,
+    status: RuntimeStorePlatformUserStatus,
+    metadata?: Record<string, unknown>
+  ): Promise<RuntimeStorePlatformUser>;
+  upsertWorkspaceMember(
+    input: UpsertRuntimeStoreWorkspaceMemberInput
+  ): Promise<RuntimeStoreWorkspaceMember>;
+  listWorkspaceMembers(query?: {
+    productId?: string;
+    workspaceId?: string;
+    platformUserId?: string;
+    status?: RuntimeStoreWorkspaceMemberStatus;
+  }): Promise<RuntimeStoreWorkspaceMember[]>;
+  updateWorkspaceMemberStatus(
+    id: string,
+    status: RuntimeStoreWorkspaceMemberStatus,
+    metadata?: Record<string, unknown>
+  ): Promise<RuntimeStoreWorkspaceMember>;
+  upsertWorkspaceInvite(
+    input: UpsertRuntimeStoreWorkspaceInviteInput
+  ): Promise<RuntimeStoreWorkspaceInvite>;
+  getWorkspaceInvite(id: string): Promise<RuntimeStoreWorkspaceInvite | null>;
+  findWorkspaceInviteByTokenHash(tokenHash: string): Promise<RuntimeStoreWorkspaceInvite | null>;
+  listWorkspaceInvites(query?: {
+    productId?: string;
+    workspaceId?: string;
+    status?: RuntimeStoreWorkspaceInviteStatus;
+    email?: string;
+  }): Promise<RuntimeStoreWorkspaceInvite[]>;
+  updateWorkspaceInviteStatus(
+    id: string,
+    status: RuntimeStoreWorkspaceInviteStatus,
+    patch?: {
+      acceptedByPlatformUserId?: string;
+      acceptedAt?: string;
+      revokedAt?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<RuntimeStoreWorkspaceInvite>;
+  createAuthSession(input: CreateRuntimeStoreAuthSessionInput): Promise<RuntimeStoreAuthSession>;
+  getAuthSession(id: string): Promise<RuntimeStoreAuthSession | null>;
+  listAuthSessions(query?: {
+    productId?: string;
+    environmentId?: string | null;
+    workspaceId?: string | null;
+    subjectType?: RuntimeStoreAuthSessionSubjectType;
+    subjectId?: string;
+    status?: RuntimeStoreAuthSessionStatus;
+    sessionType?: string;
+  }): Promise<RuntimeStoreAuthSession[]>;
+  touchAuthSession(
+    id: string,
+    patch?: {
+      lastSeenAt?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<RuntimeStoreAuthSession>;
+  revokeAuthSession(
+    id: string,
+    patch?: {
+      revokedAt?: string;
+      reason?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<RuntimeStoreAuthSession>;
+  revokeAuthSessions(query: {
+    productId?: string;
+    environmentId?: string | null;
+    workspaceId?: string | null;
+    subjectType?: RuntimeStoreAuthSessionSubjectType;
+    subjectId?: string;
+    excludeId?: string;
+    reason?: string;
+    revokedAt?: string;
+  }): Promise<RuntimeStoreAuthSession[]>;
+  upsertUserIdentity(
+    input: UpsertRuntimeStoreUserIdentityInput
+  ): Promise<RuntimeStoreUserIdentity>;
+  findUserIdentity(query: {
+    productId: string;
+    environmentId?: string | null;
+    provider: string;
+    providerKey: string;
+    status?: RuntimeStoreUserIdentityStatus;
+  }): Promise<RuntimeStoreUserIdentity | null>;
+  listUserIdentities(query?: {
+    productId?: string;
+    environmentId?: string | null;
+    userId?: string;
+    provider?: string;
+    status?: RuntimeStoreUserIdentityStatus;
+  }): Promise<RuntimeStoreUserIdentity[]>;
+  updateUserIdentityStatus(
+    id: string,
+    status: RuntimeStoreUserIdentityStatus,
+    metadata?: Record<string, unknown>
+  ): Promise<RuntimeStoreUserIdentity>;
   upsertSetting<TValue = unknown>(
     input: UpsertRuntimeStoreSettingInput<TValue>
   ): Promise<RuntimeStoreSettingRecord<TValue>>;

@@ -8,7 +8,7 @@ export interface RuntimeAuditIntegrity {
   category: string;
   risk: RuntimeAuditRisk;
   actorKind?: string;
-  decision?: 'allow' | 'deny' | 'success' | 'failure';
+  decision?: 'allow' | 'deny' | 'success' | 'failure' | 'noop';
   resourceType?: string;
   resourceId?: string;
   correlationId?: string;
@@ -145,7 +145,8 @@ function decisionFromMetadata(
     explicit === 'allow' ||
     explicit === 'deny' ||
     explicit === 'success' ||
-    explicit === 'failure'
+    explicit === 'failure' ||
+    explicit === 'noop'
   ) {
     return explicit;
   }

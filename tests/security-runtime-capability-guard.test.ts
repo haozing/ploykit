@@ -249,6 +249,68 @@ test('runtime capability guard fails closed when audit provider is not mounted',
   );
 });
 
+test('runtime capability guard allows structured audit records with AuditWrite', async () => {
+  const records: unknown[] = [];
+  const auditModule = defineModule({
+    id: 'structured-audit-test',
+    name: 'Structured Audit Test',
+    version: '0.1.0',
+    permissions: [Permission.AuditWrite],
+    actions: {
+      recordAudit: {
+        handler: './actions/record-audit',
+        auth: 'auth',
+      },
+    },
+  });
+  const host = await createModuleHost({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'structured-audit-test': {
+          module: async () => ({ default: auditModule }),
+          actions: {
+            'actions/record-audit': async () => ({
+              default: action(async (ctx: ModuleContext) => {
+                await ctx.audit.record({
+                  actorKind: 'hosted_user',
+                  actorId: 'user_8d',
+                  action: 'session.permission.structured',
+                  category: 'security',
+                  targetKind: 'session',
+                  targetId: 'session_1',
+                  decision: 'allow',
+                  requestId: 'req_1',
+                  metadata: { email: 'User@Example.com' },
+                });
+                return { ok: true };
+              }),
+            }),
+          },
+        },
+      },
+    },
+    capabilities: {
+      audit: {
+        async record(input, metadata) {
+          records.push(typeof input === 'string' ? { type: input, metadata } : input);
+        },
+      },
+    },
+  });
+
+  await host.executeAction({
+    moduleId: 'structured-audit-test',
+    name: 'recordAudit',
+    session: {
+      user: { id: 'user_8d', role: 'user' },
+      permissions: [Permission.AuditWrite],
+    },
+  });
+
+  assert.equal((records[0] as { action?: string }).action, 'session.permission.structured');
+});
+
 test('runtime capability guard protects notification reads separately from sends', async () => {
   const notificationModule = defineModule({
     id: 'notification-read-test',

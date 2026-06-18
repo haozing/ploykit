@@ -23,6 +23,7 @@ export type RuntimeStoreCreditReservationStatus = 'reserved' | 'committed' | 're
 export interface RuntimeStoreCreditLedgerEntry {
   id: string;
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   userId: string;
   amount: number;
@@ -38,6 +39,7 @@ export interface RuntimeStoreCreditLedgerEntry {
 export interface RuntimeStoreCreditReservation {
   id: string;
   productId: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   userId: string;
   amountReserved: number;

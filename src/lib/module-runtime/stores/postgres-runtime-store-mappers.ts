@@ -9,6 +9,7 @@ import type {
 } from '../scope/product-scope-types';
 import type {
   RuntimeStoreApiKeyRecord,
+  RuntimeStoreAuthSession,
   RuntimeStoreAuditRecord,
   RuntimeStoreBillingAccount,
   RuntimeStoreCommercialCatalogItem,
@@ -27,6 +28,7 @@ import type {
   RuntimeStoreNotificationDeliveryRecord,
   RuntimeStoreNotificationRecord,
   RuntimeStoreOutboxRecord,
+  RuntimeStorePlatformUser,
   RuntimeStoreRedeemCode,
   RuntimeStoreRedeemRedemption,
   RuntimeStoreRagChunkRecord,
@@ -42,8 +44,11 @@ import type {
   RuntimeStoreSubscriptionEventRecord,
   RuntimeStoreSubscriptionRecord,
   RuntimeStoreTaxProfileRecord,
+  RuntimeStoreUserIdentity,
   RuntimeStoreUsageRecord,
   RuntimeStoreWebhookReceipt,
+  RuntimeStoreWorkspaceInvite,
+  RuntimeStoreWorkspaceMember,
   RuntimeStoreWorkerRecord,
 } from './runtime-store-types';
 
@@ -88,7 +93,6 @@ export function mapOutbox(row: Row): RuntimeStoreOutboxRecord {
   return {
     id: row.id,
     productId: row.product_id,
-    environmentId: row.environment_id ?? null,
     workspaceId: row.workspace_id,
     moduleId: row.module_id,
     name: row.name,
@@ -322,6 +326,7 @@ export function mapCreditReservation(row: Row): RuntimeStoreCreditReservation {
   return {
     id: row.id,
     productId: row.product_id,
+    environmentId: row.environment_id ?? null,
     workspaceId: row.workspace_id ?? null,
     userId: row.user_id,
     amountReserved: Number(row.amount_reserved),
@@ -657,6 +662,7 @@ export function mapApiKey(row: Row): RuntimeStoreApiKeyRecord {
   return {
     id: row.id,
     productId: row.product_id,
+    environmentId: row.environment_id ?? null,
     workspaceId: row.workspace_id ?? null,
     moduleId: row.module_id ?? null,
     name: row.name,
@@ -687,10 +693,15 @@ export function mapRiskEvent(row: Row): RuntimeStoreRiskEvent {
     subjectId: row.subject_id ?? undefined,
     type: row.type,
     severity: row.severity,
+    status: row.status ?? 'open',
     source: row.source ?? undefined,
     sourceId: row.source_id ?? undefined,
     metadata: row.metadata ?? {},
     createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at),
+    acknowledgedAt: toIso(row.acknowledged_at),
+    resolvedAt: toIso(row.resolved_at),
+    ignoredAt: toIso(row.ignored_at),
   };
 }
 
@@ -704,6 +715,9 @@ export function mapRiskBlock(row: Row): RuntimeStoreRiskBlock {
     scope: row.scope ?? undefined,
     reason: row.reason,
     expiresAt: toIso(row.expires_at),
+    releasedAt: toIso(row.released_at),
+    releasedBy: row.released_by ?? undefined,
+    releaseReason: row.release_reason ?? undefined,
     idempotencyKey: row.idempotency_key ?? undefined,
     metadata: row.metadata ?? {},
     createdAt: toIso(row.created_at)!,
@@ -817,6 +831,90 @@ export function mapHostUser(row: Row): RuntimeStoreHostUser {
     permissions: row.permissions ?? undefined,
     metadata: row.metadata ?? {},
     createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at)!,
+  };
+}
+
+export function mapUserIdentity(row: Row): RuntimeStoreUserIdentity {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    environmentId: row.environment_id ?? null,
+    userId: row.user_id,
+    provider: row.provider,
+    providerKey: row.provider_key,
+    email: row.email ?? undefined,
+    status: row.status,
+    metadata: row.metadata ?? {},
+    lastUsedAt: toIso(row.last_used_at),
+    createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at)!,
+  };
+}
+
+export function mapPlatformUser(row: Row): RuntimeStorePlatformUser {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name ?? undefined,
+    status: row.status,
+    metadata: row.metadata ?? {},
+    createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at)!,
+  };
+}
+
+export function mapWorkspaceMember(row: Row): RuntimeStoreWorkspaceMember {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    workspaceId: row.workspace_id,
+    platformUserId: row.platform_user_id,
+    role: row.role,
+    status: row.status,
+    metadata: row.metadata ?? {},
+    createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at)!,
+  };
+}
+
+export function mapWorkspaceInvite(row: Row): RuntimeStoreWorkspaceInvite {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    workspaceId: row.workspace_id,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    tokenHash: row.token_hash,
+    invitedByPlatformUserId: row.invited_by_platform_user_id ?? undefined,
+    acceptedByPlatformUserId: row.accepted_by_platform_user_id ?? undefined,
+    expiresAt: toIso(row.expires_at)!,
+    acceptedAt: toIso(row.accepted_at),
+    revokedAt: toIso(row.revoked_at),
+    metadata: row.metadata ?? {},
+    createdAt: toIso(row.created_at)!,
+    updatedAt: toIso(row.updated_at)!,
+  };
+}
+
+export function mapAuthSession(row: Row): RuntimeStoreAuthSession {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    environmentId: row.environment_id ?? null,
+    workspaceId: row.workspace_id ?? null,
+    subjectType: row.subject_type,
+    subjectId: row.subject_id,
+    deviceId: row.device_id ?? undefined,
+    sessionType: row.session_type,
+    status: row.status,
+    createdAt: toIso(row.created_at)!,
+    lastSeenAt: toIso(row.last_seen_at)!,
+    expiresAt: toIso(row.expires_at),
+    revokedAt: toIso(row.revoked_at),
+    revokedReason: row.revoked_reason ?? undefined,
+    metadata: row.metadata ?? {},
     updatedAt: toIso(row.updated_at)!,
   };
 }

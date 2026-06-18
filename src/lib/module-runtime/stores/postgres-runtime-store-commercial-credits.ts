@@ -29,17 +29,18 @@ export function createPostgresCommercialCreditStore(
     async recordCreditLedger(input) {
       const result = await database.query<Row>(
         `insert into module_credit_ledger (
-          id, product_id, workspace_id, user_id, amount, unit, reason, status,
+          id, product_id, environment_id, workspace_id, user_id, amount, unit, reason, status,
           idempotency_key, expires_at, metadata
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
-        on conflict (product_id, (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+        on conflict (product_id, (coalesce(environment_id, ''::text)), (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
         where idempotency_key is not null
         do update set metadata = module_credit_ledger.metadata
         returning *`,
         [
           createId('credit'),
           input.productId,
+          input.environmentId ?? null,
           input.workspaceId ?? null,
           input.userId,
           input.amount,
@@ -63,14 +64,15 @@ export function createPostgresCommercialCreditStore(
         );
       }
       const unit = input.unit ?? 'credit';
+      const environmentKey = input.environmentId ?? '';
       const workspaceKey = creditWorkspaceKey(input.workspaceId);
       return database.transaction(async (tx) => {
         await tx.query(
           `select pg_advisory_xact_lock(
             hashtext($1::text),
-            hashtext($2::text || ':' || $3::text || ':' || $4::text)
+            hashtext($2::text || ':' || $3::text || ':' || $4::text || ':' || $5::text)
           )`,
-          [input.productId, workspaceKey, input.userId, unit]
+          [input.productId, environmentKey, workspaceKey, input.userId, unit]
         );
 
         if (input.idempotencyKey) {
@@ -78,12 +80,13 @@ export function createPostgresCommercialCreditStore(
             `select *
              from module_credit_ledger
              where product_id = $1
-               and coalesce(workspace_id, ''::text) = $2
-               and user_id = $3
-               and unit = $4
-               and idempotency_key = $5
+               and coalesce(environment_id, ''::text) = $2
+               and coalesce(workspace_id, ''::text) = $3
+               and user_id = $4
+               and unit = $5
+               and idempotency_key = $6
              limit 1`,
-            [input.productId, workspaceKey, input.userId, unit, input.idempotencyKey]
+            [input.productId, environmentKey, workspaceKey, input.userId, unit, input.idempotencyKey]
           );
           if (existing.rows[0]) {
             return mapCreditLedger(existing.rows[0]);
@@ -94,12 +97,13 @@ export function createPostgresCommercialCreditStore(
           `select coalesce(sum(amount), 0) as balance
            from module_credit_ledger
            where product_id = $1
-             and coalesce(workspace_id, ''::text) = $2
-             and user_id = $3
-             and unit = $4
+             and coalesce(environment_id, ''::text) = $2
+             and coalesce(workspace_id, ''::text) = $3
+             and user_id = $4
+             and unit = $5
              and status = 'available'
              and (expires_at is null or expires_at > now())`,
-          [input.productId, workspaceKey, input.userId, unit]
+          [input.productId, environmentKey, workspaceKey, input.userId, unit]
         );
         if (Number(balance.rows[0]?.balance ?? 0) < input.amount) {
           throw new Error('MODULE_CREDITS_INSUFFICIENT');
@@ -107,17 +111,18 @@ export function createPostgresCommercialCreditStore(
 
         const result = await tx.query<Row>(
           `insert into module_credit_ledger (
-            id, product_id, workspace_id, user_id, amount, unit, reason, status,
+            id, product_id, environment_id, workspace_id, user_id, amount, unit, reason, status,
             idempotency_key, expires_at, metadata
           )
-          values ($1, $2, $3, $4, $5, $6, $7, 'available', $8, null, $9::jsonb)
-          on conflict (product_id, (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, 'available', $9, null, $10::jsonb)
+          on conflict (product_id, (coalesce(environment_id, ''::text)), (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
           where idempotency_key is not null
           do update set metadata = module_credit_ledger.metadata
           returning *`,
           [
             createId('credit'),
             input.productId,
+            input.environmentId ?? null,
             input.workspaceId ?? null,
             input.userId,
             -input.amount,
@@ -134,20 +139,22 @@ export function createPostgresCommercialCreditStore(
       const result = await database.query<Row>(
         `select * from module_credit_ledger
          where ($1::text is null or product_id = $1)
-           and ($2::text is null or coalesce(workspace_id, '') = $2)
-           and ($3::text is null or user_id = $3)
-           and ($4::text is null or unit = $4)
+           and ($2::text is null or coalesce(environment_id, '') = $2)
+           and ($3::text is null or coalesce(workspace_id, '') = $3)
+           and ($4::text is null or user_id = $4)
+           and ($5::text is null or unit = $5)
            and (
-             $5::text is null
+             $6::text is null
              or case
                when status = 'available' and expires_at is not null and expires_at <= now()
                then 'expired'
                else status
-             end = $5
+             end = $6
            )
          order by created_at desc`,
         [
           query.productId ?? null,
+          query.environmentId === undefined ? null : (query.environmentId ?? ''),
           creditWorkspaceFilter(query.workspaceId),
           query.userId ?? null,
           query.unit ?? null,
@@ -162,12 +169,19 @@ export function createPostgresCommercialCreditStore(
         `select coalesce(sum(amount), 0) as balance
          from module_credit_ledger
          where product_id = $1
-           and ($2::text is null or coalesce(workspace_id, '') = $2)
-           and user_id = $3
-           and unit = $4
+           and ($2::text is null or coalesce(environment_id, '') = $2)
+           and ($3::text is null or coalesce(workspace_id, '') = $3)
+           and user_id = $4
+           and unit = $5
            and status = 'available'
            and (expires_at is null or expires_at > now())`,
-        [query.productId, creditWorkspaceFilter(query.workspaceId), query.userId, unit]
+        [
+          query.productId,
+          query.environmentId === undefined ? null : (query.environmentId ?? ''),
+          creditWorkspaceFilter(query.workspaceId),
+          query.userId,
+          unit,
+        ]
       );
       return { userId: query.userId, unit, balance: Number(result.rows[0]?.balance ?? 0) };
     },
@@ -175,17 +189,18 @@ export function createPostgresCommercialCreditStore(
       const unit = input.unit ?? 'credit';
       const result = await database.query<Row>(
         `insert into module_credit_reservations (
-          id, product_id, workspace_id, user_id, amount_reserved, amount_committed,
+          id, product_id, environment_id, workspace_id, user_id, amount_reserved, amount_committed,
           unit, status, reason, source, source_id, idempotency_key, expires_at, metadata
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz, $14::jsonb)
-        on conflict (product_id, (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::timestamptz, $15::jsonb)
+        on conflict (product_id, (coalesce(environment_id, ''::text)), (coalesce(workspace_id, ''::text)), user_id, unit, idempotency_key)
         where idempotency_key is not null
         do update set metadata = module_credit_reservations.metadata
         returning *`,
         [
           input.id ?? createId('credit_reservation'),
           input.productId,
+          input.environmentId ?? null,
           input.workspaceId ?? null,
           input.userId,
           input.amountReserved,
@@ -229,16 +244,18 @@ export function createPostgresCommercialCreditStore(
       const result = await database.query<Row>(
         `select * from module_credit_reservations
          where ($1::text is null or product_id = $1)
-           and ($2::text is null or coalesce(workspace_id, ''::text) = $2)
-           and ($3::text is null or user_id = $3)
-           and ($4::text is null or unit = $4)
-           and ($5::text is null or status = $5)
-           and ($6::text is null or source = $6)
-           and ($7::text is null or source_id = $7)
-           and ($8::timestamptz is null or expires_at <= $8::timestamptz)
+           and ($2::text is null or coalesce(environment_id, ''::text) = $2)
+           and ($3::text is null or coalesce(workspace_id, ''::text) = $3)
+           and ($4::text is null or user_id = $4)
+           and ($5::text is null or unit = $5)
+           and ($6::text is null or status = $6)
+           and ($7::text is null or source = $7)
+           and ($8::text is null or source_id = $8)
+           and ($9::timestamptz is null or expires_at <= $9::timestamptz)
          order by created_at desc`,
         [
           query.productId ?? null,
+          query.environmentId === undefined ? null : (query.environmentId ?? ''),
           creditWorkspaceFilter(query.workspaceId),
           query.userId ?? null,
           query.unit ?? null,

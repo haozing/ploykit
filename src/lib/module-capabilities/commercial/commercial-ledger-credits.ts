@@ -8,6 +8,7 @@ import {
   assertNonNegativeIntegerAmount,
   assertPositiveIntegerAmount,
   assertIntegerAmount,
+  normalizeCreditAmount,
   subjectFromCommercialInput,
   subjectFromStoredUserId,
   subjectToStoredUserId,
@@ -21,6 +22,7 @@ interface CreateCommercialLedgerCreditsInput {
   store: RuntimeStore;
   scope: {
     productId: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
   };
 }
@@ -62,6 +64,7 @@ export function createCommercialLedgerCredits({
     const userId = subjectToStoredUserId(input.subject);
     const expired = await store.listCreditReservations({
       productId: scope.productId,
+      environmentId: scope.environmentId,
       workspaceId: scope.workspaceId,
       userId,
       unit: input.unit,
@@ -106,6 +109,7 @@ export function createCommercialLedgerCredits({
     await releaseExpiredReservations({ subject, unit: resolvedUnit });
     const balance = await store.getCreditBalance({
       productId: scope.productId,
+      environmentId: scope.environmentId,
       workspaceId: scope.workspaceId,
       userId: subjectToStoredUserId(subject),
       unit: resolvedUnit,
@@ -138,17 +142,19 @@ export function createCommercialLedgerCredits({
   const credits: ModuleCreditsApi = {
     balance: creditBalance,
     async grant(input) {
-      assertPositiveIntegerAmount(input.amount, 'credits.grant');
-      return recordCredit({ ...input, reason: 'grant' });
+      const amount = normalizeCreditAmount(input.amount, 'credits.grant');
+      assertPositiveIntegerAmount(amount, 'credits.grant');
+      return recordCredit({ ...input, amount, reason: 'grant' });
     },
     async consume(input) {
-      assertPositiveIntegerAmount(input.amount, 'credits.consume');
+      const amount = normalizeCreditAmount(input.amount, 'credits.consume');
+      assertPositiveIntegerAmount(amount, 'credits.consume');
       const subject = subjectFromCommercialInput(input);
       const userId = subjectToStoredUserId(subject);
       await store.consumeCreditLedger({
         ...scope,
         userId,
-        amount: input.amount,
+        amount,
         unit: input.unit ?? 'credit',
         reason: input.reason ?? 'consume',
         idempotencyKey: input.idempotencyKey,
@@ -162,27 +168,30 @@ export function createCommercialLedgerCredits({
       return creditBalance({ subject, unit: input.unit });
     },
     async adjust(input) {
-      return recordCredit({ ...input, reason: 'adjust' });
+      const amount = normalizeCreditAmount(input.amount, 'credits.adjust');
+      return recordCredit({ ...input, amount, reason: 'adjust' });
     },
     async refund(input) {
-      assertPositiveIntegerAmount(input.amount, 'credits.refund');
-      return recordCredit({ ...input, reason: 'refund' });
+      const amount = normalizeCreditAmount(input.amount, 'credits.refund');
+      assertPositiveIntegerAmount(amount, 'credits.refund');
+      return recordCredit({ ...input, amount, reason: 'refund' });
     },
     async reserve(input) {
-      assertPositiveIntegerAmount(input.amount, 'credits.reserve');
+      const amount = normalizeCreditAmount(input.amount, 'credits.reserve');
+      assertPositiveIntegerAmount(amount, 'credits.reserve');
       const subject = subjectFromCommercialInput(input);
       await releaseExpiredReservations({ subject, unit: input.unit ?? 'credit' });
       const currentBalance = await creditBalance({
         subject,
         unit: input.unit,
       });
-      if (currentBalance.balance < input.amount) {
+      if (currentBalance.balance < amount) {
         throw new Error('MODULE_CREDITS_INSUFFICIENT');
       }
       const reservation = await store.createCreditReservation({
         ...scope,
         userId: subjectToStoredUserId(subject),
-        amountReserved: input.amount,
+        amountReserved: amount,
         amountCommitted: 0,
         unit: input.unit ?? 'credit',
         status: 'reserved',
@@ -200,7 +209,7 @@ export function createCommercialLedgerCredits({
         await store.consumeCreditLedger({
           ...scope,
           userId: subjectToStoredUserId(subject),
-          amount: input.amount,
+          amount,
           unit: input.unit ?? 'credit',
           reason: input.reason ?? 'reserve',
           idempotencyKey: input.idempotencyKey,
@@ -246,7 +255,10 @@ export function createCommercialLedgerCredits({
         });
         throw new Error(`MODULE_CREDITS_RESERVATION_EXPIRED: ${input.reservationId}`);
       }
-      const finalAmount = input.finalAmount ?? reservation.amountReserved;
+      const finalAmount =
+        input.finalAmount === undefined
+          ? reservation.amountReserved
+          : normalizeCreditAmount(input.finalAmount, 'credits.commitReservation.finalAmount');
       assertNonNegativeIntegerAmount(finalAmount, 'credits.commitReservation.finalAmount');
       if (finalAmount < reservation.amountReserved) {
         await recordCredit({
@@ -330,6 +342,7 @@ export function createCommercialLedgerCredits({
     async revokeBySource(input) {
       const entries = await store.listCreditLedger({
         productId: scope.productId,
+        environmentId: scope.environmentId,
         workspaceId: scope.workspaceId,
       });
       const matching = entries.filter(
@@ -362,14 +375,18 @@ export function createCommercialLedgerCredits({
       if (!input.grantLedgerId && (!input.source || !input.sourceId)) {
         throw new Error('MODULE_CREDITS_REFUND_REVOKE_TARGET_REQUIRED');
       }
+      let requestedAmount: number | undefined;
       if (input.amount !== undefined) {
-        assertPositiveIntegerAmount(input.amount, 'credits.refundRevoke.amount');
+        const amount = normalizeCreditAmount(input.amount, 'credits.refundRevoke.amount');
+        assertPositiveIntegerAmount(amount, 'credits.refundRevoke.amount');
+        requestedAmount = amount;
       }
       const requestedSubject =
         input.subject || input.userId ? subjectFromCommercialInput(input) : undefined;
       const requestedUserId = requestedSubject ? subjectToStoredUserId(requestedSubject) : undefined;
       const entries = await store.listCreditLedger({
         productId: scope.productId,
+        environmentId: scope.environmentId,
         workspaceId: scope.workspaceId,
         userId: requestedUserId,
         unit: input.unit,
@@ -415,7 +432,7 @@ export function createCommercialLedgerCredits({
         const balance = await creditBalance({ subject: requestedSubject, unit: input.unit });
         return {
           revoked: 0,
-          unrecovered: input.amount ?? 0,
+          unrecovered: requestedAmount ?? 0,
           balance,
           relatedLedgerIds: [],
         };
@@ -426,7 +443,7 @@ export function createCommercialLedgerCredits({
       await releaseExpiredReservations({ subject, unit });
       const relatedLedgerIds = matching.map((entry) => entry.id);
       const eligibleAmount = matching.reduce((sum, entry) => sum + entry.amount, 0);
-      const targetAmount = input.amount ?? eligibleAmount;
+      const targetAmount = requestedAmount ?? eligibleAmount;
       const cappedTargetAmount = Math.min(targetAmount, eligibleAmount);
       const currentBalance = await creditBalance({ subject, unit });
       const revoked = Math.min(cappedTargetAmount, Math.max(0, currentBalance.balance));
@@ -466,6 +483,7 @@ export function createCommercialLedgerCredits({
       const subject = subjectFromCommercialInput(input);
       const records = await store.listCreditLedger({
         productId: scope.productId,
+        environmentId: scope.environmentId,
         workspaceId: scope.workspaceId,
         userId: input.subject || input.userId ? subjectToStoredUserId(subject) : undefined,
         unit: input.unit,

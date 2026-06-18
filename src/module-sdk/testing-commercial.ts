@@ -15,6 +15,19 @@ function subjectFromInput(input: { subject?: CommercialSubject; userId?: string 
   return { type: 'user', id: input.userId ?? 'test-user' };
 }
 
+function normalizeTestingCreditAmount(amount: number | bigint | string | undefined): number {
+  if (amount === undefined) {
+    return 0;
+  }
+  if (typeof amount === 'bigint') {
+    return Number(amount);
+  }
+  if (typeof amount === 'string') {
+    return Number(amount);
+  }
+  return amount;
+}
+
 export function createTestingMeteringApi(moduleId: string): ModuleMeteringApi {
   let nextId = 1;
   const authorization = (
@@ -101,47 +114,52 @@ export function createTestingCreditsApi(): ModuleCreditsApi {
     },
     async grant(input) {
       const subject = subjectFromInput(input);
+      const amount = normalizeTestingCreditAmount(input.amount);
       return {
         subject,
         userId: subject.type === 'user' ? subject.id : undefined,
         unit: input.unit ?? 'credit',
-        balance: input.amount,
+        balance: amount,
       };
     },
     async consume(input) {
       const subject = subjectFromInput(input);
+      const amount = normalizeTestingCreditAmount(input.amount);
       return {
         subject,
         userId: subject.type === 'user' ? subject.id : undefined,
         unit: input.unit ?? 'credit',
-        balance: -input.amount,
+        balance: -amount,
       };
     },
     async adjust(input) {
       const subject = subjectFromInput(input);
+      const amount = normalizeTestingCreditAmount(input.amount);
       return {
         subject,
         userId: subject.type === 'user' ? subject.id : undefined,
         unit: input.unit ?? 'credit',
-        balance: input.amount,
+        balance: amount,
       };
     },
     async refund(input) {
       const subject = subjectFromInput(input);
+      const amount = normalizeTestingCreditAmount(input.amount);
       return {
         subject,
         userId: subject.type === 'user' ? subject.id : undefined,
         unit: input.unit ?? 'credit',
-        balance: input.amount,
+        balance: amount,
       };
     },
     async reserve(input) {
       const subject = subjectFromInput(input);
+      const amount = normalizeTestingCreditAmount(input.amount);
       const timestamp = new Date().toISOString();
       return {
         id: 'test_reservation_1',
         subject,
-        amountReserved: input.amount,
+        amountReserved: amount,
         amountCommitted: 0,
         unit: input.unit ?? 'credit',
         status: 'reserved',
@@ -174,9 +192,10 @@ export function createTestingCreditsApi(): ModuleCreditsApi {
     },
     async refundRevoke(input) {
       const subject = subjectFromInput(input);
+      const amount = normalizeTestingCreditAmount(input.amount);
       return {
         revoked: 0,
-        unrecovered: input.amount ?? 0,
+        unrecovered: amount,
         balance: {
           subject,
           userId: subject.type === 'user' ? subject.id : undefined,

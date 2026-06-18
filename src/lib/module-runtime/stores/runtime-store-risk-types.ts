@@ -1,3 +1,5 @@
+export type RuntimeStoreRiskEventStatus = 'open' | 'acknowledged' | 'resolved' | 'ignored';
+
 export interface RuntimeStoreRiskEvent {
   id: string;
   productId: string;
@@ -7,10 +9,15 @@ export interface RuntimeStoreRiskEvent {
   subjectId?: string;
   type: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
+  status: RuntimeStoreRiskEventStatus;
   source?: string;
   sourceId?: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt?: string;
+  acknowledgedAt?: string;
+  resolvedAt?: string;
+  ignoredAt?: string;
 }
 
 export interface RuntimeStoreRiskBlock {
@@ -22,6 +29,9 @@ export interface RuntimeStoreRiskBlock {
   scope?: string;
   reason: string;
   expiresAt?: string;
+  releasedAt?: string;
+  releasedBy?: string;
+  releaseReason?: string;
   idempotencyKey?: string;
   metadata: Record<string, unknown>;
   createdAt: string;

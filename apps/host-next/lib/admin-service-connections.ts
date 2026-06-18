@@ -557,7 +557,7 @@ function inferSecretSource(providerId: string): string {
     return 'env:AI_PROVIDER_*';
   }
   if (providerId === 'auth') {
-    return 'env:PLOYKIT_AUTH_SECRET';
+    return 'env:PLOYKIT_AUTH_KEY_REFS';
   }
   return 'none';
 }

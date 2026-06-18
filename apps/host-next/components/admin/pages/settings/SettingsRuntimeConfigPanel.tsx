@@ -71,8 +71,8 @@ export function SettingsRuntimeConfigPanel({
             key: 'auth',
             title: 'Authentication',
             detail: health?.auth.secretConfigured
-              ? 'Signed cookie secret configured.'
-              : 'Development signed cookie secret.',
+              ? 'Auth signing key ring configured.'
+              : 'Volatile development signing key.',
             meta: health?.auth.mode ?? 'runtime-store-signed-cookie',
             status: health?.auth.secretConfigured ? 'configured' : 'development',
             statusTone: health?.auth.secretConfigured ? 'success' : 'warning',

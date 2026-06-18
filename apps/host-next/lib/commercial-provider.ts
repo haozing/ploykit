@@ -16,8 +16,10 @@ import type {
   RuntimeStoreSubscriptionStatus,
 } from '@/lib/module-runtime/stores/runtime-store-types';
 import {
+  DEFAULT_HOST_ENVIRONMENT_ID,
   DEFAULT_HOST_PRODUCT_ID,
   DEFAULT_HOST_WORKSPACE_ID,
+  defaultEnvironmentId,
   defaultProductId,
   defaultWorkspaceId,
 } from './default-scope';
@@ -544,15 +546,18 @@ export function resolveHostStripeProviderConfig(env: HostStripeEnv): HostStripeP
 export function createHostCommercialRuntimeFromStore(input: {
   store: RuntimeStore;
   productId?: string;
+  environmentId?: string | null;
   workspaceId?: string | null;
   catalog?: HostBillingCatalog;
 }): RuntimeStoreCommercialRuntime {
   const catalog = input.catalog ?? defaultHostBillingCatalog();
   const productId = defaultProductId(input.productId);
+  const environmentId = defaultEnvironmentId(input.environmentId ?? DEFAULT_HOST_ENVIRONMENT_ID);
   const workspaceId = defaultWorkspaceId(input.workspaceId);
   return createRuntimeStoreCommercialRuntime({
     store: input.store,
     productId,
+    environmentId,
     workspaceId,
     planCatalog: runtimePlanCatalog(catalog),
     skuCatalog: runtimeSkuCatalog(catalog),

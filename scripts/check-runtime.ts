@@ -39,7 +39,7 @@ function runtimeStatus(): RuntimeChecksStatus {
     auth: {
       provider: process.env.PLOYKIT_AUTH_PROVIDER ?? null,
       secretConfigured: Boolean(
-        process.env.PLOYKIT_AUTH_SECRET ?? process.env.PLOYKIT_MEDIA_SECRET
+        process.env.PLOYKIT_AUTH_KEY_REFS?.trim() || process.env.PLOYKIT_AUTH_SECRET_REF?.trim()
       ),
     },
     productScope: {

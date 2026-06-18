@@ -105,8 +105,8 @@ export function SettingsDiagnosticsSummary({
             'Auth',
             health?.auth.mode ?? 'runtime-store-signed-cookie',
             health?.auth.secretConfigured
-              ? 'signed cookie secret configured'
-              : 'dev signed cookie secret',
+              ? 'auth signing key ring configured'
+              : 'volatile dev signing key',
           ],
           [
             'Product Scope',

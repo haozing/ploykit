@@ -5,6 +5,7 @@ interface CreateCommercialLedgerRiskInput {
   store: RuntimeStore;
   scope: {
     productId: string;
+    environmentId?: string | null;
     workspaceId?: string | null;
   };
   moduleId: string;
@@ -26,6 +27,7 @@ export function createCommercialLedgerRisk({
         subjectId: input.subject?.id,
         type: input.type,
         severity: input.severity ?? 'medium',
+        status: input.status ?? 'open',
         source: input.source,
         sourceId: input.sourceId,
         metadata: input.metadata ?? {},
@@ -39,6 +41,7 @@ export function createCommercialLedgerRisk({
           subject: input.subject,
           type: event.type,
           severity: event.severity,
+          status: event.status,
           source: event.source,
           sourceId: event.sourceId,
         },
@@ -48,10 +51,12 @@ export function createCommercialLedgerRisk({
         subject: input.subject,
         type: event.type,
         severity: event.severity,
+        status: event.status,
         source: event.source,
         sourceId: event.sourceId,
         metadata: event.metadata,
         createdAt: event.createdAt,
+        updatedAt: event.updatedAt,
       };
     },
     async block(input) {

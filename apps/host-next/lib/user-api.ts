@@ -1,7 +1,6 @@
 import type { ModuleHostSession, RuntimeStoreHostUser } from '@/lib/module-runtime';
 import {
   createHostPasswordHash,
-  getHostAuthAdapter,
   getHostAuthPolicyForStore,
   verifyHostPassword,
 } from './auth';
@@ -296,17 +295,16 @@ export async function changeHostUserPassword(
   await writeUser(user, {
     passwordHash: createHostPasswordHash(input.newPassword),
   });
-  const adapter = await getHostAuthAdapter();
-  const activeSessions = await adapter.listSessions(user.id);
-  const revokedSessionIds = activeSessions
-    .filter((record) => record.id !== session.authSessionId)
-    .map((record) => record.id);
-  for (const sessionId of revokedSessionIds) {
-    await adapter.revokeSession(user.id, sessionId);
-  }
+  const revokedSessions = await runtimeStore.store.revokeAuthSessions({
+    productId: user.productId,
+    subjectType: 'hosted_user',
+    subjectId: user.id,
+    excludeId: session.authSessionId,
+    reason: 'password_changed',
+  });
   invalidateDashboardShellCache('profile');
   await auditUserChange(session, 'host.user.password.changed', {
-    revokedSessions: revokedSessionIds.length,
+    revokedSessions: revokedSessions.length,
   });
 }
 

@@ -12,6 +12,7 @@ import type {
   RuntimeStoreOutboxRecord,
 } from '@/lib/module-runtime/stores';
 import { createRuntimeStoreWebhookRunner } from '@/lib/module-capabilities/webhooks/runtime-store-webhook-gateway';
+import type { ModuleAuditRecordInput } from '@ploykit/module-sdk';
 import { getHostRuntime } from './create-host';
 import {
   createScopedEventsApi,
@@ -525,8 +526,27 @@ async function createHostWorkerRunner(session: ModuleHostSession = createDemoHos
     redeemCodes: (moduleId: string) => commercial.forModule(moduleId).redeemCodes,
     risk: (moduleId: string) => commercial.forModule(moduleId).risk,
     audit: {
-      async record(type: string, metadata?: Record<string, unknown>) {
-        await recordWorkerAudit(undefined, type, metadata);
+      async record(type: string | ModuleAuditRecordInput, metadata?: Record<string, unknown>) {
+        if (typeof type === 'string') {
+          await recordWorkerAudit(undefined, type, metadata);
+          return;
+        }
+        await recordWorkerAudit(undefined, type.action, {
+          ...(type.metadata ?? {}),
+          actorKind: type.actorKind,
+          actorId: type.actorId,
+          action: type.action,
+          category: type.category,
+          targetKind: type.targetKind,
+          targetId: type.targetId,
+          decision: type.decision,
+          reasonCode: type.reasonCode,
+          requestId: type.requestId,
+          traceId: type.traceId,
+          beforeHash: type.beforeHash,
+          afterHash: type.afterHash,
+          sync: type.sync,
+        });
       },
     },
   };

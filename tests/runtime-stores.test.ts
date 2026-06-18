@@ -264,6 +264,7 @@ test('memory runtime store keeps risk events and blocks scoped and idempotent', 
     sourceId: 'risk-event-1',
   });
   assert.equal(scopedEvents.length, 1);
+  assert.equal(scopedEvents[0]?.status, 'open');
   assert.deepEqual(scopedEvents[0]?.metadata, { ip: '127.0.0.1' });
 
   const block = await store.upsertRiskBlock({
@@ -310,6 +311,349 @@ test('memory runtime store keeps risk events and blocks scoped and idempotent', 
         subjectType: 'user',
         subjectId: 'user-1',
         scope: 'checkout',
+      })
+    ).length,
+    1
+  );
+
+  const released = await store.releaseRiskBlock(block.id, {
+    releasedBy: 'admin-1',
+    reason: 'false_positive',
+  });
+  assert.ok(released.releasedAt);
+  assert.equal(
+    (
+      await store.listRiskBlocks({
+        productId: 'product-a',
+        workspaceId: 'workspace-a',
+        subjectType: 'user',
+        subjectId: 'user-1',
+        scope: 'checkout',
+      })
+    ).length,
+    0
+  );
+  assert.equal(
+    (
+      await store.listRiskBlocks({
+        productId: 'product-a',
+        workspaceId: 'workspace-a',
+        subjectType: 'user',
+        subjectId: 'user-1',
+        scope: 'checkout',
+        includeReleased: true,
+      })
+    ).length,
+    1
+  );
+  const replacementBlock = await store.upsertRiskBlock({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    subjectType: 'user',
+    subjectId: 'user-1',
+    scope: 'checkout',
+    reason: 'new active block',
+  });
+  assert.notEqual(replacementBlock.id, block.id);
+});
+
+test('memory runtime store scopes credit ledger and reservations by environment', async () => {
+  let nextId = 0;
+  const store = createInMemoryRuntimeStore({
+    now: () => new Date('2026-06-18T00:00:00.000Z'),
+    createId: (prefix) => `${prefix}_${++nextId}`,
+  });
+
+  await store.recordCreditLedger({
+    productId: 'product-a',
+    environmentId: 'dev',
+    workspaceId: 'workspace-a',
+    userId: 'user-1',
+    amount: 10,
+    unit: 'credit',
+    reason: 'grant',
+    idempotencyKey: 'grant-1',
+  });
+  await store.recordCreditLedger({
+    productId: 'product-a',
+    environmentId: 'live',
+    workspaceId: 'workspace-a',
+    userId: 'user-1',
+    amount: 20,
+    unit: 'credit',
+    reason: 'grant',
+    idempotencyKey: 'grant-1',
+  });
+  await store.createCreditReservation({
+    productId: 'product-a',
+    environmentId: 'dev',
+    workspaceId: 'workspace-a',
+    userId: 'user-1',
+    amountReserved: 3,
+    unit: 'credit',
+    idempotencyKey: 'reserve-1',
+  });
+  await store.createCreditReservation({
+    productId: 'product-a',
+    environmentId: 'live',
+    workspaceId: 'workspace-a',
+    userId: 'user-1',
+    amountReserved: 5,
+    unit: 'credit',
+    idempotencyKey: 'reserve-1',
+  });
+
+  assert.equal(
+    (
+      await store.getCreditBalance({
+        productId: 'product-a',
+        environmentId: 'dev',
+        workspaceId: 'workspace-a',
+        userId: 'user-1',
+      })
+    ).balance,
+    10
+  );
+  assert.equal(
+    (
+      await store.getCreditBalance({
+        productId: 'product-a',
+        environmentId: 'live',
+        workspaceId: 'workspace-a',
+        userId: 'user-1',
+      })
+    ).balance,
+    20
+  );
+  assert.equal(
+    (await store.listCreditLedger({ productId: 'product-a', environmentId: 'dev' })).length,
+    1
+  );
+  assert.equal(
+    (await store.listCreditReservations({ productId: 'product-a', environmentId: 'live' }))
+      .length,
+    1
+  );
+});
+
+test('memory runtime store keeps hosted user identities one-to-many and environment-scoped', async () => {
+  let nextId = 0;
+  const store = createInMemoryRuntimeStore({
+    now: () => new Date('2026-06-18T00:00:00.000Z'),
+    createId: (prefix) => `${prefix}_${++nextId}`,
+  });
+  await store.upsertHostUser({
+    id: 'user-1',
+    email: 'person@example.com',
+    passwordHash: 'hash-1',
+    role: 'user',
+    status: 'active',
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    workspaceRole: 'viewer',
+    metadata: {},
+  });
+
+  const emailIdentity = await store.upsertUserIdentity({
+    productId: 'product-a',
+    environmentId: 'dev',
+    userId: 'user-1',
+    provider: 'Email',
+    providerKey: 'person@example.com',
+    email: 'Person@Example.com',
+    metadata: { verified: true },
+  });
+  const oauthIdentity = await store.upsertUserIdentity({
+    productId: 'product-a',
+    environmentId: 'dev',
+    userId: 'user-1',
+    provider: 'github',
+    providerKey: 'github:123',
+  });
+  const liveEmailIdentity = await store.upsertUserIdentity({
+    productId: 'product-a',
+    environmentId: 'live',
+    userId: 'user-1',
+    provider: 'email',
+    providerKey: 'person@example.com',
+  });
+
+  assert.equal(emailIdentity.provider, 'email');
+  assert.equal(emailIdentity.email, 'person@example.com');
+  assert.notEqual(liveEmailIdentity.id, emailIdentity.id);
+  assert.deepEqual(
+    (await store.listUserIdentities({ productId: 'product-a', environmentId: 'dev', userId: 'user-1' }))
+      .map((identity) => identity.id)
+      .sort(),
+    [emailIdentity.id, oauthIdentity.id].sort()
+  );
+  assert.equal(
+    (
+      await store.findUserIdentity({
+        productId: 'product-a',
+        environmentId: 'dev',
+        provider: 'email',
+        providerKey: 'person@example.com',
+      })
+    )?.id,
+    emailIdentity.id
+  );
+  await assert.rejects(
+    () =>
+      store.upsertUserIdentity({
+        productId: 'product-a',
+        environmentId: 'dev',
+        userId: 'user-2',
+        provider: 'email',
+        providerKey: 'person@example.com',
+      }),
+    /RUNTIME_STORE_USER_IDENTITY_ALREADY_LINKED/
+  );
+
+  await store.updateUserIdentityStatus(emailIdentity.id, 'disabled', { reason: 'relinked' });
+  assert.equal(
+    await store.findUserIdentity({
+      productId: 'product-a',
+      environmentId: 'dev',
+      provider: 'email',
+      providerKey: 'person@example.com',
+      status: 'active',
+    }),
+    null
+  );
+  assert.equal(
+    (await store.listUserIdentities({ productId: 'product-a', status: 'disabled' }))[0]?.metadata
+      .reason,
+    'relinked'
+  );
+});
+
+test('memory runtime store separates platform workspace members from hosted users', async () => {
+  let nextId = 0;
+  const store = createInMemoryRuntimeStore({
+    now: () => new Date('2026-06-18T00:00:00.000Z'),
+    createId: (prefix) => `${prefix}_${++nextId}`,
+  });
+
+  await store.upsertHostUser({
+    id: 'hosted-user-1',
+    email: 'member@example.com',
+    passwordHash: 'hash-1',
+    role: 'user',
+    status: 'active',
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    workspaceRole: 'viewer',
+    metadata: {},
+  });
+  const platformUser = await store.upsertPlatformUser({
+    email: 'Member@Example.com',
+    displayName: 'Platform Member',
+  });
+  const member = await store.upsertWorkspaceMember({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    platformUserId: platformUser.id,
+    role: 'owner',
+    metadata: { source: 'test' },
+  });
+  const replayedMember = await store.upsertWorkspaceMember({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    platformUserId: platformUser.id,
+    role: 'admin',
+  });
+  const invite = await store.upsertWorkspaceInvite({
+    productId: 'product-a',
+    workspaceId: 'workspace-a',
+    email: 'invitee@example.com',
+    role: 'editor',
+    tokenHash: 'sha256:invite-token',
+    invitedByPlatformUserId: platformUser.id,
+    expiresAt: '2026-06-19T00:00:00.000Z',
+  });
+
+  assert.equal(platformUser.email, 'member@example.com');
+  assert.equal(member.platformUserId, platformUser.id);
+  assert.equal(replayedMember.id, member.id);
+  assert.equal(replayedMember.role, 'admin');
+  assert.equal((await store.listMemberships({ userId: 'hosted-user-1' })).length, 0);
+  assert.equal(
+    (
+      await store.listWorkspaceMembers({
+        productId: 'product-a',
+        workspaceId: 'workspace-a',
+        platformUserId: platformUser.id,
+      })
+    )[0]?.id,
+    member.id
+  );
+  assert.equal((await store.findWorkspaceInviteByTokenHash('sha256:invite-token'))?.id, invite.id);
+  assert.equal(
+    (
+      await store.updateWorkspaceInviteStatus(invite.id, 'accepted', {
+        acceptedByPlatformUserId: platformUser.id,
+        acceptedAt: '2026-06-18T01:00:00.000Z',
+      })
+    ).acceptedByPlatformUserId,
+    platformUser.id
+  );
+});
+
+test('memory runtime store auth sessions can be touched and revoked by subject', async () => {
+  let nextId = 0;
+  const store = createInMemoryRuntimeStore({
+    now: () => new Date('2026-06-18T00:00:00.000Z'),
+    createId: (prefix) => `${prefix}_${++nextId}`,
+  });
+
+  const first = await store.createAuthSession({
+    productId: 'product-a',
+    environmentId: 'dev',
+    workspaceId: 'workspace-a',
+    subjectType: 'hosted_user',
+    subjectId: 'hosted-user-1',
+    expiresAt: '2026-06-19T00:00:00.000Z',
+  });
+  const second = await store.createAuthSession({
+    productId: 'product-a',
+    environmentId: 'dev',
+    workspaceId: 'workspace-a',
+    subjectType: 'hosted_user',
+    subjectId: 'hosted-user-1',
+    expiresAt: '2026-06-19T00:00:00.000Z',
+  });
+  await store.createAuthSession({
+    productId: 'product-a',
+    environmentId: 'dev',
+    workspaceId: 'workspace-a',
+    subjectType: 'platform_user',
+    subjectId: 'platform-user-1',
+  });
+
+  const touched = await store.touchAuthSession(first.id, {
+    lastSeenAt: '2026-06-18T01:00:00.000Z',
+  });
+  const revoked = await store.revokeAuthSessions({
+    productId: 'product-a',
+    environmentId: 'dev',
+    subjectType: 'hosted_user',
+    subjectId: 'hosted-user-1',
+    excludeId: first.id,
+    reason: 'logout_other_devices',
+    revokedAt: '2026-06-18T02:00:00.000Z',
+  });
+
+  assert.equal(touched.lastSeenAt, '2026-06-18T01:00:00.000Z');
+  assert.deepEqual(revoked.map((session) => session.id), [second.id]);
+  assert.equal((await store.getAuthSession(second.id))?.status, 'revoked');
+  assert.equal(
+    (
+      await store.listAuthSessions({
+        productId: 'product-a',
+        subjectType: 'platform_user',
+        subjectId: 'platform-user-1',
+        status: 'active',
       })
     ).length,
     1
@@ -809,6 +1153,11 @@ test('P13 runtime store required index audit documents core query domains', () =
   assert.ok(
     RUNTIME_STORE_REQUIRED_INDEXES.some(
       (entry) => entry.index === 'module_risk_blocks_scope_uidx' && entry.unique
+    )
+  );
+  assert.ok(
+    RUNTIME_STORE_REQUIRED_INDEXES.some(
+      (entry) => entry.index === 'module_user_identities_provider_key_uidx' && entry.unique
     )
   );
   assert.ok(

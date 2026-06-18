@@ -6,7 +6,7 @@ import { json, runtimeWorkspaceFilter } from './postgres-runtime-store-utils';
 
 export type PostgresRiskStore = Pick<
   RuntimeStore,
-  'recordRiskEvent' | 'upsertRiskBlock' | 'listRiskEvents' | 'listRiskBlocks'
+  'recordRiskEvent' | 'upsertRiskBlock' | 'releaseRiskBlock' | 'listRiskEvents' | 'listRiskBlocks'
 >;
 
 export interface CreatePostgresRiskStoreOptions {
@@ -22,9 +22,9 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
       const result = await database.query<Row>(
         `insert into module_risk_events (
           id, product_id, workspace_id, module_id, subject_type, subject_id,
-          type, severity, source, source_id, metadata
+          type, severity, status, source, source_id, metadata
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
         returning *`,
         [
           input.id ?? createId('risk_event'),
@@ -35,6 +35,7 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
           input.subjectId ?? null,
           input.type,
           input.severity ?? 'medium',
+          input.status ?? 'open',
           input.source ?? null,
           input.sourceId ?? null,
           json(redactSensitive(input.metadata ?? {})),
@@ -57,6 +58,7 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
           subject_id,
           (coalesce(scope, ''::text))
         )
+        where released_at is null
         do update set
           reason = excluded.reason,
           expires_at = excluded.expires_at,
@@ -79,6 +81,29 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
       );
       return mapRiskBlock(result.rows[0]!);
     },
+    async releaseRiskBlock(id, patch = {}) {
+      const result = await database.query<Row>(
+        `update module_risk_blocks
+         set released_at = coalesce($2::timestamptz, now()),
+             released_by = $3,
+             release_reason = $4,
+             metadata = metadata || $5::jsonb,
+             updated_at = now()
+         where id = $1
+         returning *`,
+        [
+          id,
+          patch.releasedAt ?? null,
+          patch.releasedBy ?? null,
+          patch.reason ?? null,
+          json(redactSensitive(patch.metadata ?? {})),
+        ]
+      );
+      if (!result.rows[0]) {
+        throw new Error(`RUNTIME_STORE_RISK_BLOCK_NOT_FOUND: ${id}`);
+      }
+      return mapRiskBlock(result.rows[0]);
+    },
     async listRiskEvents(query = {}) {
       const result = await database.query<Row>(
         `select * from module_risk_events
@@ -89,8 +114,9 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
            and ($5::text is null or subject_id = $5)
            and ($6::text is null or type = $6)
            and ($7::text is null or severity = $7)
-           and ($8::text is null or source = $8)
-           and ($9::text is null or source_id = $9)
+           and ($8::text is null or status = $8)
+           and ($9::text is null or source = $9)
+           and ($10::text is null or source_id = $10)
          order by created_at desc`,
         [
           query.productId ?? null,
@@ -100,6 +126,7 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
           query.subjectId ?? null,
           query.type ?? null,
           query.severity ?? null,
+          query.status ?? null,
           query.source ?? null,
           query.sourceId ?? null,
         ]
@@ -114,6 +141,7 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
            and ($3::text is null or subject_type = $3)
            and ($4::text is null or subject_id = $4)
            and ($5::text is null or coalesce(scope, ''::text) = $5)
+           and ($6::boolean is true or released_at is null)
          order by updated_at desc`,
         [
           query.productId ?? null,
@@ -121,6 +149,7 @@ export function createPostgresRiskStore(options: CreatePostgresRiskStoreOptions)
           query.subjectType ?? null,
           query.subjectId ?? null,
           query.scope === undefined ? null : (query.scope ?? ''),
+          query.includeReleased ?? false,
         ]
       );
       return result.rows.map(mapRiskBlock);

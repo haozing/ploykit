@@ -13,6 +13,7 @@ import type {
 } from '@/lib/module-runtime/stores/runtime-store-types';
 import type {
   ModuleConnectorsApi,
+  ModuleAuditRecordInput,
   ModuleEventPublishResult,
   ModuleJobsApi,
   ModuleRunError,
@@ -1051,6 +1052,7 @@ export function createHostCapabilityProviders(input: {
     return createHostCommercialRuntimeFromStore({
       store: input.runtimeStore.store,
       productId: hostSession.productId,
+      environmentId: hostSession.environmentId ?? null,
       workspaceId: hostSession.workspaceId ?? null,
       catalog: input.billingCatalog,
     });
@@ -1060,16 +1062,45 @@ export function createHostCapabilityProviders(input: {
     return async (record: {
       moduleId: string;
       type: string;
+      actorId?: string;
       metadata?: Record<string, unknown>;
     }) => {
       await input.runtimeStore.store.recordAudit({
         productId: hostSession.productId ?? DEFAULT_PRODUCT_ID,
         workspaceId: hostSession.workspaceId ?? null,
         moduleId: record.moduleId,
-        actorId: hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id,
+        actorId: record.actorId ?? hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id,
         type: record.type,
         metadata: record.metadata,
       });
+    };
+  }
+
+  function normalizeModuleAuditInput(
+    typeOrInput: string | ModuleAuditRecordInput,
+    metadata?: Record<string, unknown>
+  ): { type: string; actorId?: string; metadata?: Record<string, unknown> } {
+    if (typeof typeOrInput === 'string') {
+      return { type: typeOrInput, metadata };
+    }
+    return {
+      type: typeOrInput.action,
+      actorId: typeOrInput.actorId,
+      metadata: {
+        ...(typeOrInput.metadata ?? {}),
+        actorKind: typeOrInput.actorKind,
+        action: typeOrInput.action,
+        category: typeOrInput.category,
+        targetKind: typeOrInput.targetKind,
+        targetId: typeOrInput.targetId,
+        decision: typeOrInput.decision,
+        reasonCode: typeOrInput.reasonCode,
+        requestId: typeOrInput.requestId,
+        traceId: typeOrInput.traceId,
+        beforeHash: typeOrInput.beforeHash,
+        afterHash: typeOrInput.afterHash,
+        sync: typeOrInput.sync,
+      },
     };
   }
 
@@ -1087,10 +1118,12 @@ export function createHostCapabilityProviders(input: {
   return {
     audit: ({ contract, hostSession }) => ({
       async record(type, metadata) {
+        const normalized = normalizeModuleAuditInput(type, metadata);
         await auditForSession(hostSession)({
           moduleId: contract.id,
-          type,
-          metadata,
+          type: normalized.type,
+          actorId: normalized.actorId,
+          metadata: normalized.metadata,
         });
       },
     }),

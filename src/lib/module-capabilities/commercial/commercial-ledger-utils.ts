@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
   CommercialSubject,
+  ModuleCreditsAmountInput,
   ModuleBillingPlan,
   ModuleCommerceCheckout,
   ModuleCreditsBalance,
@@ -351,6 +352,39 @@ export function assertIntegerAmount(amount: number, operation: string): void {
   if (!Number.isSafeInteger(amount)) {
     throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation} must be a safe integer`);
   }
+}
+
+export function normalizeCreditAmount(
+  amount: ModuleCreditsAmountInput,
+  operation: string
+): number {
+  if (typeof amount === 'bigint') {
+    if (
+      amount > BigInt(Number.MAX_SAFE_INTEGER) ||
+      amount < BigInt(Number.MIN_SAFE_INTEGER)
+    ) {
+      throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation} exceeds safe integer range`);
+    }
+    return Number(amount);
+  }
+
+  if (typeof amount === 'string') {
+    const normalized = amount.trim();
+    if (!/^-?\d+$/.test(normalized)) {
+      throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation} must be an integer string`);
+    }
+    const parsed = BigInt(normalized);
+    if (
+      parsed > BigInt(Number.MAX_SAFE_INTEGER) ||
+      parsed < BigInt(Number.MIN_SAFE_INTEGER)
+    ) {
+      throw new Error(`MODULE_COMMERCIAL_INVALID_AMOUNT: ${operation} exceeds safe integer range`);
+    }
+    return Number(parsed);
+  }
+
+  assertIntegerAmount(amount, operation);
+  return amount;
 }
 
 export function assertPositiveIntegerAmount(amount: number, operation: string): void {

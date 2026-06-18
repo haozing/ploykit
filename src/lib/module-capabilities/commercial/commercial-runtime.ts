@@ -21,6 +21,7 @@ import type {
   ModuleUsageApi,
   ModuleUsageRecord,
 } from '@ploykit/module-sdk';
+import { normalizeCreditAmount } from './commercial-ledger-utils';
 
 export interface ModuleCommercialRuntime {
   forModule(moduleId: string): {
@@ -518,27 +519,38 @@ export function createInMemoryModuleCommercialRuntime(
         return { ...currentBalance(subjectToUserId(subject), resolvedUnit) };
       },
       async grant(input) {
-        assertPositiveIntegerAmount(input.amount, 'credits.grant');
-        return adjustBalance({ ...input, multiplier: 1, reason: input.reason ?? 'grant' });
+        const amount = normalizeCreditAmount(input.amount, 'credits.grant');
+        assertPositiveIntegerAmount(amount, 'credits.grant');
+        return adjustBalance({ ...input, amount, multiplier: 1, reason: input.reason ?? 'grant' });
       },
       async consume(input) {
-        assertPositiveIntegerAmount(input.amount, 'credits.consume');
+        const amount = normalizeCreditAmount(input.amount, 'credits.consume');
+        assertPositiveIntegerAmount(amount, 'credits.consume');
         const subject = subjectFromInput(input);
         const current = currentBalance(subjectToUserId(subject), input.unit ?? 'credit');
-        if (current.balance < input.amount) {
+        if (current.balance < amount) {
           throw new Error('MODULE_CREDITS_INSUFFICIENT');
         }
-        return adjustBalance({ ...input, subject, multiplier: -1, reason: input.reason ?? 'consume' });
+        return adjustBalance({
+          ...input,
+          amount,
+          subject,
+          multiplier: -1,
+          reason: input.reason ?? 'consume',
+        });
       },
       async adjust(input) {
-        return adjustBalance({ ...input, multiplier: 1, reason: input.reason ?? 'adjust' });
+        const amount = normalizeCreditAmount(input.amount, 'credits.adjust');
+        return adjustBalance({ ...input, amount, multiplier: 1, reason: input.reason ?? 'adjust' });
       },
       async refund(input) {
-        assertPositiveIntegerAmount(input.amount, 'credits.refund');
-        return adjustBalance({ ...input, multiplier: 1, reason: input.reason ?? 'refund' });
+        const amount = normalizeCreditAmount(input.amount, 'credits.refund');
+        assertPositiveIntegerAmount(amount, 'credits.refund');
+        return adjustBalance({ ...input, amount, multiplier: 1, reason: input.reason ?? 'refund' });
       },
       async reserve(input) {
-        assertPositiveIntegerAmount(input.amount, 'credits.reserve');
+        const amount = normalizeCreditAmount(input.amount, 'credits.reserve');
+        assertPositiveIntegerAmount(amount, 'credits.reserve');
         if (input.idempotencyKey) {
           const existing = [...reservations.values()].find(
             (reservation) => reservation.idempotencyKey === input.idempotencyKey
@@ -550,13 +562,13 @@ export function createInMemoryModuleCommercialRuntime(
         const subject = subjectFromInput(input);
         releaseExpiredReservations(subject, input.unit ?? 'credit');
         const current = currentBalance(subjectToUserId(subject), input.unit ?? 'credit');
-        if (current.balance < input.amount) {
+        if (current.balance < amount) {
           throw new Error('MODULE_CREDITS_INSUFFICIENT');
         }
         const reservation: ModuleCreditsReservation = {
           id: `reservation_${randomUUID()}`,
           subject,
-          amountReserved: input.amount,
+          amountReserved: amount,
           amountCommitted: 0,
           unit: input.unit ?? 'credit',
           status: 'reserved',
@@ -571,6 +583,7 @@ export function createInMemoryModuleCommercialRuntime(
         reservations.set(reservation.id, reservation);
         adjustBalance({
           ...input,
+          amount,
           subject,
           multiplier: -1,
           reason: input.reason ?? 'reserve',
@@ -593,7 +606,10 @@ export function createInMemoryModuleCommercialRuntime(
           releaseExpiredReservations(reservation.subject, reservation.unit);
           throw new Error(`MODULE_CREDITS_RESERVATION_EXPIRED: ${input.reservationId}`);
         }
-        const finalAmount = input.finalAmount ?? reservation.amountReserved;
+        const finalAmount =
+          input.finalAmount === undefined
+            ? reservation.amountReserved
+            : normalizeCreditAmount(input.finalAmount, 'credits.commitReservation.finalAmount');
         assertNonNegativeIntegerAmount(finalAmount, 'credits.commitReservation.finalAmount');
         if (finalAmount < reservation.amountReserved) {
           adjustBalance({
@@ -680,8 +696,11 @@ export function createInMemoryModuleCommercialRuntime(
         if (!input.grantLedgerId && (!input.source || !input.sourceId)) {
           throw new Error('MODULE_CREDITS_REFUND_REVOKE_TARGET_REQUIRED');
         }
+        let requestedAmount: number | undefined;
         if (input.amount !== undefined) {
-          assertPositiveIntegerAmount(input.amount, 'credits.refundRevoke.amount');
+          const amount = normalizeCreditAmount(input.amount, 'credits.refundRevoke.amount');
+          assertPositiveIntegerAmount(amount, 'credits.refundRevoke.amount');
+          requestedAmount = amount;
         }
         const requestedSubject =
           input.subject || input.userId ? subjectFromInput(input) : undefined;
@@ -710,7 +729,7 @@ export function createInMemoryModuleCommercialRuntime(
           }
           return {
             revoked: 0,
-            unrecovered: input.amount ?? 0,
+            unrecovered: requestedAmount ?? 0,
             balance: currentBalance(subjectToUserId(requestedSubject), input.unit),
             relatedLedgerIds: [],
           };
@@ -719,7 +738,7 @@ export function createInMemoryModuleCommercialRuntime(
         releaseExpiredReservations(subject, input.unit ?? first.unit);
         const relatedLedgerIds = matching.map((entry) => entry.id);
         const eligibleAmount = matching.reduce((sum, entry) => sum + entry.amount, 0);
-        const targetAmount = input.amount ?? eligibleAmount;
+        const targetAmount = requestedAmount ?? eligibleAmount;
         const cappedTargetAmount = Math.min(targetAmount, eligibleAmount);
         const current = currentBalance(subjectToUserId(subject), input.unit ?? first.unit);
         const revoked = Math.min(cappedTargetAmount, Math.max(0, current.balance));
@@ -1101,6 +1120,7 @@ export function createInMemoryModuleCommercialRuntime(
           subject: input.subject,
           type: input.type,
           severity: input.severity ?? 'medium',
+          status: input.status ?? 'open',
           source: input.source,
           sourceId: input.sourceId,
           metadata: input.metadata ?? {},
