@@ -59,7 +59,9 @@ export interface ModuleRouteBase {
 export interface ModulePageRoute extends ModuleRouteBase {
   component: string;
   loader?: string;
+  loaderByParam?: ModulePageRouteParamLoaderMap;
   metadata?: string;
+  metadataByParam?: ModulePageRouteParamLoaderMap;
   metadataResult?: {
     type?: 'page';
     required?: readonly ('title' | 'description' | 'canonical' | 'sitemap' | 'openGraph')[];
@@ -67,12 +69,23 @@ export interface ModulePageRoute extends ModuleRouteBase {
   };
   aliases?: readonly string[];
   publicAliases?: readonly string[];
-  cache?: {
-    strategy: 'none' | 'public' | 'private';
-    revalidateSeconds?: number;
-    tags?: readonly string[];
-  };
+  cache?: ModulePageRouteCacheDefinition;
+  cacheByParam?: ModulePageRouteParamCacheMap;
 }
+
+export interface ModulePageRouteCacheDefinition {
+  strategy: 'none' | 'public' | 'private';
+  revalidateSeconds?: number;
+  tags?: readonly string[];
+}
+
+export type ModulePageRouteParamLoaderMap = Readonly<
+  Record<string, Readonly<Record<string, string>>>
+>;
+
+export type ModulePageRouteParamCacheMap = Readonly<
+  Record<string, Readonly<Record<string, ModulePageRouteCacheDefinition>>>
+>;
 
 export interface ModuleApiRoute extends ModuleRouteBase {
   handler: string;
@@ -387,11 +400,43 @@ export interface ModuleQualityRuntimeEvidenceDefinition {
   checks?: readonly string[];
 }
 
+export interface ModuleQualityDashboardTransitionsPerformanceDefinition {
+  routes?: readonly string[];
+  maxDocumentNavigations?: number;
+  maxHydrationErrors?: number;
+  maxP95Ms?: number;
+  maxRscTransferBytes?: number;
+}
+
+export interface ModuleQualityPageRoutePerformanceDefinition {
+  shell?: 'dashboard';
+  path: string;
+  params?: Record<string, string>;
+  samplePath?: string;
+  maxLoaderMs?: number;
+  maxLoaderDataBytes?: number;
+}
+
+export interface ModuleQualityApiRoutePerformanceDefinition {
+  path: string;
+  method?: Extract<ModuleHttpMethod, 'GET' | 'HEAD'>;
+  auth?: 'admin' | 'anonymous';
+  maxP95Ms?: number;
+  maxResponseBytes?: number;
+}
+
+export interface ModuleQualityPerformanceDefinition {
+  dashboardTransitions?: ModuleQualityDashboardTransitionsPerformanceDefinition;
+  pageRoutes?: readonly ModuleQualityPageRoutePerformanceDefinition[];
+  apiRoutes?: readonly ModuleQualityApiRoutePerformanceDefinition[];
+}
+
 export interface ModuleQualityDefinition {
   routes?: {
     browser?: readonly ModuleQualityRouteEvidenceDefinition[];
     accessibility?: readonly ModuleQualityRouteEvidenceDefinition[];
   };
+  performance?: ModuleQualityPerformanceDefinition;
   evidence?: readonly ModuleQualityRuntimeEvidenceDefinition[];
 }
 

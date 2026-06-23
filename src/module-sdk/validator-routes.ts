@@ -28,6 +28,7 @@ const PAGE_METADATA_REQUIRED_FIELDS = new Set([
   'sitemap',
   'openGraph',
 ]);
+const ROUTE_PARAM_PATTERN = /(?:\[\.{3}([A-Za-z][A-Za-z0-9_]*)\]|\[([A-Za-z][A-Za-z0-9_]*)\]|:([A-Za-z][A-Za-z0-9_]*))/g;
 const RESERVED_PUBLIC_ALIAS_PATHS = new Set([
   '/',
   '/about',
@@ -430,16 +431,219 @@ function validateRoutePathConflicts(
   }
 }
 
+function routeParamNames(routePath: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of routePath.matchAll(ROUTE_PARAM_PATTERN)) {
+    const name = match[1] ?? match[2] ?? match[3];
+    if (name) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+function validateSingleParamSelector(
+  diagnostics: ModuleDiagnostic[],
+  selector: Record<string, unknown> | undefined,
+  path: string,
+  routeParamNamesValue: ReadonlySet<string>
+): string | undefined {
+  if (!selector) {
+    return undefined;
+  }
+  const selectorParams = Object.keys(selector);
+  if (selectorParams.length !== 1) {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_PARAM_SELECTOR_COUNT_INVALID',
+      'Route param selectors must declare exactly one route parameter.',
+      path,
+      'Use a shape like { section: { agents: "./loaders/agents" } }.'
+    );
+    return undefined;
+  }
+  const [paramName] = selectorParams;
+  if (!routeParamNamesValue.has(paramName)) {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_PARAM_SELECTOR_UNKNOWN',
+      `Route param selector "${paramName}" does not exist in the route path.`,
+      path,
+      'Use one of the dynamic parameter names from the route path.'
+    );
+  }
+  return paramName;
+}
+
+function validateParamLoaderMap(
+  diagnostics: ModuleDiagnostic[],
+  selector: ModulePageRoute['loaderByParam'],
+  path: string,
+  label: string,
+  routeParamNamesValue: ReadonlySet<string>
+): void {
+  const paramName = validateSingleParamSelector(
+    diagnostics,
+    selector as Record<string, unknown> | undefined,
+    path,
+    routeParamNamesValue
+  );
+  if (!paramName || !selector) {
+    return;
+  }
+  const branches = selector[paramName] ?? {};
+  const entries = Object.entries(branches);
+  if (entries.length === 0) {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_PARAM_SELECTOR_EMPTY',
+      `${label} param selector must declare at least one branch.`,
+      `${path}.${paramName}`
+    );
+  }
+  for (const [value, localPath] of entries) {
+    if (!value.trim()) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_PARAM_VALUE_EMPTY',
+        `${label} param branch values must not be empty.`,
+        `${path}.${paramName}`
+      );
+    }
+    validateLocalModulePath(
+      diagnostics,
+      localPath,
+      `${path}.${paramName}.${value}`,
+      `${label} param branch`
+    );
+  }
+}
+
+function validateCachePolicy(
+  diagnostics: ModuleDiagnostic[],
+  cache: ModulePageRoute['cache'],
+  path: string
+): void {
+  if (!cache) {
+    return;
+  }
+
+  if (!CACHE_STRATEGIES.has(cache.strategy)) {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_CACHE_STRATEGY_INVALID',
+      `Cache strategy "${cache.strategy}" is not supported.`,
+      `${path}.strategy`
+    );
+  }
+
+  if (
+    cache.revalidateSeconds !== undefined &&
+    (!Number.isInteger(cache.revalidateSeconds) || cache.revalidateSeconds <= 0)
+  ) {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_CACHE_REVALIDATE_INVALID',
+      'Cache revalidateSeconds must be a positive integer when declared.',
+      `${path}.revalidateSeconds`
+    );
+  }
+
+  for (const [index, tag] of (cache.tags ?? []).entries()) {
+    if (!tag.trim()) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_CACHE_TAG_EMPTY',
+        'Cache tags must not be empty.',
+        `${path}.tags.${index}`
+      );
+    }
+  }
+}
+
+function validateParamCacheMap(
+  diagnostics: ModuleDiagnostic[],
+  selector: ModulePageRoute['cacheByParam'],
+  path: string,
+  routeParamNamesValue: ReadonlySet<string>
+): void {
+  const paramName = validateSingleParamSelector(
+    diagnostics,
+    selector as Record<string, unknown> | undefined,
+    path,
+    routeParamNamesValue
+  );
+  if (!paramName || !selector) {
+    return;
+  }
+  const branches = selector[paramName] ?? {};
+  const entries = Object.entries(branches);
+  if (entries.length === 0) {
+    addError(
+      diagnostics,
+      'MODULE_ROUTE_PARAM_SELECTOR_EMPTY',
+      'Cache param selector must declare at least one branch.',
+      `${path}.${paramName}`
+    );
+  }
+  for (const [value, cache] of entries) {
+    if (!value.trim()) {
+      addError(
+        diagnostics,
+        'MODULE_ROUTE_PARAM_VALUE_EMPTY',
+        'Cache param branch values must not be empty.',
+        `${path}.${paramName}`
+      );
+    }
+    validateCachePolicy(diagnostics, cache, `${path}.${paramName}.${value}`);
+  }
+}
+
+function validatePublicParamCachePolicy(
+  diagnostics: ModuleDiagnostic[],
+  selector: ModulePageRoute['cacheByParam'],
+  path: string
+): void {
+  for (const [paramName, branches] of Object.entries(selector ?? {})) {
+    for (const [value, cache] of Object.entries(branches ?? {})) {
+      if (cache?.strategy === 'private') {
+        addError(
+          diagnostics,
+          'MODULE_PUBLIC_ROUTE_PRIVATE_CACHE',
+          'Public routes cannot use private cache strategy.',
+          `${path}.${paramName}.${value}.strategy`,
+          'Use "public" or "none".'
+        );
+      }
+    }
+  }
+}
+
 function validatePageRoute(
   diagnostics: ModuleDiagnostic[],
   route: ModulePageRoute,
   path: string,
   group: 'site' | 'dashboard' | 'admin'
 ): void {
+  const routeParams = routeParamNames(route.path ?? '');
   validateRouteBase(diagnostics, route, path);
   validateLocalModulePath(diagnostics, route.component, `${path}.component`, 'Page component');
   validateLocalModulePath(diagnostics, route.loader, `${path}.loader`, 'Page loader', false);
+  validateParamLoaderMap(
+    diagnostics,
+    route.loaderByParam,
+    `${path}.loaderByParam`,
+    'Page loader',
+    routeParams
+  );
   validateLocalModulePath(diagnostics, route.metadata, `${path}.metadata`, 'Page metadata', false);
+  validateParamLoaderMap(
+    diagnostics,
+    route.metadataByParam,
+    `${path}.metadataByParam`,
+    'Page metadata',
+    routeParams
+  );
   validateRouteAliases(diagnostics, route, path, group);
   validatePublicAliases(diagnostics, route, path, group);
 
@@ -455,42 +659,11 @@ function validatePageRoute(
     }
   }
 
-  if (route.cache) {
-    if (!CACHE_STRATEGIES.has(route.cache.strategy)) {
-      addError(
-        diagnostics,
-        'MODULE_ROUTE_CACHE_STRATEGY_INVALID',
-        `Cache strategy "${route.cache.strategy}" is not supported.`,
-        `${path}.cache.strategy`
-      );
-    }
-
-    if (
-      route.cache.revalidateSeconds !== undefined &&
-      (!Number.isInteger(route.cache.revalidateSeconds) || route.cache.revalidateSeconds <= 0)
-    ) {
-      addError(
-        diagnostics,
-        'MODULE_ROUTE_CACHE_REVALIDATE_INVALID',
-        'Cache revalidateSeconds must be a positive integer when declared.',
-        `${path}.cache.revalidateSeconds`
-      );
-    }
-
-    for (const [index, tag] of (route.cache.tags ?? []).entries()) {
-      if (!tag.trim()) {
-        addError(
-          diagnostics,
-          'MODULE_ROUTE_CACHE_TAG_EMPTY',
-          'Cache tags must not be empty.',
-          `${path}.cache.tags.${index}`
-        );
-      }
-    }
-  }
+  validateCachePolicy(diagnostics, route.cache, `${path}.cache`);
+  validateParamCacheMap(diagnostics, route.cacheByParam, `${path}.cacheByParam`, routeParams);
 
   if (group === 'site' && route.auth === 'public') {
-    if (!route.metadata) {
+    if (!route.metadata && !route.metadataByParam) {
       addError(
         diagnostics,
         'MODULE_PUBLIC_SITE_METADATA_REQUIRED',
@@ -500,7 +673,7 @@ function validatePageRoute(
       );
     }
 
-    if (!route.cache) {
+    if (!route.cache && !route.cacheByParam) {
       addError(
         diagnostics,
         'MODULE_PUBLIC_SITE_CACHE_REQUIRED',
@@ -519,6 +692,9 @@ function validatePageRoute(
       `${path}.cache.strategy`,
       'Use "public" or "none".'
     );
+  }
+  if (route.auth === 'public') {
+    validatePublicParamCachePolicy(diagnostics, route.cacheByParam, `${path}.cacheByParam`);
   }
 }
 

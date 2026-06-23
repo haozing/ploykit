@@ -4,6 +4,7 @@ import { validateJobsEventsWebhooks } from './validator-background';
 import { validateData } from './validator-data';
 import { validatePresentation, validateTheme } from './validator-presentation';
 import { validateNavigation, validateProduct } from './validator-product';
+import { validateQuality } from './validator-quality';
 import { validateI18n, validateResources } from './validator-resources';
 import { validateRoutes } from './validator-routes';
 import {
@@ -238,6 +239,7 @@ export function validateModuleDefinition(definition: ModuleDefinition): ModuleDi
   validateTheme(diagnostics, definition);
   validateNavigation(diagnostics, definition);
   validateProduct(diagnostics, definition);
+  validateQuality(diagnostics, definition.quality);
   validateResources(diagnostics, definition);
   validateI18n(diagnostics, definition);
   validatePresentation(diagnostics, definition);

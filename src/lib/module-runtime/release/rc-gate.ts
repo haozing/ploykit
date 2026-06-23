@@ -7,10 +7,13 @@ import {
 } from './rc-gate-legacy-scan';
 import {
   asRecord,
+  collectModuleDashboardTransitionRequirements,
   collectModuleQualityEvidenceRequirements,
   collectModuleQualityRouteRequirements,
   commercialDomainEvidenceFromReport,
+  dashboardTransitionRoutePath,
   missingModuleQualityRouteChecks,
+  missingDashboardTransitionRoutes,
   providerInvocationEvidenceFromReport,
   readModuleTestReports,
   readProductPresentationManifest,
@@ -23,6 +26,7 @@ import type {
   DriftCheckReport,
   FilesCleanupReport,
   FilesReconcileReport,
+  ModuleDashboardTransitionRequirement,
   ReleaseCandidateCheck,
   ReleaseCandidateCheckStatus,
   ReleaseCandidateDiagnostic,
@@ -371,6 +375,76 @@ function dashboardTransitionCheckPassed(report: RuntimeEvidenceReport, checkId: 
   return (report.checks ?? []).some((check) => check.id === checkId && check.ok === true);
 }
 
+function runtimeMetricNumber(metric: Record<string, unknown>, key: string): number | undefined {
+  const value = metric[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function dashboardTransitionRouteMetrics(
+  report: RuntimeEvidenceReport
+): Map<string, Record<string, unknown>> {
+  const summary = asRecord(report.summary);
+  const metrics = Array.isArray(summary?.routeMetrics) ? summary.routeMetrics : [];
+  return new Map(
+    metrics.flatMap((item) => {
+      const metric = asRecord(item);
+      const route =
+        typeof metric?.route === 'string' ? dashboardTransitionRoutePath(metric.route) : '';
+      return metric && route ? [[route, metric] as const] : [];
+    })
+  );
+}
+
+function dashboardTransitionRouteBudgetFailures(
+  report: RuntimeEvidenceReport,
+  requirements: readonly ModuleDashboardTransitionRequirement[]
+): string[] {
+  const metrics = dashboardTransitionRouteMetrics(report);
+  return requirements.flatMap((requirement) => {
+    const route = dashboardTransitionRoutePath(requirement.route);
+    const metric = metrics.get(route);
+    if (!metric) {
+      return [`routeMetrics missing for ${requirement.moduleId}:${route}`];
+    }
+
+    const failures: string[] = [];
+    const maxDocumentNavigations = requirement.maxDocumentNavigations ?? 0;
+    const maxHydrationErrors = requirement.maxHydrationErrors ?? 0;
+    const documentNavigations = runtimeMetricNumber(metric, 'maxDocumentNavigations');
+    const hydrationErrors = runtimeMetricNumber(metric, 'maxHydrationErrors');
+    const p95Ms = runtimeMetricNumber(metric, 'p95Ms');
+    const rscTransferP95Bytes = runtimeMetricNumber(metric, 'rscTransferP95Bytes');
+
+    if ((documentNavigations ?? Number.POSITIVE_INFINITY) > maxDocumentNavigations) {
+      failures.push(
+        `${requirement.moduleId}:${route} maxDocumentNavigations=${documentNavigations ?? 'missing'} exceeded declared budget ${maxDocumentNavigations}`
+      );
+    }
+    if ((hydrationErrors ?? Number.POSITIVE_INFINITY) > maxHydrationErrors) {
+      failures.push(
+        `${requirement.moduleId}:${route} maxHydrationErrors=${hydrationErrors ?? 'missing'} exceeded declared budget ${maxHydrationErrors}`
+      );
+    }
+    if (
+      requirement.maxP95Ms !== undefined &&
+      (p95Ms ?? Number.POSITIVE_INFINITY) > requirement.maxP95Ms
+    ) {
+      failures.push(
+        `${requirement.moduleId}:${route} p95Ms=${p95Ms ?? 'missing'} exceeded declared budget ${requirement.maxP95Ms}`
+      );
+    }
+    if (
+      requirement.maxRscTransferBytes !== undefined &&
+      (rscTransferP95Bytes ?? Number.POSITIVE_INFINITY) > requirement.maxRscTransferBytes
+    ) {
+      failures.push(
+        `${requirement.moduleId}:${route} rscTransferP95Bytes=${rscTransferP95Bytes ?? 'missing'} exceeded declared budget ${requirement.maxRscTransferBytes}`
+      );
+    }
+    return failures;
+  });
+}
+
 function resolveDashboardTransitionSmokeCheck(
   projectRoot: string,
   requestedStatus: ReleaseCandidateCheckStatus
@@ -410,13 +484,30 @@ function resolveDashboardTransitionSmokeCheck(
   const hydrationErrors =
     typeof summary?.hydrationErrors === 'number' ? summary.hydrationErrors : undefined;
   const p95Ms = typeof summary?.p95Ms === 'number' ? summary.p95Ms : undefined;
+  const rscTransferP95Bytes =
+    typeof summary?.rscTransferP95Bytes === 'number' ? summary.rscTransferP95Bytes : undefined;
+  const dashboardTimingReports =
+    typeof summary?.dashboardTimingReports === 'number' ? summary.dashboardTimingReports : undefined;
   const appFramePresent = summary?.appFramePresent === true;
   const clientTransitionMarkerPresent = summary?.clientTransitionMarkerPresent === true;
   const injectedAnchorInAppFrame = !injectAnchor || summary?.injectedAnchorInAppFrame === true;
   const failedChecks = (smoke.report.checks ?? [])
     .filter((check) => check.ok === false)
     .map((check) => check.id ?? 'unknown');
+  const declaredDashboardTransitions = collectModuleDashboardTransitionRequirements(projectRoot);
+  const missingDeclaredDashboardRoutes = declaredDashboardTransitions.error
+    ? []
+    : missingDashboardTransitionRoutes(smoke.report, declaredDashboardTransitions.requirements);
+  const declaredTransitionBudgetFailures = declaredDashboardTransitions.error
+    ? []
+    : dashboardTransitionRouteBudgetFailures(
+        smoke.report,
+        declaredDashboardTransitions.requirements
+      );
   const missingSignals = [
+    declaredDashboardTransitions.error
+      ? `${declaredDashboardTransitions.error} (${declaredDashboardTransitions.manifestPath})`
+      : undefined,
     smoke.report.ok === true ? undefined : 'report did not pass',
     smoke.report.skipped === true ? 'report was skipped' : undefined,
     (repeat ?? 0) >= 3 ? undefined : `repeat>=3 required, actual=${repeat ?? 'missing'}`,
@@ -427,10 +518,9 @@ function resolveDashboardTransitionSmokeCheck(
     (resetTransitions ?? 0) >= 2
       ? undefined
       : `at least 2 reset transitions required, actual=${resetTransitions ?? 'missing'}`,
-    transitionDocumentNavigations === 0
+    declaredTransitionBudgetFailures.length === 0
       ? undefined
-      : `transitionDocumentNavigations=${transitionDocumentNavigations ?? 'missing'}`,
-    hydrationErrors === 0 ? undefined : `hydrationErrors=${hydrationErrors ?? 'missing'}`,
+      : `module dashboard transition budget failures: ${declaredTransitionBudgetFailures.join(', ')}`,
     appFramePresent ? undefined : 'appFramePresent=true required',
     clientTransitionMarkerPresent ? undefined : 'clientTransitionMarkerPresent=true required',
     injectedAnchorInAppFrame ? undefined : 'injectedAnchorInAppFrame=true required',
@@ -452,12 +542,21 @@ function resolveDashboardTransitionSmokeCheck(
     dashboardTransitionCheckPassed(smoke.report, 'transition:p95')
       ? undefined
       : 'transition:p95 check missing or failed',
+    dashboardTransitionCheckPassed(smoke.report, 'transition:rsc-transfer')
+      ? undefined
+      : 'transition:rsc-transfer check missing or failed',
+    dashboardTransitionCheckPassed(smoke.report, 'dashboard:timing-evidence')
+      ? undefined
+      : 'dashboard:timing-evidence check missing or failed',
+    missingDeclaredDashboardRoutes.length === 0
+      ? undefined
+      : `missing module dashboard transition routes: ${missingDeclaredDashboardRoutes.join(', ')}`,
   ].filter(Boolean);
 
   if (missingSignals.length === 0) {
     return {
       status: 'passed',
-      evidence: `Dashboard transition smoke passed at ${smoke.report.checkedAt ?? 'unknown time'} with repeat=${repeat}, injectAnchor=${injectAnchor}, appFramePresent=${appFramePresent}, clientTransitionMarkerPresent=${clientTransitionMarkerPresent}, injectedAnchorInAppFrame=${injectedAnchorInAppFrame}, transitions=${transitions}, resetTransitions=${resetTransitions}, transition document navigations=${transitionDocumentNavigations}, hydration errors=${hydrationErrors}, and P95 ${p95Ms ?? 'unknown'}ms. (${smoke.path})`,
+      evidence: `Dashboard transition smoke passed at ${smoke.report.checkedAt ?? 'unknown time'} with repeat=${repeat}, injectAnchor=${injectAnchor}, appFramePresent=${appFramePresent}, clientTransitionMarkerPresent=${clientTransitionMarkerPresent}, injectedAnchorInAppFrame=${injectedAnchorInAppFrame}, transitions=${transitions}, resetTransitions=${resetTransitions}, transition document navigations=${transitionDocumentNavigations}, hydration errors=${hydrationErrors}, P95 ${p95Ms ?? 'unknown'}ms, RSC transfer P95 ${rscTransferP95Bytes ?? 'unknown'} bytes, and dashboard timing reports=${dashboardTimingReports ?? 'unknown'}. (${smoke.path})`,
     };
   }
 

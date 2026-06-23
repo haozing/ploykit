@@ -25,6 +25,8 @@
     "module:doctor": "node scripts/ploykit-module.mjs doctor",
     "module:evidence": "node scripts/module-evidence.mjs",
     "module:inspect": "node scripts/ploykit-module.mjs inspect",
+    "module:api-performance": "node scripts/module-api-performance-smoke.mjs",
+    "module:page-performance": "node scripts/module-page-performance-smoke.mjs",
     "module:quality": "node scripts/module-quality.mjs",
     "module:service-contract": "node scripts/module-service-contract.mjs",
     "module:test": "node scripts/module-test.mjs",

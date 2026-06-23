@@ -213,11 +213,43 @@ export interface ModuleQualityRuntimeEvidence {
   checks?: string[];
 }
 
+export interface ModuleQualityDashboardTransitionsPerformance {
+  routes?: string[];
+  maxDocumentNavigations?: number;
+  maxHydrationErrors?: number;
+  maxP95Ms?: number;
+  maxRscTransferBytes?: number;
+}
+
+export interface ModuleQualityApiRoutePerformance {
+  path?: string;
+  method?: string;
+  auth?: string;
+  maxP95Ms?: number;
+  maxResponseBytes?: number;
+}
+
+export interface ModuleQualityPageRoutePerformance {
+  shell?: string;
+  path?: string;
+  params?: Record<string, string>;
+  samplePath?: string;
+  maxLoaderMs?: number;
+  maxLoaderDataBytes?: number;
+}
+
+export interface ModuleQualityPerformanceDefinition {
+  dashboardTransitions?: ModuleQualityDashboardTransitionsPerformance;
+  pageRoutes?: ModuleQualityPageRoutePerformance[];
+  apiRoutes?: ModuleQualityApiRoutePerformance[];
+}
+
 export interface ModuleQualityDefinition {
   routes?: {
     browser?: ModuleQualityRouteEvidence[];
     accessibility?: ModuleQualityRouteEvidence[];
   };
+  performance?: ModuleQualityPerformanceDefinition;
   evidence?: ModuleQualityRuntimeEvidence[];
 }
 
@@ -244,4 +276,13 @@ export interface ModuleQualityEvidenceRequirement {
   runtimeDir: string;
   command?: ModuleQualityCommand;
   checks: readonly string[];
+}
+
+export interface ModuleDashboardTransitionRequirement {
+  moduleId: string;
+  route: string;
+  maxDocumentNavigations?: number;
+  maxHydrationErrors?: number;
+  maxP95Ms?: number;
+  maxRscTransferBytes?: number;
 }

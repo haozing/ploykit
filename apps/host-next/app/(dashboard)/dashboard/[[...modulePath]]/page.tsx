@@ -31,6 +31,7 @@ import {
   createDashboardTimingReport,
   maybeLogDashboardTiming,
   measureDashboardSpan,
+  safeJsonByteSize,
   type DashboardTimingSpan,
 } from '@host/lib/dashboard-timing';
 import { applyModuleSelfServiceSessionPermissions } from '@host/lib/create-host';
@@ -107,12 +108,16 @@ function moduleNavigationGroupLabel(
 
 async function createScopedDashboardRequest(
   pathname: string,
-  query?: Record<string, string | string[] | undefined>
+  query?: Record<string, string | string[] | undefined>,
+  requestContext?: { requestId?: string; correlationId?: string }
 ): Promise<Request> {
   const requestHeaders = await headers();
   const host = requestHeaders.get('host');
   const cookie = requestHeaders.get('cookie');
   const lang = languageFromHeaders(requestHeaders);
+  const requestId = requestContext?.requestId ?? requestHeaders.get('x-request-id') ?? undefined;
+  const correlationId =
+    requestContext?.correlationId ?? requestHeaders.get('x-correlation-id') ?? requestId;
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) {
     if (Array.isArray(value)) {
@@ -130,6 +135,8 @@ async function createScopedDashboardRequest(
     headers: {
       ...(host ? { host } : {}),
       ...(cookie ? { cookie } : {}),
+      ...(requestId ? { 'x-request-id': requestId } : {}),
+      ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
       [HOST_LANGUAGE_HEADER]: lang,
     },
   });
@@ -274,6 +281,83 @@ function dashboardModuleId(
     return undefined;
   }
   return result.ok ? result.page.moduleId : result.routeContext?.moduleId;
+}
+
+function dashboardModuleRoutePath(
+  result: ResolveModulePageRouteResult | null | undefined
+): string | undefined {
+  if (!result) {
+    return undefined;
+  }
+  return result.ok ? result.page.route.path : result.routeContext?.route.path;
+}
+
+function dashboardModuleMatchedPath(
+  result: ResolveModulePageRouteResult | null | undefined
+): string | undefined {
+  if (!result) {
+    return undefined;
+  }
+  return result.ok ? result.page.matchedPath : result.routeContext?.matchedPath;
+}
+
+function dashboardModuleCachePolicy(
+  result: ResolveModulePageRouteResult | null | undefined
+) {
+  if (!result?.ok) {
+    return null;
+  }
+  return {
+    strategy: result.page.effectiveRoute.cache?.strategy ?? 'none',
+    revalidateSeconds: result.page.effectiveRoute.cache?.revalidateSeconds,
+  };
+}
+
+function dashboardModulePayloadSizes(
+  result: ResolveModulePageRouteResult | null | undefined,
+  enabled: boolean
+): {
+  loaderDataBytes?: number | null;
+  loaderDataSizeUnavailableReason?: string;
+  metadataBytes?: number | null;
+  metadataSizeUnavailableReason?: string;
+} {
+  if (!result) {
+    return {};
+  }
+  if (!enabled) {
+    return {
+      loaderDataBytes: null,
+      loaderDataSizeUnavailableReason: 'disabled',
+      metadataBytes: null,
+      metadataSizeUnavailableReason: 'disabled',
+    };
+  }
+  const loaderData = result.ok ? result.page.loaderData : undefined;
+  const metadata = result.ok ? result.page.metadata : result.routeContext?.metadata;
+  const loaderDataSize = result.ok ? safeJsonByteSize(loaderData) : { bytes: null };
+  const metadataSize = safeJsonByteSize(metadata);
+  return {
+    loaderDataBytes: loaderDataSize.bytes,
+    loaderDataSizeUnavailableReason: loaderDataSize.reason,
+    metadataBytes: metadataSize.bytes,
+    metadataSizeUnavailableReason: metadataSize.reason,
+  };
+}
+
+function createDashboardRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `req_${Date.now().toString(36)}`;
+}
+
+function dashboardPayloadSizeDiagnosticsEnabled(headersValue: Headers): boolean {
+  const envValue = process.env.PLOYKIT_DASHBOARD_TIMING_PAYLOAD_BYTES;
+  return (
+    envValue === '1' ||
+    envValue === 'true' ||
+    envValue === 'always' ||
+    headersValue.get('x-ploykit-smoke') === 'dashboard-transition' ||
+    headersValue.get('x-ploykit-smoke') === 'module-page-performance'
+  );
 }
 
 function dashboardActivePath(
@@ -617,6 +701,8 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   const timingStartedAt = Date.now();
   const timingSpans: DashboardTimingSpan[] = [];
   const requestHeaders = await headers();
+  const requestId = requestHeaders.get('x-request-id') ?? createDashboardRequestId();
+  const correlationId = requestHeaders.get('x-correlation-id') ?? requestId;
   const lang = languageFromHeaders(requestHeaders);
   const { modulePath } = await params;
   const query = searchParams ? await searchParams : {};
@@ -633,7 +719,8 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   const host = await measureDashboardSpan('module-host', timingSpans, () => getModuleHost());
   const request = await createScopedDashboardRequest(
     pathname === '/' ? '/dashboard' : dashboardHref(pathname),
-    query
+    query,
+    { requestId, correlationId }
   );
   const session = await measureDashboardSpan('session', timingSpans, () =>
     createScopedDemoHostSession(request)
@@ -641,6 +728,7 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
   const moduleSession = await measureDashboardSpan('module-session', timingSpans, () =>
     applyDashboardModuleSessionPermissions(host, session, pathname)
   );
+  let modulePageCacheHit: boolean | null = null;
   const { moduleNavigation, navGroups } = await measureDashboardSpan(
     'navigation',
     timingSpans,
@@ -687,10 +775,13 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
             cachePolicy(result) {
               return result.ok
                 ? {
-                    strategy: result.page.route.cache?.strategy ?? 'none',
-                    revalidateSeconds: result.page.route.cache?.revalidateSeconds,
+                    strategy: result.page.effectiveRoute.cache?.strategy ?? 'none',
+                    revalidateSeconds: result.page.effectiveRoute.cache?.revalidateSeconds,
                   }
                 : null;
+            },
+            onCacheStatus(status) {
+              modulePageCacheHit = status.hit;
             },
           })
         );
@@ -719,14 +810,24 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
         moduleId: nextModuleId,
       };
     });
+  const payloadSizes = dashboardModulePayloadSizes(
+    modulePageResult,
+    dashboardPayloadSizeDiagnosticsEnabled(requestHeaders)
+  );
   maybeLogDashboardTiming(
     createDashboardTimingReport({
+      requestId,
       pathname,
       routeKind: 'dashboard',
       moduleId,
+      routePath: dashboardModuleRoutePath(modulePageResult),
+      matchedPath: dashboardModuleMatchedPath(modulePageResult),
       status: modulePageResult?.status ?? 200,
       spans: timingSpans,
       totalMs: Date.now() - timingStartedAt,
+      cachePolicy: dashboardModuleCachePolicy(modulePageResult),
+      cacheHit: modulePageCacheHit,
+      ...payloadSizes,
     })
   );
 

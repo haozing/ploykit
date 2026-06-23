@@ -23,6 +23,9 @@ const EGRESS_ORIGIN_PATTERN = /^https?:\/\/[^*/\s?#]+(?::\d+)?$/;
 const RATE_LIMIT_WINDOW_PATTERN = /^\d+(ms|s|m|h|d)$/;
 const WEBHOOK_SIGNATURES = new Set(['none', 'hmac-sha256', 'stripe', 'github']);
 const DATA_MIGRATION_MODES = new Set(['generated', 'sql']);
+const DYNAMIC_DASHBOARD_ROUTE_PATTERN = /\[[^\]]+\]|\*/;
+const BROAD_DASHBOARD_LOADER_PATTERN =
+  /(?:^|[\/_-])(?:dashboard|overview|state|shell|app|home|index|all)(?:[\/_.-]|$)/i;
 const LIFECYCLE_HOOKS = new Set([
   'install',
   'enable',
@@ -121,6 +124,50 @@ function extractLifecycleEntries(source) {
 
 function hasDefaultExport(source) {
   return /\bexport\s+default\b/.test(source) || /\bexport\s*{[^}]+\bas\s+default\b/.test(source);
+}
+
+function extractStringProperty(source, key) {
+  return source.match(new RegExp(`\\b${key}\\s*:\\s*['"\`]([^'"\`]+)['"\`]`))?.[1] ?? '';
+}
+
+function isDynamicDashboardPath(value) {
+  return DYNAMIC_DASHBOARD_ROUTE_PATTERN.test(value);
+}
+
+function isBroadDashboardLoader(value) {
+  return BROAD_DASHBOARD_LOADER_PATTERN.test(value.replace(/\\/g, '/'));
+}
+
+function staticPrefixForRoutePath(value) {
+  const dynamicIndex = value.search(DYNAMIC_DASHBOARD_ROUTE_PATTERN);
+  return dynamicIndex >= 0 ? value.slice(0, dynamicIndex) : value;
+}
+
+function extractDashboardEntrypointPaths(source) {
+  const paths = new Set();
+  const objectPattern = /{[\s\S]*?}/g;
+  for (const match of source.matchAll(objectPattern)) {
+    const objectSource = match[0];
+    if (!/\blocation\s*:\s*['"`]dashboard\.sidebar['"`]/.test(objectSource)) {
+      continue;
+    }
+    const entryPath = extractStringProperty(objectSource, 'path');
+    if (entryPath) {
+      paths.add(entryPath);
+    }
+  }
+
+  for (const match of source.matchAll(
+    /{[\s\S]*?\bshell\s*:\s*['"`]dashboard['"`][\s\S]*?}/g
+  )) {
+    const entryPath =
+      extractStringProperty(match[0], 'samplePath') || extractStringProperty(match[0], 'path');
+    if (entryPath) {
+      paths.add(entryPath);
+    }
+  }
+
+  return [...paths];
 }
 
 export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
@@ -481,6 +528,65 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
     }
   }
 
+  function checkDashboardRoutePerformanceShape(source, diagnostics) {
+    const dashboardRoutes = extractRouteObjects(source, 'dashboard').map((route, index) => ({
+      index,
+      source: route,
+      path: extractStringProperty(route, 'path'),
+      loader: extractStringProperty(route, 'loader'),
+    }));
+    const dynamicRoutes = dashboardRoutes.filter((route) => isDynamicDashboardPath(route.path));
+
+    for (const route of dynamicRoutes) {
+      if (/\bloaderByParam\s*:/.test(route.source)) {
+        continue;
+      }
+      if (!route.loader || !isBroadDashboardLoader(route.loader)) {
+        continue;
+      }
+      diagnostics.push(
+        diagnostic(
+          'warning',
+          'MODULE_DASHBOARD_DYNAMIC_ROUTE_BROAD_LOADER',
+          `Dashboard route "${route.path}" is dynamic and uses broad loader "${route.loader}" without loaderByParam, which can make every section fetch full dashboard state.`,
+          `routes.dashboard.${route.index}.loader`,
+          'Declare loaderByParam on this route so each high-traffic section resolves its own loader.'
+        )
+      );
+    }
+
+    if (dynamicRoutes.length !== 1 || dashboardRoutes.length !== 1) {
+      return;
+    }
+
+    const [route] = dynamicRoutes;
+    if (/\bloaderByParam\s*:/.test(route.source)) {
+      return;
+    }
+    if (!route.loader) {
+      return;
+    }
+
+    const prefix = staticPrefixForRoutePath(route.path);
+    const entrypointPaths = extractDashboardEntrypointPaths(source).filter(
+      (entryPath) => entryPath === route.path || entryPath.startsWith(prefix)
+    );
+
+    if (entrypointPaths.length < 2) {
+      return;
+    }
+
+    diagnostics.push(
+      diagnostic(
+        'warning',
+        'MODULE_DASHBOARD_DYNAMIC_ROUTE_SHARED_LOADER',
+        `Dashboard route "${route.path}" is the only dashboard route, but ${entrypointPaths.length} dashboard entrypoints share loader "${route.loader}".`,
+        `routes.dashboard.${route.index}`,
+        'Declare loaderByParam on this route and add quality.performance.dashboardTransitions.routes for smoke coverage.'
+      )
+    );
+  }
+
   function checkDataArtifacts(moduleRoot, source, diagnostics) {
     if (!hasDataDefinition(source)) {
       return;
@@ -600,6 +706,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
     checkDataArtifacts,
     checkEventNames,
     checkHttpEgress,
+    checkDashboardRoutePerformanceShape,
     checkLifecycleContracts,
     checkPublicAliases,
     checkPublicRouteContracts,

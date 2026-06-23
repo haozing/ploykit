@@ -373,6 +373,18 @@ const ROUTE_CATALOG: readonly HostRouteCatalogEntry[] = [
     commercialPolicy: 'module-runtime',
   },
   {
+    id: 'host.diagnostics.dashboardTiming',
+    path: '/api/host/diagnostics/dashboard-timing',
+    methods: ['GET'],
+    auth: 'admin',
+    scope: 'product',
+    csrf: 'none',
+    origin: 'none',
+    rateLimit: { kind: 'machine', rule: { limit: 240, windowMs: MINUTE } },
+    anonymousPolicy: 'denied',
+    commercialPolicy: 'none',
+  },
+  {
     id: 'worker.enqueue',
     path: '/api/worker/enqueue',
     methods: ['POST'],

@@ -99,41 +99,68 @@ function parseInterfaceFields(source, marker) {
     throw new Error(`Could not find ${marker}`);
   }
   const bodyStart = source.indexOf('{', start) + 1;
-  const end = source.indexOf('\n}', bodyStart);
+  const end = findMatchingBrace(source, bodyStart - 1);
   const body = source.slice(bodyStart, end);
   const fields = [];
-  const lines = body.split(/\r?\n/);
-  let offset = bodyStart;
+  const lines = splitLinesWithOffsets(body, bodyStart);
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
+    const { text: line, offset } = lines[index];
     const match = /^\s{2}([A-Za-z]\w+)(\?)?:\s*(.*)$/.exec(line);
     if (!match) {
-      offset += line.length + 1;
       continue;
     }
-    const startOffset = offset;
     let typeSource = match[3];
-    let consumedLength = line.length + 1;
     let braceDepth = countChar(typeSource, '{') - countChar(typeSource, '}');
     while (!typeSource.trimEnd().endsWith(';') || braceDepth > 0) {
       index += 1;
       if (index >= lines.length) {
         break;
       }
-      const nextLine = lines[index];
+      const nextLine = lines[index].text;
       typeSource += ` ${nextLine.trim()}`;
-      consumedLength += nextLine.length + 1;
       braceDepth += countChar(nextLine, '{') - countChar(nextLine, '}');
     }
     fields.push({
       name: match[1],
       required: match[2] !== '?',
       type: typeSource.replace(/;\s*$/, '').replace(/\s+/g, ' ').trim(),
-      line: lineFor(source, startOffset),
+      line: lineFor(source, offset),
     });
-    offset += consumedLength;
   }
   return fields;
+}
+
+function findMatchingBrace(source, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  throw new Error('Could not find matching interface brace');
+}
+
+function splitLinesWithOffsets(source, startOffset) {
+  const lines = [];
+  const pattern = /[^\n]*(?:\n|$)/g;
+  for (const match of source.matchAll(pattern)) {
+    if (match[0] === '') {
+      continue;
+    }
+    lines.push({
+      text: match[0].replace(/\r?\n$/, '').replace(/\r$/, ''),
+      offset: startOffset + match.index,
+    });
+  }
+  return lines;
 }
 
 function countChar(value, char) {

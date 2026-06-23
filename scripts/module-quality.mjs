@@ -2,9 +2,13 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  apiPerformanceCheckId,
+  collectModuleApiPerformanceRoutes,
+  collectModulePagePerformanceRoutes,
   collectModuleQualityEvidence,
   collectModuleQualityRoutes,
   collectModuleProductChecks,
+  pagePerformanceCheckId,
   readModuleQualityManifest,
   routeViewports,
 } from './module-quality-manifest.mjs';
@@ -196,6 +200,12 @@ const accessibilityRoutes = collectModuleQualityRoutes('accessibility', projectR
 const evidenceDeclarations = collectModuleQualityEvidence(projectRoot).filter((evidence) =>
   moduleIds.has(evidence.moduleId)
 );
+const apiPerformanceRoutes = collectModuleApiPerformanceRoutes(projectRoot).filter((route) =>
+  moduleIds.has(route.moduleId)
+);
+const pagePerformanceRoutes = collectModulePagePerformanceRoutes(projectRoot).filter((route) =>
+  moduleIds.has(route.moduleId)
+);
 const productChecks = collectModuleProductChecks(projectRoot).filter((check) =>
   moduleIds.has(check.moduleId)
 );
@@ -216,6 +226,24 @@ if (accessibilityRoutes.length > 0) {
     id: 'accessibility-routes',
     command: runRuntimeEvidence('scripts/host-accessibility-smoke.mjs', [
       '--module-quality-only',
+      ...(required ? ['--required'] : []),
+    ]),
+  });
+}
+if (apiPerformanceRoutes.length > 0) {
+  runtimeCommandResults.push({
+    id: 'api-performance',
+    command: runRuntimeEvidence('scripts/module-api-performance-smoke.mjs', [
+      ...[...moduleIds].flatMap((moduleId) => ['--module-id', moduleId]),
+      ...(required ? ['--required'] : []),
+    ]),
+  });
+}
+if (pagePerformanceRoutes.length > 0) {
+  runtimeCommandResults.push({
+    id: 'page-performance',
+    command: runRuntimeEvidence('scripts/module-page-performance-smoke.mjs', [
+      ...[...moduleIds].flatMap((moduleId) => ['--module-id', moduleId]),
       ...(required ? ['--required'] : []),
     ]),
   });
@@ -257,6 +285,26 @@ if (accessibilityRoutes.length > 0) {
       title: 'Accessibility smoke includes module-declared routes',
       runtimeDir: 'accessibility-smoke',
       requiredChecks: routeCheckIds(accessibilityRoutes),
+    })
+  );
+}
+if (apiPerformanceRoutes.length > 0) {
+  checks.push(
+    validateRuntimeReport({
+      id: 'api-performance',
+      title: 'Module API performance includes declared routes',
+      runtimeDir: 'module-api-performance',
+      requiredChecks: apiPerformanceRoutes.map(apiPerformanceCheckId),
+    })
+  );
+}
+if (pagePerformanceRoutes.length > 0) {
+  checks.push(
+    validateRuntimeReport({
+      id: 'page-performance',
+      title: 'Module page performance includes declared routes',
+      runtimeDir: 'module-page-performance',
+      requiredChecks: pagePerformanceRoutes.map(pagePerformanceCheckId),
     })
   );
 }

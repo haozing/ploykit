@@ -444,6 +444,51 @@ test('module doctor reuses SDK contract validation gates', () => {
   assert.ok(codes.includes('MODULE_DEPENDENCY_VERSION_REQUIRED'));
 });
 
+test('module doctor warns when dynamic dashboard route shares a broad loader', () => {
+  const moduleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule } from '@ploykit/module-sdk';
+      export default defineModule({
+        id: 'doctor-dynamic-dashboard',
+        name: 'Doctor Dynamic Dashboard',
+        version: '0.1.0',
+        routes: {
+          dashboard: [
+            {
+              path: '/doctor-dynamic-dashboard/[section]',
+              component: './pages/App',
+              loader: './loaders/dashboard',
+              auth: 'auth',
+            },
+          ],
+        },
+        navigation: [
+          {
+            location: 'dashboard.sidebar',
+            fallbackLabel: 'Agents',
+            path: '/doctor-dynamic-dashboard/agents',
+          },
+          {
+            location: 'dashboard.sidebar',
+            fallbackLabel: 'Traces',
+            path: '/doctor-dynamic-dashboard/traces',
+          },
+        ],
+      });
+    `,
+    'pages/App.tsx': 'export default function App() { return null; }',
+    'loaders/dashboard.ts': 'export default async function loader() { return {}; }',
+  });
+
+  const result = runDoctor(moduleRoot);
+  const codes = result.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.body.success, true);
+  assert.ok(codes.includes('MODULE_DASHBOARD_DYNAMIC_ROUTE_BROAD_LOADER'));
+  assert.ok(codes.includes('MODULE_DASHBOARD_DYNAMIC_ROUTE_SHARED_LOADER'));
+});
+
 test('module doctor rejects unsafe module npm dependency declarations', () => {
   const moduleRoot = writeFixture({
     'module.ts': `

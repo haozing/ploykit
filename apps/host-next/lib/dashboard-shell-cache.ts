@@ -281,15 +281,18 @@ export async function cachedDashboardModulePageRoute<T>(input: {
   language?: string;
   loader: () => Promise<T>;
   cachePolicy: (value: T) => DashboardModulePageCachePolicy | null | undefined;
+  onCacheStatus?: (status: { hit: boolean }) => void;
 }): Promise<T> {
   const key = dashboardShellModulePageKey(input);
   const entries = state().modulePages;
   const now = nowMs();
   const existing = entries.get(key);
   if (existing && existing.expiresAt > now) {
+    input.onCacheStatus?.({ hit: true });
     return existing.value as T;
   }
 
+  input.onCacheStatus?.({ hit: false });
   const value = await input.loader();
   const policy = input.cachePolicy(value);
   const routeTtlMs = Math.max(0, Math.floor(policy?.revalidateSeconds ?? 0) * 1000);

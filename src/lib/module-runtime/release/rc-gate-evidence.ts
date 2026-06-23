@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type {
   CommercialDomainEvidence,
+  ModuleDashboardTransitionRequirement,
   ModuleMapManifest,
   ModuleQualityEvidenceRequirement,
   ModuleQualityRouteRequirement,
@@ -16,6 +17,33 @@ import type {
 } from './rc-gate-types';
 
 const DEFAULT_MODULE_ROUTE_VIEWPORTS = ['desktop', 'mobile'] as const;
+
+export function dashboardTransitionRoutePath(route: string): string {
+  const normalized = route.startsWith('/') ? route : `/${route}`;
+  if (normalized === '/zh/dashboard' || normalized.startsWith('/zh/dashboard/')) {
+    return normalized;
+  }
+  if (normalized === '/dashboard' || normalized.startsWith('/dashboard/')) {
+    return `/zh${normalized}`;
+  }
+  return normalized === '/' ? '/zh/dashboard' : `/zh/dashboard${normalized}`;
+}
+
+function moduleApiPerformanceCheckId(input: {
+  moduleId: string;
+  method?: string;
+  path: string;
+}): string {
+  return `api:${input.moduleId}:${(input.method ?? 'GET').toUpperCase()}:${input.path}`;
+}
+
+function modulePagePerformanceCheckId(input: {
+  moduleId: string;
+  path: string;
+  samplePath?: string;
+}): string {
+  return `page:${input.moduleId}:${input.samplePath ?? input.path}`;
+}
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -277,7 +305,7 @@ export function collectModuleQualityEvidenceRequirements(projectRoot: string): {
       return [];
     }
     const evidence = moduleInfo.quality?.evidence ?? [];
-    return evidence.flatMap((item): ModuleQualityEvidenceRequirement[] => {
+    const declared = evidence.flatMap((item): ModuleQualityEvidenceRequirement[] => {
       if (!item.id || item.required === false) {
         return [];
       }
@@ -292,9 +320,120 @@ export function collectModuleQualityEvidenceRequirements(projectRoot: string): {
         },
       ];
     });
+    const apiRoutes = moduleInfo.quality?.performance?.apiRoutes ?? [];
+    const apiChecks = apiRoutes
+      .filter((route) => route.path && route.path.startsWith('/'))
+      .map((route) =>
+        moduleApiPerformanceCheckId({
+          moduleId,
+          method: route.method,
+          path: route.path as string,
+        })
+      );
+    const pageRoutes = moduleInfo.quality?.performance?.pageRoutes ?? [];
+    const pageChecks = pageRoutes
+      .filter((route) => route.path && route.path.startsWith('/'))
+      .map((route) =>
+        modulePagePerformanceCheckId({
+          moduleId,
+          path: route.path as string,
+          samplePath: route.samplePath,
+        })
+      );
+    if (apiChecks.length === 0 && pageChecks.length === 0) {
+      return declared;
+    }
+    const performanceEvidence: ModuleQualityEvidenceRequirement[] = [];
+    if (pageChecks.length > 0) {
+      performanceEvidence.push({
+        moduleId,
+        title: `${moduleInfo.name ?? moduleId} module page performance`,
+        id: 'module-page-performance',
+        runtimeDir: 'module-page-performance',
+        command: {
+          script: 'module:page-performance',
+          args: ['--module-id', moduleId],
+        },
+        checks: pageChecks,
+      });
+    }
+    if (apiChecks.length > 0) {
+      performanceEvidence.push({
+        moduleId,
+        title: `${moduleInfo.name ?? moduleId} module API performance`,
+        id: 'module-api-performance',
+        runtimeDir: 'module-api-performance',
+        command: {
+          script: 'module:api-performance',
+          args: ['--module-id', moduleId],
+        },
+        checks: apiChecks,
+      });
+    }
+    return [
+      ...declared,
+      ...performanceEvidence,
+    ];
   });
 
   return { requirements, manifestPath: manifest.path };
+}
+
+export function collectModuleDashboardTransitionRequirements(projectRoot: string): {
+  requirements: ModuleDashboardTransitionRequirement[];
+  manifestPath: string;
+  error?: string;
+} {
+  const manifest = readModuleMapManifest(projectRoot);
+  if (!manifest.manifest) {
+    if (manifest.error === 'Module map manifest is missing.') {
+      return { requirements: [], manifestPath: manifest.path };
+    }
+    return { requirements: [], manifestPath: manifest.path, error: manifest.error };
+  }
+
+  const requirements = (manifest.manifest.modules ?? []).flatMap((moduleInfo) => {
+    const moduleId = moduleInfo.id;
+    if (!moduleId) {
+      return [];
+    }
+    const transitions = moduleInfo.quality?.performance?.dashboardTransitions;
+    const routes = transitions?.routes ?? [];
+    return routes.flatMap((route): ModuleDashboardTransitionRequirement[] => {
+      if (!route || !route.startsWith('/')) {
+        return [];
+      }
+      return [
+        {
+          moduleId,
+          route: dashboardTransitionRoutePath(route),
+          maxDocumentNavigations: transitions?.maxDocumentNavigations,
+          maxHydrationErrors: transitions?.maxHydrationErrors,
+          maxP95Ms: transitions?.maxP95Ms,
+          maxRscTransferBytes: transitions?.maxRscTransferBytes,
+        },
+      ];
+    });
+  });
+
+  return { requirements, manifestPath: manifest.path };
+}
+
+export function missingDashboardTransitionRoutes(
+  report: RuntimeEvidenceReport,
+  requirements: readonly ModuleDashboardTransitionRequirement[]
+): string[] {
+  const summary = asRecord(report.summary);
+  const reportRoutes = Array.isArray(summary?.routes)
+    ? new Set(
+        summary.routes
+          .filter((route): route is string => typeof route === 'string')
+          .map(dashboardTransitionRoutePath)
+      )
+    : new Set<string>();
+  return requirements
+    .filter((requirement) => !reportRoutes.has(requirement.route))
+    .map((requirement) => `${requirement.moduleId}:${requirement.route}`);
 }
 
 export function missingModuleQualityRouteChecks(

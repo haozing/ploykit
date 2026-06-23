@@ -286,6 +286,8 @@ test('P21 RC gate reads dashboard transition strict repeat evidence', () => {
       transitionDocumentNavigations: 0,
       hydrationErrors: 0,
       p95Ms: 246,
+      rscTransferP95Bytes: 64000,
+      dashboardTimingReports: 8,
       appFramePresent: true,
       clientTransitionMarkerPresent: true,
       injectedAnchorInAppFrame: true,
@@ -297,6 +299,8 @@ test('P21 RC gate reads dashboard transition strict repeat evidence', () => {
       { id: 'transition:document-navigation', ok: true },
       { id: 'transition:hydration', ok: true },
       { id: 'transition:p95', ok: true },
+      { id: 'transition:rsc-transfer', ok: true },
+      { id: 'dashboard:timing-evidence', ok: true },
       { id: 'transition:1:/zh/dashboard->/zh/dashboard/workspaces', ok: true },
     ],
   });
@@ -319,6 +323,249 @@ test('P21 RC gate reads dashboard transition strict repeat evidence', () => {
   assert.match(transitionCheck?.evidence ?? '', /document navigations=0/);
 });
 
+test('P21 RC gate reads module API performance strict evidence from quality performance routes', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, 'src', 'lib', 'module-map.manifest.json'), {
+    modules: [
+      {
+        id: 'origin-agentops',
+        name: 'Origin AgentOps',
+        quality: {
+          performance: {
+            apiRoutes: [
+              {
+                path: '/origin-agentops/audit',
+                method: 'GET',
+                maxP95Ms: 800,
+                maxResponseBytes: 150000,
+              },
+            ],
+          },
+        },
+      },
+    ],
+  });
+  writeJson(path.join(root, '.runtime', 'module-api-performance', 'latest.json'), {
+    ok: true,
+    required: true,
+    skipped: false,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    checks: [
+      {
+        id: 'api:origin-agentops:GET:/origin-agentops/audit',
+        ok: true,
+        p95Ms: 320,
+        maxResponseBytesObserved: 42000,
+      },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'module-quality': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const moduleQualityCheck = result.checks.find((item) => item.id === 'module-quality');
+
+  assert.equal(result.ok, false);
+  assert.equal(moduleQualityCheck?.status, 'passed');
+  assert.match(moduleQualityCheck?.evidence ?? '', /origin-agentops:module-api-performance/);
+});
+
+test('P21 RC gate reads module page performance strict evidence from quality performance routes', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, 'src', 'lib', 'module-map.manifest.json'), {
+    modules: [
+      {
+        id: 'origin-agentops',
+        name: 'Origin AgentOps',
+        quality: {
+          performance: {
+            pageRoutes: [
+              {
+                path: '/origin-agentops/[section]',
+                params: { section: 'traces' },
+                samplePath: '/origin-agentops/traces',
+                maxLoaderMs: 500,
+                maxLoaderDataBytes: 20000,
+              },
+            ],
+          },
+        },
+      },
+    ],
+  });
+  writeJson(path.join(root, '.runtime', 'module-page-performance', 'latest.json'), {
+    ok: true,
+    required: true,
+    skipped: false,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+    checks: [
+      {
+        id: 'page:origin-agentops:/origin-agentops/traces',
+        ok: true,
+        p95LoaderMs: 320,
+        maxLoaderDataBytesObserved: 12000,
+      },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'module-quality': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const moduleQualityCheck = result.checks.find((item) => item.id === 'module-quality');
+
+  assert.equal(result.ok, false);
+  assert.equal(moduleQualityCheck?.status, 'passed');
+  assert.match(moduleQualityCheck?.evidence ?? '', /origin-agentops:module-page-performance/);
+});
+
+test('P21 RC gate rejects declared module API performance routes without evidence', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, 'src', 'lib', 'module-map.manifest.json'), {
+    modules: [
+      {
+        id: 'origin-agentops',
+        name: 'Origin AgentOps',
+        quality: {
+          performance: {
+            apiRoutes: [{ path: '/origin-agentops/audit', method: 'GET' }],
+          },
+        },
+      },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'module-quality': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const moduleQualityCheck = result.checks.find((item) => item.id === 'module-quality');
+
+  assert.equal(result.ok, false);
+  assert.equal(moduleQualityCheck?.status, 'failed');
+  assert.match(moduleQualityCheck?.evidence ?? '', /module-api-performance evidence is missing/);
+  assert.match(moduleQualityCheck?.evidence ?? '', /npm run module:api-performance/);
+});
+
+test('P21 RC gate rejects declared module page performance routes without evidence', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, 'src', 'lib', 'module-map.manifest.json'), {
+    modules: [
+      {
+        id: 'origin-agentops',
+        name: 'Origin AgentOps',
+        quality: {
+          performance: {
+            pageRoutes: [{ path: '/origin-agentops/[section]', samplePath: '/origin-agentops/traces' }],
+          },
+        },
+      },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'module-quality': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const moduleQualityCheck = result.checks.find((item) => item.id === 'module-quality');
+
+  assert.equal(result.ok, false);
+  assert.equal(moduleQualityCheck?.status, 'failed');
+  assert.match(moduleQualityCheck?.evidence ?? '', /module-page-performance evidence is missing/);
+  assert.match(moduleQualityCheck?.evidence ?? '', /npm run module:page-performance/);
+});
+
+test('P21 RC gate rejects dashboard transition smoke that exceeds module-declared budgets', () => {
+  const root = createTempProject();
+  writeJson(path.join(root, 'src', 'lib', 'module-map.manifest.json'), {
+    modules: [
+      {
+        id: 'origin-agentops',
+        name: 'Origin AgentOps',
+        quality: {
+          performance: {
+            dashboardTransitions: {
+              routes: ['/origin-agentops/traces'],
+              maxP95Ms: 500,
+              maxRscTransferBytes: 60000,
+            },
+          },
+        },
+      },
+    ],
+  });
+  writeJson(path.join(root, '.runtime', 'dashboard-transition-smoke', 'latest.json'), {
+    ok: true,
+    required: true,
+    skipped: false,
+    checkedAt: '2026-05-21T00:00:00.000Z',
+      summary: {
+        routes: ['/zh/dashboard/origin-agentops/traces'],
+        routeMetrics: [
+          {
+            route: '/zh/dashboard/origin-agentops/traces',
+            transitions: 8,
+            p95Ms: 900,
+            maxDocumentNavigations: 0,
+            maxHydrationErrors: 0,
+            rscTransferP95Bytes: 64000,
+            dashboardTimingReports: 8,
+          },
+        ],
+        repeat: 3,
+      injectAnchor: true,
+      transitions: 8,
+      resetTransitions: 2,
+      transitionDocumentNavigations: 0,
+      hydrationErrors: 0,
+      p95Ms: 900,
+      rscTransferP95Bytes: 64000,
+      dashboardTimingReports: 8,
+      appFramePresent: true,
+      clientTransitionMarkerPresent: true,
+      injectedAnchorInAppFrame: true,
+    },
+    checks: [
+      { id: 'shell:app-frame', ok: true },
+      { id: 'shell:client-transition-marker', ok: true },
+      { id: 'shell:injected-anchor-frame', ok: true },
+      { id: 'transition:document-navigation', ok: true },
+      { id: 'transition:hydration', ok: true },
+      { id: 'transition:p95', ok: true },
+      { id: 'transition:rsc-transfer', ok: true },
+      { id: 'dashboard:timing-evidence', ok: true },
+    ],
+  });
+
+  const result = runReleaseCandidateGate({
+    projectRoot: root,
+    targets: [],
+    requiredChecks: { 'dashboard-transition-smoke': true },
+    now: () => new Date('2026-05-21T00:00:00.000Z'),
+  });
+  const transitionCheck = result.checks.find((item) => item.id === 'dashboard-transition-smoke');
+
+  assert.equal(result.ok, false);
+  assert.equal(transitionCheck?.status, 'failed');
+  assert.match(
+    transitionCheck?.evidence ?? '',
+    /origin-agentops:\/zh\/dashboard\/origin-agentops\/traces p95Ms=900 exceeded declared budget 500/
+  );
+  assert.match(
+    transitionCheck?.evidence ?? '',
+    /origin-agentops:\/zh\/dashboard\/origin-agentops\/traces rscTransferP95Bytes=64000 exceeded declared budget 60000/
+  );
+});
+
 test('P21 RC gate rejects dashboard transition smoke without repeat soak coverage', () => {
   const root = createTempProject();
   writeJson(path.join(root, '.runtime', 'dashboard-transition-smoke', 'latest.json'), {
@@ -334,6 +581,8 @@ test('P21 RC gate rejects dashboard transition smoke without repeat soak coverag
       transitionDocumentNavigations: 0,
       hydrationErrors: 0,
       p95Ms: 240,
+      rscTransferP95Bytes: 64000,
+      dashboardTimingReports: 2,
       appFramePresent: true,
       clientTransitionMarkerPresent: true,
       injectedAnchorInAppFrame: true,
@@ -345,6 +594,8 @@ test('P21 RC gate rejects dashboard transition smoke without repeat soak coverag
       { id: 'transition:document-navigation', ok: true },
       { id: 'transition:hydration', ok: true },
       { id: 'transition:p95', ok: true },
+      { id: 'transition:rsc-transfer', ok: true },
+      { id: 'dashboard:timing-evidence', ok: true },
     ],
   });
 
@@ -377,6 +628,8 @@ test('P21 RC gate rejects dashboard transition smoke without injected anchor cov
       transitionDocumentNavigations: 0,
       hydrationErrors: 0,
       p95Ms: 246,
+      rscTransferP95Bytes: 64000,
+      dashboardTimingReports: 8,
       appFramePresent: true,
       clientTransitionMarkerPresent: true,
       injectedAnchorInAppFrame: true,
@@ -387,6 +640,8 @@ test('P21 RC gate rejects dashboard transition smoke without injected anchor cov
       { id: 'transition:document-navigation', ok: true },
       { id: 'transition:hydration', ok: true },
       { id: 'transition:p95', ok: true },
+      { id: 'transition:rsc-transfer', ok: true },
+      { id: 'dashboard:timing-evidence', ok: true },
     ],
   });
 
@@ -418,6 +673,8 @@ test('P21 RC gate rejects dashboard transition smoke without AppFrame client-tra
       transitionDocumentNavigations: 0,
       hydrationErrors: 0,
       p95Ms: 246,
+      rscTransferP95Bytes: 64000,
+      dashboardTimingReports: 8,
       appFramePresent: false,
       clientTransitionMarkerPresent: false,
       injectedAnchorInAppFrame: false,
@@ -429,6 +686,8 @@ test('P21 RC gate rejects dashboard transition smoke without AppFrame client-tra
       { id: 'transition:document-navigation', ok: true },
       { id: 'transition:hydration', ok: true },
       { id: 'transition:p95', ok: true },
+      { id: 'transition:rsc-transfer', ok: true },
+      { id: 'dashboard:timing-evidence', ok: true },
     ],
   });
 

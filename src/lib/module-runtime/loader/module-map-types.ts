@@ -1,5 +1,9 @@
 import type { ModuleRuntimeContract } from '../contract';
-import type { ModuleProductDefinition, ModuleQualityDefinition } from '@ploykit/module-sdk';
+import type {
+  ModuleNavigationItem,
+  ModuleProductDefinition,
+  ModuleQualityDefinition,
+} from '@ploykit/module-sdk';
 
 export type ModuleLoader = () => Promise<unknown>;
 export type ModuleMapLocaleMessages = Record<string, unknown>;
@@ -28,6 +32,7 @@ export interface ModuleRuntimeMapEntry {
   release?: ModuleMapReleaseMetadata;
   product?: ModuleProductDefinition;
   quality?: ModuleQualityDefinition;
+  navigation?: ModuleNavigationItem | readonly ModuleNavigationItem[];
   module?: ModuleLoader;
   pages?: Record<string, ModuleLoader>;
   apis?: Record<string, ModuleLoader>;

@@ -104,6 +104,45 @@ function normalizeEvidence(moduleInfo, evidence) {
   };
 }
 
+function normalizeApiPerformanceRoute(moduleInfo, route) {
+  if (!route || typeof route.path !== 'string' || !route.path.startsWith('/')) {
+    return undefined;
+  }
+  const method = typeof route.method === 'string' ? route.method.toUpperCase() : 'GET';
+  return {
+    moduleId: moduleInfo.id,
+    path: route.path,
+    method,
+    auth: typeof route.auth === 'string' ? route.auth : 'admin',
+    maxP95Ms: Number.isFinite(route.maxP95Ms) ? route.maxP95Ms : undefined,
+    maxResponseBytes: Number.isFinite(route.maxResponseBytes)
+      ? route.maxResponseBytes
+      : undefined,
+    source: 'module-quality-performance',
+  };
+}
+
+function normalizePagePerformanceRoute(moduleInfo, route) {
+  if (!route || typeof route.path !== 'string' || !route.path.startsWith('/')) {
+    return undefined;
+  }
+  return {
+    moduleId: moduleInfo.id,
+    shell: typeof route.shell === 'string' ? route.shell : 'dashboard',
+    path: route.path,
+    params: asObject(route.params),
+    samplePath:
+      typeof route.samplePath === 'string' && route.samplePath.startsWith('/')
+        ? route.samplePath
+        : undefined,
+    maxLoaderMs: Number.isFinite(route.maxLoaderMs) ? route.maxLoaderMs : undefined,
+    maxLoaderDataBytes: Number.isFinite(route.maxLoaderDataBytes)
+      ? route.maxLoaderDataBytes
+      : undefined,
+    source: 'module-quality-performance',
+  };
+}
+
 export function readModuleQualityManifest(projectRoot = process.cwd()) {
   const manifestPath = path.resolve(projectRoot, 'src', 'lib', 'module-map.manifest.json');
   if (!fs.existsSync(manifestPath)) {
@@ -158,6 +197,42 @@ export function collectModuleQualityEvidence(projectRoot = process.cwd()) {
       ? evidence.map((item) => normalizeEvidence(moduleRecord, item)).filter(Boolean)
       : [];
   });
+}
+
+export function collectModuleApiPerformanceRoutes(projectRoot = process.cwd()) {
+  const manifest = readModuleQualityManifest(projectRoot);
+  if (manifest.error) {
+    return [];
+  }
+  return manifest.modules.flatMap((moduleInfo) => {
+    const moduleRecord = asObject(moduleInfo);
+    const routes = asObject(asObject(moduleRecord?.quality)?.performance)?.apiRoutes;
+    return Array.isArray(routes)
+      ? routes.map((route) => normalizeApiPerformanceRoute(moduleRecord, route)).filter(Boolean)
+      : [];
+  });
+}
+
+export function collectModulePagePerformanceRoutes(projectRoot = process.cwd()) {
+  const manifest = readModuleQualityManifest(projectRoot);
+  if (manifest.error) {
+    return [];
+  }
+  return manifest.modules.flatMap((moduleInfo) => {
+    const moduleRecord = asObject(moduleInfo);
+    const routes = asObject(asObject(moduleRecord?.quality)?.performance)?.pageRoutes;
+    return Array.isArray(routes)
+      ? routes.map((route) => normalizePagePerformanceRoute(moduleRecord, route)).filter(Boolean)
+      : [];
+  });
+}
+
+export function apiPerformanceCheckId(route) {
+  return `api:${route.moduleId}:${(route.method ?? 'GET').toUpperCase()}:${route.path}`;
+}
+
+export function pagePerformanceCheckId(route) {
+  return `page:${route.moduleId}:${route.samplePath ?? route.path}`;
 }
 
 export function collectModuleProductChecks(projectRoot = process.cwd()) {

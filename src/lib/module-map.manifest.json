@@ -47,6 +47,17 @@
           "commercialRequirements": 1,
           "presentationContributions": 1
         }
+      },
+      "navigation": {
+        "location": "dashboard.sidebar",
+        "fallbackLabel": "AI/RAG Demo",
+        "path": "/ai-rag-demo",
+        "weight": 70,
+        "requires": {
+          "entitlements": [
+            "ploykit.demo_modules"
+          ]
+        }
       }
     },
     {
@@ -122,6 +133,17 @@
           "commercialRequirements": 1,
           "presentationContributions": 1
         }
+      },
+      "navigation": {
+        "location": "dashboard.sidebar",
+        "fallbackLabel": "Capability Demo",
+        "path": "/capability-demo",
+        "weight": 30,
+        "requires": {
+          "entitlements": [
+            "ploykit.demo_modules"
+          ]
+        }
       }
     },
     {
@@ -190,6 +212,17 @@
           "commercialRequirements": 0,
           "presentationContributions": 2
         }
+      },
+      "navigation": {
+        "location": "dashboard.sidebar",
+        "fallbackLabel": "CMS",
+        "path": "/cms-demo",
+        "weight": 45,
+        "requires": {
+          "entitlements": [
+            "ploykit.demo_modules"
+          ]
+        }
       }
     },
     {
@@ -252,6 +285,17 @@
           "providerRequirements": 0,
           "commercialRequirements": 0,
           "presentationContributions": 2
+        }
+      },
+      "navigation": {
+        "location": "dashboard.sidebar",
+        "fallbackLabel": "Hello",
+        "path": "/hello",
+        "weight": 10,
+        "requires": {
+          "entitlements": [
+            "ploykit.demo_modules"
+          ]
         }
       }
     },
@@ -379,7 +423,32 @@
           "commercialRequirements": 3,
           "presentationContributions": 3
         }
-      }
+      },
+      "navigation": [
+        {
+          "location": "dashboard.sidebar",
+          "fallbackLabel": "Shop",
+          "path": "/shop-demo",
+          "weight": 48,
+          "requires": {
+            "entitlements": [
+              "ploykit.demo_modules"
+            ]
+          }
+        },
+        {
+          "location": "dashboard.sidebar",
+          "fallbackLabel": "Billing Guard",
+          "path": "/shop-demo/billing",
+          "weight": 49,
+          "requires": {
+            "entitlements": [
+              "ploykit.demo_modules",
+              "demo.entitlement"
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "white-label-site-demo",
@@ -478,7 +547,23 @@
           "commercialRequirements": 0,
           "presentationContributions": 33
         }
-      }
+      },
+      "navigation": [
+        {
+          "location": "site.header",
+          "labelKey": "nav.dashboard",
+          "fallbackLabel": "Workspace",
+          "path": "/dashboard",
+          "weight": 50
+        },
+        {
+          "location": "site.footer",
+          "labelKey": "nav.support",
+          "fallbackLabel": "Support",
+          "path": "/contact",
+          "weight": 10
+        }
+      ]
     }
   ]
 }

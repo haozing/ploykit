@@ -72,7 +72,14 @@ function methodName(method: string): keyof ModuleApiDefinition {
 }
 
 function jsonError(status: number, code: string, message: string): Response {
-  return Response.json({ ok: false, code, message }, { status });
+  const body = JSON.stringify({ ok: false, code, message });
+  return new Response(body, {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'content-length': String(new TextEncoder().encode(body).byteLength),
+    },
+  });
 }
 
 const moduleApiRouteLogger = createRuntimeLogger({
@@ -91,6 +98,99 @@ function errorMetadata(error: unknown): Record<string, unknown> {
 
 function logModuleApiHandlerError(error: unknown): void {
   moduleApiRouteLogger.error('Module API handler failed.', errorMetadata(error));
+}
+
+interface ModuleApiTimingSpan {
+  name: string;
+  durationMs: number;
+}
+
+function createRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `req_${Date.now().toString(36)}`;
+}
+
+function requestIdFor(request: Request): string {
+  return request.headers.get('x-request-id') ?? createRequestId();
+}
+
+function timingName(name: string): string {
+  return name.replace(/[^A-Za-z0-9!#$%&'*+.^_`|~-]+/g, '-') || 'span';
+}
+
+function timingDuration(durationMs: number): string {
+  const duration = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
+  return Number.isInteger(duration) ? String(duration) : duration.toFixed(1);
+}
+
+async function measureApiTiming<T>(
+  spans: ModuleApiTimingSpan[],
+  name: string,
+  fn: () => Promise<T> | T
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    return await fn();
+  } finally {
+    spans.push({ name, durationMs: Date.now() - startedAt });
+  }
+}
+
+function responseBodyBytes(response: Response): number | null {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength) {
+    const value = Number(contentLength);
+    if (Number.isFinite(value) && value >= 0) {
+      return value;
+    }
+  }
+  return response.body === null ? 0 : null;
+}
+
+function withModuleApiDiagnostics(
+  response: Response,
+  input: {
+    request: Request;
+    requestId: string;
+    startedAt: number;
+    spans: readonly ModuleApiTimingSpan[];
+    moduleId?: string;
+    routePath?: string;
+    matchedPath?: string;
+  }
+): Response {
+  const totalMs = Date.now() - input.startedAt;
+  const headers = new Headers(response.headers);
+  const serverTiming = [
+    ...input.spans.map(
+      (span) => `${timingName(span.name)};dur=${timingDuration(span.durationMs)}`
+    ),
+    `module-api-total;dur=${timingDuration(totalMs)}`,
+  ].join(', ');
+  const existingServerTiming = headers.get('server-timing');
+  headers.set(
+    'server-timing',
+    existingServerTiming ? `${existingServerTiming}, ${serverTiming}` : serverTiming
+  );
+
+  const responseBytes = responseBodyBytes(response);
+  headers.set('x-request-id', input.requestId);
+  headers.set('x-ploykit-request-id', input.requestId);
+  if (input.moduleId) {
+    headers.set('x-ploykit-module-id', input.moduleId);
+  }
+  if (input.routePath) {
+    headers.set('x-ploykit-route-path', input.routePath);
+  }
+  if (input.matchedPath) {
+    headers.set('x-ploykit-matched-path', input.matchedPath);
+  }
+  headers.set('x-ploykit-response-bytes', responseBytes === null ? 'unknown' : String(responseBytes));
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function readIdempotencyKey(request: Request): string | undefined {
@@ -349,22 +449,40 @@ export async function dispatchModuleApiRoute(
   host: ModuleRuntimeHost,
   input: DispatchModuleApiRouteInput
 ): Promise<Response> {
-  const match = findModuleRouteMatch(host.routes, 'api', input.pathname);
+  const startedAt = Date.now();
+  const spans: ModuleApiTimingSpan[] = [];
+  const requestId = requestIdFor(input.request);
+  let moduleId: string | undefined;
+  let routePath: string | undefined;
+  let matchedPath: string | undefined;
+  const finish = (response: Response) =>
+    withModuleApiDiagnostics(response, {
+      request: input.request,
+      requestId,
+      startedAt,
+      spans,
+      moduleId,
+      routePath,
+      matchedPath,
+    });
+
+  const match = await measureApiTiming(spans, 'module-api-match', () =>
+    findModuleRouteMatch(host.routes, 'api', input.pathname)
+  );
   if (!match) {
-    return jsonError(404, 'MODULE_API_ROUTE_NOT_FOUND', 'Module API route was not found.');
+    return finish(jsonError(404, 'MODULE_API_ROUTE_NOT_FOUND', 'Module API route was not found.'));
   }
 
   const route = match.entry.route as ModuleApiRoute;
+  moduleId = match.entry.moduleId;
+  routePath = route.path;
+  matchedPath = match.entry.path;
   const params = { ...match.params, ...input.params };
-  const machineAuthResult = await verifyMachineAuth(
-    host,
-    route,
-    input,
-    match.entry.moduleId,
-    params
+  const machineAuthResult = await measureApiTiming(spans, 'module-api-auth', () =>
+    verifyMachineAuth(host, route, input, match.entry.moduleId, params)
   );
   if (machineAuthResult instanceof Response) {
-    return machineAuthResult;
+    return finish(machineAuthResult);
   }
 
   const accessSession = mergeModuleRuntimeAccessSession(
@@ -376,58 +494,72 @@ export async function dispatchModuleApiRoute(
   );
   const user = accessSession.user;
   if (!routeAllowsMethod(route, input.request.method)) {
-    return jsonError(405, 'MODULE_API_METHOD_NOT_ALLOWED', 'HTTP method is not allowed.');
+    return finish(jsonError(405, 'MODULE_API_METHOD_NOT_ALLOWED', 'HTTP method is not allowed.'));
   }
 
-  const anonymousPolicyDenied = checkModuleAnonymousPolicy({
-    moduleId: match.entry.moduleId,
-    route,
-    request: input.request,
-    userId: accessSession.userId ?? accessSession.user?.id ?? null,
-    anonymous: !accessSession.user && !accessSession.userId,
-  });
+  const anonymousPolicyDenied = await measureApiTiming(spans, 'module-api-access', () =>
+    checkModuleAnonymousPolicy({
+      moduleId: match.entry.moduleId,
+      route,
+      request: input.request,
+      userId: accessSession.userId ?? accessSession.user?.id ?? null,
+      anonymous: !accessSession.user && !accessSession.userId,
+    })
+  );
   if (anonymousPolicyDenied) {
-    return anonymousPolicyDenied;
+    return finish(anonymousPolicyDenied);
   }
 
   const entry = host.getMapEntry(match.entry.moduleId);
   const contract = host.getContract(match.entry.moduleId);
   if (!entry || !contract) {
-    return jsonError(500, 'MODULE_API_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.');
+    return finish(
+      jsonError(500, 'MODULE_API_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.')
+    );
   }
 
-  const accessDenied = checkModuleRuntimeAccess({
-    kind: 'api',
-    contract,
-    session: accessSession,
-    auth: match.entry.auth,
-    permissions: match.entry.permissions,
-    commercial: route.commercial,
-  });
+  const accessDenied = await measureApiTiming(spans, 'module-api-runtime-access', () =>
+    checkModuleRuntimeAccess({
+      kind: 'api',
+      contract,
+      session: accessSession,
+      auth: match.entry.auth,
+      permissions: match.entry.permissions,
+      commercial: route.commercial,
+    })
+  );
   if (accessDenied) {
-    return jsonError(accessDenied.status, accessDenied.code, accessDenied.message);
+    return finish(jsonError(accessDenied.status, accessDenied.code, accessDenied.message));
   }
 
   const loader = resolveModuleEntryLoader(entry, 'apis', route.handler);
   if (!loader) {
-    return jsonError(
-      500,
-      'MODULE_API_HANDLER_MISSING',
-      'Module API handler is missing from module map.'
+    return finish(
+      jsonError(
+        500,
+        'MODULE_API_HANDLER_MISSING',
+        'Module API handler is missing from module map.'
+      )
     );
   }
 
-  const api = asModuleApiDefinition(await loader());
+  const api = asModuleApiDefinition(
+    await measureApiTiming(spans, 'module-api-handler-load', () => loader())
+  );
   if (!api) {
-    return jsonError(500, 'MODULE_API_INVALID_EXPORT', 'Module API handler export is invalid.');
+    return finish(
+      jsonError(500, 'MODULE_API_INVALID_EXPORT', 'Module API handler export is invalid.')
+    );
   }
 
   const handler = api?.[methodName(input.request.method)];
   if (!handler) {
-    return jsonError(
-      405,
-      'MODULE_API_HANDLER_METHOD_MISSING',
-      'Module API method handler is missing.'
+    return finish(
+      jsonError(
+        405,
+        'MODULE_API_HANDLER_METHOD_MISSING',
+        'Module API method handler is missing.'
+      )
     );
   }
 
@@ -457,17 +589,20 @@ export async function dispatchModuleApiRoute(
   });
 
   try {
-    return await runWithApiIdempotency({
-      request: input.request,
-      moduleId: match.entry.moduleId,
-      route,
-      params,
-      session: accessSession,
-      store: input.runtimeStore,
-      execute: () => handler(context),
-    });
+    const response = await measureApiTiming(spans, 'module-api-idempotency', () =>
+      runWithApiIdempotency({
+        request: input.request,
+        moduleId: match.entry.moduleId,
+        route,
+        params,
+        session: accessSession,
+        store: input.runtimeStore,
+        execute: () => measureApiTiming(spans, 'module-api-handler', () => handler(context)),
+      })
+    );
+    return finish(response);
   } catch (error) {
     logModuleApiHandlerError(error);
-    return jsonError(500, 'MODULE_API_HANDLER_ERROR', 'Module API handler failed.');
+    return finish(jsonError(500, 'MODULE_API_HANDLER_ERROR', 'Module API handler failed.'));
   }
 }

@@ -639,6 +639,13 @@ function normalizeQualityDefinition(definition) {
   return JSON.parse(JSON.stringify(definition.quality));
 }
 
+function normalizeNavigationDefinition(definition) {
+  if (!definition.navigation) {
+    return undefined;
+  }
+  return JSON.parse(JSON.stringify(definition.navigation));
+}
+
 function normalizeProductDefinition(definition) {
   if (!definition.product || typeof definition.product !== 'object') {
     return undefined;
@@ -696,6 +703,10 @@ async function scanModules() {
       const quality = normalizeQualityDefinition(definition);
       if (quality) {
         latest.quality = quality;
+      }
+      const navigation = normalizeNavigationDefinition(definition);
+      if (navigation) {
+        latest.navigation = navigation;
       }
       const product = normalizeProductDefinition(definition);
       if (product) {

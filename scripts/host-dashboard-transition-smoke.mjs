@@ -9,20 +9,33 @@ const baseUrl =
 const routeArg = process.argv.includes('--routes')
   ? process.argv[process.argv.indexOf('--routes') + 1]
   : process.env.HOST_DASHBOARD_TRANSITION_ROUTES;
-const maxDocumentNavigations = Number(
-  process.argv.includes('--max-document-navigations')
+const moduleIdArg = process.argv.includes('--module-id')
+  ? process.argv[process.argv.indexOf('--module-id') + 1]
+  : process.env.HOST_DASHBOARD_TRANSITION_MODULE_ID;
+const explicitMaxDocumentNavigations = process.argv.includes('--max-document-navigations');
+const explicitMaxHydrationErrors = process.argv.includes('--max-hydration-errors');
+const explicitMaxP95Ms = process.argv.includes('--max-p95-ms');
+const explicitMaxRscTransferBytes = process.argv.includes('--max-rsc-transfer-bytes');
+const configuredMaxDocumentNavigations = Number(
+  explicitMaxDocumentNavigations
     ? process.argv[process.argv.indexOf('--max-document-navigations') + 1]
     : (process.env.HOST_DASHBOARD_TRANSITION_MAX_DOCUMENT_NAVIGATIONS ?? '0')
 );
-const maxP95Ms = Number(
-  process.argv.includes('--max-p95-ms')
+const configuredMaxHydrationErrors = Number(
+  explicitMaxHydrationErrors
+    ? process.argv[process.argv.indexOf('--max-hydration-errors') + 1]
+    : (process.env.HOST_DASHBOARD_TRANSITION_MAX_HYDRATION_ERRORS ?? '0')
+);
+const configuredMaxP95Ms = Number(
+  explicitMaxP95Ms
     ? process.argv[process.argv.indexOf('--max-p95-ms') + 1]
     : (process.env.HOST_DASHBOARD_TRANSITION_MAX_P95_MS ?? '1000')
 );
-const maxRscTransferBytes = Number(
-  process.argv.includes('--max-rsc-transfer-bytes')
+const configuredMaxRscTransferBytes = Number(
+  explicitMaxRscTransferBytes
     ? process.argv[process.argv.indexOf('--max-rsc-transfer-bytes') + 1]
-    : (process.env.HOST_DASHBOARD_TRANSITION_MAX_RSC_TRANSFER_BYTES ?? '0')
+    : (process.env.HOST_DASHBOARD_TRANSITION_MAX_RSC_TRANSFER_BYTES ??
+      (required || moduleIdArg ? '100000' : '0'))
 );
 const repeat = Math.max(
   1,
@@ -36,11 +49,152 @@ const failFast = process.argv.includes('--fail-fast');
 const injectAnchor = process.argv.includes('--inject-anchor');
 const writeLatest = !process.argv.includes('--no-latest');
 const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
-const routes = (routeArg ?? '/zh/dashboard,/zh/dashboard/workspaces,/zh/dashboard/files')
-  .split(',')
-  .map((route) => route.trim())
-  .filter(Boolean)
-  .map((route) => (route.startsWith('/') ? route : `/${route}`));
+const DEFAULT_ROUTES = '/zh/dashboard,/zh/dashboard/workspaces,/zh/dashboard/files';
+const DYNAMIC_ROUTE_PATTERN = /\[[^\]]+\]|\*|:[A-Za-z][A-Za-z0-9_]*/;
+
+function asArray(value) {
+  if (!value) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+}
+
+function readModuleManifest() {
+  const manifestPath = path.resolve(process.cwd(), 'src', 'lib', 'module-map.manifest.json');
+  if (!fs.existsSync(manifestPath)) {
+    return { path: manifestPath, modules: [], error: 'Module map manifest is missing.' };
+  }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return { path: manifestPath, modules: Array.isArray(manifest.modules) ? manifest.modules : [] };
+  } catch (error) {
+    return {
+      path: manifestPath,
+      modules: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function dashboardRoutePath(route) {
+  if (typeof route !== 'string' || route.trim().length === 0) {
+    return undefined;
+  }
+  const normalized = route.trim().startsWith('/') ? route.trim() : `/${route.trim()}`;
+  if (normalized.startsWith('/zh/dashboard/')) {
+    return normalized;
+  }
+  if (normalized === '/zh/dashboard') {
+    return normalized;
+  }
+  if (normalized.startsWith('/dashboard/')) {
+    return `/zh${normalized}`;
+  }
+  if (normalized === '/dashboard') {
+    return '/zh/dashboard';
+  }
+  return normalized === '/' ? '/zh/dashboard' : `/zh/dashboard${normalized}`;
+}
+
+function isConcreteDashboardRoute(route) {
+  return typeof route === 'string' && route.startsWith('/') && !DYNAMIC_ROUTE_PATTERN.test(route);
+}
+
+function explicitRoutesFromArg(value) {
+  return (value ?? DEFAULT_ROUTES)
+    .split(',')
+    .map((route) => route.trim())
+    .filter(Boolean)
+    .map((route) => (route.startsWith('/') ? route : `/${route}`));
+}
+
+function routesFromModuleManifest(moduleId) {
+  const manifest = readModuleManifest();
+  const moduleInfo = manifest.modules.find((candidate) => candidate?.id === moduleId);
+  if (!moduleInfo) {
+    return {
+      routes: [],
+      source: {
+        kind: 'module-id',
+        moduleId,
+        manifestPath: manifest.path,
+        error: manifest.error ?? `Module "${moduleId}" was not found in module-map manifest.`,
+      },
+    };
+  }
+
+  const qualityRoutes = asArray(moduleInfo.quality?.performance?.dashboardTransitions?.routes);
+  const transitionBudgets = moduleInfo.quality?.performance?.dashboardTransitions ?? {};
+  const navigationRoutes = asArray(moduleInfo.navigation)
+    .filter((item) => item?.location === 'dashboard.sidebar')
+    .map((item) => item.path);
+  const productRoutes = asArray(moduleInfo.product?.pages)
+    .filter((page) => page?.shell === 'dashboard')
+    .map((page) => page.samplePath ?? page.path);
+  const normalizedRoutes = [...qualityRoutes, ...navigationRoutes, ...productRoutes]
+    .map((route) => ({ route, normalized: dashboardRoutePath(route) }))
+    .filter((entry) => entry.normalized);
+  const invalidRoutes = normalizedRoutes
+    .filter((entry) => !isConcreteDashboardRoute(entry.normalized))
+    .map((entry) => entry.route);
+  const routes = normalizedRoutes
+    .map((entry) => entry.normalized)
+    .filter(isConcreteDashboardRoute);
+  const uniqueRoutes = [...new Set(routes)];
+  return {
+    routes: uniqueRoutes,
+    invalidRoutes,
+    source: {
+      kind: 'module-id',
+      moduleId,
+      manifestPath: manifest.path,
+      qualityRoutes: qualityRoutes.length,
+      navigationRoutes: navigationRoutes.length,
+      productRoutes: productRoutes.length,
+      budgets: {
+        maxDocumentNavigations: transitionBudgets.maxDocumentNavigations,
+        maxHydrationErrors: transitionBudgets.maxHydrationErrors,
+        maxP95Ms: transitionBudgets.maxP95Ms,
+        maxRscTransferBytes: transitionBudgets.maxRscTransferBytes,
+      },
+    },
+  };
+}
+
+function resolveRoutes() {
+  if (routeArg) {
+    return { routes: explicitRoutesFromArg(routeArg), source: { kind: 'routes-arg' } };
+  }
+  if (moduleIdArg) {
+    return routesFromModuleManifest(moduleIdArg);
+  }
+  return { routes: explicitRoutesFromArg(DEFAULT_ROUTES), source: { kind: 'default' } };
+}
+
+const routeResolution = resolveRoutes();
+const invalidRoutes = [
+  ...(routeResolution.invalidRoutes ?? []),
+  ...routeResolution.routes.filter((route) => !isConcreteDashboardRoute(route)),
+];
+const routes = routeResolution.routes.filter(isConcreteDashboardRoute);
+function numericBudget(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : undefined;
+}
+
+const moduleBudgets = routeResolution.source?.budgets ?? {};
+const maxDocumentNavigations = explicitMaxDocumentNavigations
+  ? configuredMaxDocumentNavigations
+  : (numericBudget(moduleBudgets.maxDocumentNavigations) ?? configuredMaxDocumentNavigations);
+const maxHydrationErrors = explicitMaxHydrationErrors
+  ? configuredMaxHydrationErrors
+  : (numericBudget(moduleBudgets.maxHydrationErrors) ?? configuredMaxHydrationErrors);
+const maxP95Ms = explicitMaxP95Ms
+  ? configuredMaxP95Ms
+  : (numericBudget(moduleBudgets.maxP95Ms) ?? configuredMaxP95Ms);
+const maxRscTransferBytes = explicitMaxRscTransferBytes
+  ? configuredMaxRscTransferBytes
+  : (numericBudget(moduleBudgets.maxRscTransferBytes) ?? configuredMaxRscTransferBytes);
 const outputDir = path.resolve(
   process.cwd(),
   '.runtime',
@@ -195,6 +349,40 @@ function percentile(values, p) {
   return Math.round(sorted[index]);
 }
 
+function maxNumber(values) {
+  const numeric = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
+  return numeric.length > 0 ? Math.max(...numeric) : 0;
+}
+
+function routePerformanceMetrics(routeList, transitionList, rscRequestList) {
+  return routeList.map((route) => {
+    const routeTransitions = transitionList.filter(
+      (transition) => transition.expectedFinalPath === route || transition.to === route
+    );
+    const routeRscRequests = rscRequestList.filter((request) => request.path === route);
+    const routeRscTransferBytes = routeRscRequests
+      .map((request) => request.transferBytes)
+      .filter((value) => typeof value === 'number');
+    return {
+      route,
+      transitions: routeTransitions.length,
+      p95Ms: percentile(
+        routeTransitions.map((transition) => transition.durationMs),
+        95
+      ),
+      maxDocumentNavigations: maxNumber(
+        routeTransitions.map((transition) => transition.documentNavigationCount)
+      ),
+      maxHydrationErrors: maxNumber(
+        routeTransitions.map((transition) => transition.hydrationErrorCount)
+      ),
+      rscRequests: routeRscRequests.length,
+      rscTransferP95Bytes: percentile(routeRscTransferBytes, 95),
+      dashboardTimingReports: routeRscRequests.filter((request) => request.dashboardTiming).length,
+    };
+  });
+}
+
 function transitionPairs(routeList) {
   const pairs = [];
   for (let cycle = 0; cycle < repeat; cycle += 1) {
@@ -267,14 +455,73 @@ function parseContentLength(headers) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+async function fetchDashboardTiming(context, requestId) {
+  const url = `${normalizedBaseUrl}/api/host/diagnostics/dashboard-timing?requestId=${encodeURIComponent(
+    requestId
+  )}`;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const response = await context.request.get(url).catch((error) => ({ error }));
+    if ('error' in response) {
+      if (attempt === 4) {
+        return {
+          ok: false,
+          requestId,
+          error: response.error instanceof Error ? response.error.message : String(response.error),
+        };
+      }
+    } else if (response.status() === 200) {
+      return {
+        ok: true,
+        requestId,
+        status: response.status(),
+        report: (await response.json().catch(() => null))?.report ?? null,
+      };
+    } else if (attempt === 4 || response.status() !== 404) {
+      return {
+        ok: false,
+        requestId,
+        status: response.status(),
+        body: await response.text().catch(() => ''),
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+  }
+  return { ok: false, requestId, error: 'Dashboard timing report was not available.' };
+}
+
 const loaded = await loadPlaywright();
-if (routes.length < 2) {
+if (invalidRoutes.length > 0) {
   const result = {
     ok: false,
     required,
     skipped: false,
-    reason: 'Dashboard transition smoke requires at least two routes.',
+    reason: 'Dashboard transition smoke routes must be concrete paths.',
     routes,
+    invalidRoutes,
+    routeSource: routeResolution.source,
+    outputDir,
+    checkedAt: new Date().toISOString(),
+    artifacts: {
+      report: reportPath,
+      latest: latestPath,
+    },
+  };
+  writeReport(result);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.exitCode = 1;
+  process.exit();
+}
+const minimumRoutes = moduleIdArg ? 3 : 2;
+if (routes.length < minimumRoutes) {
+  const result = {
+    ok: false,
+    required,
+    skipped: false,
+    reason: moduleIdArg
+      ? `Dashboard transition smoke requires at least three concrete module routes for --module-id ${moduleIdArg}.`
+      : 'Dashboard transition smoke requires at least two routes.',
+    routes,
+    routeSource: routeResolution.source,
     outputDir,
     checkedAt: new Date().toISOString(),
     artifacts: {
@@ -296,6 +543,8 @@ if ('error' in loaded) {
     reason:
       'Playwright is not installed. Install playwright before running a required dashboard transition smoke.',
     error: loaded.error,
+    routes,
+    routeSource: routeResolution.source,
     outputDir,
     checkedAt: new Date().toISOString(),
     artifacts: {
@@ -319,11 +568,27 @@ const pageDiagnostics = [];
 const rscRequestStarts = new Map();
 const rscRequests = [];
 const rscFailures = [];
+const dashboardTimingReports = [];
+const rscResponseTasks = [];
+let successfulDashboardTimingReports = [];
 let transitionDocumentNavigations = 0;
+let routeMetrics = [];
+
+async function drainResponseTasks() {
+  let drained = 0;
+  while (drained < rscResponseTasks.length) {
+    const pending = rscResponseTasks.slice(drained);
+    drained = rscResponseTasks.length;
+    await Promise.allSettled(pending);
+  }
+}
 
 try {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: {
+      'x-ploykit-smoke': 'dashboard-transition',
+    },
   });
   const page = await context.newPage();
   checks.push({ id: 'auth-login', ...(await ensureAdminLogin(context)) });
@@ -357,25 +622,37 @@ try {
       startedAt: Date.now(),
     });
   });
-  page.on('response', async (response) => {
+  page.on('response', (response) => {
     const request = response.request();
     if (!isRscRequestUrl(request.url())) {
       return;
     }
-    const startedAt = rscRequestStarts.get(request) ?? Date.now();
-    rscRequestStarts.delete(request);
-    const headers = response.headers();
-    const body = await response.body().catch(() => null);
-    const contentLength = parseContentLength(headers);
-    rscRequests.push({
-      url: response.url(),
-      path: new URL(response.url()).pathname,
-      status: response.status(),
-      durationMs: Date.now() - startedAt,
-      transferBytes: contentLength ?? body?.byteLength ?? null,
-      decodedBytes: body?.byteLength ?? null,
-      serverTiming: headers['server-timing'] ?? null,
-    });
+    const task = (async () => {
+      const startedAt = rscRequestStarts.get(request) ?? Date.now();
+      rscRequestStarts.delete(request);
+      const headers = response.headers();
+      const body = await response.body().catch(() => null);
+      const contentLength = parseContentLength(headers);
+      const requestId = headers['x-request-id'] ?? headers['x-ploykit-request-id'] ?? null;
+      const rscRecord = {
+        url: response.url(),
+        path: new URL(response.url()).pathname,
+        status: response.status(),
+        durationMs: Date.now() - startedAt,
+        transferBytes: contentLength ?? body?.byteLength ?? null,
+        decodedBytes: body?.byteLength ?? null,
+        serverTiming: headers['server-timing'] ?? null,
+        requestId,
+        dashboardTiming: null,
+      };
+      rscRequests.push(rscRecord);
+      if (requestId) {
+        const timing = await fetchDashboardTiming(context, requestId);
+        rscRecord.dashboardTiming = timing.ok ? timing.report : null;
+        dashboardTimingReports.push(timing);
+      }
+    })();
+    rscResponseTasks.push(task);
   });
   page.on('requestfailed', (request) => {
     if (!isRscRequestUrl(request.url())) {
@@ -489,7 +766,7 @@ try {
       ok:
         finalPath === expectedFinalPath &&
         documentNavigationCount <= maxDocumentNavigations &&
-        hydrationErrorCount === 0,
+        hydrationErrorCount <= maxHydrationErrors,
       durationMs,
       finalPath,
       documentNavigationCount,
@@ -504,7 +781,9 @@ try {
     }
   }
 
+  await drainResponseTasks();
   const transitionDurations = transitions.map((transition) => transition.durationMs);
+  routeMetrics = routePerformanceMetrics(routes, transitions, rscRequests);
   transitionDocumentNavigations = documentRequests.length - initialDocumentCount;
   checks.push({
     id: 'transition:document-navigation',
@@ -514,8 +793,9 @@ try {
   });
   checks.push({
     id: 'transition:hydration',
-    ok: hydrationErrors.length === 0,
+    ok: hydrationErrors.length <= maxHydrationErrors,
     hydrationErrors: hydrationErrors.length,
+    maxHydrationErrors,
   });
   checks.push({
     id: 'transition:rsc-abort',
@@ -542,6 +822,19 @@ try {
       maxRscTransferBytes,
     });
   }
+  successfulDashboardTimingReports = dashboardTimingReports.filter(
+    (item) => item?.ok === true && item.report
+  );
+  if (required || moduleIdArg) {
+    checks.push({
+      id: 'dashboard:timing-evidence',
+      ok:
+        rscRequests.length === 0 ||
+        successfulDashboardTimingReports.length >= Math.min(rscRequests.length, transitions.length),
+      reports: successfulDashboardTimingReports.length,
+      rscRequests: rscRequests.length,
+    });
+  }
   checks.push({
     id: 'transition:p95',
     ok: percentile(transitionDurations, 95) <= maxP95Ms,
@@ -549,6 +842,39 @@ try {
     p95Ms: percentile(transitionDurations, 95),
     maxP95Ms,
   });
+  if (moduleIdArg) {
+    checks.push(
+      ...routeMetrics.map((metric) => {
+        const documentOk = metric.maxDocumentNavigations <= maxDocumentNavigations;
+        const hydrationOk = metric.maxHydrationErrors <= maxHydrationErrors;
+        const p95Ok = metric.p95Ms <= maxP95Ms;
+        const rscOk =
+          maxRscTransferBytes <= 0 || metric.rscTransferP95Bytes <= maxRscTransferBytes;
+        return {
+          id: `transition:route-budget:${metric.route}`,
+          ok: documentOk && hydrationOk && p95Ok && rscOk,
+          route: metric.route,
+          maxDocumentNavigations,
+          maxHydrationErrors,
+          maxP95Ms,
+          maxRscTransferBytes,
+          metric,
+          failures: [
+            documentOk
+              ? undefined
+              : `maxDocumentNavigations ${metric.maxDocumentNavigations} exceeded ${maxDocumentNavigations}`,
+            hydrationOk
+              ? undefined
+              : `maxHydrationErrors ${metric.maxHydrationErrors} exceeded ${maxHydrationErrors}`,
+            p95Ok ? undefined : `p95Ms ${metric.p95Ms} exceeded ${maxP95Ms}`,
+            rscOk
+              ? undefined
+              : `rscTransferP95Bytes ${metric.rscTransferP95Bytes} exceeded ${maxRscTransferBytes}`,
+          ].filter(Boolean),
+        };
+      })
+    );
+  }
   checks.push(
     ...transitions.map((transition, index) => ({
       id: `transition:${index + 1}:${transition.from}->${transition.to}`,
@@ -609,6 +935,13 @@ const result = {
   checkedAt: new Date().toISOString(),
   summary: {
     routes,
+    routeMetrics,
+    routeSource: routeResolution.source,
+    moduleId: moduleIdArg ?? null,
+    maxDocumentNavigations,
+    maxHydrationErrors,
+    maxP95Ms,
+    maxRscTransferBytes,
     repeat,
     injectAnchor,
     writeLatest,
@@ -642,6 +975,7 @@ const result = {
       95
     ),
     rscServerTimingHeaders: rscRequests.filter((request) => request.serverTiming).length,
+    dashboardTimingReports: successfulDashboardTimingReports.length,
     hydrationErrors: hydrationErrors.length,
     appFramePresent,
     clientTransitionMarkerPresent,
@@ -651,6 +985,7 @@ const result = {
   transitions,
   documentRequests,
   rscRequests,
+  dashboardTimingReports,
   rscFailures,
   pageDiagnostics,
   hydrationErrors,

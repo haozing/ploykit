@@ -46,6 +46,7 @@ export interface ResolvedModulePageRoute {
   moduleId: string;
   kind: ModulePageRouteKind;
   route: ModulePageRoute;
+  effectiveRoute: ResolvedModulePageEffectiveRoute;
   matchedPath: string;
   routeSource: 'route' | 'alias' | 'publicAlias';
   canonicalPath: string;
@@ -54,6 +55,18 @@ export interface ResolvedModulePageRoute {
   component: unknown;
   loaderData: unknown;
   metadata: unknown;
+}
+
+export interface ResolvedModulePageEffectiveRoute {
+  loader?: string;
+  metadata?: string;
+  cache?: ModulePageRoute['cache'];
+  selectedParams: readonly {
+    kind: 'loader' | 'metadata' | 'cache';
+    param: string;
+    value: string;
+    matched: boolean;
+  }[];
 }
 
 export interface ResolvedModulePageRouteResult {
@@ -66,6 +79,7 @@ export interface ResolvedModulePageRouteMetadata {
   moduleId: string;
   kind: ModulePageRouteKind;
   route: ModulePageRoute;
+  effectiveRoute: ResolvedModulePageEffectiveRoute;
   matchedPath: string;
   routeSource: 'route' | 'alias' | 'publicAlias';
   canonicalPath: string;
@@ -84,6 +98,7 @@ export interface ModulePageRouteErrorContext {
   moduleId: string;
   kind: ModulePageRouteKind;
   route: ModulePageRoute;
+  effectiveRoute?: ResolvedModulePageEffectiveRoute;
   matchedPath: string;
   routeSource: 'route' | 'alias' | 'publicAlias';
   canonicalPath: string;
@@ -141,11 +156,13 @@ function moduleRouteContext(input: {
   contract: ModuleRuntimeContract;
   params: Record<string, string>;
   metadata?: unknown;
+  effectiveRoute?: ResolvedModulePageEffectiveRoute;
 }): ModulePageRouteErrorContext {
   return {
     moduleId: input.match.entry.moduleId,
     kind: input.kind,
     route: input.route,
+    effectiveRoute: input.effectiveRoute,
     matchedPath: input.match.entry.path,
     routeSource: input.match.entry.source,
     canonicalPath: input.match.entry.canonicalPath,
@@ -153,6 +170,63 @@ function moduleRouteContext(input: {
     contract: input.contract,
     metadata: input.metadata,
   };
+}
+
+function selectParamBranch<T>(
+  selector: Readonly<Record<string, Readonly<Record<string, T>>>> | undefined,
+  params: Record<string, string>,
+  kind: 'loader' | 'metadata' | 'cache'
+): { value?: T; selected?: ResolvedModulePageEffectiveRoute['selectedParams'][number] } {
+  const [param, branches] = Object.entries(selector ?? {})[0] ?? [];
+  if (!param || !branches) {
+    return {};
+  }
+  const paramValue = params[param];
+  const matched =
+    paramValue !== undefined && Object.prototype.hasOwnProperty.call(branches, paramValue);
+  return {
+    value: matched ? branches[paramValue as string] : undefined,
+    selected: {
+      kind,
+      param,
+      value: paramValue ?? '',
+      matched,
+    },
+  };
+}
+
+function selectedParamValueOrRouteDefault<T>(
+  selected: { value?: T; selected?: ResolvedModulePageEffectiveRoute['selectedParams'][number] },
+  routeDefault: T | undefined
+): T | undefined {
+  return selected.selected ? selected.value : routeDefault;
+}
+
+function resolveEffectiveRoute(
+  route: ModulePageRoute,
+  params: Record<string, string>
+): ResolvedModulePageEffectiveRoute {
+  const selectedParams: Array<ResolvedModulePageEffectiveRoute['selectedParams'][number]> = [];
+  const loader = selectParamBranch(route.loaderByParam, params, 'loader');
+  const metadata = selectParamBranch(route.metadataByParam, params, 'metadata');
+  const cache = selectParamBranch(route.cacheByParam, params, 'cache');
+  for (const selected of [loader.selected, metadata.selected, cache.selected]) {
+    if (selected) {
+      selectedParams.push(selected);
+    }
+  }
+  return {
+    loader: selectedParamValueOrRouteDefault(loader, route.loader),
+    metadata: selectedParamValueOrRouteDefault(metadata, route.metadata),
+    cache: selectedParamValueOrRouteDefault(cache, route.cache),
+    selectedParams,
+  };
+}
+
+function missingEffectiveRouteParamBranch(
+  effectiveRoute: ResolvedModulePageEffectiveRoute
+): ResolvedModulePageEffectiveRoute['selectedParams'][number] | undefined {
+  return effectiveRoute.selectedParams.find((selected) => !selected.matched);
 }
 
 async function resolveErrorMetadata(
@@ -314,6 +388,7 @@ export async function resolveModulePageRoute(
     return parts;
   }
   const { match, route, contract, params, accessSession, user } = parts;
+  const effectiveRoute = resolveEffectiveRoute(route, params);
   const entry = host.getMapEntry(match.entry.moduleId);
   if (!entry) {
     return pageError(500, 'MODULE_PAGE_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.');
@@ -324,14 +399,26 @@ export async function resolveModulePageRoute(
     route,
     contract,
     params,
+    effectiveRoute,
   });
 
   const componentLoader = resolveModuleEntryLoader(entry, 'pages', route.component);
-  const loader = route.loader ? resolveModuleEntryLoader(entry, 'loaders', route.loader) : null;
-  const metadataLoader = route.metadata
-    ? resolveModuleEntryLoader(entry, 'loaders', route.metadata)
+  const loader = effectiveRoute.loader
+    ? resolveModuleEntryLoader(entry, 'loaders', effectiveRoute.loader)
+    : null;
+  const metadataLoader = effectiveRoute.metadata
+    ? resolveModuleEntryLoader(entry, 'loaders', effectiveRoute.metadata)
     : null;
   const context = createContext(host, contract, route, input, match, params, user, accessSession);
+  const missingParamBranch = missingEffectiveRouteParamBranch(effectiveRoute);
+  if (missingParamBranch) {
+    return pageError(
+      404,
+      'MODULE_PAGE_PARAM_BRANCH_NOT_FOUND',
+      `Module page ${missingParamBranch.kind} branch is not declared for route parameter "${missingParamBranch.param}".`,
+      baseRouteContext
+    );
+  }
 
   if (!componentLoader) {
     const metadata = await resolveErrorMetadata(metadataLoader, context);
@@ -339,21 +426,37 @@ export async function resolveModulePageRoute(
       500,
       'MODULE_PAGE_COMPONENT_MISSING',
       'Module page component is missing.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+      moduleRouteContext({
+        match,
+        kind: input.kind,
+        route,
+        effectiveRoute,
+        contract,
+        params,
+        metadata,
+      })
     );
   }
 
-  if (route.loader && !loader) {
+  if (effectiveRoute.loader && !loader) {
     const metadata = await resolveErrorMetadata(metadataLoader, context);
     return pageError(
       500,
       'MODULE_PAGE_LOADER_MISSING',
       'Module page loader is missing.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+      moduleRouteContext({
+        match,
+        kind: input.kind,
+        route,
+        effectiveRoute,
+        contract,
+        params,
+        metadata,
+      })
     );
   }
 
-  if (route.metadata && !metadataLoader) {
+  if (effectiveRoute.metadata && !metadataLoader) {
     return pageError(
       500,
       'MODULE_PAGE_METADATA_MISSING',
@@ -374,7 +477,15 @@ export async function resolveModulePageRoute(
       500,
       'MODULE_PAGE_HANDLER_ERROR',
       'Module page route failed.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+      moduleRouteContext({
+        match,
+        kind: input.kind,
+        route,
+        effectiveRoute,
+        contract,
+        params,
+        metadata,
+      })
     );
   }
 
@@ -390,7 +501,15 @@ export async function resolveModulePageRoute(
       500,
       'MODULE_PAGE_HANDLER_ERROR',
       'Module page route failed.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params, metadata })
+      moduleRouteContext({
+        match,
+        kind: input.kind,
+        route,
+        effectiveRoute,
+        contract,
+        params,
+        metadata,
+      })
     );
   }
 
@@ -405,7 +524,7 @@ export async function resolveModulePageRoute(
       500,
       'MODULE_PAGE_HANDLER_ERROR',
       'Module page route failed.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params })
+      moduleRouteContext({ match, kind: input.kind, route, effectiveRoute, contract, params })
     );
   }
 
@@ -416,6 +535,7 @@ export async function resolveModulePageRoute(
       moduleId: match.entry.moduleId,
       kind: input.kind,
       route,
+      effectiveRoute,
       matchedPath: match.entry.path,
       routeSource: match.entry.source,
       canonicalPath: match.entry.canonicalPath,
@@ -437,19 +557,29 @@ export async function resolveModulePageRouteMetadata(
     return parts;
   }
   const { match, route, contract, params, accessSession, user } = parts;
+  const effectiveRoute = resolveEffectiveRoute(route, params);
   const entry = host.getMapEntry(match.entry.moduleId);
   if (!entry) {
     return pageError(500, 'MODULE_PAGE_RUNTIME_ENTRY_MISSING', 'Module runtime entry is missing.');
   }
-  const metadataLoader = route.metadata
-    ? resolveModuleEntryLoader(entry, 'loaders', route.metadata)
+  const metadataLoader = effectiveRoute.metadata
+    ? resolveModuleEntryLoader(entry, 'loaders', effectiveRoute.metadata)
     : null;
-  if (route.metadata && !metadataLoader) {
+  const missingParamBranch = missingEffectiveRouteParamBranch(effectiveRoute);
+  if (missingParamBranch) {
+    return pageError(
+      404,
+      'MODULE_PAGE_PARAM_BRANCH_NOT_FOUND',
+      `Module page ${missingParamBranch.kind} branch is not declared for route parameter "${missingParamBranch.param}".`,
+      moduleRouteContext({ match, kind: input.kind, route, effectiveRoute, contract, params })
+    );
+  }
+  if (effectiveRoute.metadata && !metadataLoader) {
     return pageError(
       500,
       'MODULE_PAGE_METADATA_MISSING',
       'Module page metadata is missing.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params })
+      moduleRouteContext({ match, kind: input.kind, route, effectiveRoute, contract, params })
     );
   }
 
@@ -465,7 +595,7 @@ export async function resolveModulePageRouteMetadata(
       500,
       'MODULE_PAGE_HANDLER_ERROR',
       'Module page route failed.',
-      moduleRouteContext({ match, kind: input.kind, route, contract, params })
+      moduleRouteContext({ match, kind: input.kind, route, effectiveRoute, contract, params })
     );
   }
 
@@ -476,6 +606,7 @@ export async function resolveModulePageRouteMetadata(
       moduleId: match.entry.moduleId,
       kind: input.kind,
       route,
+      effectiveRoute,
       matchedPath: match.entry.path,
       routeSource: match.entry.source,
       canonicalPath: match.entry.canonicalPath,

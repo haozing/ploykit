@@ -195,6 +195,105 @@ test('module contract validates dashboard and admin route aliases', () => {
   assert.ok(codes.includes('MODULE_ROUTE_ALIAS_PATH_INVALID'));
 });
 
+test('module contract validates page route param selectors', () => {
+  const valid = codesFor(
+    defineModule({
+      id: 'param-selector-valid',
+      name: 'Param Selector Valid',
+      version: '0.1.0',
+      routes: {
+        dashboard: [
+          {
+            path: '/param-selector/[section]',
+            component: './pages/App',
+            loaderByParam: {
+              section: {
+                agents: './loaders/agents',
+              },
+            },
+            metadataByParam: {
+              section: {
+                agents: './loaders/agents-metadata',
+              },
+            },
+            cacheByParam: {
+              section: {
+                agents: {
+                  strategy: 'private',
+                  revalidateSeconds: 10,
+                },
+              },
+            },
+          },
+        ],
+      },
+    })
+  );
+  const invalid = codesFor(
+    defineModule({
+      id: 'param-selector-invalid',
+      name: 'Param Selector Invalid',
+      version: '0.1.0',
+      routes: {
+        dashboard: [
+          {
+            path: '/param-selector/[section]',
+            component: './pages/App',
+            loaderByParam: {
+              section: {
+                agents: '../outside',
+              },
+              tab: {
+                overview: './loaders/overview',
+              },
+            },
+            metadataByParam: {
+              missing: {
+                agents: './loaders/agents-metadata',
+              },
+            },
+            cacheByParam: {
+              section: {
+                agents: {
+                  strategy: 'invalid' as never,
+                  revalidateSeconds: 0,
+                },
+              },
+            },
+          },
+        ],
+      },
+    })
+  );
+  const invalidPath = codesFor(
+    defineModule({
+      id: 'param-selector-invalid-path',
+      name: 'Param Selector Invalid Path',
+      version: '0.1.0',
+      routes: {
+        dashboard: [
+          {
+            path: '/param-selector/[section]',
+            component: './pages/App',
+            loaderByParam: {
+              section: {
+                agents: '../outside',
+              },
+            },
+          },
+        ],
+      },
+    })
+  );
+
+  assert.deepEqual(valid, []);
+  assert.ok(invalid.includes('MODULE_ROUTE_PARAM_SELECTOR_COUNT_INVALID'));
+  assert.ok(invalid.includes('MODULE_ROUTE_PARAM_SELECTOR_UNKNOWN'));
+  assert.ok(invalidPath.includes('MODULE_LOCAL_PATH_INVALID'));
+  assert.ok(invalid.includes('MODULE_ROUTE_CACHE_STRATEGY_INVALID'));
+  assert.ok(invalid.includes('MODULE_ROUTE_CACHE_REVALIDATE_INVALID'));
+});
+
 test('module contract keeps public aliases and route aliases in separate lanes', () => {
   const siteCodes = codesFor(
     defineModule({
@@ -279,6 +378,70 @@ test('module contract requires public site routes to declare SEO metadata and ca
   assert.ok(codes.includes('MODULE_ROUTE_CACHE_TAG_EMPTY'));
 });
 
+test('module contract validates public site param metadata and cache branches', () => {
+  const branchOnlyCodes = codesFor(
+    defineModule({
+      id: 'public-site-param-test',
+      name: 'Public Site Param Test',
+      version: '0.1.0',
+      routes: {
+        site: [
+          {
+            path: '/docs/[section]',
+            component: './pages/DocsPage',
+            auth: 'public',
+            metadataByParam: {
+              section: {
+                guide: './loaders/docs-guide-metadata',
+              },
+            },
+            cacheByParam: {
+              section: {
+                guide: {
+                  strategy: 'public',
+                  revalidateSeconds: 300,
+                },
+              },
+            },
+          },
+        ],
+      },
+    })
+  );
+  const privateBranchCodes = codesFor(
+    defineModule({
+      id: 'public-site-param-private-test',
+      name: 'Public Site Param Private Test',
+      version: '0.1.0',
+      routes: {
+        site: [
+          {
+            path: '/docs/[section]',
+            component: './pages/DocsPage',
+            auth: 'public',
+            metadataByParam: {
+              section: {
+                guide: './loaders/docs-guide-metadata',
+              },
+            },
+            cacheByParam: {
+              section: {
+                guide: {
+                  strategy: 'private',
+                },
+              },
+            },
+          },
+        ],
+      },
+    })
+  );
+
+  assert.equal(branchOnlyCodes.includes('MODULE_PUBLIC_SITE_METADATA_REQUIRED'), false);
+  assert.equal(branchOnlyCodes.includes('MODULE_PUBLIC_SITE_CACHE_REQUIRED'), false);
+  assert.ok(privateBranchCodes.includes('MODULE_PUBLIC_ROUTE_PRIVATE_CACHE'));
+});
+
 test('module contract rejects public machine-auth API routes', () => {
   const codes = codesFor(
     defineModule({
@@ -337,6 +500,68 @@ test('module contract validates API route idempotency declarations', () => {
 
   assert.ok(codes.includes('MODULE_API_IDEMPOTENCY_KEY_SOURCE_REQUIRED'));
   assert.ok(codes.includes('MODULE_API_IDEMPOTENCY_KEY_SOURCE_INVALID'));
+});
+
+test('module contract validates quality performance route sampling shape', () => {
+  const valid = codesFor(
+    defineModule({
+      id: 'quality-performance-valid',
+      name: 'Quality Performance Valid',
+      version: '0.1.0',
+      quality: {
+        performance: {
+          pageRoutes: [
+            {
+              shell: 'dashboard',
+              path: '/quality-performance/[section]',
+              samplePath: '/quality-performance/traces',
+              maxLoaderMs: 500,
+              maxLoaderDataBytes: 20000,
+            },
+          ],
+          apiRoutes: [
+            {
+              path: '/quality-performance/audit',
+              method: 'GET',
+              auth: 'anonymous',
+              maxP95Ms: 800,
+              maxResponseBytes: 150000,
+            },
+          ],
+        },
+      },
+    })
+  );
+  const invalid = codesFor(
+    defineModule({
+      id: 'quality-performance-invalid',
+      name: 'Quality Performance Invalid',
+      version: '0.1.0',
+      quality: {
+        performance: {
+          pageRoutes: [
+            {
+              shell: 'site' as never,
+              path: '/quality-performance/[section]',
+              samplePath: '/quality-performance/traces',
+            },
+          ],
+          apiRoutes: [
+            {
+              path: '/quality-performance/audit',
+              method: 'POST' as never,
+              auth: 'user' as never,
+            },
+          ],
+        },
+      },
+    })
+  );
+
+  assert.deepEqual(valid, []);
+  assert.ok(invalid.includes('MODULE_QUALITY_PAGE_ROUTE_SHELL_INVALID'));
+  assert.ok(invalid.includes('MODULE_QUALITY_API_METHOD_INVALID'));
+  assert.ok(invalid.includes('MODULE_QUALITY_API_AUTH_INVALID'));
 });
 
 test('module contract validates public API anonymous policy details', () => {

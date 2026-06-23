@@ -64,6 +64,42 @@ export const testModule = defineModule({
         aliases: ['/workspace-dashboard', '/dashboard/special'],
       },
       {
+        path: '/sections/[section]',
+        component: './pages/DashboardPage',
+        loader: './loaders/section-default-state',
+        loaderByParam: {
+          section: {
+            agents: './loaders/section-agents-state',
+            traces: './loaders/section-traces-state',
+          },
+        },
+        metadata: './loaders/section-default-metadata',
+        metadataByParam: {
+          section: {
+            agents: './loaders/section-agents-metadata',
+            traces: './loaders/section-default-metadata',
+          },
+        },
+        cache: {
+          strategy: 'private',
+          revalidateSeconds: 30,
+        },
+        cacheByParam: {
+          section: {
+            agents: {
+              strategy: 'private',
+              revalidateSeconds: 30,
+            },
+            traces: {
+              strategy: 'private',
+              revalidateSeconds: 5,
+              tags: ['host-test-traces'],
+            },
+          },
+        },
+        auth: 'auth',
+      },
+      {
         path: '/module-loader-error',
         component: './pages/ExplodingLoaderPage',
         loader: './loaders/exploding-loader-state',
@@ -266,6 +302,36 @@ export const artifact: ModuleMapArtifact = {
         'loaders/workspace-metadata': async () => ({
           default: () => ({
             title: 'Workspace dashboard',
+          }),
+        }),
+        'loaders/section-default-state': async () => ({
+          default: (ctx: ModuleContext) => ({
+            section: ctx.request.params.section,
+            source: 'default',
+          }),
+        }),
+        'loaders/section-agents-state': async () => ({
+          default: (ctx: ModuleContext) => ({
+            section: ctx.request.params.section,
+            source: 'agents',
+          }),
+        }),
+        'loaders/section-traces-state': async () => ({
+          default: (ctx: ModuleContext) => ({
+            section: ctx.request.params.section,
+            source: 'traces',
+          }),
+        }),
+        'loaders/section-default-metadata': async () => ({
+          default: (ctx: ModuleContext) => ({
+            title: `Section ${ctx.request.params.section}`,
+            source: 'default',
+          }),
+        }),
+        'loaders/section-agents-metadata': async () => ({
+          default: () => ({
+            title: 'Agents',
+            source: 'agents',
           }),
         }),
         'loaders/public-tool-metadata': async () => ({

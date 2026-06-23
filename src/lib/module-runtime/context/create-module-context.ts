@@ -87,7 +87,16 @@ export interface CreateModuleContextOptions {
 function createResponseFactory(): ModuleResponseFactory {
   return {
     json(data, init) {
-      return Response.json(data, init);
+      const body = JSON.stringify(data);
+      if (body === undefined) {
+        return Response.json(data, init);
+      }
+      const headers = new Headers(init?.headers);
+      if (!headers.has('content-type')) {
+        headers.set('content-type', 'application/json');
+      }
+      headers.set('content-length', String(new TextEncoder().encode(body).byteLength));
+      return new Response(body, { ...init, headers });
     },
     redirect(url, status = 302) {
       return Response.redirect(url, status);

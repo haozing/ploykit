@@ -6,32 +6,33 @@
 
 | Field | Required | Type | Meaning | Source |
 | --- | --- | --- | --- | --- |
-| `contractVersion` | no | `1 \| 2` | Contract version; service operation policies require v2. | `src/module-sdk/types.ts:429` |
-| `id` | yes | `string` | Stable module id that must align with modules/<id>. | `src/module-sdk/types.ts:430` |
-| `name` | yes | `string` | Display name. | `src/module-sdk/types.ts:431` |
-| `version` | yes | `string` | Module version. | `src/module-sdk/types.ts:432` |
-| `description` | no | `string` | Short description. | `src/module-sdk/types.ts:433` |
-| `product` | no | `ModuleProductDefinition` | Product page, audience, shell, and quality metadata. | `src/module-sdk/types.ts:434` |
-| `parts` | no | `ModuleContractPartsDefinition` | Contract file split declarations. | `src/module-sdk/types.ts:435` |
-| `permissions` | no | `readonly PermissionValue[]` | Top-level module permission allowlist. | `src/module-sdk/types.ts:436` |
-| `scope` | no | `ModuleScopeDefinition` | User, workspace, product scope, and role requirements. | `src/module-sdk/types.ts:437` |
-| `data` | no | `ModuleDataDefinition` | Data v2 table, document, and migration definitions. | `src/module-sdk/types.ts:438` |
-| `routes` | no | `ModuleRoutesDefinition` | Site, dashboard, admin, and API routes. | `src/module-sdk/types.ts:439` |
-| `navigation` | no | `ModuleNavigationItem \| readonly ModuleNavigationItem[]` | Host shell navigation contributions. | `src/module-sdk/types.ts:440` |
-| `surfaces` | no | `Record<string, ModuleSurfaceDefinition>` | Host surface contributions or replacements. | `src/module-sdk/types.ts:441` |
-| `resources` | no | `ModuleResourcesDefinition` | Locales, icons, assets, and similar resources. | `src/module-sdk/types.ts:442` |
-| `i18n` | no | `ModuleI18nDefinition` | Multilingual declaration. | `src/module-sdk/types.ts:443` |
-| `presentation` | no | `ModulePresentationDefinition` | White-label, SEO, themeScope, and presentation metadata. | `src/module-sdk/types.ts:444` |
-| `theme` | no | `ModuleThemeDefinition` | Theme tokens. | `src/module-sdk/types.ts:445` |
-| `meters` | no | `Record<string, ModuleMeterDefinition>` | Meter definitions. | `src/module-sdk/types.ts:446` |
-| `serviceRequirements` | no | `Record<string, ModuleServiceRequirementDefinition>` | Controlled external service contracts. | `src/module-sdk/types.ts:447` |
-| `resourceBindings` | no | `Record<string, ModuleResourceBindingRequirement>` | Host resource binding requirements. | `src/module-sdk/types.ts:448` |
-| `config` | no | `Record<string, ModuleConfigFieldDefinition>` | Module configuration fields. | `src/module-sdk/types.ts:449` |
-| `actions` | no | `Record<string, ModuleActionDefinition>` | Module action handlers. | `src/module-sdk/types.ts:450` |
-| `jobs` | no | `Record<string, ModuleJobDefinition>` | Background job handlers. | `src/module-sdk/types.ts:451` |
-| `events` | no | `ModuleEventsDefinition` | Event publish and subscribe declarations. | `src/module-sdk/types.ts:452` |
-| `webhooks` | no | `Record<string, ModuleWebhookDefinition>` | Module webhook entries. | `src/module-sdk/types.ts:453` |
-| `head` | no | `ModuleHeadDefinition` | Page head metadata. | `src/module-sdk/types.ts:454` |
-| `lifecycle` | no | `ModuleLifecycleDefinition` | Install, enable, seed, and other lifecycle handlers. | `src/module-sdk/types.ts:455` |
-| `dependencies` | no | `ModuleDependenciesDefinition` | Module npm dependencies. | `src/module-sdk/types.ts:456` |
-| `egress` | no | `readonly string[]` | Outbound origin allowlist. | `src/module-sdk/types.ts:457` |
+| `contractVersion` | no | `1 \| 2` | Contract version; service operation policies require v2. | `src/module-sdk/types.ts:475` |
+| `id` | yes | `string` | Stable module id that must align with modules/<id>. | `src/module-sdk/types.ts:476` |
+| `name` | yes | `string` | Display name. | `src/module-sdk/types.ts:477` |
+| `version` | yes | `string` | Module version. | `src/module-sdk/types.ts:478` |
+| `description` | no | `string` | Short description. | `src/module-sdk/types.ts:479` |
+| `product` | no | `ModuleProductDefinition` | Product page, audience, shell, and quality metadata. | `src/module-sdk/types.ts:480` |
+| `parts` | no | `ModuleContractPartsDefinition` | Contract file split declarations. | `src/module-sdk/types.ts:481` |
+| `permissions` | no | `readonly PermissionValue[]` | Top-level module permission allowlist. | `src/module-sdk/types.ts:482` |
+| `scope` | no | `ModuleScopeDefinition` | User, workspace, product scope, and role requirements. | `src/module-sdk/types.ts:483` |
+| `data` | no | `ModuleDataDefinition` | Data v2 table, document, and migration definitions. | `src/module-sdk/types.ts:484` |
+| `routes` | no | `ModuleRoutesDefinition` | Site, dashboard, admin, and API routes. | `src/module-sdk/types.ts:485` |
+| `navigation` | no | `ModuleNavigationItem \| readonly ModuleNavigationItem[]` | Host shell navigation contributions. | `src/module-sdk/types.ts:486` |
+| `surfaces` | no | `Record<string, ModuleSurfaceDefinition>` | Host surface contributions or replacements. | `src/module-sdk/types.ts:487` |
+| `resources` | no | `ModuleResourcesDefinition` | Locales, icons, assets, and similar resources. | `src/module-sdk/types.ts:488` |
+| `i18n` | no | `ModuleI18nDefinition` | Multilingual declaration. | `src/module-sdk/types.ts:489` |
+| `presentation` | no | `ModulePresentationDefinition` | White-label, SEO, themeScope, and presentation metadata. | `src/module-sdk/types.ts:490` |
+| `theme` | no | `ModuleThemeDefinition` | Theme tokens. | `src/module-sdk/types.ts:491` |
+| `meters` | no | `Record<string, ModuleMeterDefinition>` | Meter definitions. | `src/module-sdk/types.ts:492` |
+| `serviceRequirements` | no | `Record<string, ModuleServiceRequirementDefinition>` | Controlled external service contracts. | `src/module-sdk/types.ts:493` |
+| `resourceBindings` | no | `Record<string, ModuleResourceBindingRequirement>` | Host resource binding requirements. | `src/module-sdk/types.ts:494` |
+| `config` | no | `Record<string, ModuleConfigFieldDefinition>` | Module configuration fields. | `src/module-sdk/types.ts:495` |
+| `actions` | no | `Record<string, ModuleActionDefinition>` | Module action handlers. | `src/module-sdk/types.ts:496` |
+| `jobs` | no | `Record<string, ModuleJobDefinition>` | Background job handlers. | `src/module-sdk/types.ts:497` |
+| `events` | no | `ModuleEventsDefinition` | Event publish and subscribe declarations. | `src/module-sdk/types.ts:498` |
+| `webhooks` | no | `Record<string, ModuleWebhookDefinition>` | Module webhook entries. | `src/module-sdk/types.ts:499` |
+| `head` | no | `ModuleHeadDefinition` | Page head metadata. | `src/module-sdk/types.ts:500` |
+| `lifecycle` | no | `ModuleLifecycleDefinition` | Install, enable, seed, and other lifecycle handlers. | `src/module-sdk/types.ts:501` |
+| `dependencies` | no | `ModuleDependenciesDefinition` | Module npm dependencies. | `src/module-sdk/types.ts:502` |
+| `egress` | no | `readonly string[]` | Outbound origin allowlist. | `src/module-sdk/types.ts:503` |
+| `quality` | no | `ModuleQualityDefinition` | Module quality evidence declaration. | `src/module-sdk/types.ts:504` |

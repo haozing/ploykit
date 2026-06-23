@@ -277,6 +277,7 @@ async function doctorModule(moduleRoot) {
   capabilityRules.checkPrivilegedServiceSourceUsage(moduleRoot, source, diagnostics);
   contractRules.checkHttpEgress(moduleRoot, source, diagnostics);
   contractRules.checkPublicRouteContracts(source, diagnostics);
+  contractRules.checkDashboardRoutePerformanceShape(source, diagnostics);
   contractRules.checkLifecycleContracts(moduleRoot, source, diagnostics);
   dependencyRules.checkModuleDependencies(source, diagnostics);
   await checkSdkContractValidation(moduleRoot, diagnostics);

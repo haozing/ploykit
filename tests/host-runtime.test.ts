@@ -732,7 +732,7 @@ test('runtime host snapshot explains mounted capabilities and module map health'
   });
 
   assert.equal(snapshot.mountedCapabilities.modules, 1);
-  assert.equal(snapshot.mountedCapabilities.routes, 13);
+  assert.equal(snapshot.mountedCapabilities.routes, 14);
   assert.equal(snapshot.mountedCapabilities.actions, 1);
   assert.equal(
     snapshot.routeResolution.some((route) => route.source === 'publicAlias'),

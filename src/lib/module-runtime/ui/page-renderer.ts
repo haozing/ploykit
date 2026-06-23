@@ -29,7 +29,8 @@ export interface ModulePageRenderProps {
     id: string;
     version: string;
   };
-  route: ResolvedModulePageRoute['route'];
+  route: ResolvedModulePageRoute['effectiveRoute'];
+  contractRoute: ResolvedModulePageRoute['route'];
   params: Record<string, string>;
   loaderData: unknown;
   metadata: unknown;
@@ -81,7 +82,8 @@ export async function renderModulePage(
       id: page.contract.id,
       version: page.contract.version,
     },
-    route: page.route,
+    route: page.effectiveRoute,
+    contractRoute: page.route,
     params: page.params,
     loaderData: page.loaderData,
     metadata: page.metadata,
@@ -102,7 +104,7 @@ export async function renderModulePage(
         props,
         rendered,
         seo: createModulePageSeoMetadata(page, input.hostBaseUrl),
-        cache: resolveModuleRouteCachePolicy(page.route),
+        cache: resolveModuleRouteCachePolicy(page.effectiveRoute),
         route: page,
       },
     };

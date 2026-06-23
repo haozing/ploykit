@@ -159,6 +159,78 @@ test('createModuleHost resolves page route metadata without running page loader'
   );
 });
 
+test('createModuleHost resolves loader metadata and cache by route params', async () => {
+  const host = await createModuleHost({ artifact });
+
+  const agents = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/sections/agents', { method: 'GET' }),
+    pathname: '/sections/agents',
+    session: {
+      user: { id: 'user_sections', role: 'user' },
+    },
+  });
+  const traces = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/sections/traces', { method: 'GET' }),
+    pathname: '/sections/traces',
+    session: {
+      user: { id: 'user_sections', role: 'user' },
+    },
+  });
+
+  if (!agents.ok) {
+    throw new Error(agents.message);
+  }
+  if (!traces.ok) {
+    throw new Error(traces.message);
+  }
+
+  assert.deepEqual(agents.page.loaderData, {
+    section: 'agents',
+    source: 'agents',
+  });
+  assert.deepEqual(agents.page.metadata, {
+    title: 'Agents',
+    source: 'agents',
+  });
+  assert.equal(agents.page.effectiveRoute.loader, './loaders/section-agents-state');
+  assert.equal(agents.page.effectiveRoute.metadata, './loaders/section-agents-metadata');
+  assert.deepEqual(agents.page.effectiveRoute.cache, {
+    strategy: 'private',
+    revalidateSeconds: 30,
+  });
+
+  assert.deepEqual(traces.page.loaderData, {
+    section: 'traces',
+    source: 'traces',
+  });
+  assert.deepEqual(traces.page.metadata, {
+    title: 'Section traces',
+    source: 'default',
+  });
+  assert.equal(traces.page.effectiveRoute.loader, './loaders/section-traces-state');
+  assert.equal(traces.page.effectiveRoute.metadata, './loaders/section-default-metadata');
+  assert.deepEqual(traces.page.effectiveRoute.cache, {
+    strategy: 'private',
+    revalidateSeconds: 5,
+    tags: ['host-test-traces'],
+  });
+
+  const unknown = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/sections/unknown', { method: 'GET' }),
+    pathname: '/sections/unknown',
+    session: {
+      user: { id: 'user_sections', role: 'user' },
+    },
+  });
+
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.status, 404);
+  assert.equal(unknown.ok ? undefined : unknown.code, 'MODULE_PAGE_PARAM_BRANCH_NOT_FOUND');
+});
+
 test('dashboard generateMetadata resolves metadata-only routes without page loaders', async () => {
   let metadataCalls = 0;
   let pageRouteCalls = 0;
@@ -217,6 +289,11 @@ test('dashboard generateMetadata resolves metadata-only routes without page load
             loader: './loaders/page-state',
             metadata: './loaders/page-metadata',
             auth: 'auth' as const,
+          },
+          effectiveRoute: {
+            loader: './loaders/page-state',
+            metadata: './loaders/page-metadata',
+            selectedParams: [],
           },
           matchedPath: '/metadata-only',
           routeSource: 'route' as const,
