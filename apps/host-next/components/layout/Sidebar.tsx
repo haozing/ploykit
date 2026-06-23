@@ -87,6 +87,7 @@ export function Sidebar({
                   <Link
                     key={item.href}
                     href={href}
+                    prefetch={false}
                     className={cn(
                       'relative flex min-h-9 items-center gap-3 rounded-admin-md px-3 py-2 text-sm font-medium text-admin-text-muted transition duration-150',
                       'hover:bg-admin-surface-muted hover:text-admin-text',

@@ -59,6 +59,7 @@ export function HeaderUserMenu({
         >
           <Link
             href={localizedPath(lang, '/dashboard/profile')}
+            prefetch={false}
             role="menuitem"
             className="flex min-h-9 items-center gap-2 rounded-admin-md px-2 text-sm font-medium text-admin-text-muted transition hover:bg-admin-surface-muted hover:text-admin-text"
             onClick={() => setOpen(false)}
@@ -68,6 +69,7 @@ export function HeaderUserMenu({
           </Link>
           <Link
             href={localizedPath(lang, '/dashboard/notifications')}
+            prefetch={false}
             role="menuitem"
             className="flex min-h-9 items-center gap-2 rounded-admin-md px-2 text-sm font-medium text-admin-text-muted transition hover:bg-admin-surface-muted hover:text-admin-text"
             onClick={() => setOpen(false)}

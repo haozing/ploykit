@@ -95,6 +95,7 @@ export function Header({
         {area === 'dashboard' ? (
           <Link
             href={searchPath}
+            prefetch={false}
             className="inline-flex h-9 w-9 items-center justify-center rounded-admin-md text-admin-text-muted hover:bg-admin-surface-muted hover:text-admin-text lg:hidden"
             aria-label={searchLabel}
           >
@@ -103,6 +104,7 @@ export function Header({
         ) : null}
         <Link
           href={localizedPath(lang, '/dashboard/notifications')}
+          prefetch={false}
           className="relative inline-flex h-9 w-9 items-center justify-center rounded-admin-md text-admin-text-muted hover:bg-admin-surface-muted hover:text-admin-text"
           aria-label={notificationLabel}
         >

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 import { getHostRuntimeHealth } from '../apps/host-next/lib/create-host';
 import { resolvePublicNavigation } from '../apps/host-next/lib/site-navigation';
@@ -70,4 +71,19 @@ test('K1 host runtime health reports the current composition root', async () => 
   assert.equal(health.catalog.mode, 'runtime-store');
   assert.equal(health.worker.mode, 'runtime-store-loop');
   assert.equal(health.security.routeCatalog, 'configured');
+});
+
+test('dashboard app-frame links disable implicit Next prefetch', () => {
+  const files = [
+    'apps/host-next/components/layout/Sidebar.tsx',
+    'apps/host-next/components/layout/MobileNav.tsx',
+    'apps/host-next/components/layout/Header.tsx',
+    'apps/host-next/components/layout/HeaderLanguageSwitch.tsx',
+    'apps/host-next/components/layout/HeaderUserMenu.tsx',
+  ];
+
+  for (const file of files) {
+    const source = fs.readFileSync(file, 'utf8');
+    assert.match(source, /prefetch=\{false\}/, `${file} should avoid shell link prefetch`);
+  }
 });

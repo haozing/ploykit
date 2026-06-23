@@ -137,6 +137,7 @@ export function MobileNav({
                     <Link
                       key={`${group.id}:${item.href}`}
                       href={href}
+                      prefetch={false}
                       className={cn(
                         'flex min-h-10 items-center justify-between gap-3 rounded-admin-md px-3 py-2 text-sm font-semibold text-admin-text-muted transition',
                         'hover:bg-admin-surface-muted hover:text-admin-text',

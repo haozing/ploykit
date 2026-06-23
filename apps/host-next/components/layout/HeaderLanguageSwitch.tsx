@@ -27,6 +27,7 @@ export function HeaderLanguageSwitch({
   return (
     <Link
       href={href}
+      prefetch={false}
       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-admin-md px-2 text-sm font-semibold text-admin-text-muted transition hover:bg-admin-surface-muted hover:text-admin-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-primary"
       aria-label={label}
       title={label}
