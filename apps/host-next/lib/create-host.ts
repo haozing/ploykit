@@ -47,6 +47,7 @@ import {
 } from './dev-runtime-seed';
 import {
   DEFAULT_HOST_ADMIN_USER_ID,
+  DEFAULT_HOST_ENVIRONMENT_ID,
   DEFAULT_HOST_PRODUCT_ID,
   DEFAULT_HOST_WORKSPACE_ID,
 } from './default-scope';
@@ -130,6 +131,7 @@ async function ensureHostCatalogSeeded(runtimeStore: HostRuntimeStoreHandle): Pr
 async function ensureHostDemoCreditsSeeded(runtimeStore: HostRuntimeStoreHandle): Promise<void> {
   await runtimeStore.store.recordCreditLedger({
     productId: DEFAULT_HOST_PRODUCT_ID,
+    environmentId: DEFAULT_HOST_ENVIRONMENT_ID,
     workspaceId: DEFAULT_HOST_WORKSPACE_ID,
     userId: DEFAULT_HOST_ADMIN_USER_ID,
     amount: 1000,

@@ -19,6 +19,11 @@ const maxP95Ms = Number(
     ? process.argv[process.argv.indexOf('--max-p95-ms') + 1]
     : (process.env.HOST_DASHBOARD_TRANSITION_MAX_P95_MS ?? '1000')
 );
+const maxRscTransferBytes = Number(
+  process.argv.includes('--max-rsc-transfer-bytes')
+    ? process.argv[process.argv.indexOf('--max-rsc-transfer-bytes') + 1]
+    : (process.env.HOST_DASHBOARD_TRANSITION_MAX_RSC_TRANSFER_BYTES ?? '0')
+);
 const repeat = Math.max(
   1,
   Number(
@@ -226,6 +231,16 @@ function routeSlug(routePath) {
   return routePath.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'dashboard';
 }
 
+function localizedInjectedDashboardTarget(currentPath, targetPath) {
+  const languageMatch = /^\/([a-z]{2}(?:-[A-Z]{2})?)\/dashboard(?:\/|$)/.exec(currentPath);
+  if (!languageMatch) {
+    return targetPath;
+  }
+  return targetPath === '/dashboard' || targetPath.startsWith('/dashboard/')
+    ? `/${languageMatch[1]}${targetPath}`
+    : targetPath;
+}
+
 function hasDashboardAppFrame(diagnostic) {
   return Array.isArray(diagnostic.appFrames)
     ? diagnostic.appFrames.some((frame) => frame.area === 'dashboard')
@@ -236,6 +251,20 @@ function hasDashboardClientTransitionMarker(diagnostic) {
   return Array.isArray(diagnostic.clientTransitionMarkers)
     ? diagnostic.clientTransitionMarkers.includes('dashboard')
     : false;
+}
+
+function isRscRequestUrl(url) {
+  try {
+    return new URL(url).searchParams.has('_rsc');
+  } catch {
+    return false;
+  }
+}
+
+function parseContentLength(headers) {
+  const value = headers['content-length'];
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 const loaded = await loadPlaywright();
@@ -287,6 +316,9 @@ const documentRequests = [];
 const hydrationErrors = [];
 const transitions = [];
 const pageDiagnostics = [];
+const rscRequestStarts = new Map();
+const rscRequests = [];
+const rscFailures = [];
 let transitionDocumentNavigations = 0;
 
 try {
@@ -312,6 +344,9 @@ try {
     }
   });
   page.on('request', (request) => {
+    if (isRscRequestUrl(request.url())) {
+      rscRequestStarts.set(request, Date.now());
+    }
     if (!request.isNavigationRequest() || request.resourceType() !== 'document') {
       return;
     }
@@ -320,6 +355,38 @@ try {
       path: new URL(request.url()).pathname,
       method: request.method(),
       startedAt: Date.now(),
+    });
+  });
+  page.on('response', async (response) => {
+    const request = response.request();
+    if (!isRscRequestUrl(request.url())) {
+      return;
+    }
+    const startedAt = rscRequestStarts.get(request) ?? Date.now();
+    rscRequestStarts.delete(request);
+    const headers = response.headers();
+    const body = await response.body().catch(() => null);
+    const contentLength = parseContentLength(headers);
+    rscRequests.push({
+      url: response.url(),
+      path: new URL(response.url()).pathname,
+      status: response.status(),
+      durationMs: Date.now() - startedAt,
+      transferBytes: contentLength ?? body?.byteLength ?? null,
+      decodedBytes: body?.byteLength ?? null,
+      serverTiming: headers['server-timing'] ?? null,
+    });
+  });
+  page.on('requestfailed', (request) => {
+    if (!isRscRequestUrl(request.url())) {
+      return;
+    }
+    rscRequestStarts.delete(request);
+    const failure = request.failure();
+    rscFailures.push({
+      url: request.url(),
+      path: new URL(request.url()).pathname,
+      errorText: failure?.errorText ?? 'unknown',
     });
   });
 
@@ -342,6 +409,8 @@ try {
     const { repeatIndex, from, to, reset } = transitionPair;
     const beforeDocuments = documentRequests.length;
     const beforeHydrationErrors = hydrationErrors.length;
+    const currentPath = new URL(page.url()).pathname;
+    const expectedFinalPath = injectAnchor ? localizedInjectedDashboardTarget(currentPath, to) : to;
     const start = Date.now();
     if (injectAnchor) {
       await injectPlainDashboardAnchor(page, to);
@@ -349,6 +418,7 @@ try {
         stage: `before-click:${from}->${to}`,
         repeatIndex,
         reset,
+        expectedFinalPath,
         ...(await collectPageDiagnostics(page)),
       });
     }
@@ -371,6 +441,7 @@ try {
         ok: false,
         durationMs: 0,
         finalPath: new URL(page.url()).pathname,
+        expectedFinalPath,
         documentNavigationCount: 0,
         hydrationErrorCount: 0,
         error: injectAnchor
@@ -383,7 +454,7 @@ try {
       continue;
     }
     await targetLink.click();
-    await page.waitForURL(`**${to}`, { timeout: 5_000 }).catch(() => undefined);
+    await page.waitForURL(`**${expectedFinalPath}`, { timeout: 5_000 }).catch(() => undefined);
     await page.waitForLoadState('networkidle', { timeout: 1_500 }).catch(() => undefined);
     await page.waitForTimeout(100);
     const diagnostics = await collectPageDiagnostics(page);
@@ -394,8 +465,8 @@ try {
     const screenshot = path.join(
       outputDir,
       repeat > 1
-        ? `r${repeatIndex}-${reset ? 'reset-' : ''}${routeSlug(to)}.png`
-        : `${routeSlug(to)}.png`
+        ? `r${repeatIndex}-${reset ? 'reset-' : ''}${routeSlug(expectedFinalPath)}.png`
+        : `${routeSlug(expectedFinalPath)}.png`
     );
     await prepareVisualQaPage(page);
     await page.screenshot({ path: screenshot, fullPage: true });
@@ -406,6 +477,7 @@ try {
       durationMs,
       documentNavigationCount,
       finalPath,
+      expectedFinalPath,
       ...diagnostics,
     });
     const transition = {
@@ -413,8 +485,9 @@ try {
       from,
       to,
       reset,
+      expectedFinalPath,
       ok:
-        finalPath === to &&
+        finalPath === expectedFinalPath &&
         documentNavigationCount <= maxDocumentNavigations &&
         hydrationErrorCount === 0,
       durationMs,
@@ -444,6 +517,31 @@ try {
     ok: hydrationErrors.length === 0,
     hydrationErrors: hydrationErrors.length,
   });
+  checks.push({
+    id: 'transition:rsc-abort',
+    ok: rscFailures.length === 0,
+    rscFailures: rscFailures.length,
+  });
+  if (maxRscTransferBytes > 0) {
+    checks.push({
+      id: 'transition:rsc-transfer',
+      ok:
+        rscRequests.length === 0 ||
+        percentile(
+          rscRequests
+            .map((request) => request.transferBytes)
+            .filter((value) => typeof value === 'number'),
+          95
+        ) <= maxRscTransferBytes,
+      p95Bytes: percentile(
+        rscRequests
+          .map((request) => request.transferBytes)
+          .filter((value) => typeof value === 'number'),
+        95
+      ),
+      maxRscTransferBytes,
+    });
+  }
   checks.push({
     id: 'transition:p95',
     ok: percentile(transitionDurations, 95) <= maxP95Ms,
@@ -527,6 +625,23 @@ const result = {
     documentNavigations: documentRequests.length,
     initialDocumentNavigations: documentRequests.length - transitionDocumentNavigations,
     transitionDocumentNavigations,
+    rscRequests: rscRequests.length,
+    rscFailures: rscFailures.length,
+    rscP50Ms: percentile(
+      rscRequests.map((request) => request.durationMs),
+      50
+    ),
+    rscP95Ms: percentile(
+      rscRequests.map((request) => request.durationMs),
+      95
+    ),
+    rscTransferP95Bytes: percentile(
+      rscRequests
+        .map((request) => request.transferBytes)
+        .filter((value) => typeof value === 'number'),
+      95
+    ),
+    rscServerTimingHeaders: rscRequests.filter((request) => request.serverTiming).length,
     hydrationErrors: hydrationErrors.length,
     appFramePresent,
     clientTransitionMarkerPresent,
@@ -535,6 +650,8 @@ const result = {
   checks,
   transitions,
   documentRequests,
+  rscRequests,
+  rscFailures,
   pageDiagnostics,
   hydrationErrors,
   artifacts: {

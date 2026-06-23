@@ -12,6 +12,7 @@ test('P10 path helpers map Next catch-all segments to module routes', () => {
   assert.equal(dashboardHref('/'), '/dashboard');
   assert.equal(dashboardHref('/hello'), '/dashboard/hello');
   assert.equal(dashboardHref('hello'), '/dashboard/hello');
+  assert.equal(dashboardHref('/dashboard/hello'), '/dashboard/hello');
   assert.equal(
     requestUrl(
       '/zh/dashboard',

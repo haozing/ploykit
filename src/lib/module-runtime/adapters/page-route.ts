@@ -22,6 +22,7 @@ export interface ResolveModulePageRouteInput {
   session?: ModuleRuntimeAccessSession;
   params?: Record<string, string>;
   createContext?: (input: CreateModulePageContextInput) => ModuleContext;
+  onTimingSpan?: (span: ModulePageRouteTimingSpan) => void;
 }
 
 export interface CreateModulePageContextInput {
@@ -32,6 +33,13 @@ export interface CreateModulePageContextInput {
   user: ModuleUser | null;
   session: ModuleRuntimeAccessSession;
   params: Record<string, string>;
+}
+
+export interface ModulePageRouteTimingSpan {
+  name: 'component' | 'loader' | 'metadata';
+  moduleId: string;
+  pathname: string;
+  durationMs: number;
 }
 
 export interface ResolvedModulePageRoute {
@@ -195,6 +203,29 @@ async function resolveOptionalRouteExport(
     : exported;
 }
 
+async function measurePageRouteTiming<T>(
+  input: ResolveModulePageRouteInput,
+  parts: Pick<ResolvedModulePageRouteParts, 'match'>,
+  name: ModulePageRouteTimingSpan['name'],
+  fn: () => Promise<T>
+): Promise<T> {
+  if (!input.onTimingSpan) {
+    return fn();
+  }
+
+  const startedAt = Date.now();
+  try {
+    return await fn();
+  } finally {
+    input.onTimingSpan({
+      name,
+      moduleId: parts.match.entry.moduleId,
+      pathname: input.pathname,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+}
+
 function createContext(
   host: ModuleRuntimeHost,
   contract: ModuleRuntimeContract,
@@ -333,7 +364,9 @@ export async function resolveModulePageRoute(
 
   let component: unknown;
   try {
-    component = await loadDefaultExport(componentLoader);
+    component = await measurePageRouteTiming(input, parts, 'component', () =>
+      loadDefaultExport(componentLoader)
+    );
   } catch (error) {
     logModulePageHandlerError(error);
     const metadata = await resolveErrorMetadata(metadataLoader, context);
@@ -347,7 +380,9 @@ export async function resolveModulePageRoute(
 
   let loaderData: unknown;
   try {
-    loaderData = await resolveOptionalRouteExport(loader, context);
+    loaderData = await measurePageRouteTiming(input, parts, 'loader', () =>
+      resolveOptionalRouteExport(loader, context)
+    );
   } catch (error) {
     logModulePageHandlerError(error);
     const metadata = await resolveErrorMetadata(metadataLoader, context);
@@ -361,7 +396,9 @@ export async function resolveModulePageRoute(
 
   let metadata: unknown;
   try {
-    metadata = await resolveOptionalRouteExport(metadataLoader, context);
+    metadata = await measurePageRouteTiming(input, parts, 'metadata', () =>
+      resolveOptionalRouteExport(metadataLoader, context)
+    );
   } catch (error) {
     logModulePageHandlerError(error);
     return pageError(
@@ -419,7 +456,9 @@ export async function resolveModulePageRouteMetadata(
   const context = createContext(host, contract, route, input, match, params, user, accessSession);
   let metadata: unknown;
   try {
-    metadata = await resolveOptionalRouteExport(metadataLoader, context);
+    metadata = await measurePageRouteTiming(input, parts, 'metadata', () =>
+      resolveOptionalRouteExport(metadataLoader, context)
+    );
   } catch (error) {
     logModulePageHandlerError(error);
     return pageError(

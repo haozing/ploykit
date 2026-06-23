@@ -35,6 +35,29 @@ export function createDashboardTimingReport(
   };
 }
 
+function dashboardServerTimingName(name: string): string {
+  return name.replace(/[^A-Za-z0-9!#$%&'*+.^_`|~-]+/g, '-').replace(/^-+|-+$/g, '') || 'span';
+}
+
+function dashboardServerTimingDuration(durationMs: number): string {
+  const duration = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
+  return Number.isInteger(duration) ? String(duration) : duration.toFixed(1);
+}
+
+export function createDashboardServerTimingHeader(
+  input: Pick<DashboardTimingReportInput, 'spans' | 'totalMs'>
+): string {
+  return [
+    ...input.spans.map(
+      (span) =>
+        `${dashboardServerTimingName(span.name)};dur=${dashboardServerTimingDuration(
+          span.durationMs
+        )}`
+    ),
+    `total;dur=${dashboardServerTimingDuration(input.totalMs)}`,
+  ].join(', ');
+}
+
 export async function measureDashboardSpan<T>(
   name: string,
   spans: DashboardTimingSpan[],

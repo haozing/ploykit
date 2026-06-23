@@ -6,6 +6,7 @@ import {
 } from './lib/i18n';
 
 export function proxy(request: NextRequest) {
+  const startedAt = Date.now();
   const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
   const correlationId = request.headers.get('x-correlation-id') ?? requestId;
   const requestHeaders = new Headers(request.headers);
@@ -21,6 +22,7 @@ export function proxy(request: NextRequest) {
   });
   response.headers.set('x-request-id', requestId);
   response.headers.set('x-correlation-id', correlationId);
+  response.headers.set('server-timing', `proxy;dur=${Math.max(0, Date.now() - startedAt)}`);
   return response;
 }
 

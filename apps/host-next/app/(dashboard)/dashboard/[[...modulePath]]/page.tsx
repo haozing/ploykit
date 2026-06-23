@@ -16,10 +16,17 @@ import {
   HOST_LANGUAGE_HEADER,
   languageFromHeaders,
   localizedPath,
+  stripLanguagePrefix,
   type SupportedLanguage,
 } from '@host/lib/i18n';
 import { dashboardInlineText } from '@host/lib/dashboard-copy';
-import { cachedDashboardNavigation } from '@host/lib/dashboard-shell-cache';
+import {
+  cachedDashboardNavigation,
+  cachedDashboardModulePageRoute,
+  cachedDashboardProductScopeResolution,
+  cachedDashboardTheme,
+  cachedDashboardUserProfile,
+} from '@host/lib/dashboard-shell-cache';
 import {
   createDashboardTimingReport,
   maybeLogDashboardTiming,
@@ -234,6 +241,32 @@ function dashboardModuleSearchHref(
   return hasSearchRoute ? candidate : undefined;
 }
 
+function normalizedDashboardHref(path = '/'): string {
+  return dashboardHref(stripLanguagePrefix(path));
+}
+
+function localizedDashboardModuleHref(lang: SupportedLanguage, path = '/'): string {
+  return localizedPath(lang, normalizedDashboardHref(path));
+}
+
+function createDashboardModuleRenderProps(
+  page: Extract<ResolveModulePageRouteResult, { ok: true }>['page'],
+  lang: SupportedLanguage
+) {
+  return {
+    params: page.params,
+    loaderData: page.loaderData,
+    metadata: page.metadata,
+    language: lang,
+    dashboardBaseHref: dashboardHref('/'),
+    localizedDashboardHref: (path?: string) => localizedDashboardModuleHref(lang, path),
+  };
+}
+
+function dashboardModuleTimingSpanName(name: string): string {
+  return `module-${name}`;
+}
+
 function dashboardModuleId(
   result: ResolveModulePageRouteResult | null | undefined
 ): string | undefined {
@@ -310,7 +343,9 @@ async function dashboardFrameUser(session: ModuleHostSession) {
     return undefined;
   }
 
-  const profile = await getHostUserProfile(session).catch(() => null);
+  const profile = await cachedDashboardUserProfile(session, () =>
+    getHostUserProfile(session)
+  ).catch(() => null);
   return {
     name: profile?.displayName ?? session.user.email ?? session.user.id,
     email: session.user.email,
@@ -324,7 +359,7 @@ async function resolveDashboardShellData(
 ) {
   const spans = timingSpans ?? [];
   const scopeResolutionPromise = measureDashboardSpan('scope', spans, () =>
-    resolveDemoProductScope(request)
+    cachedDashboardProductScopeResolution(request, session, () => resolveDemoProductScope(request))
   );
   const workspacesPromise = scopeResolutionPromise.then((scopeResolution) =>
     measureDashboardSpan('workspaces', spans, () => listDemoWorkspaces(scopeResolution.product.id))
@@ -338,7 +373,9 @@ async function resolveDashboardShellData(
     frameUserPromise,
   ]);
   const theme = await measureDashboardSpan('theme', spans, () =>
-    getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id })
+    cachedDashboardTheme(scopeResolution.workspace.id, () =>
+      getProductThemeRuntimeView({ workspaceId: scopeResolution.workspace.id })
+    )
   );
 
   return {
@@ -403,6 +440,7 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
 }
 
 export const generateDashboardModuleMetadataForTest = generateDashboardMetadata;
+export const createDashboardModuleRenderPropsForTest = createDashboardModuleRenderProps;
 
 async function DashboardHome({ request }: { request: Request }) {
   const host = await getModuleHost();
@@ -504,12 +542,10 @@ async function ModuleDashboardPage({
     return <ErrorPanel status={result.status} code={result.code} message={result.message} />;
   }
 
-  const output = await renderPageComponent(result.page.component, {
-    params: result.page.params,
-    loaderData: result.page.loaderData,
-    metadata: result.page.metadata,
-    language: lang,
-  });
+  const output = await renderPageComponent(
+    result.page.component,
+    createDashboardModuleRenderProps(result.page, lang)
+  );
 
   if (unframed) {
     return <ModuleValue value={output} />;
@@ -629,11 +665,33 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
     pathname === '/'
       ? Promise.resolve(undefined)
       : measureDashboardSpan('route-resolve', timingSpans, () =>
-          host.resolvePageRoute({
+          cachedDashboardModulePageRoute({
             kind: 'dashboard',
             pathname,
             request,
             session: moduleSession,
+            language: lang,
+            loader: () =>
+              host.resolvePageRoute({
+                kind: 'dashboard',
+                pathname,
+                request,
+                session: moduleSession,
+                onTimingSpan(span) {
+                  timingSpans.push({
+                    name: dashboardModuleTimingSpanName(span.name),
+                    durationMs: span.durationMs,
+                  });
+                },
+              }),
+            cachePolicy(result) {
+              return result.ok
+                ? {
+                    strategy: result.page.route.cache?.strategy ?? 'none',
+                    revalidateSeconds: result.page.route.cache?.revalidateSeconds,
+                  }
+                : null;
+            },
           })
         );
   const shellDataPromise = measureDashboardSpan('shell-data', timingSpans, () =>

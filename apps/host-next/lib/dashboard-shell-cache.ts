@@ -7,7 +7,17 @@ import type { ProductThemeRuntimeView } from './product-composition';
 const DEFAULT_TTL_MS = 10_000;
 const MAX_ENTRIES = 128;
 
-export type DashboardShellCacheKind = 'product-scope' | 'profile' | 'theme' | 'navigation';
+export type DashboardShellCacheKind =
+  | 'product-scope'
+  | 'profile'
+  | 'theme'
+  | 'navigation'
+  | 'module-page';
+
+export interface DashboardModulePageCachePolicy {
+  strategy: 'none' | 'public' | 'private';
+  revalidateSeconds: number | null | undefined;
+}
 
 interface CacheEntry<T> {
   expiresAt: number;
@@ -20,6 +30,7 @@ interface DashboardShellCacheState {
   profiles: Map<string, CacheEntry<HostUserProfile>>;
   themes: Map<string, CacheEntry<ProductThemeRuntimeView>>;
   navigation: Map<string, CacheEntry<unknown>>;
+  modulePages: Map<string, CacheEntry<unknown>>;
 }
 
 const DASHBOARD_SHELL_CACHE_KEY = Symbol.for('ploykit.host.dashboardShellCache');
@@ -40,6 +51,7 @@ function state(): DashboardShellCacheState {
     profiles: new Map(),
     themes: new Map(),
     navigation: new Map(),
+    modulePages: new Map(),
   };
   return globalState[DASHBOARD_SHELL_CACHE_KEY]!;
 }
@@ -197,6 +209,34 @@ export function dashboardShellProductScopeResolutionKey(
   ].join('|');
 }
 
+function requestSearchKey(request: Request): string {
+  const searchParams = new URL(request.url).searchParams;
+  return [...searchParams.entries()]
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+      `${leftKey}=${leftValue}`.localeCompare(`${rightKey}=${rightValue}`)
+    )
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+}
+
+export function dashboardShellModulePageKey(input: {
+  request: Request;
+  session: ModuleHostSession;
+  kind: string;
+  pathname: string;
+  language?: string;
+}): string {
+  return [
+    hostKeyFromRequest(input.request),
+    input.kind,
+    input.pathname,
+    input.language ?? '',
+    requestSearchKey(input.request),
+    productScopeCookieKey(input.request),
+    dashboardShellNavigationKey(input.session),
+  ].join('|');
+}
+
 export function cachedDashboardProductScopeSnapshot(
   loader: () => Promise<ProductScopeSnapshot>
 ): Promise<ProductScopeSnapshot> {
@@ -219,11 +259,7 @@ export function cachedDashboardUserProfile(
   session: ModuleHostSession,
   loader: () => Promise<HostUserProfile>
 ): Promise<HostUserProfile> {
-  return readShortCache(
-    state().profiles,
-    dashboardShellSessionKey(session),
-    loader
-  );
+  return readShortCache(state().profiles, dashboardShellSessionKey(session), loader);
 }
 
 export function cachedDashboardTheme(
@@ -233,15 +269,42 @@ export function cachedDashboardTheme(
   return readShortCacheSync(state().themes, workspaceId ?? 'default', loader);
 }
 
-export function cachedDashboardNavigation<T>(
-  session: ModuleHostSession,
-  loader: () => T
-): T {
-  return readShortCacheSync(
-    state().navigation,
-    dashboardShellNavigationKey(session),
-    loader
-  ) as T;
+export function cachedDashboardNavigation<T>(session: ModuleHostSession, loader: () => T): T {
+  return readShortCacheSync(state().navigation, dashboardShellNavigationKey(session), loader) as T;
+}
+
+export async function cachedDashboardModulePageRoute<T>(input: {
+  request: Request;
+  session: ModuleHostSession;
+  kind: string;
+  pathname: string;
+  language?: string;
+  loader: () => Promise<T>;
+  cachePolicy: (value: T) => DashboardModulePageCachePolicy | null | undefined;
+}): Promise<T> {
+  const key = dashboardShellModulePageKey(input);
+  const entries = state().modulePages;
+  const now = nowMs();
+  const existing = entries.get(key);
+  if (existing && existing.expiresAt > now) {
+    return existing.value as T;
+  }
+
+  const value = await input.loader();
+  const policy = input.cachePolicy(value);
+  const routeTtlMs = Math.max(0, Math.floor(policy?.revalidateSeconds ?? 0) * 1000);
+  const ttlMs = Math.min(routeTtlMs, dashboardShellCacheTtlMs());
+  if (policy?.strategy === 'none' || ttlMs <= 0) {
+    entries.delete(key);
+    return value;
+  }
+
+  entries.set(key, {
+    value,
+    expiresAt: nowMs() + ttlMs,
+  });
+  pruneMap(entries);
+  return value;
 }
 
 export function invalidateDashboardShellCache(kind?: DashboardShellCacheKind): void {
@@ -258,6 +321,9 @@ export function invalidateDashboardShellCache(kind?: DashboardShellCacheKind): v
   }
   if (!kind || kind === 'navigation') {
     cache.navigation.clear();
+  }
+  if (!kind || kind === 'module-page') {
+    cache.modulePages.clear();
   }
 }
 

@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineModule, Permission, type ModuleContext } from '@ploykit/module-sdk';
 import { createModuleHost, type ModuleMapArtifact } from '../src/lib/module-runtime';
-import { generateDashboardModuleMetadataForTest } from '../apps/host-next/app/(dashboard)/dashboard/[[...modulePath]]/page';
+import {
+  createDashboardModuleRenderPropsForTest,
+  generateDashboardModuleMetadataForTest,
+} from '../apps/host-next/app/(dashboard)/dashboard/[[...modulePath]]/page';
 import { artifact } from './host-runtime-fixtures';
 
 test('createModuleHost resolves page routes with loader data and metadata', async () => {
   const host = await createModuleHost({ artifact });
+  const timingSpans: Array<{ name: string; moduleId: string; durationMs: number }> = [];
 
   const result = await host.resolvePageRoute({
     kind: 'dashboard',
@@ -14,6 +18,9 @@ test('createModuleHost resolves page routes with loader data and metadata', asyn
     pathname: '/dashboard/alpha',
     session: {
       user: { id: 'user_3', role: 'user' },
+    },
+    onTimingSpan(span) {
+      timingSpans.push(span);
     },
   });
 
@@ -27,6 +34,43 @@ test('createModuleHost resolves page routes with loader data and metadata', asyn
   assert.deepEqual(result.page.loaderData, { slug: 'alpha', userId: 'user_3' });
   assert.deepEqual(result.page.metadata, { title: 'Dashboard alpha' });
   assert.deepEqual((result.page.component as () => unknown)(), { view: 'dashboard' });
+  assert.deepEqual(
+    timingSpans.map((span) => span.name),
+    ['component', 'loader', 'metadata']
+  );
+  assert.ok(timingSpans.every((span) => span.moduleId === 'host-test' && span.durationMs >= 0));
+});
+
+test('dashboard module render props expose locale-aware dashboard href helpers', async () => {
+  const host = await createModuleHost({ artifact });
+  const result = await host.resolvePageRoute({
+    kind: 'dashboard',
+    request: new Request('http://localhost/dashboard/alpha', { method: 'GET' }),
+    pathname: '/dashboard/alpha',
+    session: {
+      user: { id: 'user_3', role: 'user' },
+    },
+  });
+
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+
+  const props = createDashboardModuleRenderPropsForTest(result.page, 'zh');
+  assert.equal(props.language, 'zh');
+  assert.equal(props.dashboardBaseHref, '/dashboard');
+  assert.equal(
+    props.localizedDashboardHref('/origin-agentops/traces'),
+    '/zh/dashboard/origin-agentops/traces'
+  );
+  assert.equal(
+    props.localizedDashboardHref('/dashboard/origin-agentops/usage'),
+    '/zh/dashboard/origin-agentops/usage'
+  );
+  assert.equal(
+    props.localizedDashboardHref('/zh/dashboard/origin-agentops/tools'),
+    '/zh/dashboard/origin-agentops/tools'
+  );
 });
 
 test('createModuleHost resolves page route metadata without running page loader', async () => {
@@ -83,6 +127,7 @@ test('createModuleHost resolves page route metadata without running page loader'
     },
   };
   const host = await createModuleHost({ artifact: metadataOnlyArtifact });
+  const timingSpans: Array<{ name: string; moduleId: string; durationMs: number }> = [];
 
   const result = await host.resolvePageRouteMetadata({
     kind: 'dashboard',
@@ -90,6 +135,9 @@ test('createModuleHost resolves page route metadata without running page loader'
     pathname: '/metadata-only/alpha',
     session: {
       user: { id: 'metadata-user', role: 'user' },
+    },
+    onTimingSpan(span) {
+      timingSpans.push(span);
     },
   });
 
@@ -102,6 +150,13 @@ test('createModuleHost resolves page route metadata without running page loader'
   assert.equal(componentLoads, 0);
   assert.equal(pageLoaderRuns, 0);
   assert.equal(metadataRuns, 1);
+  assert.deepEqual(
+    timingSpans.map((span) => span.name),
+    ['metadata']
+  );
+  assert.ok(
+    timingSpans.every((span) => span.moduleId === 'metadata-only-test' && span.durationMs >= 0)
+  );
 });
 
 test('dashboard generateMetadata resolves metadata-only routes without page loaders', async () => {

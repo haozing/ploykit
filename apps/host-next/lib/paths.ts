@@ -5,7 +5,10 @@ export function modulePathFromSegments(segments: readonly string[] | undefined):
 
 export function dashboardHref(modulePath: string): string {
   const path = modulePath.startsWith('/') ? modulePath : `/${modulePath}`;
-  return path === '/' ? '/dashboard' : `/dashboard${path}`;
+  if (path === '/' || path === '/dashboard') {
+    return '/dashboard';
+  }
+  return path.startsWith('/dashboard/') ? path : `/dashboard${path}`;
 }
 
 export function adminHref(modulePath: string): string {
@@ -28,7 +31,8 @@ function firstHeaderValue(value: string | null): string | null {
 
 export function requestBaseUrl(request: Request): URL {
   const fallback = new URL(request.url);
-  const host = firstHeaderValue(request.headers.get('x-forwarded-host')) ?? request.headers.get('host');
+  const host =
+    firstHeaderValue(request.headers.get('x-forwarded-host')) ?? request.headers.get('host');
   const forwardedProto = firstHeaderValue(request.headers.get('x-forwarded-proto'));
   const protocol = forwardedProto ? `${forwardedProto.replace(/:$/, '')}:` : fallback.protocol;
 

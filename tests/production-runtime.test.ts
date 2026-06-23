@@ -17,14 +17,17 @@ import {
 } from '../src/lib/module-capabilities';
 import { loadRuntimeConfig } from '../src/lib/runtime-config';
 import {
+  createDashboardServerTimingHeader,
   createDashboardTimingReport,
   measureDashboardSpan,
 } from '../apps/host-next/lib/dashboard-timing';
 import {
   cachedDashboardProductScopeSnapshot,
+  cachedDashboardModulePageRoute,
   cachedDashboardNavigation,
   cachedDashboardTheme,
   cachedDashboardUserProfile,
+  dashboardShellModulePageKey,
   dashboardShellProductScopeResolutionKey,
   dashboardShellSessionKey,
   dashboardShellNavigationKey,
@@ -176,6 +179,18 @@ test('dashboard shell cache reuses scoped shell reads and respects invalidation'
       dashboardShellNavigationKey(session),
       'user:session-1:user-1:user:product-1:workspace-1:owner:|user||||||||'
     );
+    assert.equal(
+      dashboardShellModulePageKey({
+        request: new Request('https://app.example.com/dashboard/tool?b=2&a=1', {
+          headers: { cookie: 'ploykit_product_scope=scope-cookie', host: 'app.example.com' },
+        }),
+        session,
+        kind: 'dashboard',
+        pathname: '/tool',
+        language: 'zh',
+      }),
+      'app.example.com|dashboard|/tool|zh|a=1&b=2|scope-cookie|user:session-1:user-1:user:product-1:workspace-1:owner:|user||||||||'
+    );
     assert.notEqual(
       dashboardShellNavigationKey(session),
       dashboardShellNavigationKey({
@@ -268,6 +283,59 @@ test('dashboard shell cache reuses scoped shell reads and respects invalidation'
     assert.equal(navigation, 1);
     assert.equal(cachedNav, nav);
 
+    let moduleRoutes = 0;
+    const moduleRoute = await cachedDashboardModulePageRoute({
+      request,
+      session,
+      kind: 'dashboard',
+      pathname: '/cached-tool',
+      language: 'zh',
+      async loader() {
+        moduleRoutes += 1;
+        return { ok: true, value: moduleRoutes };
+      },
+      cachePolicy: () => ({ strategy: 'private', revalidateSeconds: 30 }),
+    });
+    const cachedModuleRoute = await cachedDashboardModulePageRoute({
+      request,
+      session,
+      kind: 'dashboard',
+      pathname: '/cached-tool',
+      language: 'zh',
+      async loader() {
+        moduleRoutes += 1;
+        throw new Error('module route cache miss');
+      },
+      cachePolicy: () => ({ strategy: 'private', revalidateSeconds: 30 }),
+    });
+    assert.equal(moduleRoutes, 1);
+    assert.equal(cachedModuleRoute, moduleRoute);
+
+    let uncachedModuleRoutes = 0;
+    await cachedDashboardModulePageRoute({
+      request,
+      session,
+      kind: 'dashboard',
+      pathname: '/uncached-tool',
+      async loader() {
+        uncachedModuleRoutes += 1;
+        return { ok: true };
+      },
+      cachePolicy: () => ({ strategy: 'none', revalidateSeconds: 30 }),
+    });
+    await cachedDashboardModulePageRoute({
+      request,
+      session,
+      kind: 'dashboard',
+      pathname: '/uncached-tool',
+      async loader() {
+        uncachedModuleRoutes += 1;
+        return { ok: true };
+      },
+      cachePolicy: () => ({ strategy: 'none', revalidateSeconds: 30 }),
+    });
+    assert.equal(uncachedModuleRoutes, 2);
+
     invalidateDashboardShellCache('profile');
     const refreshedProfile = await cachedDashboardUserProfile(session, async () => {
       profiles += 1;
@@ -287,6 +355,20 @@ test('dashboard shell cache reuses scoped shell reads and respects invalidation'
       return nav;
     });
     assert.equal(navigation, 2);
+    const refreshedModuleRoute = await cachedDashboardModulePageRoute({
+      request,
+      session,
+      kind: 'dashboard',
+      pathname: '/cached-tool',
+      language: 'zh',
+      async loader() {
+        moduleRoutes += 1;
+        return { ok: true, value: moduleRoutes };
+      },
+      cachePolicy: () => ({ strategy: 'private', revalidateSeconds: 30 }),
+    });
+    assert.equal(moduleRoutes, 2);
+    assert.notEqual(refreshedModuleRoute, moduleRoute);
   } finally {
     if (originalTtl === undefined) {
       delete process.env.PLOYKIT_DASHBOARD_SHELL_CACHE_TTL_MS;
@@ -318,6 +400,28 @@ test('host client transition catches module dashboard anchors without breaking s
     {
       shouldNavigate: true,
       href: '/zh/dashboard/files?tab=all',
+    }
+  );
+  assert.deepEqual(
+    resolveHostClientTransitionHref({
+      area: 'dashboard',
+      href: '/dashboard/origin-agentops/traces',
+      currentUrl: 'https://app.example.com/zh/dashboard/origin-agentops/runtime',
+    }),
+    {
+      shouldNavigate: true,
+      href: '/zh/dashboard/origin-agentops/traces',
+    }
+  );
+  assert.deepEqual(
+    resolveHostClientTransitionHref({
+      area: 'admin',
+      href: '/admin/modules',
+      currentUrl: 'https://app.example.com/en/admin/users',
+    }),
+    {
+      shouldNavigate: true,
+      href: '/en/admin/modules',
     }
   );
 
@@ -353,6 +457,19 @@ test('host client transition catches module dashboard anchors without breaking s
       currentUrl: 'https://app.example.com/dashboard/orders',
     }).shouldNavigate,
     false
+  );
+});
+
+test('dashboard timing can be encoded as a Server-Timing header', () => {
+  assert.equal(
+    createDashboardServerTimingHeader({
+      spans: [
+        { name: 'auth', durationMs: 12 },
+        { name: 'module host', durationMs: 3.25 },
+      ],
+      totalMs: 18,
+    }),
+    'auth;dur=12, module-host;dur=3.3, total;dur=18'
   );
 });
 

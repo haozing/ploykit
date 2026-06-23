@@ -34,6 +34,8 @@ export interface ModulePageRenderProps {
   loaderData: unknown;
   metadata: unknown;
   language?: string;
+  dashboardBaseHref?: string;
+  localizedDashboardHref?: (path?: string) => string;
 }
 
 export interface RenderedModulePage {

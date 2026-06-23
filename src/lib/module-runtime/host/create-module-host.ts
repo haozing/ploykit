@@ -497,6 +497,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         params,
         user: hostSession.user,
         session: hostSession,
+        onTimingSpan: input.onTimingSpan,
         createContext(contextInput) {
           return createContext({
             moduleId: contextInput.moduleId,
@@ -530,6 +531,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         params,
         user: hostSession.user,
         session: hostSession,
+        onTimingSpan: input.onTimingSpan,
         createContext(contextInput) {
           return createContext({
             moduleId: contextInput.moduleId,

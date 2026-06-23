@@ -27,6 +27,15 @@ function isLocalizedAreaPath(pathname: string, area: HostClientTransitionArea): 
   return new RegExp(`^/[a-z]{2}(?:-[A-Z]{2})?/${area}(?:/|$)`).test(pathname);
 }
 
+function isBareAreaPath(pathname: string, area: HostClientTransitionArea): boolean {
+  return pathname === `/${area}` || pathname.startsWith(`/${area}/`);
+}
+
+function currentAreaLanguage(pathname: string, area: HostClientTransitionArea): string | undefined {
+  const match = new RegExp(`^/([a-z]{2}(?:-[A-Z]{2})?)/${area}(?:/|$)`).exec(pathname);
+  return match?.[1];
+}
+
 function targetPath(url: URL): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
@@ -64,6 +73,10 @@ export function resolveHostClientTransitionHref(
   }
   if (target.protocol !== 'http:' && target.protocol !== 'https:') {
     return { shouldNavigate: false, reason: 'unsupported-protocol' };
+  }
+  const currentLanguage = currentAreaLanguage(current.pathname, input.area);
+  if (currentLanguage && isBareAreaPath(target.pathname, input.area)) {
+    target.pathname = `/${currentLanguage}${target.pathname}`;
   }
   if (!isLocalizedAreaPath(target.pathname, input.area)) {
     return { shouldNavigate: false, reason: 'outside-area' };

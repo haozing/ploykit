@@ -30,6 +30,7 @@ export async function renderPageComponent(component: unknown, props: unknown): P
       params: props.params,
       metadata: props.metadata,
       language: props.language,
+      dashboardBaseHref: props.dashboardBaseHref,
     };
   }
 
