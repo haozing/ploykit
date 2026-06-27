@@ -9,11 +9,11 @@ import sitemap from '../apps/host-next/app/sitemap';
 test('P10 path helpers map Next catch-all segments to module routes', () => {
   assert.equal(modulePathFromSegments(undefined), '/');
   assert.equal(modulePathFromSegments([]), '/');
-  assert.equal(modulePathFromSegments(['hello']), '/hello');
+  assert.equal(modulePathFromSegments(['platform-smoke']), '/platform-smoke');
   assert.equal(dashboardHref('/'), '/dashboard');
-  assert.equal(dashboardHref('/hello'), '/dashboard/hello');
-  assert.equal(dashboardHref('hello'), '/dashboard/hello');
-  assert.equal(dashboardHref('/dashboard/hello'), '/dashboard/hello');
+  assert.equal(dashboardHref('/platform-smoke'), '/dashboard/platform-smoke');
+  assert.equal(dashboardHref('platform-smoke'), '/dashboard/platform-smoke');
+  assert.equal(dashboardHref('/dashboard/platform-smoke'), '/dashboard/platform-smoke');
   assert.equal(
     requestUrl(
       '/zh/dashboard',
@@ -33,33 +33,29 @@ test('R3 host sitemap includes public product pages and module aliases', async (
   assert.ok(urls.some((url) => url.endsWith('/zh/contact')));
   assert.ok(urls.some((url) => url.endsWith('/zh/docs')));
   assert.ok(urls.some((url) => url.endsWith('/en/pricing')));
-  assert.ok(urls.some((url) => url.endsWith('/public-tools')));
+  assert.ok(urls.some((url) => url.endsWith('/public-tool-smoke')));
   assert.ok(urls.some((url) => url.endsWith('/tools/json')));
-  assert.ok(urls.some((url) => url.endsWith('/cms-demo')));
-  assert.ok(urls.some((url) => url.endsWith('/blog')));
-  assert.ok(urls.some((url) => url.endsWith('/shop-demo')));
-  assert.ok(urls.some((url) => url.endsWith('/shop')));
 });
 
 test('R3 public navigation merges module site header and footer contributions', async () => {
   const navigation = await resolvePublicNavigation('zh');
   const englishNavigation = await resolvePublicNavigation('en');
 
+  assert.ok(navigation.headerItems.some((item) => item.href === '/' && item.label === '首页'));
   assert.ok(
-    navigation.headerItems.some((item) => item.href === '/dashboard' && item.label === '工作台')
+    navigation.headerItems.some((item) => item.href === '/tools/json' && item.label === 'JSON Tool')
   );
+  assert.ok(navigation.footerItems.some((item) => item.href === '/privacy' && item.label === '隐私'));
   assert.ok(
-    navigation.footerItems.some((item) => item.href === '/contact' && item.label === '支持')
+    englishNavigation.headerItems.some((item) => item.href === '/' && item.label === 'Home')
   );
   assert.ok(
     englishNavigation.headerItems.some(
-      (item) => item.href === '/dashboard' && item.label === 'Dashboard'
+      (item) => item.href === '/tools/json' && item.label === 'JSON Tool'
     )
   );
   assert.ok(
-    englishNavigation.footerItems.some(
-      (item) => item.href === '/contact' && item.label === 'Support'
-    )
+    englishNavigation.footerItems.some((item) => item.href === '/privacy' && item.label === 'Privacy')
   );
 });
 

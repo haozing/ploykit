@@ -80,7 +80,7 @@ function navigationItems(definition: ModuleDefinition) {
 }
 
 function shellRoutePaths(definition: ModuleDefinition, shell: ModuleProductShell): Set<string> {
-  return new Set((definition.routes?.[shell] ?? []).map((route) => route.path));
+  return new Set((definition.pages ?? []).filter((page) => page.area === shell).map((page) => page.path));
 }
 
 function hasNavigationForShell(definition: ModuleDefinition, shell: ModuleProductShell): boolean {
@@ -119,13 +119,13 @@ export function validateProduct(
       continue;
     }
 
-    if ((definition.routes?.[shell] ?? []).length === 0) {
+    if ((definition.pages ?? []).filter((page) => page.area === shell).length === 0) {
       addError(
         diagnostics,
         'MODULE_PRODUCT_REQUIRED_SHELL_ROUTE_MISSING',
-        `Product module declares required shell "${shell}" but has no ${shell} routes.`,
-        `routes.${shell}`,
-        `Add routes.${shell} entries or remove "${shell}" from product.requiredShells.`
+        `Product module declares required shell "${shell}" but has no ${shell} pages.`,
+        'pages',
+        `Add pages with area: "${shell}" or remove "${shell}" from product.requiredShells.`
       );
     }
 
@@ -140,21 +140,21 @@ export function validateProduct(
     }
   }
 
-  if ((definition.routes?.admin ?? []).length > 0 && !hasNavigationForShell(definition, 'admin')) {
+  if ((definition.pages ?? []).some((page) => page.area === 'admin') && !hasNavigationForShell(definition, 'admin')) {
     addWarning(
       diagnostics,
       'MODULE_ADMIN_ROUTE_NAVIGATION_MISSING',
-      'Module declares admin routes but does not contribute admin.sidebar navigation.',
+      'Module declares admin pages but does not contribute admin.sidebar navigation.',
       'navigation',
       'Add an admin.sidebar navigation item so administrators can reach the module admin pages.'
     );
   }
 
-  if ((definition.routes?.site ?? []).length > 0 && !hasNavigationForShell(definition, 'site')) {
+  if ((definition.pages ?? []).some((page) => page.area === 'site') && !hasNavigationForShell(definition, 'site')) {
     addWarning(
       diagnostics,
       'MODULE_SITE_ROUTE_NAVIGATION_MISSING',
-      'Module declares site routes but does not contribute site.header or site.footer navigation.',
+      'Module declares site pages but does not contribute site.header or site.footer navigation.',
       'navigation',
       'Add site.header or site.footer navigation when public users need a discoverable entry.'
     );
@@ -224,7 +224,7 @@ export function validateProduct(
         'MODULE_PRODUCT_PAGE_ROUTE_MISSING',
         `Product page "${page.path}" is declared for "${page.shell}" but no matching route exists.`,
         `${path}.path`,
-        `Add routes.${page.shell} with path "${page.path}" or set required: false.`
+        `Add a pages entry with area: "${page.shell}" and path "${page.path}", or set required: false.`
       );
     }
   }

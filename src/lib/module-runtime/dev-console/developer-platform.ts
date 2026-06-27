@@ -21,46 +21,18 @@ export function createDeveloperPlatformReport(input: {
   templates?: readonly DeveloperPlatformTemplate[];
 }): DeveloperPlatformReport {
   const templates = input.templates ?? [
-    { id: 'basic', path: 'templates/modules/basic', capabilities: ['routes', 'actions'] },
+    { id: 'app', path: 'templates/modules/app', capabilities: ['pages', 'tsx', 'ui'] },
     {
-      id: 'dashboard',
-      path: 'templates/modules/dashboard',
-      capabilities: ['dashboard', 'surfaces'],
+      id: 'resource',
+      path: 'templates/modules/resource',
+      capabilities: ['resources', 'schema', 'data', 'openapi'],
     },
     {
-      id: 'product',
-      path: 'templates/modules/product',
-      capabilities: ['site', 'dashboard', 'admin', 'product', 'white-label', 'data'],
+      id: 'tool',
+      path: 'templates/modules/tool',
+      capabilities: ['pages', 'actions', 'api', 'schema'],
     },
-    {
-      id: 'product-app',
-      path: 'templates/modules/product-app',
-      capabilities: ['site', 'dashboard', 'admin', 'product'],
-    },
-    { id: 'crud', path: 'templates/modules/crud', capabilities: ['data', 'actions', 'api'] },
     { id: 'connector', path: 'templates/modules/connector', capabilities: ['connectors', 'jobs'] },
-    {
-      id: 'signed-service',
-      path: 'templates/modules/signed-service',
-      capabilities: ['services', 'secretRefs', 'audit'],
-    },
-    { id: 'job', path: 'templates/modules/job', capabilities: ['jobs', 'events'] },
-    {
-      id: 'service-backed',
-      path: 'templates/module-extensions/service-backed',
-      capabilities: ['services', 'contracts', 'mocks'],
-    },
-    {
-      id: 'background',
-      path: 'templates/module-extensions/background',
-      capabilities: ['jobs', 'events', 'lifecycle'],
-    },
-    {
-      id: 'billing-aware',
-      path: 'templates/modules/billing-aware',
-      capabilities: ['billing', 'credits'],
-    },
-    { id: 'ai-rag', path: 'templates/modules/ai-rag', capabilities: ['ai', 'rag', 'files'] },
   ];
   const modulesWithErrors = input.snapshot.modules
     .filter((module) => module.status === 'error')

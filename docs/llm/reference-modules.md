@@ -1,22 +1,27 @@
 # Reference Modules
 
-Use these modules as living examples. They are checked by `npm run modules:check`; do not copy from legacy narrative docs first.
+Use these sources when an LLM needs a known-good example. The repository keeps only current-contract module fixtures under `modules/`.
 
-## Golden Sample Decision
+## Templates
 
-Plan route B is selected. `modules/capability-demo/` is the primary golden sample because it is small enough to imitate and currently passes both `npm run module:doctor -- capability-demo` and `npm run module:test -- capability-demo --summary`.
-
-No underscore-named reference module is created because the current module id validator accepts only lowercase letters, numbers, and hyphens. A literal underscore reference id would violate `MODULE_ID_PATTERN`.
-
-| Need | Reference | Why |
+| Need | Source | Use When |
 | --- | --- | --- |
-| Primary golden sample | `modules/capability-demo/module.ts` | Data v2, files, jobs, events, webhooks, AI/RAG, metering, credits, notifications |
-| Workspace/product Data v2 and public pages | `modules/cms-demo/module.ts` | Product-scoped posts, workspace notes, site route metadata/cache, dashboard routes |
-| White-label shell and host surfaces | `modules/white-label-site-demo/module.ts` | `presentation`, `navigation`, `surfaces`, i18n, theme, host page replacement |
-| Signed service-backed shape | `docs/llm/recipes/service-backed.md` | `contractVersion: 2`, `serviceRequirements`, controlled service calls |
+| Ordinary app | `templates/modules/app/module.ts` | A dashboard page, action, and API are enough. |
+| CRUD/resource module | `templates/modules/resource/module.ts` | The module owns workspace-scoped business records through Data v2. |
+| Public tool | `templates/modules/tool/module.ts` | The module exposes a public site page and anonymous API. |
+| Connector | `templates/modules/connector/module.ts` | The module connects to an external system through declared host capabilities. |
 
-Rules:
+## Checked-In Fixtures
 
-- Copy contract shape first, then code shape.
-- Keep edits inside the new module unless the user asked for host work.
-- Run `npm run module:doctor -- <id>` and `npm run module:test -- <id> --summary` after adapting any pattern.
+| Module | What It Proves |
+| --- | --- |
+| `modules/platform-smoke` | Dashboard page, API, action, job, event, webhook, lifecycle, surface, and navigation. |
+| `modules/resource-smoke` | Runtime schema, business resource, Data v2 storage, list/create/edit/detail pages, API, action, generated data artifacts, and migration. |
+| `modules/public-tool-smoke` | Public site page, metadata loader, cache policy, public alias, anonymous API, action, and site navigation. |
+
+## Copy Rules
+
+- Start new modules from templates, not from host code.
+- Read the fixture `module.ts` first, then copy only the specific pattern needed.
+- Keep static assets in `assets`, business resources in `resources`, pages in `pages`, and APIs in `apis`.
+- Run `npm run modules:scan`, `npm run module:doctor -- <id>`, and `npm run module:test -- <id> --summary` after adapting a pattern.

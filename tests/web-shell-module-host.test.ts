@@ -48,14 +48,14 @@ test('P10 host shell resolves dashboard module page through the real host factor
   const host = await getModuleHost();
   const result = await host.resolvePageRoute({
     kind: 'dashboard',
-    pathname: '/hello',
-    request: createHostRequest('/dashboard/hello'),
+    pathname: '/platform-smoke',
+    request: createHostRequest('/dashboard/platform-smoke'),
     session: createDemoHostSession(),
   });
 
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.page.moduleId, 'hello');
+    assert.equal(result.page.moduleId, 'platform-smoke');
     assert.equal(result.page.kind, 'dashboard');
   }
 });
@@ -63,15 +63,15 @@ test('P10 host shell resolves dashboard module page through the real host factor
 test('P10 host shell dispatches module API routes with a demo host session', async () => {
   const host = await getModuleHost();
   const response = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/hello'),
-    pathname: '/hello',
+    request: createHostRequest('/api/modules/platform-smoke/ping'),
+    pathname: '/platform-smoke/ping',
     session: createDemoHostSession(),
   });
-  const body = (await response.json()) as { ok: boolean; moduleId: string };
+  const body = (await response.json()) as { ok: boolean; module_id: string };
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
-  assert.equal(body.moduleId, 'hello');
+  assert.equal(body.module_id, 'platform-smoke');
 });
 
 test('K1 host module API resolves request cookie sessions without a demo override', async () => {
@@ -79,103 +79,75 @@ test('K1 host module API resolves request cookie sessions without a demo overrid
   await seedDemoHostIdentity();
   const cookie = createHostSessionCookie('demo-admin').split(';')[0]!;
   const response = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/hello', {
+    request: createHostRequest('/api/modules/platform-smoke/ping', {
       headers: { cookie },
     }),
-    pathname: '/hello',
+    pathname: '/platform-smoke/ping',
   });
-  const body = (await response.json()) as { ok: boolean; moduleId: string };
+  const body = (await response.json()) as { ok: boolean; module_id: string };
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
-  assert.equal(body.moduleId, 'hello');
+  assert.equal(body.module_id, 'platform-smoke');
 });
 
-test('P20 capability demo API and action receive AI/RAG host capabilities', async () => {
+test('P20 platform smoke API and action receive host runtime context', async () => {
   const host = await getModuleHost();
   const apiResponse = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/capability-demo/ask', {
-      method: 'POST',
-      body: JSON.stringify({ question: 'What does the demo cover?' }),
-      headers: { 'content-type': 'application/json' },
-    }),
-    pathname: '/capability-demo/ask',
+    request: createHostRequest('/api/modules/platform-smoke/ping'),
+    pathname: '/platform-smoke/ping',
     session: createDemoHostSession(),
   });
   const apiBody = (await apiResponse.json()) as {
     ok: boolean;
-    result: { text: string; model: string };
+    module_id: string;
   };
 
   assert.equal(apiResponse.status, 200);
   assert.equal(apiBody.ok, true);
-  assert.equal(apiBody.result.model, 'static-text');
-  assert.match(apiBody.result.text, /demo-ai:/);
+  assert.equal(apiBody.module_id, 'platform-smoke');
 
   const actionResult = await host.executeAction<
-    { question: string },
-    { text: string; model: string }
+    { request_id?: string },
+    { ok: boolean; module_id: string }
   >({
-    moduleId: 'capability-demo',
-    name: 'ask',
-    input: { question: 'Which capabilities are mounted?' },
+    moduleId: 'platform-smoke',
+    name: 'ping',
+    input: { request_id: 'web-shell' },
     session: createDemoHostSession(),
   });
 
-  assert.equal(actionResult.model, 'static-text');
-  assert.match(actionResult.text, /demo-ai:/);
+  assert.equal(actionResult.ok, true);
+  assert.equal(actionResult.module_id, 'platform-smoke');
 });
 
-test('M5 public tools demo formats JSON and text through public module APIs', async () => {
+test('M5 public tool smoke formats JSON through a public module API', async () => {
   const host = await getModuleHost();
   const response = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/public-tools/format-json', {
+    request: createHostRequest('/api/modules/public-tool-smoke/format-json', {
       method: 'POST',
       body: JSON.stringify({ source: '{"ok":true}' }),
       headers: { 'content-type': 'application/json' },
     }),
-    pathname: '/public-tools/format-json',
+    pathname: '/public-tool-smoke/format-json',
   });
   const body = (await response.json()) as { ok: boolean; output: string };
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
   assert.match(body.output, /"ok": true/);
-
-  const textResponse = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/public-tools/text-utils', {
-      method: 'POST',
-      body: JSON.stringify({ source: 'PloyKit Text Tools', operation: 'slugify' }),
-      headers: { 'content-type': 'application/json' },
-    }),
-    pathname: '/public-tools/text-utils',
-  });
-  const textBody = (await textResponse.json()) as {
-    ok: boolean;
-    output: string;
-    stats: { words: number };
-  };
-
-  assert.equal(textResponse.status, 200);
-  assert.equal(textBody.ok, true);
-  assert.equal(textBody.output, 'ploykit-text-tools');
-  assert.equal(textBody.stats.words, 3);
 });
 
-test('X10 demo modules expose page, API and action paths through the host runtime', async () => {
+test('X10 smoke modules expose page, API and action paths through the host runtime', async () => {
   const host = await getModuleHost();
   const session = createDemoHostSession();
-  const demoPages = [
-    ['cms-demo', '/cms-demo'],
-    ['cms-demo', '/cms-demo/notes'],
-    ['shop-demo', '/shop-demo'],
-    ['shop-demo', '/shop-demo/billing'],
-    ['capability-demo', '/capability-demo'],
-    ['capability-demo', '/capability-demo/workflow'],
-    ['ai-rag-demo', '/ai-rag-demo'],
+  const dashboardPages = [
+    ['platform-smoke', '/platform-smoke'],
+    ['resource-smoke', '/resource-smoke'],
+    ['resource-smoke', '/resource-smoke/new'],
   ] as const;
 
-  for (const [moduleId, pathname] of demoPages) {
+  for (const [moduleId, pathname] of dashboardPages) {
     const result = await host.resolvePageRoute({
       kind: 'dashboard',
       pathname,
@@ -188,75 +160,79 @@ test('X10 demo modules expose page, API and action paths through the host runtim
     }
   }
 
-  const jobStatus = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/capability-demo/workflow/status'),
-    pathname: '/capability-demo/workflow/status',
+  const publicToolPage = await host.resolvePageRoute({
+    kind: 'site',
+    pathname: '/public-tool-smoke',
+    request: createHostRequest('/public-tool-smoke'),
+  });
+  assert.equal(publicToolPage.ok, true, 'public-tool-smoke');
+  if (publicToolPage.ok) {
+    assert.equal(publicToolPage.page.moduleId, 'public-tool-smoke');
+  }
+
+  const platformStatus = await host.dispatchApiRoute({
+    request: createHostRequest('/api/modules/platform-smoke/ping'),
+    pathname: '/platform-smoke/ping',
     session,
   });
-  const billingStatus = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/shop-demo/billing/status'),
-    pathname: '/shop-demo/billing/status',
+  const resourceStatus = await host.dispatchApiRoute({
+    request: createHostRequest('/api/modules/resource-smoke/notes'),
+    pathname: '/resource-smoke/notes',
     session,
   });
-  const aiResponse = await host.dispatchApiRoute({
-    request: createHostRequest('/api/modules/ai-rag-demo/ask', {
+  const publicToolResponse = await host.dispatchApiRoute({
+    request: createHostRequest('/api/modules/public-tool-smoke/format-json', {
       method: 'POST',
-      body: JSON.stringify({
-        question: 'What is X10 proving?',
-        source: 'X10 proves demo product modules and the developer platform.',
-      }),
+      body: JSON.stringify({ source: '{"guard":true}' }),
       headers: { 'content-type': 'application/json' },
     }),
-    pathname: '/ai-rag-demo/ask',
+    pathname: '/public-tool-smoke/format-json',
     session,
   });
-  assert.equal(jobStatus.status, 200);
-  assert.equal(billingStatus.status, 200);
-  assert.equal(aiResponse.status, 200);
-  assert.equal(((await aiResponse.json()) as { ok: boolean }).ok, true);
+  assert.equal(platformStatus.status, 200);
+  assert.equal(resourceStatus.status, 200);
+  assert.equal(publicToolResponse.status, 200);
+  assert.equal(((await publicToolResponse.json()) as { ok: boolean }).ok, true);
 
   const publicToolAction = await host.executeAction<
     { source: string },
     { ok: boolean; output: string }
   >({
-    moduleId: 'public-tools-demo',
+    moduleId: 'public-tool-smoke',
     name: 'formatSample',
     input: { source: '{"guard":true}' },
     session,
   });
-  const billingAction = await host.executeAction<unknown, { ok: boolean; upgrade?: string }>({
-    moduleId: 'shop-demo',
-    name: 'runPaidTool',
+  const platformAction = await host.executeAction<
+    { request_id?: string },
+    { ok: boolean; module_id: string }
+  >({
+    moduleId: 'platform-smoke',
+    name: 'ping',
+    input: { request_id: 'x10' },
     session,
   });
 
   assert.equal(publicToolAction.ok, true);
   assert.match(publicToolAction.output, /"guard": true/);
-  assert.equal(billingAction.ok, false);
-  assert.equal(billingAction.upgrade, '/zh/dashboard/billing');
+  assert.equal(platformAction.ok, true);
+  assert.equal(platformAction.module_id, 'platform-smoke');
 
   const devConsole = await getAdminModuleDevConsoleView();
-  assert.ok(devConsole.snapshot.modules.some((module) => module.id === 'cms-demo'));
-  assert.ok(devConsole.snapshot.modules.some((module) => module.id === 'capability-demo'));
-  assert.ok(devConsole.report.templates.some((template) => template.id === 'ai-rag'));
-  assert.ok(devConsole.bundle.modules.some((module) => module.id === 'shop-demo'));
+  assert.ok(devConsole.snapshot.modules.some((module) => module.id === 'platform-smoke'));
+  assert.ok(devConsole.snapshot.modules.some((module) => module.id === 'resource-smoke'));
+  assert.ok(devConsole.snapshot.modules.some((module) => module.id === 'public-tool-smoke'));
+  assert.ok(devConsole.report.templates.some((template) => template.id === 'app'));
+  assert.ok(devConsole.bundle.modules.some((module) => module.id === 'resource-smoke'));
 
-  const whiteLabelDetail = await getAdminModuleDetail('white-label-site-demo');
-  assert.ok(
-    whiteLabelDetail.contract?.risk.highRiskPermissions.some(
-      (permission) => permission.value === 'surface.override'
-    )
-  );
-  assert.ok(
-    whiteLabelDetail.contract?.risk.presentationOverrides.includes('surface:host.page:site.home')
-  );
-  assert.equal(whiteLabelDetail.contract?.data.migrationMode, undefined);
+  const resourceDetail = await getAdminModuleDetail('resource-smoke');
+  assert.equal(resourceDetail.contract?.data.migrationMode, 'generated');
 });
 
-test('X10 capability workflow writes runtime-store job result, webhook receipt and outbox', async () => {
+test('X10 platform smoke workflow writes runtime-store job result, webhook receipt and outbox', async () => {
   const session = createDemoHostSession();
   const run = await enqueueHostDemoJob(session, {
-    moduleId: 'capability-demo',
+    moduleId: 'platform-smoke',
     name: 'generate_report',
     input: { title: 'X10 workflow', content: 'Evidence path.' },
   });
@@ -278,7 +254,7 @@ test('X10 capability workflow writes runtime-store job result, webhook receipt a
   );
 
   const webhookResponse = await receiveModuleWebhook(
-    createHostRequest('/api/module-webhooks/capability-demo/workflow/webhook', {
+    createHostRequest('/api/module-webhooks/platform-smoke/workflow/webhook', {
       method: 'POST',
       body: JSON.stringify({ source: 'x10-test' }),
       headers: {
@@ -287,7 +263,7 @@ test('X10 capability workflow writes runtime-store job result, webhook receipt a
       },
     }),
     {
-      params: Promise.resolve({ path: ['capability-demo', 'workflow', 'webhook'] }),
+      params: Promise.resolve({ path: ['platform-smoke', 'workflow', 'webhook'] }),
     }
   );
   const webhookBody = (await webhookResponse.json()) as {
@@ -296,23 +272,23 @@ test('X10 capability workflow writes runtime-store job result, webhook receipt a
   };
   const receipts = await hostRuntime.runtimeStore.store.listWebhookReceipts({
     productId: 'demo-product',
-    moduleId: 'capability-demo',
+    moduleId: 'platform-smoke',
   });
   const outbox = await hostRuntime.runtimeStore.store.listOutbox({
     productId: 'demo-product',
-    namePrefix: 'webhook:capability-demo:workflow',
+    namePrefix: 'webhook:platform-smoke:workflow',
   });
 
   assert.equal(webhookResponse.status, 200);
   assert.equal(webhookBody.ok, true);
-  assert.equal(webhookBody.receipt.moduleId, 'capability-demo');
+  assert.equal(webhookBody.receipt.moduleId, 'platform-smoke');
   assert.ok(receipts.some((receipt) => receipt.webhookName === 'workflow'));
-  assert.ok(outbox.some((record) => record.moduleId === 'capability-demo'));
+  assert.ok(outbox.some((record) => record.moduleId === 'platform-smoke'));
 
   const webhookDrain = await drainHostWorker({ session, limit: 10 });
   const processedReceipts = await hostRuntime.runtimeStore.store.listWebhookReceipts({
     productId: 'demo-product',
-    moduleId: 'capability-demo',
+    moduleId: 'platform-smoke',
     status: 'processed',
   });
 
@@ -322,15 +298,15 @@ test('X10 capability workflow writes runtime-store job result, webhook receipt a
   assert.ok(processedReceipts.some((receipt) => receipt.id === webhookBody.receipt.id));
 
   const processedWebhookOutbox = webhookDrain.records.find((record) =>
-    record.name.startsWith('webhook:capability-demo:workflow')
+    record.name.startsWith('webhook:platform-smoke:workflow')
   );
   assert.ok(processedWebhookOutbox);
   const unrelatedReceipt = await hostRuntime.runtimeStore.store.createWebhookReceipt({
     productId: 'demo-product',
     workspaceId: 'demo-workspace',
-    moduleId: 'capability-demo',
+    moduleId: 'platform-smoke',
     webhookName: 'workflow',
-    path: '/capability-demo/workflow/webhook',
+    path: '/platform-smoke/workflow/webhook',
     method: 'POST',
     idempotencyKey: `x10-unrelated-${Date.now()}`,
     bodyText: JSON.stringify({ source: 'unrelated-detail-check' }),
@@ -355,7 +331,7 @@ test('X10 capability workflow writes runtime-store job result, webhook receipt a
   );
   const replayOutbox = await hostRuntime.runtimeStore.store.listOutbox({
     productId: 'demo-product',
-    namePrefix: 'webhook:capability-demo:workflow',
+    namePrefix: 'webhook:platform-smoke:workflow',
   });
 
   assert.equal(replay.receipt.status, 'received');

@@ -10,7 +10,7 @@ Commands:
   check [module-id|module-root|all]      Run module doctor over the selected modules.
   inspect <module-id|module-root|all>    Print module path, source hash, and digest metadata.
   create <module-id> [options]           Create a local module from a template.
-  templates                              Print available module templates and extensions as JSON.
+  templates                              Print available module templates as JSON.
   dev [module-id|module-root|all]        Run dependency, module map, and module check gates.
 
 Create:

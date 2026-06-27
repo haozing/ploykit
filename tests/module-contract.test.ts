@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  api,
   defineModule,
+  page,
   Permission,
+  resource,
   relation,
+  schema,
+  stringField,
   table,
   text,
   validateModuleDefinition,
@@ -13,32 +18,48 @@ function codesFor(definition: Parameters<typeof validateModuleDefinition>[0]): s
   return validateModuleDefinition(definition).map((diagnostic) => diagnostic.code);
 }
 
+function payloadSchema(name = 'Payload') {
+  return schema({
+    name,
+    fields: {
+      value: stringField({ required: true }),
+    },
+  });
+}
+
 test('module contract rejects public aliases that collide with host routes', () => {
   const codes = codesFor(
     defineModule({
       id: 'alias-test',
       name: 'Alias Test',
       version: '0.1.0',
-      routes: {
-        site: [
-          {
-            path: '/tools/alias-test',
-            component: './pages/ToolPage',
-            auth: 'public',
-            publicAliases: ['/pricing'],
+      pages: [
+        page({
+          id: 'alias-test.tool',
+          area: 'site',
+          path: '/tools/alias-test',
+          frame: 'site',
+          component: './pages/ToolPage',
+          metadata: './loaders/tool-metadata',
+          auth: 'public',
+          publicAliases: ['/pricing'],
+          cache: {
+            strategy: 'public',
+            revalidateSeconds: 300,
+            tags: ['alias-test'],
           },
-        ],
-      },
+        }),
+      ],
     })
   );
 
   assert.ok(codes.includes('MODULE_PUBLIC_ALIAS_RESERVED'));
 });
 
-test('module contract rejects unsupported contract schema versions', () => {
+test('module contract rejects removed contractVersion field', () => {
   const codes = codesFor(
     defineModule({
-      contractVersion: 3 as never,
+      contractVersion: 4 as never,
       id: 'contract-version-test',
       name: 'Contract Version Test',
       version: '0.1.0',
@@ -46,6 +67,348 @@ test('module contract rejects unsupported contract schema versions', () => {
   );
 
   assert.ok(codes.includes('MODULE_CONTRACT_VERSION_UNSUPPORTED'));
+});
+
+test('clean-slate contract validates assets, resources, pages, and schemas', () => {
+  const noteSchema = schema({
+    name: 'Note',
+    fields: {
+      title: stringField({ required: true }),
+      body: stringField(),
+    },
+  });
+
+  const diagnostics = validateModuleDefinition(
+    defineModule({
+      id: 'clean-notes',
+      name: 'Clean Notes',
+      version: '0.1.0',
+      assets: {
+        locales: {
+          en: './locales/en.json',
+        },
+        icons: {
+          notes: {
+            kind: 'lucide',
+            name: 'NotebookTabs',
+          },
+        },
+      },
+      resources: {
+        notes: resource({
+          scope: 'workspace',
+          schema: noteSchema,
+          storage: { table: 'notes' },
+        }),
+      },
+      pages: [
+        page({
+          id: 'notes.list',
+          area: 'dashboard',
+          path: '/notes',
+          frame: 'workspace',
+          component: './pages/NotesListPage.tsx',
+          auth: 'auth',
+        }),
+      ],
+      actions: {
+        publishNote: {
+          handler: './actions/publish-note',
+          input: noteSchema,
+          sideEffect: 'write',
+        },
+      },
+      apis: [
+        {
+          id: 'notes.api',
+          path: '/notes',
+          handler: './api/notes',
+          methods: ['GET', 'POST'],
+          input: noteSchema,
+          output: noteSchema,
+        },
+      ],
+    })
+  );
+
+  assert.deepEqual(diagnostics, []);
+});
+
+test('clean-slate contract rejects old routes, static resources, missing frame, and missing schemas', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'bad-clean-notes',
+      name: 'Bad Clean Notes',
+      version: '0.1.0',
+      routes: {
+        dashboard: [
+          {
+            path: '/notes',
+            component: './pages/NotesPage',
+          },
+        ],
+      },
+      resources: {
+        locales: {
+          en: './locales/en.json',
+        },
+      } as never,
+      pages: [
+        {
+          id: 'notes.list',
+          area: 'dashboard',
+          path: '/notes',
+          frame: '',
+          component: './pages/NotesListPage.tsx',
+        },
+      ],
+      actions: {
+        publishNote: {
+          handler: './actions/publish-note',
+        },
+      },
+      apis: [
+        {
+          id: 'notes.api',
+          path: '/notes',
+          handler: './api/notes',
+        } as never,
+      ],
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_CLEAN_ROUTES_UNSUPPORTED'));
+  assert.ok(codes.includes('MODULE_CLEAN_STATIC_RESOURCES_MOVED'));
+  assert.ok(codes.includes('MODULE_PAGE_FRAME_REQUIRED'));
+  assert.ok(codes.includes('MODULE_SCHEMA_REQUIRED'));
+});
+
+test('clean-slate contract rejects module-owned tenant authority fields', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'tenant-authority-test',
+      name: 'Tenant Authority Test',
+      version: '0.1.0',
+      resources: {
+        notes: resource({
+          scope: 'workspace',
+          schema: schema({
+            fields: {
+              title: stringField({ required: true }),
+              tenant_id: stringField({ required: true }),
+            },
+          }),
+          storage: { table: 'notes' },
+        }),
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_TENANT_AUTHORITY_FIELD_FORBIDDEN'));
+});
+
+test('clean-slate contract rejects resource-local page declarations', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'resource-pages-test',
+      name: 'Resource Pages Test',
+      version: '0.1.0',
+      resources: {
+        notes: {
+          $$type: 'ploykit.resource',
+          scope: 'workspace',
+          schema: payloadSchema('ResourcePagesPayload'),
+          storage: { table: 'notes' },
+          pages: {
+            list: { area: 'dashboard', path: '/notes', frame: 'workspace' },
+          },
+        } as never,
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_RESOURCE_PAGES_UNSUPPORTED'));
+});
+
+test('module contract validates page, API, and resource entry security rules', () => {
+  const noteSchema = schema({
+    name: 'Note',
+    fields: {
+      title: stringField({ required: true }),
+    },
+  });
+
+  const diagnostics = validateModuleDefinition(
+    defineModule({
+      id: 'clean-entry-security',
+      name: 'Clean Entry Security',
+      version: '0.1.0',
+      assets: {},
+      resources: {
+        notes: resource({
+          scope: 'workspace',
+          schema: noteSchema,
+          storage: { table: 'notes' },
+          permissions: [Permission.ExternalHttp],
+        }),
+      },
+      pages: [
+        page({
+          id: 'clean-entry-security.home',
+          area: 'dashboard',
+          path: '/clean-entry-security',
+          frame: 'workspace',
+          component: './pages/HomePage.tsx',
+          auth: 'anonymous' as never,
+          permissions: [Permission.ExternalHttp],
+        }),
+      ],
+      apis: [
+        api({
+          id: 'clean-entry-security.public',
+          path: '/clean-entry-security/public',
+          methods: ['TRACE' as never],
+          auth: 'public',
+          permissions: [Permission.ExternalHttp],
+          machineAuth: 'apiKey',
+          idempotency: { required: true },
+          input: noteSchema,
+          output: noteSchema,
+          handler: './api/public.ts',
+        }),
+        api({
+          id: 'clean-entry-security.commercial',
+          path: '/clean-entry-security/commercial',
+          methods: ['POST'],
+          auth: 'public',
+          commercial: {
+            credits: { amount: 1 },
+          },
+          anonymousPolicy: {
+            rateLimit: { bucket: 'ip', limit: 0, window: 'soon' },
+            maxUploadBytes: 0,
+            captcha: 'sometimes' as never,
+            allowHighCostActions: true,
+          },
+          input: noteSchema,
+          output: noteSchema,
+          handler: './api/commercial.ts',
+        }),
+      ],
+    })
+  );
+  const codes = diagnostics.map((diagnostic) => diagnostic.code);
+
+  assert.ok(codes.includes('MODULE_ROUTE_AUTH_INVALID'));
+  assert.ok(codes.includes('MODULE_ENTRY_PERMISSION_NOT_DECLARED'));
+  assert.ok(codes.includes('MODULE_API_METHOD_INVALID'));
+  assert.ok(codes.includes('MODULE_API_MACHINE_AUTH_NOT_PUBLIC'));
+  assert.ok(codes.includes('MODULE_PUBLIC_API_ANONYMOUS_POLICY_REQUIRED'));
+  assert.ok(codes.includes('MODULE_API_IDEMPOTENCY_KEY_SOURCE_REQUIRED'));
+  assert.ok(codes.includes('MODULE_PUBLIC_API_RATE_LIMIT_INVALID'));
+  assert.ok(codes.includes('MODULE_PUBLIC_API_RATE_LIMIT_WINDOW_INVALID'));
+  assert.ok(codes.includes('MODULE_PUBLIC_API_UPLOAD_LIMIT_INVALID'));
+  assert.ok(codes.includes('MODULE_PUBLIC_API_CAPTCHA_INVALID'));
+  assert.ok(codes.includes('MODULE_PUBLIC_API_HIGH_COST_ANONYMOUS_FORBIDDEN'));
+});
+
+test('module contract validates public page metadata, aliases, and cache policy', () => {
+  const validCodes = codesFor(
+    defineModule({
+      id: 'clean-public-page',
+      name: 'Clean Public Page',
+      version: '0.1.0',
+      assets: {},
+      pages: [
+        page({
+          id: 'clean-public-page.index',
+          area: 'site',
+          path: '/clean-public-page',
+          frame: 'site',
+          component: './pages/PublicPage.tsx',
+          auth: 'public',
+          metadata: './loaders/public-metadata',
+          metadataResult: {
+            required: ['title', 'description', 'canonical', 'sitemap'],
+          },
+          publicAliases: ['/tools/clean-public-page'],
+          cache: {
+            strategy: 'public',
+            revalidateSeconds: 300,
+            tags: ['clean-public-page'],
+          },
+        }),
+      ],
+    })
+  );
+  const invalidCodes = codesFor(
+    defineModule({
+      id: 'bad-clean-public-page',
+      name: 'Bad Clean Public Page',
+      version: '0.1.0',
+      assets: {},
+      pages: [
+        page({
+          id: 'bad-clean-public-page.index',
+          area: 'site',
+          path: '/bad-clean-public-page',
+          frame: 'site',
+          component: './pages/PublicPage.tsx',
+          auth: 'public',
+          publicAliases: ['/pricing'],
+          metadataResult: {
+            required: ['unknown' as never],
+          },
+          cache: {
+            strategy: 'private',
+            revalidateSeconds: 0,
+            tags: [''],
+          },
+        }),
+      ],
+    })
+  );
+  const branchCodes = codesFor(
+    defineModule({
+      id: 'clean-public-page-branches',
+      name: 'Clean Public Page Branches',
+      version: '0.1.0',
+      assets: {},
+      pages: [
+        page({
+          id: 'clean-public-page-branches.docs',
+          area: 'site',
+          path: '/docs/[section]',
+          frame: 'site',
+          component: './pages/DocsPage.tsx',
+          auth: 'public',
+          metadataByParam: {
+            section: {
+              guide: './loaders/docs-guide-metadata',
+            },
+          },
+          cacheByParam: {
+            section: {
+              guide: {
+                strategy: 'public',
+                revalidateSeconds: 300,
+              },
+            },
+          },
+        }),
+      ],
+    })
+  );
+
+  assert.deepEqual(validCodes, []);
+  assert.equal(branchCodes.includes('MODULE_PUBLIC_SITE_METADATA_REQUIRED'), false);
+  assert.equal(branchCodes.includes('MODULE_PUBLIC_SITE_CACHE_REQUIRED'), false);
+  assert.ok(invalidCodes.includes('MODULE_PUBLIC_SITE_METADATA_REQUIRED'));
+  assert.ok(invalidCodes.includes('MODULE_PUBLIC_ALIAS_RESERVED'));
+  assert.ok(invalidCodes.includes('MODULE_PAGE_METADATA_REQUIRED_FIELD_INVALID'));
+  assert.ok(invalidCodes.includes('MODULE_PUBLIC_ROUTE_PRIVATE_CACHE'));
+  assert.ok(invalidCodes.includes('MODULE_ROUTE_CACHE_REVALIDATE_INVALID'));
+  assert.ok(invalidCodes.includes('MODULE_ROUTE_CACHE_TAG_EMPTY'));
 });
 
 test('module contract rejects permissions reserved without runtime capabilities', () => {
@@ -67,13 +430,13 @@ test('module contract rejects permissions reserved without runtime capabilities'
   assert.ok(codes.includes('MODULE_PERMISSION_RESERVED_RUNTIME'));
 });
 
-test('module contract validates v2 signed service policies', () => {
+test('module contract validates signed service policies', () => {
   const valid = codesFor(
     defineModule({
-      contractVersion: 2,
       id: 'signed-policy-test',
       name: 'Signed Policy Test',
       version: '0.1.0',
+      assets: {},
       serviceRequirements: {
         signedAdmin: {
           required: true,
@@ -138,7 +501,6 @@ test('module contract validates v2 signed service policies', () => {
   );
 
   assert.deepEqual(valid, []);
-  assert.ok(invalid.includes('MODULE_CONTRACT_V2_REQUIRED'));
   assert.ok(invalid.includes('MODULE_SERVICE_EGRESS_INVALID'));
   assert.ok(invalid.includes('MODULE_SERVICE_PRIVATE_NETWORK_FORBIDDEN'));
   assert.ok(invalid.includes('MODULE_SERVICE_CLAIMS_TEMPLATE_INVALID'));
@@ -153,16 +515,17 @@ test('module contract requires public aliases to be public site routes', () => {
       id: 'dashboard-alias-test',
       name: 'Dashboard Alias Test',
       version: '0.1.0',
-      routes: {
-        dashboard: [
-          {
-            path: '/dashboard-alias',
-            component: './pages/DashboardPage',
-            auth: 'auth',
-            publicAliases: ['/tools/dashboard-alias'],
-          },
-        ],
-      },
+      pages: [
+        page({
+          id: 'dashboard-alias-test.home',
+          area: 'dashboard',
+          path: '/dashboard-alias',
+          frame: 'workspace',
+          component: './pages/DashboardPage',
+          auth: 'auth',
+          publicAliases: ['/tools/dashboard-alias'],
+        }),
+      ],
     })
   );
 
@@ -170,22 +533,23 @@ test('module contract requires public aliases to be public site routes', () => {
   assert.ok(codes.includes('MODULE_PUBLIC_ALIAS_PUBLIC_AUTH_REQUIRED'));
 });
 
-test('module contract validates dashboard and admin route aliases', () => {
+test('module contract validates dashboard and admin page aliases', () => {
   const codes = codesFor(
     defineModule({
       id: 'route-alias-test',
       name: 'Route Alias Test',
       version: '0.1.0',
-      routes: {
-        dashboard: [
-          {
-            path: '/canonical',
-            component: './pages/DashboardPage',
-            auth: 'auth',
-            aliases: ['/canonical', '/alias/:dynamic', '/alias/:dynamic', '/alias?tab=one'],
-          },
-        ],
-      },
+      pages: [
+        page({
+          id: 'route-alias-test.home',
+          area: 'dashboard',
+          path: '/canonical',
+          frame: 'workspace',
+          component: './pages/DashboardPage',
+          auth: 'auth',
+          aliases: ['/canonical', '/alias/:dynamic', '/alias/:dynamic', '/alias?tab=one'],
+        }),
+      ],
     })
   );
 
@@ -201,32 +565,34 @@ test('module contract validates page route param selectors', () => {
       id: 'param-selector-valid',
       name: 'Param Selector Valid',
       version: '0.1.0',
-      routes: {
-        dashboard: [
-          {
-            path: '/param-selector/[section]',
-            component: './pages/App',
-            loaderByParam: {
-              section: {
-                agents: './loaders/agents',
-              },
+      assets: {},
+      pages: [
+        page({
+          id: 'param-selector-valid.home',
+          area: 'dashboard',
+          path: '/param-selector/[section]',
+          frame: 'workspace',
+          component: './pages/App',
+          loaderByParam: {
+            section: {
+              agents: './loaders/agents',
             },
-            metadataByParam: {
-              section: {
-                agents: './loaders/agents-metadata',
-              },
+          },
+          metadataByParam: {
+            section: {
+              agents: './loaders/agents-metadata',
             },
-            cacheByParam: {
-              section: {
-                agents: {
-                  strategy: 'private',
-                  revalidateSeconds: 10,
-                },
+          },
+          cacheByParam: {
+            section: {
+              agents: {
+                strategy: 'private',
+                revalidateSeconds: 10,
               },
             },
           },
-        ],
-      },
+        }),
+      ],
     })
   );
   const invalid = codesFor(
@@ -234,35 +600,36 @@ test('module contract validates page route param selectors', () => {
       id: 'param-selector-invalid',
       name: 'Param Selector Invalid',
       version: '0.1.0',
-      routes: {
-        dashboard: [
-          {
-            path: '/param-selector/[section]',
-            component: './pages/App',
-            loaderByParam: {
-              section: {
-                agents: '../outside',
-              },
-              tab: {
-                overview: './loaders/overview',
-              },
+      pages: [
+        page({
+          id: 'param-selector-invalid.home',
+          area: 'dashboard',
+          path: '/param-selector/[section]',
+          frame: 'workspace',
+          component: './pages/App',
+          loaderByParam: {
+            section: {
+              agents: '../outside',
             },
-            metadataByParam: {
-              missing: {
-                agents: './loaders/agents-metadata',
-              },
+            tab: {
+              overview: './loaders/overview',
             },
-            cacheByParam: {
-              section: {
-                agents: {
-                  strategy: 'invalid' as never,
-                  revalidateSeconds: 0,
-                },
+          },
+          metadataByParam: {
+            missing: {
+              agents: './loaders/agents-metadata',
+            },
+          },
+          cacheByParam: {
+            section: {
+              agents: {
+                strategy: 'invalid' as never,
+                revalidateSeconds: 0,
               },
             },
           },
-        ],
-      },
+        }),
+      ],
     })
   );
   const invalidPath = codesFor(
@@ -270,19 +637,20 @@ test('module contract validates page route param selectors', () => {
       id: 'param-selector-invalid-path',
       name: 'Param Selector Invalid Path',
       version: '0.1.0',
-      routes: {
-        dashboard: [
-          {
-            path: '/param-selector/[section]',
-            component: './pages/App',
-            loaderByParam: {
-              section: {
-                agents: '../outside',
-              },
+      pages: [
+        page({
+          id: 'param-selector-invalid-path.home',
+          area: 'dashboard',
+          path: '/param-selector/[section]',
+          frame: 'workspace',
+          component: './pages/App',
+          loaderByParam: {
+            section: {
+              agents: '../outside',
             },
           },
-        ],
-      },
+        }),
+      ],
     })
   );
 
@@ -294,24 +662,25 @@ test('module contract validates page route param selectors', () => {
   assert.ok(invalid.includes('MODULE_ROUTE_CACHE_REVALIDATE_INVALID'));
 });
 
-test('module contract keeps public aliases and route aliases in separate lanes', () => {
+test('module contract keeps public aliases and page aliases in separate lanes', () => {
   const siteCodes = codesFor(
     defineModule({
       id: 'site-route-alias-test',
       name: 'Site Route Alias Test',
       version: '0.1.0',
-      routes: {
-        site: [
-          {
-            path: '/canonical',
-            component: './pages/SitePage',
-            metadata: './loaders/site-meta',
-            auth: 'public',
-            aliases: ['/legacy'],
-            cache: { strategy: 'public', revalidateSeconds: 300 },
-          },
-        ],
-      },
+      pages: [
+        page({
+          id: 'site-route-alias-test.public',
+          area: 'site',
+          path: '/canonical',
+          frame: 'site',
+          component: './pages/SitePage',
+          metadata: './loaders/site-meta',
+          auth: 'public',
+          aliases: ['/legacy'],
+          cache: { strategy: 'public', revalidateSeconds: 300 },
+        }),
+      ],
     })
   );
 
@@ -320,21 +689,25 @@ test('module contract keeps public aliases and route aliases in separate lanes',
       id: 'route-alias-conflict-test',
       name: 'Route Alias Conflict Test',
       version: '0.1.0',
-      routes: {
-        dashboard: [
-          {
-            path: '/orders/:orderId',
-            component: './pages/OrderPage',
-            auth: 'auth',
-          },
-          {
-            path: '/orders/archive',
-            component: './pages/ArchivePage',
-            auth: 'auth',
-            aliases: ['/orders/:orderId'],
-          },
-        ],
-      },
+      pages: [
+        page({
+          id: 'route-alias-conflict-test.order',
+          area: 'dashboard',
+          path: '/orders/[orderId]',
+          frame: 'workspace',
+          component: './pages/OrderPage',
+          auth: 'auth',
+        }),
+        page({
+          id: 'route-alias-conflict-test.archive',
+          area: 'dashboard',
+          path: '/orders/archive',
+          frame: 'workspace',
+          component: './pages/ArchivePage',
+          auth: 'auth',
+          aliases: ['/orders/[orderId]'],
+        }),
+      ],
     })
   );
 
@@ -348,26 +721,30 @@ test('module contract requires public site routes to declare SEO metadata and ca
       id: 'public-site-test',
       name: 'Public Site Test',
       version: '0.1.0',
-      routes: {
-        site: [
-          {
-            path: '/public-site-test',
-            component: './pages/PublicSitePage',
-            auth: 'public',
+      pages: [
+        page({
+          id: 'public-site-test.home',
+          area: 'site',
+          path: '/public-site-test',
+          frame: 'site',
+          component: './pages/PublicSitePage',
+          auth: 'public',
+        }),
+        page({
+          id: 'public-site-test.private-cache',
+          area: 'site',
+          path: '/private-cache',
+          frame: 'site',
+          component: './pages/PrivateCachePage',
+          metadata: './loaders/private-cache-metadata',
+          auth: 'public',
+          cache: {
+            strategy: 'private',
+            revalidateSeconds: 0,
+            tags: [''],
           },
-          {
-            path: '/private-cache',
-            component: './pages/PrivateCachePage',
-            metadata: './loaders/private-cache-metadata',
-            auth: 'public',
-            cache: {
-              strategy: 'private',
-              revalidateSeconds: 0,
-              tags: [''],
-            },
-          },
-        ],
-      },
+        }),
+      ],
     })
   );
 
@@ -384,28 +761,29 @@ test('module contract validates public site param metadata and cache branches', 
       id: 'public-site-param-test',
       name: 'Public Site Param Test',
       version: '0.1.0',
-      routes: {
-        site: [
-          {
-            path: '/docs/[section]',
-            component: './pages/DocsPage',
-            auth: 'public',
-            metadataByParam: {
-              section: {
-                guide: './loaders/docs-guide-metadata',
-              },
+      pages: [
+        page({
+          id: 'public-site-param-test.docs',
+          area: 'site',
+          path: '/docs/[section]',
+          frame: 'site',
+          component: './pages/DocsPage',
+          auth: 'public',
+          metadataByParam: {
+            section: {
+              guide: './loaders/docs-guide-metadata',
             },
-            cacheByParam: {
-              section: {
-                guide: {
-                  strategy: 'public',
-                  revalidateSeconds: 300,
-                },
+          },
+          cacheByParam: {
+            section: {
+              guide: {
+                strategy: 'public',
+                revalidateSeconds: 300,
               },
             },
           },
-        ],
-      },
+        }),
+      ],
     })
   );
   const privateBranchCodes = codesFor(
@@ -413,27 +791,28 @@ test('module contract validates public site param metadata and cache branches', 
       id: 'public-site-param-private-test',
       name: 'Public Site Param Private Test',
       version: '0.1.0',
-      routes: {
-        site: [
-          {
-            path: '/docs/[section]',
-            component: './pages/DocsPage',
-            auth: 'public',
-            metadataByParam: {
-              section: {
-                guide: './loaders/docs-guide-metadata',
-              },
+      pages: [
+        page({
+          id: 'public-site-param-private-test.docs',
+          area: 'site',
+          path: '/docs/[section]',
+          frame: 'site',
+          component: './pages/DocsPage',
+          auth: 'public',
+          metadataByParam: {
+            section: {
+              guide: './loaders/docs-guide-metadata',
             },
-            cacheByParam: {
-              section: {
-                guide: {
-                  strategy: 'private',
-                },
+          },
+          cacheByParam: {
+            section: {
+              guide: {
+                strategy: 'private',
               },
             },
           },
-        ],
-      },
+        }),
+      ],
     })
   );
 
@@ -443,28 +822,30 @@ test('module contract validates public site param metadata and cache branches', 
 });
 
 test('module contract rejects public machine-auth API routes', () => {
+  const payload = payloadSchema('MachineAuthPayload');
   const codes = codesFor(
     defineModule({
       id: 'machine-auth-test',
       name: 'Machine Auth Test',
       version: '0.1.0',
-      routes: {
-        api: [
-          {
-            path: '/machine',
-            handler: './api/machine',
-            auth: 'public',
-            machineAuth: 'apiKey',
-            anonymousPolicy: {
-              rateLimit: {
-                bucket: 'ip',
-                limit: 10,
-                window: '1m',
-              },
+      apis: [
+        api({
+          id: 'machine-auth-test.machine',
+          path: '/machine',
+          handler: './api/machine',
+          auth: 'public',
+          machineAuth: 'apiKey',
+          input: payload,
+          output: payload,
+          anonymousPolicy: {
+            rateLimit: {
+              bucket: 'ip',
+              limit: 10,
+              window: '1m',
             },
           },
-        ],
-      },
+        }),
+      ],
     })
   );
 
@@ -472,29 +853,34 @@ test('module contract rejects public machine-auth API routes', () => {
 });
 
 test('module contract validates API route idempotency declarations', () => {
+  const payload = payloadSchema('ApiIdempotencyPayload');
   const codes = codesFor(
     defineModule({
       id: 'api-idempotency-test',
       name: 'API Idempotency Test',
       version: '0.1.0',
-      routes: {
-        api: [
-          {
-            path: '/missing-key-source',
-            handler: './api/missing-key-source',
-            auth: 'auth',
-            methods: ['POST'],
-            idempotency: { required: true },
-          },
-          {
-            path: '/invalid-key-source',
-            handler: './api/invalid-key-source',
-            auth: 'auth',
-            methods: ['POST'],
-            idempotency: { required: true, keyFrom: 'body' as never },
-          },
-        ],
-      },
+      apis: [
+        api({
+          id: 'api-idempotency-test.missing',
+          path: '/missing-key-source',
+          handler: './api/missing-key-source',
+          auth: 'auth',
+          methods: ['POST'],
+          input: payload,
+          output: payload,
+          idempotency: { required: true },
+        }),
+        api({
+          id: 'api-idempotency-test.invalid',
+          path: '/invalid-key-source',
+          handler: './api/invalid-key-source',
+          auth: 'auth',
+          methods: ['POST'],
+          input: payload,
+          output: payload,
+          idempotency: { required: true, keyFrom: 'body' as never },
+        }),
+      ],
     })
   );
 
@@ -508,6 +894,7 @@ test('module contract validates quality performance route sampling shape', () =>
       id: 'quality-performance-valid',
       name: 'Quality Performance Valid',
       version: '0.1.0',
+      assets: {},
       quality: {
         performance: {
           pageRoutes: [
@@ -565,41 +952,46 @@ test('module contract validates quality performance route sampling shape', () =>
 });
 
 test('module contract validates public API anonymous policy details', () => {
+  const payload = payloadSchema('AnonymousPolicyPayload');
   const codes = codesFor(
     defineModule({
       id: 'anonymous-policy-test',
       name: 'Anonymous Policy Test',
       version: '0.1.0',
-      routes: {
-        api: [
-          {
-            path: '/missing-rate-limit',
-            handler: './api/missing-rate-limit',
-            methods: ['POST'],
-            auth: 'public',
-            anonymousPolicy: {},
+      apis: [
+        api({
+          id: 'anonymous-policy-test.missing',
+          path: '/missing-rate-limit',
+          handler: './api/missing-rate-limit',
+          methods: ['POST'],
+          auth: 'public',
+          input: payload,
+          output: payload,
+          anonymousPolicy: {},
+        }),
+        api({
+          id: 'anonymous-policy-test.bad',
+          path: '/bad-rate-limit',
+          handler: './api/bad-rate-limit',
+          methods: ['POST'],
+          auth: 'public',
+          input: payload,
+          output: payload,
+          commercial: {
+            credits: { amount: 1 },
           },
-          {
-            path: '/bad-rate-limit',
-            handler: './api/bad-rate-limit',
-            methods: ['POST'],
-            auth: 'public',
-            commercial: {
-              credits: { amount: 1 },
+          anonymousPolicy: {
+            rateLimit: {
+              bucket: 'ip',
+              limit: 0,
+              window: 'soon',
             },
-            anonymousPolicy: {
-              rateLimit: {
-                bucket: 'ip',
-                limit: 0,
-                window: 'soon',
-              },
-              maxUploadBytes: 0,
-              captcha: 'sometimes' as never,
-              allowHighCostActions: true,
-            },
+            maxUploadBytes: 0,
+            captcha: 'sometimes' as never,
+            allowHighCostActions: true,
           },
-        ],
-      },
+        }),
+      ],
     })
   );
 
@@ -618,21 +1010,23 @@ test('module contract validates commercial placeholders', () => {
       name: 'Commercial Test',
       version: '0.1.0',
       permissions: [Permission.SurfaceContribute],
-      routes: {
-        site: [
-          {
-            path: '/paid',
-            component: './pages/PaidPage',
-            auth: 'auth',
-            commercial: {
-              entitlements: [''],
-              credits: {
-                amount: 0,
-              },
+      pages: [
+        page({
+          id: 'commercial-test.paid',
+          area: 'site',
+          path: '/paid',
+          frame: 'site',
+          component: './pages/PaidPage',
+          metadata: './loaders/paid-metadata',
+          auth: 'auth',
+          commercial: {
+            entitlements: [''],
+            credits: {
+              amount: 0,
             },
           },
-        ],
-      },
+        }),
+      ],
       surfaces: {
         'dashboard.home:paid-panel': {
           component: './surfaces/PaidPanel',
@@ -859,7 +1253,7 @@ test('module contract validates module icon resources', () => {
       id: 'icon-resource-test',
       name: 'Icon Resource Test',
       version: '0.1.0',
-      resources: {
+      assets: {
         icons: {
           taskList: {
             kind: 'lucide',
@@ -878,7 +1272,7 @@ test('module contract validates module icon resources', () => {
       id: 'bad-icon-resource-test',
       name: 'Bad Icon Resource Test',
       version: '0.1.0',
-      resources: {
+      assets: {
         icons: {
           task_list: {
             kind: 'lucide',

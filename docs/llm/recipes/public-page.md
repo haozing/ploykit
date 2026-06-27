@@ -1,33 +1,50 @@
 # Recipe: Public Page
 
-Intent: publish a site page through the module contract with metadata and cache policy.
+Intent: publish an indexable site page through the module contract with metadata, cache policy, and optional public aliases.
 
 ## Use
 
-- `module.ts`: `routes.site`, `metadata`, `cache`, and optional `publicAliases`.
-- Runtime: loaders read `ctx.data` or service data; components render content only.
-- Permissions: depends on loader/action needs; common examples are `Permission.DataTableRead` and `Permission.SurfaceContribute`.
-- Reference: `modules/cms-demo/module.ts`.
+- Declare the page in `pages` with `area: 'site'`, `frame: 'site'`, `auth: 'public'`, metadata, and cache.
+- Render page content with TSX only.
+- Add `navigation` when the public page should be discoverable from the site header or footer.
+- Declare only the permissions required by loaders, APIs, actions, or surfaces.
 
 ## Contract Shape
 
 ```ts
-permissions: [Permission.DataTableRead],
-routes: {
-  site: [{
+import { defineModule, page } from '@ploykit/module-sdk';
+
+export default defineModule({
+  id: 'blog',
+  name: 'Blog',
+  version: '0.1.0',
+  pages: [
+    page({
+      id: 'blog.index',
+      area: 'site',
+      path: '/blog',
+      frame: 'site',
+      component: './pages/PublicBlogPage.tsx',
+      loader: './loaders/public-posts',
+      metadata: './loaders/blog-metadata',
+      metadataResult: {
+        required: ['title', 'description', 'canonical', 'sitemap'],
+      },
+      auth: 'public',
+      publicAliases: ['/news'],
+      cache: {
+        strategy: 'public',
+        revalidateSeconds: 120,
+        tags: ['blog'],
+      },
+    }),
+  ],
+  navigation: {
+    location: 'site.header',
+    fallbackLabel: 'Blog',
     path: '/blog',
-    component: './pages/PublicBlogPage',
-    loader: './loaders/public-posts',
-    metadata: './loaders/blog-metadata',
-    publicAliases: ['/news'],
-    auth: 'public',
-    cache: {
-      strategy: 'public',
-      revalidateSeconds: 120,
-      tags: ['blog'],
-    },
-  }],
-},
+  },
+});
 ```
 
 ## Loader Shape

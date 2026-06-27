@@ -111,10 +111,10 @@ test('data apply command helper orchestrates migrate and reset flows', async () 
   }[] = [];
   const calls: string[] = [];
   const plan: StaticPlan & { tables: { physicalName: string }[] } = {
-    moduleId: 'hello',
-    moduleRoot: 'modules/hello',
+    moduleId: 'resource-smoke',
+    moduleRoot: 'modules/resource-smoke',
     migrations: { mode: 'generated' },
-    tables: [{ physicalName: 'mod_hello__notes' }],
+    tables: [{ physicalName: 'mod_resource_smoke__notes' }],
   };
   const parseCommandArgs = (args: string[]) => {
     const flags = new Set<string>();
@@ -136,11 +136,11 @@ test('data apply command helper orchestrates migrate and reset flows', async () 
         calls.push(`collect:${results.length}:${diagnostics.length}`);
         return [
           {
-            moduleId: 'hello',
+            moduleId: 'resource-smoke',
             schemaHash: 'hash-1',
-            projectPath: 'modules/hello/migrations/0001_generated.sql',
+            projectPath: 'modules/resource-smoke/migrations/0001_generated.sql',
             bytes: 42,
-            migrationFile: 'hello.sql',
+            migrationFile: 'resource-smoke.sql',
           },
         ];
       },
@@ -169,7 +169,7 @@ test('data apply command helper orchestrates migrate and reset flows', async () 
           diagnostics.push({ severity: 'error', code: 'MIGRATE_FAILED', message: 'failed' });
           return [];
         }
-        return [{ moduleId: 'hello', schemaHash: 'hash-1', path: 'modules/hello/migration.sql' }];
+        return [{ moduleId: 'resource-smoke', schemaHash: 'hash-1', path: 'modules/resource-smoke/migration.sql' }];
       },
       applyResetPlans: async (databaseUrl, resetPlans, diagnostics) => {
         calls.push(`apply-reset:${databaseUrl}:${resetPlans.length}`);
@@ -234,12 +234,12 @@ test('data apply command helper orchestrates migrate and reset flows', async () 
     await command.commandReset([]);
     assert.equal(outputs.at(-1)?.success, true);
     assert.equal(outputs.at(-1)?.mode, 'dry-run');
-    assert.deepEqual(outputs.at(-1)?.resetPlans, [{ moduleId: 'hello', sql: 'reset hello' }]);
+    assert.deepEqual(outputs.at(-1)?.resetPlans, [{ moduleId: 'resource-smoke', sql: 'reset resource-smoke' }]);
 
     await command.commandReset(['--force', '--database-url', 'postgres://ok']);
     assert.equal(outputs.at(-1)?.success, true);
     assert.equal(outputs.at(-1)?.mode, 'pg');
-    assert.deepEqual(outputs.at(-1)?.reset, [{ moduleId: 'hello' }]);
+    assert.deepEqual(outputs.at(-1)?.reset, [{ moduleId: 'resource-smoke' }]);
     assert.equal(process.exitCode, undefined);
     assert.ok(calls.includes('apply-migrate:postgres://ok:1'));
     assert.ok(calls.includes('apply-reset:postgres://ok:1'));

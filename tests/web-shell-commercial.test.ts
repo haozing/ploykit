@@ -231,7 +231,7 @@ test('A8 admin commercial view redacts commercial secret metadata', async () => 
     id: `api_key_redaction_${suffix}`,
     productId: 'demo-product',
     workspaceId: 'demo-workspace',
-    moduleId: 'public-tools-demo',
+    moduleId: 'public-tool-smoke',
     name: 'Redaction key',
     prefix: `pk_redact_${suffix}`.slice(0, 24),
     keyHash: 'stored-key-hash',
@@ -298,7 +298,7 @@ test('M6 host commercial provider applies local paid checkout benefits', async (
     amount: 1200,
     currency: 'USD',
   });
-  const balance = await commercial.forModule('public-tools-demo').credits.balance('demo-admin');
+  const balance = await commercial.forModule('public-tool-smoke').credits.balance('demo-admin');
   const orderEvents = await store.listOutbox({
     productId: 'demo-product',
     workspaceId: 'demo-workspace',
@@ -330,7 +330,7 @@ test('M6 host commercial provider applies local paid checkout benefits', async (
 
   assert.equal(repaired.repaired, 1);
   assert.equal(
-    (await commercial.forModule('public-tools-demo').credits.balance('demo-admin')).balance,
+    (await commercial.forModule('public-tool-smoke').credits.balance('demo-admin')).balance,
     2000
   );
 });

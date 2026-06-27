@@ -69,10 +69,10 @@ function countArray(value: readonly unknown[] | undefined): number {
 function summarizeContract(contract: ModuleRuntimeContract): ModuleDevConsoleCapabilitySummary {
   return {
     routes:
-      countArray(contract.routes.site) +
-      countArray(contract.routes.dashboard) +
-      countArray(contract.routes.admin) +
-      countArray(contract.routes.api),
+      contract.capabilitySummary.routes.site +
+      contract.capabilitySummary.routes.dashboard +
+      contract.capabilitySummary.routes.admin +
+      contract.capabilitySummary.routes.api,
     actions: countRecord(contract.actions),
     jobs: countRecord(contract.jobs),
     events: {
@@ -86,8 +86,8 @@ function summarizeContract(contract: ModuleRuntimeContract): ModuleDevConsoleCap
       tables: countRecord(contract.definition.data?.tables),
     },
     resources: {
-      locales: countRecord(contract.resources.locales),
-      assets: countArray(contract.resources.assets),
+      locales: countRecord(contract.assets.locales),
+      assets: countArray(contract.assets.assets),
     },
     lifecycle: Object.values(contract.lifecycle).filter(Boolean).length,
   };

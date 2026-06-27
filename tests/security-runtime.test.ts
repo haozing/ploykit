@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   action,
+  api,
   defineApi,
   defineModule,
   Permission,
+  schema,
+  stringField,
   type ModuleContext,
 } from '@ploykit/module-sdk';
 import {
@@ -17,6 +20,13 @@ import {
   resetSecurityFixtureLoadCounts,
   securityArtifact,
 } from './security-runtime-fixtures';
+
+const payloadSchema = schema({
+  name: 'SecurityRuntimeInlinePayload',
+  fields: {
+    value: stringField(),
+  },
+});
 
 test('P4 permission guard denies API routes before loading handlers', async () => {
   resetSecurityFixtureLoadCounts();
@@ -72,16 +82,19 @@ test('P4 contract validation rejects entry permissions missing from module contr
     id: 'entry-permission-test',
     name: 'Entry Permission Test',
     version: '0.1.0',
-    routes: {
-      api: [
-        {
-          path: '/entry-permission',
-          handler: './api/entry-permission',
-          auth: 'auth',
-          permissions: [Permission.DataTableRead],
-        },
-      ],
-    },
+    assets: {},
+    apis: [
+      api({
+        id: 'entry-permission-test.entry',
+        path: '/entry-permission',
+        handler: './api/entry-permission',
+        auth: 'auth',
+        methods: ['GET'],
+        input: payloadSchema,
+        output: payloadSchema,
+        permissions: [Permission.DataTableRead],
+      }),
+    ],
   });
 
   await assert.rejects(

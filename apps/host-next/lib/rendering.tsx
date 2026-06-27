@@ -1,3 +1,4 @@
+import { createElement, isValidElement, type ComponentType } from 'react';
 import { readModuleDefaultExport } from '@/lib/module-runtime/adapters/module-export';
 import type { ModuleHost } from '@/lib/module-runtime/host/create-module-host';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
@@ -16,8 +17,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-export async function renderPageComponent(component: unknown, props: unknown): Promise<unknown> {
+export interface RenderPageComponentOptions {
+  strictReactOutput?: boolean;
+}
+
+function renderStrictReactPageComponent(component: unknown, props: unknown): unknown {
+  const exported = readModuleDefaultExport(component);
+  if (isValidElement(exported)) {
+    return exported;
+  }
+  if (typeof exported === 'function') {
+    return createElement(
+      exported as ComponentType<Record<string, unknown>>,
+      isRecord(props) ? props : {}
+    );
+  }
+
+  if (exported === null || exported === undefined) {
+    return exported;
+  }
+
+  throw new Error(
+    'MODULE_PAGE_RENDER_OUTPUT_INVALID: clean-slate module pages must export a JSX/React component.'
+  );
+}
+
+export async function renderPageComponent(
+  component: unknown,
+  props: unknown,
+  options: RenderPageComponentOptions = {}
+): Promise<unknown> {
+  if (options.strictReactOutput) {
+    return renderStrictReactPageComponent(component, props);
+  }
+
   const output = await callModuleComponent(component, props);
+
   if (
     isRecord(output) &&
     typeof output.view === 'string' &&

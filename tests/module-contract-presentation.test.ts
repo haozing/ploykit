@@ -74,7 +74,7 @@ test('module contract accepts complete white-label presentation declarations', (
       name: 'White Label Valid',
       version: '0.1.0',
       permissions: [Permission.SurfaceOverride, Permission.ThemeWrite],
-      resources: {
+      assets: {
         locales: {
           zh: './locales/zh.json',
           en: './locales/en.json',
@@ -117,7 +117,7 @@ test('module contract requires localized message keys for strict i18n fallbacks'
       id: 'strict-i18n-messages',
       name: 'Strict I18n Messages',
       version: '0.1.0',
-      resources: {
+      assets: {
         locales: {
           zh: './locales/zh.json',
         },
@@ -162,7 +162,8 @@ test('module contract validates local contract parts, action side effects, and s
       version: '0.1.0',
       parts: {
         data: './data',
-        routes: './routes',
+        pages: './pages',
+        apis: './apis',
         theme: './theme',
       },
       actions: {
@@ -194,7 +195,8 @@ test('module contract validates local contract parts, action side effects, and s
   );
 
   assert.ok(codes.includes('MODULE_PART_DATA_NOT_WIRED'));
-  assert.ok(codes.includes('MODULE_PART_ROUTES_NOT_WIRED'));
+  assert.ok(codes.includes('MODULE_PART_PAGES_NOT_WIRED'));
+  assert.ok(codes.includes('MODULE_PART_APIS_NOT_WIRED'));
   assert.ok(codes.includes('MODULE_PART_THEME_NOT_WIRED'));
   assert.ok(codes.includes('MODULE_ENTRY_PERMISSION_NOT_DECLARED'));
   assert.ok(codes.includes('MODULE_ACTION_CONFIRMATION_REQUIRED'));

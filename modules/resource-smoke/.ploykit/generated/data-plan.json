@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "moduleId": "resource-smoke",
+  "moduleRoot": "modules/resource-smoke",
+  "dataVersion": 1,
+  "documents": [
+    {
+      "name": "user_notes",
+      "scope": "user",
+      "fields": {
+        "message": {
+          "type": "string",
+          "required": true,
+          "maxLength": 200
+        }
+      }
+    }
+  ],
+  "tables": [
+    {
+      "name": "workspace_notes",
+      "physicalName": "mod_resource_smoke__workspace_notes",
+      "scope": "workspace",
+      "columns": {
+        "title": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "body": {
+          "kind": "text",
+          "nullable": true,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "status": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": "draft"
+        }
+      },
+      "unique": [],
+      "indexes": [
+        [
+          "status"
+        ]
+      ]
+    },
+    {
+      "name": "public_posts",
+      "physicalName": "mod_resource_smoke__public_posts",
+      "scope": "public-read",
+      "columns": {
+        "title": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "status": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": "draft"
+        },
+        "metadata": {
+          "kind": "jsonb",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": {
+            "featured": false
+          }
+        }
+      },
+      "unique": [
+        [
+          "title"
+        ]
+      ],
+      "indexes": [
+        [
+          "status"
+        ]
+      ]
+    },
+    {
+      "name": "product_items",
+      "physicalName": "mod_resource_smoke__product_items",
+      "scope": "product",
+      "columns": {
+        "sku": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "title": {
+          "kind": "text",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "price_cents": {
+          "kind": "integer",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false
+        },
+        "inventory": {
+          "kind": "integer",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": 0
+        },
+        "metadata": {
+          "kind": "jsonb",
+          "nullable": false,
+          "primaryKey": false,
+          "defaultRandom": false,
+          "default": {
+            "source": "resource-smoke"
+          }
+        }
+      },
+      "unique": [
+        [
+          "sku"
+        ]
+      ],
+      "indexes": [
+        [
+          "inventory"
+        ]
+      ]
+    }
+  ],
+  "views": [],
+  "grants": [],
+  "checks": [],
+  "migrations": {
+    "mode": "generated",
+    "dir": "./migrations"
+  },
+  "schemaHash": "61d0cd138f15edb6fe0bffdb9da942a368dc5fd60b42d190bc5dbae7f559415c",
+  "resourceFacts": [
+    {
+      "name": "notes",
+      "scope": "workspace",
+      "schema": {
+        "name": "ResourceSmokeNote",
+        "jsonSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "title": "ResourceSmokeNote",
+          "properties": {
+            "title": {
+              "maxLength": 120,
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "status": {
+              "default": "draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "status"
+          ]
+        },
+        "fixture": {
+          "title": "example",
+          "body": "Example text",
+          "status": "draft"
+        }
+      },
+      "kind": "table",
+      "model": "workspace_notes"
+    }
+  ],
+  "openapi": {
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Resource Smoke",
+      "version": "0.1.0"
+    },
+    "paths": {
+      "/resource-smoke/notes": {
+        "get": {
+          "operationId": "resource-smoke.notes.get",
+          "tags": [
+            "resource-smoke"
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ApiOutputResourceSmokeNotes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "operationId": "resource-smoke.notes.post",
+          "tags": [
+            "resource-smoke"
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiInputResourceSmokeNotes"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ApiOutputResourceSmokeNotes"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "ResourceNotes": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "title": "ResourceSmokeNote",
+          "properties": {
+            "title": {
+              "maxLength": 120,
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "status": {
+              "default": "draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "status"
+          ]
+        },
+        "ApiInputResourceSmokeNotes": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "title": "ResourceSmokeNote",
+          "properties": {
+            "title": {
+              "maxLength": 120,
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "status": {
+              "default": "draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "status"
+          ]
+        },
+        "ApiOutputResourceSmokeNotes": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "title": "ResourceSmokeNoteOutput",
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok"
+          ]
+        },
+        "ActionInputCreateNote": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "title": "ResourceSmokeNote",
+          "properties": {
+            "title": {
+              "maxLength": 120,
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "status": {
+              "default": "draft",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "status"
+          ]
+        },
+        "ActionOutputCreateNote": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "title": "ResourceSmokeNoteOutput",
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok"
+          ]
+        }
+      }
+    }
+  }
+}

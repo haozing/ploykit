@@ -26,7 +26,7 @@
 - 将 service connection 的配置、健康检查和 secret rotation 继续从大型 admin operations 中拆出。
 - 为每个 provider 增加最小 contract test：签名、拒绝未声明 header、拒绝私网 egress、redaction。
 - 已增加通用 OpenAPI consumer check：`npm run module:service-contract -- <module-id> --openapi ../service/openapi.yaml` 校验模块 service client 使用的 method/path 仍存在于服务端机器契约。
-- 已增加 `product --with service-backed` 扩展：在 product 主模板上生成 serviceRequirements、service client、fixtures、mock test 和 live smoke 骨架。
+- `module:create` 不再提供 `product --with service-backed` 扩展；需要受控服务时，在模块 contract 中手写 `serviceRequirements`、service client、fixtures、mock test 和 live smoke。
 - 在 module doctor 中继续强化 privileged service 与 `ctx.http.fetch` 的互斥提示。
 - 对 release evidence 输出每个 service operation 的 readiness 和最近一次安全检查。
 

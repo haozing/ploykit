@@ -34,6 +34,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEMO_MODULES_ENTITLEMENT = 'ploykit.demo_modules';
 const DEMO_USERS_PRODUCTION_ERROR = 'PLOYKIT_DEMO_USERS_PRODUCTION_FORBIDDEN';
 const BOOTSTRAP_ADMIN_INCOMPLETE_ERROR = 'PLOYKIT_BOOTSTRAP_ADMIN_INCOMPLETE';
+const CURRENT_AUTH_TOKEN_FORMAT = 'current';
 
 interface SeedHostUser {
   id: string;
@@ -344,27 +345,26 @@ function safeEqual(left: string, right: string): boolean {
 function encodeSessionCookieValue(userId: string, sessionId?: string, expiresAt?: string): string {
   const payload = Buffer.from(JSON.stringify({ userId, sessionId, expiresAt }), 'utf8').toString('base64url');
   const signed = signSessionPayload(payload);
-  return `v3.${signed.kid}.${payload}.${signed.signature}`;
+  return `${CURRENT_AUTH_TOKEN_FORMAT}.${signed.kid}.${payload}.${signed.signature}`;
 }
 
 function decodeSessionCookieValue(value: string | undefined): DecodedHostSessionCookie | undefined {
-  const parts = (value ?? '').split('.');
-  const [version] = parts;
-  const kid = version === 'v3' ? parts[1] : undefined;
-  const payload = version === 'v3' ? parts[2] : parts[1];
-  const signature = version === 'v3' ? parts[3] : parts[2];
-  const validShape =
-    (version === 'v3' && parts.length === 4 && kid && payload && signature) ||
-    ((version === 'v1' || version === 'v2') && parts.length === 3 && payload && signature);
-  if (!validShape) {
+  const [format, kid, payload, signature, ...rest] = (value ?? '').split('.');
+  if (
+    format !== CURRENT_AUTH_TOKEN_FORMAT ||
+    !kid ||
+    !payload ||
+    !signature ||
+    rest.length > 0
+  ) {
     return undefined;
   }
-  if (!verifySessionPayload(kid, payload!, signature!)) {
+  if (!verifySessionPayload(kid, payload, signature)) {
     return undefined;
   }
 
   try {
-    const decoded = JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')) as {
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
       userId?: unknown;
       sessionId?: unknown;
       expiresAt?: unknown;
@@ -383,7 +383,7 @@ function decodeSessionCookieValue(value: string | undefined): DecodedHostSession
 
 function tokenHash(token: string): string {
   const key = resolveHostAuthKeyRing().active;
-  return `v2.${key.kid}.${signWithSecret(key.secret, token)}`;
+  return `${CURRENT_AUTH_TOKEN_FORMAT}.${key.kid}.${signWithSecret(key.secret, token)}`;
 }
 
 function createToken(): string {
@@ -699,14 +699,12 @@ function tokenMailLog(
 }
 
 function tokenHashMatches(storedHash: string, token: string): boolean {
-  const [version, kid, digest, ...rest] = storedHash.split('.');
-  if (version === 'v2' && kid && digest && rest.length === 0) {
-    const key = resolveHostAuthKeyRing().keys.find((candidate) => candidate.kid === kid);
-    return Boolean(key && safeEqual(digest, signWithSecret(key.secret, token)));
+  const [format, kid, digest, ...rest] = storedHash.split('.');
+  if (format !== CURRENT_AUTH_TOKEN_FORMAT || !kid || !digest || rest.length > 0) {
+    return false;
   }
-  return resolveHostAuthKeyRing().keys.some((key) =>
-    safeEqual(storedHash, signWithSecret(key.secret, token))
-  );
+  const key = resolveHostAuthKeyRing().keys.find((candidate) => candidate.kid === kid);
+  return Boolean(key && safeEqual(digest, signWithSecret(key.secret, token)));
 }
 
 function hasUsableToken(tokens: readonly HostAuthTokenRecord[], token: string): boolean {

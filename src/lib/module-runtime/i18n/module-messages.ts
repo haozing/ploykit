@@ -48,8 +48,9 @@ export function loadModuleLocaleMessages(
     return null;
   }
 
+  const staticAssets = contract.assets ?? {};
   const matchedLocale = localeCandidates(language).find(
-    (candidate) => entry.messages?.[candidate] || contract.resources.locales?.[candidate]
+    (candidate) => entry.messages?.[candidate] || staticAssets.locales?.[candidate]
   );
   if (!matchedLocale) {
     return null;

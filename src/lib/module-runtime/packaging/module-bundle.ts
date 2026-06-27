@@ -48,10 +48,10 @@ function keys(value: Record<string, unknown> | undefined): string[] {
 function contractCapabilities(contract: ModuleRuntimeContract) {
   return {
     routes:
-      contract.routes.site.length +
-      contract.routes.dashboard.length +
-      contract.routes.admin.length +
-      contract.routes.api.length,
+      contract.capabilitySummary.routes.site +
+      contract.capabilitySummary.routes.dashboard +
+      contract.capabilitySummary.routes.admin +
+      contract.capabilitySummary.routes.api,
     actions: Object.keys(contract.actions).length,
     jobs: Object.keys(contract.jobs).length,
     events: contract.events.publishes.length + Object.keys(contract.events.subscribes).length,

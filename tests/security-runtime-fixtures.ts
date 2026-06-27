@@ -1,8 +1,12 @@
 import {
   action,
+  api,
   defineApi,
   defineModule,
+  page,
   Permission,
+  schema,
+  stringField,
   type ModuleContext,
 } from '@ploykit/module-sdk';
 import type { ModuleMapArtifact } from '../src/lib/module-runtime';
@@ -29,6 +33,13 @@ export function getSecurityFixtureLoadCounts(): {
   };
 }
 
+const payloadSchema = schema({
+  name: 'SecurityRuntimePayload',
+  fields: {
+    value: stringField(),
+  },
+});
+
 const securityModule = defineModule({
   id: 'security-test',
   name: 'Security Test Module',
@@ -51,40 +62,53 @@ const securityModule = defineModule({
       secret: true,
     },
   },
-  routes: {
-    dashboard: [
-      {
-        path: '/paid',
-        component: './pages/PaidPage',
-        auth: 'auth',
-        commercial: {
-          entitlements: ['pro'],
-        },
+  assets: {},
+  pages: [
+    page({
+      id: 'security-test.paid',
+      area: 'dashboard',
+      path: '/paid',
+      frame: 'workspace',
+      component: './pages/PaidPage',
+      auth: 'auth',
+      commercial: {
+        entitlements: ['pro'],
       },
-    ],
-    api: [
-      {
-        path: '/secure',
-        handler: './api/secure',
-        auth: 'auth',
-        permissions: [Permission.DataDocumentRead],
-      },
-      {
-        path: '/missing-permission',
-        handler: './api/missing-permission',
-        auth: 'auth',
-        permissions: [Permission.DataTableRead],
-      },
-      {
-        path: '/capabilities',
-        handler: './api/capabilities',
-        auth: 'auth',
-      },
-    ],
-  },
+    }),
+  ],
+  apis: [
+    api({
+      id: 'security-test.secure',
+      path: '/secure',
+      handler: './api/secure',
+      auth: 'auth',
+      input: payloadSchema,
+      output: payloadSchema,
+      permissions: [Permission.DataDocumentRead],
+    }),
+    api({
+      id: 'security-test.missing-permission',
+      path: '/missing-permission',
+      handler: './api/missing-permission',
+      auth: 'auth',
+      input: payloadSchema,
+      output: payloadSchema,
+      permissions: [Permission.DataTableRead],
+    }),
+    api({
+      id: 'security-test.capabilities',
+      path: '/capabilities',
+      handler: './api/capabilities',
+      auth: 'auth',
+      input: payloadSchema,
+      output: payloadSchema,
+    }),
+  ],
   actions: {
     paidAction: {
       handler: './actions/paid-action',
+      input: payloadSchema,
+      output: payloadSchema,
       auth: 'auth',
       commercial: {
         entitlements: ['pro'],

@@ -111,9 +111,9 @@ test('R1 contact API accepts public requests through the route security catalog'
 test('K4 module webhook route enforces signed secret readiness and body limits', async () => {
   const secretKeys = [
     'PLOYKIT_MODULE_WEBHOOK_SECRET',
-    'PLOYKIT_MODULE_WEBHOOK_SECRET_CAPABILITY_DEMO',
-    'PLOYKIT_MODULE_WEBHOOK_SECRET_CAPABILITY_DEMO_INGEST',
-    'PLOYKIT_MODULE_WEBHOOK_SECRET_DEV_HMAC_SHA256_CAP_CONN',
+    'PLOYKIT_MODULE_WEBHOOK_SECRET_PLATFORM_SMOKE',
+    'PLOYKIT_MODULE_WEBHOOK_SECRET_PLATFORM_SMOKE_INGEST',
+    'PLOYKIT_MODULE_WEBHOOK_SECRET_DEV_HMAC_SHA256_PLATFORM_CONN',
   ];
   const previous = new Map(secretKeys.map((key) => [key, process.env[key]]));
   const body = JSON.stringify({ source: 'signed-route-test' });
@@ -124,7 +124,7 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
       delete process.env[key];
     }
     const missingSecret = await receiveModuleWebhook(
-      createHostRequest('/api/module-webhooks/capability-demo/webhook', {
+      createHostRequest('/api/module-webhooks/platform-smoke/webhook', {
         method: 'POST',
         body,
         headers: {
@@ -134,14 +134,14 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
         },
       }),
       {
-        params: Promise.resolve({ path: ['capability-demo', 'webhook'] }),
+        params: Promise.resolve({ path: ['platform-smoke', 'webhook'] }),
       }
     );
 
-    process.env.PLOYKIT_MODULE_WEBHOOK_SECRET_CAPABILITY_DEMO_INGEST = 'cap-secret';
-    const signature = `sha256=${createHmac('sha256', 'cap-secret').update(body).digest('hex')}`;
+    process.env.PLOYKIT_MODULE_WEBHOOK_SECRET_PLATFORM_SMOKE_INGEST = 'platform-secret';
+    const signature = `sha256=${createHmac('sha256', 'platform-secret').update(body).digest('hex')}`;
     const accepted = await receiveModuleWebhook(
-      createHostRequest('/api/module-webhooks/capability-demo/webhook', {
+      createHostRequest('/api/module-webhooks/platform-smoke/webhook', {
         method: 'POST',
         body,
         headers: {
@@ -151,15 +151,15 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
         },
       }),
       {
-        params: Promise.resolve({ path: ['capability-demo', 'webhook'] }),
+        params: Promise.resolve({ path: ['platform-smoke', 'webhook'] }),
       }
     );
     const githubHeaderBody = JSON.stringify({ source: 'github-header-test' });
-    const githubHeaderSignature = `sha256=${createHmac('sha256', 'cap-secret')
+    const githubHeaderSignature = `sha256=${createHmac('sha256', 'platform-secret')
       .update(githubHeaderBody)
       .digest('hex')}`;
     const acceptedGithubHeader = await receiveModuleWebhook(
-      createHostRequest('/api/module-webhooks/capability-demo/webhook', {
+      createHostRequest('/api/module-webhooks/platform-smoke/webhook', {
         method: 'POST',
         body: githubHeaderBody,
         headers: {
@@ -169,31 +169,31 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
         },
       }),
       {
-        params: Promise.resolve({ path: ['capability-demo', 'webhook'] }),
+        params: Promise.resolve({ path: ['platform-smoke', 'webhook'] }),
       }
     );
-    process.env.PLOYKIT_MODULE_WEBHOOK_SECRET_DEV_HMAC_SHA256_CAP_CONN = 'connection-secret';
+    process.env.PLOYKIT_MODULE_WEBHOOK_SECRET_DEV_HMAC_SHA256_PLATFORM_CONN = 'connection-secret';
     const connectionBody = JSON.stringify({ source: 'connection-secret-test' });
     const connectionSignature = `sha256=${createHmac('sha256', 'connection-secret')
       .update(connectionBody)
       .digest('hex')}`;
     const acceptedConnectionSecret = await receiveModuleWebhook(
-      createHostRequest('/api/module-webhooks/capability-demo/webhook?connection=cap-conn', {
+      createHostRequest('/api/module-webhooks/platform-smoke/webhook?connection=platform-conn', {
         method: 'POST',
         body: connectionBody,
         headers: {
           'content-type': 'application/json',
           'idempotency-key': `${idempotencyKey}-connection`,
           'x-ploykit-signature': connectionSignature,
-          'x-ploykit-connection-slug': 'cap-conn',
+          'x-ploykit-connection-slug': 'platform-conn',
         },
       }),
       {
-        params: Promise.resolve({ path: ['capability-demo', 'webhook'] }),
+        params: Promise.resolve({ path: ['platform-smoke', 'webhook'] }),
       }
     );
     const tooLarge = await receiveModuleWebhook(
-      createHostRequest('/api/module-webhooks/capability-demo/workflow/webhook', {
+      createHostRequest('/api/module-webhooks/platform-smoke/workflow/webhook', {
         method: 'POST',
         body: '{}',
         headers: {
@@ -202,7 +202,7 @@ test('K4 module webhook route enforces signed secret readiness and body limits',
         },
       }),
       {
-        params: Promise.resolve({ path: ['capability-demo', 'workflow', 'webhook'] }),
+        params: Promise.resolve({ path: ['platform-smoke', 'workflow', 'webhook'] }),
       }
     );
 
@@ -279,7 +279,7 @@ test('K4 host security catalog covers main routes and blocks cross-origin mutati
   assert.ok(adminKeys.includes('action:webhooks.bulkReplayDeadLetters'));
   assert.ok(adminKeys.includes('action:serviceConnections.rotateSecret'));
   assert.equal(
-    findAdminPageRegistryEntry('/admin/modules/white-label-site-demo')?.id,
+    findAdminPageRegistryEntry('/admin/modules/platform-smoke')?.id,
     'module.detail'
   );
   assert.equal(findAdminPageRegistryEntry('/admin/runs/run_demo')?.id, 'run.detail');
@@ -357,22 +357,22 @@ test('K4 host security catalog covers main routes and blocks cross-origin mutati
   };
   const moduleContracts = await loadModuleRuntimeContracts(MODULE_MAP_ARTIFACT);
   const moduleRoutes = createModuleRouteManifest(moduleContracts);
-  const helloDashboardContract = moduleContracts.find((contract) =>
-    contract.routes.dashboard.some((route) => route.path === '/hello')
+  const platformDashboardContract = moduleContracts.find((contract) =>
+    contract.pages.some((page) => page.area === 'dashboard' && page.path === '/platform-smoke')
   );
-  assert.ok(helloDashboardContract);
-  const helloDashboardSession = applyModuleSelfServiceSessionPermissions(
+  assert.ok(platformDashboardContract);
+  const platformDashboardSession = applyModuleSelfServiceSessionPermissions(
     baseModuleSession,
     {
       operation: 'page',
       routeKind: 'dashboard',
-      pathname: '/hello',
+      pathname: '/platform-smoke',
     },
     moduleContracts,
     moduleRoutes
   );
-  for (const permission of helloDashboardContract.permissions) {
-    assert.ok(helloDashboardSession.permissions?.includes(permission));
+  for (const permission of platformDashboardContract.permissions) {
+    assert.ok(platformDashboardSession.permissions?.includes(permission));
   }
   const unrelatedDashboardSession = applyModuleSelfServiceSessionPermissions(
     baseModuleSession,

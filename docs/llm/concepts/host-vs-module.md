@@ -1,6 +1,6 @@
 # Host vs Module
 
-A ploykit module fills product capability; the host owns the shell.
+A PloyKit module fills product capability; the host owns the shell.
 
 ## Boundary
 
@@ -20,5 +20,4 @@ A ploykit module fills product capability; the host owns the shell.
 - Do not draw a second dashboard shell inside a module page.
 - Do not create account menus, workspace selectors, or host sidebars in module code.
 - Do not change `apps/host-next/*` for a module-specific layout need.
-
-Reference: `modules/white-label-site-demo/module.ts`.
+- Do not hide host chrome and rebuild it locally.

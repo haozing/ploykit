@@ -20,20 +20,16 @@ export function normalizeModuleRuntimeContract(
   definition: RuntimeModuleDefinition
 ): ModuleRuntimeContract {
   return {
-    contractVersion: definition.contractVersion ?? 1,
     id: definition.id,
     name: definition.name,
     version: definition.version,
     description: definition.description,
     permissions: definition.permissions ?? [],
-    routes: {
-      site: definition.routes?.site ?? [],
-      dashboard: definition.routes?.dashboard ?? [],
-      admin: definition.routes?.admin ?? [],
-      api: definition.routes?.api ?? [],
-    },
+    pages: definition.pages ?? [],
+    apis: definition.apis ?? [],
     navigation: normalizeNavigation(definition.navigation),
     surfaces: definition.surfaces ?? {},
+    assets: definition.assets ?? {},
     resources: definition.resources ?? {},
     theme: definition.theme ?? {},
     meters: definition.meters ?? {},

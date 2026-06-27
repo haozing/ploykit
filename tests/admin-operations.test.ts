@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { defineModule } from '@ploykit/module-sdk';
+import { defineModule, page } from '@ploykit/module-sdk';
 import {
   countMissingRequiredModuleRequirements,
   createAdminOperationsCenter,
@@ -14,9 +14,16 @@ const moduleDefinition = defineModule({
   id: 'admin-test',
   name: 'Admin Test',
   version: '1.0.0',
-  routes: {
-    dashboard: [{ path: '/admin-test', component: './pages/Home', auth: 'auth' }],
-  },
+  pages: [
+    page({
+      id: 'admin-test.home',
+      area: 'dashboard',
+      path: '/admin-test',
+      frame: 'workspace',
+      component: './pages/Home',
+      auth: 'auth',
+    }),
+  ],
 });
 
 const artifact: ModuleMapArtifact = {

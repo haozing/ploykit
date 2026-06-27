@@ -66,20 +66,8 @@ function moduleRobots(metadata: unknown): Metadata['robots'] {
   };
 }
 
-function readSiteShellChrome(metadata: unknown): 'none' | 'site' | 'workspace' | 'admin' | undefined {
-  if (!metadata || typeof metadata !== 'object') {
-    return undefined;
-  }
-
-  const shell = (metadata as Record<string, unknown>).shell;
-  if (!shell || typeof shell !== 'object') {
-    return undefined;
-  }
-
-  const chrome = (shell as Record<string, unknown>).chrome;
-  return chrome === 'none' || chrome === 'site' || chrome === 'workspace' || chrome === 'admin'
-    ? chrome
-    : undefined;
+function sitePageUsesModuleFrame(page: { route: { frame?: string } }): boolean {
+  return page.route.frame === 'none';
 }
 
 export async function siteModuleMetadata(pathname: string): Promise<Metadata> {
@@ -151,8 +139,10 @@ export async function renderSiteModulePage(pathname: string) {
     loaderData: result.page.loaderData,
     metadata: result.page.metadata,
     language: lang,
+  }, {
+    strictReactOutput: true,
   });
-  const usesModuleChrome = readSiteShellChrome(result.page.metadata) === 'none';
+  const usesModuleChrome = sitePageUsesModuleFrame(result.page);
   const title = readMetadataString(result.page.metadata, 'title') ?? result.page.contract.name;
   const description =
     readMetadataString(result.page.metadata, 'description') ?? result.page.contract.description;

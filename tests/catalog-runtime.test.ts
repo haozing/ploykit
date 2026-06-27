@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { defineModule } from '@ploykit/module-sdk';
+import { defineModule, page } from '@ploykit/module-sdk';
 import {
   createModuleCatalogApplyPlan,
   createModuleRuntimeHost,
@@ -13,30 +13,32 @@ const enabledModule = defineModule({
   id: 'enabled',
   name: 'Enabled Module',
   version: '1.0.0',
-  routes: {
-    dashboard: [
-      {
-        path: '/enabled',
-        component: './pages/EnabledPage',
-        auth: 'public',
-      },
-    ],
-  },
+  pages: [
+    page({
+      id: 'enabled.home',
+      area: 'dashboard',
+      path: '/enabled',
+      frame: 'workspace',
+      component: './pages/EnabledPage',
+      auth: 'public',
+    }),
+  ],
 });
 
 const disabledModule = defineModule({
   id: 'disabled',
   name: 'Disabled Module',
   version: '1.0.0',
-  routes: {
-    dashboard: [
-      {
-        path: '/disabled',
-        component: './pages/DisabledPage',
-        auth: 'public',
-      },
-    ],
-  },
+  pages: [
+    page({
+      id: 'disabled.home',
+      area: 'dashboard',
+      path: '/disabled',
+      frame: 'workspace',
+      component: './pages/DisabledPage',
+      auth: 'public',
+    }),
+  ],
 });
 
 const enabledContract = normalizeModuleRuntimeContract(enabledModule);
@@ -147,30 +149,32 @@ test('P11 catalog doctor reports enabled module route alias conflicts', () => {
     id: 'first-alias-owner',
     name: 'First Alias Owner',
     version: '1.0.0',
-    routes: {
-      dashboard: [
-        {
-          path: '/first',
-          component: './pages/FirstPage',
-          auth: 'auth',
-          aliases: ['/shared-console-path'],
-        },
-      ],
-    },
+    pages: [
+      page({
+        id: 'first-alias-owner.home',
+        area: 'dashboard',
+        path: '/first',
+        frame: 'workspace',
+        component: './pages/FirstPage',
+        auth: 'auth',
+        aliases: ['/shared-console-path'],
+      }),
+    ],
   });
   const secondModule = defineModule({
     id: 'second-alias-owner',
     name: 'Second Alias Owner',
     version: '1.0.0',
-    routes: {
-      dashboard: [
-        {
-          path: '/shared-console-path',
-          component: './pages/SecondPage',
-          auth: 'auth',
-        },
-      ],
-    },
+    pages: [
+      page({
+        id: 'second-alias-owner.home',
+        area: 'dashboard',
+        path: '/shared-console-path',
+        frame: 'workspace',
+        component: './pages/SecondPage',
+        auth: 'auth',
+      }),
+    ],
   });
 
   const diagnostics = diagnoseModuleCatalog({

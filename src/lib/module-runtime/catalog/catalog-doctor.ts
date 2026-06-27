@@ -78,7 +78,7 @@ export function diagnoseModuleCatalog(input: DiagnoseModuleCatalogInput): Module
       continue;
     }
 
-    for (const route of contract.routes.site) {
+    for (const route of contract.pages.filter((page) => page.area === 'site')) {
       for (const path of [route.path, ...(route.publicAliases ?? [])]) {
         const owner = publicPaths.get(path);
         if (owner && owner !== contract.id) {
@@ -87,7 +87,7 @@ export function diagnoseModuleCatalog(input: DiagnoseModuleCatalogInput): Module
               'error',
               'MODULE_CATALOG_PUBLIC_PATH_CONFLICT',
               `Public path "${path}" is declared by both "${owner}" and "${contract.id}".`,
-              `modules.${contract.id}.routes.site`,
+              `modules.${contract.id}.pages`,
               'Change one route path or public alias so each public path has one owner.'
             )
           );
@@ -98,7 +98,7 @@ export function diagnoseModuleCatalog(input: DiagnoseModuleCatalogInput): Module
     }
 
     for (const group of ['dashboard', 'admin'] as const) {
-      for (const route of contract.routes[group]) {
+      for (const route of contract.pages.filter((page) => page.area === group)) {
         for (const path of [route.path, ...(route.aliases ?? [])]) {
           const key = `${group}:${path}`;
           const owner = routePaths.get(key);
@@ -108,7 +108,7 @@ export function diagnoseModuleCatalog(input: DiagnoseModuleCatalogInput): Module
                 'error',
                 'MODULE_CATALOG_ROUTE_PATH_CONFLICT',
                 `${group} path "${path}" is declared by both "${owner}" and "${contract.id}".`,
-                `modules.${contract.id}.routes.${group}`,
+                `modules.${contract.id}.pages`,
                 'Change one route path or alias so each dashboard/admin path has one owner.'
               )
             );

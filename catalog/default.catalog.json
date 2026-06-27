@@ -19,41 +19,23 @@
     {
       "id": "demo",
       "name": "Demo Bundle",
-      "description": "Default bundle used by the P11 catalog runtime smoke path and X10 product demos.",
-      "requiredModuleIds": ["hello"],
+      "description": "Default bundle used by the catalog runtime and clean smoke modules.",
+      "requiredModuleIds": ["platform-smoke"],
       "modules": [
         {
-          "moduleId": "hello",
+          "moduleId": "platform-smoke",
           "status": "enabled",
           "required": true,
           "scopeProfile": "hidden-default"
         },
         {
-          "moduleId": "public-tools-demo",
+          "moduleId": "resource-smoke",
           "status": "enabled",
           "required": false,
           "scopeProfile": "explicit-workspace"
         },
         {
-          "moduleId": "cms-demo",
-          "status": "enabled",
-          "required": false,
-          "scopeProfile": "explicit-workspace"
-        },
-        {
-          "moduleId": "shop-demo",
-          "status": "enabled",
-          "required": false,
-          "scopeProfile": "explicit-workspace"
-        },
-        {
-          "moduleId": "capability-demo",
-          "status": "enabled",
-          "required": false,
-          "scopeProfile": "explicit-workspace"
-        },
-        {
-          "moduleId": "ai-rag-demo",
+          "moduleId": "public-tool-smoke",
           "status": "enabled",
           "required": false,
           "scopeProfile": "explicit-workspace"
@@ -63,20 +45,14 @@
         {
           "planId": "demo",
           "capabilities": [
-            "hello.basic",
-            "public-tools.basic",
-            "cms.basic",
-            "shop.basic",
-            "capability.basic",
-            "ai-rag.basic"
+            "platform-smoke.basic",
+            "resource-smoke.basic",
+            "public-tool-smoke.basic"
           ],
           "moduleIds": [
-            "hello",
-            "public-tools-demo",
-            "cms-demo",
-            "shop-demo",
-            "capability-demo",
-            "ai-rag-demo"
+            "platform-smoke",
+            "resource-smoke",
+            "public-tool-smoke"
           ]
         }
       ]
@@ -85,7 +61,7 @@
   "moduleStates": [
     {
       "productId": "demo-product",
-      "moduleId": "hello",
+      "moduleId": "platform-smoke",
       "status": "enabled",
       "bundleId": "demo",
       "required": true,
@@ -93,7 +69,7 @@
     },
     {
       "productId": "demo-product",
-      "moduleId": "public-tools-demo",
+      "moduleId": "resource-smoke",
       "status": "enabled",
       "bundleId": "demo",
       "required": false,
@@ -101,31 +77,7 @@
     },
     {
       "productId": "demo-product",
-      "moduleId": "cms-demo",
-      "status": "enabled",
-      "bundleId": "demo",
-      "required": false,
-      "scopeProfile": "explicit-workspace"
-    },
-    {
-      "productId": "demo-product",
-      "moduleId": "shop-demo",
-      "status": "enabled",
-      "bundleId": "demo",
-      "required": false,
-      "scopeProfile": "explicit-workspace"
-    },
-    {
-      "productId": "demo-product",
-      "moduleId": "capability-demo",
-      "status": "enabled",
-      "bundleId": "demo",
-      "required": false,
-      "scopeProfile": "explicit-workspace"
-    },
-    {
-      "productId": "demo-product",
-      "moduleId": "ai-rag-demo",
+      "moduleId": "public-tool-smoke",
       "status": "enabled",
       "bundleId": "demo",
       "required": false,

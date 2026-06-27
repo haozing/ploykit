@@ -1,12 +1,12 @@
 import { createModuleDiagnostic, type ModuleDiagnostic } from './diagnostics';
 import { validateActions } from './validator-actions';
+import { validateCleanContract } from './validator-clean-contract';
 import { validateJobsEventsWebhooks } from './validator-background';
 import { validateData } from './validator-data';
 import { validatePresentation, validateTheme } from './validator-presentation';
 import { validateNavigation, validateProduct } from './validator-product';
 import { validateQuality } from './validator-quality';
 import { validateI18n, validateResources } from './validator-resources';
-import { validateRoutes } from './validator-routes';
 import {
   validateCapabilityMetadata,
   validateDependencies,
@@ -109,13 +109,23 @@ function validateContractParts(
     );
   }
 
-  if (parts.routes && !definition.routes) {
+  if (parts.pages && !definition.pages) {
     addError(
       diagnostics,
-      'MODULE_PART_ROUTES_NOT_WIRED',
-      'parts.routes is declared, but module.ts does not expose a routes contract.',
-      'parts.routes',
-      'Import the route definition in module.ts and assign it to routes.'
+      'MODULE_PART_PAGES_NOT_WIRED',
+      'parts.pages is declared, but module.ts does not expose a pages contract.',
+      'parts.pages',
+      'Import the page definition in module.ts and assign it to pages.'
+    );
+  }
+
+  if (parts.apis && !definition.apis) {
+    addError(
+      diagnostics,
+      'MODULE_PART_APIS_NOT_WIRED',
+      'parts.apis is declared, but module.ts does not expose an apis contract.',
+      'parts.apis',
+      'Import the API definition in module.ts and assign it to apis.'
     );
   }
 
@@ -192,17 +202,13 @@ function validatePermissionList(
 export function validateModuleDefinition(definition: ModuleDefinition): ModuleDiagnostic[] {
   const diagnostics: ModuleDiagnostic[] = [];
 
-  if (
-    definition.contractVersion !== undefined &&
-    definition.contractVersion !== 1 &&
-    definition.contractVersion !== 2
-  ) {
+  if ('contractVersion' in definition) {
     addError(
       diagnostics,
       'MODULE_CONTRACT_VERSION_UNSUPPORTED',
-      `Module contract version "${definition.contractVersion}" is not supported.`,
+      'Module contractVersion is no longer supported in the single-version contract.',
       'contractVersion',
-      'Use contractVersion: 1, contractVersion: 2, or omit the field to use the current default.'
+      'Remove contractVersion; the SDK only accepts the current contract shape.'
     );
   }
 
@@ -233,7 +239,6 @@ export function validateModuleDefinition(definition: ModuleDefinition): ModuleDi
   validatePermissionList(diagnostics, definition.permissions, 'permissions');
   validateContractParts(diagnostics, definition);
   validateData(diagnostics, definition.data);
-  validateRoutes(diagnostics, definition);
   validateActions(diagnostics, definition);
   validateSurfaces(diagnostics, definition);
   validateTheme(diagnostics, definition);
@@ -248,6 +253,7 @@ export function validateModuleDefinition(definition: ModuleDefinition): ModuleDi
   validateDependencies(diagnostics, definition);
   validateCapabilityMetadata(diagnostics, definition);
   validateEgress(diagnostics, definition);
+  validateCleanContract(diagnostics, definition);
 
   return diagnostics;
 }

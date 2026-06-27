@@ -14,31 +14,25 @@ Node.js 级别的不可信第三方插件沙箱；不要安装或执行未经源
 ## 创建模块
 
 ```bash
-npm run module:create -- my-product
-npm run module:create -- my-product --template product
-npm run module:create -- my-service-product --template product --with service-backed
-npm run module:create -- my-worker-product --template product --with background
-npm run module:create -- my-full-product --template product --with service-backed,background
+npm run module:create -- my-app
+npm run module:create -- my-resource --template resource
+npm run module:create -- my-tool --template tool
+npm run module:create -- my-connector --template connector
 ```
 
 推荐模型：
 
-- `product`：主模板，覆盖 minimal、product、white-label、Data v2 CRUD 的统一产品模块骨架。未指定 `--template` 时默认使用它。
-- `service-backed`：扩展，通过 `--with service-backed` 叠加 OpenAPI/受控服务/service client/mock/live smoke。
-- `background`：扩展，通过 `--with background` 叠加 jobs/events/webhooks/lifecycle。
+- `app`：默认普通 dashboard 应用模板。
+- `resource`：schema/resource/Data v2/OpenAPI 优先的 CRUD 资源模板。
+- `tool`：单页工具，包含 action/API/schema。
+- `connector`：受控连接器模板，允许声明连接器权限和同步 job。
 
-模板体系的目标不是继续增加平级模板，而是让 `product` 主模板覆盖大多数真实产品模块：public site、dashboard、admin、页面替换、
-presentation/SEO/theme/i18n、Data v2 表和 migration/test 骨架。`service-backed` 与 `background` 不再作为孤立产品模板，而是叠加在
-`product` 上的能力块。
-
-当前仓库的 CLI 仍保留 `ai-rag`、`basic`、`billing-aware`、`dashboard`、`crud`、`connector`、`signed-service`、`job`、`white-label`、`product-app`
-等历史模板；它们是兼容入口或拆分片段，不再作为新增模板的主要方向。新能力优先按上面的主模板/扩展模型设计，不要继续增加新的平级模板。
+`module:create` 不再提供 `product` 模板或 `--with service-backed/background` 扩展入口。受控服务、后台任务、webhook 或白牌能力仍是平台能力，但需要在模块 contract 中显式声明，不作为普通模块第一屏脚手架。
 
 服务端分离型产品模块（例如独立 Go Core + PloyKit 控制台）不要只按普通 dashboard 或 CRUD 模块处理。优先阅读
 [服务端分离型模块开发指南](service-backed-module-development.zh-CN.md)：服务端以 OpenAPI 等机器契约为源头，PloyKit
 模块声明 `contractVersion: 2` 和 `serviceRequirements`，在模块内保留单一 service client/adapter，并用
-contract mock、fixture mock 和 live smoke 分层开发。现在应从 `product + service-backed` 生成；需要后台任务时再叠加
-`background`。
+contract mock、fixture mock 和 live smoke 分层开发。创建骨架时从最接近的 `app`、`resource`、`tool` 或 `connector` 开始，再手写所需的 `serviceRequirements`、permissions 和测试。
 
 创建后脚本会自动刷新 module map，并对新模块运行 doctor。要看当前可用模板，也可以运行：
 

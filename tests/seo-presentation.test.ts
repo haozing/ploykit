@@ -95,7 +95,7 @@ test('host sitemap emits localized static pages with alternates', async () => {
 
 test('host sitemap emits localized module routes and aliases with alternates', async () => {
   const entries = await sitemap();
-  const zhPublicTools = entries.find((entry) => entry.url.endsWith('/zh/public-tools')) as
+  const zhPublicTool = entries.find((entry) => entry.url.endsWith('/zh/public-tool-smoke')) as
     | {
         alternates?: {
           languages?: Record<string, string>;
@@ -110,9 +110,12 @@ test('host sitemap emits localized module routes and aliases with alternates', a
       }
     | undefined;
 
-  assert.ok(zhPublicTools);
+  assert.ok(zhPublicTool);
   assert.ok(zhJsonTool);
-  assert.equal(zhPublicTools.alternates?.languages?.en, 'http://localhost:3000/en/public-tools');
+  assert.equal(
+    zhPublicTool.alternates?.languages?.en,
+    'http://localhost:3000/en/public-tool-smoke'
+  );
   assert.equal(zhJsonTool.alternates?.languages?.zh, 'http://localhost:3000/zh/tools/json');
   assert.equal(zhJsonTool.alternates?.languages?.en, 'http://localhost:3000/en/tools/json');
 });
@@ -161,7 +164,7 @@ test('non-site route presentation forces noindex and non-public cache', async ()
 });
 
 test('localized module site metadata resolves language-prefixed aliases', async () => {
-  const metadata = await siteModuleMetadata('/en/shop');
+  const metadata = await siteModuleMetadata('/en/tools/json');
   const alternates = metadata.alternates as {
     canonical?: string;
     languages?: Record<string, string>;
@@ -170,9 +173,9 @@ test('localized module site metadata resolves language-prefixed aliases', async 
     url?: string;
   };
 
-  assert.equal(metadata.title, 'Shop Demo | PloyKit');
-  assert.equal(alternates.canonical, 'http://localhost:3000/en/shop');
-  assert.equal(alternates.languages?.zh, 'http://localhost:3000/zh/shop');
-  assert.equal(alternates.languages?.en, 'http://localhost:3000/en/shop');
-  assert.equal(openGraph.url, 'http://localhost:3000/en/shop');
+  assert.equal(metadata.title, 'Public Tool Smoke');
+  assert.equal(alternates.canonical, 'http://localhost:3000/en/tools/json');
+  assert.equal(alternates.languages?.zh, 'http://localhost:3000/zh/tools/json');
+  assert.equal(alternates.languages?.en, 'http://localhost:3000/en/tools/json');
+  assert.equal(openGraph.url, 'http://localhost:3000/en/tools/json');
 });

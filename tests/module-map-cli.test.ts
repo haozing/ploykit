@@ -114,7 +114,7 @@ function writeWorkspaceModuleWithNavigationIcon(t: TestContext): string {
         id: '${moduleId}',
         name: 'Icon Fixture',
         version: '0.1.0',
-        resources: {
+        assets: {
           icons: {
             listChecks: { kind: 'lucide', name: 'ListChecks' },
           },

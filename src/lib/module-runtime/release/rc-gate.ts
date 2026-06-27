@@ -54,7 +54,7 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
   },
   {
     id: 'web-shell',
-    title: 'Web Shell loads modules through the v2 host without legacy runtime dependencies.',
+    title: 'Web Shell loads modules through the current module host without removed runtime dependencies.',
     required: true,
   },
   {
@@ -70,7 +70,7 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
   },
   {
     id: 'runtime-stores',
-    title: 'Runtime stores and Data v2 pass the Postgres verification loop.',
+    title: 'Runtime stores and governed module data pass the Postgres verification loop.',
     required: true,
   },
   {
@@ -138,7 +138,7 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
   {
     id: 'data-safety-matrix',
     title:
-      'Auth secrets, store durability, route security, files, worker, and legacy scans are checked.',
+      'Auth secrets, store durability, route security, files, worker, and removed-entry scans are checked.',
     required: true,
   },
   {
@@ -995,7 +995,7 @@ function resolveSecurityOperationsCheck(
   }
   return {
     status: 'passed',
-    evidence: `Security operations passed through data-safety route security, config doctor, legacy scan, and redaction evidence. ${safety.evidence}`,
+    evidence: `Security operations passed through data-safety route security, config doctor, removed-entry scan, and redaction evidence. ${safety.evidence}`,
   };
 }
 

@@ -3,7 +3,8 @@ import path from 'node:path';
 
 export const PART_EXPECTED_EXPORTS = {
   data: /\bexport\s+(const|default)\s+\w*data|\bexport\s*{\s*\w+\s+as\s+data|\bdata\s*:/,
-  routes: /\bexport\s+(const|default)\s+\w*routes|\bexport\s*{\s*\w+\s+as\s+routes|\broutes\s*:/,
+  pages: /\bexport\s+(const|default)\s+\w*pages|\bexport\s*{\s*\w+\s+as\s+pages|\bpages\s*:/,
+  apis: /\bexport\s+(const|default)\s+\w*apis|\bexport\s*{\s*\w+\s+as\s+apis|\bapis\s*:/,
   presentation:
     /\bexport\s+(const|default)\s+\w*presentation|\bexport\s*{\s*\w+\s+as\s+presentation|\bpresentation\s*:/,
   theme: /\bexport\s+(const|default)\s+\w*theme|\bexport\s*{\s*\w+\s+as\s+theme|\btheme\s*:/,
@@ -192,7 +193,7 @@ export function extractContractParts(source) {
   }
   const entries = [];
   for (const match of partsSource.matchAll(
-    /\b(data|routes|presentation|theme|i18n)\s*:\s*['"`](\.\/[^'"`]+)['"`]/g
+    /\b(data|pages|apis|presentation|theme|i18n)\s*:\s*['"`](\.\/[^'"`]+)['"`]/g
   )) {
     entries.push({ part: match[1], localPath: match[2] });
   }
@@ -269,6 +270,17 @@ export function extractObjectLiterals(source) {
 
 export function extractRouteObjects(source, group) {
   const block = findKeyArraySource(source, group);
+  return block ? extractObjectLiterals(block) : [];
+}
+
+export function extractPageObjects(source, area) {
+  const block = findKeyArraySource(source, 'pages');
+  const pages = block ? extractObjectLiterals(block) : [];
+  return pages.filter((page) => extractString(page, 'area') === area);
+}
+
+export function extractApiObjects(source) {
+  const block = findKeyArraySource(source, 'apis');
   return block ? extractObjectLiterals(block) : [];
 }
 

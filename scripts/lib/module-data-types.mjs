@@ -47,6 +47,13 @@ export function tableColumnTs(column) {
   return column.nullable === true ? `${mapped} | null` : mapped;
 }
 
+function jsonToTsLiteral(value) {
+  return JSON.stringify(value, null, 2)
+    .split('\n')
+    .map((line, index) => (index === 0 ? line : `  ${line}`))
+    .join('\n');
+}
+
 export function generateTypes(modulePlan, input = {}) {
   const standardColumns = input.standardColumns ?? [];
   const lines = [
@@ -76,6 +83,17 @@ export function generateTypes(modulePlan, input = {}) {
       lines.push(`  ${columnName}: ${tableColumnTs(column)};`);
     }
     lines.push('}', '');
+  }
+
+  for (const resource of modulePlan.resourceFacts ?? []) {
+    const modelSuffix = resource.kind === 'document' ? 'Document' : 'Table';
+    lines.push(
+      `export type ${tsIdentifier(resource.name, 'Resource')} = ${tsIdentifier(resource.model, modelSuffix)};`
+    );
+    lines.push(
+      `export const ${resource.name}Fixture: ${tsIdentifier(resource.name, 'Resource')} = ${jsonToTsLiteral(resource.schema.fixture)} as ${tsIdentifier(resource.name, 'Resource')};`
+    );
+    lines.push('');
   }
 
   lines.push(`export interface ${tsIdentifier(modulePlan.moduleId, 'Data')} {`);

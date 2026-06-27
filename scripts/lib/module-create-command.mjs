@@ -3,16 +3,14 @@ import path from 'node:path';
 
 import {
   createUsage,
-  MODULE_EXTENSIONS,
   MODULE_TEMPLATES,
   TEMPLATES_WITH_DATA_ARTIFACTS,
 } from './module-template-catalog.mjs';
-import { applyModuleExtensions } from './module-template-extensions.mjs';
 import { runLocalScript } from './module-command-execution.mjs';
 
 export function parseCreateArgs(args) {
   let moduleId = null;
-  let template = 'product';
+  let template = 'app';
   const extensions = [];
 
   for (let index = 0; index < args.length; index += 1) {
@@ -91,15 +89,8 @@ export function createModuleFromTemplate(options) {
       `Unknown module template "${template}". Available: ${[...MODULE_TEMPLATES].join(', ')}.`
     );
   }
-  for (const extension of extensions) {
-    if (!MODULE_EXTENSIONS.has(extension)) {
-      throw new Error(
-        `Unknown module extension "${extension}". Available: ${[...MODULE_EXTENSIONS].join(', ')}.`
-      );
-    }
-  }
-  if (extensions.length > 0 && template !== 'product') {
-    throw new Error('Module extensions currently require the product template.');
+  if (extensions.length > 0) {
+    throw new Error('Module extensions are not part of the clean ordinary template path.');
   }
 
   const sources = getModuleSources(projectRoot).sources;
@@ -123,14 +114,6 @@ export function createModuleFromTemplate(options) {
   };
 
   copyTemplateDirectory(templateRoot, moduleRoot, variables);
-  applyModuleExtensions({
-    projectRoot,
-    moduleRoot,
-    extensions,
-    variables,
-    copyTemplateDirectory,
-    toProjectPath,
-  });
 
   if (TEMPLATES_WITH_DATA_ARTIFACTS.has(template)) {
     runLocalScript(projectRoot, path.join('scripts', 'module-data.mjs'), ['generate', moduleRoot]);
@@ -148,6 +131,8 @@ export function createModuleFromTemplate(options) {
     next: [
       `npm run module:doctor -- ${toProjectPath(moduleRoot)}`,
       `npm run module:test -- ${toProjectPath(moduleRoot)}`,
+      `npm run module:inspect -- ${toProjectPath(moduleRoot)}`,
+      `http://localhost:3000/dashboard/${moduleId}`,
     ],
   };
 }

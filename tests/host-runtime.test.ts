@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   action,
+  api,
   createTestingModuleContext,
   defineApi,
   defineModule,
   Permission,
+  schema,
+  stringField,
   table,
   text,
   type ModuleContext,
@@ -24,6 +27,13 @@ import {
   type CapabilityDescriptor,
 } from '../src/lib/module-capabilities';
 import { artifact, testModule } from './host-runtime-fixtures';
+
+const payloadSchema = schema({
+  name: 'HostRuntimeInlinePayload',
+  fields: {
+    value: stringField(),
+  },
+});
 
 test('createModuleHost dispatches API routes with resolved session and ctx.data', async () => {
   const host = await createModuleHost({
@@ -317,12 +327,16 @@ test('createModuleHost enforces action confirmation, idempotency and timeout met
     actions: {
       destroy: {
         handler: './actions/destroy',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
         sideEffect: 'destructive',
         confirmation: { required: true, fallbackMessage: 'Destroy everything?' },
       },
       bill: {
         handler: './actions/bill',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
         sideEffect: 'billing',
         confirmation: { required: true, fallbackMessage: 'Bill account?' },
@@ -330,6 +344,8 @@ test('createModuleHost enforces action confirmation, idempotency and timeout met
       },
       slow: {
         handler: './actions/slow',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
         timeoutMs: 5,
       },
@@ -621,17 +637,19 @@ test('createModuleHost enforces API route idempotency metadata', async () => {
     id: 'api-idempotency-test',
     name: 'API Idempotency Test',
     version: '0.1.0',
-    routes: {
-      api: [
-        {
-          path: '/charge',
-          handler: './api/charge',
-          auth: 'auth',
-          methods: ['POST'],
-          idempotency: { required: true, keyFrom: 'request' },
-        },
-      ],
-    },
+    assets: {},
+    apis: [
+      api({
+        id: 'api-idempotency-test.charge',
+        path: '/charge',
+        handler: './api/charge',
+        auth: 'auth',
+        methods: ['POST'],
+        input: payloadSchema,
+        output: payloadSchema,
+        idempotency: { required: true, keyFrom: 'request' },
+      }),
+    ],
   });
   const host = await createModuleHost({
     runtimeStore,

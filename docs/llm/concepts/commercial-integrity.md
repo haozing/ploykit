@@ -20,6 +20,5 @@ Commercial facts must have one authority: the host.
 
 - Do not create balance, order, subscription, entitlement, or redeem-code authority tables in a module.
 - Do not apply payment webhooks by directly granting module-owned benefits.
-- Do not fake paid/unpaid state for UI convenience.
-
-Reference: `modules/capability-demo/module.ts`.
+- Do not fake paid or unpaid state for UI convenience.
+- Do not store host checkout secrets in module config.

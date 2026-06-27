@@ -29,7 +29,7 @@ function moduleNavigationLabel(
     return translateModuleMessage(host.runtime, item.moduleId, lang, item.item.labelKey);
   }
 
-  return host.getContract(item.moduleId)?.name ?? item.moduleId;
+  return item.item.fallbackLabel || host.getContract(item.moduleId)?.name || item.moduleId;
 }
 
 export async function resolvePublicNavigation(lang: SupportedLanguage): Promise<{

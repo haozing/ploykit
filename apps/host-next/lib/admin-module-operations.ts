@@ -377,8 +377,8 @@ export async function getAdminModuleDetail(moduleId: string): Promise<AdminModul
             migrationMode: contract.definition.data?.migrations?.mode,
           },
           resources: {
-            locales: Object.keys(contract.resources.locales ?? {}),
-            assets: (contract.resources.assets ?? []).map((asset) => asset.path),
+            locales: Object.keys(contract.assets.locales ?? {}),
+            assets: (contract.assets.assets ?? []).map((asset) => asset.path),
           },
           requirements: [
             ...Object.entries(contract.serviceRequirements).map(([name, definition]) => ({

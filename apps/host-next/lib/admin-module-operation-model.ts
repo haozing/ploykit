@@ -149,20 +149,20 @@ function lifecycleCount(contract: ModuleRuntimeContract): number {
 
 function moduleRouteCount(contract: ModuleRuntimeContract): number {
   return (
-    countArray(contract.routes.site) +
-    countArray(contract.routes.dashboard) +
-    countArray(contract.routes.admin) +
-    countArray(contract.routes.api)
+    contract.capabilitySummary.routes.site +
+    contract.capabilitySummary.routes.dashboard +
+    contract.capabilitySummary.routes.admin +
+    contract.capabilitySummary.routes.api
   );
 }
 
 function moduleCapabilitySummary(contract: ModuleRuntimeContract): AdminModuleCapabilitySummary {
   return {
     routes: moduleRouteCount(contract),
-    siteRoutes: countArray(contract.routes.site),
-    dashboardRoutes: countArray(contract.routes.dashboard),
-    adminRoutes: countArray(contract.routes.admin),
-    apiRoutes: countArray(contract.routes.api),
+    siteRoutes: contract.capabilitySummary.routes.site,
+    dashboardRoutes: contract.capabilitySummary.routes.dashboard,
+    adminRoutes: contract.capabilitySummary.routes.admin,
+    apiRoutes: contract.capabilitySummary.routes.api,
     actions: countRecord(contract.actions),
     jobs: countRecord(contract.jobs),
     events:
@@ -184,7 +184,7 @@ function routeCountForShell(
   contract: ModuleRuntimeContract,
   shell: 'site' | 'dashboard' | 'admin'
 ) {
-  return contract.routes[shell].length;
+  return contract.pages.filter((page) => page.area === shell).length;
 }
 
 function hasNavigationForShell(
@@ -244,7 +244,7 @@ export function moduleRiskSummary(contract: ModuleRuntimeContract): AdminModuleR
   const systemPermissions = contract.permissions
     .filter((permission) => SystemOnlyPermissions.has(permission))
     .map(String);
-  const publicApis = contract.routes.api
+  const publicApis = contract.apis
     .filter((route) => (route.auth ?? 'auth') === 'public')
     .map((route) => ({
       path: route.path,

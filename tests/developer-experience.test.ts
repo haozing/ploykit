@@ -10,13 +10,8 @@ import {
   type ModuleMapArtifact,
 } from '../src/lib/module-runtime';
 
-const templateNames = fs
-  .readdirSync(path.join('templates', 'modules'), { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .sort();
-const dataArtifactTemplates = new Set(['crud', 'product']);
-const extensionNames = ['service-backed', 'background'];
+const templateNames = ['app', 'connector', 'resource', 'tool'];
+const dataArtifactTemplates = new Set(['resource']);
 const hostBoundaryRuntimeDir = path.join('.runtime', 'test-modules', 'host-boundary-policy');
 
 function writeModuleDataFixture(files: Record<string, string>): string {
@@ -104,32 +99,7 @@ test('module templates include contract, README, and smoke test', () => {
   }
 });
 
-test('module extensions are product-safe overlays with tests and no root README collision', () => {
-  for (const extensionName of extensionNames) {
-    const extensionRoot = path.join('templates', 'module-extensions', extensionName);
-    assert.equal(fs.existsSync(extensionRoot), true, extensionName);
-    assert.equal(fs.existsSync(path.join(extensionRoot, 'README.md')), false, extensionName);
-    assert.equal(
-      fs.existsSync(path.join(extensionRoot, 'tests', `${extensionName}.test.ts`)),
-      true,
-      extensionName
-    );
-  }
-  assert.equal(
-    fs.existsSync(
-      path.join(
-        'templates',
-        'module-extensions',
-        'service-backed',
-        'tests',
-        'service-contract.json'
-      )
-    ),
-    true
-  );
-});
-
-test('module template CLI exposes product preset and extension overlays', () => {
+test('module template CLI exposes clean ordinary templates', () => {
   const result = childProcess.spawnSync(
     process.execPath,
     ['scripts/ploykit-module.mjs', 'templates'],
@@ -147,11 +117,8 @@ test('module template CLI exposes product preset and extension overlays', () => 
   const cliTemplateNames = body.templates.map((template) => template.name).sort();
 
   assert.deepEqual(cliTemplateNames, templateNames);
-  assert.ok(body.templates.some((template) => template.name === 'product'));
-  assert.ok(body.templates.some((template) => template.name === 'ai-rag'));
-  assert.ok(body.templates.some((template) => template.name === 'billing-aware'));
-  assert.ok(body.extensions.some((extension) => extension.name === 'service-backed'));
-  assert.ok(body.extensions.some((extension) => extension.name === 'background'));
+  assert.deepEqual(cliTemplateNames, ['app', 'connector', 'resource', 'tool']);
+  assert.deepEqual(body.extensions, []);
 });
 
 test('module CLI help documents dynamic template and extension choices', () => {
@@ -165,7 +132,20 @@ test('module CLI help documents dynamic template and extension choices', () => {
   assert.match(rootHelp.stdout, /templates\s+Print available module templates/);
   assert.ok(rootHelp.stdout.includes(expectedCreateUsage), rootHelp.stdout);
   assert.ok(createHelp.stdout.includes(expectedCreateUsage), createHelp.stdout);
-  assert.ok(createHelp.stdout.includes('--with background,service-backed'), createHelp.stdout);
+  assert.equal(createHelp.stdout.includes('--with'), false, createHelp.stdout);
+});
+
+test('module create rejects non-core template extensions', () => {
+  const result = runProjectNodeScript([
+    'scripts/ploykit-module.mjs',
+    'create',
+    `template-with-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    '--with',
+    'background',
+  ]);
+
+  assert.notEqual(result.status, 0, result.stdout);
+  assert.match(result.stdout, /Module extensions are not part of the clean ordinary template path/);
 });
 
 test('module templates generate modules that pass doctor and fake-host tests', (t) => {
@@ -210,46 +190,115 @@ test('module templates generate modules that pass doctor and fake-host tests', (
   }
 });
 
-test('module template extensions generate modules that pass doctor and fake-host tests', (t) => {
-  const extensionMatrix = [['service-backed'], ['background'], ['service-backed', 'background']];
-  const createdModuleIds: string[] = [];
+test('module create defaults to the clean app template', (t) => {
+  const moduleId = `template-default-app-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
   t.after(() => {
-    for (const moduleId of createdModuleIds) {
-      fs.rmSync(path.join(process.cwd(), 'modules', moduleId), { recursive: true, force: true });
-      fs.rmSync(path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`), {
-        force: true,
-      });
-    }
+    fs.rmSync(moduleRoot, { recursive: true, force: true });
+    fs.rmSync(path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`), {
+      force: true,
+    });
     runProjectNodeScript(['scripts/generate-module-map.mjs']);
   });
 
-  for (const extensions of extensionMatrix) {
-    const suffix = extensions.join('-');
-    const moduleId = `template-product-${suffix}-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-    createdModuleIds.push(moduleId);
+  const create = runProjectNodeScript(['scripts/ploykit-module.mjs', 'create', moduleId]);
+  assert.equal(create.status, 0, create.stderr || create.stdout);
+  const body = JSON.parse(create.stdout) as { template: string; next: string[] };
+  assert.equal(body.template, 'app');
+  assert.ok(body.next.some((item) => item.includes(`/dashboard/${moduleId}`)));
+  const moduleSource = fs.readFileSync(path.join(moduleRoot, 'module.ts'), 'utf8');
+  assert.equal(moduleSource.includes('contractVersion'), false);
+  assert.equal(moduleSource.includes('pages'), true);
+  assert.equal(moduleSource.includes('product'), false);
+});
 
-    const create = runProjectNodeScript([
-      'scripts/ploykit-module.mjs',
-      'create',
-      moduleId,
-      '--template',
-      'product',
-      '--with',
-      extensions.join(','),
-    ]);
-    assert.equal(create.status, 0, `${suffix}\n${create.stdout}\n${create.stderr}`);
+test('module dev reports host preview URLs after checks', (t) => {
+  const moduleId = `dev-preview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+  t.after(() => {
+    fs.rmSync(moduleRoot, { recursive: true, force: true });
+    runProjectNodeScript(['scripts/generate-module-map.mjs']);
+  });
 
-    const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
-    const moduleSource = fs.readFileSync(path.join(moduleRoot, 'module.ts'), 'utf8');
-    assert.equal(moduleSource.includes('__PLOYKIT_'), false, suffix);
-    assert.equal(moduleSource.includes('__MODULE_ID__'), false, suffix);
+  const create = runProjectNodeScript(['scripts/ploykit-module.mjs', 'create', moduleId]);
+  assert.equal(create.status, 0, create.stderr || create.stdout);
 
-    const moduleTest = runProjectNodeScript(['scripts/module-test.mjs', moduleRoot, '--summary']);
-    assert.equal(moduleTest.status, 0, `${suffix}\n${moduleTest.stdout}\n${moduleTest.stderr}`);
-    assert.match(moduleTest.stdout, new RegExp(`${moduleId}: passed`));
-  }
+  const dev = runProjectNodeScript(['scripts/ploykit-module.mjs', 'dev', moduleRoot]);
+  assert.equal(dev.status, 0, dev.stderr || dev.stdout);
+  const body = JSON.parse(dev.stdout) as {
+    start: string;
+    previews: Array<{ moduleId: string; url: string }>;
+    next: string[];
+  };
+
+  assert.equal(body.start, 'npm run host:dev');
+  assert.equal(body.previews[0]?.moduleId, moduleId);
+  assert.equal(body.previews[0]?.url, `http://localhost:3000/dashboard/${moduleId}`);
+  assert.ok(body.next.includes('npm run host:dev'));
+});
+
+test('module test rejects clean-slate pages that return object fallback', (t) => {
+  const moduleId = `object-page-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+  t.after(() => {
+    fs.rmSync(moduleRoot, { recursive: true, force: true });
+    fs.rmSync(path.join(process.cwd(), '.runtime', 'module-test-reports', `${moduleId}.json`), {
+      force: true,
+    });
+  });
+
+  fs.mkdirSync(path.join(moduleRoot, 'pages'), { recursive: true });
+  fs.mkdirSync(path.join(moduleRoot, 'tests'), { recursive: true });
+  fs.writeFileSync(
+    path.join(moduleRoot, 'module.ts'),
+    `
+      import { defineModule, page } from '@ploykit/module-sdk';
+
+      export default defineModule({
+        id: '${moduleId}',
+        name: 'Object Page',
+        version: '0.1.0',
+        pages: [
+          page({
+            id: '${moduleId}.home',
+            area: 'dashboard',
+            path: '/${moduleId}',
+            frame: 'workspace',
+            component: './pages/HomePage.tsx',
+            auth: 'auth',
+          }),
+        ],
+      });
+    `,
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(moduleRoot, 'pages', 'HomePage.tsx'),
+    `
+      export default function HomePage() {
+        return { view: 'legacy-object' };
+      }
+    `,
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(moduleRoot, 'tests', 'smoke.test.ts'),
+    `
+      import test from 'node:test';
+      import assert from 'node:assert/strict';
+      import moduleDefinition from '../module';
+
+      test('module exports contract', () => {
+        assert.equal(moduleDefinition.id, '${moduleId}');
+      });
+    `,
+    'utf8'
+  );
+
+  const moduleTest = runProjectNodeScript(['scripts/module-test.mjs', moduleRoot, '--summary']);
+  assert.notEqual(moduleTest.status, 0, moduleTest.stdout);
+  assert.match(moduleTest.stdout, /page-render-smoke failed/);
+  assert.match(moduleTest.stdout, /pages\.0\.renderOutput/);
 });
 
 test('root tsconfig uses explicit path aliases without a wildcard catch-all', () => {
@@ -268,15 +317,17 @@ test('dev console snapshot summarizes module map, capabilities, and diagnostics'
     id: 'console-test',
     name: 'Console Test',
     version: '0.1.0',
-    routes: {
-      dashboard: [
-        {
-          path: '/console-test',
-          component: './pages/HomePage',
-          auth: 'auth',
-        },
-      ],
-    },
+    assets: {},
+    pages: [
+      {
+        id: 'console-test.home',
+        area: 'dashboard',
+        path: '/console-test',
+        frame: 'workspace',
+        component: './pages/HomePage',
+        auth: 'auth',
+      },
+    ],
     actions: {
       ping: {
         handler: './actions/ping',

@@ -13,7 +13,7 @@
     "resolveJsonModule": true,
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "paths": {
       "@/*": ["src/*"],
       "@host/*": ["apps/host-next/*"],
@@ -23,9 +23,13 @@
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "modules/**/*.ts",
+    "modules/**/*.tsx",
     "templates/**/*.ts",
+    "templates/**/*.tsx",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "apps/**/*.ts",
     "apps/**/*.tsx"
   ],

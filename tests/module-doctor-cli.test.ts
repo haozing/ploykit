@@ -100,7 +100,6 @@ test('module doctor keeps service egress separate from ordinary http egress', ()
     'module.ts': `
       import { defineModule, Permission } from '@ploykit/module-sdk';
       export default defineModule({
-        contractVersion: 2,
         id: 'doctor-service-egress',
         name: 'Doctor Service Egress',
         version: '0.1.0',
@@ -144,27 +143,32 @@ test('module doctor keeps service egress separate from ordinary http egress', ()
 test('module doctor catches public site routes without SEO metadata or cache policy', () => {
   const moduleRoot = writeFixture({
     'module.ts': `
-      import { defineModule } from '@ploykit/module-sdk';
+      import { defineModule, page } from '@ploykit/module-sdk';
       export default defineModule({
         id: 'doctor-public-site',
         name: 'Doctor Public Site',
         version: '0.1.0',
-        routes: {
-          site: [
-            {
-              path: '/doctor-public-site',
-              component: './pages/PublicSitePage',
-              auth: 'public',
-            },
-            {
-              path: '/doctor-private-cache',
-              component: './pages/PrivateCachePage',
-              metadata: './loaders/private-cache-metadata',
-              auth: 'public',
-              cache: { strategy: 'private', revalidateSeconds: 0 },
-            },
-          ],
-        },
+        assets: {},
+        pages: [
+          page({
+            id: 'doctor-public-site.home',
+            area: 'site',
+            path: '/doctor-public-site',
+            frame: 'site',
+            component: './pages/PublicSitePage',
+            auth: 'public',
+          }),
+          page({
+            id: 'doctor-public-site.private-cache',
+            area: 'site',
+            path: '/doctor-private-cache',
+            frame: 'site',
+            component: './pages/PrivateCachePage',
+            metadata: './loaders/private-cache-metadata',
+            auth: 'public',
+            cache: { strategy: 'private', revalidateSeconds: 0 },
+          }),
+        ],
       });
     `,
     'pages/PublicSitePage.ts': 'export default function PublicSitePage() { return null; }',
@@ -185,34 +189,43 @@ test('module doctor catches public site routes without SEO metadata or cache pol
 test('module doctor validates public API anonymous policy details', () => {
   const moduleRoot = writeFixture({
     'module.ts': `
-      import { defineModule } from '@ploykit/module-sdk';
+      import { api, defineModule, schema, stringField } from '@ploykit/module-sdk';
+      const payloadSchema = schema({
+        name: 'Payload',
+        fields: { value: stringField({ required: true }) },
+      });
       export default defineModule({
         id: 'doctor-public-api',
         name: 'Doctor Public API',
         version: '0.1.0',
-        routes: {
-          api: [
-            {
-              path: '/missing-policy',
-              handler: './api/missing-policy',
-              methods: ['POST'],
-              auth: 'public',
+        assets: {},
+        apis: [
+          api({
+            id: 'doctor-public-api.missing',
+            path: '/missing-policy',
+            handler: './api/missing-policy',
+            methods: ['POST'],
+            auth: 'public',
+            input: payloadSchema,
+            output: payloadSchema,
+          }),
+          api({
+            id: 'doctor-public-api.bad',
+            path: '/bad-policy',
+            handler: './api/bad-policy',
+            methods: ['POST'],
+            auth: 'public',
+            input: payloadSchema,
+            output: payloadSchema,
+            commercial: { credits: { amount: 1 } },
+            anonymousPolicy: {
+              rateLimit: { bucket: 'ip', limit: 0, window: 'soon' },
+              maxUploadBytes: 0,
+              captcha: 'sometimes',
+              allowHighCostActions: true,
             },
-            {
-              path: '/bad-policy',
-              handler: './api/bad-policy',
-              methods: ['POST'],
-              auth: 'public',
-              commercial: { credits: { amount: 1 } },
-              anonymousPolicy: {
-                rateLimit: { bucket: 'ip', limit: 0, window: 'soon' },
-                maxUploadBytes: 0,
-                captcha: 'sometimes',
-                allowHighCostActions: true,
-              },
-            },
-          ],
-        },
+          }),
+        ],
       });
     `,
     'api/missing-policy.ts':
@@ -282,7 +295,6 @@ test('module doctor forbids ctx.http for privileged service modules', () => {
     'module.ts': `
       import { defineModule, Permission } from '@ploykit/module-sdk';
       export default defineModule({
-        contractVersion: 2,
         id: 'doctor-privileged-service',
         name: 'Doctor Privileged Service',
         version: '0.1.0',
@@ -401,7 +413,11 @@ test('module doctor validates notification read and send permissions separately'
 test('module doctor reuses SDK contract validation gates', () => {
   const moduleRoot = writeFixture({
     'module.ts': `
-      import { defineModule, Permission } from '@ploykit/module-sdk';
+      import { api, defineModule, Permission, schema, stringField } from '@ploykit/module-sdk';
+      const payloadSchema = schema({
+        name: 'Payload',
+        fields: { value: stringField({ required: true }) },
+      });
       export default defineModule({
         id: 'doctor-sdk-validator',
         name: 'Doctor SDK Validator',
@@ -411,16 +427,17 @@ test('module doctor reuses SDK contract validation gates', () => {
             zod: '',
           },
         },
-        routes: {
-          api: [
-            {
-              path: '/doctor-sdk-validator',
-              handler: './api/validator',
-              auth: 'auth',
-              permissions: [Permission.FilesRead],
-            },
-          ],
-        },
+        apis: [
+          api({
+            id: 'doctor-sdk-validator.api',
+            path: '/doctor-sdk-validator',
+            handler: './api/validator',
+            auth: 'auth',
+            input: payloadSchema,
+            output: payloadSchema,
+            permissions: [Permission.FilesRead],
+          }),
+        ],
         actions: {
           callExternal: {
             handler: './actions/call-external',
@@ -447,21 +464,23 @@ test('module doctor reuses SDK contract validation gates', () => {
 test('module doctor warns when dynamic dashboard route shares a broad loader', () => {
   const moduleRoot = writeFixture({
     'module.ts': `
-      import { defineModule } from '@ploykit/module-sdk';
+      import { defineModule, page } from '@ploykit/module-sdk';
       export default defineModule({
         id: 'doctor-dynamic-dashboard',
         name: 'Doctor Dynamic Dashboard',
         version: '0.1.0',
-        routes: {
-          dashboard: [
-            {
-              path: '/doctor-dynamic-dashboard/[section]',
-              component: './pages/App',
-              loader: './loaders/dashboard',
-              auth: 'auth',
-            },
-          ],
-        },
+        assets: {},
+        pages: [
+          page({
+            id: 'doctor-dynamic-dashboard.home',
+            area: 'dashboard',
+            path: '/doctor-dynamic-dashboard/[section]',
+            frame: 'workspace',
+            component: './pages/App',
+            loader: './loaders/dashboard',
+            auth: 'auth',
+          }),
+        ],
         navigation: [
           {
             location: 'dashboard.sidebar',
@@ -616,12 +635,12 @@ test('module doctor emits structured diagnostics and summary for split contract 
         name: 'Doctor Split Contract',
         version: '0.1.0',
         parts: {
-          routes: './routes',
+          pages: './pages',
         },
-        routes: {},
+        pages: [],
       });
     `,
-    'routes.ts': 'export const notRoutes = [];',
+    'pages.ts': 'export const notPages = [];',
   });
 
   const result = runDoctor(moduleRoot);
@@ -630,9 +649,108 @@ test('module doctor emits structured diagnostics and summary for split contract 
   );
 
   assert.equal(result.status, 0, result.stderr);
-  assert.ok(result.body.summary.parts.includes('routes'));
+  assert.ok(result.body.summary.parts.includes('pages'));
   assert.equal(typeof result.body.summary.sourceHash, 'string');
   assert.equal(typeof result.body.summary.contractDigest, 'string');
   assert.equal(warning.category, 'contract');
   assert.equal(warning.subsystem, 'module');
+});
+
+test('module inspect exposes clean-slate resources, pages, capabilities, and OpenAPI', () => {
+  const moduleRoot = writeFixture({
+    'module.ts': `
+      import { api, defineModule, resource, schema, stringField } from '@ploykit/module-sdk';
+
+      const noteSchema = schema({
+        name: 'Note',
+        fields: {
+          title: stringField({ required: true }),
+        },
+      });
+
+      export default defineModule({
+        id: 'inspect-clean-resource',
+        name: 'Inspect Clean Resource',
+        version: '0.1.0',
+        assets: {},
+        resources: {
+          notes: resource({
+            scope: 'workspace',
+            schema: noteSchema,
+            storage: { table: 'notes' },
+          }),
+        },
+        pages: [
+          {
+            id: 'notes.list',
+            area: 'dashboard',
+            path: '/notes',
+            frame: 'workspace',
+            component: './pages/NotesListPage.tsx',
+          },
+        ],
+        apis: [
+          api({
+            id: 'notes.api',
+            path: '/notes',
+            methods: ['POST'],
+            input: noteSchema,
+            output: noteSchema,
+            handler: './api/notes.ts',
+          }),
+        ],
+      });
+    `,
+    'pages/NotesListPage.tsx': 'export default function NotesListPage() { return null; }',
+    'api/notes.ts':
+      "import { defineApi } from '@ploykit/module-sdk'; export default defineApi({ post(ctx) { return ctx.json({ ok: true }); } });",
+  });
+
+  const result = childProcess.spawnSync(
+    process.execPath,
+    ['scripts/ploykit-module.mjs', 'inspect', moduleRoot, '--openapi'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }
+  );
+  const body = JSON.parse(result.stdout) as {
+    modules: Array<{
+      resources: Record<string, { storage: { table: string } }>;
+      pages: Array<{ id: string; frame: string }>;
+      apis: Array<{ id: string; auth: string | null; permissions: string[] }>;
+      capabilities: { resources: number; pages: number; apis: number };
+      schemas: Record<
+        string,
+        {
+          name: string;
+          fields: Record<string, { type: string; required: boolean }>;
+          jsonSchema: { properties: Record<string, { type: string }> };
+          fixture: Record<string, unknown>;
+        }
+      >;
+      openapi: { paths: Record<string, unknown>; components: { schemas: Record<string, unknown> } };
+    }>;
+  };
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(body.modules[0].resources.notes.storage.table, 'notes');
+  assert.equal(body.modules[0].pages[0].frame, 'workspace');
+  assert.equal(body.modules[0].apis[0].id, 'notes.api');
+  assert.equal(body.modules[0].apis[0].auth, null);
+  assert.deepEqual(body.modules[0].apis[0].permissions, []);
+  assert.equal(body.modules[0].capabilities.resources, 1);
+  assert.equal(body.modules[0].capabilities.pages, 1);
+  assert.equal(body.modules[0].capabilities.apis, 1);
+  assert.equal(body.modules[0].schemas['resources.notes'].name, 'Note');
+  assert.equal(body.modules[0].schemas['resources.notes'].fields.title.type, 'string');
+  assert.equal(body.modules[0].schemas['resources.notes'].fields.title.required, true);
+  assert.equal(
+    body.modules[0].schemas['resources.notes'].jsonSchema.properties.title.type,
+    'string'
+  );
+  assert.equal(body.modules[0].schemas['resources.notes'].fixture.title, 'example');
+  assert.deepEqual(Object.keys(body.modules[0].openapi.paths), ['/notes']);
+  assert.ok('ResourceNotes' in body.modules[0].openapi.components.schemas);
+  assert.equal('/actions/createNote' in body.modules[0].openapi.paths, false);
 });

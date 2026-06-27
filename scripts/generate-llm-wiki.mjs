@@ -213,7 +213,6 @@ const capabilityDescriptions = {
 };
 
 const contractDescriptions = {
-  contractVersion: 'Contract version; service operation policies require v2.',
   id: 'Stable module id that must align with modules/<id>.',
   name: 'Display name.',
   version: 'Module version.',
@@ -223,10 +222,13 @@ const contractDescriptions = {
   permissions: 'Top-level module permission allowlist.',
   scope: 'User, workspace, product scope, and role requirements.',
   data: 'Data v2 table, document, and migration definitions.',
-  routes: 'Site, dashboard, admin, and API routes.',
+  pages:
+    'Unified TSX page manifest with id, area, path, frame, component, loader, metadata, cache, aliases, and publicAliases.',
+  apis: 'Schema-backed API route manifest with id, path, methods, input, output, and handler.',
   navigation: 'Host shell navigation contributions.',
   surfaces: 'Host surface contributions or replacements.',
-  resources: 'Locales, icons, assets, and similar resources.',
+  assets: 'Static module assets such as locales, icons, workers, and wasm files.',
+  resources: 'Business resource manifest; static module assets belong in assets.',
   i18n: 'Multilingual declaration.',
   presentation: 'White-label, SEO, themeScope, and presentation metadata.',
   theme: 'Theme tokens.',
@@ -234,7 +236,7 @@ const contractDescriptions = {
   serviceRequirements: 'Controlled external service contracts.',
   resourceBindings: 'Host resource binding requirements.',
   config: 'Module configuration fields.',
-  actions: 'Module action handlers.',
+  actions: 'Module action handlers; public actions declare runtime input schema.',
   jobs: 'Background job handlers.',
   events: 'Event publish and subscribe declarations.',
   webhooks: 'Module webhook entries.',

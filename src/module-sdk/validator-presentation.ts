@@ -116,13 +116,16 @@ export function validatePresentation(
     );
   }
 
-  if (presentation.whiteLabel && Object.keys(definition.resources?.locales ?? {}).length === 0) {
+  if (
+    presentation.whiteLabel &&
+    Object.keys(definition.assets?.locales ?? {}).length === 0
+  ) {
     addError(
       diagnostics,
       'MODULE_PRESENTATION_LOCALES_REQUIRED',
       'White-label modules must declare module locale resources.',
-      'resources.locales',
-      'Add resources.locales for every required presentation language.'
+      'assets.locales',
+      'Add assets.locales for every required presentation language.'
     );
   }
 

@@ -197,13 +197,15 @@ export function validateActions(
       );
     }
     validateLocalModulePath(diagnostics, action.handler, `actions.${actionName}.handler`, 'Action');
-    validateLocalModulePath(
-      diagnostics,
-      action.input,
-      `actions.${actionName}.input`,
-      'Action input',
-      false
-    );
+    if (typeof action.input === 'string') {
+      validateLocalModulePath(
+        diagnostics,
+        action.input,
+        `actions.${actionName}.input`,
+        'Action input',
+        false
+      );
+    }
 
     if (action.auth && !ROUTE_AUTHS.has(action.auth)) {
       addError(

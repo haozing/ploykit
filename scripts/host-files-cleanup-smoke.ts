@@ -9,7 +9,7 @@ const checkedAt = new Date().toISOString();
 const session = createDemoHostSession();
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const upload = await uploadHostUserFile(session, {
-  moduleId: 'public-tools-demo',
+  moduleId: 'public-tool-smoke',
   name: `cleanup-smoke-${suffix}.txt`,
   purpose: 'source',
   contentType: 'text/plain',

@@ -223,7 +223,7 @@ test('M6 S3-compatible HTTP client signs object requests and creates presigned U
     key: 'demo/source.json',
     body: new TextEncoder().encode('{"ok":true}'),
     contentType: 'application/json',
-    metadata: { module: 'public-tools-demo' },
+    metadata: { module: 'public-tool-smoke' },
   });
   const head = await storage.head('demo/source.json');
   const range = await storage.get('demo/source.json', { start: 6, end: 9 });
@@ -235,7 +235,7 @@ test('M6 S3-compatible HTTP client signs object requests and creates presigned U
   const listed = await storage.list?.({ prefix: 'demo/' });
 
   assert.equal(head?.checksum, put.checksum);
-  assert.equal(head?.metadata.module, 'public-tools-demo');
+  assert.equal(head?.metadata.module, 'public-tool-smoke');
   assert.equal(new TextDecoder().decode(range?.body), 'true');
   assert.match(
     fake.requests[0]?.headers.get('authorization') ?? '',

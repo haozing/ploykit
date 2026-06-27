@@ -306,7 +306,7 @@ export default function ${componentName}(props: SVGProps<SVGSVGElement>) {
 }
 
 function collectModuleIcons(root, moduleId, definition) {
-  const declaredIcons = definition.resources?.icons ?? {};
+  const declaredIcons = definition.assets?.icons ?? {};
   const usedKeys = usedNavigationIconKeys(definition);
   const icons = [];
 
@@ -317,12 +317,12 @@ function collectModuleIcons(root, moduleId, definition) {
         continue;
       }
       throw new Error(
-        `Module "${moduleId}" navigation icon "${localKey}" is not declared in resources.icons and is not a host core icon.`
+        `Module "${moduleId}" navigation icon "${localKey}" is not declared in assets.icons and is not a host core icon.`
       );
     }
 
     const key = `${moduleId}:${localKey}`;
-    const sourcePath = `${moduleId}.resources.icons.${localKey}`;
+    const sourcePath = `${moduleId}.assets.icons.${localKey}`;
     if (icon.kind === 'lucide') {
       assertKnownLucideIcon(icon.name, sourcePath);
       icons.push({ key, kind: 'lucide', name: icon.name });
@@ -434,7 +434,7 @@ function normalizeModuleResourcePath(moduleRoot, moduleId, resourcePath, kind) {
 }
 
 function readModuleLocaleMessages(root, definition, moduleId) {
-  const locales = definition.resources?.locales;
+  const locales = definition.assets?.locales;
   if (!locales || typeof locales !== 'object' || Array.isArray(locales)) {
     return undefined;
   }
@@ -571,12 +571,9 @@ function countNavigation(navigation) {
 }
 
 function routeCommercialRequirements(definition) {
-  const routes = definition.routes ?? {};
   return [
-    ...(routes.site ?? []),
-    ...(routes.dashboard ?? []),
-    ...(routes.admin ?? []),
-    ...(routes.api ?? []),
+    ...(definition.pages ?? []),
+    ...(definition.apis ?? []),
   ]
     .map((route) => route.commercial)
     .filter(Boolean);
@@ -597,19 +594,23 @@ function hasCredits(requirements) {
 }
 
 function createMapCapabilitySummary(definition) {
-  const routes = definition.routes ?? {};
+  const pages = definition.pages ?? [];
+  const apis = definition.apis ?? [];
+  const businessResources = Object.values(definition.resources ?? {}).filter(
+    (resource) => resource?.$$type === 'ploykit.resource'
+  );
   const routeCommercial = routeCommercialRequirements(definition);
   const actionCommercial = actionCommercialRequirements(definition);
   return {
     routes:
-      (routes.site ?? []).length +
-      (routes.dashboard ?? []).length +
-      (routes.admin ?? []).length +
-      (routes.api ?? []).length,
+      pages.length +
+      apis.length,
     dataModels:
       recordKeys(definition.data?.tables).length +
       recordKeys(definition.data?.documents).length +
-      recordKeys(definition.data?.views).length,
+      recordKeys(definition.data?.views).length +
+      businessResources.filter((resource) => resource.storage?.table).length +
+      businessResources.filter((resource) => resource.storage?.document).length,
     permissions: (definition.permissions ?? []).length,
     backgroundHandlers:
       recordKeys(definition.jobs).length +
@@ -683,7 +684,15 @@ async function scanModules() {
         jobs: scanDirectory(root, 'jobs', ['.ts', '.js']),
         events: scanDirectory(root, 'events', ['.ts', '.js']),
         webhooks: scanDirectory(root, 'webhooks', ['.ts', '.js']),
-        assets: scanFiles(root, 'assets'),
+        assets: [
+          ...new Set([
+            ...scanFiles(root, 'assets'),
+            ...(definition.assets?.assets ?? [])
+              .map((asset) => asset?.path)
+              .filter((assetPath) => typeof assetPath === 'string')
+              .map((assetPath) => assetPath.replace(/^\.\//, '').replace(/\\/g, '/')),
+          ]),
+        ].sort(),
         icons: collectModuleIcons(root, summary.id, definition),
       });
       const latest = modules[modules.length - 1];

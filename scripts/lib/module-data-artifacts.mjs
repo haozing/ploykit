@@ -5,6 +5,7 @@ export function createModuleDataArtifactHelpers(input) {
   const {
     diagnostic,
     generateMigrationSql,
+    generateOpenApi,
     generateTypes,
     projectRoot,
     resolveModuleLocalPath,
@@ -21,6 +22,10 @@ export function createModuleDataArtifactHelpers(input) {
 
   function moduleTypesFile(moduleRoot) {
     return path.join(moduleGeneratedDir(moduleRoot), 'data-types.ts');
+  }
+
+  function moduleOpenApiFile(moduleRoot) {
+    return path.join(moduleGeneratedDir(moduleRoot), 'openapi.json');
   }
 
   function moduleMigrationFile(moduleRoot, modulePlan) {
@@ -162,6 +167,14 @@ export function createModuleDataArtifactHelpers(input) {
         'MODULE_DATA_TYPES_MISSING',
         'Run npm run data:types.'
       );
+      checkFile(
+        moduleOpenApiFile(moduleRoot),
+        generateOpenApi(result.plan),
+        diagnostics,
+        'MODULE_OPENAPI_STALE',
+        'MODULE_OPENAPI_MISSING',
+        'Run npm run data:generate.'
+      );
 
       if (result.plan.migrations.mode === 'generated') {
         checkFile(
@@ -181,6 +194,7 @@ export function createModuleDataArtifactHelpers(input) {
     moduleMigrationFile,
     modulePlanContent,
     modulePlanFile,
+    moduleOpenApiFile,
     moduleTypesFile,
     verifyGeneratedArtifacts,
     writeIfChanged,

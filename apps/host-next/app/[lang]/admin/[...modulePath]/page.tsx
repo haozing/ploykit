@@ -108,6 +108,8 @@ async function ModuleAdminPage({
     loaderData: result.page.loaderData,
     metadata: result.page.metadata,
     language: lang,
+  }, {
+    strictReactOutput: true,
   });
 
   return (

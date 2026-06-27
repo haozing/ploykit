@@ -42,7 +42,7 @@ test('P5 module contract validates host page overrides and worker/wasm asset kin
           permissions: [Permission.SurfaceOverride],
         },
       },
-      resources: {
+      assets: {
         assets: [
           {
             path: './assets/engine.wasm',

@@ -1,6 +1,6 @@
 # LLM Module Wiki
 
-This wiki is for LLMs writing ploykit modules. It is self-contained and does not depend on legacy narrative docs.
+This wiki is for LLMs writing ploykit modules. It is self-contained and uses the current module contract as its fact surface.
 
 ## First Read
 
@@ -32,9 +32,9 @@ This wiki is for LLMs writing ploykit modules. It is self-contained and does not
 
 `.generated.md` files are generated from code and must not be hand edited. Handwritten pages carry judgment and anti-patterns; their `ctx.*`, `Permission.*`, commands, and links are checked by `npm run llm-wiki:check`.
 
-## Legacy Docs Policy
+## Other Docs Policy
 
-Legacy `docs/*.zh-CN.md` files may remain for human background, but LLM module authoring should use `AGENTS.md` and `docs/llm/` as the active fact surface.
+Other `docs/*.zh-CN.md` files may remain for human background, but LLM module authoring should use `AGENTS.md` and `docs/llm/` as the active fact surface.
 
 ## Effect Check
 

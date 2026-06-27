@@ -399,6 +399,7 @@ export type ModuleDataStaticCommandsModule = {
       moduleMigrationFile(moduleRoot: string, plan: StaticPlan): string;
       modulePlanContent(plan: StaticPlan): string;
       modulePlanFile(moduleRoot: string): string;
+      moduleOpenApiFile(moduleRoot: string): string;
       moduleTypesFile(moduleRoot: string): string;
       verifyGeneratedArtifacts(
         results: { plan?: StaticPlan; diagnostics: StaticDiagnostic[] }[],
@@ -413,6 +414,7 @@ export type ModuleDataStaticCommandsModule = {
       }[]
     >;
     generateMigrationSql(plan: StaticPlan): string;
+    generateOpenApi(plan: StaticPlan): string;
     generateTypes(plan: StaticPlan): string;
     parseCommandArgs(args: string[]): { values: Map<string, string>; flags: Set<string> };
     printJson(value: unknown): void;

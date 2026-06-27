@@ -32,6 +32,12 @@ import { createModuleDoctorMapRules } from './lib/module-doctor-map-rules.mjs';
 import { createModuleDoctorSourceBoundaryRules } from './lib/module-doctor-source-boundary-rules.mjs';
 import { createRootHelp, printJson, runModuleCliCommand } from './lib/module-cli-runner.mjs';
 import { createUsage, listModuleTemplateCatalog } from './lib/module-template-catalog.mjs';
+import { createModuleOpenApi } from './lib/module-openapi.mjs';
+import {
+  isRuntimeSchema,
+  schemaToFixture,
+  schemaToJsonSchema,
+} from './lib/module-schema-facts.mjs';
 import './lib/module-sdk-alias.cjs';
 
 const PROJECT_ROOT = process.cwd();
@@ -133,6 +139,18 @@ async function evaluateSdkContractValidation(moduleRoot) {
     );
   }
   return diagnostics;
+}
+
+async function loadModuleDefinition(moduleRoot) {
+  const loaded = await tsx.import(
+    pathToFileURL(path.join(moduleRoot, 'module.ts')).href,
+    import.meta.url
+  );
+  const definition = readDefaultExport(loaded);
+  if (!definition || typeof definition !== 'object') {
+    throw new Error(`Module ${toProjectPath(moduleRoot)} did not export a module definition.`);
+  }
+  return definition;
 }
 
 function hasSourceBoundaryErrors(diagnostics) {
@@ -346,22 +364,153 @@ async function commandValidateContractInternal(args) {
   });
 }
 
-function commandInspect(args) {
-  const target = args[0];
+function schemaSummary(name, schema) {
+  if (!isRuntimeSchema(schema)) {
+    return null;
+  }
+  return {
+    name: schema.name ?? name,
+    fields: Object.fromEntries(
+      Object.entries(schema.fields ?? {}).map(([fieldName, field]) => [
+        fieldName,
+        {
+          type: field.type,
+          required: field.required === true,
+          ...(field.array ? { array: true } : {}),
+          ...(typeof field.maxLength === 'number' ? { maxLength: field.maxLength } : {}),
+          ...(typeof field.min === 'number' ? { min: field.min } : {}),
+          ...(typeof field.max === 'number' ? { max: field.max } : {}),
+          ...(Array.isArray(field.enum) ? { enum: [...field.enum] } : {}),
+        },
+      ])
+    ),
+    jsonSchema: schemaToJsonSchema(schema, { title: schema.name ?? name }),
+    fixture: schemaToFixture(schema),
+  };
+}
+
+function collectRuntimeSchemas(definition) {
+  const schemas = {};
+  for (const [resourceName, resource] of Object.entries(definition.resources ?? {})) {
+    const summary = schemaSummary(`resources.${resourceName}`, resource?.schema);
+    if (summary) {
+      schemas[`resources.${resourceName}`] = summary;
+    }
+  }
+  for (const apiDefinition of definition.apis ?? []) {
+    const input = schemaSummary(`${apiDefinition.id}.input`, apiDefinition.input);
+    const output = schemaSummary(`${apiDefinition.id}.output`, apiDefinition.output);
+    if (input) {
+      schemas[`apis.${apiDefinition.id}.input`] = input;
+    }
+    if (output) {
+      schemas[`apis.${apiDefinition.id}.output`] = output;
+    }
+  }
+  for (const [actionName, actionDefinition] of Object.entries(definition.actions ?? {})) {
+    const input = schemaSummary(`${actionName}.input`, actionDefinition?.input);
+    const output = schemaSummary(`${actionName}.output`, actionDefinition?.output);
+    if (input) {
+      schemas[`actions.${actionName}.input`] = input;
+    }
+    if (output) {
+      schemas[`actions.${actionName}.output`] = output;
+    }
+  }
+  return schemas;
+}
+
+async function commandInspect(args) {
+  const flags = new Set(args.filter((arg) => arg.startsWith('--')));
+  const target = args.find((arg) => !arg.startsWith('--'));
   const roots = discoverModuleRoots(target);
-  const results = roots.map((root) => {
+  const results = [];
+  for (const root of roots) {
     const source = fs.readFileSync(path.join(root, 'module.ts'), 'utf8');
-    return {
+    const definition = await loadModuleDefinition(root);
+    const resources = Object.fromEntries(
+      Object.entries(definition.resources ?? {})
+        .filter(([, resource]) => resource?.$$type === 'ploykit.resource')
+        .map(([name, resource]) => [
+          name,
+          {
+            scope: resource.scope,
+            storage: resource.storage ?? null,
+            schema: resource.schema?.name ?? name,
+          },
+        ])
+    );
+    const pages = (definition.pages ?? []).map((page) => ({
+      id: page.id,
+      area: page.area,
+      path: page.path,
+      frame: page.frame,
+      component: page.component,
+      loader: page.loader ?? null,
+      auth: page.auth ?? null,
+    }));
+    const apis = (definition.apis ?? []).map((api) => ({
+      id: api.id,
+      path: api.path,
+      methods: api.methods ?? ['GET'],
+      handler: api.handler,
+      auth: api.auth ?? null,
+      permissions: api.permissions ?? [],
+      machineAuth: api.machineAuth ?? null,
+      idempotency: api.idempotency ?? null,
+      anonymousPolicy: api.anonymousPolicy ?? null,
+      input: api.input?.name ?? null,
+      output: api.output?.name ?? null,
+    }));
+    const capabilities = {
+      pages: pages.length,
+      apis: apis.length,
+      resources: Object.keys(resources).length,
+      actions: Object.keys(definition.actions ?? {}).length,
+      dataModels:
+        Object.keys(definition.data?.tables ?? {}).length +
+        Object.keys(definition.data?.documents ?? {}).length +
+        Object.values(definition.resources ?? {}).filter((resource) => resource?.storage).length,
+      permissions: definition.permissions ?? [],
+    };
+    const schemas = collectRuntimeSchemas(definition);
+    const includeResources = flags.size === 0 || flags.has('--resources') || flags.has('--openapi');
+    const includeRoutes = flags.size === 0 || flags.has('--routes') || flags.has('--openapi');
+    const includeCapabilities =
+      flags.size === 0 || flags.has('--capabilities') || flags.has('--openapi');
+    const includeSchemas =
+      flags.size === 0 || flags.has('--schema') || flags.has('--schemas') || flags.has('--openapi');
+
+    results.push({
       moduleRoot: toProjectPath(root),
       id: extractString(source, 'id') || path.basename(root),
       name: extractString(source, 'name') || null,
       version: extractString(source, 'version') || null,
       localPaths: extractAllContractLocalPaths(source),
       parts: extractContractParts(source),
+      ...(includeResources ? { resources } : {}),
+      ...(includeRoutes ? { pages, apis } : {}),
+      ...(includeCapabilities ? { capabilities } : {}),
+      ...(includeSchemas ? { schemas } : {}),
+      ...(flags.size === 0
+        ? {
+            testPlan: [
+              `npm run module:doctor -- ${toProjectPath(root)}`,
+              `npm run module:test -- ${toProjectPath(root)} --summary`,
+              ...(Object.keys(resources).length > 0
+                ? [
+                    `npm run data:generate -- ${toProjectPath(root)}`,
+                    `npm run data:types -- ${toProjectPath(root)}`,
+                  ]
+                : []),
+            ],
+          }
+        : {}),
+      ...(flags.has('--openapi') ? { openapi: createModuleOpenApi(definition) } : {}),
       sourceHash: mapRules.sourceHash(root),
       contractDigest: contractSourceDigest(root),
-    };
-  });
+    });
+  }
   printJson({ count: results.length, modules: results });
 }
 
@@ -393,14 +542,27 @@ function commandDev(args) {
   runLocalScript(PROJECT_ROOT, path.join('scripts', 'module-deps.mjs'), ['--install']);
   runLocalScript(PROJECT_ROOT, path.join('scripts', 'generate-module-map.mjs'), ['--check']);
   runLocalScript(PROJECT_ROOT, path.join('scripts', 'ploykit-module.mjs'), ['check', target]);
+  const roots = discoverModuleRoots(target);
+  const previews = roots.map((root) => {
+    const source = fs.readFileSync(path.join(root, 'module.ts'), 'utf8');
+    const moduleId = extractString(source, 'id') || path.basename(root);
+    return {
+      moduleId,
+      moduleRoot: toProjectPath(root),
+      url: `http://localhost:3000/dashboard/${moduleId}`,
+    };
+  });
   printJson({
     success: true,
     target,
     checks: ['modules:deps --install', 'modules:scan --check', 'modules:check'],
+    start: 'npm run host:dev',
+    previews,
     next: [
       `npm run module:doctor -- ${target}`,
       `npm run module:test -- ${target}`,
-      'npm run module:build',
+      'npm run host:dev',
+      ...previews.map((preview) => preview.url),
     ],
   });
 }

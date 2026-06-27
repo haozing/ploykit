@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  extractApiObjects,
   extractObjectAfterKey,
+  extractPageObjects,
   extractPublicAliases,
-  extractRouteObjects,
   extractStaticHttpFetchOrigins,
   extractStringArray,
   extractTopLevelStringArray,
@@ -376,7 +377,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
   }
 
   function checkPublicRouteContracts(source, diagnostics) {
-    for (const [index, route] of extractRouteObjects(source, 'site').entries()) {
+    for (const [index, route] of extractPageObjects(source, 'site').entries()) {
       if (!hasStringProperty(route, 'auth', 'public')) {
         continue;
       }
@@ -386,8 +387,8 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
           diagnostic(
             'error',
             'MODULE_PUBLIC_SITE_METADATA_REQUIRED',
-            'Public site routes must declare a metadata loader.',
-            `routes.site.${index}.metadata`,
+            'Public site pages must declare a metadata loader.',
+            `pages.${index}.metadata`,
             'Add metadata: "./loaders/metadata" and return title, description, and canonical.'
           )
         );
@@ -398,8 +399,8 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
           diagnostic(
             'error',
             'MODULE_PUBLIC_SITE_CACHE_REQUIRED',
-            'Public site routes must declare an explicit cache strategy.',
-            `routes.site.${index}.cache`,
+            'Public site pages must declare an explicit cache strategy.',
+            `pages.${index}.cache`,
             'Add cache: { strategy: "public", revalidateSeconds: 300, tags: ["module-id"] } or strategy: "none".'
           )
         );
@@ -410,8 +411,8 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
           diagnostic(
             'error',
             'MODULE_PUBLIC_ROUTE_PRIVATE_CACHE',
-            'Public routes cannot use private cache strategy.',
-            `routes.site.${index}.cache.strategy`,
+            'Public pages cannot use private cache strategy.',
+            `pages.${index}.cache.strategy`,
             'Use "public" or "none".'
           )
         );
@@ -424,13 +425,13 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
             'error',
             'MODULE_ROUTE_CACHE_REVALIDATE_INVALID',
             'Cache revalidateSeconds must be a positive integer when declared.',
-            `routes.site.${index}.cache.revalidateSeconds`
+            `pages.${index}.cache.revalidateSeconds`
           )
         );
       }
     }
 
-    for (const [index, route] of extractRouteObjects(source, 'api').entries()) {
+    for (const [index, route] of extractApiObjects(source).entries()) {
       if (!hasStringProperty(route, 'auth', 'public')) {
         continue;
       }
@@ -440,8 +441,8 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
           diagnostic(
             'error',
             'MODULE_PUBLIC_API_ANONYMOUS_POLICY_REQUIRED',
-            'Public API routes must declare anonymousPolicy.',
-            `routes.api.${index}.anonymousPolicy`,
+            'Public APIs must declare anonymousPolicy.',
+            `apis.${index}.anonymousPolicy`,
             'Add anonymousPolicy with rateLimit, upload, captcha, or high-cost policy.'
           )
         );
@@ -458,8 +459,8 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
           diagnostic(
             'error',
             'MODULE_PUBLIC_API_RATE_LIMIT_REQUIRED',
-            'Public API routes must declare anonymousPolicy.rateLimit.',
-            `routes.api.${index}.anonymousPolicy.rateLimit`,
+            'Public APIs must declare anonymousPolicy.rateLimit.',
+            `apis.${index}.anonymousPolicy.rateLimit`,
             'Add an IP, route, module, method, or custom bucket rate limit.'
           )
         );
@@ -472,7 +473,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
             'error',
             'MODULE_PUBLIC_API_RATE_LIMIT_INVALID',
             'anonymousPolicy.rateLimit.limit must be a positive integer.',
-            `routes.api.${index}.anonymousPolicy.rateLimit.limit`
+            `apis.${index}.anonymousPolicy.rateLimit.limit`
           )
         );
       }
@@ -484,7 +485,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
             'error',
             'MODULE_PUBLIC_API_RATE_LIMIT_WINDOW_INVALID',
             'anonymousPolicy.rateLimit.window must use a duration such as "30s", "1m", or "1h".',
-            `routes.api.${index}.anonymousPolicy.rateLimit.window`
+            `apis.${index}.anonymousPolicy.rateLimit.window`
           )
         );
       }
@@ -496,7 +497,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
             'error',
             'MODULE_PUBLIC_API_UPLOAD_LIMIT_INVALID',
             'anonymousPolicy.maxUploadBytes must be a positive integer when declared.',
-            `routes.api.${index}.anonymousPolicy.maxUploadBytes`
+            `apis.${index}.anonymousPolicy.maxUploadBytes`
           )
         );
       }
@@ -508,7 +509,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
             'error',
             'MODULE_PUBLIC_API_CAPTCHA_INVALID',
             `Anonymous captcha policy "${captcha}" is not supported.`,
-            `routes.api.${index}.anonymousPolicy.captcha`,
+            `apis.${index}.anonymousPolicy.captcha`,
             'Use "never", "auto", or "always".'
           )
         );
@@ -519,8 +520,8 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
           diagnostic(
             'error',
             'MODULE_PUBLIC_API_HIGH_COST_ANONYMOUS_FORBIDDEN',
-            'Public commercial API routes cannot allow anonymous high-cost actions.',
-            `routes.api.${index}.anonymousPolicy.allowHighCostActions`,
+            'Public commercial APIs cannot allow anonymous high-cost actions.',
+            `apis.${index}.anonymousPolicy.allowHighCostActions`,
             'Set allowHighCostActions: false and require auth for high-cost execution.'
           )
         );
@@ -529,7 +530,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
   }
 
   function checkDashboardRoutePerformanceShape(source, diagnostics) {
-    const dashboardRoutes = extractRouteObjects(source, 'dashboard').map((route, index) => ({
+    const dashboardRoutes = extractPageObjects(source, 'dashboard').map((route, index) => ({
       index,
       source: route,
       path: extractStringProperty(route, 'path'),
@@ -548,9 +549,9 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
         diagnostic(
           'warning',
           'MODULE_DASHBOARD_DYNAMIC_ROUTE_BROAD_LOADER',
-          `Dashboard route "${route.path}" is dynamic and uses broad loader "${route.loader}" without loaderByParam, which can make every section fetch full dashboard state.`,
-          `routes.dashboard.${route.index}.loader`,
-          'Declare loaderByParam on this route so each high-traffic section resolves its own loader.'
+          `Dashboard page "${route.path}" is dynamic and uses broad loader "${route.loader}" without loaderByParam, which can make every section fetch full dashboard state.`,
+          `pages.${route.index}.loader`,
+          'Declare loaderByParam on this page so each high-traffic section resolves its own loader.'
         )
       );
     }
@@ -580,9 +581,9 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
       diagnostic(
         'warning',
         'MODULE_DASHBOARD_DYNAMIC_ROUTE_SHARED_LOADER',
-        `Dashboard route "${route.path}" is the only dashboard route, but ${entrypointPaths.length} dashboard entrypoints share loader "${route.loader}".`,
-        `routes.dashboard.${route.index}`,
-        'Declare loaderByParam on this route and add quality.performance.dashboardTransitions.routes for smoke coverage.'
+        `Dashboard page "${route.path}" is the only dashboard page, but ${entrypointPaths.length} dashboard entrypoints share loader "${route.loader}".`,
+        `pages.${route.index}`,
+        'Declare loaderByParam on this page and add quality.performance.dashboardTransitions.routes for smoke coverage.'
       )
     );
   }
