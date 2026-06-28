@@ -52,6 +52,8 @@ export const Permission = {
 
   UsageWrite: 'usage.write',
   AuditWrite: 'audit.write',
+  AdminResourcesRead: 'adminResources.read',
+  AdminResourcesWrite: 'adminResources.write',
   SubjectsRead: 'subjects.read',
   MeteringWrite: 'metering.write',
   CreditsRead: 'credits.read',
@@ -527,6 +529,20 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     risk: 'high',
     scope: 'workspace',
     ctxCapability: 'ctx.audit',
+  },
+  [Permission.AdminResourcesRead]: {
+    value: Permission.AdminResourcesRead,
+    group: 'security',
+    labelKey: 'permissions.security.adminResourcesRead',
+    risk: 'medium',
+    scope: 'product',
+  },
+  [Permission.AdminResourcesWrite]: {
+    value: Permission.AdminResourcesWrite,
+    group: 'security',
+    labelKey: 'permissions.security.adminResourcesWrite',
+    risk: 'high',
+    scope: 'product',
   },
   [Permission.SubjectsRead]: {
     value: Permission.SubjectsRead,

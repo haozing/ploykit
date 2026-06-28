@@ -71,7 +71,7 @@ function sessionWithPermissions(
 }
 
 function moduleIdForHostRequest(input: {
-  operation: 'api' | 'action' | 'page';
+  operation: 'api' | 'action' | 'page' | 'admin-resource';
   pathname?: string;
   routeKind?: 'site' | 'dashboard' | 'admin';
   moduleId?: string;
@@ -92,7 +92,7 @@ function moduleIdForHostRequest(input: {
 export function applyModuleSelfServiceSessionPermissions(
   session: ModuleHostSession,
   input: {
-    operation: 'api' | 'action' | 'page';
+    operation: 'api' | 'action' | 'page' | 'admin-resource';
     pathname?: string;
     routeKind?: 'site' | 'dashboard' | 'admin';
     moduleId?: string;

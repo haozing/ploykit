@@ -36,6 +36,7 @@ export interface ModuleRuntimeMapEntry {
   module?: ModuleLoader;
   pages?: Record<string, ModuleLoader>;
   apis?: Record<string, ModuleLoader>;
+  admin?: Record<string, ModuleLoader>;
   loaders?: Record<string, ModuleLoader>;
   actions?: Record<string, ModuleLoader>;
   services?: Record<string, ModuleLoader>;
@@ -45,6 +46,7 @@ export interface ModuleRuntimeMapEntry {
   jobs?: Record<string, ModuleLoader>;
   events?: Record<string, ModuleLoader>;
   webhooks?: Record<string, ModuleLoader>;
+  capabilities?: Record<string, ModuleLoader>;
   assets?: readonly string[];
   messages?: Record<string, ModuleMapLocaleMessages>;
   runtimeContract?: ModuleRuntimeContract;

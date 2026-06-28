@@ -1,6 +1,7 @@
 import type { ModuleDiagnostic, ModuleProductScopeProfile } from '@ploykit/module-sdk';
 
 export type ModuleCatalogModuleStatus = 'enabled' | 'disabled' | 'error' | 'maintenance';
+export type ModuleRuntimeTrust = 'product' | 'trusted' | 'system';
 
 export interface ModuleCatalogProduct {
   id: string;
@@ -22,6 +23,8 @@ export interface ModuleCatalogBundleModule {
   status?: ModuleCatalogModuleStatus;
   required?: boolean;
   scopeProfile?: ModuleProductScopeProfile;
+  trust?: ModuleRuntimeTrust;
+  allowedProvides?: readonly string[];
 }
 
 export interface ModuleCatalogPlanCapability {
@@ -46,6 +49,8 @@ export interface ModuleCatalogModuleState {
   bundleId?: string;
   required?: boolean;
   scopeProfile?: ModuleProductScopeProfile;
+  trust?: ModuleRuntimeTrust;
+  allowedProvides?: readonly string[];
   diagnostics?: readonly ModuleDiagnostic[];
   updatedAt?: string;
 }

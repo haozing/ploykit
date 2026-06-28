@@ -28,6 +28,13 @@ import {
 } from '../src/lib/module-capabilities';
 import { artifact, testModule } from './host-runtime-fixtures';
 
+const descriptorConsumerModule = defineModule({
+  ...testModule,
+  uses: {
+    capabilities: ['diagnostics', 'egressDiagnostics'],
+  },
+});
+
 const payloadSchema = schema({
   name: 'HostRuntimeInlinePayload',
   fields: {
@@ -115,15 +122,16 @@ test('createModuleHost mounts descriptor registered capability extensions', asyn
       kind: 'source',
       modules: {
         'host-test': {
-          module: async () => ({ default: testModule }),
+          module: async () => ({ default: descriptorConsumerModule }),
           actions: {
             'actions/write-message': async () => ({
               default: action<ModuleContext, { message: string }, Record<string, unknown>>(
                 async (ctx) => {
-                  const diagnostics = ctx.extensions.diagnostics as { ping(): string };
+                  const diagnostics = ctx.extensions.require<{ ping(): string }>('diagnostics');
                   return {
                     ok: true,
                     value: diagnostics.ping(),
+                    extensions: ctx.extensions.list(),
                     moduleId: ctx.module.id,
                   };
                 }
@@ -158,8 +166,445 @@ test('createModuleHost mounts descriptor registered capability extensions', asyn
   assert.deepEqual(result, {
     ok: true,
     value: 'pong',
+    extensions: ['diagnostics'],
     moduleId: 'host-test',
   });
+});
+
+test('createModuleHost extension API throws for missing required extensions', async () => {
+  const host = await createModuleHost({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'host-test': {
+          module: async () => ({ default: descriptorConsumerModule }),
+          actions: {
+            'actions/write-message': async () => ({
+              default: action<ModuleContext, { message: string }, Record<string, unknown>>(
+                async (ctx) => {
+                  ctx.extensions.require('missing');
+                  return { ok: true };
+                }
+              ),
+            }),
+          },
+        },
+      },
+    },
+    resolveSession: async () => ({
+      user: { id: 'user_descriptor', role: 'user' },
+      permissions: [],
+    }),
+  });
+
+  await assert.rejects(
+    () =>
+      host.executeAction<{ message: string }, Record<string, unknown>>({
+        moduleId: 'host-test',
+        name: 'writeMessage',
+        input: { message: 'from-descriptor' },
+      }),
+    /MODULE_EXTENSION_REQUIRED/
+  );
+});
+
+test('createModuleHost does not mount untrusted module provided capabilities', async () => {
+  const extensionModule = defineModule({
+    id: 'executor-extension',
+    name: 'Executor Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    provides: {
+      capabilities: {
+        executor: {
+          provider: './capabilities/executor',
+        },
+      },
+    },
+  });
+  const consumerModule = defineModule({
+    id: 'extension-consumer',
+    name: 'Extension Consumer',
+    version: '0.1.0',
+    uses: {
+      capabilities: ['executor'],
+    },
+    actions: {
+      run: {
+        handler: './actions/run',
+        input: payloadSchema,
+      },
+    },
+  });
+  const host = await createModuleHost({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'executor-extension': {
+          module: async () => ({ default: extensionModule }),
+          capabilities: {
+            executor: async () => ({
+              default: {
+                api: {
+                  run() {
+                    return 'mounted';
+                  },
+                },
+              },
+            }),
+          },
+        },
+        'extension-consumer': {
+          module: async () => ({ default: consumerModule }),
+          actions: {
+            'actions/run': async () => ({
+              default: action<ModuleContext, unknown, Record<string, unknown>>(async (ctx) => {
+                const executor = ctx.extensions.require<{ run(): string }>('executor');
+                return { value: executor.run() };
+              }),
+            }),
+          },
+        },
+      },
+    },
+    catalog: {
+      moduleStates: [
+        { productId: 'default', moduleId: 'executor-extension', status: 'enabled' },
+        { productId: 'default', moduleId: 'extension-consumer', status: 'enabled' },
+      ],
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      host.executeAction({
+        moduleId: 'extension-consumer',
+        name: 'run',
+        input: { value: 'run' },
+        session: { user: { id: 'user_extension', role: 'user' }, permissions: [] },
+      }),
+    /MODULE_EXTENSION_REQUIRED/
+  );
+});
+
+test('createModuleHost mounts trusted module provided capabilities', async () => {
+  const extensionModule = defineModule({
+    id: 'executor-extension',
+    name: 'Executor Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    provides: {
+      capabilities: {
+        executor: {
+          provider: './capabilities/executor',
+        },
+      },
+    },
+  });
+  const consumerModule = defineModule({
+    id: 'extension-consumer',
+    name: 'Extension Consumer',
+    version: '0.1.0',
+    uses: {
+      capabilities: ['executor'],
+    },
+    actions: {
+      run: {
+        handler: './actions/run',
+        input: payloadSchema,
+      },
+    },
+  });
+  const host = await createModuleHost({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'executor-extension': {
+          module: async () => ({ default: extensionModule }),
+          capabilities: {
+            executor: async () => ({
+              default: {
+                api: {
+                  run() {
+                    return 'mounted';
+                  },
+                },
+              },
+            }),
+          },
+        },
+        'extension-consumer': {
+          module: async () => ({ default: consumerModule }),
+          actions: {
+            'actions/run': async () => ({
+              default: action<ModuleContext, unknown, Record<string, unknown>>(async (ctx) => {
+                const executor = ctx.extensions.require<{ run(): string }>('executor');
+                return {
+                  value: executor.run(),
+                  extensions: ctx.extensions.list(),
+                };
+              }),
+            }),
+          },
+        },
+      },
+    },
+    catalog: {
+      moduleStates: [
+        {
+          productId: 'default',
+          moduleId: 'executor-extension',
+          status: 'enabled',
+          trust: 'trusted',
+          allowedProvides: ['capabilities.executor'],
+        },
+        { productId: 'default', moduleId: 'extension-consumer', status: 'enabled' },
+      ],
+    },
+  });
+
+  const result = await host.executeAction<Record<string, unknown>, Record<string, unknown>>({
+    moduleId: 'extension-consumer',
+    name: 'run',
+    input: { value: 'run' },
+    session: { user: { id: 'user_extension', role: 'user' }, permissions: [] },
+  });
+
+  assert.deepEqual(result, {
+    value: 'mounted',
+    extensions: ['executor'],
+  });
+});
+
+test('createModuleHost requires consumers to declare used extension capabilities', async () => {
+  const extensionModule = defineModule({
+    id: 'executor-extension',
+    name: 'Executor Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    provides: {
+      capabilities: {
+        executor: {
+          provider: './capabilities/executor',
+        },
+      },
+    },
+  });
+  const consumerModule = defineModule({
+    id: 'extension-consumer',
+    name: 'Extension Consumer',
+    version: '0.1.0',
+    actions: {
+      run: {
+        handler: './actions/run',
+        input: payloadSchema,
+      },
+    },
+  });
+  const host = await createModuleHost({
+    artifact: {
+      kind: 'source',
+      modules: {
+        'executor-extension': {
+          module: async () => ({ default: extensionModule }),
+          capabilities: {
+            executor: async () => ({
+              default: {
+                api: {
+                  run() {
+                    return 'mounted';
+                  },
+                },
+              },
+            }),
+          },
+        },
+        'extension-consumer': {
+          module: async () => ({ default: consumerModule }),
+          actions: {
+            'actions/run': async () => ({
+              default: action<ModuleContext, unknown, Record<string, unknown>>(async (ctx) => {
+                const executor = ctx.extensions.require<{ run(): string }>('executor');
+                return { value: executor.run() };
+              }),
+            }),
+          },
+        },
+      },
+    },
+    catalog: {
+      moduleStates: [
+        {
+          productId: 'default',
+          moduleId: 'executor-extension',
+          status: 'enabled',
+          trust: 'trusted',
+          allowedProvides: ['capabilities.executor'],
+        },
+        { productId: 'default', moduleId: 'extension-consumer', status: 'enabled' },
+      ],
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      host.executeAction({
+        moduleId: 'extension-consumer',
+        name: 'run',
+        input: { value: 'run' },
+        session: { user: { id: 'user_extension', role: 'user' }, permissions: [] },
+      }),
+    /MODULE_EXTENSION_REQUIRED/
+  );
+});
+
+test('createModuleHost rejects trusted module capabilities that require system permissions', async () => {
+  const extensionModule = defineModule({
+    id: 'runtime-extension',
+    name: 'Runtime Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    permissions: [Permission.RuntimeManage],
+    provides: {
+      capabilities: {
+        runtimeOps: {
+          provider: './capabilities/runtime-ops',
+          permissions: [Permission.RuntimeManage],
+        },
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      createModuleHost({
+        artifact: {
+          kind: 'source',
+          modules: {
+            'runtime-extension': {
+              module: async () => ({ default: extensionModule }),
+              capabilities: {
+                runtimeOps: async () => ({ default: { api: {} } }),
+              },
+            },
+          },
+        },
+        catalog: {
+          moduleStates: [
+            {
+              productId: 'default',
+              moduleId: 'runtime-extension',
+              status: 'enabled',
+              trust: 'trusted',
+              allowedProvides: ['capabilities.runtimeOps'],
+            },
+          ],
+        },
+      }),
+    /MODULE_PROVIDED_CAPABILITY_SYSTEM_PERMISSION_FORBIDDEN/
+  );
+});
+
+test('createModuleHost executes trusted admin resource operations with guard and audit', async () => {
+  const extensionModule = defineModule({
+    id: 'admin-resource-extension',
+    name: 'Admin Resource Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    permissions: [Permission.AdminResourcesWrite],
+    provides: {
+      adminResources: {
+        workers: {
+          operations: {
+            restart: {
+              handler: './admin/workers.restart',
+              permission: Permission.AdminResourcesWrite,
+              risk: 'dangerous',
+              auditEvent: 'worker.restart',
+              confirmation: { field: 'confirm', value: 'RESTART' },
+            },
+          },
+        },
+      },
+    },
+  });
+  const runtimeStore = createInMemoryRuntimeStore({
+    now: () => new Date('2026-06-28T00:00:00.000Z'),
+  });
+  const host = await createModuleHost({
+    runtimeStore,
+    artifact: {
+      kind: 'source',
+      modules: {
+        'admin-resource-extension': {
+          module: async () => ({ default: extensionModule }),
+          admin: {
+            'admin/workers.restart': async () => ({
+              default: action<ModuleContext, { workerId: string }, Record<string, unknown>>(
+                async (ctx, input) => ({
+                  ok: true,
+                  moduleId: ctx.module.id,
+                  workerId: input.workerId,
+                })
+              ),
+            }),
+          },
+        },
+      },
+    },
+    catalog: {
+      moduleStates: [
+        {
+          productId: 'product-a',
+          moduleId: 'admin-resource-extension',
+          status: 'enabled',
+          trust: 'trusted',
+          allowedProvides: ['adminResources.workers'],
+        },
+      ],
+    },
+  });
+  const session = {
+    user: { id: 'admin-1', role: 'admin' as const },
+    actorId: 'admin-1',
+    productId: 'product-a',
+    permissions: [Permission.AdminResourcesWrite],
+  };
+
+  await assert.rejects(
+    () =>
+      host.executeAdminResourceOperation({
+        resourceId: 'admin-resource-extension.workers',
+        operationName: 'restart',
+        input: { workerId: 'worker-1' },
+        session,
+      }),
+    /ADMIN_RESOURCE_OPERATION_CONFIRMATION_REQUIRED/
+  );
+
+  const result = await host.executeAdminResourceOperation<
+    { workerId: string },
+    Record<string, unknown>
+  >({
+    resourceId: 'admin-resource-extension.workers',
+    operationName: 'restart',
+    input: { workerId: 'worker-1' },
+    confirmation: { confirm: 'RESTART' },
+    session,
+  });
+  const audit = await runtimeStore.listAudit({ productId: 'product-a' });
+
+  assert.deepEqual(result, {
+    ok: true,
+    moduleId: 'admin-resource-extension',
+    workerId: 'worker-1',
+  });
+  assert.equal(audit.length, 2);
+  assert.equal(audit[0]?.type, 'admin.resource.denied');
+  assert.equal(audit[0]?.metadata.reason, 'ADMIN_RESOURCE_OPERATION_CONFIRMATION_REQUIRED');
+  assert.equal(audit[1]?.type, 'worker.restart');
+  assert.equal(audit[1]?.moduleId, 'admin-resource-extension');
+  assert.equal(audit[1]?.actorId, 'admin-1');
 });
 
 test('createModuleHost enforces descriptor registered capability permissions', async () => {
@@ -174,12 +619,12 @@ test('createModuleHost enforces descriptor registered capability permissions', a
       kind: 'source',
       modules: {
         'host-test': {
-          module: async () => ({ default: testModule }),
+          module: async () => ({ default: descriptorConsumerModule }),
           actions: {
             'actions/write-message': async () => ({
               default: action<ModuleContext, { message: string }, Record<string, unknown>>(
                 async (ctx) => {
-                  const diagnostics = ctx.extensions.egressDiagnostics as { ping(): string };
+                  const diagnostics = ctx.extensions.require<{ ping(): string }>('egressDiagnostics');
                   return { value: diagnostics.ping() };
                 }
               ),

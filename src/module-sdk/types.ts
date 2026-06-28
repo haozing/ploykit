@@ -7,6 +7,7 @@ export type ModuleRouteAuth = 'public' | 'auth' | 'admin';
 export type ModuleHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type ModuleSurfaceMode = 'append' | 'prepend' | 'replace' | 'panel' | 'action';
 export type ModuleWorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type ModuleKind = 'product' | 'host-extension';
 export type ModuleActionSideEffect =
   | 'none'
   | 'read'
@@ -288,6 +289,39 @@ export interface ModuleResourceDefinition {
   permissions?: readonly PermissionValue[];
 }
 
+export interface ModuleProvidedCapabilityDefinition {
+  provider: string;
+  permissions?: readonly PermissionValue[];
+  description?: string;
+}
+
+export type ModuleProvidedAdminResourceRisk = 'read' | 'write' | 'dangerous';
+
+export interface ModuleProvidedAdminResourceOperationDefinition {
+  handler: string;
+  permission: PermissionValue;
+  risk: ModuleProvidedAdminResourceRisk;
+  auditEvent?: string;
+  confirmation?: {
+    field: string;
+    value: string;
+  };
+}
+
+export interface ModuleProvidedAdminResourceDefinition {
+  label?: string;
+  operations: Record<string, ModuleProvidedAdminResourceOperationDefinition>;
+}
+
+export interface ModuleProvidesDefinition {
+  capabilities?: Record<string, ModuleProvidedCapabilityDefinition>;
+  adminResources?: Record<string, ModuleProvidedAdminResourceDefinition>;
+}
+
+export interface ModuleUsesDefinition {
+  capabilities?: readonly string[];
+}
+
 export interface ModuleThemeDefinition {
   tokens?: Record<string, string | number>;
   css?: string;
@@ -544,8 +578,11 @@ export interface ModuleDefinition {
   name: string;
   version: string;
   description?: string;
+  kind?: ModuleKind;
   product?: ModuleProductDefinition;
   parts?: ModuleContractPartsDefinition;
+  uses?: ModuleUsesDefinition;
+  provides?: ModuleProvidesDefinition;
   permissions?: readonly PermissionValue[];
   scope?: ModuleScopeDefinition;
   data?: ModuleDataDefinition;

@@ -23,8 +23,49 @@ import {
 import type { ModuleDefinition } from './types';
 
 const MODULE_ID_PATTERN = /^[a-z0-9-]+$/;
+const EXTENSION_KEY_PATTERN = /^[a-z][a-zA-Z0-9]*(?:[._-][a-zA-Z0-9]+)*$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/;
 const LOCAL_PATH_PATTERN = /^\.\/(?!\.)(?!.*(?:^|\/)\.\.(?:\/|$))/;
+const RESERVED_CONTEXT_KEYS = new Set([
+  'module',
+  'product',
+  'user',
+  'auth',
+  'scope',
+  'workspace',
+  'request',
+  'response',
+  'data',
+  'config',
+  'secrets',
+  'services',
+  'connectors',
+  'resourceBindings',
+  'http',
+  'files',
+  'artifacts',
+  'notifications',
+  'runs',
+  'jobs',
+  'events',
+  'webhooks',
+  'usage',
+  'metering',
+  'credits',
+  'billing',
+  'entitlements',
+  'commerce',
+  'redeemCodes',
+  'ai',
+  'rag',
+  'apiKeys',
+  'rateLimit',
+  'risk',
+  'cache',
+  'audit',
+  'extensions',
+  'json',
+]);
 function addDiagnostic(
   diagnostics: ModuleDiagnostic[],
   severity: ModuleDiagnostic['severity'],
@@ -199,6 +240,166 @@ function validatePermissionList(
   }
 }
 
+function hasTopLevelPermission(definition: ModuleDefinition, permission: PermissionValue): boolean {
+  return (definition.permissions ?? []).includes(permission);
+}
+
+function validateExtensionKey(
+  diagnostics: ModuleDiagnostic[],
+  value: string,
+  path: string,
+  label: string
+): void {
+  if (!EXTENSION_KEY_PATTERN.test(value)) {
+    addError(
+      diagnostics,
+      'MODULE_EXTENSION_KEY_INVALID',
+      `${label} "${value}" must start with a lowercase letter and contain only letters, numbers, dot, underscore, or hyphen separators.`,
+      path,
+      'Use a key like "executor", "media.ffmpeg", or "crmSync".'
+    );
+  }
+}
+
+function validateModuleExtensions(
+  diagnostics: ModuleDiagnostic[],
+  definition: ModuleDefinition
+): void {
+  const kind = definition.kind ?? 'product';
+  if (kind !== 'product' && kind !== 'host-extension') {
+    addError(
+      diagnostics,
+      'MODULE_KIND_INVALID',
+      `Module kind "${String(definition.kind)}" is not supported.`,
+      'kind',
+      'Use "product" or "host-extension".'
+    );
+  }
+
+  const provides = definition.provides;
+  if (kind === 'product' && provides) {
+    addError(
+      diagnostics,
+      'MODULE_PROVIDES_PRODUCT_FORBIDDEN',
+      'Product modules must not declare provides; host extension points require kind: "host-extension" and catalog trust.',
+      'provides',
+      'Move this declaration to a host-extension module.'
+    );
+  }
+
+  for (const [index, capability] of (definition.uses?.capabilities ?? []).entries()) {
+    validateExtensionKey(diagnostics, capability, `uses.capabilities.${index}`, 'Used capability');
+  }
+
+  for (const [name, capability] of Object.entries(provides?.capabilities ?? {})) {
+    validateExtensionKey(diagnostics, name, `provides.capabilities.${name}`, 'Provided capability');
+    if (RESERVED_CONTEXT_KEYS.has(name)) {
+      addError(
+        diagnostics,
+        'MODULE_PROVIDED_CAPABILITY_KEY_RESERVED',
+        `Provided capability "${name}" conflicts with a core ModuleContext key.`,
+        `provides.capabilities.${name}`,
+        'Use a ctx.extensions key such as "executor" or a namespaced key such as "media.ffmpeg".'
+      );
+    }
+    validateLocalModulePath(
+      diagnostics,
+      capability.provider,
+      `provides.capabilities.${name}.provider`,
+      `Provided capability "${name}" provider`
+    );
+    validatePermissionList(
+      diagnostics,
+      capability.permissions,
+      `provides.capabilities.${name}.permissions`
+    );
+    for (const [permissionIndex, permission] of (capability.permissions ?? []).entries()) {
+      if (ModulePermissionValues.has(permission) && !hasTopLevelPermission(definition, permission)) {
+        addError(
+          diagnostics,
+          'MODULE_PROVIDED_CAPABILITY_PERMISSION_NOT_DECLARED',
+          `Provided capability "${name}" permission "${permission}" must also be declared in module permissions.`,
+          `provides.capabilities.${name}.permissions.${permissionIndex}`,
+          'Add the permission to the top-level permissions array.'
+        );
+      }
+    }
+  }
+
+  for (const [resourceName, resource] of Object.entries(provides?.adminResources ?? {})) {
+    validateExtensionKey(
+      diagnostics,
+      resourceName,
+      `provides.adminResources.${resourceName}`,
+      'Admin resource'
+    );
+    const operations = Object.entries(resource.operations ?? {});
+    if (operations.length === 0) {
+      addError(
+        diagnostics,
+        'MODULE_ADMIN_RESOURCE_OPERATIONS_REQUIRED',
+        `Admin resource "${resourceName}" must declare at least one operation.`,
+        `provides.adminResources.${resourceName}.operations`
+      );
+    }
+    for (const [operationName, operation] of operations) {
+      validateExtensionKey(
+        diagnostics,
+        operationName,
+        `provides.adminResources.${resourceName}.operations.${operationName}`,
+        'Admin resource operation'
+      );
+      validateLocalModulePath(
+        diagnostics,
+        operation.handler,
+        `provides.adminResources.${resourceName}.operations.${operationName}.handler`,
+        `Admin resource "${resourceName}" operation "${operationName}" handler`
+      );
+      validatePermissionList(
+        diagnostics,
+        [operation.permission],
+        `provides.adminResources.${resourceName}.operations.${operationName}.permission`
+      );
+      if (
+        ModulePermissionValues.has(operation.permission) &&
+        !hasTopLevelPermission(definition, operation.permission)
+      ) {
+        addError(
+          diagnostics,
+          'MODULE_ADMIN_RESOURCE_PERMISSION_NOT_DECLARED',
+          `Admin resource "${resourceName}" operation "${operationName}" permission "${operation.permission}" must also be declared in module permissions.`,
+          `provides.adminResources.${resourceName}.operations.${operationName}.permission`,
+          'Add the permission to the top-level permissions array.'
+        );
+      }
+      if (!['read', 'write', 'dangerous'].includes(operation.risk)) {
+        addError(
+          diagnostics,
+          'MODULE_ADMIN_RESOURCE_RISK_INVALID',
+          `Admin resource "${resourceName}" operation "${operationName}" risk must be read, write, or dangerous.`,
+          `provides.adminResources.${resourceName}.operations.${operationName}.risk`
+        );
+      }
+      if (operation.risk !== 'read' && !operation.auditEvent?.trim()) {
+        addError(
+          diagnostics,
+          'MODULE_ADMIN_RESOURCE_AUDIT_EVENT_REQUIRED',
+          `Admin resource "${resourceName}" mutation operation "${operationName}" must declare auditEvent.`,
+          `provides.adminResources.${resourceName}.operations.${operationName}.auditEvent`
+        );
+      }
+      if (operation.risk === 'dangerous' && !operation.confirmation) {
+        addError(
+          diagnostics,
+          'MODULE_ADMIN_RESOURCE_CONFIRMATION_REQUIRED',
+          `Dangerous admin resource "${resourceName}" operation "${operationName}" must declare confirmation.`,
+          `provides.adminResources.${resourceName}.operations.${operationName}.confirmation`
+        );
+      }
+    }
+  }
+}
+
 export function validateModuleDefinition(definition: ModuleDefinition): ModuleDiagnostic[] {
   const diagnostics: ModuleDiagnostic[] = [];
 
@@ -237,6 +438,7 @@ export function validateModuleDefinition(definition: ModuleDefinition): ModuleDi
   }
 
   validatePermissionList(diagnostics, definition.permissions, 'permissions');
+  validateModuleExtensions(diagnostics, definition);
   validateContractParts(diagnostics, definition);
   validateData(diagnostics, definition.data);
   validateActions(diagnostics, definition);

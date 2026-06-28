@@ -34,6 +34,7 @@ export interface CapabilityDescriptor<TName extends string = string, TApi = unkn
 
 export class CapabilityDescriptorRegistry {
   private readonly descriptors = new Map<string, CapabilityDescriptor>();
+  private readonly ctxKeys = new Map<string, string>();
 
   register<TName extends string, TApi>(
     descriptor: CapabilityDescriptor<TName, TApi>
@@ -41,7 +42,14 @@ export class CapabilityDescriptorRegistry {
     if (this.descriptors.has(descriptor.name)) {
       throw new Error(`MODULE_CAPABILITY_DESCRIPTOR_DUPLICATE: ${descriptor.name}`);
     }
+    const existingCtxKey = this.ctxKeys.get(descriptor.ctxKey);
+    if (existingCtxKey) {
+      throw new Error(
+        `MODULE_CAPABILITY_CTXKEY_DUPLICATE: ctx.extensions.${descriptor.ctxKey} is already provided by "${existingCtxKey}".`
+      );
+    }
     this.descriptors.set(descriptor.name, descriptor as CapabilityDescriptor);
+    this.ctxKeys.set(descriptor.ctxKey, descriptor.name);
     return this;
   }
 
@@ -102,9 +110,14 @@ export function mountCapabilityDescriptors(input: {
   descriptors: CapabilityDescriptorRegistry;
   providers?: CapabilityProviderRegistry;
   mountInput: CapabilityMountInput;
+  allowedNames?: readonly string[];
 }): Record<string, unknown> {
   const mounted: Record<string, unknown> = {};
+  const allowedNames = input.allowedNames ? new Set(input.allowedNames) : undefined;
   for (const descriptor of input.descriptors.list()) {
+    if (allowedNames && !allowedNames.has(descriptor.name) && !allowedNames.has(descriptor.ctxKey)) {
+      continue;
+    }
     const provider = input.providers?.[descriptor.name] ?? input.providers?.[descriptor.ctxKey];
     const api =
       descriptor.mount?.(input.mountInput) ??

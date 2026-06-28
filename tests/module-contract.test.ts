@@ -69,6 +69,109 @@ test('module contract rejects removed contractVersion field', () => {
   assert.ok(codes.includes('MODULE_CONTRACT_VERSION_UNSUPPORTED'));
 });
 
+test('module contract validates host extension declarations', () => {
+  const productCodes = codesFor(
+    defineModule({
+      id: 'product-with-provides',
+      name: 'Product With Provides',
+      version: '0.1.0',
+      provides: {
+        capabilities: {
+          executor: {
+            provider: './capabilities/executor',
+          },
+        },
+      },
+    })
+  );
+
+  assert.ok(productCodes.includes('MODULE_PROVIDES_PRODUCT_FORBIDDEN'));
+
+  const extensionDiagnostics = validateModuleDefinition(
+    defineModule({
+      id: 'worker-executor-local',
+      name: 'Worker Executor Local',
+      version: '0.1.0',
+      kind: 'host-extension',
+      permissions: [Permission.ServicesInvoke, Permission.AdminResourcesWrite],
+      provides: {
+        capabilities: {
+          executor: {
+            provider: './capabilities/executor',
+            permissions: [Permission.ServicesInvoke],
+          },
+        },
+        adminResources: {
+          workers: {
+            operations: {
+              restart: {
+                handler: './admin/restart-worker',
+                permission: Permission.AdminResourcesWrite,
+                risk: 'dangerous',
+                auditEvent: 'worker.restart',
+                confirmation: { field: 'confirm', value: 'RESTART' },
+              },
+            },
+          },
+        },
+      },
+      uses: {
+        capabilities: ['executor'],
+      },
+    })
+  );
+
+  assert.deepEqual(extensionDiagnostics.map((diagnostic) => diagnostic.code), []);
+});
+
+test('module contract rejects provided capability key collisions', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'bad-extension-capability-key',
+      name: 'Bad Extension Capability Key',
+      version: '0.1.0',
+      kind: 'host-extension',
+      provides: {
+        capabilities: {
+          data: {
+            provider: './capabilities/data-proxy',
+          },
+        },
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_PROVIDED_CAPABILITY_KEY_RESERVED'));
+});
+
+test('module contract validates admin resource operation guards', () => {
+  const codes = codesFor(
+    defineModule({
+      id: 'bad-admin-resource',
+      name: 'Bad Admin Resource',
+      version: '0.1.0',
+      kind: 'host-extension',
+    permissions: [Permission.AdminResourcesWrite],
+      provides: {
+        adminResources: {
+          workers: {
+            operations: {
+              restart: {
+                handler: './admin/restart-worker',
+                permission: Permission.AdminResourcesWrite,
+                risk: 'dangerous',
+              },
+            },
+          },
+        },
+      },
+    })
+  );
+
+  assert.ok(codes.includes('MODULE_ADMIN_RESOURCE_AUDIT_EVENT_REQUIRED'));
+  assert.ok(codes.includes('MODULE_ADMIN_RESOURCE_CONFIRMATION_REQUIRED'));
+});
+
 test('clean-slate contract validates assets, resources, pages, and schemas', () => {
   const noteSchema = schema({
     name: 'Note',

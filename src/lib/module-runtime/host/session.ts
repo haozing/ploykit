@@ -12,12 +12,14 @@ export interface ModuleHostSession extends ModuleRuntimeAccessSession {
 }
 
 export interface ResolveModuleHostSessionInput {
-  operation: 'api' | 'action' | 'page';
+  operation: 'api' | 'action' | 'page' | 'admin-resource';
   request: Request;
   pathname?: string;
   routeKind?: 'site' | 'dashboard' | 'admin';
   moduleId?: string;
   actionName?: string;
+  resourceId?: string;
+  operationName?: string;
   params: Record<string, string>;
 }
 

@@ -133,6 +133,69 @@ function writeWorkspaceModuleWithNavigationIcon(t: TestContext): string {
   return moduleId;
 }
 
+function writeWorkspaceHostExtensionModule(t: TestContext): string {
+  const moduleId = `capability-fixture-${crypto.randomUUID().slice(0, 8)}`;
+  const moduleRoot = path.join(process.cwd(), 'modules', moduleId);
+  fs.mkdirSync(path.join(moduleRoot, 'admin'), { recursive: true });
+  fs.mkdirSync(path.join(moduleRoot, 'capabilities'), { recursive: true });
+  fs.writeFileSync(
+    path.join(moduleRoot, 'module.ts'),
+    `
+      import { defineModule } from '@ploykit/module-sdk';
+
+      export default defineModule({
+        id: '${moduleId}',
+        name: 'Capability Fixture',
+        version: '0.1.0',
+        kind: 'host-extension',
+        provides: {
+          capabilities: {
+            executor: {
+              provider: './capabilities/executor',
+            },
+          },
+          adminResources: {
+            workers: {
+              operations: {
+                list: {
+                  handler: './admin/workers.list',
+                  permission: 'audit.write',
+                  risk: 'read',
+                },
+              },
+            },
+          },
+        },
+      });
+    `,
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(moduleRoot, 'admin', 'workers.list.ts'),
+    `
+      export default async function listWorkers() {
+        return [];
+      }
+    `,
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(moduleRoot, 'capabilities', 'executor.ts'),
+    `
+      export default {
+        api: {
+          ping() {
+            return 'pong';
+          },
+        },
+      };
+    `,
+    'utf8'
+  );
+  t.after(() => fs.rmSync(moduleRoot, { recursive: true, force: true }));
+  return moduleId;
+}
+
 function runPloyKitCommand(args: string[]) {
   return childProcess.spawnSync(process.execPath, args, {
     cwd: process.cwd(),
@@ -369,6 +432,40 @@ test('generated module icon registry includes host core and declared module navi
     assert.match(registry, /"layoutDashboard": LayoutDashboard/);
     assert.match(registry, new RegExp(`"${moduleId}:listChecks": ListChecks`));
     assert.doesNotMatch(registry, /"listChecks": ListChecks/);
+  });
+});
+
+test('generated module map includes declared host extension capability providers', (t) => {
+  withGeneratedModuleMapRestore(() => {
+    const moduleId = writeWorkspaceHostExtensionModule(t);
+    const scan = runPloyKitCommand(['scripts/generate-module-map.mjs']);
+    assert.equal(scan.status, 0, scan.stderr || scan.stdout);
+
+    const mapSource = fs.readFileSync(
+      path.join(process.cwd(), 'src', 'lib', 'module-map.ts'),
+      'utf8'
+    );
+    assert.match(mapSource, new RegExp(`${moduleId}[\\s\\S]*capabilities`));
+    assert.match(mapSource, new RegExp(`${moduleId}[\\s\\S]*admin`));
+    assert.match(mapSource, /"admin\/workers\.list": \(\) => import\("\.\.\/\.\.\/modules\/capability-fixture-[a-f0-9-]+\/admin\/workers\.list"\)/);
+    assert.match(mapSource, /"executor": \(\) => import\("\.\.\/\.\.\/modules\/capability-fixture-[a-f0-9-]+\/capabilities\/executor"\)/);
+
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'src', 'lib', 'module-map.manifest.json'), 'utf8')
+    ) as {
+      modules: Array<{
+        id: string;
+        admin?: Array<{ name: string; path: string }>;
+        capabilities?: Array<{ name: string; path: string }>;
+      }>;
+    };
+    const moduleInfo = manifest.modules.find((module) => module.id === moduleId);
+    assert.deepEqual(moduleInfo?.admin, [
+      { name: 'admin/workers.list', path: 'admin/workers.list' },
+    ]);
+    assert.deepEqual(moduleInfo?.capabilities, [
+      { name: 'executor', path: 'capabilities/executor' },
+    ]);
   });
 });
 

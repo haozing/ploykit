@@ -95,6 +95,119 @@ test('module doctor validates egress permission and explicit origins', () => {
   assert.ok(codes.includes('MODULE_EGRESS_ORIGIN_INVALID'));
 });
 
+test('module doctor requires declared extension capabilities for ctx.extensions.require', () => {
+  const moduleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule } from '@ploykit/module-sdk';
+      export default defineModule({
+        id: 'doctor-extension-missing',
+        name: 'Doctor Extension Missing',
+        version: '0.1.0',
+        actions: {
+          run: {
+            handler: './actions/run',
+            auth: 'auth',
+          },
+        },
+      });
+    `,
+    'actions/run.ts': `
+      import { action } from '@ploykit/module-sdk';
+      export default action(async (ctx) => {
+        return ctx.extensions.require('executor');
+      });
+    `,
+  });
+
+  const result = runDoctor(moduleRoot);
+  const codes = result.body.diagnostics.map((diagnostic: { code: string }) => diagnostic.code);
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.ok(codes.includes('MODULE_EXTENSION_USE_DECLARATION_MISSING'));
+});
+
+test('module doctor accepts declared extension capabilities and rejects dynamic extension names', () => {
+  const declaredModuleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule, schema, stringField } from '@ploykit/module-sdk';
+      const input = schema({
+        name: 'DoctorExtensionDeclaredInput',
+        fields: {
+          value: stringField(),
+        },
+      });
+      export default defineModule({
+        id: 'doctor-extension-declared',
+        name: 'Doctor Extension Declared',
+        version: '0.1.0',
+        uses: {
+          capabilities: ['executor'],
+        },
+        actions: {
+          run: {
+            handler: './actions/run',
+            auth: 'auth',
+            input,
+          },
+        },
+      });
+    `,
+    'actions/run.ts': `
+      import { action } from '@ploykit/module-sdk';
+      export default action(async (ctx) => {
+        return ctx.extensions.require('executor');
+      });
+    `,
+  });
+  const dynamicModuleRoot = writeFixture({
+    'module.ts': `
+      import { defineModule, schema, stringField } from '@ploykit/module-sdk';
+      const input = schema({
+        name: 'DoctorExtensionDynamicInput',
+        fields: {
+          value: stringField(),
+        },
+      });
+      export default defineModule({
+        id: 'doctor-extension-dynamic',
+        name: 'Doctor Extension Dynamic',
+        version: '0.1.0',
+        uses: {
+          capabilities: ['executor'],
+        },
+        actions: {
+          run: {
+            handler: './actions/run',
+            auth: 'auth',
+            input,
+          },
+        },
+      });
+    `,
+    'actions/run.ts': `
+      import { action } from '@ploykit/module-sdk';
+      export default action(async (ctx) => {
+        const name = 'executor';
+        return ctx.extensions.require(name);
+      });
+    `,
+  });
+
+  const declared = runDoctor(declaredModuleRoot);
+  const declaredCodes = declared.body.diagnostics.map(
+    (diagnostic: { code: string }) => diagnostic.code
+  );
+  const dynamic = runDoctor(dynamicModuleRoot);
+  const dynamicCodes = dynamic.body.diagnostics.map(
+    (diagnostic: { code: string }) => diagnostic.code
+  );
+
+  assert.equal(declaredCodes.includes('MODULE_EXTENSION_USE_DECLARATION_MISSING'), false);
+  assert.equal(declaredCodes.includes('MODULE_EXTENSION_DYNAMIC_NAME_FORBIDDEN'), false);
+  assert.equal(dynamic.status, 1, dynamic.stderr);
+  assert.ok(dynamicCodes.includes('MODULE_EXTENSION_DYNAMIC_NAME_FORBIDDEN'));
+});
+
 test('module doctor keeps service egress separate from ordinary http egress', () => {
   const moduleRoot = writeFixture({
     'module.ts': `

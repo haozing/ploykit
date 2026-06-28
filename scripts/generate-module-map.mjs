@@ -563,6 +563,50 @@ function recordKeys(value) {
   return Object.keys(value ?? {});
 }
 
+function collectProvidedCapabilityProviders(root, moduleId, definition) {
+  const providers = [];
+  for (const [name, capability] of Object.entries(definition.provides?.capabilities ?? {})) {
+    const providerPath = capability?.provider;
+    if (typeof providerPath !== 'string') {
+      continue;
+    }
+    const resolved = assertModuleLocalFile(
+      root,
+      providerPath,
+      `Provided capability ${moduleId}.provides.capabilities.${name}.provider`
+    );
+    providers.push({
+      name,
+      path: slash(path.relative(root, resolved).replace(/\.(ts|tsx|js|jsx)$/, '')),
+    });
+  }
+  return providers.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function collectProvidedAdminResourceHandlers(root, moduleId, definition) {
+  const handlers = [];
+  for (const [resourceName, resource] of Object.entries(
+    definition.provides?.adminResources ?? {}
+  )) {
+    for (const [operationName, operation] of Object.entries(resource?.operations ?? {})) {
+      const handlerPath = operation?.handler;
+      if (typeof handlerPath !== 'string') {
+        continue;
+      }
+      const resolved = assertModuleLocalFile(
+        root,
+        handlerPath,
+        `Provided admin resource ${moduleId}.provides.adminResources.${resourceName}.operations.${operationName}.handler`
+      );
+      handlers.push({
+        name: slash(handlerPath.replace(/^\.\//, '').replace(/\.(ts|tsx|js|jsx)$/, '')),
+        path: slash(path.relative(root, resolved).replace(/\.(ts|tsx|js|jsx)$/, '')),
+      });
+    }
+  }
+  return handlers.sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function countNavigation(navigation) {
   if (!navigation) {
     return 0;
@@ -675,6 +719,7 @@ async function scanModules() {
         rootDir: relativeToProject(root),
         pages: scanDirectory(root, 'pages'),
         apis: scanDirectory(root, 'api', ['.ts', '.js']),
+        admin: collectProvidedAdminResourceHandlers(root, summary.id, definition),
         loaders: scanDirectory(root, 'loaders', ['.ts', '.js']),
         actions: scanDirectory(root, 'actions', ['.ts', '.js']),
         services: scanDirectory(root, 'services', ['.ts', '.js']),
@@ -684,6 +729,7 @@ async function scanModules() {
         jobs: scanDirectory(root, 'jobs', ['.ts', '.js']),
         events: scanDirectory(root, 'events', ['.ts', '.js']),
         webhooks: scanDirectory(root, 'webhooks', ['.ts', '.js']),
+        capabilities: collectProvidedCapabilityProviders(root, summary.id, definition),
         assets: [
           ...new Set([
             ...scanFiles(root, 'assets'),
@@ -728,8 +774,12 @@ async function scanModules() {
 }
 
 function runtimeModuleInfo(moduleInfo) {
-  const { root, icons, ...rest } = moduleInfo;
-  return rest;
+  const { root, icons, capabilities, admin, ...rest } = moduleInfo;
+  return {
+    ...rest,
+    ...(admin.length > 0 ? { admin } : {}),
+    ...(capabilities.length > 0 ? { capabilities } : {}),
+  };
 }
 
 function manifestModuleInfo(moduleInfo) {
@@ -784,6 +834,22 @@ function generateModuleMap(modules) {
       if (block) {
         parts.push(`    ${property}: {\n${block}\n    },`);
       }
+    }
+
+    if (moduleInfo.admin.length > 0) {
+      const lines = moduleInfo.admin.map((handler) => {
+        const importPath = path.join(moduleInfo.root, handler.path);
+        return `      ${JSON.stringify(handler.name)}: () => import(${JSON.stringify(moduleSpecifier(importPath, outputDir))})`;
+      });
+      parts.push(`    admin: {\n${lines.join(',\n')}\n    },`);
+    }
+
+    if (moduleInfo.capabilities.length > 0) {
+      const lines = moduleInfo.capabilities.map((capability) => {
+        const importPath = path.join(moduleInfo.root, capability.path);
+        return `      ${JSON.stringify(capability.name)}: () => import(${JSON.stringify(moduleSpecifier(importPath, outputDir))})`;
+      });
+      parts.push(`    capabilities: {\n${lines.join(',\n')}\n    },`);
     }
 
     if (runtimeInfo.assets.length > 0) {

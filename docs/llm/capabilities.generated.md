@@ -6,41 +6,41 @@
 
 | Capability | Type | Related permissions | Meaning | Source |
 | --- | --- | --- | --- | --- |
-| `ctx.module` | { id: string; version: string; } | - | Module identity metadata such as id and version. | `src/module-sdk/context.ts:1050` |
-| `ctx.product` | ModuleProductContext | - | Host product context. | `src/module-sdk/context.ts:1054` |
-| `ctx.user` | ModuleUser \| null | - | Current authenticated user, or null when unauthenticated. | `src/module-sdk/context.ts:1055` |
-| `ctx.auth` | ModuleAuthContext | - | Authentication and subject context; do not create module-owned sessions. | `src/module-sdk/context.ts:1056` |
-| `ctx.scope` | ModuleScopeContext | - | Product, environment, workspace, and module scope. | `src/module-sdk/context.ts:1057` |
-| `ctx.workspace` | ModuleWorkspaceContext | - | Current workspace context. | `src/module-sdk/context.ts:1058` |
-| `ctx.request` | ModuleRequest | - | Current request metadata. | `src/module-sdk/context.ts:1059` |
-| `ctx.response` | ModuleResponseFactory | - | Response factory helpers. | `src/module-sdk/context.ts:1060` |
-| `ctx.data` | ModuleDataApi | Permission.DataDocumentRead / Permission.DataDocumentWrite / Permission.DataTableRead / Permission.DataTableWrite / Permission.DataTransaction / Permission.DataSqlRead / Permission.DataSqlWrite | Data v2 document, table, and transaction capabilities. | `src/module-sdk/context.ts:1061` |
-| `ctx.config` | ModuleConfigApi | Permission.ConfigRead | Module configuration reads. | `src/module-sdk/context.ts:1062` |
-| `ctx.secrets` | ModuleSecretsApi | Permission.SecretsRead | Host-managed secret reads. | `src/module-sdk/context.ts:1063` |
-| `ctx.services` | ModuleServicesApi | Permission.ServicesInvoke | Controlled external service invocation. | `src/module-sdk/context.ts:1064` |
-| `ctx.connectors` | ModuleConnectorsApi | Permission.ConnectorsRead / Permission.ConnectorsInvoke | Host connector read and invoke access. | `src/module-sdk/context.ts:1065` |
-| `ctx.resourceBindings` | ModuleResourceBindingsApi | Permission.ResourceBindingsRead / Permission.ResourceBindingsWrite | Host resource binding access. | `src/module-sdk/context.ts:1066` |
-| `ctx.http` | ModuleHttpApi | Permission.ExternalHttp | External HTTP access constrained by permissions and egress policy. | `src/module-sdk/context.ts:1067` |
-| `ctx.files` | ModuleFilesApi | Permission.FilesRead / Permission.FilesWrite / Permission.FilesPublish | Host file uploads, signed URLs, and archive helpers. | `src/module-sdk/context.ts:1068` |
-| `ctx.artifacts` | ModuleArtifactsApi | Permission.ArtifactsRead / Permission.ArtifactsWrite | Runtime artifact reads and writes. | `src/module-sdk/context.ts:1069` |
-| `ctx.notifications` | ModuleNotificationsApi | Permission.NotificationsRead / Permission.NotificationsSend | In-app and email notifications. | `src/module-sdk/context.ts:1070` |
-| `ctx.runs` | ModuleRunsApi | Permission.RunsRead / Permission.RunsWrite | Background run records. | `src/module-sdk/context.ts:1071` |
-| `ctx.jobs` | ModuleJobsApi | Permission.JobsEnqueue / Permission.JobsRegister | Background job enqueue and registration. | `src/module-sdk/context.ts:1072` |
-| `ctx.events` | ModuleEventsApi | Permission.EventsEmit / Permission.EventsSubscribe | Module event publish and subscribe. | `src/module-sdk/context.ts:1073` |
-| `ctx.webhooks` | ModuleWebhooksApi | Permission.WebhookReceive | Module webhook helper capability. | `src/module-sdk/context.ts:1074` |
-| `ctx.usage` | ModuleUsageApi | Permission.UsageWrite | Usage recording. | `src/module-sdk/context.ts:1075` |
-| `ctx.metering` | ModuleMeteringApi | Permission.MeteringWrite | Metering authorize, charge, and commit flows. | `src/module-sdk/context.ts:1076` |
-| `ctx.credits` | ModuleCreditsApi | Permission.CreditsRead / Permission.CreditsConsume / Permission.CreditsWrite | Credits balance, reserve, and consume flows. | `src/module-sdk/context.ts:1077` |
-| `ctx.billing` | ModuleBillingApi | Permission.BillingRead / Permission.BillingWrite | Billing reads. | `src/module-sdk/context.ts:1078` |
-| `ctx.entitlements` | ModuleEntitlementsApi | Permission.EntitlementsRead / Permission.EntitlementsWrite | Entitlement reads, grants, and revocations. | `src/module-sdk/context.ts:1079` |
-| `ctx.commerce` | ModuleCommerceApi | Permission.CommerceRead / Permission.CommerceWrite / Permission.CommerceApply | Order, refund, and commercial fact mapping. | `src/module-sdk/context.ts:1080` |
-| `ctx.redeemCodes` | ModuleRedeemCodesApi | Permission.RedeemCodesRead / Permission.RedeemCodesWrite / Permission.RedeemCodesRedeem | Redeem code capability. | `src/module-sdk/context.ts:1081` |
-| `ctx.ai` | ModuleAiApi | Permission.AiGenerate / Permission.AiEmbed | Host-managed AI generation and embedding. | `src/module-sdk/context.ts:1082` |
-| `ctx.rag` | ModuleRagApi | Permission.RagRead / Permission.RagWrite | RAG indexing and retrieval. | `src/module-sdk/context.ts:1083` |
-| `ctx.apiKeys` | ModuleApiKeysApi | Permission.ApiKeysRead / Permission.ApiKeysWrite | API key creation and verification. | `src/module-sdk/context.ts:1084` |
-| `ctx.rateLimit` | ModuleRateLimitApi | Permission.RateLimitCheck | Rate-limit checks. | `src/module-sdk/context.ts:1085` |
-| `ctx.risk` | ModuleRiskApi | Permission.RiskRead / Permission.RiskWrite | Risk checks. | `src/module-sdk/context.ts:1086` |
-| `ctx.cache` | ModuleCacheApi | Permission.CacheRevalidate | Host cache access. | `src/module-sdk/context.ts:1087` |
-| `ctx.audit` | ModuleAuditApi | Permission.AuditWrite | Audit event recording. | `src/module-sdk/context.ts:1088` |
-| `ctx.extensions` | Readonly<Record<string, unknown>> | - | Host extension points; do not invent unknown capabilities. | `src/module-sdk/context.ts:1089` |
-| `ctx.json` | (data: unknown, init?: ResponseInit) => Response | - | JSON response shortcut. | `src/module-sdk/context.ts:1090` |
+| `ctx.module` | { id: string; version: string; } | - | Module identity metadata such as id and version. | `src/module-sdk/context.ts:1056` |
+| `ctx.product` | ModuleProductContext | - | Host product context. | `src/module-sdk/context.ts:1060` |
+| `ctx.user` | ModuleUser \| null | - | Current authenticated user, or null when unauthenticated. | `src/module-sdk/context.ts:1061` |
+| `ctx.auth` | ModuleAuthContext | - | Authentication and subject context; do not create module-owned sessions. | `src/module-sdk/context.ts:1062` |
+| `ctx.scope` | ModuleScopeContext | - | Product, environment, workspace, and module scope. | `src/module-sdk/context.ts:1063` |
+| `ctx.workspace` | ModuleWorkspaceContext | - | Current workspace context. | `src/module-sdk/context.ts:1064` |
+| `ctx.request` | ModuleRequest | - | Current request metadata. | `src/module-sdk/context.ts:1065` |
+| `ctx.response` | ModuleResponseFactory | - | Response factory helpers. | `src/module-sdk/context.ts:1066` |
+| `ctx.data` | ModuleDataApi | Permission.DataDocumentRead / Permission.DataDocumentWrite / Permission.DataTableRead / Permission.DataTableWrite / Permission.DataTransaction / Permission.DataSqlRead / Permission.DataSqlWrite | Data v2 document, table, and transaction capabilities. | `src/module-sdk/context.ts:1067` |
+| `ctx.config` | ModuleConfigApi | Permission.ConfigRead | Module configuration reads. | `src/module-sdk/context.ts:1068` |
+| `ctx.secrets` | ModuleSecretsApi | Permission.SecretsRead | Host-managed secret reads. | `src/module-sdk/context.ts:1069` |
+| `ctx.services` | ModuleServicesApi | Permission.ServicesInvoke | Controlled external service invocation. | `src/module-sdk/context.ts:1070` |
+| `ctx.connectors` | ModuleConnectorsApi | Permission.ConnectorsRead / Permission.ConnectorsInvoke | Host connector read and invoke access. | `src/module-sdk/context.ts:1071` |
+| `ctx.resourceBindings` | ModuleResourceBindingsApi | Permission.ResourceBindingsRead / Permission.ResourceBindingsWrite | Host resource binding access. | `src/module-sdk/context.ts:1072` |
+| `ctx.http` | ModuleHttpApi | Permission.ExternalHttp | External HTTP access constrained by permissions and egress policy. | `src/module-sdk/context.ts:1073` |
+| `ctx.files` | ModuleFilesApi | Permission.FilesRead / Permission.FilesWrite / Permission.FilesPublish | Host file uploads, signed URLs, and archive helpers. | `src/module-sdk/context.ts:1074` |
+| `ctx.artifacts` | ModuleArtifactsApi | Permission.ArtifactsRead / Permission.ArtifactsWrite | Runtime artifact reads and writes. | `src/module-sdk/context.ts:1075` |
+| `ctx.notifications` | ModuleNotificationsApi | Permission.NotificationsRead / Permission.NotificationsSend | In-app and email notifications. | `src/module-sdk/context.ts:1076` |
+| `ctx.runs` | ModuleRunsApi | Permission.RunsRead / Permission.RunsWrite | Background run records. | `src/module-sdk/context.ts:1077` |
+| `ctx.jobs` | ModuleJobsApi | Permission.JobsEnqueue / Permission.JobsRegister | Background job enqueue and registration. | `src/module-sdk/context.ts:1078` |
+| `ctx.events` | ModuleEventsApi | Permission.EventsEmit / Permission.EventsSubscribe | Module event publish and subscribe. | `src/module-sdk/context.ts:1079` |
+| `ctx.webhooks` | ModuleWebhooksApi | Permission.WebhookReceive | Module webhook helper capability. | `src/module-sdk/context.ts:1080` |
+| `ctx.usage` | ModuleUsageApi | Permission.UsageWrite | Usage recording. | `src/module-sdk/context.ts:1081` |
+| `ctx.metering` | ModuleMeteringApi | Permission.MeteringWrite | Metering authorize, charge, and commit flows. | `src/module-sdk/context.ts:1082` |
+| `ctx.credits` | ModuleCreditsApi | Permission.CreditsRead / Permission.CreditsConsume / Permission.CreditsWrite | Credits balance, reserve, and consume flows. | `src/module-sdk/context.ts:1083` |
+| `ctx.billing` | ModuleBillingApi | Permission.BillingRead / Permission.BillingWrite | Billing reads. | `src/module-sdk/context.ts:1084` |
+| `ctx.entitlements` | ModuleEntitlementsApi | Permission.EntitlementsRead / Permission.EntitlementsWrite | Entitlement reads, grants, and revocations. | `src/module-sdk/context.ts:1085` |
+| `ctx.commerce` | ModuleCommerceApi | Permission.CommerceRead / Permission.CommerceWrite / Permission.CommerceApply | Order, refund, and commercial fact mapping. | `src/module-sdk/context.ts:1086` |
+| `ctx.redeemCodes` | ModuleRedeemCodesApi | Permission.RedeemCodesRead / Permission.RedeemCodesWrite / Permission.RedeemCodesRedeem | Redeem code capability. | `src/module-sdk/context.ts:1087` |
+| `ctx.ai` | ModuleAiApi | Permission.AiGenerate / Permission.AiEmbed | Host-managed AI generation and embedding. | `src/module-sdk/context.ts:1088` |
+| `ctx.rag` | ModuleRagApi | Permission.RagRead / Permission.RagWrite | RAG indexing and retrieval. | `src/module-sdk/context.ts:1089` |
+| `ctx.apiKeys` | ModuleApiKeysApi | Permission.ApiKeysRead / Permission.ApiKeysWrite | API key creation and verification. | `src/module-sdk/context.ts:1090` |
+| `ctx.rateLimit` | ModuleRateLimitApi | Permission.RateLimitCheck | Rate-limit checks. | `src/module-sdk/context.ts:1091` |
+| `ctx.risk` | ModuleRiskApi | Permission.RiskRead / Permission.RiskWrite | Risk checks. | `src/module-sdk/context.ts:1092` |
+| `ctx.cache` | ModuleCacheApi | Permission.CacheRevalidate | Host cache access. | `src/module-sdk/context.ts:1093` |
+| `ctx.audit` | ModuleAuditApi | Permission.AuditWrite | Audit event recording. | `src/module-sdk/context.ts:1094` |
+| `ctx.extensions` | ModuleExtensionsApi | - | Host extension points; do not invent unknown capabilities. | `src/module-sdk/context.ts:1095` |
+| `ctx.json` | (data: unknown, init?: ResponseInit) => Response | - | JSON response shortcut. | `src/module-sdk/context.ts:1096` |

@@ -217,8 +217,12 @@ const contractDescriptions = {
   name: 'Display name.',
   version: 'Module version.',
   description: 'Short description.',
+  kind: 'Module intent: product by default, or host-extension for modules that declare host extension points.',
   product: 'Product page, audience, shell, and quality metadata.',
   parts: 'Contract file split declarations.',
+  uses: 'Optional declared use of host extension capabilities such as ctx.extensions.require("executor").',
+  provides:
+    'Host extension declarations. Only host-extension modules may declare provides, and catalog trust controls runtime mounting.',
   permissions: 'Top-level module permission allowlist.',
   scope: 'User, workspace, product scope, and role requirements.',
   data: 'Data v2 table, document, and migration definitions.',

@@ -21,6 +21,7 @@ import type {
   ModuleJobsApi,
   ModuleMeteringApi,
   ModuleNotificationsApi,
+  ModuleExtensionsApi,
   ModuleProductContext,
   ModuleRagApi,
   ModuleRedeemCodesApi,
@@ -81,7 +82,7 @@ export interface CreateModuleContextOptions {
   risk?: ModuleRiskApi;
   cache?: ModuleCacheApi;
   audit?: ModuleAuditApi;
-  extensions?: Readonly<Record<string, unknown>>;
+  extensions?: Readonly<Record<string, unknown>> | ModuleExtensionsApi;
 }
 
 function createResponseFactory(): ModuleResponseFactory {
@@ -687,6 +688,43 @@ function createUnavailableAuditApi(): ModuleAuditApi {
   };
 }
 
+function isModuleExtensionsApi(value: unknown): value is ModuleExtensionsApi {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as ModuleExtensionsApi).get === 'function' &&
+    typeof (value as ModuleExtensionsApi).require === 'function' &&
+    typeof (value as ModuleExtensionsApi).list === 'function'
+  );
+}
+
+function createModuleExtensionsApi(
+  extensions: Readonly<Record<string, unknown>> | ModuleExtensionsApi | undefined
+): ModuleExtensionsApi {
+  if (isModuleExtensionsApi(extensions)) {
+    return extensions;
+  }
+
+  const registry = extensions ?? {};
+  return {
+    get<T = unknown>(name: string): T | null {
+      return Object.prototype.hasOwnProperty.call(registry, name)
+        ? (registry[name] as T)
+        : null;
+    },
+    require<T = unknown>(name: string): T {
+      const value = this.get<T>(name);
+      if (value === null) {
+        throw new Error(`MODULE_EXTENSION_REQUIRED: ctx.extensions.${name} is not mounted.`);
+      }
+      return value;
+    },
+    list(): readonly string[] {
+      return Object.keys(registry).sort();
+    },
+  };
+}
+
 export function createModuleRuntimeContext(options: CreateModuleContextOptions): ModuleContext {
   const response = createResponseFactory();
   const session = options.session ?? { user: options.user, permissions: [] };
@@ -742,7 +780,7 @@ export function createModuleRuntimeContext(options: CreateModuleContextOptions):
     risk: options.risk ?? createUnavailableRiskApi(),
     cache: options.cache ?? createUnavailableCacheApi(),
     audit: options.audit ?? createUnavailableAuditApi(),
-    extensions: options.extensions ?? {},
+    extensions: createModuleExtensionsApi(options.extensions),
     json: response.json,
   };
 

@@ -110,7 +110,15 @@ test('P11 catalog apply plan enables bundle modules and diagnoses missing module
       id: 'demo',
       name: 'Demo Bundle',
       requiredModuleIds: ['enabled'],
-      modules: [{ moduleId: 'enabled', required: true }, { moduleId: 'missing' }],
+      modules: [
+        {
+          moduleId: 'enabled',
+          required: true,
+          trust: 'trusted',
+          allowedProvides: ['capabilities.executor'],
+        },
+        { moduleId: 'missing' },
+      ],
     },
     existingStates: [{ productId: 'demo-product', moduleId: 'disabled', status: 'enabled' }],
     disableStale: true,
@@ -120,6 +128,8 @@ test('P11 catalog apply plan enables bundle modules and diagnoses missing module
   assert.equal(plan.operations.length, 3);
   assert.equal(plan.operations[0]?.type, 'enable');
   assert.equal(plan.operations[2]?.type, 'disable');
+  assert.equal(plan.desiredStates[0]?.trust, 'trusted');
+  assert.deepEqual(plan.desiredStates[0]?.allowedProvides, ['capabilities.executor']);
   assert.equal(plan.diagnostics[0]?.code, 'MODULE_CATALOG_BUNDLE_MODULE_MISSING');
 });
 

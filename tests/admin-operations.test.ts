@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { defineModule, page } from '@ploykit/module-sdk';
+import { defineModule, page, Permission } from '@ploykit/module-sdk';
 import {
+  assertAdminResourceOperationAllowed,
   countMissingRequiredModuleRequirements,
   createAdminOperationsCenter,
   createInMemoryRuntimeStore,
@@ -97,6 +98,159 @@ test('P14 admin operations snapshot aggregates runtime store and host records', 
   assert.equal(snapshot.counts.auditLogs, 1);
   assert.equal(snapshot.counts.usageRecords, 1);
   assert.equal(snapshot.recent.runs[0]?.id, run.id);
+});
+
+test('admin resource registry lists only trusted catalog-allowed resources', async () => {
+  const extension = defineModule({
+    id: 'admin-extension',
+    name: 'Admin Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    permissions: [Permission.AdminResourcesRead, Permission.AdminResourcesWrite],
+    provides: {
+      adminResources: {
+        workers: {
+          label: 'Workers',
+          operations: {
+            list: {
+              handler: './admin/workers.list',
+              permission: Permission.AdminResourcesRead,
+              risk: 'read',
+            },
+            restart: {
+              handler: './admin/workers.restart',
+              permission: Permission.AdminResourcesWrite,
+              risk: 'dangerous',
+              auditEvent: 'worker.restart',
+              confirmation: { field: 'confirm', value: 'RESTART' },
+            },
+          },
+        },
+      },
+    },
+  });
+  const host = await createModuleRuntimeHost(
+    {
+      kind: 'source',
+      modules: {
+        'admin-extension': {
+          module: async () => ({ default: extension }),
+        },
+      },
+    },
+    {
+      contracts: [normalizeModuleRuntimeContract(extension)],
+      catalog: {
+        moduleStates: [
+          {
+            productId: 'product-a',
+            moduleId: 'admin-extension',
+            status: 'enabled',
+            trust: 'trusted',
+            allowedProvides: ['adminResources.workers'],
+          },
+        ],
+      },
+    }
+  );
+
+  const resources = host.adminResources.list();
+  const restart = host.adminResources.getOperation('admin-extension.workers', 'restart');
+
+  assert.equal(resources.length, 1);
+  assert.equal(resources[0]?.id, 'admin-extension.workers');
+  assert.equal(restart?.auditEvent, 'worker.restart');
+  assert.throws(
+    () =>
+      assertAdminResourceOperationAllowed(
+        { user: { id: 'admin-1', role: 'admin' }, permissions: [Permission.AdminResourcesWrite] },
+        restart!
+      ),
+    /ADMIN_RESOURCE_OPERATION_CONFIRMATION_REQUIRED/
+  );
+  assert.doesNotThrow(() =>
+    assertAdminResourceOperationAllowed(
+      { user: { id: 'admin-1', role: 'admin' }, permissions: [Permission.AdminResourcesWrite] },
+      restart!,
+      { confirmation: { confirm: 'RESTART' } }
+    )
+  );
+});
+
+test('admin resource registry blocks untrusted resources and system permissions', async () => {
+  const extension = defineModule({
+    id: 'runtime-admin-extension',
+    name: 'Runtime Admin Extension',
+    version: '0.1.0',
+    kind: 'host-extension',
+    permissions: [Permission.RuntimeManage],
+    provides: {
+      adminResources: {
+        runtime: {
+          operations: {
+            compact: {
+              handler: './admin/runtime.compact',
+              permission: Permission.RuntimeManage,
+              risk: 'write',
+              auditEvent: 'runtime.compact',
+            },
+          },
+        },
+      },
+    },
+  });
+  const untrusted = await createModuleRuntimeHost(
+    {
+      kind: 'source',
+      modules: {
+        'runtime-admin-extension': {
+          module: async () => ({ default: extension }),
+        },
+      },
+    },
+    {
+      contracts: [normalizeModuleRuntimeContract(extension)],
+      catalog: {
+        moduleStates: [
+          {
+            productId: 'product-a',
+            moduleId: 'runtime-admin-extension',
+            status: 'enabled',
+          },
+        ],
+      },
+    }
+  );
+
+  assert.equal(untrusted.adminResources.list().length, 0);
+  await assert.rejects(
+    () =>
+      createModuleRuntimeHost(
+        {
+          kind: 'source',
+          modules: {
+            'runtime-admin-extension': {
+              module: async () => ({ default: extension }),
+            },
+          },
+        },
+        {
+          contracts: [normalizeModuleRuntimeContract(extension)],
+          catalog: {
+            moduleStates: [
+              {
+                productId: 'product-a',
+                moduleId: 'runtime-admin-extension',
+                status: 'enabled',
+                trust: 'trusted',
+                allowedProvides: ['adminResources.runtime'],
+              },
+            ],
+          },
+        }
+      ),
+    /MODULE_ADMIN_RESOURCE_SYSTEM_PERMISSION_FORBIDDEN/
+  );
 });
 
 test('P14 admin operations require admin session for dangerous actions', async () => {

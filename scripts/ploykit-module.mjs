@@ -292,6 +292,7 @@ async function doctorModule(moduleRoot) {
   contractRules.checkWebhookSignatures(source, diagnostics);
   capabilityRules.checkCapabilityPermissions(moduleRoot, source, diagnostics);
   capabilityRules.checkCapabilityDeclarations(moduleRoot, source, diagnostics);
+  capabilityRules.checkExtensionCapabilityDeclarations(moduleRoot, source, diagnostics);
   capabilityRules.checkPrivilegedServiceSourceUsage(moduleRoot, source, diagnostics);
   contractRules.checkHttpEgress(moduleRoot, source, diagnostics);
   contractRules.checkPublicRouteContracts(source, diagnostics);

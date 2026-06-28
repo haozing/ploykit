@@ -19,15 +19,17 @@ export function createPostgresCatalogStore(
     async upsertCatalogState(state: ModuleCatalogModuleState) {
       const result = await database.query<Row>(
         `insert into module_catalog_states (
-          product_id, module_id, status, bundle_id, required, scope_profile, diagnostics
+          product_id, module_id, status, bundle_id, required, scope_profile, trust, allowed_provides, diagnostics
         )
-        values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+        values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
         on conflict (product_id, module_id)
         do update set
           status = excluded.status,
           bundle_id = excluded.bundle_id,
           required = excluded.required,
           scope_profile = excluded.scope_profile,
+          trust = excluded.trust,
+          allowed_provides = excluded.allowed_provides,
           diagnostics = excluded.diagnostics,
           updated_at = now()
         returning *`,
@@ -38,6 +40,8 @@ export function createPostgresCatalogStore(
           state.bundleId ?? null,
           state.required ?? false,
           state.scopeProfile ?? null,
+          state.trust ?? 'product',
+          json(state.allowedProvides ?? []),
           json(state.diagnostics ?? []),
         ]
       );

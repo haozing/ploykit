@@ -406,6 +406,8 @@ test('K4 host security catalog covers main routes and blocks cross-origin mutati
   assert.equal(getHostRouteSecurityEntry('admin.search').rateLimit?.kind, 'machine');
   assert.equal(getHostRouteSecurityEntry('admin.providers.read').rateLimit?.kind, 'machine');
   assert.equal(getHostRouteSecurityEntry('admin.providers.write').rateLimit?.kind, 'public');
+  assert.equal(getHostRouteSecurityEntry('admin.resources.read').rateLimit?.kind, 'machine');
+  assert.equal(getHostRouteSecurityEntry('admin.resources.execute').rateLimit?.kind, 'high-cost');
   assert.equal(getHostRouteSecurityEntry('admin.entitlements.write').rateLimit?.kind, 'public');
   assert.equal(getHostRouteSecurityEntry('admin.revenue.reconcile').rateLimit?.kind, 'high-cost');
 

@@ -11,6 +11,50 @@ function hasAnyPermission(source, permissions) {
 }
 
 export function createModuleDoctorCapabilityRules({ diagnostic }) {
+  function extractUsedExtensions(code) {
+    const used = [];
+    const staticPattern = /\bctx\.extensions\.(require|get)\s*(?:<[^>]+>)?\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
+    for (const match of code.matchAll(staticPattern)) {
+      used.push({ mode: match[1], name: match[2] });
+    }
+    return used;
+  }
+
+  function checkExtensionCapabilityDeclarations(moduleRoot, moduleSource, diagnostics) {
+    const code = readModuleSourceCode(moduleRoot);
+    const staticUses = extractUsedExtensions(code);
+    const usesSource = extractObjectAfterKey(moduleSource, 'uses');
+    const declared = new Set(extractStringArray(usesSource, 'capabilities'));
+
+    for (const usage of staticUses) {
+      if (!declared.has(usage.name)) {
+        diagnostics.push(
+          diagnostic(
+            usage.mode === 'require' ? 'error' : 'warning',
+            usage.mode === 'require'
+              ? 'MODULE_EXTENSION_USE_DECLARATION_MISSING'
+              : 'MODULE_EXTENSION_USE_DECLARATION_RECOMMENDED',
+            `ctx.extensions.${usage.mode}("${usage.name}") is used but module.ts does not declare uses.capabilities: ["${usage.name}"].`,
+            'uses.capabilities',
+            `Add uses: { capabilities: ["${usage.name}"] } to module.ts.`
+          )
+        );
+      }
+    }
+
+    if (/\bctx\.extensions\.(require|get)\s*(?:<[^>]+>)?\s*\(\s*(?!['"`])/.test(code)) {
+      diagnostics.push(
+        diagnostic(
+          'error',
+          'MODULE_EXTENSION_DYNAMIC_NAME_FORBIDDEN',
+          'ctx.extensions.get/require must use a static string capability name.',
+          'ctx.extensions',
+          'Use ctx.extensions.require("executor") and declare uses.capabilities so doctor and catalog policy can verify it.'
+        )
+      );
+    }
+  }
+
   function checkCapabilityPermissions(moduleRoot, moduleSource, diagnostics) {
     const code = readModuleSourceCode(moduleRoot);
     const checks = [
@@ -366,6 +410,7 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
 
   return {
     checkCapabilityDeclarations,
+    checkExtensionCapabilityDeclarations,
     checkCapabilityPermissions,
     checkPrivilegedServiceSourceUsage,
   };

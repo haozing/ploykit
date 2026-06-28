@@ -81,6 +81,7 @@ export function createModuleCatalogApplyPlan(
       );
     }
 
+    const previous = existing.get(bundleModule.moduleId);
     const next: ModuleCatalogModuleState = {
       productId: input.product.id,
       moduleId: bundleModule.moduleId,
@@ -88,9 +89,10 @@ export function createModuleCatalogApplyPlan(
       bundleId: input.bundle.id,
       required: bundleModule.required ?? required.has(bundleModule.moduleId),
       scopeProfile: bundleModule.scopeProfile ?? input.product.scopeProfile,
+      trust: bundleModule.trust ?? previous?.trust ?? 'product',
+      allowedProvides: bundleModule.allowedProvides ?? previous?.allowedProvides ?? [],
       updatedAt: now,
     };
-    const previous = existing.get(bundleModule.moduleId);
     const operation: ModuleCatalogOperation = {
       type: !previous ? 'enable' : sameState(previous, next) ? 'noop' : 'update',
       productId: input.product.id,

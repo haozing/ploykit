@@ -848,7 +848,17 @@ export function createTestingModuleContext(
     risk: createTestingRiskApi(),
     cache: createTestingCacheApi(),
     audit: createTestingAuditApi(),
-    extensions: {},
+    extensions: {
+      get() {
+        return null;
+      },
+      require(name) {
+        throw new Error(`MODULE_EXTENSION_REQUIRED: ctx.extensions.${name} is not mounted.`);
+      },
+      list() {
+        return [];
+      },
+    },
     json: response.json,
   };
 }
