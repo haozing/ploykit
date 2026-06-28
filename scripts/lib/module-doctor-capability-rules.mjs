@@ -232,9 +232,9 @@ export function createModuleDoctorCapabilityRules({ diagnostic }) {
       },
       {
         token: 'ctx.cache',
-        permissions: ['Permission.CacheRevalidate', 'cache.revalidate'],
+        permissions: ['Permission.CacheAccess', 'cache.access'],
         code: 'MODULE_CACHE_PERMISSION_MISSING',
-        fix: 'Add Permission.CacheRevalidate to module.ts.',
+        fix: 'Add Permission.CacheAccess to module.ts.',
       },
       {
         token: 'ctx.audit',

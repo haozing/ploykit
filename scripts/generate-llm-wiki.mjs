@@ -88,6 +88,28 @@ function loadContextFields() {
   return fields;
 }
 
+function loadHostNextMountedCapabilities() {
+  const source = readProjectFile('apps', 'host-next', 'lib', 'capability-providers.ts');
+  const keys = new Set();
+  for (const match of source.matchAll(/^    ([A-Za-z]\w*):\s*(?:\(|\{)/gm)) {
+    keys.add(match[1]);
+  }
+  return keys;
+}
+
+const coreRuntimeContextFields = new Set([
+  'module',
+  'product',
+  'user',
+  'auth',
+  'scope',
+  'workspace',
+  'request',
+  'response',
+  'data',
+  'extensions',
+]);
+
 function loadContractFields() {
   const source = readProjectFile('src', 'module-sdk', 'types.ts');
   return parseInterfaceFields(source, 'export interface ModuleDefinition {');
@@ -262,13 +284,24 @@ function renderGeneratedHeader(title) {
 function renderCapabilities() {
   const fields = loadContextFields();
   const { permissionsByCapability } = loadPermissions();
+  const mountedCapabilities = loadHostNextMountedCapabilities();
   const rows = fields.map((field) => {
     const permissionText = (permissionsByCapability.get(field.name) ?? []).join(' / ') || '-';
-    return `| \`ctx.${field.name}\` | ${mdCell(field.type)} | ${mdCell(permissionText)} | ${mdCell(capabilityDescriptions[field.name] ?? '-')} | \`src/module-sdk/context.ts:${field.line}\` |`;
+    const mountingStatus = field.name === 'json'
+      ? 'SDK helper'
+      : coreRuntimeContextFields.has(field.name)
+        ? 'core runtime'
+      : mountedCapabilities.has(field.name)
+        ? 'host-next mounted'
+        : 'SDK/contract only';
+    return `| \`ctx.${field.name}\` | ${mdCell(field.type)} | ${mdCell(permissionText)} | ${mdCell(mountingStatus)} | ${mdCell(capabilityDescriptions[field.name] ?? '-')} | \`src/module-sdk/context.ts:${field.line}\` |`;
   });
   return `${renderGeneratedHeader('LLM Capability Facts')}
-| Capability | Type | Related permissions | Meaning | Source |
-| --- | --- | --- | --- | --- |
+> Mounting status combines core runtime context fields with provider-backed capabilities generated from \`apps/host-next/lib/capability-providers.ts\`.
+> \`SDK/contract only\` means the SDK surface exists, but the current host-next app does not mount a concrete module capability provider.
+
+| Capability | Type | Related permissions | host-next mounting | Meaning | Source |
+| --- | --- | --- | --- | --- | --- |
 ${rows.join('\n')}
 `;
 }

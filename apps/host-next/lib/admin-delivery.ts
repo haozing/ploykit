@@ -1,4 +1,4 @@
-import { createAdminOperationsCenter } from '@/lib/module-runtime/admin/admin-operations';
+import { createAdminOperationsCenter } from '@host/lib/admin/operations-center';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
 import type {
   RuntimeStoreAuditRecord,

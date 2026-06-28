@@ -10,7 +10,7 @@ import {
 import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
 import { adminInlineColumns, adminInlineText } from '@host/lib/admin-inline-i18n';
 import type { AdminTableQuery } from '@host/lib/table-query';
-import type { AdminOperationsSnapshot } from '@/lib/module-runtime';
+import type { AdminOperationsSnapshot } from '@host/lib/admin/operations-center';
 import {
   FilterResultHint,
   adminRelatedHref,

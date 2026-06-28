@@ -2,7 +2,7 @@ import { validateModuleDefinition } from '@ploykit/module-sdk';
 import {
   createAdminOperationsCenter,
   type AdminOperationsSnapshot,
-} from '@/lib/module-runtime/admin/admin-operations';
+} from '@host/lib/admin/operations-center';
 import {
   diagnoseModuleCatalog,
   type ModuleCatalogModuleStatus,

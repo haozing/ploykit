@@ -39,6 +39,17 @@
           "status": "enabled",
           "required": false,
           "scopeProfile": "explicit-workspace"
+        },
+        {
+          "moduleId": "executor-extension-smoke",
+          "status": "enabled",
+          "required": false,
+          "scopeProfile": "hidden-default",
+          "trust": "trusted",
+          "allowedProvides": [
+            "capabilities.executor",
+            "adminResources.executorHealth"
+          ]
         }
       ],
       "planCapabilities": [
@@ -52,7 +63,8 @@
           "moduleIds": [
             "platform-smoke",
             "resource-smoke",
-            "public-tool-smoke"
+            "public-tool-smoke",
+            "executor-extension-smoke"
           ]
         }
       ]
@@ -82,6 +94,19 @@
       "bundleId": "demo",
       "required": false,
       "scopeProfile": "explicit-workspace"
+    },
+    {
+      "productId": "demo-product",
+      "moduleId": "executor-extension-smoke",
+      "status": "enabled",
+      "bundleId": "demo",
+      "required": false,
+      "scopeProfile": "hidden-default",
+      "trust": "trusted",
+      "allowedProvides": [
+        "capabilities.executor",
+        "adminResources.executorHealth"
+      ]
     }
   ]
 }

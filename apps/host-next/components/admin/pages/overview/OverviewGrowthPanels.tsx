@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { AdminPanel, ChartPanel, EntityListItem } from '@host/components/admin/shared/AdminPrimitives';
 import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
 import { formatDate, formatRelativeTime } from '@host/lib/i18n-format';
-import type { AdminOperationsSnapshot, RuntimeStoreHostUser } from '@/lib/module-runtime';
+import type { AdminOperationsSnapshot } from '@host/lib/admin/operations-center';
+import type { RuntimeStoreHostUser } from '@/lib/module-runtime';
 
 export interface ActivityBucket {
   key: string;

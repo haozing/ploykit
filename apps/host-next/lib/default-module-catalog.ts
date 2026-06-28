@@ -1,6 +1,9 @@
 import defaultCatalog from '../../../catalog/default.catalog.json';
 import type { ModuleProductScopeProfile } from '@ploykit/module-sdk';
-import type { ModuleCatalogSnapshot } from '@/lib/module-runtime/catalog';
+import type {
+  ModuleCatalogModuleState,
+  ModuleCatalogSnapshot,
+} from '@/lib/module-runtime/catalog';
 
 import {
   DEFAULT_HOST_PRODUCT_ID,
@@ -61,6 +64,8 @@ export function getDefaultModuleCatalogSeed(moduleId: string): {
   bundleId: string | undefined;
   required: boolean;
   scopeProfile: ModuleProductScopeProfile;
+  trust: ModuleCatalogModuleState['trust'];
+  allowedProvides: ModuleCatalogModuleState['allowedProvides'];
 } {
   const bundle = defaultBundle();
   const bundleModule = bundle?.modules.find((module) => module.moduleId === moduleId);
@@ -76,5 +81,7 @@ export function getDefaultModuleCatalogSeed(moduleId: string): {
     bundleId: bundleModule ? bundle?.id : state?.bundleId ?? bundle?.id,
     required,
     scopeProfile: bundleModule?.scopeProfile ?? state?.scopeProfile ?? fallbackScope,
+    trust: bundleModule?.trust ?? state?.trust ?? 'product',
+    allowedProvides: bundleModule?.allowedProvides ?? state?.allowedProvides ?? [],
   };
 }

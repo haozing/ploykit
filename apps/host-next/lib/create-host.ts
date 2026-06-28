@@ -123,6 +123,8 @@ async function ensureHostCatalogSeeded(runtimeStore: HostRuntimeStoreHandle): Pr
       bundleId: seed.bundleId,
       required: seed.required,
       scopeProfile: seed.scopeProfile,
+      trust: seed.trust,
+      allowedProvides: seed.allowedProvides,
     });
     existingModuleIds.add(moduleId);
   }

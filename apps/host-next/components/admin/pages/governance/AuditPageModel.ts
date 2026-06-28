@@ -1,5 +1,6 @@
 import type { AdminTableQuery } from '@host/lib/table-query';
-import type { AdminOperationsSnapshot, RuntimeStoreAuditRecord } from '@/lib/module-runtime';
+import type { AdminOperationsSnapshot } from '@host/lib/admin/operations-center';
+import type { RuntimeStoreAuditRecord } from '@/lib/module-runtime';
 import { cleanGovernanceTableQuery } from './GovernancePageModel';
 
 export type AuditUsageRecord = AdminOperationsSnapshot['recent']['usageRecords'][number];

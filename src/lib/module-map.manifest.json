@@ -4,6 +4,56 @@
   "generatedAt": "1970-01-01T00:00:00.000Z",
   "modules": [
     {
+      "id": "executor-extension-smoke",
+      "name": "Executor Extension Smoke",
+      "version": "0.1.0",
+      "rootDir": "modules/executor-extension-smoke",
+      "pages": [],
+      "apis": [],
+      "loaders": [],
+      "actions": [],
+      "services": [],
+      "components": [],
+      "surfaces": [],
+      "lifecycle": [],
+      "jobs": [],
+      "events": [],
+      "webhooks": [],
+      "assets": [],
+      "release": {
+        "generatedAt": "1970-01-01T00:00:00.000Z",
+        "buildId": "local-dev",
+        "sourceHash": "097dcdf04b1544cffe97a672981b4a7da78b04fe136b09536539ae2b2e99d813",
+        "contractDigest": "7a46ad76a26e15c4bbff32584b01773dd70220ed6c56f7b15a0beb6073be36a1",
+        "sourceFiles": [
+          "admin/executor-health.read.ts",
+          "capabilities/executor.ts",
+          "module.ts"
+        ],
+        "capabilitySummary": {
+          "routes": 0,
+          "dataModels": 0,
+          "permissions": 1,
+          "backgroundHandlers": 0,
+          "providerRequirements": 0,
+          "commercialRequirements": 0,
+          "presentationContributions": 0
+        }
+      },
+      "admin": [
+        {
+          "name": "admin/executor-health.read",
+          "path": "admin/executor-health.read"
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "executor",
+          "path": "capabilities/executor"
+        }
+      ]
+    },
+    {
       "id": "platform-smoke",
       "name": "Platform Smoke",
       "version": "0.1.0",

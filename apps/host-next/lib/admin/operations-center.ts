@@ -1,5 +1,5 @@
-import type { ModuleRuntimeHost } from '../host';
-import type { ModuleHostSession } from '../host/session';
+import type { ModuleRuntimeHost } from '@/lib/module-runtime/host';
+import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
 import type {
   RuntimeStore,
   RuntimeStoreAuditRecord,
@@ -11,9 +11,13 @@ import type {
   RuntimeStoreServiceConnectionRecord,
   RuntimeStoreUsageRecord,
   RuntimeStoreWebhookReceipt,
-} from '../stores';
-import type { ModuleRunRecord } from '../runs';
-import type { ModuleCatalogModuleState, ModuleCatalogModuleStatus } from '../catalog';
+} from '@/lib/module-runtime/stores';
+import type { ModuleRunRecord } from '@/lib/module-runtime/runs';
+import type {
+  ModuleCatalogModuleState,
+  ModuleCatalogModuleStatus,
+} from '@/lib/module-runtime/catalog';
+import { assertAdminSession } from '../admin-session';
 
 export interface AdminOperationsCenterOptions {
   host: ModuleRuntimeHost;
@@ -74,12 +78,6 @@ export interface AdminOutboxBulkPreview {
     RuntimeStoreOutboxRecord,
     'id' | 'name' | 'moduleId' | 'status' | 'attempts' | 'createdAt' | 'scheduledAt'
   >[];
-}
-
-export function assertAdminSession(session: ModuleHostSession): void {
-  if (!session.system && session.user?.role !== 'admin') {
-    throw new Error('ADMIN_OPERATION_FORBIDDEN');
-  }
 }
 
 function serviceConnectionUsable(record: RuntimeStoreServiceConnectionRecord): boolean {

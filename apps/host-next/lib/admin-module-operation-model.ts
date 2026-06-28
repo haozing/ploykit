@@ -4,7 +4,7 @@ import {
   validateModuleDefinition,
   type ModuleDiagnostic,
 } from '@ploykit/module-sdk';
-import { countMissingRequiredModuleRequirements } from '@/lib/module-runtime/admin/admin-operations';
+import { countMissingRequiredModuleRequirements } from '@host/lib/admin/operations-center';
 import type {
   ModuleCatalogModuleState,
   ModuleCatalogModuleStatus,

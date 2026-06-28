@@ -22,7 +22,7 @@ export const Permission = {
   EventsEmit: 'events.emit',
   EventsSubscribe: 'events.subscribe',
   WebhookReceive: 'webhook.receive',
-  CacheRevalidate: 'cache.revalidate',
+  CacheAccess: 'cache.access',
 
   FilesRead: 'files.read',
   FilesWrite: 'files.write',
@@ -308,10 +308,10 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     ctxCapability: 'ctx.webhooks',
     suggestedTemplate: 'connector',
   },
-  [Permission.CacheRevalidate]: {
-    value: Permission.CacheRevalidate,
+  [Permission.CacheAccess]: {
+    value: Permission.CacheAccess,
     group: 'presentation',
-    labelKey: 'permissions.presentation.cacheRevalidate',
+    labelKey: 'permissions.presentation.cacheAccess',
     risk: 'medium',
     scope: 'product',
     ctxCapability: 'ctx.cache',

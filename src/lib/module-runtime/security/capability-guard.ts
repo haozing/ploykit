@@ -1147,19 +1147,19 @@ export function guardModuleContextCapabilities(
     } satisfies ModuleRateLimitApi,
     cache: {
       async get(key) {
-        assertPermission(contract, session, Permission.CacheRevalidate, 'ctx.cache.get');
+        assertPermission(contract, session, Permission.CacheAccess, 'ctx.cache.get');
         return context.cache.get(key);
       },
       async set(key, value, options) {
-        assertPermission(contract, session, Permission.CacheRevalidate, 'ctx.cache.set');
+        assertPermission(contract, session, Permission.CacheAccess, 'ctx.cache.set');
         return context.cache.set(key, value, options);
       },
       async delete(key) {
-        assertPermission(contract, session, Permission.CacheRevalidate, 'ctx.cache.delete');
+        assertPermission(contract, session, Permission.CacheAccess, 'ctx.cache.delete');
         return context.cache.delete(key);
       },
       async remember(key, factory, options) {
-        assertPermission(contract, session, Permission.CacheRevalidate, 'ctx.cache.remember');
+        assertPermission(contract, session, Permission.CacheAccess, 'ctx.cache.remember');
         return context.cache.remember(key, factory, options);
       },
     } satisfies ModuleCacheApi,

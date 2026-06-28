@@ -666,7 +666,7 @@ createHostCapabilityProviders(...)
 
 | 当前权限 | 问题 | 建议 |
 | --- | --- | --- |
-| `CacheRevalidate` | 实际守护 get/set/delete/remember，不只是 revalidate。 | 改为 `CacheRead` / `CacheWrite`，或先改为 `CacheAccess`。 |
+| `CacheAccess` | 已从旧 `CacheRevalidate` 语义收口；当前守护 get/set/delete/remember，仍是粗粒度访问权限。 | 后续只有出现真实读写分离需求时再拆 `CacheRead` / `CacheWrite`。 |
 | `ServicesInvoke` | 当前可调用服务，必须和 `serviceRequirements` 绑定更紧。 | doctor/source scan 要检查调用名称是否已声明。 |
 | `ConnectorsManage` | 已 reserved。 | 保持 reserved，管理动作走 admin resource。 |
 | `RuntimeManage` | system-only。 | 不给普通 trusted extension 示例使用。 |

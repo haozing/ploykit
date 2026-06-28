@@ -1,11 +1,31 @@
-import { createInMemoryModuleArtifactRuntime } from '@/lib/module-capabilities/artifacts/artifact-runtime';
 import { createRuntimeStoreModuleResourceBindingsApi } from '@/lib/module-runtime/capabilities/resource-bindings';
-import type { ModuleRuntimeContract } from '@/lib/module-runtime/contract/types';
 import type { CreateModuleHostCapabilitiesOptions } from '@/lib/module-runtime/host/create-module-host';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
 import { createModuleHttpApi } from '@/lib/module-capabilities/http/http-runtime';
-import { createRuntimeStoreNotificationRuntime } from '@/lib/module-capabilities/notifications/notification-runtime';
-import type { ModuleAuditRecordInput } from '@ploykit/module-sdk';
+import {
+  createHostAuditWriter,
+  createHostModuleAuditApi,
+} from './capabilities/audit';
+import {
+  createHostModuleAiApiForSession,
+  createHostModuleRagApiForSession,
+} from './capabilities/ai-rag';
+import {
+  createHostModuleArtifactsApi,
+  createHostModuleFilesApi,
+} from './capabilities/files';
+import { createHostModuleNotificationsApi } from './capabilities/notifications';
+import {
+  createHostCommercialForSession,
+  createHostModuleBillingApi,
+  createHostModuleCommerceApi,
+  createHostModuleCreditsApi,
+  createHostModuleEntitlementsApi,
+  createHostModuleMeteringApi,
+  createHostModuleRedeemCodesApi,
+  createHostModuleRiskApi,
+  createHostModuleUsageApi,
+} from './capabilities/commercial';
 import {
   createScopedEventsApi,
   createScopedJobsApi,
@@ -16,19 +36,11 @@ import {
   createHostServiceConnectionsApi,
   createHostServiceInvocationApi,
 } from './capabilities/services';
-import { createHostModuleAiApi } from './ai-provider';
 import { createHostModuleApiKeysApi } from './capability-api-keys';
-import {
-  createHostCommercialRuntimeFromStore,
-  type HostBillingCatalog,
-} from './commercial-provider';
-import { createHostFileRuntimeFromParts, type HostFileStorageHandle } from './files';
-import { createHostModuleRagApi } from './rag-provider';
+import type { HostBillingCatalog } from './commercial-provider';
+import type { HostFileStorageHandle } from './files';
 import type { HostRuntimeStoreHandle } from './runtime-store';
-import {
-  DEFAULT_HOST_PRODUCT_ID,
-  defaultProductId,
-} from './default-scope';
+import { defaultProductId } from './default-scope';
 
 export { createHostModuleApiKeyVerifier, createHostModuleApiKeysApi } from './capability-api-keys';
 export {
@@ -37,10 +49,22 @@ export {
   createScopedRunsApi,
   createScopedWebhooksApi,
 } from './capabilities/background';
+export { createHostAuditWriter, createHostModuleAuditApi } from './capabilities/audit';
+export { createHostModuleAiApiForSession, createHostModuleRagApiForSession } from './capabilities/ai-rag';
+export { createHostModuleArtifactsApi, createHostModuleFilesApi } from './capabilities/files';
+export { createHostModuleNotificationsApi } from './capabilities/notifications';
+export {
+  createHostCommercialForSession,
+  createHostModuleBillingApi,
+  createHostModuleCommerceApi,
+  createHostModuleCreditsApi,
+  createHostModuleEntitlementsApi,
+  createHostModuleMeteringApi,
+  createHostModuleRedeemCodesApi,
+  createHostModuleRiskApi,
+  createHostModuleUsageApi,
+} from './capabilities/commercial';
 export { createHostServiceConnectionsApi } from './capabilities/services';
-
-const artifactRuntime = createInMemoryModuleArtifactRuntime();
-const DEFAULT_PRODUCT_ID = DEFAULT_HOST_PRODUCT_ID;
 
 function normalizeEgressOrigin(value: string): string {
   try {
@@ -55,108 +79,61 @@ export function createHostCapabilityProviders(input: {
   fileStorage: HostFileStorageHandle;
   billingCatalog?: HostBillingCatalog;
 }): CreateModuleHostCapabilitiesOptions {
-  function commercialForSession(hostSession: ModuleHostSession) {
-    return createHostCommercialRuntimeFromStore({
-      store: input.runtimeStore.store,
-      productId: hostSession.productId,
-      environmentId: hostSession.environmentId ?? null,
-      workspaceId: hostSession.workspaceId ?? null,
-      catalog: input.billingCatalog,
-    });
-  }
+  const commercialForSession = createHostCommercialForSession({
+    runtimeStore: input.runtimeStore,
+    billingCatalog: input.billingCatalog,
+  });
 
   function auditForSession(hostSession: ModuleHostSession) {
-    return async (record: {
-      moduleId: string;
-      type: string;
-      actorId?: string;
-      metadata?: Record<string, unknown>;
-    }) => {
-      await input.runtimeStore.store.recordAudit({
-        productId: hostSession.productId ?? DEFAULT_PRODUCT_ID,
-        workspaceId: hostSession.workspaceId ?? null,
-        moduleId: record.moduleId,
-        actorId: record.actorId ?? hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id,
-        type: record.type,
-        metadata: record.metadata,
-      });
-    };
-  }
-
-  function normalizeModuleAuditInput(
-    typeOrInput: string | ModuleAuditRecordInput,
-    metadata?: Record<string, unknown>
-  ): { type: string; actorId?: string; metadata?: Record<string, unknown> } {
-    if (typeof typeOrInput === 'string') {
-      return { type: typeOrInput, metadata };
-    }
-    return {
-      type: typeOrInput.action,
-      actorId: typeOrInput.actorId,
-      metadata: {
-        ...(typeOrInput.metadata ?? {}),
-        actorKind: typeOrInput.actorKind,
-        action: typeOrInput.action,
-        category: typeOrInput.category,
-        targetKind: typeOrInput.targetKind,
-        targetId: typeOrInput.targetId,
-        decision: typeOrInput.decision,
-        reasonCode: typeOrInput.reasonCode,
-        requestId: typeOrInput.requestId,
-        traceId: typeOrInput.traceId,
-        beforeHash: typeOrInput.beforeHash,
-        afterHash: typeOrInput.afterHash,
-        sync: typeOrInput.sync,
-      },
-    };
-  }
-
-  function aiForSession(contract: ModuleRuntimeContract, hostSession: ModuleHostSession) {
-    return createHostModuleAiApi({
-      moduleId: contract.id,
-      session: hostSession,
-      commercialForModule(moduleId) {
-        return commercialForSession(hostSession).forModule(moduleId);
-      },
-      audit: auditForSession(hostSession),
+    return createHostAuditWriter({
+      store: input.runtimeStore.store,
+      hostSession,
     });
   }
 
   return {
-    audit: ({ contract, hostSession }) => ({
-      async record(type, metadata) {
-        const normalized = normalizeModuleAuditInput(type, metadata);
-        await auditForSession(hostSession)({
-          moduleId: contract.id,
-          type: normalized.type,
-          actorId: normalized.actorId,
-          metadata: normalized.metadata,
-        });
-      },
-    }),
-    ai: ({ contract, hostSession }) => aiForSession(contract, hostSession),
-    rag: ({ contract, hostSession }) =>
-      createHostModuleRagApi({
+    audit: ({ contract, hostSession }) =>
+      createHostModuleAuditApi({
         moduleId: contract.id,
-        session: hostSession,
-        ai: aiForSession(contract, hostSession),
-        store: input.runtimeStore.store,
-        durable: input.runtimeStore.durable,
+        writeAudit: auditForSession(hostSession),
+      }),
+    ai: ({ contract, hostSession }) =>
+      createHostModuleAiApiForSession({
+        contract,
+        hostSession,
+        commercialForSession,
         audit: auditForSession(hostSession),
       }),
+    rag: ({ contract, hostSession }) => {
+      const audit = auditForSession(hostSession);
+      const ai = createHostModuleAiApiForSession({
+        contract,
+        hostSession,
+        commercialForSession,
+        audit,
+      });
+      return createHostModuleRagApiForSession({
+        contract,
+        hostSession,
+        runtimeStore: input.runtimeStore,
+        ai,
+        audit,
+      });
+    },
     notifications: ({ contract, hostSession }) =>
-      createRuntimeStoreNotificationRuntime({
-        store: input.runtimeStore.store,
-        productId: defaultProductId(hostSession.productId),
-        workspaceId: hostSession.workspaceId ?? null,
-      }).forModule(contract.id),
+      createHostModuleNotificationsApi({
+        contract,
+        hostSession,
+        runtimeStore: input.runtimeStore,
+      }),
     files: ({ contract, hostSession }) =>
-      createHostFileRuntimeFromParts({
-        store: input.runtimeStore.store,
-        storage: input.fileStorage.storage,
-        session: hostSession,
-      }).forModule(contract.id),
-    artifacts: ({ contract }) => artifactRuntime.forModule(contract.id),
+      createHostModuleFilesApi({
+        contract,
+        hostSession,
+        runtimeStore: input.runtimeStore,
+        fileStorage: input.fileStorage,
+      }),
+    artifacts: ({ contract }) => createHostModuleArtifactsApi({ contract }),
     connectors: ({ contract, hostSession }) =>
       createHostServiceConnectionsApi({
         contract,
@@ -227,21 +204,21 @@ export function createHostCapabilityProviders(input: {
         session: hostSession,
       }),
     usage: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).usage,
+      createHostModuleUsageApi({ contract, hostSession, commercialForSession }),
     metering: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).metering,
+      createHostModuleMeteringApi({ contract, hostSession, commercialForSession }),
     credits: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).credits,
+      createHostModuleCreditsApi({ contract, hostSession, commercialForSession }),
     billing: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).billing,
+      createHostModuleBillingApi({ contract, hostSession, commercialForSession }),
     entitlements: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).entitlements,
+      createHostModuleEntitlementsApi({ contract, hostSession, commercialForSession }),
     commerce: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).commerce,
+      createHostModuleCommerceApi({ contract, hostSession, commercialForSession }),
     redeemCodes: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).redeemCodes,
+      createHostModuleRedeemCodesApi({ contract, hostSession, commercialForSession }),
     risk: ({ contract, hostSession }) =>
-      commercialForSession(hostSession).forModule(contract.id).risk,
+      createHostModuleRiskApi({ contract, hostSession, commercialForSession }),
     apiKeys: ({ contract, hostSession }) =>
       createHostModuleApiKeysApi({
         contract,

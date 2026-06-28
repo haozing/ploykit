@@ -3,13 +3,18 @@ import test from 'node:test';
 import { defineModule, page, Permission } from '@ploykit/module-sdk';
 import {
   assertAdminResourceOperationAllowed,
-  countMissingRequiredModuleRequirements,
-  createAdminOperationsCenter,
   createInMemoryRuntimeStore,
   createModuleRuntimeHost,
   normalizeModuleRuntimeContract,
   type ModuleMapArtifact,
 } from '../src/lib/module-runtime';
+import {
+  countMissingRequiredModuleRequirements,
+  createAdminOperationsCenter,
+} from '../apps/host-next/lib/admin/operations-center';
+import { getDefaultModuleCatalogSeed } from '../apps/host-next/lib/default-module-catalog';
+import { MODULE_MAP_ARTIFACT } from '../src/lib/module-map';
+import executorExtensionSmoke from '../modules/executor-extension-smoke/module';
 
 const moduleDefinition = defineModule({
   id: 'admin-test',
@@ -98,6 +103,32 @@ test('P14 admin operations snapshot aggregates runtime store and host records', 
   assert.equal(snapshot.counts.auditLogs, 1);
   assert.equal(snapshot.counts.usageRecords, 1);
   assert.equal(snapshot.recent.runs[0]?.id, run.id);
+});
+
+test('default catalog seed preserves trusted executor extension provides', async () => {
+  const seed = getDefaultModuleCatalogSeed('executor-extension-smoke');
+  assert.equal(seed.trust, 'trusted');
+  assert.deepEqual(seed.allowedProvides, [
+    'capabilities.executor',
+    'adminResources.executorHealth',
+  ]);
+
+  const contract = normalizeModuleRuntimeContract(executorExtensionSmoke);
+  const host = await createModuleRuntimeHost(MODULE_MAP_ARTIFACT, {
+    contracts: [contract],
+    catalog: {
+      moduleStates: [
+        {
+          productId: 'demo-product',
+          moduleId: 'executor-extension-smoke',
+          status: 'enabled',
+          ...seed,
+        },
+      ],
+    },
+  });
+
+  assert.equal(host.adminResources.get('executor-extension-smoke.executorHealth')?.label, 'Executor Health');
 });
 
 test('admin resource registry lists only trusted catalog-allowed resources', async () => {
