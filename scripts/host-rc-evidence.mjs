@@ -12,6 +12,30 @@ const baseUrlArgIndex = process.argv.indexOf('--base-url');
 const baseUrl =
   baseUrlArgIndex >= 0 ? process.argv[baseUrlArgIndex + 1] : process.env.HOST_SMOKE_BASE_URL;
 const normalizedBaseUrl = baseUrl?.replace(/\/$/, '');
+const opsCommands = new Set([
+  'host:ai-rag-local-smoke',
+  'host:web-shell-evidence',
+  'host:backup-restore-smoke',
+  'host:postgres-physical-restore-smoke',
+  'host:upgrade-migration-smoke',
+  'host:chaos-smoke',
+  'host:data-safety',
+  'host:postgres-local-smoke',
+  'host:s3-smoke',
+  'host:s3-local-smoke',
+  'host:stripe-smoke',
+  'host:stripe-local-smoke',
+  'host:billing-reconcile-smoke',
+  'host:ai-rag-policy-smoke',
+  'host:ai-webhook-local-smoke',
+  'host:rag-provider-smoke',
+  'host:email-smoke',
+  'host:email-local-webhook-smoke',
+  'host:files-cleanup-smoke',
+  'host:files-reconcile-smoke',
+  'host:local-provider-smoke',
+  'host:worker-soak',
+]);
 const shouldManageHost =
   Boolean(normalizedBaseUrl) &&
   !disableManagedHost &&
@@ -41,11 +65,15 @@ function isLocalBaseUrl(value) {
 }
 
 function npmArgs(script, args = []) {
-  return ['run', script, ...(args.length > 0 ? ['--', ...args] : [])];
+  return opsCommands.has(script)
+    ? ['run', 'ops', '--', script, ...args]
+    : ['run', script, ...(args.length > 0 ? ['--', ...args] : [])];
 }
 
 function displayCommand(script, args = []) {
-  return `npm run ${script}${args.length > 0 ? ` -- ${args.join(' ')}` : ''}`;
+  return opsCommands.has(script)
+    ? `npm run ops -- ${script}${args.length > 0 ? ` ${args.join(' ')}` : ''}`
+    : `npm run ${script}${args.length > 0 ? ` -- ${args.join(' ')}` : ''}`;
 }
 
 function safeId(id) {
@@ -516,8 +544,13 @@ checks.push(
   )
 );
 checks.push(runStep('data-v2-migrate', 'Data v2 migration', 'data:migrate'));
-checks.push(runStep('presentation-check', 'Product presentation check', 'presentation:check'));
-checks.push(runStep('white-label-smoke', 'White-label presentation smoke', 'white-label:smoke'));
+checks.push(runStep('presentation-check', 'Product presentation check', 'check', ['presentation']));
+checks.push(
+  runStep('white-label-smoke', 'White-label presentation smoke', 'check', [
+    'white-label',
+    '--required',
+  ])
+);
 
 checks.push(
   runStep('provider-matrix', 'Provider matrix', 'host:provider-matrix', [
@@ -573,11 +606,6 @@ checks.push(
   ])
 );
 checks.push(
-  runStep('module-quality', 'Module-declared quality evidence', 'module:quality', [
-    ...(required ? ['--required'] : []),
-  ])
-);
-checks.push(
   runStep('worker-heartbeat-refresh', 'Worker heartbeat refresh', 'host:worker', ['--limit', '0'])
 );
 checks.push(
@@ -592,9 +620,13 @@ checks.push(
 );
 checks.push(
   required
-    ? runStep('drift-check', 'Unified drift check', 'drift:check', ['--reuse-latest', '--required'])
+    ? runStep('drift-check', 'Unified drift check', 'check', [
+        'drift',
+        '--reuse-latest',
+        '--required',
+      ])
     : advisoryStep(
-        runStep('drift-check', 'Unified drift check', 'drift:check', ['--reuse-latest']),
+        runStep('drift-check', 'Unified drift check', 'check', ['drift', '--reuse-latest']),
         'Non-required evidence records drift findings without blocking local RC evidence. Use --required for blocking production evidence.'
       )
 );
@@ -764,7 +796,6 @@ const report = {
     dashboardTransitionSmoke: latestRuntimeDir('dashboard-transition-smoke'),
     browserMatrix: latestRuntimeDir('browser-matrix'),
     accessibilitySmoke: latestRuntimeDir('accessibility-smoke'),
-    moduleQuality: latestRuntimeDir('module-quality'),
     dataSafety: latestRuntimeDir('data-safety'),
     driftCheck: latestRuntimeDir('drift-check'),
     runtimeStorePostgres: latestRuntimeDir('runtime-store-postgres'),

@@ -33,7 +33,7 @@ Use Postgres verification when persistence, migrations, transactions, SQL
 refs, rollback, or product/workspace/user scope matters:
 
 ```bash
-npm run test:data-runtime
+npm run test -- runtime
 ```
 
 ## Runtime Store Checks
@@ -43,10 +43,9 @@ webhooks, files metadata, audit, commercial ledger, dead-letter queues, admin
 operations, or product scope:
 
 ```bash
-npm run test:runtime-stores
-npm run test:commercial-ledger
-npm run test:files-storage
-npm run test:runtime-checks
+npm run test -- runtime
+npm run test -- commercial
+npm run test -- ai
 ```
 
 If a seed or test needs a deterministic run record, `createRun` now accepts a

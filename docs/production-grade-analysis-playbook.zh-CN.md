@@ -552,7 +552,7 @@ npm run module:test -- tmp-check
 ```bash
 npm run module:doctor -- all
 npm run module:test -- all
-npm run module:quality -- all
+npm run module:test -- all
 npm run data:plan -- all
 npm run data:verify -- all
 npm run module:evidence -- all

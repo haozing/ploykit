@@ -221,7 +221,7 @@ export async function runRuntimeChecks(input: RunRuntimeChecksInput): Promise<Ru
         'RUNTIME_CATALOG_DRIFT',
         'App catalog state has drifted from the declared bundle.',
         'catalog',
-        'Run npm run catalog:plan and apply the expected catalog state.'
+        'Run npm run modules:check and apply the expected catalog state.'
       )
     );
   }

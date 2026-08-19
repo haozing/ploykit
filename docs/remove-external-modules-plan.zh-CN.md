@@ -40,7 +40,7 @@
 - `scripts/module-deps.mjs` / `scripts/lib/module-dependencies.mjs`：当前会扫描配置源中的外部模块依赖。
 - `scripts/ploykit-module.mjs`：create/dev/check/doctor 通过 configured module sources 发现模块。
 - `scripts/module-test.mjs`：通过 configured module sources 按 id 解析模块。
-- `scripts/module-bundle.mjs` 与 `src/lib/module-runtime/packaging/module-bundle.ts`：manifest 中输出 source metadata。
+- `src/lib/module-runtime/packaging/module-bundle.ts`：manifest 中输出 source metadata。
 - `src/lib/module-runtime/loader/module-map-types.ts`：`sourceKind?: 'workspace' | 'external'`。
 - `src/lib/module-runtime/dev-console/*`、`apps/host-next/lib/admin-operations.ts`、admin/dev console UI：展示 module source metadata。
 - `apps/host-next/next.config.mjs`：`PLOYKIT_CONFIG`、`trustedModuleRoots`、`externalDir`、Turbopack root 扩大逻辑。
@@ -173,7 +173,7 @@ npm run module:service-contract -- runlynk --openapi <runlynk-core-openapi.yaml>
 - 如果短期保留 `sourceId/sourceDir`，固定为 `workspace/modules`，并在类型中不再包含 external。
 - `moduleSpecifier` 只接受 projectRoot 内文件；遇到 projectRoot 外文件直接抛错。
 - `generateManifest` 删除 `trustedModuleRoots`，不记录 local config 名称。
-- `scripts/module-bundle.mjs` 和 `createModuleBundleManifest` 同步删除或固定 source metadata。
+- `createModuleBundleManifest` 同步删除或固定 source metadata。
 
 必须新增 guard：
 
@@ -236,7 +236,7 @@ npm run host:build
 
 ```powershell
 rg -n "外部模块|仓库外模块|trustedModuleRoots|PLOYKIT_CONFIG|ploykit\\.local\\.config|external-dev|external source|external module" README.md docs skills ploykit*.json .gitignore
-npm run docs:encoding-check
+npm run check -- docs
 ```
 
 允许保留的命中只能是本文档或历史审计文档中的“移除说明”；普通开发指南不应再推荐外部模块。
@@ -263,9 +263,7 @@ npm run docs:encoding-check
 验收：
 
 ```powershell
-npm run test:module-map
-npm run test:developer-experience
-npm run test:catalog-runtime
+npm run test -- module
 ```
 
 ### Phase 7：最终重扫和全量回归
@@ -288,7 +286,7 @@ npm run modules:check
 npm run typecheck
 npm run module:doctor -- all
 npm run module:test -- all
-npm run docs:encoding-check
+npm run check -- docs
 npm run host:boundary-check
 ```
 

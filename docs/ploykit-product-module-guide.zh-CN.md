@@ -38,7 +38,7 @@ product: {
 宿主会使用这份声明做三件事：
 
 - `module:doctor` 检查 required shell、产品页、导航和 route 是否缺失。
-- `module:quality` 从 `product.pages` 自动生成 browser/accessibility 目标。
+- `host:browser-matrix` 和 `host:accessibility-smoke` 只验证宿主声明的正式页面目标；模块页面由模块测试覆盖。
 - Admin Modules 页面展示产品形态覆盖情况。
 
 ## 3. 路由与宿主 Shell

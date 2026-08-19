@@ -226,13 +226,13 @@ For shared host-runtime changes:
 
 ```bash
 npm run typecheck
-npm run presentation:check
-npm run i18n:check
-npm run theme:check
-npm run seo:check
-npm run white-label:smoke
-npm run test:runtime-checks
-npm run test:web-shell
+npm run check -- presentation
+npm run check -- i18n
+npm run check -- theme
+npm run check -- seo
+npm run check -- white-label
+npm run test -- runtime
+npm run test -- web
 npm run runtime:check
 ```
 

@@ -32,23 +32,20 @@ jobs:
       - name: Module map and contracts
         run: npm run modules:check
 
-      - name: Catalog doctor
-        run: npm run catalog:doctor
+      - name: Module doctor
+        run: npm run module:doctor -- all
 
       - name: Documentation encoding
-        run: npm run docs:encoding-check
+        run: npm run check -- docs
 
       - name: Runtime checks
-        run: npm run test:runtime-checks
+        run: npm run test -- runtime
 
       - name: Security runtime tests
-        run: npm run test:security-runtime
-
-      - name: Security hardening tests
-        run: npm run test:security-hardening
+        run: npm run test -- security
 
       - name: Web shell tests
-        run: npm run test:web-shell
+        run: npm run test -- web
 
       - name: Module smoke tests
         run: npm run module:test -- all

@@ -198,7 +198,7 @@ function buildAdminFileCleanup(input: {
     eligible,
     physicalObjectPresent,
     latestCleanupAt,
-    command: 'npm run host:files-cleanup-smoke',
+    command: 'npm run ops -- host:files-cleanup-smoke',
     reason: eligible
       ? physicalObjectPresent
         ? 'Deleted metadata still has a physical object; cleanup can remove object bytes while keeping audit metadata.'
@@ -345,7 +345,7 @@ export async function reconcileAdminFileStorage(
         ? listedObjects.reduce((total, item) => total + item.sizeBytes, 0)
         : presentItems.reduce((total, item) => total + (item.objectSizeBytes ?? 0), 0),
     orphanBytes: orphans.reduce((total, item) => total + item.sizeBytes, 0),
-    command: 'npm run host:files-reconcile-smoke',
+    command: 'npm run ops -- host:files-reconcile-smoke',
     items: issueItems.slice(0, 50),
     orphans,
   };

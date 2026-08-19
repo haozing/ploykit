@@ -75,15 +75,15 @@ npm run module:doctor -- modules/<module-id>
 npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml>
 npm run module:service-contract -- modules/<module-id> --openapi <openapi.yaml> --write-fixtures
 npm run module:test -- modules/<module-id>
-npm run module:quality -- modules/<module-id> -- --required
+npm run module:test -- modules/<module-id> --real
 npm run modules:scan
 npm run modules:check
 npm run host:boundary-check
-npm run presentation:check
-npm run i18n:check
-npm run theme:check
-npm run seo:check
-npm run white-label:smoke
+npm run check -- presentation
+npm run check -- i18n
+npm run check -- theme
+npm run check -- seo
+npm run check -- white-label
 npm run admin:ui-gate
 npm run admin:mobile-handfeel
 npm run admin:visual-baseline
@@ -105,16 +105,14 @@ changes, do not add module-specific routes or required checks to those global
 gates; use module-local tests and module README E2E instructions instead.
 
 ```bash
-npm run test:runtime-checks
-npm run test:web-shell
+npm run test -- runtime
+npm run test -- web
 npm run host:browser-matrix -- --required
 npm run host:theme-matrix -- --required
 npm run host:accessibility-smoke -- --required
-npm run test:data-runtime
-npm run test:runtime-stores
-npm run test:ai-provider-runtime
-npm run test:rag-files
-npm run test:release-candidate
+npm run test -- runtime
+npm run test -- ai
+npm run test -- release
 ```
 
 ## References

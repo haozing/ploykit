@@ -474,6 +474,6 @@ test('D22 admin file detail reports storage object and cleanup drilldown', async
   assert.deepEqual(cleanupAudit.metadata.fileIds, [uploaded.file.id]);
 
   const filesView = await getAdminFilesView();
-  assert.equal(filesView.reconcile.command, 'npm run host:files-reconcile-smoke');
+  assert.equal(filesView.reconcile.command, 'npm run ops -- host:files-reconcile-smoke');
   assert.ok(typeof filesView.reconcile.issues === 'number');
 });

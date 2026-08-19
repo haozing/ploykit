@@ -101,7 +101,7 @@ npm run modules:scan
 npm run typecheck
 npm run module:doctor -- <id>
 npm run module:test -- <id> --summary
-npm run test:ui-runtime
+npm run test -- runtime
 ```
 
 检查重点：

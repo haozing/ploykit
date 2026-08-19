@@ -40,13 +40,10 @@ const ALLOWED_FILES = new Set([
 ]);
 const ALLOWED_ROOT_SCRIPT_FILES = new Set([
   normalizePath('scripts/generate-module-map.mjs'),
-  normalizePath('scripts/module-bundle.mjs'),
   normalizePath('scripts/module-catalog.mjs'),
   normalizePath('scripts/module-data-diff.mjs'),
   normalizePath('scripts/module-data.mjs'),
   normalizePath('scripts/module-evidence.mjs'),
-  normalizePath('scripts/module-quality-manifest.mjs'),
-  normalizePath('scripts/module-quality.mjs'),
   normalizePath('scripts/module-test.mjs'),
   normalizePath('scripts/ploykit-module.mjs'),
 ]);

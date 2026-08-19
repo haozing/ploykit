@@ -54,7 +54,7 @@ try {
 
   const smoke = run(
     npm,
-    ['run', 'host:s3-smoke', '--', '--required', '--check-signed-url'],
+    ['run', 'ops', '--', 'host:s3-smoke', '--required', '--check-signed-url'],
     {
       capture: true,
       env: {

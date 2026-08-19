@@ -131,7 +131,7 @@ For typical module-only changes:
 ```bash
 npm run typecheck
 npm run modules:check
-npm run catalog:doctor
+npm run module:doctor -- all
 npm run module:doctor -- <module-id>
 npm run module:test -- <module-id>
 ```
@@ -140,7 +140,7 @@ Run host/product release gates when shared host runtime, Web Shell, public/auth/
 
 ```bash
 npm run host:boundary-check
-npm run test:web-shell
+npm run test -- web
 npm run release:integration-gate
 npm run host:browser-matrix -- --required
 npm run host:accessibility-smoke -- --required
@@ -290,7 +290,7 @@ npm run data:generate -- all
 ```bash
 npm run typecheck
 npm run modules:check
-npm run catalog:doctor
+npm run module:doctor -- all
 npm run module:doctor -- <module-id>
 npm run module:test -- <module-id>
 ```
@@ -299,7 +299,7 @@ npm run module:test -- <module-id>
 
 ```bash
 npm run host:boundary-check
-npm run test:web-shell
+npm run test -- web
 npm run release:integration-gate
 npm run host:browser-matrix -- --required
 npm run host:accessibility-smoke -- --required

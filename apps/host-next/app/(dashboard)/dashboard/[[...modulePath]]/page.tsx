@@ -334,8 +334,7 @@ function dashboardPayloadSizeDiagnosticsEnabled(headersValue: Headers): boolean 
     envValue === '1' ||
     envValue === 'true' ||
     envValue === 'always' ||
-    headersValue.get('x-ploykit-smoke') === 'dashboard-transition' ||
-    headersValue.get('x-ploykit-smoke') === 'module-page-performance'
+    headersValue.get('x-ploykit-smoke') === 'dashboard-transition'
   );
 }
 

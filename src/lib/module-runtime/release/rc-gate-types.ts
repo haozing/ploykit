@@ -8,7 +8,6 @@ export interface ReleaseCandidateCheck {
   status: ReleaseCandidateCheckStatus;
   evidence?: string;
 }
-
 export interface ReleaseCandidateDiagnostic {
   severity: 'error' | 'warning';
   code: string;
@@ -192,97 +191,4 @@ export interface ModuleTestReport {
   moduleRoot?: string;
   checkedAt?: string;
   steps?: { name?: string; ok?: boolean; status?: number }[];
-}
-
-export interface ModuleQualityRouteEvidence {
-  path?: string;
-  viewports?: string[];
-}
-
-export interface ModuleQualityCommand {
-  script?: string;
-  args?: string[];
-}
-
-export interface ModuleQualityRuntimeEvidence {
-  id?: string;
-  title?: string;
-  runtimeDir?: string;
-  required?: boolean;
-  command?: ModuleQualityCommand;
-  checks?: string[];
-}
-
-export interface ModuleQualityDashboardTransitionsPerformance {
-  routes?: string[];
-  maxDocumentNavigations?: number;
-  maxHydrationErrors?: number;
-  maxP95Ms?: number;
-  maxRscTransferBytes?: number;
-}
-
-export interface ModuleQualityApiRoutePerformance {
-  path?: string;
-  method?: string;
-  auth?: string;
-  maxP95Ms?: number;
-  maxResponseBytes?: number;
-}
-
-export interface ModuleQualityPageRoutePerformance {
-  shell?: string;
-  path?: string;
-  params?: Record<string, string>;
-  samplePath?: string;
-  maxLoaderMs?: number;
-  maxLoaderDataBytes?: number;
-}
-
-export interface ModuleQualityPerformanceDefinition {
-  dashboardTransitions?: ModuleQualityDashboardTransitionsPerformance;
-  pageRoutes?: ModuleQualityPageRoutePerformance[];
-  apiRoutes?: ModuleQualityApiRoutePerformance[];
-}
-
-export interface ModuleQualityDefinition {
-  routes?: {
-    browser?: ModuleQualityRouteEvidence[];
-    accessibility?: ModuleQualityRouteEvidence[];
-  };
-  performance?: ModuleQualityPerformanceDefinition;
-  evidence?: ModuleQualityRuntimeEvidence[];
-}
-
-export interface ModuleMapManifestModule {
-  id?: string;
-  name?: string;
-  quality?: ModuleQualityDefinition;
-}
-
-export interface ModuleMapManifest {
-  modules?: ModuleMapManifestModule[];
-}
-
-export interface ModuleQualityRouteRequirement {
-  moduleId: string;
-  path: string;
-  viewports: readonly string[];
-}
-
-export interface ModuleQualityEvidenceRequirement {
-  moduleId: string;
-  title: string;
-  id: string;
-  runtimeDir: string;
-  command?: ModuleQualityCommand;
-  checks: readonly string[];
-}
-
-export interface ModuleDashboardTransitionRequirement {
-  moduleId: string;
-  route: string;
-  maxDocumentNavigations?: number;
-  maxHydrationErrors?: number;
-  maxP95Ms?: number;
-  maxRscTransferBytes?: number;
 }

@@ -123,15 +123,13 @@ function routesFromModuleManifest(moduleId) {
     };
   }
 
-  const qualityRoutes = asArray(moduleInfo.quality?.performance?.dashboardTransitions?.routes);
-  const transitionBudgets = moduleInfo.quality?.performance?.dashboardTransitions ?? {};
   const navigationRoutes = asArray(moduleInfo.navigation)
     .filter((item) => item?.location === 'dashboard.sidebar')
     .map((item) => item.path);
   const productRoutes = asArray(moduleInfo.product?.pages)
     .filter((page) => page?.shell === 'dashboard')
     .map((page) => page.samplePath ?? page.path);
-  const normalizedRoutes = [...qualityRoutes, ...navigationRoutes, ...productRoutes]
+  const normalizedRoutes = [...navigationRoutes, ...productRoutes]
     .map((route) => ({ route, normalized: dashboardRoutePath(route) }))
     .filter((entry) => entry.normalized);
   const invalidRoutes = normalizedRoutes
@@ -148,15 +146,8 @@ function routesFromModuleManifest(moduleId) {
       kind: 'module-id',
       moduleId,
       manifestPath: manifest.path,
-      qualityRoutes: qualityRoutes.length,
       navigationRoutes: navigationRoutes.length,
       productRoutes: productRoutes.length,
-      budgets: {
-        maxDocumentNavigations: transitionBudgets.maxDocumentNavigations,
-        maxHydrationErrors: transitionBudgets.maxHydrationErrors,
-        maxP95Ms: transitionBudgets.maxP95Ms,
-        maxRscTransferBytes: transitionBudgets.maxRscTransferBytes,
-      },
     },
   };
 }

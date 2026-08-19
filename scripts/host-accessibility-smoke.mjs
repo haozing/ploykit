@@ -1,9 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { collectModuleQualityRoutes, routeAppliesToViewport } from './module-quality-manifest.mjs';
 
 const required = process.argv.includes('--required');
-const moduleQualityOnly = process.argv.includes('--module-quality-only');
 const baseUrl = (
   process.argv.includes('--base-url')
     ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -44,55 +42,13 @@ const baseRoutes = [
   { path: '/zh/admin/service-connections', auth: true, contains: '服务连接' },
   { path: '/zh/admin/module-dev-console', auth: true, contains: '模块开发控制台' },
 ];
-const moduleQualityRoutes = collectModuleQualityRoutes('accessibility').map((route) => ({
-  ...route,
-  delegatedToModuleQuality: true,
-}));
-const routes = [...baseRoutes, ...moduleQualityRoutes];
+const routes = baseRoutes;
 
 const viewports = [
   { id: 'desktop', width: 1280, height: 900 },
   { id: 'mobile', width: 390, height: 844 },
 ];
 let qaLoginIpCounter = 0;
-
-function moduleQualityRouteChecks() {
-  return viewports.flatMap((viewport) =>
-    moduleQualityRoutes
-      .filter((route) => routeAppliesToViewport(route, viewport.id))
-      .map((route) => ({
-        id: `${viewport.id}:${route.path}`,
-        ok: true,
-        delegatedToModuleQuality: true,
-        moduleId: route.moduleId,
-        source: route.source,
-      }))
-  );
-}
-
-if (moduleQualityOnly) {
-  const result = {
-    ok: true,
-    required,
-    skipped: false,
-    baseUrl: normalizedBaseUrl,
-    outputDir,
-    checkedAt: new Date().toISOString(),
-    summary: {
-      mode: 'module-quality-only',
-      baseRoutes: 0,
-      moduleQualityRoutes: moduleQualityRoutes.length,
-    },
-    checks: moduleQualityRouteChecks(),
-    artifacts: {
-      report: reportPath,
-      latest: latestPath,
-    },
-  };
-  writeReport(result);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  process.exit(0);
-}
 
 async function loadPlaywright() {
   try {
@@ -223,19 +179,6 @@ try {
     let loggedIn = false;
 
     for (const route of routes) {
-      if (!routeAppliesToViewport(route, viewport.id)) {
-        continue;
-      }
-      if (route.delegatedToModuleQuality) {
-        checks.push({
-          id: `${viewport.id}:${route.path}`,
-          ok: true,
-          delegatedToModuleQuality: true,
-          moduleId: route.moduleId,
-          source: route.source,
-        });
-        continue;
-      }
       if (route.auth && !loggedIn) {
         checks.push({ id: `${viewport.id}:auth-login`, ...(await ensureAdminLogin(context)) });
         loggedIn = true;
@@ -396,7 +339,6 @@ const result = {
   checkedAt: new Date().toISOString(),
   summary: {
     baseRoutes: baseRoutes.length,
-    moduleQualityRoutes: moduleQualityRoutes.length,
   },
   checks,
   artifacts: {

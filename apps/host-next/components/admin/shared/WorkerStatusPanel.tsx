@@ -144,7 +144,7 @@ export function WorkerStatusPanel({
               : 'missing',
             status.soak.exists
               ? status.soak.reportPath ?? status.soak.latestPath
-              : 'Run npm run host:worker-soak',
+              : 'Run npm run ops -- host:worker-soak',
           ],
         ]}
         density="compact"

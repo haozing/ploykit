@@ -1187,7 +1187,7 @@
         "productShapeTitle": "产品形态",
         "productShapeDescription": "宿主级产品元数据会在检查原始路由证据前，说明模块想拥有哪些 shell。",
         "productShapeEmptyTitle": "未声明产品形态",
-        "productShapeEmptyBody": "这个模块仍然可以是有效模块，但产品模块应声明 module.product，让 doctor、quality 和后台能够发现缺失的站点、控制台或管理端 surface。"
+        "productShapeEmptyBody": "这个模块仍然可以是有效模块，但产品模块应声明 module.product，让 doctor 和后台能够发现缺失的站点、控制台或管理端 surface。"
       }
     },
     "identity": {

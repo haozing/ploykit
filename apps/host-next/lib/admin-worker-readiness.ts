@@ -46,7 +46,7 @@ export function adminWorkerActions(input: {
 }): string[] {
   const actions: string[] = [];
   if (!input.worker.heartbeatAt) {
-    actions.push('Run npm run host:worker-soak or drain the worker once to establish heartbeat.');
+    actions.push('Run npm run ops -- host:worker-soak or drain the worker once to establish heartbeat.');
   }
   if (input.worker.queue.failed > 0) {
     actions.push('Inspect failed queue records and let retry backoff drain them or discard with audit.');
@@ -58,7 +58,7 @@ export function adminWorkerActions(input: {
     actions.push('Increase worker capacity or drain limit before queued work breaches SLA.');
   }
   if (!input.soak.exists) {
-    actions.push('Run npm run host:worker-soak to attach latest worker evidence.');
+    actions.push('Run npm run ops -- host:worker-soak to attach latest worker evidence.');
   } else if (input.soak.status === 'failed') {
     actions.push('Open worker soak report and fix failed drain/dead-letter evidence.');
   }

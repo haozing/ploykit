@@ -63,7 +63,7 @@ Run:
 ```bash
 npm run modules:scan
 npm run module:doctor -- <id>
-npm run seo:check
+npm run check -- seo
 npm run module:test -- <id> --summary
 ```
 

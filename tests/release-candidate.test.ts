@@ -403,7 +403,7 @@ test('P21 RC gate rejects non-required unified drift evidence for strict gate', 
 
   assert.equal(result.ok, false);
   assert.equal(driftCheck?.status, 'failed');
-  assert.match(driftCheck?.evidence ?? '', /drift:check -- --required/i);
+  assert.match(driftCheck?.evidence ?? '', /check -- drift --required/i);
 });
 
 test('P21 RC gate reads backup/restore strict evidence', () => {

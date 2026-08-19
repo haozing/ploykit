@@ -78,7 +78,7 @@ function payloadIsValid(payload: Record<string, unknown>): boolean {
 
 function runEmailSmoke(webhookUrl: string): Promise<ChildResult> {
   return new Promise((resolve) => {
-    const child = spawn(npm, ['run', 'host:email-smoke', '--', '--required', '--to', to], {
+    const child = spawn(npm, ['run', 'ops', '--', 'host:email-smoke', '--required', '--to', to], {
       cwd: process.cwd(),
       env: {
         ...process.env,

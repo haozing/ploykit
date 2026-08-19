@@ -1215,7 +1215,7 @@
         "productShapeTitle": "Product shape",
         "productShapeDescription": "Host-level product metadata shows which shells a module intends to own before raw route evidence is inspected.",
         "productShapeEmptyTitle": "No product shape declared",
-        "productShapeEmptyBody": "This module can still be valid, but product modules should declare module.product so doctor, quality, and Admin can catch missing site, console, or admin surfaces."
+        "productShapeEmptyBody": "This module can still be valid, but product modules should declare module.product so doctor and Admin can catch missing site, console, or admin surfaces."
       }
     },
     "identity": {

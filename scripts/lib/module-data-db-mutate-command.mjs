@@ -24,7 +24,7 @@ export function createModuleDataDbMutationRunner(input) {
         'MODULE_DATA_RESET_DATABASE_URL_REQUIRED',
         'data:reset --force requires DATABASE_URL, POSTGRES_URL, or --database-url.',
         'DATABASE_URL',
-        'Run npm run data:reset -- --dry-run to inspect SQL first.'
+        'Run the module-data reset command with --dry-run to inspect SQL first.'
       )
     );
   }

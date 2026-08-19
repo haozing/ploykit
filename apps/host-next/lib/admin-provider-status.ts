@@ -406,7 +406,7 @@ function providerFailureDetails(
           ? `Failed local depth checks: ${matrix.localDepth.failedChecks.join(', ')}`
           : 'Local provider depth did not pass.',
       missing: [],
-      command: 'npm run host:local-provider-smoke',
+      command: 'npm run ops -- host:local-provider-smoke',
       action:
         'Open local provider depth report, fix failed runtime smoke, then rerun provider matrix.',
     });
@@ -473,14 +473,14 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'files.cleanup-smoke',
         label: 'Files Cleanup Smoke',
         kind: 'command',
-        command: 'npm run host:files-cleanup-smoke',
+        command: 'npm run ops -- host:files-cleanup-smoke',
         detail: 'Validate deleted file object cleanup and audit-backed retention path.',
       },
       {
         id: 'files.reconcile-smoke',
         label: 'Files Reconcile Smoke',
         kind: 'command',
-        command: 'npm run host:files-reconcile-smoke',
+        command: 'npm run ops -- host:files-reconcile-smoke',
         detail:
           'Validate metadata/object reconciliation for missing, stale deleted, and drift cases.',
       },
@@ -488,7 +488,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'files.s3.required-smoke',
         label: 'S3 Required Smoke',
         kind: 'command',
-        command: 'npm run host:s3-smoke -- --required --check-signed-url',
+        command: 'npm run ops -- host:s3-smoke --required --check-signed-url',
         detail:
           'Validate S3-compatible bucket credentials, upload/read/delete, and signed URL path.',
       },
@@ -496,7 +496,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'files.s3.local-minio-smoke',
         label: 'Local MinIO S3 Smoke',
         kind: 'command',
-        command: 'npm run host:s3-local-smoke',
+        command: 'npm run ops -- host:s3-local-smoke',
         detail:
           'Start the local MinIO profile and validate S3-compatible signed URL fetch end to end.',
       },
@@ -508,14 +508,14 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'billing.stripe.required-smoke',
         label: 'Stripe Required Smoke',
         kind: 'command',
-        command: 'npm run host:stripe-smoke -- --required --apply-ledger',
+        command: 'npm run ops -- host:stripe-smoke --required --apply-ledger',
         detail: 'Validate Stripe checkout/webhook configuration and local ledger application.',
       },
       {
         id: 'billing.stripe.local-mock-smoke',
         label: 'Local Mock Stripe Smoke',
         kind: 'command',
-        command: 'npm run host:stripe-local-smoke',
+        command: 'npm run ops -- host:stripe-local-smoke',
         detail:
           'Validate checkout request shape, webhook signature, and ledger apply without external Stripe keys.',
       },
@@ -523,7 +523,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'billing.reconcile-smoke',
         label: 'Billing Reconcile Smoke',
         kind: 'command',
-        command: 'npm run host:billing-reconcile-smoke',
+        command: 'npm run ops -- host:billing-reconcile-smoke',
         detail:
           'Validate provider order reconcile discrepancies, benefit reconcile, credit reconcile, and audit evidence.',
       },
@@ -535,7 +535,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'email.local-webhook-smoke',
         label: 'Local Email Webhook Smoke',
         kind: 'command',
-        command: 'npm run host:email-local-webhook-smoke',
+        command: 'npm run ops -- host:email-local-webhook-smoke',
         detail:
           'Start a local signed email webhook and validate the required delivery path end to end.',
       },
@@ -543,7 +543,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'email.required-smoke',
         label: 'Email Required Smoke',
         kind: 'command',
-        command: 'npm run host:email-smoke -- --required',
+        command: 'npm run ops -- host:email-smoke --required',
         detail: 'Validate email provider configuration, webhook signature, and delivery path.',
       },
     ];
@@ -554,7 +554,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: 'runtime-store.local-postgres-smoke',
         label: 'Local Postgres Smoke',
         kind: 'command',
-        command: 'npm run host:postgres-local-smoke',
+        command: 'npm run ops -- host:postgres-local-smoke',
         detail:
           'Start local Docker Postgres and validate runtime store schema, tests, commercial ledger, and runtime checks.',
       },
@@ -573,7 +573,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: `${providerId}.ai-rag-local-smoke`,
         label: 'AI/RAG Local Smoke',
         kind: 'command',
-        command: 'npm run host:ai-rag-local-smoke',
+        command: 'npm run ops -- host:ai-rag-local-smoke',
         detail: 'Validate AI provider runtime, RAG indexing, and the ai-rag demo module contract.',
       },
       ...(providerId === 'rag'
@@ -582,7 +582,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
               id: 'rag.provider-smoke',
               label: 'RAG Provider Smoke',
               kind: 'command' as const,
-              command: 'npm run host:rag-provider-smoke',
+              command: 'npm run ops -- host:rag-provider-smoke',
               detail:
                 'Validate host RAG memory-vector provider, workspace isolation, delete, and audit evidence.',
             },
@@ -594,7 +594,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
               id: 'ai.webhook-local-smoke',
               label: 'AI Webhook Local Smoke',
               kind: 'command' as const,
-              command: 'npm run host:ai-webhook-local-smoke',
+              command: 'npm run ops -- host:ai-webhook-local-smoke',
               detail:
                 'Validate the host AI webhook provider adapter, signed request, text generation, and embeddings.',
             },
@@ -604,7 +604,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: `${providerId}.local-depth`,
         label: 'Local Provider Depth',
         kind: 'command',
-        command: 'npm run host:local-provider-smoke',
+        command: 'npm run ops -- host:local-provider-smoke',
         detail: 'Validate local provider runtime behavior through the provider depth smoke.',
       },
     ];
@@ -615,7 +615,7 @@ function providerOperationCommands(providerId: string): AdminProviderOperation[]
         id: `${providerId}.local-depth`,
         label: 'Local Provider Depth',
         kind: 'command',
-        command: 'npm run host:local-provider-smoke',
+        command: 'npm run ops -- host:local-provider-smoke',
         detail: 'Validate local provider runtime behavior through the provider depth smoke.',
       },
     ];

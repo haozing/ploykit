@@ -124,7 +124,13 @@ function parseCheckDetail(stdout) {
 }
 
 function runCheck(id, script, extraArgs = []) {
-  const args = ['run', script, ...(extraArgs.length > 0 ? ['--', ...extraArgs] : [])];
+  const args = [
+    'run',
+    'ops',
+    '--',
+    script,
+    ...(extraArgs.length > 0 ? extraArgs : []),
+  ];
   const startedAt = Date.now();
   const result = spawnSync(npm, args, {
     encoding: 'utf8',

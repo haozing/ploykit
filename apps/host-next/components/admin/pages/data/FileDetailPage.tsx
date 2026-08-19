@@ -138,7 +138,7 @@ export function AdminFileDetailOperationsPage({
                   ['Access Reason', access?.reason ?? 'file is missing'],
                   ['Cleanup Eligible', cleanup ? String(cleanup.eligible) : 'false'],
                   ['Latest Cleanup Audit', cleanup?.latestCleanupAt ?? 'none'],
-                  ['Cleanup Command', cleanup?.command ?? 'npm run host:files-cleanup-smoke'],
+                  ['Cleanup Command', cleanup?.command ?? 'npm run ops -- host:files-cleanup-smoke'],
                   ['Cleanup Reason', cleanup?.reason ?? 'file is missing'],
                 ]}
                 minWidthClass="min-w-[760px]"

@@ -540,7 +540,7 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
         'MODULE_DASHBOARD_DYNAMIC_ROUTE_SHARED_LOADER',
         `Dashboard page "${route.path}" is the only dashboard page, but ${entrypointPaths.length} dashboard entrypoints share loader "${route.loader}".`,
         `pages.${route.index}`,
-        'Declare loaderByParam on this page and add quality.performance.dashboardTransitions.routes for smoke coverage.'
+        'Declare loaderByParam on this page and expose the route through module navigation or product pages for smoke coverage.'
       )
     );
   }

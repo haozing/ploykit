@@ -30,7 +30,7 @@ This wiki is for LLMs writing ploykit modules. It is self-contained and uses the
 
 ## Source Boundary
 
-`.generated.md` files are generated from code and must not be hand edited. Handwritten pages carry judgment and anti-patterns; their `ctx.*`, `Permission.*`, commands, and links are checked by `npm run llm-wiki:check`.
+`.generated.md` files are generated from code and must not be hand edited. Handwritten pages carry judgment and anti-patterns; their `ctx.*`, `Permission.*`, commands, and links are checked by `npm run modules:check`.
 
 ## Other Docs Policy
 

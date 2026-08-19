@@ -56,7 +56,7 @@ const report = {
   ok,
   required,
   checkedAt,
-  command: 'npm run test:web-shell',
+  command: 'npm run test -- web',
   durationMs: Date.now() - startedAt,
   summary,
   checks: [

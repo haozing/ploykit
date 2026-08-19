@@ -7,13 +7,7 @@ import {
 } from './rc-gate-legacy-scan';
 import {
   asRecord,
-  collectModuleDashboardTransitionRequirements,
-  collectModuleQualityEvidenceRequirements,
-  collectModuleQualityRouteRequirements,
   commercialDomainEvidenceFromReport,
-  dashboardTransitionRoutePath,
-  missingModuleQualityRouteChecks,
-  missingDashboardTransitionRoutes,
   providerInvocationEvidenceFromReport,
   readModuleTestReports,
   readProductPresentationManifest,
@@ -26,7 +20,6 @@ import type {
   DriftCheckReport,
   FilesCleanupReport,
   FilesReconcileReport,
-  ModuleDashboardTransitionRequirement,
   ReleaseCandidateCheck,
   ReleaseCandidateCheckStatus,
   ReleaseCandidateDiagnostic,
@@ -119,11 +112,6 @@ const REQUIRED_CHECKS: readonly Omit<ReleaseCandidateCheck, 'status' | 'evidence
     required: true,
   },
   {
-    id: 'module-quality',
-    title: 'Module-declared quality evidence passes without host-specific module exceptions.',
-    required: true,
-  },
-  {
     id: 'product-presentation-kernel',
     title:
       'Product Presentation manifest proves typed product config, clean i18n paths, and theme token readiness.',
@@ -212,7 +200,6 @@ const PROFILE_REQUIRED_CHECKS: Record<ReleaseCandidateGateProfile, readonly stri
     'demo-products',
     'browser-matrix',
     'accessibility-smoke',
-    'module-quality',
     'product-presentation-kernel',
     'white-label-presentation',
     'documentation',
@@ -287,23 +274,6 @@ function resolveBrowserMatrixCheck(
       evidence: `Browser matrix strict evidence must be generated with npm run host:browser-matrix -- --required. (${matrix.path})`,
     };
   }
-  const moduleRoutes = collectModuleQualityRouteRequirements(projectRoot, 'browser');
-  if (moduleRoutes.error) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${moduleRoutes.error} (${moduleRoutes.manifestPath})`,
-    };
-  }
-  const missingModuleRoutes = missingModuleQualityRouteChecks(
-    matrix.report,
-    moduleRoutes.requirements
-  );
-  if (missingModuleRoutes.length > 0) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `Browser matrix is missing module-declared route evidence: ${missingModuleRoutes.join(', ')}. (${matrix.path}; declared in ${moduleRoutes.manifestPath})`,
-    };
-  }
   if (matrix.report.ok === true && matrix.report.skipped !== true) {
     return {
       status: 'passed',
@@ -339,23 +309,6 @@ function resolveAccessibilitySmokeCheck(
       evidence: `Accessibility smoke strict evidence must be generated with npm run host:accessibility-smoke -- --required. (${smoke.path})`,
     };
   }
-  const moduleRoutes = collectModuleQualityRouteRequirements(projectRoot, 'accessibility');
-  if (moduleRoutes.error) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${moduleRoutes.error} (${moduleRoutes.manifestPath})`,
-    };
-  }
-  const missingModuleRoutes = missingModuleQualityRouteChecks(
-    smoke.report,
-    moduleRoutes.requirements
-  );
-  if (missingModuleRoutes.length > 0) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `Accessibility smoke is missing module-declared route evidence: ${missingModuleRoutes.join(', ')}. (${smoke.path}; declared in ${moduleRoutes.manifestPath})`,
-    };
-  }
   if (smoke.report.ok === true && smoke.report.skipped !== true) {
     return {
       status: 'passed',
@@ -373,76 +326,6 @@ function resolveAccessibilitySmokeCheck(
 
 function dashboardTransitionCheckPassed(report: RuntimeEvidenceReport, checkId: string): boolean {
   return (report.checks ?? []).some((check) => check.id === checkId && check.ok === true);
-}
-
-function runtimeMetricNumber(metric: Record<string, unknown>, key: string): number | undefined {
-  const value = metric[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function dashboardTransitionRouteMetrics(
-  report: RuntimeEvidenceReport
-): Map<string, Record<string, unknown>> {
-  const summary = asRecord(report.summary);
-  const metrics = Array.isArray(summary?.routeMetrics) ? summary.routeMetrics : [];
-  return new Map(
-    metrics.flatMap((item) => {
-      const metric = asRecord(item);
-      const route =
-        typeof metric?.route === 'string' ? dashboardTransitionRoutePath(metric.route) : '';
-      return metric && route ? [[route, metric] as const] : [];
-    })
-  );
-}
-
-function dashboardTransitionRouteBudgetFailures(
-  report: RuntimeEvidenceReport,
-  requirements: readonly ModuleDashboardTransitionRequirement[]
-): string[] {
-  const metrics = dashboardTransitionRouteMetrics(report);
-  return requirements.flatMap((requirement) => {
-    const route = dashboardTransitionRoutePath(requirement.route);
-    const metric = metrics.get(route);
-    if (!metric) {
-      return [`routeMetrics missing for ${requirement.moduleId}:${route}`];
-    }
-
-    const failures: string[] = [];
-    const maxDocumentNavigations = requirement.maxDocumentNavigations ?? 0;
-    const maxHydrationErrors = requirement.maxHydrationErrors ?? 0;
-    const documentNavigations = runtimeMetricNumber(metric, 'maxDocumentNavigations');
-    const hydrationErrors = runtimeMetricNumber(metric, 'maxHydrationErrors');
-    const p95Ms = runtimeMetricNumber(metric, 'p95Ms');
-    const rscTransferP95Bytes = runtimeMetricNumber(metric, 'rscTransferP95Bytes');
-
-    if ((documentNavigations ?? Number.POSITIVE_INFINITY) > maxDocumentNavigations) {
-      failures.push(
-        `${requirement.moduleId}:${route} maxDocumentNavigations=${documentNavigations ?? 'missing'} exceeded declared budget ${maxDocumentNavigations}`
-      );
-    }
-    if ((hydrationErrors ?? Number.POSITIVE_INFINITY) > maxHydrationErrors) {
-      failures.push(
-        `${requirement.moduleId}:${route} maxHydrationErrors=${hydrationErrors ?? 'missing'} exceeded declared budget ${maxHydrationErrors}`
-      );
-    }
-    if (
-      requirement.maxP95Ms !== undefined &&
-      (p95Ms ?? Number.POSITIVE_INFINITY) > requirement.maxP95Ms
-    ) {
-      failures.push(
-        `${requirement.moduleId}:${route} p95Ms=${p95Ms ?? 'missing'} exceeded declared budget ${requirement.maxP95Ms}`
-      );
-    }
-    if (
-      requirement.maxRscTransferBytes !== undefined &&
-      (rscTransferP95Bytes ?? Number.POSITIVE_INFINITY) > requirement.maxRscTransferBytes
-    ) {
-      failures.push(
-        `${requirement.moduleId}:${route} rscTransferP95Bytes=${rscTransferP95Bytes ?? 'missing'} exceeded declared budget ${requirement.maxRscTransferBytes}`
-      );
-    }
-    return failures;
-  });
 }
 
 function resolveDashboardTransitionSmokeCheck(
@@ -494,20 +377,7 @@ function resolveDashboardTransitionSmokeCheck(
   const failedChecks = (smoke.report.checks ?? [])
     .filter((check) => check.ok === false)
     .map((check) => check.id ?? 'unknown');
-  const declaredDashboardTransitions = collectModuleDashboardTransitionRequirements(projectRoot);
-  const missingDeclaredDashboardRoutes = declaredDashboardTransitions.error
-    ? []
-    : missingDashboardTransitionRoutes(smoke.report, declaredDashboardTransitions.requirements);
-  const declaredTransitionBudgetFailures = declaredDashboardTransitions.error
-    ? []
-    : dashboardTransitionRouteBudgetFailures(
-        smoke.report,
-        declaredDashboardTransitions.requirements
-      );
   const missingSignals = [
-    declaredDashboardTransitions.error
-      ? `${declaredDashboardTransitions.error} (${declaredDashboardTransitions.manifestPath})`
-      : undefined,
     smoke.report.ok === true ? undefined : 'report did not pass',
     smoke.report.skipped === true ? 'report was skipped' : undefined,
     (repeat ?? 0) >= 3 ? undefined : `repeat>=3 required, actual=${repeat ?? 'missing'}`,
@@ -518,9 +388,6 @@ function resolveDashboardTransitionSmokeCheck(
     (resetTransitions ?? 0) >= 2
       ? undefined
       : `at least 2 reset transitions required, actual=${resetTransitions ?? 'missing'}`,
-    declaredTransitionBudgetFailures.length === 0
-      ? undefined
-      : `module dashboard transition budget failures: ${declaredTransitionBudgetFailures.join(', ')}`,
     appFramePresent ? undefined : 'appFramePresent=true required',
     clientTransitionMarkerPresent ? undefined : 'clientTransitionMarkerPresent=true required',
     injectedAnchorInAppFrame ? undefined : 'injectedAnchorInAppFrame=true required',
@@ -548,9 +415,6 @@ function resolveDashboardTransitionSmokeCheck(
     dashboardTransitionCheckPassed(smoke.report, 'dashboard:timing-evidence')
       ? undefined
       : 'dashboard:timing-evidence check missing or failed',
-    missingDeclaredDashboardRoutes.length === 0
-      ? undefined
-      : `missing module dashboard transition routes: ${missingDeclaredDashboardRoutes.join(', ')}`,
   ].filter(Boolean);
 
   if (missingSignals.length === 0) {
@@ -563,116 +427,6 @@ function resolveDashboardTransitionSmokeCheck(
   return {
     status: requestedStatus === 'passed' ? 'failed' : 'pending',
     evidence: `Dashboard transition smoke evidence is incomplete: ${missingSignals.join('; ')}. Failed checks: ${failedChecks.join(', ') || 'none'}. (${smoke.path})`,
-  };
-}
-
-function resolveModuleQualityCheck(
-  projectRoot: string,
-  requestedStatus: ReleaseCandidateCheckStatus
-): ResolvedCheckEvidence {
-  if (requestedStatus === 'failed') {
-    return {
-      status: 'failed',
-      evidence: 'Module quality was marked failed by the release gate caller.',
-    };
-  }
-
-  const declared = collectModuleQualityEvidenceRequirements(projectRoot);
-  if (declared.error) {
-    return {
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${declared.error} (${declared.manifestPath})`,
-    };
-  }
-
-  if (declared.requirements.length === 0) {
-    return {
-      status: 'passed',
-      evidence: `No required module-declared quality evidence was found in ${declared.manifestPath}.`,
-    };
-  }
-
-  const results = declared.requirements.map((requirement) => {
-    const evidence = readRuntimeEvidenceReport(projectRoot, requirement.runtimeDir);
-    if (!evidence.report) {
-      return {
-        requirement,
-        status: requestedStatus === 'passed' ? 'failed' : 'pending',
-        evidence: `${evidence.error} Run ${
-          requirement.command?.script
-            ? `npm run ${requirement.command.script}`
-            : 'the declared module quality command'
-        } -- --required. (${evidence.path})`,
-      };
-    }
-    if (evidence.report.required !== true) {
-      return {
-        requirement,
-        status: requestedStatus === 'passed' ? 'failed' : 'pending',
-        evidence: `${requirement.id} strict evidence must be generated with --required. (${evidence.path})`,
-      };
-    }
-    if (evidence.report.skipped === true) {
-      return {
-        requirement,
-        status: requestedStatus === 'passed' ? 'failed' : 'pending',
-        evidence: `${requirement.id} evidence was skipped. (${evidence.path})`,
-      };
-    }
-
-    const passedIds = new Set(
-      (evidence.report.checks ?? [])
-        .filter((check) => check.ok === true)
-        .map((check) => check.id)
-        .filter((id): id is string => typeof id === 'string')
-    );
-    const missing = requirement.checks.filter((id) => !passedIds.has(id));
-    if (missing.length > 0) {
-      return {
-        requirement,
-        status: requestedStatus === 'passed' ? 'failed' : 'pending',
-        evidence: `${requirement.id} is missing required checks: ${missing.join(', ')}. (${evidence.path})`,
-      };
-    }
-
-    const failedChecks = (evidence.report.checks ?? [])
-      .filter((check) => check.ok === false)
-      .map((check) => check.id ?? 'unknown');
-    if (evidence.report.ok === true) {
-      return {
-        requirement,
-        status: 'passed' as const,
-        evidence: `${requirement.id} passed at ${evidence.report.checkedAt ?? 'unknown time'} with ${evidence.report.checks?.length ?? 0} checks. (${evidence.path})`,
-      };
-    }
-
-    return {
-      requirement,
-      status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${requirement.id} did not pass. Failed checks: ${failedChecks.join(', ') || 'unknown'}. (${evidence.path})`,
-    };
-  });
-
-  const failed = results.filter((item) => item.status === 'failed');
-  if (failed.length > 0) {
-    return {
-      status: 'failed',
-      evidence: failed.map((item) => item.evidence).join(' '),
-    };
-  }
-  const pending = results.filter((item) => item.status === 'pending');
-  if (pending.length > 0) {
-    return {
-      status: 'pending',
-      evidence: pending.map((item) => item.evidence).join(' '),
-    };
-  }
-
-  return {
-    status: 'passed',
-    evidence: `Module quality evidence passed for ${results.length} required declaration(s): ${results
-      .map((item) => `${item.requirement.moduleId}:${item.requirement.id}`)
-      .join(', ')}.`,
   };
 }
 
@@ -690,7 +444,7 @@ function resolveProductPresentationCheck(
   if (!manifest.manifest) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${manifest.error} Run npm run presentation:check. (${manifest.path})`,
+      evidence: `${manifest.error} Run npm run check -- presentation. (${manifest.path})`,
     };
   }
   const errors = (manifest.manifest.diagnostics ?? []).filter(
@@ -730,13 +484,13 @@ function resolveWhiteLabelPresentationCheck(
   if (!smoke.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${smoke.error} Run npm run white-label:smoke. (${smoke.path})`,
+      evidence: `${smoke.error} Run npm run check -- white-label. (${smoke.path})`,
     };
   }
   if (requestedStatus === 'passed' && smoke.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `White-label smoke strict evidence must be generated with npm run white-label:smoke. (${smoke.path})`,
+      evidence: `White-label smoke strict evidence must be generated with npm run check -- white-label --required. (${smoke.path})`,
     };
   }
   if (smoke.report.ok === true) {
@@ -765,13 +519,13 @@ function resolveDataSafetyCheck(
   if (!safety.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${safety.error} Run npm run host:data-safety. (${safety.path})`,
+      evidence: `${safety.error} Run npm run ops -- host:data-safety. (${safety.path})`,
     };
   }
   if (requestedStatus === 'passed' && safety.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Data safety strict evidence must be generated with npm run host:data-safety -- --required. (${safety.path})`,
+      evidence: `Data safety strict evidence must be generated with npm run ops -- host:data-safety --required. (${safety.path})`,
     };
   }
   if (safety.report.ok === true) {
@@ -808,14 +562,14 @@ function resolveDriftCheck(
   if (!drift.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${drift.error} Run npm run drift:check. (${drift.path})`,
+      evidence: `${drift.error} Run npm run check -- drift. (${drift.path})`,
     };
   }
 
   if (requestedStatus === 'passed' && drift.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Unified drift strict evidence must be generated with npm run drift:check -- --required. (${drift.path})`,
+      evidence: `Unified drift strict evidence must be generated with npm run check -- drift --required. (${drift.path})`,
     };
   }
 
@@ -902,8 +656,8 @@ function resolveBackupRestoreCheck(
     requestedStatus,
     runtimeDir: 'backup-restore',
     displayName: 'Backup/restore smoke',
-    command: 'npm run host:backup-restore-smoke',
-    strictCommand: 'npm run host:backup-restore-smoke -- --required',
+    command: 'npm run ops -- host:backup-restore-smoke',
+    strictCommand: 'npm run ops -- host:backup-restore-smoke --required',
     markedFailedEvidence: 'Backup/restore evidence was marked failed by the release gate caller.',
   });
 }
@@ -917,8 +671,8 @@ function resolvePostgresPhysicalRestoreCheck(
     requestedStatus,
     runtimeDir: 'postgres-physical-restore',
     displayName: 'Postgres physical restore smoke',
-    command: 'npm run host:postgres-physical-restore-smoke',
-    strictCommand: 'npm run host:postgres-physical-restore-smoke -- --required',
+    command: 'npm run ops -- host:postgres-physical-restore-smoke',
+    strictCommand: 'npm run ops -- host:postgres-physical-restore-smoke --required',
     markedFailedEvidence:
       'Postgres physical restore evidence was marked failed by the release gate caller.',
   });
@@ -933,8 +687,8 @@ function resolveUpgradeMigrationCheck(
     requestedStatus,
     runtimeDir: 'upgrade-migration',
     displayName: 'Upgrade migration smoke',
-    command: 'npm run host:upgrade-migration-smoke',
-    strictCommand: 'npm run host:upgrade-migration-smoke -- --required',
+    command: 'npm run ops -- host:upgrade-migration-smoke',
+    strictCommand: 'npm run ops -- host:upgrade-migration-smoke --required',
     markedFailedEvidence:
       'Upgrade migration evidence was marked failed by the release gate caller.',
   });
@@ -955,14 +709,14 @@ function resolveChaosCheck(
   if (!chaos.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${chaos.error} Run npm run host:chaos-smoke. (${chaos.path})`,
+      evidence: `${chaos.error} Run npm run ops -- host:chaos-smoke. (${chaos.path})`,
     };
   }
 
   if (requestedStatus === 'passed' && chaos.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Chaos strict evidence must be generated with npm run host:chaos-smoke -- --required. (${chaos.path})`,
+      evidence: `Chaos strict evidence must be generated with npm run ops -- host:chaos-smoke --required. (${chaos.path})`,
     };
   }
 
@@ -1013,13 +767,13 @@ function resolveWebShellCheck(
   if (!report.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${report.error} Run npm run host:web-shell-evidence. (${report.path})`,
+      evidence: `${report.error} Run npm run ops -- host:web-shell-evidence. (${report.path})`,
     };
   }
   if (requestedStatus === 'passed' && report.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Web shell strict evidence must be generated with npm run host:web-shell-evidence -- --required. (${report.path})`,
+      evidence: `Web shell strict evidence must be generated with npm run ops -- host:web-shell-evidence --required. (${report.path})`,
     };
   }
   if (report.report.ok === true) {
@@ -1233,14 +987,14 @@ function resolveDeliveryLedgerCheck(
   if (!soak.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${soak.error} Run npm run host:worker-soak -- --required. (${soak.path})`,
+      evidence: `${soak.error} Run npm run ops -- host:worker-soak --required. (${soak.path})`,
     };
   }
 
   if (requestedStatus === 'passed' && soak.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Delivery ledger strict evidence must be generated with npm run host:worker-soak -- --required. (${soak.path})`,
+      evidence: `Delivery ledger strict evidence must be generated with npm run ops -- host:worker-soak --required. (${soak.path})`,
     };
   }
 
@@ -1281,14 +1035,14 @@ function resolveCommercialDomainCheck(
   if (!billing.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${billing.error} Run npm run host:billing-reconcile-smoke. (${billing.path})`,
+      evidence: `${billing.error} Run npm run ops -- host:billing-reconcile-smoke. (${billing.path})`,
     };
   }
 
   if (requestedStatus === 'passed' && billing.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Commercial domain strict evidence must be generated with npm run host:billing-reconcile-smoke. (${billing.path})`,
+      evidence: `Commercial domain strict evidence must be generated with npm run ops -- host:billing-reconcile-smoke. (${billing.path})`,
     };
   }
 
@@ -1338,7 +1092,7 @@ function resolveFilesStorageDomainCheck(
       .join('; ');
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${missing} Run npm run host:files-cleanup-smoke and npm run host:files-reconcile-smoke. (${cleanup.path}; ${reconcile.path})`,
+      evidence: `${missing} Run npm run ops -- host:files-cleanup-smoke and npm run ops -- host:files-reconcile-smoke. (${cleanup.path}; ${reconcile.path})`,
     };
   }
 
@@ -1394,7 +1148,7 @@ function resolveProviderInvocationLedgerCheck(
   if (!report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${reportError ?? 'Provider invocation ledger evidence is missing.'} Run npm run host:ai-rag-local-smoke or npm run host:provider-matrix. (${reportPath})`,
+      evidence: `${reportError ?? 'Provider invocation ledger evidence is missing.'} Run npm run ops -- host:ai-rag-local-smoke or npm run host:provider-matrix. (${reportPath})`,
     };
   }
 
@@ -1440,8 +1194,8 @@ function resolveAiRagPolicyCheck(
     requestedStatus,
     runtimeDir: 'ai-rag-policy',
     displayName: 'AI/RAG policy smoke',
-    command: 'npm run host:ai-rag-policy-smoke',
-    strictCommand: 'npm run host:ai-rag-policy-smoke -- --required',
+    command: 'npm run ops -- host:ai-rag-policy-smoke',
+    strictCommand: 'npm run ops -- host:ai-rag-policy-smoke --required',
     markedFailedEvidence: 'AI/RAG policy evidence was marked failed by the release gate caller.',
     validate(report) {
       const evidence = asRecord(asRecord(report.domainEvidence)?.aiRagPolicy);
@@ -1488,14 +1242,14 @@ function resolveWorkerSoakCheck(
   if (!soak.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${soak.error} Run npm run host:worker-soak. (${soak.path})`,
+      evidence: `${soak.error} Run npm run ops -- host:worker-soak. (${soak.path})`,
     };
   }
 
   if (requestedStatus === 'passed' && soak.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Worker soak strict evidence must be generated with npm run host:worker-soak -- --required. (${soak.path})`,
+      evidence: `Worker soak strict evidence must be generated with npm run ops -- host:worker-soak --required. (${soak.path})`,
     };
   }
 
@@ -1533,14 +1287,14 @@ function resolveRuntimeStoresCheck(
   if (!postgres.report) {
     return {
       status: requestedStatus === 'passed' ? 'failed' : 'pending',
-      evidence: `${postgres.error} Run npm run host:postgres-local-smoke. (${postgres.path})`,
+      evidence: `${postgres.error} Run npm run ops -- host:postgres-local-smoke. (${postgres.path})`,
     };
   }
 
   if (requestedStatus === 'passed' && postgres.report.required !== true) {
     return {
       status: 'failed',
-      evidence: `Runtime store strict evidence must be generated by npm run host:postgres-local-smoke. (${postgres.path})`,
+      evidence: `Runtime store strict evidence must be generated by npm run ops -- host:postgres-local-smoke. (${postgres.path})`,
     };
   }
 
@@ -1604,9 +1358,6 @@ function resolveCheckEvidence(
   }
   if (checkId === 'accessibility-smoke') {
     return resolveAccessibilitySmokeCheck(projectRoot, requestedStatus);
-  }
-  if (checkId === 'module-quality') {
-    return resolveModuleQualityCheck(projectRoot, requestedStatus);
   }
   if (checkId === 'product-presentation-kernel') {
     return resolveProductPresentationCheck(projectRoot, requestedStatus);

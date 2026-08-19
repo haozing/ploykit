@@ -36,7 +36,6 @@
 
 ## 验证入口
 
-- `npm run test:commercial-ledger`
-- `npm run test:commercial-postgres`
-- `npm run test:web-shell`
-- `npm run host:stripe-local-smoke`
+- `npm run test -- commercial`
+- `npm run test -- web`
+- `npm run ops -- host:stripe-local-smoke`

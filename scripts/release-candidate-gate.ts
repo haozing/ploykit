@@ -28,7 +28,6 @@ const requiredChecks =
         'delivery-ledger': true,
         'browser-matrix': true,
         'accessibility-smoke': true,
-        'module-quality': true,
         'product-presentation-kernel': true,
         'white-label-presentation': true,
         'data-safety-matrix': true,
