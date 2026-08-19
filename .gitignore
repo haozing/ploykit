@@ -1,5 +1,12 @@
 .DS_Store
 Thumbs.db
+
+# Local assistant, editor, and MCP configuration
+.claude/
+.vscode/
+.mcp.json
+skills-lock.json
+
 node_modules/
 .next/
 apps/host-next/next-env.d.ts
@@ -16,4 +23,6 @@ modules/*/tests/artifacts/
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
 tmp

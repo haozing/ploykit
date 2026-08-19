@@ -744,36 +744,6 @@ select:focus-visible {
   white-space: pre-wrap;
 }
 
-.module-json,
-.module-object pre {
-  border-radius: 7px;
-  background: #111b17;
-  color: #e6f0e9;
-}
-
-.module-json,
-.module-object pre {
-  overflow: auto;
-  overflow-wrap: anywhere;
-  padding: 12px;
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-
-.module-output-text,
-.module-object p {
-  color: var(--theme-color-foreground);
-}
-
-.module-list {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.muted {
-  color: var(--theme-color-muted-foreground);
-}
-
 .checkbox-row {
   display: flex;
   align-items: center;

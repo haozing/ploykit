@@ -1,7 +1,7 @@
 import { Fragment, isValidElement, type ReactNode } from 'react';
-import { ModuleValue } from '@host/components/ModuleValue';
 import { HostPageRenderer } from '@host/components/layout/HostPageRenderer';
 import { HostPageSlot } from '@host/components/layout/HostPageSlot';
+import { ModuleSurfaceErrorBoundary } from '@host/components/layout/ModuleSurfaceErrorBoundary';
 import { ProductThemeStyle } from '@host/components/theme/ProductThemeStyle';
 import {
   resolveHostPageComposition,
@@ -161,13 +161,7 @@ export async function renderHostPageSlotById({
     composition: getProductComposition(),
     session: renderSession,
   });
-  return renderHostPageSlot(
-    plan,
-    slotId,
-    pathname,
-    componentProps ?? {},
-    renderSession
-  );
+  return renderHostPageSlot(plan, slotId, pathname, componentProps ?? {}, renderSession);
 }
 
 async function renderActiveHostPageOverride(
@@ -210,7 +204,11 @@ async function renderActiveHostPageOverride(
 
   return {
     resolved: true,
-    page: normalizeModuleRenderOutput(selected.rendered),
+    page: (
+      <ModuleSurfaceErrorBoundary moduleId={selected.moduleId}>
+        {normalizeModuleRenderOutput(selected.rendered)}
+      </ModuleSurfaceErrorBoundary>
+    ),
   };
 }
 
@@ -267,26 +265,55 @@ async function renderHostPageSlot(
     .filter((item) => item.mode !== 'replace')
     .map((item, index) => (
       <Fragment key={`${item.moduleId}:${item.surfaceId}:${item.mode}:${index}`}>
-        {normalizeModuleRenderOutput(item.rendered)}
+        <ModuleSurfaceErrorBoundary moduleId={item.moduleId}>
+          {normalizeModuleRenderOutput(item.rendered)}
+        </ModuleSurfaceErrorBoundary>
       </Fragment>
     ));
 }
 
 function normalizeModuleRenderOutput(output: unknown): ReactNode {
-  if (
-    output === null ||
-    output === undefined ||
-    typeof output === 'string' ||
-    typeof output === 'number' ||
-    typeof output === 'boolean' ||
-    isValidElement(output)
-  ) {
+  if (isReactNodeValue(output)) {
     return output;
   }
 
-  return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <ModuleValue value={output} />
-    </main>
-  );
+  throw new TypeError('Module UI entry must return a ReactNode.');
+}
+
+function isReactNodeValue(value: unknown): value is ReactNode {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint' ||
+    isValidElement(value)
+  ) {
+    return true;
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    try {
+      const marker = (value as { $$typeof?: symbol }).$$typeof;
+      if (marker === Symbol.for('react.portal')) {
+        return true;
+      }
+      if (typeof (value as PromiseLike<unknown>).then === 'function') {
+        return true;
+      }
+      if (typeof (value as Iterable<unknown>)[Symbol.iterator] === 'function') {
+        for (const item of value as Iterable<unknown>) {
+          if (!isReactNodeValue(item)) {
+            return false;
+          }
+        }
+        return true;
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { ModuleValue } from '@host/components/ModuleValue';
 import { ErrorPanel } from '@host/components/layout/ErrorPanel';
 import { SiteFrame } from '@host/components/site/SiteFrame';
 import { SitePageShell } from '@host/components/site/SitePageShell';
@@ -160,7 +159,7 @@ export async function renderSiteModulePage(pathname: string) {
   if (usesModuleChrome) {
     return (
       <SiteFrame lang={lang} navItems={headerItems} footerItems={footerItems}>
-        <ModuleValue value={output} />
+        {output}
       </SiteFrame>
     );
   }
@@ -168,9 +167,7 @@ export async function renderSiteModulePage(pathname: string) {
   return (
     <SiteFrame lang={lang} navItems={headerItems} footerItems={footerItems}>
       <SitePageShell title={title} description={description}>
-        <section className="rounded-md border border-border bg-card p-5 shadow-sm">
-          <ModuleValue value={output} />
-        </section>
+        {output}
       </SitePageShell>
     </SiteFrame>
   );

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createElement, isValidElement, type ReactNode } from 'react';
 import { defineModule, Permission, type ModuleContext } from '@ploykit/module-sdk';
 import {
   createModuleHost,
@@ -127,13 +128,11 @@ const artifact: ModuleMapArtifact = {
       module: async () => ({ default: uiModule }),
       pages: {
         'pages/DashboardPage': async () => ({
-          default: (props: { loaderData: unknown }) => ({
-            view: 'dashboard',
-            loaderData: props.loaderData,
-          }),
+          default: (props: { loaderData: unknown }) =>
+            createElement('div', { 'data-view': 'dashboard', loaderData: props.loaderData }),
         }),
         'pages/PublicToolPage': async () => ({
-          default: () => ({ view: 'public-tool' }),
+          default: () => createElement('div', { 'data-view': 'public-tool' }),
         }),
       },
       loaders: {
@@ -167,10 +166,8 @@ const artifact: ModuleMapArtifact = {
       },
       surfaces: {
         'surfaces/Widget': async () => ({
-          default: (props: { loaderData: unknown }) => ({
-            view: 'widget',
-            loaderData: props.loaderData,
-          }),
+          default: (props: { loaderData: unknown }) =>
+            createElement('div', { 'data-view': 'widget', loaderData: props.loaderData }),
         }),
       },
       assets: ['assets/logo.png', 'assets/sync.worker.js', 'assets/engine.wasm'],
@@ -203,7 +200,7 @@ test('P5 renders module pages with loader data, metadata, SEO and cache policy',
       workspaceId: 'workspace_1',
     },
     renderComponent({ page, props }) {
-      return (page.component as (input: typeof props) => unknown)(props);
+      return (page.component as (input: typeof props) => ReactNode)(props);
     },
   });
 
@@ -216,12 +213,16 @@ test('P5 renders module pages with loader data, metadata, SEO and cache policy',
     slug: 'alpha',
     scope: 'workspace_1',
   });
-  assert.deepEqual(result.page.rendered, {
-    view: 'dashboard',
-    loaderData: {
-      slug: 'alpha',
-      scope: 'workspace_1',
-    },
+  const renderedPage = result.page.rendered;
+  assert.ok(isValidElement(renderedPage));
+  const renderedPageProps = renderedPage.props as {
+    'data-view'?: string;
+    loaderData?: unknown;
+  };
+  assert.equal(renderedPageProps['data-view'], 'dashboard');
+  assert.deepEqual(renderedPageProps.loaderData, {
+    slug: 'alpha',
+    scope: 'workspace_1',
   });
   assert.equal(result.page.seo.title, 'UI alpha');
   assert.equal(result.page.seo.canonical, '/ui/alpha');
@@ -291,16 +292,20 @@ test('P5 renders surfaces and filters them by P4 permissions', async () => {
       permissions: [Permission.ThemeWrite],
     },
     renderComponent({ component, loaderData }) {
-      return (component as (props: { loaderData: unknown }) => unknown)({ loaderData });
+      return (component as (props: { loaderData: unknown }) => ReactNode)({ loaderData });
     },
   });
 
   assert.equal(allowed.panel.length, 1);
   assert.deepEqual(allowed.panel[0].loaderData, { userId: 'user_2' });
-  assert.deepEqual(allowed.panel[0].rendered, {
-    view: 'widget',
-    loaderData: { userId: 'user_2' },
-  });
+  const renderedPanel = allowed.panel[0].rendered;
+  assert.ok(isValidElement(renderedPanel));
+  const renderedPanelProps = renderedPanel.props as {
+    'data-view'?: string;
+    loaderData?: unknown;
+  };
+  assert.equal(renderedPanelProps['data-view'], 'widget');
+  assert.deepEqual(renderedPanelProps.loaderData, { userId: 'user_2' });
 });
 
 test('P5 enforces surface visibility modes at runtime', async () => {

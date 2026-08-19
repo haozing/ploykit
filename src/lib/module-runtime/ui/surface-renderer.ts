@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { ModuleContext } from '@ploykit/module-sdk';
 import { createModuleRuntimeContext } from '../context';
 import type { ModuleRuntimeHost } from '../host';
@@ -19,7 +20,7 @@ export interface RenderModuleSurfaceInput {
   loaderDataByModuleId?: ReadonlyMap<string, unknown> | Record<string, unknown>;
   isolateErrors?: boolean;
   onDiagnostic?: (diagnostic: RenderedModuleSurfaceDiagnostic) => void;
-  renderComponent?: (input: RenderModuleSurfaceComponentInput) => unknown | Promise<unknown>;
+  renderComponent?: (input: RenderModuleSurfaceComponentInput) => ReactNode | Promise<ReactNode>;
 }
 
 export interface RenderModuleSurfaceComponentInput {
@@ -35,7 +36,7 @@ export interface RenderedModuleSurfaceContribution {
   priority: number;
   component: unknown;
   loaderData: unknown;
-  rendered: unknown;
+  rendered: ReactNode;
   contribution: ResolvedModuleSurfaceContribution;
 }
 
@@ -216,7 +217,7 @@ export async function renderModuleSurface(
       continue;
     }
 
-    let output: unknown = null;
+    let output: ReactNode = null;
     if (input.renderComponent) {
       try {
         output = await input.renderComponent({ contribution, component, loaderData });

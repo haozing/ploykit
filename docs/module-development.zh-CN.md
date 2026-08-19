@@ -95,7 +95,7 @@ one-time token 和状态机时序必须用真实服务 live smoke 或服务端 b
 CRUD 模板会生成：
 
 - `module.ts`：声明 data table、dashboard route、API route、action 和权限。
-- `pages/NotesPage.ts`：页面组件入口。
+- `pages/NotesPage.tsx`：标准 React/TSX 页面组件入口。
 - `loaders/notes.ts`：通过 `ctx.data` 读取列表。
 - `api/notes.ts`：GET/POST API。
 - `actions/create-note.ts`：模块 action。

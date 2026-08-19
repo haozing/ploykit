@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { ModuleRuntimeHost } from '../host';
 import {
   resolveModulePageRoute,
@@ -16,7 +17,7 @@ export interface RenderModulePageInput {
   session?: ModuleRuntimeAccessSession;
   params?: Record<string, string>;
   hostBaseUrl?: string;
-  renderComponent?: (input: RenderModulePageComponentInput) => unknown | Promise<unknown>;
+  renderComponent?: (input: RenderModulePageComponentInput) => ReactNode | Promise<ReactNode>;
 }
 
 export interface RenderModulePageComponentInput {
@@ -45,7 +46,7 @@ export interface RenderedModulePage {
   shell: ModulePageRouteKind;
   component: unknown;
   props: ModulePageRenderProps;
-  rendered: unknown;
+  rendered: ReactNode;
   seo: ModuleSeoMetadata;
   cache: ModuleRouteCachePolicy;
   route: ResolvedModulePageRoute;

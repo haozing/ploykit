@@ -7,7 +7,6 @@ import { ClientTransitionLinks } from '@host/components/layout/ClientTransitionL
 import { ErrorPanel } from '@host/components/layout/ErrorPanel';
 import { PageShell } from '@host/components/layout/PageShell';
 import type { NavGroup, NavItem } from '@host/components/layout/types';
-import { ModuleValue } from '@host/components/ModuleValue';
 import { ProductScopeSwitcher } from '@host/components/ProductScopeSwitcher';
 import { ProductThemeStyle } from '@host/components/theme/ProductThemeStyle';
 import { requireHostUser } from '@host/lib/auth';
@@ -566,7 +565,7 @@ async function DashboardHome({ request }: { request: Request }) {
               key={`${item.moduleId}:${item.surfaceId}`}
               className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between"
             >
-              <ModuleValue value={item.rendered} />
+              {item.rendered}
             </div>
           ))
         ) : (
@@ -632,14 +631,10 @@ async function ModuleDashboardPage({
   );
 
   if (unframed) {
-    return <ModuleValue value={output} />;
+    return output;
   }
 
-  return (
-    <section className="rounded-md border border-border bg-card p-5 shadow-sm">
-      <ModuleValue value={output} />
-    </section>
-  );
+  return output;
 }
 
 function ModuleChromeErrorPanel({

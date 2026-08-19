@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createElement, forwardRef, isValidElement, lazy, memo, type ReactNode } from 'react';
 import { defineModule, Permission, validateModuleDefinition } from '@ploykit/module-sdk';
 import {
   createModuleHost,
@@ -11,6 +12,20 @@ import {
 import { resolveActiveNavItem } from '../apps/host-next/components/layout/nav-active';
 import type { NavGroup } from '../apps/host-next/components/layout/types';
 import { resolveModuleNavigationIconKey } from '../apps/host-next/lib/module-navigation-icons';
+import { callModuleComponent } from '../apps/host-next/lib/rendering';
+
+test('host rendering accepts standard React component types', () => {
+  const components = [
+    memo(() => createElement('span', null, 'memo')),
+    forwardRef((_props, _ref) => createElement('span', null, 'forward-ref')),
+    lazy(async () => ({ default: () => createElement('span', null, 'lazy') })),
+  ];
+
+  for (const component of components) {
+    assert.ok(isValidElement(callModuleComponent(component)));
+  }
+  assert.throws(() => callModuleComponent({ view: 'legacy' }), /valid React component type/);
+});
 
 test('P5 validates host page override requirements', () => {
   const diagnostics = validateModuleHostPageOverride('host.page:dashboard.home', {
@@ -301,7 +316,8 @@ test('P5 replacement render uses product-granted override permission without cal
         module: async () => ({ default: replacement }),
         surfaces: {
           'surfaces/Home': async () => ({
-            default: (_props: { loaderData?: unknown }) => ({ rendered: true }),
+            default: (_props: { loaderData?: unknown }) =>
+              createElement('span', { 'data-rendered': true }),
           }),
         },
         loaders: {
@@ -319,7 +335,7 @@ test('P5 replacement render uses product-granted override permission without cal
     surfaceId: 'host.page:site.home',
     session: { user: null, permissions: [] },
     renderComponent({ component, loaderData }) {
-      return (component as (props: { loaderData: unknown }) => unknown)({ loaderData });
+      return (component as (props: { loaderData: unknown }) => ReactNode)({ loaderData });
     },
   });
 
@@ -327,7 +343,9 @@ test('P5 replacement render uses product-granted override permission without cal
     surface.replace.map((item) => item.moduleId),
     ['override-only']
   );
-  assert.deepEqual(surface.replace[0]?.rendered, { rendered: true });
+  const renderedReplacement = surface.replace[0]?.rendered;
+  assert.ok(isValidElement(renderedReplacement));
+  assert.equal((renderedReplacement.props as { 'data-rendered'?: boolean })['data-rendered'], true);
 });
 
 test('P5 surface visibility is evaluated with the caller session', async () => {
@@ -352,7 +370,7 @@ test('P5 surface visibility is evaluated with the caller session', async () => {
         module: async () => ({ default: adminSurface }),
         surfaces: {
           'surfaces/AdminOnly': async () => ({
-            default: () => ({ adminOnly: true }),
+            default: () => createElement('span', { 'data-admin-only': true }),
           }),
         },
       },
@@ -365,7 +383,7 @@ test('P5 surface visibility is evaluated with the caller session', async () => {
     surfaceId: 'host.page:site.home:main.before',
     session: { user: null, permissions: [] },
     renderComponent({ component }) {
-      return (component as () => unknown)();
+      return (component as () => ReactNode)();
     },
   });
   const admin = await renderModuleSurface(host.runtime, {
@@ -373,7 +391,7 @@ test('P5 surface visibility is evaluated with the caller session', async () => {
     surfaceId: 'host.page:site.home:main.before',
     session: { user: { id: 'admin', role: 'admin' }, permissions: [] },
     renderComponent({ component }) {
-      return (component as () => unknown)();
+      return (component as () => ReactNode)();
     },
   });
 
@@ -407,7 +425,8 @@ test('P5 surface rendering can reuse preloaded page presentation metadata', asyn
         module: async () => ({ default: replacement }),
         surfaces: {
           'surfaces/Home': async () => ({
-            default: (props: { loaderData: unknown }) => props.loaderData,
+            default: (props: { loaderData: unknown }) =>
+              createElement('span', { loaderData: props.loaderData }),
           }),
         },
         loaders: {
@@ -429,12 +448,16 @@ test('P5 surface rendering can reuse preloaded page presentation metadata', asyn
     session: { user: null, permissions: [] },
     loaderDataByModuleId: new Map([['preloaded-replace', { title: 'Preloaded metadata' }]]),
     renderComponent({ component, loaderData }) {
-      return (component as (props: { loaderData: unknown }) => unknown)({ loaderData });
+      return (component as (props: { loaderData: unknown }) => ReactNode)({ loaderData });
     },
   });
 
   assert.equal(loaderCalls, 0);
-  assert.deepEqual(surface.replace[0]?.rendered, { title: 'Preloaded metadata' });
+  const renderedPreloaded = surface.replace[0]?.rendered;
+  assert.ok(isValidElement(renderedPreloaded));
+  assert.deepEqual((renderedPreloaded.props as { loaderData?: unknown }).loaderData, {
+    title: 'Preloaded metadata',
+  });
 });
 
 test('host layout navigation active state prefers the deepest matching item', () => {

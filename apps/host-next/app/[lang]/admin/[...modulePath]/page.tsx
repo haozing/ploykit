@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { ErrorPanel } from '@host/components/layout/ErrorPanel';
-import { ModuleValue } from '@host/components/ModuleValue';
 import { adminNav, WorkspaceShell } from '@host/components/ProductShell';
 import { requireAdminUser } from '@host/lib/auth';
 import { getModuleHost } from '@host/lib/module-host';
@@ -110,11 +109,7 @@ async function ModuleAdminPage({
     language: lang,
   });
 
-  return (
-    <section className="rounded-md border border-admin-border bg-admin-surface p-5 shadow-admin-card">
-      <ModuleValue value={output} />
-    </section>
-  );
+  return output;
 }
 
 export async function generateMetadata({ params }: AdminModulePageProps): Promise<Metadata> {

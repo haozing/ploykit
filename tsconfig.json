@@ -24,7 +24,9 @@
   "include": [
     "src/**/*.ts",
     "modules/**/*.ts",
+    "modules/**/*.tsx",
     "templates/**/*.ts",
+    "templates/**/*.tsx",
     "tests/**/*.ts",
     "apps/**/*.ts",
     "apps/**/*.tsx"

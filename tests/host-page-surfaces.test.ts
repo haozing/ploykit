@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createElement, type ReactNode } from 'react';
 import { defineModule, Permission } from '@ploykit/module-sdk';
 import {
   createModuleHost,
@@ -45,7 +46,7 @@ test('P1.5A renders only host page slot contributions selected by composition po
           'surfaces/Hero': async () => ({
             default: () => {
               renderedModules.push('allowed-site');
-              return { moduleId: 'allowed-site' };
+              return createElement('span', { 'data-module-id': 'allowed-site' });
             },
           }),
         },
@@ -56,7 +57,7 @@ test('P1.5A renders only host page slot contributions selected by composition po
           'surfaces/Hero': async () => ({
             default: () => {
               renderedModules.push('blocked-site');
-              return { moduleId: 'blocked-site' };
+              return createElement('span', { 'data-module-id': 'blocked-site' });
             },
           }),
         },
@@ -83,7 +84,7 @@ test('P1.5A renders only host page slot contributions selected by composition po
     contributions: plan.slots.hero,
     session: { user: null, system: true },
     renderComponent({ component }) {
-      return (component as () => unknown)();
+      return (component as () => ReactNode)();
     },
   });
 
@@ -137,13 +138,17 @@ test('P5 host page slot plan uses caller visibility and module permissions', asy
       'admin-only-slot': {
         module: async () => ({ default: adminOnly }),
         surfaces: {
-          'surfaces/AdminOnly': async () => ({ default: () => ({ admin: true }) }),
+          'surfaces/AdminOnly': async () => ({
+            default: () => createElement('span', { 'data-admin': true }),
+          }),
         },
       },
       'missing-slot-permission': {
         module: async () => ({ default: missingPermission }),
         surfaces: {
-          'surfaces/MissingPermission': async () => ({ default: () => ({ missing: true }) }),
+          'surfaces/MissingPermission': async () => ({
+            default: () => createElement('span', { 'data-missing': true }),
+          }),
         },
       },
     },
@@ -183,7 +188,7 @@ test('P5 host page slot plan uses caller visibility and module permissions', asy
   );
 });
 
-test('P5 slot surface rendering isolates a failed contribution', async () => {
+test('P5 surface renderer isolates a failed render callback', async () => {
   const healthy = defineModule({
     id: 'healthy-slot',
     name: 'Healthy Slot',
@@ -219,7 +224,7 @@ test('P5 slot surface rendering isolates a failed contribution', async () => {
         module: async () => ({ default: healthy }),
         surfaces: {
           'surfaces/Healthy': async () => ({
-            default: () => ({ moduleId: 'healthy-slot' }),
+            default: () => createElement('span', { 'data-module-id': 'healthy-slot' }),
           }),
         },
       },
@@ -243,7 +248,7 @@ test('P5 slot surface rendering isolates a failed contribution', async () => {
     session: { user: null, permissions: [] },
     isolateErrors: true,
     renderComponent({ component }) {
-      return (component as () => unknown)();
+      return (component as () => ReactNode)();
     },
   });
 
@@ -297,7 +302,10 @@ test('P1.5B renders admin module header actions only from allowed composition mo
           'surfaces/AdminActions': async () => ({
             default: () => {
               renderedModules.push('admin-actions');
-              return { moduleId: 'admin-actions', label: 'Brand preview' };
+              return createElement('span', {
+                'data-module-id': 'admin-actions',
+                'data-label': 'Brand preview',
+              });
             },
           }),
         },
@@ -308,7 +316,10 @@ test('P1.5B renders admin module header actions only from allowed composition mo
           'surfaces/AdminActions': async () => ({
             default: () => {
               renderedModules.push('blocked-actions');
-              return { moduleId: 'blocked-actions', label: 'Blocked preview' };
+              return createElement('span', {
+                'data-module-id': 'blocked-actions',
+                'data-label': 'Blocked preview',
+              });
             },
           }),
         },
@@ -335,7 +346,7 @@ test('P1.5B renders admin module header actions only from allowed composition mo
     contributions: plan.slots['header.actions'],
     session: { user: { id: 'admin', role: 'admin' } },
     renderComponent({ component }) {
-      return (component as () => unknown)();
+      return (component as () => ReactNode)();
     },
   });
 

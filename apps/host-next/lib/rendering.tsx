@@ -1,40 +1,37 @@
+import { createElement, type ElementType, type ReactNode } from 'react';
 import { readModuleDefaultExport } from '@/lib/module-runtime/adapters/module-export';
 import type { ModuleHost } from '@/lib/module-runtime/host/create-module-host';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
 import { renderModuleSurface } from '@/lib/module-runtime/ui/surface-renderer';
 
-export async function callModuleComponent(component: unknown, props?: unknown): Promise<unknown> {
+export function callModuleComponent(component: unknown, props?: unknown): ReactNode {
   const exported = readModuleDefaultExport(component);
-  if (typeof exported === 'function') {
-    return (exported as (props?: unknown) => unknown | Promise<unknown>)(props);
+  if (!isReactComponentType(exported)) {
+    throw new TypeError('Module UI entry must export a valid React component type.');
   }
 
-  return exported;
+  return createElement(exported as ElementType, props as Record<string, unknown>);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-export async function renderPageComponent(component: unknown, props: unknown): Promise<unknown> {
-  const output = await callModuleComponent(component, props);
-  if (
-    isRecord(output) &&
-    typeof output.view === 'string' &&
-    isRecord(props) &&
-    !('loaderData' in output)
-  ) {
-    return {
-      ...output,
-      loaderData: props.loaderData,
-      params: props.params,
-      metadata: props.metadata,
-      language: props.language,
-      dashboardBaseHref: props.dashboardBaseHref,
-    };
+function isReactComponentType(value: unknown): boolean {
+  if (typeof value === 'function') {
+    return true;
   }
 
-  return output;
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const reactType = (value as { $$typeof?: symbol }).$$typeof;
+  return (
+    reactType === Symbol.for('react.forward_ref') ||
+    reactType === Symbol.for('react.memo') ||
+    reactType === Symbol.for('react.lazy')
+  );
+}
+
+export function renderPageComponent(component: unknown, props: unknown): ReactNode {
+  return callModuleComponent(component, props);
 }
 
 export async function renderDashboardSurface(

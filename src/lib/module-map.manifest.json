@@ -29,14 +29,14 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "05a7f4f92693ce9b8a679b85b924d994cb307ad5ca6b1b6f494fa588d21a1b5a",
+        "sourceHash": "03a812ad71d7cf5773414ae33fb2cd0f231ba4f94806f2f07ddb315df53b8826",
         "contractDigest": "44f53eacecba1c7403f838fab0f9e448012ac4dac95dd2efb08be1cd871ad7c7",
         "sourceFiles": [
           "actions/ask.ts",
           "api/ask.ts",
           "lib/run-ai-rag.ts",
           "module.ts",
-          "pages/AiRagPage.ts"
+          "pages/AiRagPage.tsx"
         ],
         "capabilitySummary": {
           "routes": 2,
@@ -101,7 +101,7 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "ea0ae728a490d168a0e5853b34089c622c4fa88c9b5d96cbe7f59051f3bc7e05",
+        "sourceHash": "8dd518b202a1fe1c96cbc19ab3f3418ad663d3b43636ab4ac242192c122bd7b4",
         "contractDigest": "6d437861bc5cdd3520770de63cc4770234b052edbce1728d0805b3a69060fa41",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
@@ -117,9 +117,9 @@
           "loaders/public-tool-metadata.ts",
           "migrations/0001_generated.sql",
           "module.ts",
-          "pages/DashboardPage.ts",
-          "pages/JobPage.ts",
-          "pages/PublicToolPage.ts",
+          "pages/DashboardPage.tsx",
+          "pages/JobPage.tsx",
+          "pages/PublicToolPage.tsx",
           "README.md",
           "webhooks/ingest.ts",
           "webhooks/workflow-ingest.ts"
@@ -183,7 +183,7 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "e3b2310c8be82753e2632be229044c42eb0ac5e3998a6e002181c6d1220c4620",
+        "sourceHash": "9945ec48afe0f3074ef410d0d58c134793f0953d8d50746fe807a0b43fedc345",
         "contractDigest": "1bc7a2a456e5825d486676b3a265fe93f028794700720c335470839c1a5c6e54",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
@@ -198,10 +198,10 @@
           "loaders/studio.ts",
           "migrations/0001_generated.sql",
           "module.ts",
-          "pages/CmsStudioPage.ts",
-          "pages/NotesPage.ts",
-          "pages/PublicCmsPage.ts",
-          "surfaces/AdminSummary.ts"
+          "pages/CmsStudioPage.tsx",
+          "pages/NotesPage.tsx",
+          "pages/PublicCmsPage.tsx",
+          "surfaces/AdminSummary.tsx"
         ],
         "capabilitySummary": {
           "routes": 5,
@@ -261,7 +261,7 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "3e2b05b9ca08501107c7b359a34261f3b3e10a0c7f374c23e90c3a0086f1ca4a",
+        "sourceHash": "109b96460717c10d2262afc7d92cf2c87d8c943500575b45b112be23cf436161",
         "contractDigest": "7b5506c1356f813ce227caa95e6268997d2db9f902261eb77ec92516f9e41784",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
@@ -273,8 +273,8 @@
           "lifecycle/install.ts",
           "migrations/0001_generated.sql",
           "module.ts",
-          "pages/HelloPage.ts",
-          "surfaces/HelloWidget.ts",
+          "pages/HelloPage.tsx",
+          "surfaces/HelloWidget.tsx",
           "webhooks/echo.ts"
         ],
         "capabilitySummary": {
@@ -394,7 +394,7 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "a2daff57b31974b5e0c01dff01f19c82cc935de89187e00c836cea963fa8ceb5",
+        "sourceHash": "d6038c029417f0c3f0446f95c6a21b9ef7b2e2d768bd05081058d6b5fc3449da",
         "contractDigest": "990540f80f781c293641b5c14cb024ddb4dd8536ca64da829377afbac22cf997",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
@@ -409,10 +409,10 @@
           "loaders/shopfront.ts",
           "migrations/0001_generated.sql",
           "module.ts",
-          "pages/BillingToolPage.ts",
-          "pages/ShopfrontPage.ts",
-          "pages/ShopOpsPage.ts",
-          "surfaces/AdminSummary.ts"
+          "pages/BillingToolPage.tsx",
+          "pages/ShopfrontPage.tsx",
+          "pages/ShopOpsPage.tsx",
+          "surfaces/AdminSummary.tsx"
         ],
         "capabilitySummary": {
           "routes": 6,
@@ -501,7 +501,7 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "589070d6a721a8c3bbd62cf77f9958f1977428f332bebb014a683458ab4a1932",
+        "sourceHash": "cd56d9c63b58385b9c189b2b2b6dcc682e1301371c6a01a8b6339a43e152fd09",
         "contractDigest": "0b72b2604a45c8832642fe874d797e198edf88aa92e6dfbe7219e58fcf8651b9",
         "sourceFiles": [
           "loaders/about-meta.ts",
@@ -521,22 +521,22 @@
           "locales/en.json",
           "locales/zh.json",
           "module.ts",
-          "surfaces/AboutPage.ts",
-          "surfaces/AdminModulesActions.ts",
-          "surfaces/auth-view.ts",
-          "surfaces/ContactPage.ts",
-          "surfaces/content-view.ts",
-          "surfaces/DashboardHomePage.ts",
-          "surfaces/DocsPage.ts",
-          "surfaces/ForgotPasswordPage.ts",
-          "surfaces/HomeHero.ts",
-          "surfaces/HomePage.ts",
-          "surfaces/LoginPage.ts",
-          "surfaces/PricingPage.ts",
-          "surfaces/PrivacyPage.ts",
-          "surfaces/RegisterPage.ts",
-          "surfaces/ResetPasswordPage.ts",
-          "surfaces/TermsPage.ts"
+          "surfaces/AboutPage.tsx",
+          "surfaces/AdminModulesActions.tsx",
+          "surfaces/auth-view.tsx",
+          "surfaces/ContactPage.tsx",
+          "surfaces/content-view.tsx",
+          "surfaces/DashboardHomePage.tsx",
+          "surfaces/DocsPage.tsx",
+          "surfaces/ForgotPasswordPage.tsx",
+          "surfaces/HomeHero.tsx",
+          "surfaces/HomePage.tsx",
+          "surfaces/LoginPage.tsx",
+          "surfaces/PricingPage.tsx",
+          "surfaces/PrivacyPage.tsx",
+          "surfaces/RegisterPage.tsx",
+          "surfaces/ResetPasswordPage.tsx",
+          "surfaces/TermsPage.tsx"
         ],
         "capabilitySummary": {
           "routes": 0,
