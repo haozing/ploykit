@@ -102,7 +102,7 @@ export async function getAdminModuleDevConsoleView(): Promise<AdminModuleDevCons
   const diagnosticsByModule: Record<string, ModuleDiagnostic[]> = {};
 
   for (const contract of hostRuntime.moduleHost.runtime.contracts) {
-    for (const diagnostic of validateModuleDefinition(contract.definition)) {
+    for (const diagnostic of validateModuleDefinition(contract.definition as any)) {
       addDiagnostic(diagnosticsByModule, contract.id, diagnostic);
     }
   }

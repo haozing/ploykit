@@ -5,25 +5,24 @@ import type {
   ModuleDefinition,
   ModuleEventsDefinition,
   ModuleJobDefinition,
-  ModuleLifecycleDefinition,
   ModuleAssetsDefinition,
-  ModuleConfigFieldDefinition,
   ModuleNavigationItem,
   ModulePageDefinition,
-  ModuleDependenciesDefinition,
-  ModuleHeadDefinition,
-  ModuleMeterDefinition,
-  ModuleResourceBindingRequirement,
   ModuleResourceDefinition,
   ModuleServiceRequirementDefinition,
   ModuleSurfaceDefinition,
-  ModuleThemeDefinition,
   ModuleWebhookDefinition,
   PermissionRiskLevel,
   PermissionValue,
 } from '@ploykit/module-sdk';
 
-export type RuntimeModuleDefinition = ModuleDefinition | DefinedModule;
+export type RuntimeModuleDefinition = {
+  id: string;
+  name: string;
+  version: string;
+  profile?: ModuleDefinition['profile'];
+  [key: string]: any;
+};
 
 export interface ModuleRuntimeCapabilitySummary {
   routes: {
@@ -60,11 +59,7 @@ export interface ModuleRuntimeCapabilitySummary {
       required: boolean;
       provider?: string;
     }[];
-    resourceBindings: readonly {
-      name: string;
-      kind: string;
-      required: boolean;
-    }[];
+    resourceBindings: readonly unknown[];
     egressOrigins: readonly string[];
   };
   commercialRequirements: {
@@ -101,20 +96,22 @@ export interface ModuleRuntimeContract {
   surfaces: Readonly<Record<string, ModuleSurfaceDefinition>>;
   assets: ModuleAssetsDefinition;
   resources: Readonly<Record<string, ModuleResourceDefinition>>;
-  theme: ModuleThemeDefinition;
-  meters: Readonly<Record<string, ModuleMeterDefinition>>;
+  theme: any;
+  meters: Readonly<Record<string, any>>;
   serviceRequirements: Readonly<Record<string, ModuleServiceRequirementDefinition>>;
-  resourceBindings: Readonly<Record<string, ModuleResourceBindingRequirement>>;
-  config: Readonly<Record<string, ModuleConfigFieldDefinition>>;
+  resourceBindings: Readonly<Record<string, any>>;
+  config: Readonly<Record<string, any>>;
   actions: Readonly<Record<string, ModuleActionDefinition>>;
   jobs: Readonly<Record<string, ModuleJobDefinition>>;
   events: Required<ModuleEventsDefinition>;
   webhooks: Readonly<Record<string, ModuleWebhookDefinition>>;
-  head: ModuleHeadDefinition;
-  lifecycle: ModuleLifecycleDefinition;
-  dependencies: ModuleDependenciesDefinition;
+  head: any;
+  dependencies: any;
   egress: readonly string[];
-  parts: RuntimeModuleDefinition['parts'];
+  parts: Record<string, string>;
+  profile: ModuleDefinition['profile'];
+  capabilities: NonNullable<ModuleDefinition['capabilities']>;
+  commercial: NonNullable<ModuleDefinition['commercial']>;
   capabilitySummary: ModuleRuntimeCapabilitySummary;
   definition: RuntimeModuleDefinition;
 }

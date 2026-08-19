@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-export type ModuleRunKind = 'manual' | 'job' | 'event' | 'webhook' | 'lifecycle';
+export type ModuleRunKind = 'manual' | 'job' | 'event' | 'webhook';
 
 export type ModuleRunStatus =
   | 'queued'

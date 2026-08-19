@@ -37,8 +37,10 @@ export default defineModule({
   id: 'public-tool-smoke',
   name: 'Public Tool Smoke',
   version: '0.1.0',
+  profile: 'ai-tool',
+  capabilities: ['ai', 'commercial'],
   description: 'Current-contract public page and anonymous API fixture.',
-  permissions: [Permission.UsageWrite, Permission.CreditsConsume],
+  permissions: [Permission.CommercialRead, Permission.CommercialCharge],
   pages: [
     page({
       id: 'public-tool-smoke.home',

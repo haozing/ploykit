@@ -34,8 +34,7 @@ export const USER_MODULE_PERMISSIONS = [
   Permission.DataTableRead,
   Permission.FilesRead,
   Permission.RunsRead,
-  Permission.CreditsRead,
-  Permission.BillingRead,
+  Permission.CommercialRead,
   Permission.NotificationsRead,
   Permission.NotificationsSend,
 ] as const satisfies readonly PermissionValue[];

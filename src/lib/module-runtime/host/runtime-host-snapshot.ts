@@ -68,9 +68,7 @@ export function createModuleRuntimeHostSnapshot(
         summary.backgroundHandlers.eventSubscribes.length +
         summary.backgroundHandlers.webhooks.length;
       totals.providerRequirements +=
-        summary.providerRequirements.services.length +
-        summary.providerRequirements.resourceBindings.length +
-        summary.providerRequirements.egressOrigins.length;
+        summary.providerRequirements.services.length;
       totals.commercialRequirements +=
         summary.commercialRequirements.meters.length +
         summary.commercialRequirements.routeEntitlements.length +

@@ -11,6 +11,8 @@ export default defineModule({
   id: '__MODULE_ID__',
   name: '__MODULE_NAME__',
   version: '0.1.0',
+  profile: 'ai-tool' as const,
+  capabilities: ['ai', 'commercial'] as const,
   pages: [
     page({
       id: '__MODULE_ID__.tool',
@@ -42,7 +44,7 @@ export default defineModule({
     }),
   ],
   navigation: {
-    location: 'dashboard.sidebar',
+    location: 'dashboard.sidebar' as const,
     fallbackLabel: '__MODULE_NAME__',
     path: '/__MODULE_ID__',
     weight: 100,

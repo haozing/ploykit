@@ -1,9 +1,5 @@
 import type { ModuleRuntimeContract } from '../contract';
-import type {
-  ModuleNavigationItem,
-  ModuleProductDefinition,
-  ModuleQualityDefinition,
-} from '@ploykit/module-sdk';
+import type { ModuleNavigationItem } from '@ploykit/module-sdk';
 
 export type ModuleLoader = () => Promise<unknown>;
 export type ModuleMapLocaleMessages = Record<string, unknown>;
@@ -30,8 +26,6 @@ export interface ModuleMapReleaseMetadata {
 export interface ModuleRuntimeMapEntry {
   rootDir?: string;
   release?: ModuleMapReleaseMetadata;
-  product?: ModuleProductDefinition;
-  quality?: ModuleQualityDefinition;
   navigation?: ModuleNavigationItem | readonly ModuleNavigationItem[];
   module?: ModuleLoader;
   pages?: Record<string, ModuleLoader>;
@@ -42,7 +36,6 @@ export interface ModuleRuntimeMapEntry {
   services?: Record<string, ModuleLoader>;
   components?: Record<string, ModuleLoader>;
   surfaces?: Record<string, ModuleLoader>;
-  lifecycle?: Record<string, ModuleLoader>;
   jobs?: Record<string, ModuleLoader>;
   events?: Record<string, ModuleLoader>;
   webhooks?: Record<string, ModuleLoader>;

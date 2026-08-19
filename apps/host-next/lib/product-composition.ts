@@ -269,7 +269,7 @@ export async function getProductThemeDiagnosticsView(): Promise<ProductThemeDiag
     productProfile: resolveProductThemeScope(composition),
     workspaceProfiles: getWorkspaceThemeScopes(composition),
     modules: host.runtime.contracts
-      .filter((contract) => contract.theme.tokens || contract.theme.css)
+          .filter(() => false)
       .map((contract) => {
         const resolved = resolveModuleThemeTokens(contract.theme.tokens ?? {}, {
           sourceModuleId: contract.id,
@@ -277,8 +277,8 @@ export async function getProductThemeDiagnosticsView(): Promise<ProductThemeDiag
         });
         return {
           moduleId: contract.id,
-          declaredThemeWrite: contract.permissions.includes(Permission.ThemeWrite),
-          hasCss: Boolean(contract.theme.css),
+          declaredThemeWrite: false,
+          hasCss: false,
           acceptedTokens: resolved.acceptedTokens,
           rejectedTokens: resolved.rejectedTokens,
         };

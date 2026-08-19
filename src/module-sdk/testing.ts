@@ -12,7 +12,6 @@ import type {
   ModuleEventsApi,
   ModuleFileRecord,
   ModuleFilesApi,
-  ModuleHttpApi,
   ModuleJobsApi,
   ModuleNotificationRecord,
   ModuleNotificationsApi,
@@ -161,14 +160,6 @@ function createTestingResourceBindingsApi(): ModuleResourceBindingsApi {
     },
     async upsert<TBinding = unknown>(_name: string, value: TBinding): Promise<TBinding> {
       return value;
-    },
-  };
-}
-
-function createTestingHttpApi(): ModuleHttpApi {
-  return {
-    async fetch() {
-      return Response.json({ ok: true });
     },
   };
 }
@@ -821,42 +812,25 @@ export function createTestingModuleContext(
     request,
     response,
     data: createTestingDataApi(moduleId),
-    config: createTestingConfigApi(),
-    secrets: createTestingSecretsApi(),
     services: options.services ?? createTestingServicesApi(options.serviceHandlers),
-    connectors: createTestingConnectorsApi(),
-    resourceBindings: createTestingResourceBindingsApi(),
-    http: createTestingHttpApi(),
     files: createTestingFilesApi(moduleId),
-    artifacts: createTestingArtifactsApi(moduleId),
     notifications: createTestingNotificationsApi(moduleId),
     runs: createTestingRunsApi(moduleId),
     jobs: createTestingJobsApi(),
     events: createTestingEventsApi(),
     webhooks: createTestingWebhooksApi(),
-    usage: createTestingUsageApi(moduleId),
-    metering: createTestingMeteringApi(moduleId),
-    credits: createTestingCreditsApi(),
-    billing: createTestingBillingApi(),
-    entitlements: createTestingEntitlementsApi(),
-    commerce: createTestingCommerceApi(),
-    redeemCodes: createTestingRedeemCodesApi(),
     ai: createTestingAiApi(),
     rag: createTestingRagApi(),
-    apiKeys: createTestingApiKeysApi(),
-    rateLimit: createTestingRateLimitApi(),
-    risk: createTestingRiskApi(),
-    cache: createTestingCacheApi(),
     audit: createTestingAuditApi(),
-    extensions: {
-      get() {
-        return null;
+    commercial: {
+      async read<T = unknown>() {
+        return {} as T;
       },
-      require(name) {
-        throw new Error(`MODULE_EXTENSION_REQUIRED: ctx.extensions.${name} is not mounted.`);
+      async charge<T = unknown>() {
+        return {} as T;
       },
-      list() {
-        return [];
+      async checkout<T = unknown>() {
+        return {} as T;
       },
     },
     json: response.json,

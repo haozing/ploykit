@@ -9,7 +9,6 @@ type ModuleLoaderCollectionName =
   | 'services'
   | 'components'
   | 'surfaces'
-  | 'lifecycle'
   | 'jobs'
   | 'events'
   | 'webhooks'

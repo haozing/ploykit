@@ -157,9 +157,7 @@ export function checkModuleMapHealth(input: {
         runtimeSummary.backgroundHandlers.eventSubscribes.length +
         runtimeSummary.backgroundHandlers.webhooks.length,
       providerRequirements:
-        runtimeSummary.providerRequirements.services.length +
-        runtimeSummary.providerRequirements.resourceBindings.length +
-        runtimeSummary.providerRequirements.egressOrigins.length,
+        runtimeSummary.providerRequirements.services.length,
       commercialRequirements:
         runtimeSummary.commercialRequirements.meters.length +
         runtimeSummary.commercialRequirements.routeEntitlements.length +

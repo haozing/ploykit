@@ -24,6 +24,9 @@ export function normalizeModuleRuntimeContract(
     name: definition.name,
     version: definition.version,
     description: definition.description,
+    profile: definition.profile ?? 'app',
+    capabilities: definition.capabilities ?? [],
+    commercial: definition.commercial ?? {},
     permissions: definition.permissions ?? [],
     pages: definition.pages ?? [],
     apis: definition.apis ?? [],
@@ -44,11 +47,10 @@ export function normalizeModuleRuntimeContract(
     },
     webhooks: definition.webhooks ?? {},
     head: definition.head ?? {},
-    lifecycle: definition.lifecycle ?? {},
     dependencies: definition.dependencies ?? {},
     egress: definition.egress ?? [],
     parts: definition.parts ?? {},
-    capabilitySummary: createModuleCapabilitySummary(definition),
+    capabilitySummary: createModuleCapabilitySummary(definition as any),
     definition,
   };
 }

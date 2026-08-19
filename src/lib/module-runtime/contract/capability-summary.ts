@@ -1,16 +1,16 @@
-import { PermissionRegistry } from '@ploykit/module-sdk';
+﻿import { PermissionRegistry } from '@ploykit/module-sdk';
 import type {
   ModuleActionDefinition,
   ModuleApiDefinitionContract,
   ModuleCommercialRequirement,
   ModulePageDefinition,
+  ModuleDefinition,
 } from '@ploykit/module-sdk';
 import type { ModuleRuntimeCapabilitySummary, RuntimeModuleDefinition } from './types';
 
 function keys(value: Record<string, unknown> | undefined): string[] {
   return Object.keys(value ?? {}).sort();
 }
-
 function routeCommercialRequirements(
   routes: readonly ((ModulePageDefinition | ModuleApiDefinitionContract) & {
     commercial?: ModuleCommercialRequirement;
@@ -18,7 +18,6 @@ function routeCommercialRequirements(
 ): ModuleCommercialRequirement[] {
   return routes.map((route) => route.commercial).filter(Boolean) as ModuleCommercialRequirement[];
 }
-
 function actionCommercialRequirements(
   actions: Readonly<Record<string, ModuleActionDefinition>>
 ): ModuleCommercialRequirement[] {
@@ -38,7 +37,7 @@ function hasCredits(requirements: readonly ModuleCommercialRequirement[]): boole
 }
 
 export function createModuleCapabilitySummary(
-  definition: RuntimeModuleDefinition
+  definition: ModuleDefinition
 ): ModuleRuntimeCapabilitySummary {
   const pages = definition.pages ?? [];
   const siteRoutes = pages.filter((page) => page.area === 'site');
@@ -111,17 +110,11 @@ export function createModuleCapabilitySummary(
           provider: requirement.provider,
         }))
         .sort((left, right) => left.name.localeCompare(right.name)),
-      resourceBindings: Object.entries(definition.resourceBindings ?? {})
-        .map(([name, binding]) => ({
-          name,
-          kind: binding.kind,
-          required: Boolean(binding.required),
-        }))
-        .sort((left, right) => left.name.localeCompare(right.name)),
-      egressOrigins: [...(definition.egress ?? [])].sort(),
+      resourceBindings: [],
+      egressOrigins: [],
     },
     commercialRequirements: {
-      meters: keys(definition.meters),
+      meters: keys(definition.commercial?.meters),
       routeEntitlements: collectEntitlements(routeCommercial),
       actionEntitlements: collectEntitlements(actionCommercial),
       creditsRequired: hasCredits([...routeCommercial, ...actionCommercial]),
@@ -141,9 +134,9 @@ export function createModuleCapabilitySummary(
           visibility: surface.visibility?.mode,
         }))
         .sort((left, right) => left.id.localeCompare(right.id)),
-      whiteLabel: Boolean(definition.presentation?.whiteLabel),
-      replaces: [...(definition.presentation?.replaces ?? [])].sort(),
-      themeTokens: keys(definition.theme?.tokens),
+      whiteLabel: false,
+      replaces: [],
+      themeTokens: [],
       i18nNamespaces: [...(definition.i18n?.namespaces ?? [])].sort(),
     },
   };

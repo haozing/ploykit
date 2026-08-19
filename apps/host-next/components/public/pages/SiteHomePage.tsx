@@ -121,7 +121,7 @@ const codeLines = [
   "  id: 'content-studio',",
   "  name: 'Content Studio',",
   "  version: '0.1.0',",
-  "  permissions: [Permission.FilesWrite, Permission.SurfaceContribute],",
+  "  permissions: [Permission.FilesWrite],",
   '  pages: [',
   '    page({',
   "      id: 'content.home',",

@@ -20,7 +20,6 @@ export interface ModuleDevConsoleCapabilitySummary {
     locales: number;
     assets: number;
   };
-  lifecycle: number;
 }
 
 export interface ModuleDevConsoleModule {
@@ -34,7 +33,6 @@ export interface ModuleDevConsoleModule {
     loaders: number;
     actions: number;
     surfaces: number;
-    lifecycle: number;
     jobs: number;
     events: number;
     webhooks: number;
@@ -89,7 +87,6 @@ function summarizeContract(contract: ModuleRuntimeContract): ModuleDevConsoleCap
       locales: countRecord(contract.assets.locales),
       assets: countArray(contract.assets.assets),
     },
-    lifecycle: Object.values(contract.lifecycle).filter(Boolean).length,
   };
 }
 
@@ -122,7 +119,6 @@ export function createModuleDevConsoleSnapshot(
           loaders: countRecord(entry.loaders),
           actions: countRecord(entry.actions),
           surfaces: countRecord(entry.surfaces),
-          lifecycle: countRecord(entry.lifecycle),
           jobs: countRecord(entry.jobs),
           events: countRecord(entry.events),
           webhooks: countRecord(entry.webhooks),

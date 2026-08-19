@@ -1,14 +1,7 @@
 import type { ModuleRuntimeContract } from '@/lib/module-runtime/contract/types';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
 import type {
-  ModuleBillingApi,
-  ModuleCommerceApi,
-  ModuleCreditsApi,
-  ModuleEntitlementsApi,
-  ModuleMeteringApi,
-  ModuleRedeemCodesApi,
-  ModuleRiskApi,
-  ModuleUsageApi,
+  ModuleCommercialApi,
 } from '@ploykit/module-sdk';
 import {
   createHostCommercialRuntimeFromStore,
@@ -39,67 +32,36 @@ function commercialModuleRuntime(input: {
 }) {
   return input.commercialForSession(input.hostSession).forModule(input.contract.id);
 }
-
-export function createHostModuleUsageApi(input: {
+export function createHostModuleCommercialApi(input: {
   contract: ModuleRuntimeContract;
   hostSession: ModuleHostSession;
   commercialForSession: HostCommercialForSession;
-}): ModuleUsageApi {
-  return commercialModuleRuntime(input).usage;
-}
-
-export function createHostModuleMeteringApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleMeteringApi {
-  return commercialModuleRuntime(input).metering;
-}
-
-export function createHostModuleCreditsApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleCreditsApi {
-  return commercialModuleRuntime(input).credits;
-}
-
-export function createHostModuleBillingApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleBillingApi {
-  return commercialModuleRuntime(input).billing;
-}
-
-export function createHostModuleEntitlementsApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleEntitlementsApi {
-  return commercialModuleRuntime(input).entitlements;
-}
-
-export function createHostModuleCommerceApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleCommerceApi {
-  return commercialModuleRuntime(input).commerce;
-}
-
-export function createHostModuleRedeemCodesApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleRedeemCodesApi {
-  return commercialModuleRuntime(input).redeemCodes;
-}
-
-export function createHostModuleRiskApi(input: {
-  contract: ModuleRuntimeContract;
-  hostSession: ModuleHostSession;
-  commercialForSession: HostCommercialForSession;
-}): ModuleRiskApi {
-  return commercialModuleRuntime(input).risk;
+}): ModuleCommercialApi {
+  const runtime = commercialModuleRuntime(input);
+  const userId = input.hostSession.user?.id ?? input.hostSession.actorId ?? '';
+  return {
+    async read<T = unknown>(query = {}) {
+      const normalizedQuery = query as Record<string, unknown>;
+      const kind = typeof normalizedQuery.kind === 'string' ? normalizedQuery.kind : 'summary';
+      if (kind === 'plan') {
+        return (await runtime.billing.getCurrentPlan(userId)) as T;
+      }
+      if (kind === 'entitlements') {
+        return (await runtime.entitlements.list({ userId })) as T;
+      }
+      if (kind === 'balance') {
+        return (await runtime.credits.balance((normalizedQuery as never) || userId)) as T;
+      }
+      return (await Promise.all([
+        runtime.billing.getCurrentPlan(userId),
+        runtime.entitlements.list({ userId }),
+      ]).then(([plan, entitlements]) => ({ plan, entitlements }))) as T;
+    },
+    async charge<T = unknown>(charge: Record<string, unknown>) {
+      return (await runtime.metering.charge(charge as never)) as T;
+    },
+    async checkout<T = unknown>(checkout: Record<string, unknown>) {
+      return (await runtime.commerce.createCheckout(checkout as never)) as T;
+    },
+  };
 }

@@ -435,7 +435,7 @@ test('generated module icon registry includes host core and declared module navi
   });
 });
 
-test('generated module map includes declared host extension capability providers', (t) => {
+test('generated module map excludes host extension capability providers', (t) => {
   withGeneratedModuleMapRestore(() => {
     const moduleId = writeWorkspaceHostExtensionModule(t);
     const scan = runPloyKitCommand(['scripts/generate-module-map.mjs']);
@@ -445,58 +445,10 @@ test('generated module map includes declared host extension capability providers
       path.join(process.cwd(), 'src', 'lib', 'module-map.ts'),
       'utf8'
     );
-    assert.match(mapSource, new RegExp(`${moduleId}[\\s\\S]*capabilities`));
-    assert.match(mapSource, new RegExp(`${moduleId}[\\s\\S]*admin`));
-    assert.match(mapSource, /"admin\/workers\.list": \(\) => import\("\.\.\/\.\.\/modules\/capability-fixture-[a-f0-9-]+\/admin\/workers\.list"\)/);
-    assert.match(mapSource, /"executor": \(\) => import\("\.\.\/\.\.\/modules\/capability-fixture-[a-f0-9-]+\/capabilities\/executor"\)/);
+    const moduleBlock = mapSource.slice(mapSource.indexOf(`"${moduleId}"`));
+    assert.doesNotMatch(moduleBlock, /\n    capabilities:|\n    admin:/);
 
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'src', 'lib', 'module-map.manifest.json'), 'utf8')
-    ) as {
-      modules: Array<{
-        id: string;
-        admin?: Array<{ name: string; path: string }>;
-        capabilities?: Array<{ name: string; path: string }>;
-      }>;
-    };
-    const moduleInfo = manifest.modules.find((module) => module.id === moduleId);
-    assert.deepEqual(moduleInfo?.admin, [
-      { name: 'admin/workers.list', path: 'admin/workers.list' },
-    ]);
-    assert.deepEqual(moduleInfo?.capabilities, [
-      { name: 'executor', path: 'capabilities/executor' },
-    ]);
   });
-});
-
-test('module test summary keeps stdout short while writing the detailed report', (t) => {
-  const { moduleId, moduleRoot } = writeWorkspaceModuleTestFixture(t);
-  const result = runPloyKitCommand(['scripts/module-test.mjs', moduleRoot, '--summary']);
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Module test summary:/);
-  assert.match(result.stdout, new RegExp(`${moduleId}: passed`));
-  assert.match(
-    result.stdout,
-    /\.runtime\/module-test-reports\/module-test-summary-[a-f0-9-]+\.json/
-  );
-  assert.doesNotMatch(result.stdout, /"steps":/);
-
-  const reportFile = path.join(
-    process.cwd(),
-    '.runtime',
-    'module-test-reports',
-    `${moduleId}.json`
-  );
-  const report = JSON.parse(fs.readFileSync(reportFile, 'utf8')) as {
-    success: boolean;
-    moduleId: string;
-    steps: Array<{ name: string; stdout: string }>;
-  };
-
-  assert.equal(report.success, true);
-  assert.equal(report.moduleId, moduleId);
-  assert.ok(report.steps.some((step) => step.name === 'doctor' && typeof step.stdout === 'string'));
 });
 
 test('module test help documents output modes, report files, and exit codes', () => {

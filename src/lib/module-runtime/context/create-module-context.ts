@@ -2,39 +2,22 @@ import type {
   ModuleDataApi,
   ModuleDataDocument,
   ModuleDataTable,
-  ModuleArtifactsApi,
   ModuleAiApi,
-  ModuleApiKeysApi,
   ModuleAuthContext,
   ModuleAuditApi,
-  ModuleConfigApi,
-  ModuleConnectorsApi,
+  ModuleCommercialApi,
   ModuleContext,
-  ModuleCacheApi,
-  ModuleBillingApi,
-  ModuleCommerceApi,
-  ModuleCreditsApi,
-  ModuleEntitlementsApi,
   ModuleEventsApi,
   ModuleFilesApi,
-  ModuleHttpApi,
   ModuleJobsApi,
-  ModuleMeteringApi,
   ModuleNotificationsApi,
-  ModuleExtensionsApi,
   ModuleProductContext,
   ModuleRagApi,
-  ModuleRedeemCodesApi,
-  ModuleRateLimitApi,
   ModuleRequest,
-  ModuleResourceBindingsApi,
   ModuleResponseFactory,
-  ModuleRiskApi,
   ModuleRunsApi,
   ModuleScopeContext,
-  ModuleSecretsApi,
   ModuleServicesApi,
-  ModuleUsageApi,
   ModuleUser,
   ModuleWebhooksApi,
   ModuleWorkspaceContext,
@@ -55,34 +38,17 @@ export interface CreateModuleContextOptions {
   data?: ModuleDataApi;
   session?: ModuleRuntimeAccessSession;
   scope?: ModuleScopeContext;
-  config?: ModuleConfigApi;
-  secrets?: ModuleSecretsApi;
   services?: ModuleServicesApi;
-  connectors?: ModuleConnectorsApi;
-  resourceBindings?: ModuleResourceBindingsApi;
-  http?: ModuleHttpApi;
   files?: ModuleFilesApi;
-  artifacts?: ModuleArtifactsApi;
   notifications?: ModuleNotificationsApi;
   runs?: ModuleRunsApi;
   jobs?: ModuleJobsApi;
   events?: ModuleEventsApi;
   webhooks?: ModuleWebhooksApi;
-  usage?: ModuleUsageApi;
-  metering?: ModuleMeteringApi;
-  credits?: ModuleCreditsApi;
-  billing?: ModuleBillingApi;
-  entitlements?: ModuleEntitlementsApi;
-  commerce?: ModuleCommerceApi;
-  redeemCodes?: ModuleRedeemCodesApi;
   ai?: ModuleAiApi;
   rag?: ModuleRagApi;
-  apiKeys?: ModuleApiKeysApi;
-  rateLimit?: ModuleRateLimitApi;
-  risk?: ModuleRiskApi;
-  cache?: ModuleCacheApi;
   audit?: ModuleAuditApi;
-  extensions?: Readonly<Record<string, unknown>> | ModuleExtensionsApi;
+  commercial?: ModuleCommercialApi;
 }
 
 function createResponseFactory(): ModuleResponseFactory {
@@ -217,65 +183,10 @@ function unavailableCapability(name: string): never {
   throw new Error(`MODULE_CAPABILITY_UNAVAILABLE: ctx.${name} is not mounted.`);
 }
 
-function createUnavailableConfigApi(): ModuleConfigApi {
-  return {
-    async get() {
-      return unavailableCapability('config.get');
-    },
-    async require() {
-      return unavailableCapability('config.require');
-    },
-  };
-}
-
-function createUnavailableSecretsApi(): ModuleSecretsApi {
-  return {
-    async get() {
-      return unavailableCapability('secrets.get');
-    },
-    async require() {
-      return unavailableCapability('secrets.require');
-    },
-  };
-}
-
 function createUnavailableServicesApi(): ModuleServicesApi {
   return {
     async invoke() {
       return unavailableCapability('services.invoke');
-    },
-  };
-}
-
-function createUnavailableConnectorsApi(): ModuleConnectorsApi {
-  return {
-    async get() {
-      return unavailableCapability('connectors.get');
-    },
-    async invoke() {
-      return unavailableCapability('connectors.invoke');
-    },
-  };
-}
-
-function createUnavailableResourceBindingsApi(): ModuleResourceBindingsApi {
-  return {
-    async get() {
-      return unavailableCapability('resourceBindings.get');
-    },
-    async list() {
-      return unavailableCapability('resourceBindings.list');
-    },
-    async upsert() {
-      return unavailableCapability('resourceBindings.upsert');
-    },
-  };
-}
-
-function createUnavailableHttpApi(): ModuleHttpApi {
-  return {
-    async fetch() {
-      return unavailableCapability('http.fetch');
     },
   };
 }
@@ -321,35 +232,6 @@ function createUnavailableFilesApi(): ModuleFilesApi {
   };
 }
 
-function createUnavailableArtifactsApi(): ModuleArtifactsApi {
-  return {
-    async write() {
-      return unavailableCapability('artifacts.write');
-    },
-    async writeText() {
-      return unavailableCapability('artifacts.writeText');
-    },
-    async read() {
-      return unavailableCapability('artifacts.read');
-    },
-    async readText() {
-      return unavailableCapability('artifacts.readText');
-    },
-    async updateMetadata() {
-      return unavailableCapability('artifacts.updateMetadata');
-    },
-    async list() {
-      return unavailableCapability('artifacts.list');
-    },
-    async tree() {
-      return unavailableCapability('artifacts.tree');
-    },
-    async delete() {
-      return unavailableCapability('artifacts.delete');
-    },
-  };
-}
-
 function createUnavailableNotificationsApi(): ModuleNotificationsApi {
   return {
     async send() {
@@ -360,164 +242,6 @@ function createUnavailableNotificationsApi(): ModuleNotificationsApi {
     },
     async markRead() {
       return unavailableCapability('notifications.markRead');
-    },
-  };
-}
-
-function createUnavailableUsageApi(): ModuleUsageApi {
-  return {
-    async record() {
-      return unavailableCapability('usage.record');
-    },
-    async increment() {
-      return unavailableCapability('usage.increment');
-    },
-  };
-}
-
-function createUnavailableMeteringApi(): ModuleMeteringApi {
-  return {
-    async authorize() {
-      return unavailableCapability('metering.authorize');
-    },
-    async commit() {
-      return unavailableCapability('metering.commit');
-    },
-    async refund() {
-      return unavailableCapability('metering.refund');
-    },
-    async void() {
-      return unavailableCapability('metering.void');
-    },
-    async reconcile() {
-      return unavailableCapability('metering.reconcile');
-    },
-    async charge() {
-      return unavailableCapability('metering.charge');
-    },
-  };
-}
-
-function createUnavailableCreditsApi(): ModuleCreditsApi {
-  return {
-    async balance() {
-      return unavailableCapability('credits.balance');
-    },
-    async grant() {
-      return unavailableCapability('credits.grant');
-    },
-    async consume() {
-      return unavailableCapability('credits.consume');
-    },
-    async adjust() {
-      return unavailableCapability('credits.adjust');
-    },
-    async refund() {
-      return unavailableCapability('credits.refund');
-    },
-    async reserve() {
-      return unavailableCapability('credits.reserve');
-    },
-    async commitReservation() {
-      return unavailableCapability('credits.commitReservation');
-    },
-    async releaseReservation() {
-      return unavailableCapability('credits.releaseReservation');
-    },
-    async revokeBySource() {
-      return unavailableCapability('credits.revokeBySource');
-    },
-    async refundRevoke() {
-      return unavailableCapability('credits.refundRevoke');
-    },
-    async listLedger() {
-      return unavailableCapability('credits.listLedger');
-    },
-  };
-}
-
-function createUnavailableBillingApi(): ModuleBillingApi {
-  return {
-    async getPlan() {
-      return unavailableCapability('billing.getPlan');
-    },
-    async getCurrentPlan() {
-      return unavailableCapability('billing.getCurrentPlan');
-    },
-    async hasEntitlement() {
-      return unavailableCapability('billing.hasEntitlement');
-    },
-    async redeemCode() {
-      return unavailableCapability('billing.redeemCode');
-    },
-  };
-}
-
-function createUnavailableEntitlementsApi(): ModuleEntitlementsApi {
-  return {
-    async has() {
-      return unavailableCapability('entitlements.has');
-    },
-    async list() {
-      return unavailableCapability('entitlements.list');
-    },
-    async grant() {
-      return unavailableCapability('entitlements.grant');
-    },
-    async revoke() {
-      return unavailableCapability('entitlements.revoke');
-    },
-    async override() {
-      return unavailableCapability('entitlements.override');
-    },
-    async expire() {
-      return unavailableCapability('entitlements.expire');
-    },
-  };
-}
-
-function createUnavailableCommerceApi(): ModuleCommerceApi {
-  return {
-    async createCheckout() {
-      return unavailableCapability('commerce.createCheckout');
-    },
-    async getOrder() {
-      return unavailableCapability('commerce.getOrder');
-    },
-    async applyCheckoutPaid() {
-      return unavailableCapability('commerce.applyCheckoutPaid');
-    },
-    async applyRefund() {
-      return unavailableCapability('commerce.applyRefund');
-    },
-    async recordSubscriptionEvent() {
-      return unavailableCapability('commerce.recordSubscriptionEvent');
-    },
-    async reconcilePaidOrderBenefits() {
-      return unavailableCapability('commerce.reconcilePaidOrderBenefits');
-    },
-  };
-}
-
-function createUnavailableRedeemCodesApi(): ModuleRedeemCodesApi {
-  return {
-    async createBatch() {
-      return unavailableCapability('redeemCodes.createBatch');
-    },
-    async redeem() {
-      return unavailableCapability('redeemCodes.redeem');
-    },
-    async freeze() {
-      return unavailableCapability('redeemCodes.freeze');
-    },
-    async revoke() {
-      return unavailableCapability('redeemCodes.revoke');
-    },
-    async list() {
-      return unavailableCapability('redeemCodes.list');
-    },
-    async listRedemptions() {
-      return unavailableCapability('redeemCodes.listRedemptions');
     },
   };
 }
@@ -618,68 +342,6 @@ function createUnavailableWebhooksApi(): ModuleWebhooksApi {
   };
 }
 
-function createUnavailableApiKeysApi(): ModuleApiKeysApi {
-  return {
-    async create() {
-      return unavailableCapability('apiKeys.create');
-    },
-    async rotate() {
-      return unavailableCapability('apiKeys.rotate');
-    },
-    async revoke() {
-      return unavailableCapability('apiKeys.revoke');
-    },
-    async list() {
-      return unavailableCapability('apiKeys.list');
-    },
-    async verify() {
-      return unavailableCapability('apiKeys.verify');
-    },
-    async require() {
-      return unavailableCapability('apiKeys.require');
-    },
-  };
-}
-
-function createUnavailableRateLimitApi(): ModuleRateLimitApi {
-  return {
-    async check() {
-      return unavailableCapability('rateLimit.check');
-    },
-  };
-}
-
-function createUnavailableRiskApi(): ModuleRiskApi {
-  return {
-    async record() {
-      return unavailableCapability('risk.record');
-    },
-    async block() {
-      return unavailableCapability('risk.block');
-    },
-    async check() {
-      return unavailableCapability('risk.check');
-    },
-  };
-}
-
-function createUnavailableCacheApi(): ModuleCacheApi {
-  return {
-    async get() {
-      return unavailableCapability('cache.get');
-    },
-    async set() {
-      return unavailableCapability('cache.set');
-    },
-    async delete() {
-      return unavailableCapability('cache.delete');
-    },
-    async remember() {
-      return unavailableCapability('cache.remember');
-    },
-  };
-}
-
 function createUnavailableAuditApi(): ModuleAuditApi {
   return {
     async record() {
@@ -688,39 +350,16 @@ function createUnavailableAuditApi(): ModuleAuditApi {
   };
 }
 
-function isModuleExtensionsApi(value: unknown): value is ModuleExtensionsApi {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as ModuleExtensionsApi).get === 'function' &&
-    typeof (value as ModuleExtensionsApi).require === 'function' &&
-    typeof (value as ModuleExtensionsApi).list === 'function'
-  );
-}
-
-function createModuleExtensionsApi(
-  extensions: Readonly<Record<string, unknown>> | ModuleExtensionsApi | undefined
-): ModuleExtensionsApi {
-  if (isModuleExtensionsApi(extensions)) {
-    return extensions;
-  }
-
-  const registry = extensions ?? {};
+function createUnavailableCommercialApi(): ModuleContext['commercial'] {
   return {
-    get<T = unknown>(name: string): T | null {
-      return Object.prototype.hasOwnProperty.call(registry, name)
-        ? (registry[name] as T)
-        : null;
+    async read() {
+      throw new Error('MODULE_CAPABILITY_UNAVAILABLE: commercial.read is not mounted.');
     },
-    require<T = unknown>(name: string): T {
-      const value = this.get<T>(name);
-      if (value === null) {
-        throw new Error(`MODULE_EXTENSION_REQUIRED: ctx.extensions.${name} is not mounted.`);
-      }
-      return value;
+    async charge() {
+      throw new Error('MODULE_CAPABILITY_UNAVAILABLE: commercial.charge is not mounted.');
     },
-    list(): readonly string[] {
-      return Object.keys(registry).sort();
+    async checkout() {
+      throw new Error('MODULE_CAPABILITY_UNAVAILABLE: commercial.checkout is not mounted.');
     },
   };
 }
@@ -753,34 +392,17 @@ export function createModuleRuntimeContext(options: CreateModuleContextOptions):
     request: createModuleRequest(options.request, options.params, requestId),
     response,
     data: options.data ?? createUnavailableDataApi(options.contract.id),
-    config: options.config ?? createUnavailableConfigApi(),
-    secrets: options.secrets ?? createUnavailableSecretsApi(),
     services: options.services ?? createUnavailableServicesApi(),
-    connectors: options.connectors ?? createUnavailableConnectorsApi(),
-    resourceBindings: options.resourceBindings ?? createUnavailableResourceBindingsApi(),
-    http: options.http ?? createUnavailableHttpApi(),
     files: options.files ?? createUnavailableFilesApi(),
-    artifacts: options.artifacts ?? createUnavailableArtifactsApi(),
     notifications: options.notifications ?? createUnavailableNotificationsApi(),
     runs: options.runs ?? createUnavailableRunsApi(),
     jobs: options.jobs ?? createUnavailableJobsApi(),
     events: options.events ?? createUnavailableEventsApi(),
     webhooks: options.webhooks ?? createUnavailableWebhooksApi(),
-    usage: options.usage ?? createUnavailableUsageApi(),
-    metering: options.metering ?? createUnavailableMeteringApi(),
-    credits: options.credits ?? createUnavailableCreditsApi(),
-    billing: options.billing ?? createUnavailableBillingApi(),
-    entitlements: options.entitlements ?? createUnavailableEntitlementsApi(),
-    commerce: options.commerce ?? createUnavailableCommerceApi(),
-    redeemCodes: options.redeemCodes ?? createUnavailableRedeemCodesApi(),
     ai: options.ai ?? createUnavailableAiApi(),
     rag: options.rag ?? createUnavailableRagApi(),
-    apiKeys: options.apiKeys ?? createUnavailableApiKeysApi(),
-    rateLimit: options.rateLimit ?? createUnavailableRateLimitApi(),
-    risk: options.risk ?? createUnavailableRiskApi(),
-    cache: options.cache ?? createUnavailableCacheApi(),
     audit: options.audit ?? createUnavailableAuditApi(),
-    extensions: createModuleExtensionsApi(options.extensions),
+    commercial: options.commercial ?? createUnavailableCommercialApi(),
     json: response.json,
   };
 

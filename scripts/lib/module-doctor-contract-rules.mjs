@@ -10,7 +10,6 @@ import {
   extractStringArray,
   extractTopLevelStringArray,
   hasStringProperty,
-  normalizeLocalModulePath,
   originForUrl,
   resolveAnonymousPolicySource,
 } from './module-contract-source.mjs';
@@ -27,16 +26,6 @@ const DATA_MIGRATION_MODES = new Set(['generated', 'sql']);
 const DYNAMIC_DASHBOARD_ROUTE_PATTERN = /\[[^\]]+\]|\*/;
 const BROAD_DASHBOARD_LOADER_PATTERN =
   /(?:^|[\/_-])(?:dashboard|overview|state|shell|app|home|index|all)(?:[\/_.-]|$)/i;
-const LIFECYCLE_HOOKS = new Set([
-  'install',
-  'enable',
-  'disable',
-  'update',
-  'seed',
-  'activate',
-  'deactivate',
-  'reset',
-]);
 const RESERVED_PUBLIC_ALIAS_PATHS = new Set([
   '/',
   '/about',
@@ -93,38 +82,6 @@ function extractMigrationDir(source) {
     source.match(/\bmigrations\s*:\s*{[\s\S]*?\bdir\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ??
     './migrations'
   );
-}
-
-function extractLifecycleEntries(source) {
-  const lifecycleSource = extractObjectAfterKey(source, 'lifecycle');
-  if (!lifecycleSource) {
-    return [];
-  }
-
-  const entries = [];
-  const unquotedPattern = /\b([A-Za-z_$][\w$]*)\s*:\s*['"`](\.\/[^'"`]+)['"`]/g;
-  for (const match of lifecycleSource.matchAll(unquotedPattern)) {
-    entries.push({ hook: match[1], localPath: match[2] });
-  }
-
-  const quotedPattern = /['"`]([^'"`]+)['"`]\s*:\s*['"`](\.\/[^'"`]+)['"`]/g;
-  for (const match of lifecycleSource.matchAll(quotedPattern)) {
-    entries.push({ hook: match[1], localPath: match[2] });
-  }
-
-  const seen = new Set();
-  return entries.filter((entry) => {
-    const key = `${entry.hook}:${entry.localPath}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
-
-function hasDefaultExport(source) {
-  return /\bexport\s+default\b/.test(source) || /\bexport\s*{[^}]+\bas\s+default\b/.test(source);
 }
 
 function extractStringProperty(source, key) {
@@ -670,45 +627,11 @@ export function createModuleDoctorContractRules({ diagnostic, toProjectPath }) {
     }
   }
 
-  function checkLifecycleContracts(moduleRoot, source, diagnostics) {
-    for (const entry of extractLifecycleEntries(source)) {
-      if (!LIFECYCLE_HOOKS.has(entry.hook)) {
-        diagnostics.push(
-          diagnostic(
-            'error',
-            'MODULE_LIFECYCLE_HOOK_UNKNOWN',
-            `Lifecycle hook "${entry.hook}" is not supported.`,
-            `lifecycle.${entry.hook}`,
-            `Use one of ${[...LIFECYCLE_HOOKS].join(', ')}.`
-          )
-        );
-      }
-
-      const resolved = normalizeLocalModulePath(moduleRoot, entry.localPath);
-      if (!fs.existsSync(resolved)) {
-        continue;
-      }
-
-      if (!hasDefaultExport(fs.readFileSync(resolved, 'utf8'))) {
-        diagnostics.push(
-          diagnostic(
-            'error',
-            'MODULE_LIFECYCLE_HANDLER_EXPORT_REQUIRED',
-            `Lifecycle handler "${entry.localPath}" must provide a default export.`,
-            toProjectPath(resolved),
-            'Export a default function or an object with a run(ctx, event) method.'
-          )
-        );
-      }
-    }
-  }
-
   return {
     checkDataArtifacts,
     checkEventNames,
     checkHttpEgress,
     checkDashboardRoutePerformanceShape,
-    checkLifecycleContracts,
     checkPublicAliases,
     checkPublicRouteContracts,
     checkResourceKinds,

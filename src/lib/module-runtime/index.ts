@@ -13,7 +13,6 @@ export * from './data';
 export * from './dev-console';
 export * from './host';
 export * from './i18n';
-export * from './lifecycle';
 export * from './loader';
 export * from './metering';
 export * from './observability';

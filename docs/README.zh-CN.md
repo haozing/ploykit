@@ -6,6 +6,7 @@
 
 - [模块开发](module-development.zh-CN.md)
 - [module.ts 契约规范](module-contract-spec.zh-CN.md)
+- [核心与插件能力清理决策](ploykit-core-plugin-strategy.zh-CN.md)
 - [服务端分离型模块开发指南](service-backed-module-development.zh-CN.md)
 - [受控服务接入指南](service-integration-guide.zh-CN.md)
 - [AI 辅助模块开发](ai-module-authoring.zh-CN.md)

@@ -1,4 +1,3 @@
-import type { ModuleDependenciesDefinition } from './types';
 
 export interface ModuleNpmDependency {
   name: string;
@@ -219,7 +218,7 @@ export function normalizeModuleNpmDependencyInputs(
 }
 
 export function normalizeModuleNpmDependencies(
-  npmDependencies: ModuleDependenciesDefinition['npm'] | unknown,
+  npmDependencies: unknown,
   basePath = 'dependencies.npm'
 ): ModuleNpmDependencyNormalization {
   if (npmDependencies === undefined) {

@@ -13,18 +13,18 @@ This wiki is for LLMs writing ploykit modules. It is self-contained and uses the
 
 | I need to | Read |
 | --- | --- |
-| Find the right host capability | [capability-usage.md](capability-usage.md), then [capabilities.generated.md](capabilities.generated.md) |
+| Find the right host capability | [capabilities.generated.md](capabilities.generated.md) |
 | Fill `module.ts` correctly | [contract.generated.md](contract.generated.md) |
 | Build multi-tenant CRUD | [recipes/multi-tenant-crud.md](recipes/multi-tenant-crud.md) |
-| Charge or reserve credits | [recipes/billing-charge.md](recipes/billing-charge.md) |
+| Charge commercial usage | [capabilities.generated.md](capabilities.generated.md), then `ctx.commercial` |
 | Connect a controlled external service | [recipes/service-backed.md](recipes/service-backed.md) |
-| Replace or contribute host pages | [recipes/white-label-page.md](recipes/white-label-page.md) |
+| Add module pages and surfaces | [contract.generated.md](contract.generated.md), then [host-vs-module](concepts/host-vs-module.md) |
 | Add background jobs | [recipes/background-job.md](recipes/background-job.md) |
 | Add a public page | [recipes/public-page.md](recipes/public-page.md) |
 | Understand host/module shell boundary | [concepts/host-vs-module.md](concepts/host-vs-module.md) |
 | Understand scope and tenancy | [concepts/scope-and-tenancy.md](concepts/scope-and-tenancy.md) |
-| Understand commercial authority | [concepts/commercial-integrity.md](concepts/commercial-integrity.md) |
-| Understand service contract-first | [concepts/service-contract-first.md](concepts/service-contract-first.md) |
+| Understand commercial authority | [capabilities.generated.md](capabilities.generated.md) |
+| Understand service invocation | [recipes/service-backed.md](recipes/service-backed.md) |
 | Decode platform errors | [errors.generated.md](errors.generated.md) |
 | Copy from known-good modules | [reference-modules.md](reference-modules.md) |
 

@@ -85,7 +85,7 @@ export function ModuleContractEvidence({
             rows={[
               [
                 'Provider requirements',
-                `${module.runtimeSummary.providerRequirements.services.length} services / ${module.runtimeSummary.providerRequirements.resourceBindings.length} resources / ${module.runtimeSummary.providerRequirements.egressOrigins.length} egress`,
+                `${module.runtimeSummary.providerRequirements.services.length} services`,
                 module.contractMeta.capabilitySummary
                   ? `${module.contractMeta.capabilitySummary.providerRequirements} map requirements`
                   : 'missing map summary',
@@ -137,13 +137,6 @@ export function ModuleContractEvidence({
               'Contract digest',
               module.contractMeta.contractDigest ?? 'missing',
               'module.ts contract digest',
-            ],
-            [
-              'Contract parts',
-              contract && contract.parts.length > 0
-                ? contract.parts.map((part) => `${part.name}:${part.path}`).join(', ')
-                : 'none',
-              'parts are optional local split files wired back into module.ts',
             ],
           ]}
           minWidthClass="min-w-[900px]"

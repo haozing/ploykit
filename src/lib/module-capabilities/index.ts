@@ -4,7 +4,6 @@ export * from './artifacts';
 export * from './commercial';
 export * from './events';
 export * from './files';
-export * from './http';
 export * from './jobs';
 export * from './notifications';
 export * from './rag';

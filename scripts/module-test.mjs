@@ -612,7 +612,7 @@ function runModuleTest(moduleRoot, options) {
   if (options.real) {
     steps.push({
       name: 'real-host',
-      ...run('npm', ['run', 'test:host-runtime']),
+      ...run('npm', ['run', 'test:module-action-route']),
     });
   }
 

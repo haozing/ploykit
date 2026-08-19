@@ -111,10 +111,6 @@ export interface AdminModuleDetailView {
     }[];
     meters: readonly { name: string; unit?: string; description?: string }[];
     config: readonly { name: string; type: string; required: boolean; secret: boolean }[];
-    lifecycle: readonly { hook: string; handler: string }[];
-    egress: readonly string[];
-    dependencies: readonly string[];
-    parts: readonly { name: string; path: string }[];
     capabilitySummary: ModuleRuntimeContract['capabilitySummary'];
     risk: AdminModuleRiskSummary;
     release?: ModuleMapReleaseMetadata;
@@ -294,7 +290,7 @@ export async function getAdminModuleDetail(moduleId: string): Promise<AdminModul
   });
   const diagnostics = contract
     ? [
-        ...validateModuleDefinition(contract.definition),
+        ...validateModuleDefinition(contract.definition as any),
         ...moduleDiagnostics(allDiagnostics, contract.id),
       ]
     : moduleDiagnostics(allDiagnostics, moduleId);
@@ -406,18 +402,6 @@ export async function getAdminModuleDetail(moduleId: string): Promise<AdminModul
             required: Boolean(definition.required),
             secret: Boolean(definition.secret),
           })),
-          lifecycle: Object.entries(contract.lifecycle)
-            .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-            .map(([hook, handler]) => ({ hook, handler })),
-          egress: contract.egress,
-          dependencies: Array.isArray(contract.dependencies.npm)
-            ? contract.dependencies.npm
-            : Object.entries(contract.dependencies.npm ?? {}).map(
-                ([name, version]) => `${name}@${version}`
-              ),
-          parts: Object.entries(contract.parts ?? {})
-            .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-            .map(([name, partPath]) => ({ name, path: partPath })),
           capabilitySummary: contract.capabilitySummary,
           risk: moduleRiskSummary(contract),
           release: entry?.release,

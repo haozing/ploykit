@@ -1,7 +1,5 @@
-import { createRuntimeStoreModuleResourceBindingsApi } from '@/lib/module-runtime/capabilities/resource-bindings';
 import type { CreateModuleHostCapabilitiesOptions } from '@/lib/module-runtime/host/create-module-host';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
-import { createModuleHttpApi } from '@/lib/module-capabilities/http/http-runtime';
 import {
   createHostAuditWriter,
   createHostModuleAuditApi,
@@ -10,21 +8,11 @@ import {
   createHostModuleAiApiForSession,
   createHostModuleRagApiForSession,
 } from './capabilities/ai-rag';
-import {
-  createHostModuleArtifactsApi,
-  createHostModuleFilesApi,
-} from './capabilities/files';
+import { createHostModuleFilesApi } from './capabilities/files';
 import { createHostModuleNotificationsApi } from './capabilities/notifications';
 import {
   createHostCommercialForSession,
-  createHostModuleBillingApi,
-  createHostModuleCommerceApi,
-  createHostModuleCreditsApi,
-  createHostModuleEntitlementsApi,
-  createHostModuleMeteringApi,
-  createHostModuleRedeemCodesApi,
-  createHostModuleRiskApi,
-  createHostModuleUsageApi,
+  createHostModuleCommercialApi,
 } from './capabilities/commercial';
 import {
   createScopedEventsApi,
@@ -32,17 +20,13 @@ import {
   createScopedRunsApi,
   createScopedWebhooksApi,
 } from './capabilities/background';
-import {
-  createHostServiceConnectionsApi,
-  createHostServiceInvocationApi,
-} from './capabilities/services';
-import { createHostModuleApiKeysApi } from './capability-api-keys';
+import { createHostServiceInvocationApi } from './capabilities/services';
+export { createHostModuleApiKeyVerifier } from './capability-api-keys';
+export { createHostServiceConnectionsApi } from './capabilities/services';
 import type { HostBillingCatalog } from './commercial-provider';
 import type { HostFileStorageHandle } from './files';
 import type { HostRuntimeStoreHandle } from './runtime-store';
-import { defaultProductId } from './default-scope';
 
-export { createHostModuleApiKeyVerifier, createHostModuleApiKeysApi } from './capability-api-keys';
 export {
   createScopedEventsApi,
   createScopedJobsApi,
@@ -51,28 +35,12 @@ export {
 } from './capabilities/background';
 export { createHostAuditWriter, createHostModuleAuditApi } from './capabilities/audit';
 export { createHostModuleAiApiForSession, createHostModuleRagApiForSession } from './capabilities/ai-rag';
-export { createHostModuleArtifactsApi, createHostModuleFilesApi } from './capabilities/files';
+export { createHostModuleFilesApi } from './capabilities/files';
 export { createHostModuleNotificationsApi } from './capabilities/notifications';
 export {
   createHostCommercialForSession,
-  createHostModuleBillingApi,
-  createHostModuleCommerceApi,
-  createHostModuleCreditsApi,
-  createHostModuleEntitlementsApi,
-  createHostModuleMeteringApi,
-  createHostModuleRedeemCodesApi,
-  createHostModuleRiskApi,
-  createHostModuleUsageApi,
+  createHostModuleCommercialApi,
 } from './capabilities/commercial';
-export { createHostServiceConnectionsApi } from './capabilities/services';
-
-function normalizeEgressOrigin(value: string): string {
-  try {
-    return new URL(value).origin;
-  } catch {
-    return value;
-  }
-}
 
 export function createHostCapabilityProviders(input: {
   runtimeStore: HostRuntimeStoreHandle;
@@ -133,13 +101,6 @@ export function createHostCapabilityProviders(input: {
         runtimeStore: input.runtimeStore,
         fileStorage: input.fileStorage,
       }),
-    artifacts: ({ contract }) => createHostModuleArtifactsApi({ contract }),
-    connectors: ({ contract, hostSession }) =>
-      createHostServiceConnectionsApi({
-        contract,
-        store: input.runtimeStore.store,
-        session: hostSession,
-      }),
     services: ({ contract, hostSession, request }) =>
       createHostServiceInvocationApi({
         contract,
@@ -147,43 +108,11 @@ export function createHostCapabilityProviders(input: {
         session: hostSession,
         request,
       }),
-    resourceBindings: ({ contract, hostSession }) =>
-      createRuntimeStoreModuleResourceBindingsApi({
-        store: input.runtimeStore.store,
-        productId: defaultProductId(hostSession.productId),
-        workspaceId: hostSession.workspaceId ?? null,
-        moduleId: contract.id,
-        actorId: hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id ?? null,
-      }),
     runs: ({ contract, hostSession }) =>
       createScopedRunsApi({
         contract,
         store: input.runtimeStore.store,
         session: hostSession,
-      }),
-    http: ({ contract, hostSession }) =>
-      createModuleHttpApi({
-        moduleId: contract.id,
-        allowedOrigins: contract.egress.map(normalizeEgressOrigin),
-        maxBodyBytes: 1024 * 1024,
-        audit: async (event) => {
-          await input.runtimeStore.store.recordAudit({
-            productId: defaultProductId(hostSession.productId),
-            workspaceId: hostSession.workspaceId ?? null,
-            actorId: hostSession.actorId ?? hostSession.userId ?? hostSession.user?.id,
-            moduleId: contract.id,
-            type: 'module.http.fetch',
-            metadata: {
-              method: event.method,
-              origin: event.origin,
-              path: event.path,
-              ok: event.ok,
-              status: event.status,
-              durationMs: event.durationMs,
-              errorCode: event.errorCode,
-            },
-          });
-        },
       }),
     jobs: ({ contract, hostSession }) =>
       createScopedJobsApi({
@@ -203,27 +132,7 @@ export function createHostCapabilityProviders(input: {
         store: input.runtimeStore.store,
         session: hostSession,
       }),
-    usage: ({ contract, hostSession }) =>
-      createHostModuleUsageApi({ contract, hostSession, commercialForSession }),
-    metering: ({ contract, hostSession }) =>
-      createHostModuleMeteringApi({ contract, hostSession, commercialForSession }),
-    credits: ({ contract, hostSession }) =>
-      createHostModuleCreditsApi({ contract, hostSession, commercialForSession }),
-    billing: ({ contract, hostSession }) =>
-      createHostModuleBillingApi({ contract, hostSession, commercialForSession }),
-    entitlements: ({ contract, hostSession }) =>
-      createHostModuleEntitlementsApi({ contract, hostSession, commercialForSession }),
-    commerce: ({ contract, hostSession }) =>
-      createHostModuleCommerceApi({ contract, hostSession, commercialForSession }),
-    redeemCodes: ({ contract, hostSession }) =>
-      createHostModuleRedeemCodesApi({ contract, hostSession, commercialForSession }),
-    risk: ({ contract, hostSession }) =>
-      createHostModuleRiskApi({ contract, hostSession, commercialForSession }),
-    apiKeys: ({ contract, hostSession }) =>
-      createHostModuleApiKeysApi({
-        contract,
-        store: input.runtimeStore.store,
-        session: hostSession,
-      }),
+    commercial: ({ contract, hostSession }) =>
+      createHostModuleCommercialApi({ contract, hostSession, commercialForSession }),
   };
 }

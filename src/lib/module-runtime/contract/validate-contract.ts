@@ -9,7 +9,7 @@ export function validateModuleRuntimeContract(
   definition: RuntimeModuleDefinition,
   _contract: ModuleRuntimeContract
 ): ModuleDiagnostic[] {
-  return validateModuleDefinition(definition);
+  return validateModuleDefinition(definition as any);
 }
 
 export function assertValidModuleRuntimeContract(

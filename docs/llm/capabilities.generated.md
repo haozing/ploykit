@@ -9,41 +9,24 @@
 
 | Capability | Type | Related permissions | host-next mounting | Meaning | Source |
 | --- | --- | --- | --- | --- | --- |
-| `ctx.module` | { id: string; version: string; } | - | core runtime | Module identity metadata such as id and version. | `src/module-sdk/context.ts:1056` |
-| `ctx.product` | ModuleProductContext | - | core runtime | Host product context. | `src/module-sdk/context.ts:1060` |
-| `ctx.user` | ModuleUser \| null | - | core runtime | Current authenticated user, or null when unauthenticated. | `src/module-sdk/context.ts:1061` |
-| `ctx.auth` | ModuleAuthContext | - | core runtime | Authentication and subject context; do not create module-owned sessions. | `src/module-sdk/context.ts:1062` |
-| `ctx.scope` | ModuleScopeContext | - | core runtime | Product, environment, workspace, and module scope. | `src/module-sdk/context.ts:1063` |
-| `ctx.workspace` | ModuleWorkspaceContext | - | core runtime | Current workspace context. | `src/module-sdk/context.ts:1064` |
-| `ctx.request` | ModuleRequest | - | core runtime | Current request metadata. | `src/module-sdk/context.ts:1065` |
-| `ctx.response` | ModuleResponseFactory | - | core runtime | Response factory helpers. | `src/module-sdk/context.ts:1066` |
-| `ctx.data` | ModuleDataApi | Permission.DataDocumentRead / Permission.DataDocumentWrite / Permission.DataTableRead / Permission.DataTableWrite / Permission.DataTransaction / Permission.DataSqlRead / Permission.DataSqlWrite | core runtime | Data v2 document, table, and transaction capabilities. | `src/module-sdk/context.ts:1067` |
-| `ctx.config` | ModuleConfigApi | Permission.ConfigRead | SDK/contract only | Module configuration reads. | `src/module-sdk/context.ts:1068` |
-| `ctx.secrets` | ModuleSecretsApi | Permission.SecretsRead | SDK/contract only | Host-managed secret reads. | `src/module-sdk/context.ts:1069` |
-| `ctx.services` | ModuleServicesApi | Permission.ServicesInvoke | host-next mounted | Controlled external service invocation. | `src/module-sdk/context.ts:1070` |
-| `ctx.connectors` | ModuleConnectorsApi | Permission.ConnectorsRead / Permission.ConnectorsInvoke | host-next mounted | Host connector read and invoke access. | `src/module-sdk/context.ts:1071` |
-| `ctx.resourceBindings` | ModuleResourceBindingsApi | Permission.ResourceBindingsRead / Permission.ResourceBindingsWrite | host-next mounted | Host resource binding access. | `src/module-sdk/context.ts:1072` |
-| `ctx.http` | ModuleHttpApi | Permission.ExternalHttp | host-next mounted | External HTTP access constrained by permissions and egress policy. | `src/module-sdk/context.ts:1073` |
-| `ctx.files` | ModuleFilesApi | Permission.FilesRead / Permission.FilesWrite / Permission.FilesPublish | host-next mounted | Host file uploads, signed URLs, and archive helpers. | `src/module-sdk/context.ts:1074` |
-| `ctx.artifacts` | ModuleArtifactsApi | Permission.ArtifactsRead / Permission.ArtifactsWrite | host-next mounted | Runtime artifact reads and writes. | `src/module-sdk/context.ts:1075` |
-| `ctx.notifications` | ModuleNotificationsApi | Permission.NotificationsRead / Permission.NotificationsSend | host-next mounted | In-app and email notifications. | `src/module-sdk/context.ts:1076` |
-| `ctx.runs` | ModuleRunsApi | Permission.RunsRead / Permission.RunsWrite | host-next mounted | Background run records. | `src/module-sdk/context.ts:1077` |
-| `ctx.jobs` | ModuleJobsApi | Permission.JobsEnqueue / Permission.JobsRegister | host-next mounted | Background job enqueue and registration. | `src/module-sdk/context.ts:1078` |
-| `ctx.events` | ModuleEventsApi | Permission.EventsEmit / Permission.EventsSubscribe | host-next mounted | Module event publish and subscribe. | `src/module-sdk/context.ts:1079` |
-| `ctx.webhooks` | ModuleWebhooksApi | Permission.WebhookReceive | host-next mounted | Module webhook helper capability. | `src/module-sdk/context.ts:1080` |
-| `ctx.usage` | ModuleUsageApi | Permission.UsageWrite | host-next mounted | Usage recording. | `src/module-sdk/context.ts:1081` |
-| `ctx.metering` | ModuleMeteringApi | Permission.MeteringWrite | host-next mounted | Metering authorize, charge, and commit flows. | `src/module-sdk/context.ts:1082` |
-| `ctx.credits` | ModuleCreditsApi | Permission.CreditsRead / Permission.CreditsConsume / Permission.CreditsWrite | host-next mounted | Credits balance, reserve, and consume flows. | `src/module-sdk/context.ts:1083` |
-| `ctx.billing` | ModuleBillingApi | Permission.BillingRead / Permission.BillingWrite | host-next mounted | Billing reads. | `src/module-sdk/context.ts:1084` |
-| `ctx.entitlements` | ModuleEntitlementsApi | Permission.EntitlementsRead / Permission.EntitlementsWrite | host-next mounted | Entitlement reads, grants, and revocations. | `src/module-sdk/context.ts:1085` |
-| `ctx.commerce` | ModuleCommerceApi | Permission.CommerceRead / Permission.CommerceWrite / Permission.CommerceApply | host-next mounted | Order, refund, and commercial fact mapping. | `src/module-sdk/context.ts:1086` |
-| `ctx.redeemCodes` | ModuleRedeemCodesApi | Permission.RedeemCodesRead / Permission.RedeemCodesWrite / Permission.RedeemCodesRedeem | host-next mounted | Redeem code capability. | `src/module-sdk/context.ts:1087` |
-| `ctx.ai` | ModuleAiApi | Permission.AiGenerate / Permission.AiEmbed | host-next mounted | Host-managed AI generation and embedding. | `src/module-sdk/context.ts:1088` |
-| `ctx.rag` | ModuleRagApi | Permission.RagRead / Permission.RagWrite | host-next mounted | RAG indexing and retrieval. | `src/module-sdk/context.ts:1089` |
-| `ctx.apiKeys` | ModuleApiKeysApi | Permission.ApiKeysRead / Permission.ApiKeysWrite | host-next mounted | API key creation and verification. | `src/module-sdk/context.ts:1090` |
-| `ctx.rateLimit` | ModuleRateLimitApi | Permission.RateLimitCheck | SDK/contract only | Rate-limit checks. | `src/module-sdk/context.ts:1091` |
-| `ctx.risk` | ModuleRiskApi | Permission.RiskRead / Permission.RiskWrite | host-next mounted | Risk checks. | `src/module-sdk/context.ts:1092` |
-| `ctx.cache` | ModuleCacheApi | Permission.CacheAccess | SDK/contract only | Host cache access. | `src/module-sdk/context.ts:1093` |
-| `ctx.audit` | ModuleAuditApi | Permission.AuditWrite | host-next mounted | Audit event recording. | `src/module-sdk/context.ts:1094` |
-| `ctx.extensions` | ModuleExtensionsApi | - | core runtime | Host extension points; do not invent unknown capabilities. | `src/module-sdk/context.ts:1095` |
-| `ctx.json` | (data: unknown, init?: ResponseInit) => Response | - | SDK helper | JSON response shortcut. | `src/module-sdk/context.ts:1096` |
+| `ctx.module` | { id: string; version: string; } | - | core runtime | Module identity metadata such as id and version. | `src/module-sdk/context.ts:1058` |
+| `ctx.product` | ModuleProductContext | - | core runtime | Host product context. | `src/module-sdk/context.ts:1062` |
+| `ctx.user` | ModuleUser \| null | - | core runtime | Current authenticated user, or null when unauthenticated. | `src/module-sdk/context.ts:1063` |
+| `ctx.auth` | ModuleAuthContext | - | core runtime | Authentication and subject context; do not create module-owned sessions. | `src/module-sdk/context.ts:1064` |
+| `ctx.scope` | ModuleScopeContext | - | core runtime | Product, environment, workspace, and module scope. | `src/module-sdk/context.ts:1065` |
+| `ctx.workspace` | ModuleWorkspaceContext | - | core runtime | Current workspace context. | `src/module-sdk/context.ts:1066` |
+| `ctx.request` | ModuleRequest | - | core runtime | Current request metadata. | `src/module-sdk/context.ts:1067` |
+| `ctx.response` | ModuleResponseFactory | - | core runtime | Response factory helpers. | `src/module-sdk/context.ts:1068` |
+| `ctx.data` | ModuleDataApi | - | core runtime | Data v2 document, table, and transaction capabilities. | `src/module-sdk/context.ts:1069` |
+| `ctx.services` | ModuleServicesApi | - | host-next mounted | Controlled external service invocation. | `src/module-sdk/context.ts:1070` |
+| `ctx.files` | ModuleFilesApi | - | host-next mounted | Host file uploads, signed URLs, and archive helpers. | `src/module-sdk/context.ts:1071` |
+| `ctx.notifications` | ModuleNotificationsApi | - | host-next mounted | In-app and email notifications. | `src/module-sdk/context.ts:1072` |
+| `ctx.runs` | ModuleRunsApi | - | host-next mounted | Background run records. | `src/module-sdk/context.ts:1073` |
+| `ctx.jobs` | ModuleJobsApi | - | host-next mounted | Background job enqueue and registration. | `src/module-sdk/context.ts:1074` |
+| `ctx.events` | ModuleEventsApi | - | host-next mounted | Module event publish and subscribe. | `src/module-sdk/context.ts:1075` |
+| `ctx.webhooks` | ModuleWebhooksApi | - | host-next mounted | Module webhook helper capability. | `src/module-sdk/context.ts:1076` |
+| `ctx.ai` | ModuleAiApi | - | host-next mounted | Host-managed AI generation and embedding. | `src/module-sdk/context.ts:1077` |
+| `ctx.rag` | ModuleRagApi | - | host-next mounted | RAG indexing and retrieval. | `src/module-sdk/context.ts:1078` |
+| `ctx.audit` | ModuleAuditApi | - | host-next mounted | Audit event recording. | `src/module-sdk/context.ts:1079` |
+| `ctx.commercial` | ModuleCommercialApi | - | host-next mounted | Host-managed commercial reads, usage charges, and digital checkout. | `src/module-sdk/context.ts:1080` |
+| `ctx.json` | (data: unknown, init?: ResponseInit) => Response | - | SDK helper | JSON response shortcut. | `src/module-sdk/context.ts:1081` |

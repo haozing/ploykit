@@ -4,56 +4,6 @@
   "generatedAt": "1970-01-01T00:00:00.000Z",
   "modules": [
     {
-      "id": "executor-extension-smoke",
-      "name": "Executor Extension Smoke",
-      "version": "0.1.0",
-      "rootDir": "modules/executor-extension-smoke",
-      "pages": [],
-      "apis": [],
-      "loaders": [],
-      "actions": [],
-      "services": [],
-      "components": [],
-      "surfaces": [],
-      "lifecycle": [],
-      "jobs": [],
-      "events": [],
-      "webhooks": [],
-      "assets": [],
-      "release": {
-        "generatedAt": "1970-01-01T00:00:00.000Z",
-        "buildId": "local-dev",
-        "sourceHash": "7f420a1a2b48a1bc59288f924014b4be5b54ce200c841af8066e135c724a0f6e",
-        "contractDigest": "76717e7019b32b7a31e51a50804b369b26f104047c5bc92c97357c2e11a7cfd5",
-        "sourceFiles": [
-          "admin/executor-health.read.ts",
-          "capabilities/executor.ts",
-          "module.ts"
-        ],
-        "capabilitySummary": {
-          "routes": 0,
-          "dataModels": 0,
-          "permissions": 1,
-          "backgroundHandlers": 0,
-          "providerRequirements": 0,
-          "commercialRequirements": 0,
-          "presentationContributions": 0
-        }
-      },
-      "admin": [
-        {
-          "name": "admin/executor-health.read",
-          "path": "admin/executor-health.read"
-        }
-      ],
-      "capabilities": [
-        {
-          "name": "executor",
-          "path": "capabilities/executor"
-        }
-      ]
-    },
-    {
       "id": "platform-smoke",
       "name": "Platform Smoke",
       "version": "0.1.0",
@@ -73,9 +23,6 @@
       "surfaces": [
         "surfaces/PlatformSmokeWidget"
       ],
-      "lifecycle": [
-        "lifecycle/install"
-      ],
       "jobs": [
         "jobs/generate-report"
       ],
@@ -90,14 +37,13 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "7a12efc8a9de490c58a0b92d62e4e59a2c1341d1b0a12ecc30b483af6f109a59",
-        "contractDigest": "b7352977f353d99ba52b61a038545ab11ed1f223a3e092be23fd65de6a91470e",
+        "sourceHash": "b53f674532921f1b87aa7cbe754600f64e42e491794389ad3c1da1e7a01e488f",
+        "contractDigest": "38fa55cbc1a75d78a2b19ed5e046b5dd90c4f26dce5fc230aaa7a892121a67ad",
         "sourceFiles": [
           "actions/ping.ts",
           "api/ping.ts",
           "events/reported.ts",
           "jobs/generate-report.ts",
-          "lifecycle/install.ts",
           "module.ts",
           "pages/PlatformSmokePage.tsx",
           "surfaces/PlatformSmokeWidget.tsx",
@@ -107,7 +53,7 @@
         "capabilitySummary": {
           "routes": 2,
           "dataModels": 0,
-          "permissions": 10,
+          "permissions": 5,
           "backgroundHandlers": 4,
           "providerRequirements": 0,
           "commercialRequirements": 0,
@@ -141,7 +87,6 @@
       "services": [],
       "components": [],
       "surfaces": [],
-      "lifecycle": [],
       "jobs": [],
       "events": [],
       "webhooks": [],
@@ -149,8 +94,8 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "597c5166e297730e7a42944cbf30165cda33a088d02b931b4f668fa9a97e45a5",
-        "contractDigest": "5685a7ccdbefa0f074ec627211869c33cfde757e34ad96f64bb8ed591f2eaf7a",
+        "sourceHash": "9daaaff845170a973f7bcc5e248bae49c9037a65034dcb98a06eca3eb468ed32",
+        "contractDigest": "9a1398e4427f7159e573de13aded84f3db232fadc6c7c7360da0f7cbe41729f5",
         "sourceFiles": [
           "actions/format-sample.ts",
           "api/format-json.ts",
@@ -196,7 +141,6 @@
       "services": [],
       "components": [],
       "surfaces": [],
-      "lifecycle": [],
       "jobs": [],
       "events": [],
       "webhooks": [],
@@ -204,8 +148,8 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "c1ec2897cc65bfa169b4c5ed4174274f2b61a613b6fc256c8b5b0cd1311e934b",
-        "contractDigest": "57a761066fbbbc2c02da1d31233ef89ea909638f9c55090eae89740ec1851143",
+        "sourceHash": "e46ab03ca52d0cdf8dd108df0f33c662fc360af9a2e9df24f0112248f31a9554",
+        "contractDigest": "54dac7fc772654f23540f64ac5a762e69dd922369ffa78b911c58dea952a1f4c",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
           ".ploykit/generated/data-types.ts",

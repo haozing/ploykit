@@ -80,7 +80,7 @@ function baseModuleDefinition(apis: readonly ModuleApiDefinitionContract[]): Mod
     id: 'ai-rag-policy',
     name: 'AI RAG Policy',
     version: '0.1.0',
-    permissions: [Permission.AiGenerate, Permission.CreditsConsume],
+    permissions: [Permission.AiGenerate, Permission.CommercialCharge],
     apis,
   };
 }

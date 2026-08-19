@@ -242,7 +242,7 @@ function sectionBody(content, name) {
   if (index < 0) {
     return '';
   }
-  const nextIndexes = ['routes:', 'actions:', 'jobs:', 'events:', 'webhooks:', 'data:', 'surfaces:', 'lifecycle:']
+  const nextIndexes = ['routes:', 'actions:', 'jobs:', 'events:', 'webhooks:', 'data:', 'surfaces:']
     .filter((section) => section !== `${name}:`)
     .map((section) => content.indexOf(section, index + name.length + 1))
     .filter((sectionIndex) => sectionIndex > index);

@@ -12,7 +12,6 @@ export interface ModuleBundleManifestModule {
     loaders: readonly string[];
     actions: readonly string[];
     surfaces: readonly string[];
-    lifecycle: readonly string[];
     jobs: readonly string[];
     events: readonly string[];
     webhooks: readonly string[];
@@ -82,7 +81,6 @@ export function createModuleBundleManifest(
           loaders: keys(entry.loaders),
           actions: keys(entry.actions),
           surfaces: keys(entry.surfaces),
-          lifecycle: keys(entry.lifecycle),
           jobs: keys(entry.jobs),
           events: keys(entry.events),
           webhooks: keys(entry.webhooks),

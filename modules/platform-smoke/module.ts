@@ -29,18 +29,15 @@ export default defineModule({
   id: 'platform-smoke',
   name: 'Platform Smoke',
   version: '0.1.0',
+  profile: 'app',
+  capabilities: ['async', 'events', 'notifications'],
   description: 'Minimal current-contract fixture for host runtime pages, APIs, actions and workers.',
   permissions: [
-    Permission.ArtifactsWrite,
     Permission.AuditWrite,
     Permission.EventsEmit,
-    Permission.EventsSubscribe,
     Permission.FilesWrite,
-    Permission.JobsRegister,
+    Permission.JobsEnqueue,
     Permission.NotificationsSend,
-    Permission.SurfaceContribute,
-    Permission.UsageWrite,
-    Permission.WebhookReceive,
   ],
   pages: [
     page({
@@ -99,9 +96,6 @@ export default defineModule({
       signature: 'none',
     },
   },
-  lifecycle: {
-    install: './lifecycle/install',
-  },
   navigation: {
     location: 'dashboard.sidebar',
     fallbackLabel: 'Platform Smoke',
@@ -113,7 +107,7 @@ export default defineModule({
       mode: 'panel',
       component: './surfaces/PlatformSmokeWidget.tsx',
       priority: 10,
-      permissions: [Permission.SurfaceContribute],
+      permissions: [],
     },
   },
 });

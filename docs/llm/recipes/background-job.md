@@ -1,29 +1,19 @@
 # Recipe: Background Job
 
-Intent: move long work into declared jobs with observable runs and artifacts.
-
-## Use
-
-- Declare `jobs` and the action or API that enqueues work.
-- Enqueue through `ctx.jobs.enqueue`.
-- Write artifacts, usage, and notifications from the job when needed.
-- Permissions: `Permission.JobsEnqueue`, `Permission.JobsRegister`, `Permission.ArtifactsWrite`, `Permission.NotificationsSend`, and `Permission.UsageWrite` as needed.
-
-## Contract Shape
+Use a declared job for work that should outlive the request. Jobs produce observable runs and can use files, notifications, events, and audit as needed.
 
 ```ts
-import { defineModule, Permission } from '@ploykit/module-sdk';
-
 export default defineModule({
   id: 'reports',
   name: 'Reports',
   version: '0.1.0',
+  profile: 'app',
+  capabilities: ['async', 'files', 'notifications'],
   permissions: [
     Permission.JobsEnqueue,
-    Permission.JobsRegister,
-    Permission.ArtifactsWrite,
+    Permission.FilesWrite,
     Permission.NotificationsSend,
-    Permission.UsageWrite,
+    Permission.AuditWrite,
   ],
   jobs: {
     generate_report: {
@@ -35,36 +25,6 @@ export default defineModule({
 });
 ```
 
-## Job Shape
+Start the job with `ctx.jobs.run(name, input)`. Use `ctx.files` for generated files and `ctx.runs` for explicit progress or run metadata. Do not create a private queue or write artifact records outside the file boundary.
 
-```ts
-export default async function generateReport(ctx: ModuleContext, input = {}, run) {
-  const artifact = await ctx.artifacts.write({
-    name: 'report',
-    kind: 'markdown',
-    runId: run.id,
-    path: `runs/${run.id}/report.md`,
-    content: '# Report',
-  });
-  if (ctx.user) {
-    await ctx.notifications.send({ userId: ctx.user.id, title: 'Report ready', runId: run.id });
-  }
-  return { ok: true, artifactId: artifact.id };
-}
-```
-
-## Verify
-
-Run:
-
-```bash
-npm run modules:scan
-npm run module:doctor -- <id>
-npm run module:test -- <id> --summary
-```
-
-## Red Lines
-
-- Do not do slow work in loaders or page components.
-- Do not create hidden local queues.
-- Do not omit run or artifact evidence for long work.
+Run `npm run modules:scan`, `npm run module:doctor -- <id>`, and `npm run module:test -- <id> --summary` after adapting the pattern.

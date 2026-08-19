@@ -12,8 +12,7 @@ A PloyKit module fills product capability; the host owns the shell.
 
 - Add navigation with `navigation` in `module.ts`.
 - Contribute or replace host-owned areas with `surfaces`.
-- Declare white-label replacement intent with `presentation`.
-- Use `Permission.NavigationExtend`, `Permission.SurfaceContribute`, or `Permission.SurfaceOverride` as required.
+- Declare only the permissions required by the executable surface operation, such as `Permission.SurfaceOverride`.
 
 ## Do Not
 

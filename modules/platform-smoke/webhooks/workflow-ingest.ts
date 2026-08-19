@@ -9,6 +9,5 @@ export default async function workflowIngest(
     receiptId: event.receipt.id,
     source: payload.source ?? 'unknown',
   });
-  await ctx.usage.record({ meter: 'platform-smoke.webhook.received' });
   return ctx.json({ ok: true, receiptId: event.receipt.id });
 }

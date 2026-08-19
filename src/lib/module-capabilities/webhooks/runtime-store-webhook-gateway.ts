@@ -366,10 +366,6 @@ export function createRuntimeStoreWebhookRunner(
           if (!contract || !definition) {
             throw new Error(`MODULE_WEBHOOK_NOT_FOUND: ${payload.moduleId}.${payload.webhookName}`);
           }
-          if (!contract.permissions.includes(Permission.WebhookReceive)) {
-            throw new Error(`MODULE_WEBHOOK_PERMISSION_NOT_DECLARED: ${contract.id}`);
-          }
-
           const entry = host.getMapEntry(contract.id);
           const loader = entry?.webhooks?.[normalizeModulePath(definition.handler)];
           if (!loader) {

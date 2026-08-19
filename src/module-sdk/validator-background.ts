@@ -251,25 +251,6 @@ export function validateJobsEventsWebhooks(
     );
   }
 
-  if (subscribedEvents.length > 0 && !modulePermissions.has(Permission.EventsSubscribe)) {
-    addError(
-      diagnostics,
-      'MODULE_EVENTS_SUBSCRIBE_PERMISSION_REQUIRED',
-      'Event subscription declarations require Permission.EventsSubscribe.',
-      'permissions',
-      'Add Permission.EventsSubscribe or remove events.subscribes.'
-    );
-  }
-
-  if (webhookEntries.length > 0 && !modulePermissions.has(Permission.WebhookReceive)) {
-    addError(
-      diagnostics,
-      'MODULE_WEBHOOK_RECEIVE_PERMISSION_REQUIRED',
-      'Webhook declarations require Permission.WebhookReceive.',
-      'permissions',
-      'Add Permission.WebhookReceive or remove webhooks.'
-    );
-  }
 
   for (const [index, eventName] of publishedEvents.entries()) {
     if (!EVENT_NAME_PATTERN.test(eventName)) {

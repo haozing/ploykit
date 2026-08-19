@@ -41,7 +41,6 @@ export interface AdminModuleCapabilitySummary {
   config: number;
   serviceRequirements: number;
   resourceBindings: number;
-  lifecycle: number;
 }
 
 export interface AdminModuleRiskSummary {
@@ -143,10 +142,6 @@ function countArray(value: readonly unknown[] | undefined): number {
   return value?.length ?? 0;
 }
 
-function lifecycleCount(contract: ModuleRuntimeContract): number {
-  return Object.values(contract.lifecycle).filter(Boolean).length;
-}
-
 function moduleRouteCount(contract: ModuleRuntimeContract): number {
   return (
     contract.capabilitySummary.routes.site +
@@ -176,7 +171,6 @@ function moduleCapabilitySummary(contract: ModuleRuntimeContract): AdminModuleCa
     config: countRecord(contract.config),
     serviceRequirements: countRecord(contract.serviceRequirements),
     resourceBindings: countRecord(contract.resourceBindings),
-    lifecycle: lifecycleCount(contract),
   };
 }
 
@@ -201,34 +195,7 @@ function hasNavigationForShell(
 }
 
 function moduleProductSummary(contract: ModuleRuntimeContract): AdminModuleProductSummary | null {
-  const product = contract.definition.product;
-  if (!product) {
-    return null;
-  }
-  const requiredShells = [...(product.requiredShells ?? [])];
-  return {
-    kind: product.kind,
-    audiences: [...(product.audiences ?? [])],
-    requiredShells,
-    pages: (product.pages ?? []).map((page) => ({
-      shell: page.shell,
-      path: page.path,
-      title: page.title,
-      audience: page.audience,
-      userQuestion: page.userQuestion,
-      primaryActions: [...page.primaryActions],
-      required: page.required !== false,
-    })),
-    pageCounts: {
-      site: (product.pages ?? []).filter((page) => page.shell === 'site').length,
-      dashboard: (product.pages ?? []).filter((page) => page.shell === 'dashboard').length,
-      admin: (product.pages ?? []).filter((page) => page.shell === 'admin').length,
-    },
-    missingShells: requiredShells.filter((shell) => routeCountForShell(contract, shell) === 0),
-    missingNavigationShells: requiredShells.filter(
-      (shell) => !hasNavigationForShell(contract, shell)
-    ),
-  };
+  return null;
 }
 
 export function moduleRiskSummary(contract: ModuleRuntimeContract): AdminModuleRiskSummary {
@@ -361,7 +328,7 @@ export function buildAdminModuleRows(input: {
     .map((contract) => {
       const state = stateByModule.get(contract.id) ?? null;
       const diagnostics = [
-        ...validateModuleDefinition(contract.definition),
+        ...validateModuleDefinition(contract.definition as any),
         ...moduleDiagnostics(input.diagnostics, contract.id),
       ];
       const requiredGaps = countMissingRequiredModuleRequirements({

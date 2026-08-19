@@ -40,11 +40,6 @@ export {
   sql,
 } from './data';
 export { createModuleDiagnostic, hasModuleDiagnosticErrors } from './diagnostics';
-export {
-  isValidModuleNpmPackageName,
-  normalizeModuleNpmDependencies,
-  normalizeModuleNpmDependencyInputs,
-} from './dependencies';
 export { validateModuleDefinition } from './validator';
 export * from './ui';
 export { createTestingModuleContext } from './testing';

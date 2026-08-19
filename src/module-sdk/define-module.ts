@@ -1,6 +1,6 @@
 import type { DefinedModule, ModuleDefinition } from './types';
 
-export function defineModule<TDefinition extends ModuleDefinition>(
+export function defineModule<TDefinition extends object>(
   definition: TDefinition
 ): DefinedModule<TDefinition> {
   return Object.freeze({
@@ -9,5 +9,5 @@ export function defineModule<TDefinition extends ModuleDefinition>(
       type: 'ploykit.module',
       sdkVersion: '0.1.0',
     },
-  }) as DefinedModule<TDefinition>;
+  }) as unknown as DefinedModule<TDefinition>;
 }

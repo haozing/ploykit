@@ -27,7 +27,6 @@ function main() {
         loaders: moduleInfo.loaders ?? [],
         actions: moduleInfo.actions ?? [],
         surfaces: moduleInfo.surfaces ?? [],
-        lifecycle: moduleInfo.lifecycle ?? [],
         jobs: moduleInfo.jobs ?? [],
         events: moduleInfo.events ?? [],
         webhooks: moduleInfo.webhooks ?? [],

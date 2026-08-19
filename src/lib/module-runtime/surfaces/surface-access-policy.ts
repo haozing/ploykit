@@ -16,9 +16,7 @@ export function resolveModuleSurfaceAccessPolicy(
   definition: ModuleSurfaceDefinition
 ): ModuleSurfaceAccessPolicy {
   const permissions = new Set(definition.permissions ?? []);
-  permissions.add(
-    definition.mode === 'replace' ? Permission.SurfaceOverride : Permission.SurfaceContribute
-  );
+  if (definition.mode === 'replace') permissions.add(Permission.SurfaceOverride);
 
   return {
     auth: resolveSurfaceAuth(definition),

@@ -37,6 +37,8 @@ export default defineModule({
   id: 'resource-smoke',
   name: 'Resource Smoke',
   version: '0.1.0',
+  profile: 'cms',
+  capabilities: ['files'],
   description: 'Current-contract Data v2 and business resource fixture.',
   permissions: [Permission.DataDocumentRead, Permission.DataDocumentWrite, Permission.DataTableRead, Permission.DataTableWrite],
   data: {

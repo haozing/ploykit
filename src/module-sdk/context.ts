@@ -158,10 +158,6 @@ export interface ModuleAuditApi {
   record(input: ModuleAuditRecordInput | string, metadata?: Record<string, unknown>): Promise<void>;
 }
 
-export interface ModuleHttpApi {
-  fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
-}
-
 export interface ModuleUsageRecordInput {
   meter: string;
   quantity?: number;
@@ -794,7 +790,7 @@ export interface ModuleArtifactsApi {
   delete(id: string): Promise<void>;
 }
 
-export type ModuleRunKind = 'manual' | 'job' | 'event' | 'webhook' | 'lifecycle';
+export type ModuleRunKind = 'manual' | 'job' | 'event' | 'webhook';
 
 export type ModuleRunStatus =
   | 'queued'
@@ -1052,6 +1048,12 @@ export interface ModuleNotificationsApi {
   markRead(id: string): Promise<ModuleNotificationRecord>;
 }
 
+export interface ModuleCommercialApi {
+  read<T = unknown>(input?: Record<string, unknown>): Promise<T>;
+  charge<T = unknown>(input: Record<string, unknown>): Promise<T>;
+  checkout<T = unknown>(input: Record<string, unknown>): Promise<T>;
+}
+
 export interface ModuleContext {
   module: {
     id: string;
@@ -1065,33 +1067,16 @@ export interface ModuleContext {
   request: ModuleRequest;
   response: ModuleResponseFactory;
   data: ModuleDataApi;
-  config: ModuleConfigApi;
-  secrets: ModuleSecretsApi;
   services: ModuleServicesApi;
-  connectors: ModuleConnectorsApi;
-  resourceBindings: ModuleResourceBindingsApi;
-  http: ModuleHttpApi;
   files: ModuleFilesApi;
-  artifacts: ModuleArtifactsApi;
   notifications: ModuleNotificationsApi;
   runs: ModuleRunsApi;
   jobs: ModuleJobsApi;
   events: ModuleEventsApi;
   webhooks: ModuleWebhooksApi;
-  usage: ModuleUsageApi;
-  metering: ModuleMeteringApi;
-  credits: ModuleCreditsApi;
-  billing: ModuleBillingApi;
-  entitlements: ModuleEntitlementsApi;
-  commerce: ModuleCommerceApi;
-  redeemCodes: ModuleRedeemCodesApi;
   ai: ModuleAiApi;
   rag: ModuleRagApi;
-  apiKeys: ModuleApiKeysApi;
-  rateLimit: ModuleRateLimitApi;
-  risk: ModuleRiskApi;
-  cache: ModuleCacheApi;
   audit: ModuleAuditApi;
-  extensions: ModuleExtensionsApi;
+  commercial: ModuleCommercialApi;
   json(data: unknown, init?: ResponseInit): Response;
 }

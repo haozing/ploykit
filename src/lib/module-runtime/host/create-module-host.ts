@@ -1,31 +1,15 @@
 import type {
-  ModuleArtifactsApi,
   ModuleAiApi,
-  ModuleApiKeysApi,
   ModuleAuditApi,
-  ModuleCacheApi,
-  ModuleBillingApi,
-  ModuleCommerceApi,
-  ModuleConfigApi,
-  ModuleConnectorsApi,
+  ModuleCommercialApi,
   ModuleContext,
-  ModuleCreditsApi,
-  ModuleEntitlementsApi,
   ModuleEventsApi,
   ModuleFilesApi,
-  ModuleHttpApi,
   ModuleJobsApi,
-  ModuleMeteringApi,
   ModuleNotificationsApi,
   ModuleRagApi,
-  ModuleRedeemCodesApi,
-  ModuleRateLimitApi,
-  ModuleRiskApi,
-  ModuleResourceBindingsApi,
   ModuleRunsApi,
-  ModuleSecretsApi,
   ModuleServicesApi,
-  ModuleUsageApi,
   ModuleWebhooksApi,
 } from '@ploykit/module-sdk';
 import {
@@ -45,7 +29,6 @@ import {
   type ResolvedModuleSurfaceContribution,
   type VerifyModuleApiKeyHandler,
 } from '../adapters';
-import { executeModuleAdminResourceOperation } from '../admin';
 import { createModuleRuntimeContext } from '../context';
 import {
   createPostgresModuleDataApi,
@@ -66,12 +49,6 @@ import {
   type ModuleHostSession,
   type ModuleHostSessionResolver,
 } from './session';
-import {
-  mountCapabilityDescriptors,
-  type CapabilityDescriptorRegistry,
-  type CapabilityProviderRegistry,
-} from '../../module-kernel/capability-registry';
-import { resolveTrustedModuleCapabilities } from './trusted-module-capabilities';
 
 export interface CreateModuleHostDataSessionInput {
   contract: ModuleRuntimeContract;
@@ -103,35 +80,17 @@ export type CreateModuleHostCapability<TCapability> =
   | ((input: CreateModuleHostCapabilityInput) => TCapability);
 
 export interface CreateModuleHostCapabilitiesOptions {
-  registry?: CapabilityDescriptorRegistry;
-  providers?: CapabilityProviderRegistry;
-  config?: ModuleConfigApi;
-  secrets?: ModuleSecretsApi;
   services?: CreateModuleHostCapability<ModuleServicesApi>;
-  connectors?: CreateModuleHostCapability<ModuleConnectorsApi>;
-  resourceBindings?: CreateModuleHostCapability<ModuleResourceBindingsApi>;
-  http?: CreateModuleHostCapability<ModuleHttpApi>;
   files?: CreateModuleHostCapability<ModuleFilesApi>;
-  artifacts?: CreateModuleHostCapability<ModuleArtifactsApi>;
   notifications?: CreateModuleHostCapability<ModuleNotificationsApi>;
   runs?: CreateModuleHostCapability<ModuleRunsApi>;
   jobs?: CreateModuleHostCapability<ModuleJobsApi>;
   events?: CreateModuleHostCapability<ModuleEventsApi>;
   webhooks?: CreateModuleHostCapability<ModuleWebhooksApi>;
-  usage?: CreateModuleHostCapability<ModuleUsageApi>;
-  metering?: CreateModuleHostCapability<ModuleMeteringApi>;
-  credits?: CreateModuleHostCapability<ModuleCreditsApi>;
-  billing?: CreateModuleHostCapability<ModuleBillingApi>;
-  entitlements?: CreateModuleHostCapability<ModuleEntitlementsApi>;
-  commerce?: CreateModuleHostCapability<ModuleCommerceApi>;
-  redeemCodes?: CreateModuleHostCapability<ModuleRedeemCodesApi>;
   ai?: CreateModuleHostCapability<ModuleAiApi>;
   rag?: CreateModuleHostCapability<ModuleRagApi>;
-  apiKeys?: CreateModuleHostCapability<ModuleApiKeysApi>;
-  rateLimit?: CreateModuleHostCapability<ModuleRateLimitApi>;
-  risk?: CreateModuleHostCapability<ModuleRiskApi>;
-  cache?: CreateModuleHostCapability<ModuleCacheApi>;
   audit?: CreateModuleHostCapability<ModuleAuditApi>;
+  commercial?: CreateModuleHostCapability<ModuleCommercialApi>;
 }
 
 export interface CreateModuleHostOptions extends CreateModuleRuntimeHostOptions {
@@ -159,17 +118,6 @@ export interface ExecuteModuleHostActionInput<TInput = unknown> extends Omit<
   session?: ModuleHostSession;
 }
 
-export interface ExecuteModuleHostAdminResourceOperationInput<TInput = unknown> {
-  resourceId: string;
-  operationName: string;
-  input?: TInput;
-  request?: Request;
-  session?: ModuleHostSession;
-  params?: Record<string, string>;
-  confirmed?: boolean;
-  confirmation?: Record<string, unknown>;
-}
-
 export interface ResolveModuleHostPageRouteInput extends Omit<
   ResolveModulePageRouteInput,
   'user' | 'createContext'
@@ -191,9 +139,6 @@ export interface ModuleHost {
   dispatchApiRoute(input: DispatchModuleHostApiRouteInput): Promise<Response>;
   executeAction<TInput = unknown, TResult = unknown>(
     input: ExecuteModuleHostActionInput<TInput>
-  ): Promise<TResult>;
-  executeAdminResourceOperation<TInput = unknown, TResult = unknown>(
-    input: ExecuteModuleHostAdminResourceOperationInput<TInput>
   ): Promise<TResult>;
   resolvePageRoute(input: ResolveModuleHostPageRouteInput): Promise<ResolveModulePageRouteResult>;
   resolvePageRouteMetadata(
@@ -305,11 +250,7 @@ function resolveCapability<TCapability>(
 function createContextFactory(
   runtime: ModuleRuntimeHost,
   options: CreateModuleHostOptions,
-  hostSession: ModuleHostSession,
-  mountedExtensions: {
-    registry?: CapabilityDescriptorRegistry;
-    providers?: CapabilityProviderRegistry;
-  }
+  hostSession: ModuleHostSession
 ) {
   return (input: {
     moduleId: string;
@@ -337,81 +278,23 @@ function createContextFactory(
       params: input.params,
       session: contextSession,
     });
-    const descriptorExtensions = mountedExtensions.registry
-      ? mountCapabilityDescriptors({
-          descriptors: mountedExtensions.registry,
-          providers: {
-            ...mountedExtensions.providers,
-            services: options.capabilities?.services,
-            connectors: options.capabilities?.connectors,
-            resourceBindings: options.capabilities?.resourceBindings,
-            http: options.capabilities?.http,
-            files: options.capabilities?.files,
-            artifacts: options.capabilities?.artifacts,
-            notifications: options.capabilities?.notifications,
-            runs: options.capabilities?.runs,
-            jobs: options.capabilities?.jobs,
-            events: options.capabilities?.events,
-            webhooks: options.capabilities?.webhooks,
-            usage: options.capabilities?.usage,
-            metering: options.capabilities?.metering,
-            credits: options.capabilities?.credits,
-            billing: options.capabilities?.billing,
-            entitlements: options.capabilities?.entitlements,
-            commerce: options.capabilities?.commerce,
-            redeemCodes: options.capabilities?.redeemCodes,
-            ai: options.capabilities?.ai,
-            rag: options.capabilities?.rag,
-            apiKeys: options.capabilities?.apiKeys,
-            rateLimit: options.capabilities?.rateLimit,
-            risk: options.capabilities?.risk,
-            cache: options.capabilities?.cache,
-            audit: options.capabilities?.audit,
-          },
-          mountInput: {
-            contract,
-            request: input.request,
-            params: input.params,
-            session: contextSession,
-          },
-          allowedNames: contract.definition.uses?.capabilities ?? [],
-        })
-      : {};
-
     return createModuleRuntimeContext({
       contract,
       request: input.request,
       user: input.user,
       params: input.params,
       data,
-      config: options.capabilities?.config,
-      secrets: options.capabilities?.secrets,
       services: resolveCapability(options.capabilities?.services, capabilityInput),
-      connectors: resolveCapability(options.capabilities?.connectors, capabilityInput),
-      resourceBindings: resolveCapability(options.capabilities?.resourceBindings, capabilityInput),
-      http: resolveCapability(options.capabilities?.http, capabilityInput),
       files: resolveCapability(options.capabilities?.files, capabilityInput),
-      artifacts: resolveCapability(options.capabilities?.artifacts, capabilityInput),
       notifications: resolveCapability(options.capabilities?.notifications, capabilityInput),
       runs: resolveCapability(options.capabilities?.runs, capabilityInput),
       jobs: resolveCapability(options.capabilities?.jobs, capabilityInput),
       events: resolveCapability(options.capabilities?.events, capabilityInput),
       webhooks: resolveCapability(options.capabilities?.webhooks, capabilityInput),
-      usage: resolveCapability(options.capabilities?.usage, capabilityInput),
-      metering: resolveCapability(options.capabilities?.metering, capabilityInput),
-      credits: resolveCapability(options.capabilities?.credits, capabilityInput),
-      billing: resolveCapability(options.capabilities?.billing, capabilityInput),
-      entitlements: resolveCapability(options.capabilities?.entitlements, capabilityInput),
-      commerce: resolveCapability(options.capabilities?.commerce, capabilityInput),
-      redeemCodes: resolveCapability(options.capabilities?.redeemCodes, capabilityInput),
       ai: resolveCapability(options.capabilities?.ai, capabilityInput),
       rag: resolveCapability(options.capabilities?.rag, capabilityInput),
-      apiKeys: resolveCapability(options.capabilities?.apiKeys, capabilityInput),
-      rateLimit: resolveCapability(options.capabilities?.rateLimit, capabilityInput),
-      risk: resolveCapability(options.capabilities?.risk, capabilityInput),
-      cache: resolveCapability(options.capabilities?.cache, capabilityInput),
       audit: resolveCapability(options.capabilities?.audit, capabilityInput),
-      extensions: descriptorExtensions,
+      commercial: resolveCapability(options.capabilities?.commercial, capabilityInput),
       session: contextSession,
     });
   };
@@ -424,13 +307,6 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
     createDataApi,
     catalog: options.catalog,
   });
-  const mountedExtensions = await resolveTrustedModuleCapabilities({
-    runtime,
-    catalog: options.catalog,
-    registry: options.capabilities?.registry,
-    providers: options.capabilities?.providers,
-  });
-
   return {
     runtime,
     async dispatchApiRoute(input) {
@@ -446,7 +322,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
+      const createContext = createContextFactory(runtime, options, hostSession);
 
       return dispatchModuleApiRoute(runtime, {
         request: input.request,
@@ -483,7 +359,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
+      const createContext = createContextFactory(runtime, options, hostSession);
 
       return executeModuleAction<TInput, TResult>(runtime, {
         ...input,
@@ -502,51 +378,6 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
       });
     },
-    async executeAdminResourceOperation<TInput = unknown, TResult = unknown>(
-      input: ExecuteModuleHostAdminResourceOperationInput<TInput>
-    ): Promise<TResult> {
-      const request =
-        input.request ??
-        new Request(
-          `http://localhost/admin/resources/${input.resourceId}/${input.operationName}`,
-          { method: 'POST' }
-        );
-      const params = input.params ?? {};
-      const hostSession = await resolveHostSession(
-        options,
-        {
-          operation: 'admin-resource',
-          request,
-          resourceId: input.resourceId,
-          operationName: input.operationName,
-          params,
-        },
-        input.session
-      );
-      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
-
-      return executeModuleAdminResourceOperation<TInput, TResult>(
-        {
-          host: runtime,
-          store: options.runtimeStore,
-        },
-        {
-          ...input,
-          request,
-          params,
-          session: hostSession,
-          createContext(contextInput) {
-            return createContext({
-              moduleId: contextInput.moduleId,
-              request: contextInput.request,
-              user: contextInput.session.user ?? null,
-              session: contextInput.session,
-              params: contextInput.params,
-            });
-          },
-        }
-      );
-    },
     async resolvePageRoute(input) {
       const params = input.params ?? {};
       const hostSession = await resolveHostSession(
@@ -560,7 +391,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
+      const createContext = createContextFactory(runtime, options, hostSession);
 
       return resolveModulePageRoute(runtime, {
         request: input.request,
@@ -594,7 +425,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
+      const createContext = createContextFactory(runtime, options, hostSession);
 
       return resolveModulePageRouteMetadata(runtime, {
         request: input.request,

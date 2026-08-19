@@ -7,7 +7,16 @@ export type ModuleRouteAuth = 'public' | 'auth' | 'admin';
 export type ModuleHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type ModuleSurfaceMode = 'append' | 'prepend' | 'replace' | 'panel' | 'action';
 export type ModuleWorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
-export type ModuleKind = 'product' | 'host-extension';
+export type ModuleProfile = 'app' | 'ai-tool' | 'digital-commerce' | 'cms';
+export type ModuleCapability =
+  | 'files'
+  | 'async'
+  | 'events'
+  | 'notifications'
+  | 'ai'
+  | 'rag'
+  | 'services'
+  | 'commercial';
 export type ModuleActionSideEffect =
   | 'none'
   | 'read'
@@ -22,15 +31,6 @@ export type ModuleSurfaceVisibility =
   | 'permission'
   | 'feature';
 
-export interface ModuleContractPartsDefinition {
-  data?: string;
-  pages?: string;
-  apis?: string;
-  presentation?: string;
-  theme?: string;
-  i18n?: string;
-}
-
 export interface ModuleCommercialRequirement {
   entitlements?: readonly string[];
   plans?: readonly string[];
@@ -44,11 +44,11 @@ export interface ModuleCommercialRequirement {
 export interface ModuleScopeDefinition {
   required?: boolean;
   resource?: 'user' | 'workspace' | 'product';
-  roles?: {
-    read?: readonly ModuleWorkspaceRole[];
-    write?: readonly ModuleWorkspaceRole[];
-    manage?: readonly ModuleWorkspaceRole[];
-  };
+}
+
+export interface ModuleCommercialDefinition {
+  meters?: Record<string, ModuleMeterDefinition>;
+  entitlements?: readonly string[];
 }
 
 export interface ModuleRouteBase {
@@ -289,44 +289,6 @@ export interface ModuleResourceDefinition {
   permissions?: readonly PermissionValue[];
 }
 
-export interface ModuleProvidedCapabilityDefinition {
-  provider: string;
-  permissions?: readonly PermissionValue[];
-  description?: string;
-}
-
-export type ModuleProvidedAdminResourceRisk = 'read' | 'write' | 'dangerous';
-
-export interface ModuleProvidedAdminResourceOperationDefinition {
-  handler: string;
-  permission: PermissionValue;
-  risk: ModuleProvidedAdminResourceRisk;
-  auditEvent?: string;
-  confirmation?: {
-    field: string;
-    value: string;
-  };
-}
-
-export interface ModuleProvidedAdminResourceDefinition {
-  label?: string;
-  operations: Record<string, ModuleProvidedAdminResourceOperationDefinition>;
-}
-
-export interface ModuleProvidesDefinition {
-  capabilities?: Record<string, ModuleProvidedCapabilityDefinition>;
-  adminResources?: Record<string, ModuleProvidedAdminResourceDefinition>;
-}
-
-export interface ModuleUsesDefinition {
-  capabilities?: readonly string[];
-}
-
-export interface ModuleThemeDefinition {
-  tokens?: Record<string, string | number>;
-  css?: string;
-}
-
 export interface ModuleMeterDefinition {
   unit?: string;
   description?: string;
@@ -421,30 +383,6 @@ export interface ModuleServiceRequirementDefinition {
   operations?: Record<string, ModuleServiceOperationDefinition>;
 }
 
-export interface ModuleResourceBindingRequirement {
-  kind: string;
-  required?: boolean;
-  description?: string;
-}
-
-export interface ModuleConfigFieldDefinition {
-  type: 'string' | 'number' | 'boolean' | 'json';
-  required?: boolean;
-  default?: unknown;
-  description?: string;
-  secret?: boolean;
-}
-
-export interface ModuleHeadDefinition {
-  title?: string;
-  description?: string;
-  meta?: Record<string, string>;
-  links?: readonly {
-    rel: string;
-    href: string;
-  }[];
-}
-
 export interface ModuleJobDefinition {
   handler: string;
   schedule?: string;
@@ -464,125 +402,13 @@ export interface ModuleWebhookDefinition {
   signature?: 'none' | 'hmac-sha256' | 'stripe' | 'github';
 }
 
-export interface ModuleLifecycleDefinition {
-  install?: string;
-  enable?: string;
-  disable?: string;
-  update?: string;
-  seed?: string;
-  activate?: string;
-  deactivate?: string;
-  reset?: string;
-}
-
-export interface ModuleDependenciesDefinition {
-  npm?: Record<string, string> | readonly string[];
-}
-
-export type ModuleQualityViewport = 'desktop' | 'mobile';
-
-export interface ModuleQualityRouteEvidenceDefinition {
-  path: string;
-  auth?: ModuleRouteAuth | boolean;
-  contains?: string | readonly string[];
-  viewports?: readonly ModuleQualityViewport[];
-}
-
-export interface ModuleQualityCommandDefinition {
-  script: string;
-  args?: readonly string[];
-}
-
-export interface ModuleQualityRuntimeEvidenceDefinition {
-  id: string;
-  title?: string;
-  runtimeDir?: string;
-  required?: boolean;
-  command?: ModuleQualityCommandDefinition;
-  checks?: readonly string[];
-}
-
-export interface ModuleQualityDashboardTransitionsPerformanceDefinition {
-  routes?: readonly string[];
-  maxDocumentNavigations?: number;
-  maxHydrationErrors?: number;
-  maxP95Ms?: number;
-  maxRscTransferBytes?: number;
-}
-
-export interface ModuleQualityPageRoutePerformanceDefinition {
-  shell?: 'dashboard';
-  path: string;
-  params?: Record<string, string>;
-  samplePath?: string;
-  maxLoaderMs?: number;
-  maxLoaderDataBytes?: number;
-}
-
-export interface ModuleQualityApiRoutePerformanceDefinition {
-  path: string;
-  method?: Extract<ModuleHttpMethod, 'GET' | 'HEAD'>;
-  auth?: 'admin' | 'anonymous';
-  maxP95Ms?: number;
-  maxResponseBytes?: number;
-}
-
-export interface ModuleQualityPerformanceDefinition {
-  dashboardTransitions?: ModuleQualityDashboardTransitionsPerformanceDefinition;
-  pageRoutes?: readonly ModuleQualityPageRoutePerformanceDefinition[];
-  apiRoutes?: readonly ModuleQualityApiRoutePerformanceDefinition[];
-}
-
-export interface ModuleQualityDefinition {
-  routes?: {
-    browser?: readonly ModuleQualityRouteEvidenceDefinition[];
-    accessibility?: readonly ModuleQualityRouteEvidenceDefinition[];
-  };
-  performance?: ModuleQualityPerformanceDefinition;
-  evidence?: readonly ModuleQualityRuntimeEvidenceDefinition[];
-}
-
-export type ModuleProductKind = 'tool' | 'product' | 'platform';
-export type ModuleProductShell = 'site' | 'dashboard' | 'admin';
-
-export interface ModuleProductPageQualityDefinition {
-  browser?: boolean;
-  accessibility?: boolean;
-  contains?: string | readonly string[];
-  viewports?: readonly ModuleQualityViewport[];
-  auth?: ModuleRouteAuth | boolean;
-}
-
-export interface ModuleProductPageDefinition {
-  path: string;
-  shell: ModuleProductShell;
-  title?: string;
-  audience: string;
-  userQuestion: string;
-  primaryActions: readonly string[];
-  required?: boolean;
-  samplePath?: string;
-  quality?: ModuleProductPageQualityDefinition;
-}
-
-export interface ModuleProductDefinition {
-  kind: ModuleProductKind;
-  audiences?: readonly string[];
-  requiredShells?: readonly ModuleProductShell[];
-  pages?: readonly ModuleProductPageDefinition[];
-  notes?: readonly string[];
-}
-
 export interface ModuleDefinition {
   id: string;
   name: string;
   version: string;
   description?: string;
-  kind?: ModuleKind;
-  product?: ModuleProductDefinition;
-  parts?: ModuleContractPartsDefinition;
-  uses?: ModuleUsesDefinition;
-  provides?: ModuleProvidesDefinition;
+  profile: ModuleProfile;
+  capabilities?: readonly ModuleCapability[];
   permissions?: readonly PermissionValue[];
   scope?: ModuleScopeDefinition;
   data?: ModuleDataDefinition;
@@ -593,21 +419,12 @@ export interface ModuleDefinition {
   assets?: ModuleAssetsDefinition;
   resources?: Record<string, ModuleResourceDefinition>;
   i18n?: ModuleI18nDefinition;
-  presentation?: ModulePresentationDefinition;
-  theme?: ModuleThemeDefinition;
-  meters?: Record<string, ModuleMeterDefinition>;
   serviceRequirements?: Record<string, ModuleServiceRequirementDefinition>;
-  resourceBindings?: Record<string, ModuleResourceBindingRequirement>;
-  config?: Record<string, ModuleConfigFieldDefinition>;
   actions?: Record<string, ModuleActionDefinition>;
   jobs?: Record<string, ModuleJobDefinition>;
   events?: ModuleEventsDefinition;
   webhooks?: Record<string, ModuleWebhookDefinition>;
-  head?: ModuleHeadDefinition;
-  lifecycle?: ModuleLifecycleDefinition;
-  dependencies?: ModuleDependenciesDefinition;
-  egress?: readonly string[];
-  quality?: ModuleQualityDefinition;
+  commercial?: ModuleCommercialDefinition;
 }
 
 export interface ModuleDefinitionMarker {
@@ -615,7 +432,7 @@ export interface ModuleDefinitionMarker {
   readonly sdkVersion: '0.1.0';
 }
 
-export type DefinedModule<TDefinition extends ModuleDefinition = ModuleDefinition> =
+export type DefinedModule<TDefinition extends object = ModuleDefinition> =
   Readonly<TDefinition> & {
     readonly $$ploykit: ModuleDefinitionMarker;
   };

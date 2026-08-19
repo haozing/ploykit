@@ -51,7 +51,6 @@ export function createModuleContractDigest(contract: ModuleRuntimeContract): Mod
       resourceBindings: contract.resourceBindings,
       meters: contract.meters,
       config: contract.config,
-      lifecycle: contract.lifecycle,
       egress: contract.egress,
       dependencies: contract.dependencies,
       capabilitySummary: contract.capabilitySummary,
