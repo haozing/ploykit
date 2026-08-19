@@ -38,6 +38,8 @@ test('data static command helper orchestrates plan generate types and verify', a
       modulePlanContent: (inputPlan) => JSON.stringify(inputPlan),
       modulePlanFile: (moduleRoot) =>
         path.join(moduleRoot, '.ploykit', 'generated', 'data-plan.json'),
+      moduleOpenApiFile: (moduleRoot) =>
+        path.join(moduleRoot, '.ploykit', 'generated', 'openapi.json'),
       moduleTypesFile: (moduleRoot) =>
         path.join(moduleRoot, '.ploykit', 'generated', 'data-types.ts'),
       verifyGeneratedArtifacts: (_results, diagnostics) =>
@@ -49,6 +51,7 @@ test('data static command helper orchestrates plan generate types and verify', a
     },
     buildPlans: async () => [{ plan, diagnostics: [] }],
     generateMigrationSql: () => 'sql',
+    generateOpenApi: () => 'openapi',
     generateTypes: () => 'types',
     parseCommandArgs: () => ({ values: new Map(), flags: new Set() }),
     printJson: (value) => {
@@ -77,6 +80,7 @@ test('data static command helper orchestrates plan generate types and verify', a
     assert.deepEqual(outputs[1]?.changed, [
       'modules/example/.ploykit/generated/data-plan.json',
       'modules/example/migrations/0001_generated.sql',
+      'modules/example/.ploykit/generated/openapi.json',
     ]);
     assert.deepEqual(outputs[2]?.changed, ['modules/example/.ploykit/generated/data-types.ts']);
     assert.equal(outputs[3]?.success, false);
@@ -120,7 +124,7 @@ test('data CLI runner dispatches commands and reports usage or errors', async ()
   try {
     process.exitCode = undefined;
     await runModuleDataCliCommand({
-      argv: ['node', 'module-data', 'plan', 'modules/hello'],
+      argv: ['node', 'module-data', 'plan', 'modules/resource-smoke'],
       commands: {
         plan: (args) => {
           calls.push(`plan:${args.join(',')}`);
@@ -139,7 +143,7 @@ test('data CLI runner dispatches commands and reports usage or errors', async ()
       usage: 'usage text',
     });
 
-    assert.deepEqual(calls, ['plan:modules/hello', 'finally:plan']);
+    assert.deepEqual(calls, ['plan:modules/resource-smoke', 'finally:plan']);
     assert.equal(process.exitCode, undefined);
 
     await runModuleDataCliCommand({
@@ -273,7 +277,7 @@ test('data plan helper normalizes models and reports validation diagnostics', as
   });
 
   assert.equal(STANDARD_COLUMNS[0]?.name, 'id');
-  assert.equal(moduleDataPhysicalTableName('shop-demo', 'orders'), 'mod_shop_demo__orders');
+  assert.equal(moduleDataPhysicalTableName('public-tool-smoke', 'orders'), 'mod_public_tool_smoke__orders');
   assert.deepEqual(normalizeDocumentField('string?'), { type: 'string?', required: false });
   assert.deepEqual(normalizeColumn({ kind: 'uuid', primaryKey: true, defaultRandom: true }), {
     kind: 'uuid',
@@ -377,9 +381,9 @@ test('data dry-run helper builds migrate and reset payloads', async () => {
     createMigrationDryRunPayload(
       [
         {
-          moduleId: 'hello',
+          moduleId: 'resource-smoke',
           schemaHash: 'hash-1',
-          projectPath: 'modules/hello/migrations/0001_generated.sql',
+          projectPath: 'modules/resource-smoke/migrations/0001_generated.sql',
           bytes: 42,
         },
       ],
@@ -390,9 +394,9 @@ test('data dry-run helper builds migrate and reset payloads', async () => {
       mode: 'dry-run',
       migrations: [
         {
-          moduleId: 'hello',
+          moduleId: 'resource-smoke',
           schemaHash: 'hash-1',
-          path: 'modules/hello/migrations/0001_generated.sql',
+          path: 'modules/resource-smoke/migrations/0001_generated.sql',
           bytes: 42,
         },
       ],
@@ -408,11 +412,11 @@ test('data dry-run helper builds migrate and reset payloads', async () => {
   });
 
   assert.deepEqual(
-    createResetDryRunPayload([{ moduleId: 'hello', sql: 'drop table public.mod_hello' }], [error]),
+    createResetDryRunPayload([{ moduleId: 'resource-smoke', sql: 'drop table public.mod_resource_smoke' }], [error]),
     {
       success: false,
       mode: 'dry-run',
-      resetPlans: [{ moduleId: 'hello', sql: 'drop table public.mod_hello' }],
+      resetPlans: [{ moduleId: 'resource-smoke', sql: 'drop table public.mod_resource_smoke' }],
       diagnostics: [error],
       next: 'Pass --force with DATABASE_URL to apply the reset.',
     }
@@ -449,10 +453,10 @@ test('data loader helper unwraps module exports and reports load failures', asyn
     id: 'nested',
   });
   assert.ok(
-    moduleDefinitionUrl(path.join('modules', 'hello')).endsWith('/modules/hello/module.ts')
+    moduleDefinitionUrl(path.join('modules', 'resource-smoke')).endsWith('/modules/resource-smoke/module.ts')
   );
 
-  const loaded = await loader.loadModuleDefinition(path.join('modules', 'hello'));
+  const loaded = await loader.loadModuleDefinition(path.join('modules', 'resource-smoke'));
   assert.equal(loaded.ok, true);
   if (loaded.ok) {
     assert.equal(loaded.definition.id, 'loaded-module');
@@ -490,7 +494,7 @@ test('data loader helper unwraps module exports and reports load failures', asyn
 
 test('data path helper resolves local module paths and blocks escapes', async () => {
   const { resolveModuleLocalPath } = await importModuleDataPaths();
-  const moduleRoot = path.join(process.cwd(), 'modules', 'hello');
+  const moduleRoot = path.join(process.cwd(), 'modules', 'resource-smoke');
 
   assert.equal(
     resolveModuleLocalPath(moduleRoot, './migrations/0001_generated.sql'),
@@ -510,11 +514,11 @@ test('data path helper resolves local module paths and blocks escapes', async ()
 test('data args helper parses targets filters flags and value options', async () => {
   const { parseCommandArgs } = await importModuleDataArgs();
   const parsed = parseCommandArgs([
-    'modules/hello',
+    'modules/resource-smoke',
     '--module',
-    'hello',
+    'resource-smoke',
     '--module',
-    'shop-demo',
+    'public-tool-smoke',
     '--database-url',
     'postgres://migration',
     '--app-database-url',
@@ -525,8 +529,8 @@ test('data args helper parses targets filters flags and value options', async ()
     '--require-app-role-safety',
   ]);
 
-  assert.equal(parsed.targetPath, 'modules/hello');
-  assert.deepEqual([...parsed.moduleFilter].sort(), ['hello', 'shop-demo']);
+  assert.equal(parsed.targetPath, 'modules/resource-smoke');
+  assert.deepEqual([...parsed.moduleFilter].sort(), ['public-tool-smoke', 'resource-smoke']);
   assert.deepEqual([...parsed.flags].sort(), ['dry-run', 'require-app-role-safety']);
   assert.equal(parsed.values.get('databaseUrl'), 'postgres://migration');
   assert.equal(parsed.values.get('appDatabaseUrl'), 'postgres://app');

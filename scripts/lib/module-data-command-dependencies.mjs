@@ -34,6 +34,8 @@ import { createModuleDataLoader } from './module-data-loader.mjs';
 import { createModuleDataApplyCommands } from './module-data-apply-commands.mjs';
 import { resolveModuleLocalPath } from './module-data-paths.mjs';
 import { parseCommandArgs } from './module-data-args.mjs';
+import { deriveResourceDataDefinition } from './module-schema-facts.mjs';
+import { createModuleOpenApi } from './module-openapi.mjs';
 
 export function createModuleDataCommandDependencies(input) {
   const { diagnostic, importModule, parentUrl, printJson, projectRoot = process.cwd() } = input;
@@ -71,27 +73,32 @@ export function createModuleDataCommandDependencies(input) {
 
     const { definition } = loaded;
     const moduleId = typeof definition.id === 'string' ? definition.id : path.basename(moduleRoot);
-    const data = definition.data;
+    const derived = deriveResourceDataDefinition(definition);
+    const data = derived.data;
 
     if (!data) {
       return {
         moduleRoot: toProjectPath(moduleRoot),
         moduleId,
         hasData: false,
-        diagnostics,
+        diagnostics: [...diagnostics, ...derived.diagnostics],
         plan: null,
       };
     }
 
     const result = dataPlanHelpers.createModuleDataPlan(moduleRoot, moduleId, data);
-    diagnostics.push(...result.diagnostics);
+    diagnostics.push(...derived.diagnostics, ...result.diagnostics);
 
     return {
       moduleRoot: toProjectPath(moduleRoot),
       moduleId,
       hasData: true,
       diagnostics,
-      plan: result.plan,
+      plan: {
+        ...result.plan,
+        resourceFacts: derived.resourceFacts,
+        openapi: createModuleOpenApi(definition),
+      },
     };
   }
 
@@ -118,9 +125,14 @@ export function createModuleDataCommandDependencies(input) {
     return generateDataTypes(modulePlan, { standardColumns: STANDARD_COLUMNS });
   }
 
+  function generateOpenApi(modulePlan) {
+    return `${JSON.stringify(modulePlan.openapi ?? {}, null, 2)}\n`;
+  }
+
   const dataArtifacts = createModuleDataArtifactHelpers({
     diagnostic,
     generateMigrationSql,
+    generateOpenApi,
     generateTypes,
     projectRoot,
     resolveModuleLocalPath,
@@ -137,6 +149,7 @@ export function createModuleDataCommandDependencies(input) {
     artifacts: dataArtifacts,
     buildPlans,
     generateMigrationSql,
+    generateOpenApi,
     generateTypes,
     parseCommandArgs,
     printJson,

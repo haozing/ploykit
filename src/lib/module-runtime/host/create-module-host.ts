@@ -45,6 +45,7 @@ import {
   type ResolvedModuleSurfaceContribution,
   type VerifyModuleApiKeyHandler,
 } from '../adapters';
+import { executeModuleAdminResourceOperation } from '../admin';
 import { createModuleRuntimeContext } from '../context';
 import {
   createPostgresModuleDataApi,
@@ -70,6 +71,7 @@ import {
   type CapabilityDescriptorRegistry,
   type CapabilityProviderRegistry,
 } from '../../module-kernel/capability-registry';
+import { resolveTrustedModuleCapabilities } from './trusted-module-capabilities';
 
 export interface CreateModuleHostDataSessionInput {
   contract: ModuleRuntimeContract;
@@ -157,6 +159,17 @@ export interface ExecuteModuleHostActionInput<TInput = unknown> extends Omit<
   session?: ModuleHostSession;
 }
 
+export interface ExecuteModuleHostAdminResourceOperationInput<TInput = unknown> {
+  resourceId: string;
+  operationName: string;
+  input?: TInput;
+  request?: Request;
+  session?: ModuleHostSession;
+  params?: Record<string, string>;
+  confirmed?: boolean;
+  confirmation?: Record<string, unknown>;
+}
+
 export interface ResolveModuleHostPageRouteInput extends Omit<
   ResolveModulePageRouteInput,
   'user' | 'createContext'
@@ -178,6 +191,9 @@ export interface ModuleHost {
   dispatchApiRoute(input: DispatchModuleHostApiRouteInput): Promise<Response>;
   executeAction<TInput = unknown, TResult = unknown>(
     input: ExecuteModuleHostActionInput<TInput>
+  ): Promise<TResult>;
+  executeAdminResourceOperation<TInput = unknown, TResult = unknown>(
+    input: ExecuteModuleHostAdminResourceOperationInput<TInput>
   ): Promise<TResult>;
   resolvePageRoute(input: ResolveModuleHostPageRouteInput): Promise<ResolveModulePageRouteResult>;
   resolvePageRouteMetadata(
@@ -289,7 +305,11 @@ function resolveCapability<TCapability>(
 function createContextFactory(
   runtime: ModuleRuntimeHost,
   options: CreateModuleHostOptions,
-  hostSession: ModuleHostSession
+  hostSession: ModuleHostSession,
+  mountedExtensions: {
+    registry?: CapabilityDescriptorRegistry;
+    providers?: CapabilityProviderRegistry;
+  }
 ) {
   return (input: {
     moduleId: string;
@@ -317,36 +337,36 @@ function createContextFactory(
       params: input.params,
       session: contextSession,
     });
-    const descriptorExtensions = options.capabilities?.registry
+    const descriptorExtensions = mountedExtensions.registry
       ? mountCapabilityDescriptors({
-          descriptors: options.capabilities.registry,
+          descriptors: mountedExtensions.registry,
           providers: {
-            ...options.capabilities.providers,
-            services: options.capabilities.services,
-            connectors: options.capabilities.connectors,
-            resourceBindings: options.capabilities.resourceBindings,
-            http: options.capabilities.http,
-            files: options.capabilities.files,
-            artifacts: options.capabilities.artifacts,
-            notifications: options.capabilities.notifications,
-            runs: options.capabilities.runs,
-            jobs: options.capabilities.jobs,
-            events: options.capabilities.events,
-            webhooks: options.capabilities.webhooks,
-            usage: options.capabilities.usage,
-            metering: options.capabilities.metering,
-            credits: options.capabilities.credits,
-            billing: options.capabilities.billing,
-            entitlements: options.capabilities.entitlements,
-            commerce: options.capabilities.commerce,
-            redeemCodes: options.capabilities.redeemCodes,
-            ai: options.capabilities.ai,
-            rag: options.capabilities.rag,
-            apiKeys: options.capabilities.apiKeys,
-            rateLimit: options.capabilities.rateLimit,
-            risk: options.capabilities.risk,
-            cache: options.capabilities.cache,
-            audit: options.capabilities.audit,
+            ...mountedExtensions.providers,
+            services: options.capabilities?.services,
+            connectors: options.capabilities?.connectors,
+            resourceBindings: options.capabilities?.resourceBindings,
+            http: options.capabilities?.http,
+            files: options.capabilities?.files,
+            artifacts: options.capabilities?.artifacts,
+            notifications: options.capabilities?.notifications,
+            runs: options.capabilities?.runs,
+            jobs: options.capabilities?.jobs,
+            events: options.capabilities?.events,
+            webhooks: options.capabilities?.webhooks,
+            usage: options.capabilities?.usage,
+            metering: options.capabilities?.metering,
+            credits: options.capabilities?.credits,
+            billing: options.capabilities?.billing,
+            entitlements: options.capabilities?.entitlements,
+            commerce: options.capabilities?.commerce,
+            redeemCodes: options.capabilities?.redeemCodes,
+            ai: options.capabilities?.ai,
+            rag: options.capabilities?.rag,
+            apiKeys: options.capabilities?.apiKeys,
+            rateLimit: options.capabilities?.rateLimit,
+            risk: options.capabilities?.risk,
+            cache: options.capabilities?.cache,
+            audit: options.capabilities?.audit,
           },
           mountInput: {
             contract,
@@ -354,6 +374,7 @@ function createContextFactory(
             params: input.params,
             session: contextSession,
           },
+          allowedNames: contract.definition.uses?.capabilities ?? [],
         })
       : {};
 
@@ -403,6 +424,12 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
     createDataApi,
     catalog: options.catalog,
   });
+  const mountedExtensions = await resolveTrustedModuleCapabilities({
+    runtime,
+    catalog: options.catalog,
+    registry: options.capabilities?.registry,
+    providers: options.capabilities?.providers,
+  });
 
   return {
     runtime,
@@ -419,7 +446,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession);
+      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
 
       return dispatchModuleApiRoute(runtime, {
         request: input.request,
@@ -456,7 +483,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession);
+      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
 
       return executeModuleAction<TInput, TResult>(runtime, {
         ...input,
@@ -475,6 +502,51 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
       });
     },
+    async executeAdminResourceOperation<TInput = unknown, TResult = unknown>(
+      input: ExecuteModuleHostAdminResourceOperationInput<TInput>
+    ): Promise<TResult> {
+      const request =
+        input.request ??
+        new Request(
+          `http://localhost/admin/resources/${input.resourceId}/${input.operationName}`,
+          { method: 'POST' }
+        );
+      const params = input.params ?? {};
+      const hostSession = await resolveHostSession(
+        options,
+        {
+          operation: 'admin-resource',
+          request,
+          resourceId: input.resourceId,
+          operationName: input.operationName,
+          params,
+        },
+        input.session
+      );
+      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
+
+      return executeModuleAdminResourceOperation<TInput, TResult>(
+        {
+          host: runtime,
+          store: options.runtimeStore,
+        },
+        {
+          ...input,
+          request,
+          params,
+          session: hostSession,
+          createContext(contextInput) {
+            return createContext({
+              moduleId: contextInput.moduleId,
+              request: contextInput.request,
+              user: contextInput.session.user ?? null,
+              session: contextInput.session,
+              params: contextInput.params,
+            });
+          },
+        }
+      );
+    },
     async resolvePageRoute(input) {
       const params = input.params ?? {};
       const hostSession = await resolveHostSession(
@@ -488,7 +560,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession);
+      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
 
       return resolveModulePageRoute(runtime, {
         request: input.request,
@@ -522,7 +594,7 @@ export async function createModuleHost(options: CreateModuleHostOptions): Promis
         },
         input.session
       );
-      const createContext = createContextFactory(runtime, options, hostSession);
+      const createContext = createContextFactory(runtime, options, hostSession, mountedExtensions);
 
       return resolveModulePageRouteMetadata(runtime, {
         request: input.request,

@@ -1,4 +1,4 @@
-import type { ModuleResourcesDefinition } from '@ploykit/module-sdk';
+import type { ModuleAssetsDefinition } from '@ploykit/module-sdk';
 import type { ModuleRuntimeHost } from '../host';
 
 export interface ModuleLocaleResource {
@@ -66,9 +66,9 @@ function inferContentType(path: string): string {
 }
 
 function declaredAssets(
-  resources: ModuleResourcesDefinition
-): readonly NonNullable<ModuleResourcesDefinition['assets']>[number][] {
-  return resources.assets ?? [];
+  assets: ModuleAssetsDefinition
+): readonly NonNullable<ModuleAssetsDefinition['assets']>[number][] {
+  return assets.assets ?? [];
 }
 
 export function resolveModuleResources(
@@ -82,13 +82,14 @@ export function resolveModuleResources(
   }
 
   const assetSet = new Set(entry.assets ?? []);
+  const staticAssets = contract.assets;
   return {
     moduleId,
-    locales: Object.entries(contract.resources.locales ?? {}).map(([locale, path]) => ({
+    locales: Object.entries(staticAssets.locales ?? {}).map(([locale, path]) => ({
       locale,
       path: normalizeResourcePath(path),
     })),
-    assets: declaredAssets(contract.resources).map((asset) => {
+    assets: declaredAssets(staticAssets).map((asset) => {
       const path = normalizeResourcePath(asset.path);
       if (assetSet.size > 0 && !assetSet.has(path)) {
         throw new Error(`MODULE_ASSET_NOT_IN_MAP: ${moduleId}.${path}`);

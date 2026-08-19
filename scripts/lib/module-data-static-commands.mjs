@@ -5,6 +5,7 @@ export function createModuleDataStaticCommands(input) {
     artifacts,
     buildPlans,
     generateMigrationSql,
+    generateOpenApi,
     generateTypes,
     parseCommandArgs,
     printJson,
@@ -67,6 +68,15 @@ export function createModuleDataStaticCommands(input) {
         if (artifacts.writeIfChanged(migrationFile, generateMigrationSql(result.plan))) {
           changed.push(toProjectPath(migrationFile));
         }
+      }
+
+      if (
+        artifacts.writeIfChanged(
+          artifacts.moduleOpenApiFile(moduleRoot),
+          generateOpenApi(result.plan)
+        )
+      ) {
+        changed.push(toProjectPath(artifacts.moduleOpenApiFile(moduleRoot)));
       }
     }
 

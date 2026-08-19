@@ -8,7 +8,10 @@ import { getAdminWebhookDetailCopy, getAdminWebhooksCopy } from '@host/lib/admin
 import type { AdminWorkerRuntimeStatus } from '@host/lib/admin-worker-operations';
 import type { AdminTableQuery } from '@host/lib/table-query';
 import type { AdminOutboxDetailView } from '@host/lib/admin-delivery';
-import type { AdminOperationsSnapshot, AdminOutboxBulkPreview } from '@/lib/module-runtime';
+import type {
+  AdminOperationsSnapshot,
+  AdminOutboxBulkPreview,
+} from '@host/lib/admin/operations-center';
 import { cleanTableQuery, operationResultToast } from './OperationsPageUtils';
 import { AdminWebhookDetailActions } from './WebhookDetailActions';
 import { AdminWebhookDetailDrawer } from './WebhookDetailDrawer';

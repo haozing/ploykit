@@ -1,0 +1,170 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Resource Smoke",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/resource-smoke/notes": {
+      "get": {
+        "operationId": "resource-smoke.notes.get",
+        "tags": [
+          "resource-smoke"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOutputResourceSmokeNotes"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "resource-smoke.notes.post",
+        "tags": [
+          "resource-smoke"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiInputResourceSmokeNotes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOutputResourceSmokeNotes"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ResourceNotes": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "title": "ResourceSmokeNote",
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "status"
+        ]
+      },
+      "ApiInputResourceSmokeNotes": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "title": "ResourceSmokeNote",
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "status"
+        ]
+      },
+      "ApiOutputResourceSmokeNotes": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "title": "ResourceSmokeNoteOutput",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "ActionInputCreateNote": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "title": "ResourceSmokeNote",
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "status"
+        ]
+      },
+      "ActionOutputCreateNote": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "title": "ResourceSmokeNoteOutput",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      }
+    }
+  }
+}

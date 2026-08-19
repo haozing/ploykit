@@ -22,12 +22,12 @@ const APP_DATABASE_URL =
 const APP_ROLE = 'ploykit_app';
 const APP_PASSWORD = 'ploykit_app';
 
-interface HelloMessage {
+interface ResourceSmokeMessage {
   id: string;
   message: string;
 }
 
-interface HelloPost {
+interface ResourceSmokePost {
   id: string;
   title: string;
   status: string;
@@ -169,11 +169,9 @@ async function resetDatabase(ownerPool: Pool): Promise<void> {
     await ownerPool.query(`drop role ${APP_ROLE}`);
   }
   for (const tableName of [
-    modulePhysicalTableName('hello', 'hello_posts'),
-    modulePhysicalTableName('capability-demo', 'demo_notes'),
-    modulePhysicalTableName('shop-demo', 'products'),
-    modulePhysicalTableName('shop-demo', 'coupons'),
-    modulePhysicalTableName('shop-demo', 'orders'),
+    modulePhysicalTableName('resource-smoke', 'public_posts'),
+    modulePhysicalTableName('resource-smoke', 'workspace_notes'),
+    modulePhysicalTableName('resource-smoke', 'product_items'),
   ]) {
     await ownerPool.query(`drop table if exists public."${tableName}" cascade`);
   }
@@ -199,7 +197,9 @@ async function createAppRole(ownerPool: Pool): Promise<void> {
   );
 }
 
-function helloSession(overrides: Partial<ModuleDataRuntimeSession> = {}): ModuleDataRuntimeSession {
+function resourceSmokeSession(
+  overrides: Partial<ModuleDataRuntimeSession> = {}
+): ModuleDataRuntimeSession {
   return {
     productId: 'product_a',
     workspaceId: 'workspace_a',
@@ -211,7 +211,7 @@ function helloSession(overrides: Partial<ModuleDataRuntimeSession> = {}): Module
 }
 
 test('Data v2 Postgres runtime refuses unsafe RLS context options by default', async () => {
-  const contract = await readModuleContract('hello');
+  const contract = await readModuleContract('resource-smoke');
   const database = {
     async query() {
       return { rows: [], rowCount: 0 };
@@ -223,7 +223,7 @@ test('Data v2 Postgres runtime refuses unsafe RLS context options by default', a
       createPostgresModuleDataApi({
         contract,
         database,
-        session: helloSession(),
+        session: resourceSmokeSession(),
         useRlsSession: false,
       }),
     /MODULE_DATA_RLS_SESSION_DISABLED/
@@ -234,7 +234,7 @@ test('Data v2 Postgres runtime refuses unsafe RLS context options by default', a
       createPostgresModuleDataApi({
         contract,
         database,
-        session: helloSession(),
+        session: resourceSmokeSession(),
         wrapOperationsInTransaction: false,
       }),
     /MODULE_DATA_RLS_TRANSACTION_REQUIRED/
@@ -244,7 +244,7 @@ test('Data v2 Postgres runtime refuses unsafe RLS context options by default', a
     createPostgresModuleDataApi({
       contract,
       database,
-      session: helloSession(),
+      session: resourceSmokeSession(),
       useRlsSession: false,
       wrapOperationsInTransaction: false,
       unsafeAllowRlsBypass: true,
@@ -253,7 +253,7 @@ test('Data v2 Postgres runtime refuses unsafe RLS context options by default', a
 });
 
 test('Data v2 memory runtime supports table upsert without a Postgres store', async () => {
-  const contract = await readModuleContract('capability-demo');
+  const contract = await readModuleContract('resource-smoke');
   const store = createMemoryModuleDataStore();
   const workspaceA = createMemoryModuleDataApi({
     contract,
@@ -278,14 +278,14 @@ test('Data v2 memory runtime supports table upsert without a Postgres store', as
     },
   });
 
-  const first = await workspaceA.table('demo_notes').upsert(
+  const first = await workspaceA.table('workspace_notes').upsert(
     {
       title: 'memory-runtime-post',
       body: 'first body',
     },
     { uniqueBy: ['title'] }
   );
-  const second = await workspaceA.table('demo_notes').upsert(
+  const second = await workspaceA.table('workspace_notes').upsert(
     {
       title: 'memory-runtime-post',
       body: 'updated body',
@@ -297,19 +297,19 @@ test('Data v2 memory runtime supports table upsert without a Postgres store', as
   assert.equal(second.id, first.id);
   assert.equal(second.body, 'updated body');
   assert.equal(
-    (await workspaceA.table('demo_notes').findOne({ where: { title: 'memory-runtime-post' } }))
+    (await workspaceA.table('workspace_notes').findOne({ where: { title: 'memory-runtime-post' } }))
       ?.body,
     'updated body'
   );
   assert.equal(
-    await workspaceB.table('demo_notes').findOne({ where: { title: 'memory-runtime-post' } }),
+    await workspaceB.table('workspace_notes').findOne({ where: { title: 'memory-runtime-post' } }),
     null
   );
 
-  const beforeRollback = await workspaceA.table('demo_notes').count();
+  const beforeRollback = await workspaceA.table('workspace_notes').count();
   await assert.rejects(
     workspaceA.transaction(async (tx) => {
-      await tx.table('demo_notes').insert({
+      await tx.table('workspace_notes').insert({
         title: 'memory-rollback',
         body: 'should not persist',
       });
@@ -317,9 +317,9 @@ test('Data v2 memory runtime supports table upsert without a Postgres store', as
     }),
     /memory rollback sentinel/
   );
-  assert.equal(await workspaceA.table('demo_notes').count(), beforeRollback);
+  assert.equal(await workspaceA.table('workspace_notes').count(), beforeRollback);
   assert.equal(
-    await workspaceA.table('demo_notes').findOne({ where: { title: 'memory-rollback' } }),
+    await workspaceA.table('workspace_notes').findOne({ where: { title: 'memory-rollback' } }),
     null
   );
 });
@@ -334,7 +334,7 @@ async function queryAsSession<TRecord extends QueryResultRow = Record<string, un
   try {
     await client.query('begin');
     const settings: readonly (readonly [string, string])[] = [
-      ['ploykit.module_id', 'hello'],
+      ['ploykit.module_id', 'resource-smoke'],
       ['ploykit.product_id', session.productId],
       ['ploykit.scope_type', 'user'],
       ['ploykit.scope_id', session.userId ?? ''],
@@ -360,28 +360,26 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
 
   const ownerPool = new Pool({ connectionString: OWNER_DATABASE_URL });
   await resetDatabase(ownerPool);
-  await applyMigration(ownerPool, 'hello');
-  await applyMigration(ownerPool, 'capability-demo');
-  await applyMigration(ownerPool, 'shop-demo');
+  await applyMigration(ownerPool, 'resource-smoke');
   await createAppRole(ownerPool);
 
   const appPool = new Pool({ connectionString: APP_DATABASE_URL });
   const database = createPgModuleDataExecutor(appPool);
-  const contract = await readModuleContract('hello');
-  const workspaceContract = await readModuleContract('capability-demo');
-  const productContract = await readModuleContract('shop-demo');
-  const userA = helloSession();
-  const userB = helloSession({ userId: 'user_b', actorId: 'user_b' });
-  const writer = helloSession({ allowPublicWrite: true });
+  const contract = await readModuleContract('resource-smoke');
+  const workspaceContract = contract;
+  const productContract = contract;
+  const userA = resourceSmokeSession();
+  const userB = resourceSmokeSession({ userId: 'user_b', actorId: 'user_b' });
+  const writer = resourceSmokeSession({ allowPublicWrite: true });
   const userAData = createPostgresModuleDataApi({ contract, database, session: userA });
   const userBData = createPostgresModuleDataApi({ contract, database, session: userB });
   const writerData = createPostgresModuleDataApi({ contract, database, session: writer });
 
-  const messagesA = userAData.document<HelloMessage>('hello_messages');
+  const messagesA = userAData.document<ResourceSmokeMessage>('user_notes');
   const insertedMessage = await messagesA.insert({ message: 'alpha' });
   assert.equal((await messagesA.findById(insertedMessage.id))?.message, 'alpha');
   assert.equal(
-    await userBData.document<HelloMessage>('hello_messages').findById(insertedMessage.id),
+    await userBData.document<ResourceSmokeMessage>('user_notes').findById(insertedMessage.id),
     null
   );
 
@@ -400,13 +398,15 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
   assert.equal(await messagesA.count({ where: { message: 'once' } }), 1);
 
   await assert.rejects(
-    writerData.table<HelloPost>('hello_posts').insert({ title: 'blocked', extra: true } as any),
+    writerData
+      .table<ResourceSmokePost>('public_posts')
+      .insert({ title: 'blocked', extra: true } as any),
     /MODULE_DATA_TABLE_FIELD_NOT_DECLARED/
   );
 
-  const posts = writerData.table<HelloPost>('hello_posts');
+  const posts = writerData.table<ResourceSmokePost>('public_posts');
   const firstPost = await posts.insert({
-    title: 'hello-title',
+    title: 'resource-title',
     status: 'draft',
     metadata: { featured: false },
   });
@@ -415,14 +415,14 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
 
   const upsertedPost = await posts.upsert(
     {
-      title: 'hello-title',
+      title: 'resource-title',
       status: 'published',
       metadata: { featured: true },
     },
     { uniqueBy: ['title'] }
   );
   assert.equal(upsertedPost.status, 'published');
-  assert.equal(await posts.count({ where: { title: 'hello-title' } }), 1);
+  assert.equal(await posts.count({ where: { title: 'resource-title' } }), 1);
 
   await posts.insertIfAbsent(
     {
@@ -451,7 +451,7 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
   const beforeRollback = await messagesA.count();
   await assert.rejects(
     userAData.transaction(async (tx) => {
-      await tx.document<HelloMessage>('hello_messages').insert({ message: 'rollback-me' });
+      await tx.document<ResourceSmokeMessage>('user_notes').insert({ message: 'rollback-me' });
       throw new Error('rollback sentinel');
     }),
     /rollback sentinel/
@@ -481,16 +481,16 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
   await assert.rejects(
     queryAsSession(
       appPool,
-      helloSession({ allowPublicWrite: false }),
-      `insert into public."mod_hello__hello_posts"
+      resourceSmokeSession({ allowPublicWrite: false }),
+      `insert into public."mod_resource_smoke__public_posts"
        (product_id, module_id, scope_type, scope_id, title, status, metadata)
-       values ('product_a', 'hello', 'public-read', null, 'direct-blocked', 'draft', '{}'::jsonb)`
+       values ('product_a', 'resource-smoke', 'public-read', null, 'direct-blocked', 'draft', '{}'::jsonb)`
     ),
     /row-level security/
   );
 
-  const workspaceUserA = helloSession();
-  const workspaceUserB = helloSession({
+  const workspaceUserA = resourceSmokeSession();
+  const workspaceUserB = resourceSmokeSession({
     workspaceId: 'workspace_b',
     userId: 'user_b',
     actorId: 'user_b',
@@ -509,21 +509,21 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
     id: string;
     title: string;
     body: string | null;
-  }>('demo_notes');
+  }>('workspace_notes');
   const insertedNote = await notesA.insert({
     title: 'workspace-alpha',
     body: 'workspace-a',
   });
   assert.equal(
-    await workspaceDataB.table<{ id: string; title: string; body: string | null }>('demo_notes').findById(
+    await workspaceDataB.table<{ id: string; title: string; body: string | null }>('workspace_notes').findById(
       insertedNote.id
     ),
     null
   );
   assert.equal((await notesA.findById(insertedNote.id))?.title, 'workspace-alpha');
 
-  const productUserA = helloSession();
-  const productUserB = helloSession({
+  const productUserA = resourceSmokeSession();
+  const productUserB = resourceSmokeSession({
     productId: 'product_b',
     workspaceId: 'workspace_b',
     userId: 'user_b',
@@ -543,14 +543,12 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
     id: string;
     sku: string;
     title: string;
-    slug: string;
     price_cents: number;
     inventory: number;
-  }>('products');
+  }>('product_items');
   const insertedProduct = await productsA.insert({
     sku: 'sku-alpha',
     title: 'Alpha',
-    slug: 'alpha',
     price_cents: 1000,
     inventory: 5,
   });
@@ -559,21 +557,18 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
       id: string;
       sku: string;
       title: string;
-      slug: string;
       price_cents: number;
       inventory: number;
-    }>('products').findById(insertedProduct.id),
+    }>('product_items').findById(insertedProduct.id),
     null
   );
   assert.equal((await productsA.findById(insertedProduct.id))?.sku, 'sku-alpha');
 
   const expectedPolicyNames = [
     'module_documents__module_scope_policy',
-    'mod_hello__hello_posts__module_scope_policy',
-    'mod_capability_demo__demo_notes__module_scope_policy',
-    'mod_shop_demo__products__module_scope_policy',
-    'mod_shop_demo__coupons__module_scope_policy',
-    'mod_shop_demo__orders__module_scope_policy',
+    'mod_resource_smoke__public_posts__module_scope_policy',
+    'mod_resource_smoke__workspace_notes__module_scope_policy',
+    'mod_resource_smoke__product_items__module_scope_policy',
   ];
   const policyRows = await appPool.query<{
     tablename: string;
@@ -590,12 +585,10 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
   `, [expectedPolicyNames]);
   assert.equal(policyRows.rows.length, expectedPolicyNames.length);
   const policyModuleIds: Record<string, string> = {
-    module_documents__module_scope_policy: 'hello',
-    mod_hello__hello_posts__module_scope_policy: 'hello',
-    mod_capability_demo__demo_notes__module_scope_policy: 'capability-demo',
-    mod_shop_demo__products__module_scope_policy: 'shop-demo',
-    mod_shop_demo__coupons__module_scope_policy: 'shop-demo',
-    mod_shop_demo__orders__module_scope_policy: 'shop-demo',
+    module_documents__module_scope_policy: 'resource-smoke',
+    mod_resource_smoke__public_posts__module_scope_policy: 'resource-smoke',
+    mod_resource_smoke__workspace_notes__module_scope_policy: 'resource-smoke',
+    mod_resource_smoke__product_items__module_scope_policy: 'resource-smoke',
   };
   for (const policy of policyRows.rows) {
     const moduleId = policyModuleIds[policy.policyname];
@@ -629,11 +622,11 @@ test('Data v2 Postgres runtime supports real CRUD, RLS and rollback', async () =
   });
   const hostData = factory({
     contract,
-    request: new Request('http://localhost/api/hello'),
+    request: new Request('http://localhost/api/resource-smoke'),
     user: { id: 'user_a', role: 'user' },
     params: {},
   });
-  await hostData.document<HelloMessage>('hello_messages').insert({ message: 'factory' });
+  await hostData.document<ResourceSmokeMessage>('user_notes').insert({ message: 'factory' });
   assert.equal(await messagesA.exists({ where: { message: 'factory' } }), true);
 
   await appPool.end();

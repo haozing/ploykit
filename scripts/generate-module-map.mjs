@@ -306,7 +306,7 @@ export default function ${componentName}(props: SVGProps<SVGSVGElement>) {
 }
 
 function collectModuleIcons(root, moduleId, definition) {
-  const declaredIcons = definition.resources?.icons ?? {};
+  const declaredIcons = definition.assets?.icons ?? {};
   const usedKeys = usedNavigationIconKeys(definition);
   const icons = [];
 
@@ -317,12 +317,12 @@ function collectModuleIcons(root, moduleId, definition) {
         continue;
       }
       throw new Error(
-        `Module "${moduleId}" navigation icon "${localKey}" is not declared in resources.icons and is not a host core icon.`
+        `Module "${moduleId}" navigation icon "${localKey}" is not declared in assets.icons and is not a host core icon.`
       );
     }
 
     const key = `${moduleId}:${localKey}`;
-    const sourcePath = `${moduleId}.resources.icons.${localKey}`;
+    const sourcePath = `${moduleId}.assets.icons.${localKey}`;
     if (icon.kind === 'lucide') {
       assertKnownLucideIcon(icon.name, sourcePath);
       icons.push({ key, kind: 'lucide', name: icon.name });
@@ -434,7 +434,7 @@ function normalizeModuleResourcePath(moduleRoot, moduleId, resourcePath, kind) {
 }
 
 function readModuleLocaleMessages(root, definition, moduleId) {
-  const locales = definition.resources?.locales;
+  const locales = definition.assets?.locales;
   if (!locales || typeof locales !== 'object' || Array.isArray(locales)) {
     return undefined;
   }
@@ -563,6 +563,50 @@ function recordKeys(value) {
   return Object.keys(value ?? {});
 }
 
+function collectProvidedCapabilityProviders(root, moduleId, definition) {
+  const providers = [];
+  for (const [name, capability] of Object.entries(definition.provides?.capabilities ?? {})) {
+    const providerPath = capability?.provider;
+    if (typeof providerPath !== 'string') {
+      continue;
+    }
+    const resolved = assertModuleLocalFile(
+      root,
+      providerPath,
+      `Provided capability ${moduleId}.provides.capabilities.${name}.provider`
+    );
+    providers.push({
+      name,
+      path: slash(path.relative(root, resolved).replace(/\.(ts|tsx|js|jsx)$/, '')),
+    });
+  }
+  return providers.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function collectProvidedAdminResourceHandlers(root, moduleId, definition) {
+  const handlers = [];
+  for (const [resourceName, resource] of Object.entries(
+    definition.provides?.adminResources ?? {}
+  )) {
+    for (const [operationName, operation] of Object.entries(resource?.operations ?? {})) {
+      const handlerPath = operation?.handler;
+      if (typeof handlerPath !== 'string') {
+        continue;
+      }
+      const resolved = assertModuleLocalFile(
+        root,
+        handlerPath,
+        `Provided admin resource ${moduleId}.provides.adminResources.${resourceName}.operations.${operationName}.handler`
+      );
+      handlers.push({
+        name: slash(handlerPath.replace(/^\.\//, '').replace(/\.(ts|tsx|js|jsx)$/, '')),
+        path: slash(path.relative(root, resolved).replace(/\.(ts|tsx|js|jsx)$/, '')),
+      });
+    }
+  }
+  return handlers.sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function countNavigation(navigation) {
   if (!navigation) {
     return 0;
@@ -571,12 +615,9 @@ function countNavigation(navigation) {
 }
 
 function routeCommercialRequirements(definition) {
-  const routes = definition.routes ?? {};
   return [
-    ...(routes.site ?? []),
-    ...(routes.dashboard ?? []),
-    ...(routes.admin ?? []),
-    ...(routes.api ?? []),
+    ...(definition.pages ?? []),
+    ...(definition.apis ?? []),
   ]
     .map((route) => route.commercial)
     .filter(Boolean);
@@ -597,19 +638,23 @@ function hasCredits(requirements) {
 }
 
 function createMapCapabilitySummary(definition) {
-  const routes = definition.routes ?? {};
+  const pages = definition.pages ?? [];
+  const apis = definition.apis ?? [];
+  const businessResources = Object.values(definition.resources ?? {}).filter(
+    (resource) => resource?.$$type === 'ploykit.resource'
+  );
   const routeCommercial = routeCommercialRequirements(definition);
   const actionCommercial = actionCommercialRequirements(definition);
   return {
     routes:
-      (routes.site ?? []).length +
-      (routes.dashboard ?? []).length +
-      (routes.admin ?? []).length +
-      (routes.api ?? []).length,
+      pages.length +
+      apis.length,
     dataModels:
       recordKeys(definition.data?.tables).length +
       recordKeys(definition.data?.documents).length +
-      recordKeys(definition.data?.views).length,
+      recordKeys(definition.data?.views).length +
+      businessResources.filter((resource) => resource.storage?.table).length +
+      businessResources.filter((resource) => resource.storage?.document).length,
     permissions: (definition.permissions ?? []).length,
     backgroundHandlers:
       recordKeys(definition.jobs).length +
@@ -674,6 +719,7 @@ async function scanModules() {
         rootDir: relativeToProject(root),
         pages: scanDirectory(root, 'pages'),
         apis: scanDirectory(root, 'api', ['.ts', '.js']),
+        admin: collectProvidedAdminResourceHandlers(root, summary.id, definition),
         loaders: scanDirectory(root, 'loaders', ['.ts', '.js']),
         actions: scanDirectory(root, 'actions', ['.ts', '.js']),
         services: scanDirectory(root, 'services', ['.ts', '.js']),
@@ -683,7 +729,16 @@ async function scanModules() {
         jobs: scanDirectory(root, 'jobs', ['.ts', '.js']),
         events: scanDirectory(root, 'events', ['.ts', '.js']),
         webhooks: scanDirectory(root, 'webhooks', ['.ts', '.js']),
-        assets: scanFiles(root, 'assets'),
+        capabilities: collectProvidedCapabilityProviders(root, summary.id, definition),
+        assets: [
+          ...new Set([
+            ...scanFiles(root, 'assets'),
+            ...(definition.assets?.assets ?? [])
+              .map((asset) => asset?.path)
+              .filter((assetPath) => typeof assetPath === 'string')
+              .map((assetPath) => assetPath.replace(/^\.\//, '').replace(/\\/g, '/')),
+          ]),
+        ].sort(),
         icons: collectModuleIcons(root, summary.id, definition),
       });
       const latest = modules[modules.length - 1];
@@ -719,8 +774,12 @@ async function scanModules() {
 }
 
 function runtimeModuleInfo(moduleInfo) {
-  const { root, icons, ...rest } = moduleInfo;
-  return rest;
+  const { root, icons, capabilities, admin, ...rest } = moduleInfo;
+  return {
+    ...rest,
+    ...(admin.length > 0 ? { admin } : {}),
+    ...(capabilities.length > 0 ? { capabilities } : {}),
+  };
 }
 
 function manifestModuleInfo(moduleInfo) {
@@ -775,6 +834,22 @@ function generateModuleMap(modules) {
       if (block) {
         parts.push(`    ${property}: {\n${block}\n    },`);
       }
+    }
+
+    if (moduleInfo.admin.length > 0) {
+      const lines = moduleInfo.admin.map((handler) => {
+        const importPath = path.join(moduleInfo.root, handler.path);
+        return `      ${JSON.stringify(handler.name)}: () => import(${JSON.stringify(moduleSpecifier(importPath, outputDir))})`;
+      });
+      parts.push(`    admin: {\n${lines.join(',\n')}\n    },`);
+    }
+
+    if (moduleInfo.capabilities.length > 0) {
+      const lines = moduleInfo.capabilities.map((capability) => {
+        const importPath = path.join(moduleInfo.root, capability.path);
+        return `      ${JSON.stringify(capability.name)}: () => import(${JSON.stringify(moduleSpecifier(importPath, outputDir))})`;
+      });
+      parts.push(`    capabilities: {\n${lines.join(',\n')}\n    },`);
     }
 
     if (runtimeInfo.assets.length > 0) {

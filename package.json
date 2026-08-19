@@ -72,7 +72,7 @@
     "test:module-service-contract": "tsx --test tests/module-service-contract-cli.test.ts",
     "test:module-map": "tsx --test tests/module-map-cli.test.ts",
     "test:security-runtime": "tsx --test tests/security-runtime.test.ts tests/security-runtime-services.test.ts tests/security-runtime-capability-guard.test.ts tests/security-runtime-data-commercial-guard.test.ts",
-    "test:ui-runtime": "tsx --test tests/ui-runtime.test.ts",
+    "test:ui-runtime": "tsx --test tests/ui-runtime.test.tsx",
     "test:host-page-runtime": "tsx --test tests/host-page-runtime.test.ts tests/host-page-presentation.test.ts tests/host-page-surfaces.test.ts",
     "test:background-runtime": "tsx --test tests/background-runtime.test.ts",
     "test:files-runtime": "tsx --test tests/files-runtime.test.ts",

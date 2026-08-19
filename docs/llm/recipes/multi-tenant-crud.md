@@ -4,28 +4,47 @@ Intent: create workspace-owned records without inventing tenant authority.
 
 ## Use
 
-- `module.ts`: `data.tables.<name>` with `scope: 'workspace'`.
-- Runtime: `ctx.data.table('<name>')` and `ctx.scope.workspaceId`.
-- Permissions: `Permission.DataTableRead` and `Permission.DataTableWrite`.
-- Reference: `modules/capability-demo/module.ts` and `modules/cms-demo/module.ts`.
+- Declare runtime schema with `schema(...)`.
+- Declare business resources in `resources`.
+- Declare pages in `pages` and APIs in `apis`.
+- Store records through governed Data v2 facts and `ctx.scope`.
+- Start from `npm run module:create -- notes --template resource`.
 
 ## Contract Shape
 
 ```ts
-permissions: [Permission.DataTableRead, Permission.DataTableWrite],
-data: {
-  version: 1,
-  tables: {
-    notes: table({
+import { defineModule, resource, schema, stringField, textField } from '@ploykit/module-sdk';
+
+const noteSchema = schema({
+  name: 'Note',
+  fields: {
+    title: stringField({ required: true }),
+    body: textField(),
+  },
+});
+
+export default defineModule({
+  id: 'notes',
+  name: 'Notes',
+  version: '0.1.0',
+  resources: {
+    notes: resource({
       scope: 'workspace',
-      columns: {
-        title: text().notNull(),
-        body: text().nullable(),
-      },
+      schema: noteSchema,
+      storage: { table: 'notes' },
     }),
   },
-  migrations: { mode: 'generated', dir: './migrations' },
-},
+  pages: [
+    page({
+      id: 'notes.list',
+      area: 'dashboard',
+      path: '/notes',
+      frame: 'workspace',
+      component: './pages/NotesListPage.tsx',
+      auth: 'auth',
+    }),
+  ],
+});
 ```
 
 ## Handler Shape
@@ -46,6 +65,8 @@ Run:
 
 ```bash
 npm run modules:scan
+npm run data:generate -- modules/<id>
+npm run data:types -- modules/<id>
 npm run module:doctor -- <id>
 npm run module:test -- <id> --summary
 ```
@@ -53,6 +74,6 @@ npm run module:test -- <id> --summary
 ## Red Lines
 
 - Do not add `tenant_id` as the isolation authority.
-- Do not read workspace from URL/local storage.
+- Do not read workspace from URL or local storage.
 - Do not call database clients directly.
 - Do not use global `fetch` or host internals for CRUD.

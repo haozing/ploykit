@@ -3,6 +3,7 @@ import type { ModuleLoader, ModuleRuntimeMapEntry } from './module-map-types';
 type ModuleLoaderCollectionName =
   | 'pages'
   | 'apis'
+  | 'admin'
   | 'loaders'
   | 'actions'
   | 'services'
@@ -11,7 +12,8 @@ type ModuleLoaderCollectionName =
   | 'lifecycle'
   | 'jobs'
   | 'events'
-  | 'webhooks';
+  | 'webhooks'
+  | 'capabilities';
 
 export function normalizeModuleLocalSpecifier(specifier: string): string {
   return specifier.replace(/^\.\//, '').replace(/\.(ts|tsx|js|jsx)$/, '');

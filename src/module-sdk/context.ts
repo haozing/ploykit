@@ -81,6 +81,12 @@ export interface ModuleSecretsApi {
   require(name: string): Promise<string>;
 }
 
+export interface ModuleExtensionsApi {
+  get<T = unknown>(name: string): T | null;
+  require<T = unknown>(name: string): T;
+  list(): readonly string[];
+}
+
 export interface ModuleServiceInvokeOptions {
   correlationId?: string;
 }
@@ -1086,6 +1092,6 @@ export interface ModuleContext {
   risk: ModuleRiskApi;
   cache: ModuleCacheApi;
   audit: ModuleAuditApi;
-  extensions: Readonly<Record<string, unknown>>;
+  extensions: ModuleExtensionsApi;
   json(data: unknown, init?: ResponseInit): Response;
 }

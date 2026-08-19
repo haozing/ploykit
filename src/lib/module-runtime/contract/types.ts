@@ -1,19 +1,21 @@
 import type {
   DefinedModule,
   ModuleActionDefinition,
+  ModuleApiDefinitionContract,
   ModuleDefinition,
   ModuleEventsDefinition,
   ModuleJobDefinition,
   ModuleLifecycleDefinition,
+  ModuleAssetsDefinition,
   ModuleConfigFieldDefinition,
   ModuleNavigationItem,
+  ModulePageDefinition,
   ModuleDependenciesDefinition,
   ModuleHeadDefinition,
   ModuleMeterDefinition,
   ModuleResourceBindingRequirement,
-  ModuleResourcesDefinition,
+  ModuleResourceDefinition,
   ModuleServiceRequirementDefinition,
-  ModuleRoutesDefinition,
   ModuleSurfaceDefinition,
   ModuleThemeDefinition,
   ModuleWebhookDefinition,
@@ -88,16 +90,17 @@ export interface ModuleRuntimeCapabilitySummary {
 }
 
 export interface ModuleRuntimeContract {
-  contractVersion: number;
   id: string;
   name: string;
   version: string;
   description?: string;
   permissions: readonly PermissionValue[];
-  routes: Required<ModuleRoutesDefinition>;
+  pages: readonly ModulePageDefinition[];
+  apis: readonly ModuleApiDefinitionContract[];
   navigation: readonly ModuleNavigationItem[];
   surfaces: Readonly<Record<string, ModuleSurfaceDefinition>>;
-  resources: ModuleResourcesDefinition;
+  assets: ModuleAssetsDefinition;
+  resources: Readonly<Record<string, ModuleResourceDefinition>>;
   theme: ModuleThemeDefinition;
   meters: Readonly<Record<string, ModuleMeterDefinition>>;
   serviceRequirements: Readonly<Record<string, ModuleServiceRequirementDefinition>>;

@@ -179,7 +179,7 @@ test('X9 notifications are store-backed, readable and honor preferences', async 
     const run = await hostRuntime.runtimeStore.store.createRun({
       productId: 'demo-product',
       workspaceId: 'demo-workspace',
-      moduleId: 'public-tools-demo',
+      moduleId: 'public-tool-smoke',
       kind: 'manual',
       name: 'x9-notification-task',
       idempotencyKey: `x9-notification-task:${Date.now()}`,
@@ -269,7 +269,7 @@ test('K5 admin catalog seed preserves persisted module state', async () => {
   const hostRuntime = await getHostRuntime();
   await hostRuntime.runtimeStore.store.upsertCatalogState({
     productId: 'demo-product',
-    moduleId: 'hello',
+    moduleId: 'platform-smoke',
     status: 'disabled',
     bundleId: 'operator',
     required: false,
@@ -278,18 +278,18 @@ test('K5 admin catalog seed preserves persisted module state', async () => {
 
   try {
     await getAdminOperationsView();
-    const helloState = (
+    const platformState = (
       await hostRuntime.runtimeStore.store.listCatalogStates({ productId: 'demo-product' })
-    ).find((state) => state.moduleId === 'hello');
+    ).find((state) => state.moduleId === 'platform-smoke');
 
-    assert.equal(helloState?.status, 'disabled');
-    assert.equal(helloState?.bundleId, 'operator');
-    assert.equal(helloState?.required, false);
-    assert.equal(helloState?.scopeProfile, 'explicit-workspace');
+    assert.equal(platformState?.status, 'disabled');
+    assert.equal(platformState?.bundleId, 'operator');
+    assert.equal(platformState?.required, false);
+    assert.equal(platformState?.scopeProfile, 'explicit-workspace');
   } finally {
     await hostRuntime.runtimeStore.store.upsertCatalogState({
       productId: 'demo-product',
-      moduleId: 'hello',
+      moduleId: 'platform-smoke',
       status: 'enabled',
       bundleId: 'demo',
       required: true,

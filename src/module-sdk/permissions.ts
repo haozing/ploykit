@@ -22,7 +22,7 @@ export const Permission = {
   EventsEmit: 'events.emit',
   EventsSubscribe: 'events.subscribe',
   WebhookReceive: 'webhook.receive',
-  CacheRevalidate: 'cache.revalidate',
+  CacheAccess: 'cache.access',
 
   FilesRead: 'files.read',
   FilesWrite: 'files.write',
@@ -52,6 +52,8 @@ export const Permission = {
 
   UsageWrite: 'usage.write',
   AuditWrite: 'audit.write',
+  AdminResourcesRead: 'adminResources.read',
+  AdminResourcesWrite: 'adminResources.write',
   SubjectsRead: 'subjects.read',
   MeteringWrite: 'metering.write',
   CreditsRead: 'credits.read',
@@ -306,10 +308,10 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     ctxCapability: 'ctx.webhooks',
     suggestedTemplate: 'connector',
   },
-  [Permission.CacheRevalidate]: {
-    value: Permission.CacheRevalidate,
+  [Permission.CacheAccess]: {
+    value: Permission.CacheAccess,
     group: 'presentation',
-    labelKey: 'permissions.presentation.cacheRevalidate',
+    labelKey: 'permissions.presentation.cacheAccess',
     risk: 'medium',
     scope: 'product',
     ctxCapability: 'ctx.cache',
@@ -527,6 +529,20 @@ export const PermissionRegistry: Record<PermissionValue, PermissionRegistryEntry
     risk: 'high',
     scope: 'workspace',
     ctxCapability: 'ctx.audit',
+  },
+  [Permission.AdminResourcesRead]: {
+    value: Permission.AdminResourcesRead,
+    group: 'security',
+    labelKey: 'permissions.security.adminResourcesRead',
+    risk: 'medium',
+    scope: 'product',
+  },
+  [Permission.AdminResourcesWrite]: {
+    value: Permission.AdminResourcesWrite,
+    group: 'security',
+    labelKey: 'permissions.security.adminResourcesWrite',
+    risk: 'high',
+    scope: 'product',
   },
   [Permission.SubjectsRead]: {
     value: Permission.SubjectsRead,

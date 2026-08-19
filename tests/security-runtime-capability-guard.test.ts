@@ -5,6 +5,8 @@ import {
   createTestingModuleContext,
   defineModule,
   Permission,
+  schema,
+  stringField,
   type ModuleContext,
 } from '@ploykit/module-sdk';
 import {
@@ -14,6 +16,13 @@ import {
   guardModuleContextCapabilities,
   normalizeModuleRuntimeContract,
 } from '../src/lib/module-runtime';
+
+const payloadSchema = schema({
+  name: 'SecurityCapabilityPayload',
+  fields: {
+    value: stringField(),
+  },
+});
 
 test('runtime capability guard restricts connectors to declared services', async () => {
   const connectorModule = defineModule({
@@ -161,6 +170,8 @@ test('runtime capability guard denies declared capability when session permissio
     actions: {
       recordAudit: {
         handler: './actions/record-audit',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },
@@ -212,6 +223,8 @@ test('runtime capability guard fails closed when audit provider is not mounted',
     actions: {
       recordAudit: {
         handler: './actions/record-audit',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },
@@ -259,6 +272,8 @@ test('runtime capability guard allows structured audit records with AuditWrite',
     actions: {
       recordAudit: {
         handler: './actions/record-audit',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },
@@ -320,6 +335,8 @@ test('runtime capability guard protects notification reads separately from sends
     actions: {
       listNotifications: {
         handler: './actions/list-notifications',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },

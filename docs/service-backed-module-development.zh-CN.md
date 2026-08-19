@@ -115,7 +115,7 @@ OpenAPI 不足以单独证明运行时行为：
 
 ## PloyKit 侧落地方式
 
-PloyKit 现在已经有关键基础：`contractVersion: 2`、`serviceRequirements`、`ctx.services.invoke(...)`、service connection、redaction、audit、module doctor、`module:service-contract` 和 `product + service-backed` 模板扩展。服务端分离型模块不需要推翻架构，按下面的形态落地即可；后续增强主要继续补产品 API 合同的 request/response schema diff、fixture 生成和 live evidence 自动化。
+PloyKit 现在已经有关键基础：`contractVersion: 2`、`serviceRequirements`、`ctx.services.invoke(...)`、service connection、redaction、audit、module doctor 和 `module:service-contract`。服务端分离型模块不需要推翻架构，按下面的形态落地即可；普通 `module:create` 不再提供 `product + service-backed` 扩展脚手架。
 
 ### 1. 标准模块形态
 
@@ -238,21 +238,21 @@ npm run module:evidence -- --module <id> --file ./scripts/live-smoke.ts --runner
 `tests/fixtures/`，用 `createTestingModuleContext({ serviceHandlers })` 接到 `ctx.services.invoke(...)`。不要让 AI 为了 mock
 在页面/action 里写 `if (mock)` 分支，也不要让 AI 把 OpenAI 生成的示例响应当成产品或服务端权威事实。
 
-### 4. product + service-backed 模板
+### 4. 创建骨架
 
-模板体系现在以一个主模板加两个扩展表达这类模块，而不是继续增加平级模板：
+当前普通模板只保留四个入口：
 
 ```text
-product        主模板：minimal + product + white-label + Data v2 CRUD 的统一产品模块骨架
-service-backed 扩展：产品 API 合同/受控服务/service client/mock/live smoke
-background     扩展：jobs/events/webhooks/lifecycle
+app       普通 dashboard 应用
+resource  schema/resource/Data v2/OpenAPI 优先的 CRUD 资源
+tool      单页工具，包含 action/API/schema
+connector 受控连接器，可声明连接器权限和同步 job
 ```
 
-因此新服务端分离型产品模块应使用 `product` 主模板叠加 `service-backed` 扩展：
+服务端分离型模块从最接近的模板开始，再手写 `serviceRequirements`、单一 service client、fixture/mock/live smoke 和所需权限：
 
 ```bash
-npm run module:create -- runlynk-console --template product --with service-backed
-npm run module:create -- runlynk-console --template product --with service-backed,background
+npm run module:create -- runlynk-console --template connector
 ```
 
 - `contractVersion: 2` 的 service policy。
@@ -263,9 +263,7 @@ npm run module:create -- runlynk-console --template product --with service-backe
 - live smoke 测试骨架。
 - 模块 README 中的 mock/live 开发命令。
 
-当前仓库仍保留 `signed-service`、`product-app` 等历史模板作为兼容入口和参考片段，但新服务端分离型产品模块应优先使用
-`product + service-backed`。这样 RunLynk 这类模块既有 site/dashboard/admin、white-label/presentation、Data v2 缓存/映射，
-又能叠加产品 API 合同和真实服务验收。需要队列、worker、回调或长任务时，再叠加 `background`。
+`product`、`signed-service`、`product-app` 和 `--with service-backed/background` 脚手架入口已经移除。RunLynk 这类模块需要 site/dashboard/admin、white-label/presentation、Data v2 缓存/映射、产品 API 合同和真实服务验收时，应在同一个仓库内模块中显式声明这些能力。
 
 ## 推荐开发流程
 
@@ -479,7 +477,7 @@ RunLynk 已经具备正确方向：
 - 把 mock fixtures 从页面测试中进一步沉淀成稳定目录。
 - 把 mock mode、live mode、evidence mode 写进模块 README。
 - 对 one-time secret、tenant claims、idempotency、quota、worker lease 等关键路径保持 live smoke，不被 mock 替代。
-- 按 `product + service-backed` 形态整理模块骨架：产品壳、白牌/替换、Data v2 映射和受控服务调用放在同一主模块内。
+- 按当前 clean module 形态整理模块骨架：产品壳、白牌/替换、Data v2 映射和受控服务调用放在同一仓库内模块内。
 
 ## 反模式
 

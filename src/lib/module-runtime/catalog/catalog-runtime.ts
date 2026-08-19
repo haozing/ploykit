@@ -84,3 +84,16 @@ export function createCatalogStateLookup(
   }
   return lookup;
 }
+
+export function resolveCatalogModuleState(
+  filter: ModuleCatalogRuntimeFilter | undefined,
+  moduleId: string
+): ModuleCatalogModuleState | undefined {
+  if (!filter?.moduleStates) {
+    return undefined;
+  }
+
+  return filter.moduleStates.find(
+    (state) => state.moduleId === moduleId && stateAppliesToProduct(state, filter.productId)
+  );
+}

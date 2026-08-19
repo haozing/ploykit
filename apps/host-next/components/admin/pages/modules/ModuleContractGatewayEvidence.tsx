@@ -57,7 +57,7 @@ export function ModuleContractGatewayEvidence({
               '/[lang]/admin/[...modulePath]',
               module.capabilities.adminRoutes > 0 ? 'admin routes declared' : 'not declared',
               module.capabilities.adminRoutes > 0
-                ? 'Rendered through the host Admin shell from routes.admin'
+                ? 'Rendered through the host Admin shell from pages with area admin'
                 : 'no module admin runtime route',
             ],
           ]}

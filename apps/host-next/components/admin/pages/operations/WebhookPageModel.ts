@@ -5,6 +5,8 @@ import type { AdminTableQuery } from '@host/lib/table-query';
 import type {
   AdminOperationsSnapshot,
   AdminOutboxBulkPreview,
+} from '@host/lib/admin/operations-center';
+import type {
   RuntimeStoreOutboxRecord,
   RuntimeStoreWebhookReceipt,
 } from '@/lib/module-runtime';

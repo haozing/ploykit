@@ -68,12 +68,14 @@ product: {
 优先使用：
 
 ```bash
-npm run module:create -- my-product --template product
-npm run module:create -- my-service-product --template product --with service-backed
-npm run module:create -- my-full-product --template product --with service-backed,background
+npm run module:create -- my-product
+npm run module:create -- my-resource-product --template resource
+npm run module:create -- my-service-connector --template connector
 ```
 
-`product` 主模板包含：
+当前普通模板只保留 `app`、`resource`、`tool` 和 `connector`。完整产品模块应从最接近的模板开始，再在 `module.ts` 中显式声明需要的 site/dashboard/admin pages、navigation、resources、serviceRequirements、jobs、events 或 presentation。
+
+完整产品模块通常需要自行补齐：
 
 - `product.requiredShells`
 - `product.pages`
@@ -86,8 +88,7 @@ npm run module:create -- my-full-product --template product --with service-backe
 - dashboard surface
 - smoke test
 
-`product-app` 仍可作为历史兼容模板参考，但新产品模块优先从 `product` 主模板开始，需要受控服务或后台任务时用
-`--with service-backed`、`--with background` 叠加。
+`product`、`product-app` 和 `--with service-backed/background` 脚手架入口已经移除。受控服务和后台任务仍可使用 `serviceRequirements`、`ctx.services.invoke(...)`、`jobs`、`events` 和对应权限声明实现。
 
 ## 6. 宿主与模块职责边界
 

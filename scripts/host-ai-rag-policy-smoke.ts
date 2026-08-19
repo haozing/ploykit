@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Permission, validateModuleDefinition, type ModuleDefinition } from '@ploykit/module-sdk';
+import {
+  api,
+  Permission,
+  schema,
+  stringField,
+  validateModuleDefinition,
+  type ModuleApiDefinitionContract,
+  type ModuleDefinition,
+} from '@ploykit/module-sdk';
 import {
   createModuleAiProviderRegistry,
   createProviderModuleAiRuntime,
@@ -16,6 +24,12 @@ const productId = `ai-rag-policy-${Date.now().toString(36)}`;
 const workspaceId = 'ai-rag-policy-workspace';
 const moduleId = 'ai-rag-policy-module';
 const userId = 'ai-rag-policy-user';
+const payloadSchema = schema({
+  name: 'AiRagPolicySmokePayload',
+  fields: {
+    value: stringField(),
+  },
+});
 
 type Check = {
   id: string;
@@ -46,13 +60,28 @@ const provider: ModuleAiProvider = {
   },
 };
 
-function baseModuleDefinition(routes: ModuleDefinition['routes']): ModuleDefinition {
+function publicAiApi(
+  overrides: Partial<Omit<ModuleApiDefinitionContract, '$$type' | 'id' | 'path' | 'handler'>>
+): ModuleApiDefinitionContract {
+  return api({
+    id: 'ai-rag-policy.public',
+    path: '/ai/public',
+    auth: 'public',
+    handler: './api/public-ai',
+    methods: ['POST'],
+    input: payloadSchema,
+    output: payloadSchema,
+    ...overrides,
+  });
+}
+
+function baseModuleDefinition(apis: readonly ModuleApiDefinitionContract[]): ModuleDefinition {
   return {
     id: 'ai-rag-policy',
     name: 'AI RAG Policy',
     version: '0.1.0',
     permissions: [Permission.AiGenerate, Permission.CreditsConsume],
-    routes,
+    apis,
   };
 }
 
@@ -180,21 +209,14 @@ const checks = [
   }),
   await runCheck('anonymous-public-api-requires-rate-limit-policy', async () => {
     const missingPolicyCodes = diagnosticCodes(
-      baseModuleDefinition({
-        api: [{ path: '/ai/public', auth: 'public', handler: './api/public-ai' }],
-      })
+      baseModuleDefinition([publicAiApi({})])
     );
     const missingRateLimitCodes = diagnosticCodes(
-      baseModuleDefinition({
-        api: [
-          {
-            path: '/ai/public',
-            auth: 'public',
-            handler: './api/public-ai',
-            anonymousPolicy: { allowHighCostActions: false },
-          },
-        ],
-      })
+      baseModuleDefinition([
+        publicAiApi({
+          anonymousPolicy: { allowHighCostActions: false },
+        }),
+      ])
     );
     assert.ok(missingPolicyCodes.includes('MODULE_PUBLIC_API_ANONYMOUS_POLICY_REQUIRED'));
     assert.ok(missingRateLimitCodes.includes('MODULE_PUBLIC_API_RATE_LIMIT_REQUIRED'));
@@ -205,36 +227,26 @@ const checks = [
   }),
   await runCheck('anonymous-public-api-forbids-high-cost-commercial-actions', async () => {
     const highCostCodes = diagnosticCodes(
-      baseModuleDefinition({
-        api: [
-          {
-            path: '/ai/public',
-            auth: 'public',
-            handler: './api/public-ai',
-            commercial: { credits: { amount: 1, unit: 'ai-credit' } },
-            anonymousPolicy: {
-              rateLimit: { bucket: 'ip', limit: 10, window: '1m' },
-              allowHighCostActions: true,
-            },
+      baseModuleDefinition([
+        publicAiApi({
+          commercial: { credits: { amount: 1, unit: 'ai-credit' } },
+          anonymousPolicy: {
+            rateLimit: { bucket: 'ip', limit: 10, window: '1m' },
+            allowHighCostActions: true,
           },
-        ],
-      })
+        }),
+      ])
     );
     const safeCodes = diagnosticCodes(
-      baseModuleDefinition({
-        api: [
-          {
-            path: '/ai/public',
-            auth: 'public',
-            handler: './api/public-ai',
-            commercial: { credits: { amount: 1, unit: 'ai-credit' } },
-            anonymousPolicy: {
-              rateLimit: { bucket: 'ip', limit: 10, window: '1m' },
-              allowHighCostActions: false,
-            },
+      baseModuleDefinition([
+        publicAiApi({
+          commercial: { credits: { amount: 1, unit: 'ai-credit' } },
+          anonymousPolicy: {
+            rateLimit: { bucket: 'ip', limit: 10, window: '1m' },
+            allowHighCostActions: false,
           },
-        ],
-      })
+        }),
+      ])
     );
     assert.ok(highCostCodes.includes('MODULE_PUBLIC_API_HIGH_COST_ANONYMOUS_FORBIDDEN'));
     assert.equal(safeCodes.includes('MODULE_PUBLIC_API_HIGH_COST_ANONYMOUS_FORBIDDEN'), false);

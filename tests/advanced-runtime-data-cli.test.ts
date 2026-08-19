@@ -5,10 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { writeDataDiffFixture } from './advanced-runtime-data-helpers';
 
-test('data diff reports no changes against generated hello baseline', () => {
+test('data diff reports no changes against generated resource-smoke baseline', () => {
   const result = childProcess.spawnSync(
     process.execPath,
-    ['scripts/module-data-diff.mjs', 'modules/hello'],
+    ['scripts/module-data-diff.mjs', 'modules/resource-smoke'],
     {
       encoding: 'utf8',
     }
@@ -174,4 +174,93 @@ test('data migrate dry-run rejects stale generated migration artifacts', (t) => 
   assert.ok(
     body.diagnostics.some((diagnostic) => diagnostic.code === 'MODULE_DATA_MIGRATION_STALE')
   );
+});
+
+test('data CLI derives Data v2 artifacts from clean-slate resources', (t) => {
+  const fixtureRoot = writeDataDiffFixture({
+    'module.ts': `
+      import {
+        defineModule,
+        resource,
+        schema,
+        stringField,
+        textField,
+      } from '@ploykit/module-sdk';
+
+      const noteSchema = schema({
+        name: 'Note',
+        fields: {
+          title: stringField({ required: true, maxLength: 120 }),
+          body: textField(),
+        },
+      });
+
+      export default defineModule({
+        id: 'clean-resource-data-test',
+        name: 'Clean Resource Data Test',
+        version: '0.1.0',
+        assets: {},
+        resources: {
+          notes: resource({
+            scope: 'workspace',
+            schema: noteSchema,
+            storage: { table: 'notes' },
+          }),
+        },
+        pages: [
+          {
+            id: 'notes.list',
+            area: 'dashboard',
+            path: '/notes',
+            frame: 'workspace',
+            component: './pages/NotesListPage.tsx',
+          },
+        ],
+      });
+    `,
+    'pages/NotesListPage.tsx': `
+      export default function NotesListPage() {
+        return null;
+      }
+    `,
+  });
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  const generated = childProcess.spawnSync(
+    process.execPath,
+    ['scripts/module-data.mjs', 'generate', fixtureRoot],
+    {
+      encoding: 'utf8',
+    }
+  );
+  assert.equal(generated.status, 0, generated.stderr || generated.stdout);
+
+  const types = childProcess.spawnSync(
+    process.execPath,
+    ['scripts/module-data.mjs', 'types', fixtureRoot],
+    {
+      encoding: 'utf8',
+    }
+  );
+  assert.equal(types.status, 0, types.stderr || types.stdout);
+
+  const dataPlan = JSON.parse(
+    fs.readFileSync(path.join(fixtureRoot, '.ploykit', 'generated', 'data-plan.json'), 'utf8')
+  ) as {
+    tables: Array<{ name: string; columns: Record<string, { kind: string; nullable: boolean }> }>;
+    resourceFacts: Array<{ name: string; kind: string; model: string; schema: { fixture: unknown } }>;
+  };
+  assert.equal(dataPlan.tables[0]?.name, 'notes');
+  assert.equal(dataPlan.tables[0]?.columns.title.kind, 'text');
+  assert.equal(dataPlan.tables[0]?.columns.title.nullable, false);
+  assert.equal(dataPlan.resourceFacts[0]?.name, 'notes');
+  assert.equal(dataPlan.resourceFacts[0]?.kind, 'table');
+  assert.equal(dataPlan.resourceFacts[0]?.model, 'notes');
+
+  const generatedTypes = fs.readFileSync(
+    path.join(fixtureRoot, '.ploykit', 'generated', 'data-types.ts'),
+    'utf8'
+  );
+  assert.match(generatedTypes, /export type NotesResource = NotesTable;/);
+  assert.match(generatedTypes, /export const notesFixture: NotesResource/);
 });

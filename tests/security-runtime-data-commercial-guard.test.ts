@@ -4,6 +4,8 @@ import {
   action,
   defineModule,
   Permission,
+  schema,
+  stringField,
   sql,
   type CommercialSubject,
   type ModuleContext,
@@ -11,6 +13,13 @@ import {
   type ModuleDataDocument,
 } from '@ploykit/module-sdk';
 import { createModuleHost } from '../src/lib/module-runtime';
+
+const payloadSchema = schema({
+  name: 'SecurityDataCommercialPayload',
+  fields: {
+    value: stringField(),
+  },
+});
 
 function testCreditAmount(value: number | bigint | string | undefined): number {
   if (value === undefined) {
@@ -28,10 +37,14 @@ test('runtime capability guard blocks undeclared permissions and cross-user cred
     actions: {
       writeArtifact: {
         handler: './actions/write-artifact',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       consumeOtherCredits: {
         handler: './actions/consume-other-credits',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },
@@ -194,6 +207,8 @@ test('runtime capability guard applies inside data transactions', async () => {
     actions: {
       transact: {
         handler: './actions/transact',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },
@@ -285,10 +300,14 @@ test('runtime capability guard requires UnsafeSqlRaw for ctx.data.sql execution'
     actions: {
       queryRaw: {
         handler: './actions/query-raw',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       executeRaw: {
         handler: './actions/execute-raw',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },
@@ -409,30 +428,44 @@ test('runtime capability guard protects subject-scoped entitlements, redeem code
     actions: {
       ownEntitlement: {
         handler: './actions/own-entitlement',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       otherRedeem: {
         handler: './actions/other-redeem',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       otherRisk: {
         handler: './actions/other-risk',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       revokeOtherEntitlement: {
         handler: './actions/revoke-other-entitlement',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       expireEntitlements: {
         handler: './actions/expire-entitlements',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       commitOtherReservation: {
         handler: './actions/commit-other-reservation',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
       revokeOtherCreditSource: {
         handler: './actions/revoke-other-credit-source',
+        input: payloadSchema,
+        output: payloadSchema,
         auth: 'auth',
       },
     },

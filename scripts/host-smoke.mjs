@@ -11,6 +11,7 @@ const outputDir = path.resolve(
 );
 const reportPath = path.join(outputDir, 'smoke.json');
 const latestPath = path.resolve(process.cwd(), '.runtime', 'host-smoke', 'latest.json');
+const moduleManifestPath = path.resolve(process.cwd(), 'src', 'lib', 'module-map.manifest.json');
 
 function readArg(name) {
   const index = process.argv.indexOf(name);
@@ -21,6 +22,31 @@ const baseUrl = (readArg('--base-url') ?? process.env.HOST_SMOKE_BASE_URL ?? DEF
   .replace(/\/$/, '');
 
 const checks = [];
+
+function readModuleManifest() {
+  return JSON.parse(fs.readFileSync(moduleManifestPath, 'utf8'));
+}
+
+function discoverPublicToolModule() {
+  const manifest = readModuleManifest();
+  const moduleInfo = (manifest.modules ?? []).find(
+    (candidate) =>
+      candidate?.navigation?.location === 'site.header' &&
+      typeof candidate.navigation.path === 'string' &&
+      Array.isArray(candidate.apis) &&
+      candidate.apis.length > 0
+  );
+  if (!moduleInfo) {
+    throw new Error('HOST_SMOKE_PUBLIC_TOOL_MODULE_MISSING');
+  }
+  const apiEntry = moduleInfo.apis.find((entry) => entry.startsWith('api/')) ?? moduleInfo.apis[0];
+  return {
+    id: moduleInfo.id,
+    name: moduleInfo.name,
+    sitePath: moduleInfo.navigation.path,
+    apiPath: `/api/modules/${moduleInfo.id}/${apiEntry.replace(/^api\//, '')}`,
+  };
+}
 
 function formBody(values) {
   const params = new URLSearchParams();
@@ -76,18 +102,18 @@ async function checkPage(id, path, options = {}) {
   });
 }
 
-async function checkPublicToolApi() {
-  const response = await request('/api/modules/public-tools/format-json', {
+async function checkPublicToolApi(publicTool) {
+  const response = await request(publicTool.apiPath, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...sameOriginHeaders('/zh/demo'),
+      ...sameOriginHeaders(`/zh${publicTool.sitePath}`),
     },
     body: JSON.stringify({ source: '{"smoke":true}' }),
   });
   checks.push({
     id: 'public-tool-api',
-    path: '/api/modules/public-tools/format-json',
+    path: publicTool.apiPath,
     status: response.status,
     ok: response.ok && response.status === 200 && response.body.includes('"ok":true'),
     durationMs: response.durationMs,
@@ -122,15 +148,16 @@ async function login() {
 }
 
 async function main() {
+  const publicTool = discoverPublicToolModule();
   await checkPage('site-home', '/zh', { contains: 'PloyKit' });
   await checkPage('auth-login-page', '/zh/login', { contains: '登录' });
-  await checkPage('public-demo-page', '/zh/demo', { contains: 'Capability Demo' });
-  await checkPublicToolApi();
+  await checkPage('public-tool-page', `/zh${publicTool.sitePath}`, { contains: publicTool.name });
+  await checkPublicToolApi(publicTool);
 
   const cookie = await login();
   await checkPage('dashboard-billing', '/zh/dashboard/billing', { cookie, contains: '账单' });
   await checkPage('dashboard-tasks', '/zh/dashboard/tasks', { cookie, contains: '导出公开工具数据' });
-  await checkPage('admin-modules', '/zh/admin/modules', { cookie, contains: 'public-tools-demo' });
+  await checkPage('admin-modules', '/zh/admin/modules', { cookie, contains: publicTool.id });
   await checkPage('admin-users', '/zh/admin/users', { cookie, contains: 'admin@example.com' });
   await checkPage('admin-webhooks', '/zh/admin/webhooks', { cookie, contains: 'Outbox' });
 

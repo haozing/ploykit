@@ -9,7 +9,7 @@ import {
 } from '../src/lib/module-runtime';
 import { createServiceInvocationRuntime } from '../src/lib/module-capabilities';
 
-test('runtime services.invoke keeps legacy two-argument service calls for v1 contracts', async () => {
+test('runtime services.invoke keeps two-argument service calls for simple providers', async () => {
   const serviceModule = defineModule({
     id: 'legacy-service-test',
     name: 'Legacy Service Test',
@@ -48,7 +48,6 @@ test('runtime services.invoke keeps legacy two-argument service calls for v1 con
 
 test('runtime services.invoke signs, redacts, and records privileged service calls', async () => {
   const serviceModule = defineModule({
-    contractVersion: 2,
     id: 'signed-service-test',
     name: 'Signed Service Test',
     version: '0.1.0',
@@ -235,7 +234,6 @@ test('runtime services.invoke signs, redacts, and records privileged service cal
 
 test('runtime services.invoke keeps required warning connections callable', async () => {
   const serviceModule = defineModule({
-    contractVersion: 2,
     id: 'service-warning-test',
     name: 'Service Warning Test',
     version: '0.1.0',
@@ -305,7 +303,6 @@ test('runtime services.invoke keeps required warning connections callable', asyn
 
 test('runtime services.invoke does not dispatch blocked or disabled signed-service connections', async () => {
   const serviceModule = defineModule({
-    contractVersion: 2,
     id: 'service-blocked-disabled-test',
     name: 'Service Blocked Disabled Test',
     version: '0.1.0',
@@ -407,7 +404,6 @@ test('runtime services.invoke does not dispatch blocked or disabled signed-servi
 
 test('runtime services.invoke enforces operation policy before dispatch', async () => {
   const serviceModule = defineModule({
-    contractVersion: 2,
     id: 'service-policy-test',
     name: 'Service Policy Test',
     version: '0.1.0',
@@ -500,7 +496,6 @@ test('runtime services.invoke enforces operation policy before dispatch', async 
 
 test('runtime services.invoke isolates workspace-scoped connections', async () => {
   const serviceModule = defineModule({
-    contractVersion: 2,
     id: 'service-workspace-test',
     name: 'Service Workspace Test',
     version: '0.1.0',
@@ -562,7 +557,6 @@ test('runtime services.invoke isolates workspace-scoped connections', async () =
 
 test('runtime services.invoke denies DNS-resolved private egress and oversized responses', async () => {
   const serviceModule = defineModule({
-    contractVersion: 2,
     id: 'service-egress-test',
     name: 'Service Egress Test',
     version: '0.1.0',

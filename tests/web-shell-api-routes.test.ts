@@ -6,8 +6,13 @@ import {
   ensureHostIdentitySeeded,
   getHostAuthAdapter,
 } from '../apps/host-next/lib/auth';
+import {
+  handleAdminResourceOperationPost,
+  handleAdminResourcesGet,
+} from '../apps/host-next/lib/admin-resource-route';
 import { getHostRuntime } from '../apps/host-next/lib/create-host';
 import { DEFAULT_HOST_PRODUCT_ID } from '../apps/host-next/lib/default-scope';
+import { createDemoHostSession } from '../apps/host-next/lib/module-host';
 import { createHostRequest, hostBaseUrl } from '../apps/host-next/lib/paths';
 import { getHostRuntimeStore } from '../apps/host-next/lib/runtime-store';
 import {
@@ -361,4 +366,108 @@ test('X2 scope, notification, billing and admin APIs run through route handlers'
   assert.equal(workersResponse.status, 200);
   assert.ok(workersBody.data.workerStatus.workerId.length > 0);
   assert.ok(workersBody.data.workerStatus.queue.queued >= 0);
+});
+
+test('X3 admin resource APIs list and execute module-provided resources through guarded route ids', async () => {
+  const session = createDemoHostSession();
+  const routeCalls: { routeId: string; admin?: boolean }[] = [];
+  const resources = [
+    {
+      id: 'platform-extension.workers',
+      moduleId: 'platform-extension',
+      name: 'workers',
+      label: 'Workers',
+      operations: [
+        {
+          moduleId: 'platform-extension',
+          resourceName: 'workers',
+          operationName: 'restart',
+          handler: 'admin/workers.restart',
+          permission: 'adminResources.write',
+          risk: 'dangerous',
+          confirmation: { field: 'confirm', value: 'RESTART' },
+        },
+      ],
+    },
+  ];
+  const executedRef: {
+    current:
+    | {
+        resourceId: string;
+        operationName: string;
+        input?: unknown;
+        confirmation?: Record<string, unknown>;
+      }
+    | null;
+  } = { current: null };
+  const dependencies = {
+    async requireApiSession(_request: Request, routeId: string, options: { admin?: boolean } = {}) {
+      routeCalls.push({ routeId, admin: options.admin });
+      return { session };
+    },
+    async getModuleHost() {
+      return {
+        runtime: {
+          adminResources: {
+            list() {
+              return resources;
+            },
+          },
+        },
+        async executeAdminResourceOperation(input: {
+          resourceId: string;
+          operationName: string;
+          input?: unknown;
+          confirmation?: Record<string, unknown>;
+        }) {
+          executedRef.current = input;
+          return { restarted: true, target: (input.input as { workerId?: string }).workerId };
+        },
+      } as never;
+    },
+  };
+
+  const listResponse = await handleAdminResourcesGet(
+    createHostRequest('/api/admin/resources'),
+    dependencies
+  );
+  const listBody = (await listResponse.json()) as {
+    ok: boolean;
+    data: { resources: Array<{ operations: Array<{ handler?: string }> } & (typeof resources)[number]> };
+  };
+  assert.equal(listResponse.status, 200);
+  assert.equal(listBody.ok, true);
+  assert.equal(listBody.data.resources[0]?.id, 'platform-extension.workers');
+  assert.equal(listBody.data.resources[0]?.operations[0]?.handler, undefined);
+  assert.deepEqual(routeCalls[0], { routeId: 'admin.resources.read', admin: true });
+
+  const executeResponse = await handleAdminResourceOperationPost(
+    createHostRequest('/api/admin/resources/platform-extension.workers/restart', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        input: { workerId: 'worker-1' },
+        confirmation: { confirm: 'RESTART' },
+      }),
+    }),
+    {
+      params: Promise.resolve({
+        resourceId: 'platform-extension.workers',
+        operationName: 'restart',
+      }),
+    },
+    dependencies
+  );
+  const executeBody = (await executeResponse.json()) as {
+    ok: boolean;
+    data: { result: { restarted: boolean; target: string } };
+  };
+  assert.equal(executeResponse.status, 200);
+  assert.equal(executeBody.ok, true);
+  assert.deepEqual(executeBody.data.result, { restarted: true, target: 'worker-1' });
+  assert.deepEqual(routeCalls[1], { routeId: 'admin.resources.execute', admin: true });
+  const executed = executedRef.current;
+  assert.ok(executed);
+  assert.deepEqual(executed.input, { workerId: 'worker-1' });
+  assert.deepEqual(executed.confirmation, { confirm: 'RESTART' });
 });

@@ -71,7 +71,7 @@ function sessionWithPermissions(
 }
 
 function moduleIdForHostRequest(input: {
-  operation: 'api' | 'action' | 'page';
+  operation: 'api' | 'action' | 'page' | 'admin-resource';
   pathname?: string;
   routeKind?: 'site' | 'dashboard' | 'admin';
   moduleId?: string;
@@ -92,7 +92,7 @@ function moduleIdForHostRequest(input: {
 export function applyModuleSelfServiceSessionPermissions(
   session: ModuleHostSession,
   input: {
-    operation: 'api' | 'action' | 'page';
+    operation: 'api' | 'action' | 'page' | 'admin-resource';
     pathname?: string;
     routeKind?: 'site' | 'dashboard' | 'admin';
     moduleId?: string;
@@ -123,6 +123,8 @@ async function ensureHostCatalogSeeded(runtimeStore: HostRuntimeStoreHandle): Pr
       bundleId: seed.bundleId,
       required: seed.required,
       scopeProfile: seed.scopeProfile,
+      trust: seed.trust,
+      allowedProvides: seed.allowedProvides,
     });
     existingModuleIds.add(moduleId);
   }

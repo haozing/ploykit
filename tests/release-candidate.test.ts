@@ -33,7 +33,7 @@ test('P21 RC gate allows cleanup documentation but fails explicit failed checks'
   const legacyStorage = `${'ctx'}.${'storage'}`;
   fs.writeFileSync(
     path.join(root, 'docs', 'cleanup.md'),
-    `cleanup: do not use ${legacyStorage}; use Data v2.\nnever move ${'plugin'}-${'runtime'} into v2.\n`
+    `cleanup: do not use ${legacyStorage}; use governed module data.\nnever move removed runtime entries into the current module runtime.\n`
   );
 
   const result = runReleaseCandidateGate({
@@ -606,9 +606,9 @@ test('P21 RC gate rejects non-required chaos evidence for strict gate', () => {
   assert.match(chaosCheck?.evidence ?? '', /--required/);
 });
 
-test('P21 RC gate reads module contract and demo product module reports', () => {
+test('P21 RC gate reads module contract and clean smoke module reports', () => {
   const root = createTempProject();
-  for (const moduleId of ['public-tools-demo', 'shop-demo']) {
+  for (const moduleId of ['platform-smoke', 'resource-smoke', 'public-tool-smoke']) {
     fs.mkdirSync(path.join(root, 'modules', moduleId), { recursive: true });
     fs.writeFileSync(path.join(root, 'modules', moduleId, 'module.ts'), '');
     writeJson(path.join(root, '.runtime', 'module-test-reports', `${moduleId}.json`), {

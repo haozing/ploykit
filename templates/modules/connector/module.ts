@@ -1,4 +1,4 @@
-import { defineModule, Permission } from '@ploykit/module-sdk';
+import { defineModule, page, Permission } from '@ploykit/module-sdk';
 
 export default defineModule({
   id: '__MODULE_ID__',
@@ -10,15 +10,16 @@ export default defineModule({
     Permission.JobsRegister,
     Permission.FilesWrite,
   ],
-  routes: {
-    dashboard: [
-      {
-        path: '/__MODULE_ID__',
-        component: './pages/ConnectorPage',
-        auth: 'auth',
-      },
-    ],
-  },
+  pages: [
+    page({
+      id: '__MODULE_ID__.connector',
+      area: 'dashboard',
+      path: '/__MODULE_ID__',
+      frame: 'workspace',
+      component: './pages/ConnectorPage.tsx',
+      auth: 'auth',
+    }),
+  ],
   jobs: {
     sync: {
       handler: './jobs/sync',

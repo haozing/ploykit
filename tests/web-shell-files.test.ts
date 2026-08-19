@@ -16,7 +16,7 @@ test('M6 host file runtime stores file metadata and object content', async () =>
     store,
     storage,
     session: createDemoHostSession(),
-  }).forModule('public-tools-demo');
+  }).forModule('public-tool-smoke');
   const upload = await files.createUpload({
     name: 'sample.json',
     purpose: 'source',
@@ -106,14 +106,14 @@ test('X12 host file quota policy supports plan-aware overrides', async () => {
       storage: createMemoryModuleFileStorage(),
       session,
     });
-    const upload = await runtime.forModule('public-tools-demo').createUpload({
+    const upload = await runtime.forModule('public-tool-smoke').createUpload({
       name: 'plan-quota.txt',
       purpose: 'source',
       sizeBytes: 150,
       contentType: 'text/plain',
     });
     const ready = await runtime
-      .forModule('public-tools-demo')
+      .forModule('public-tool-smoke')
       .completeUpload(upload.file.id, { content: 'x'.repeat(150), sizeBytes: 150 });
 
     assert.equal(ready.sizeBytes, 150);

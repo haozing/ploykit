@@ -16,11 +16,11 @@
       "login": "Log in",
       "register": "Get started"
     },
-    "footerBrand": "PloyKit Platform",
+    "footerBrand": "PloyKit Current Contract",
     "home": {
-      "eyebrow": "Local Module Host",
+      "eyebrow": "Current Module Host",
       "title": "PloyKit",
-      "subtitle": "An open-source application base that gets the public site, auth, workspace, and admin running before your business modules plug in.",
+      "subtitle": "A single-version module host: the public site, auth, workspace, and admin stay with the host while business capabilities plug in through the current module contract.",
       "dashboard": "Open dashboard",
       "admin": "View Admin",
       "snapshotLabel": "Host capability status",
@@ -30,31 +30,31 @@
         ["Host", "operational"]
       ],
       "cards": [
-        ["Modular extension", "Keep pages, APIs, jobs, and data plans in one module contract."],
-        ["Product base", "Auth, dashboard, admin, billing, and files have default flows."],
+        ["Current contract", "Declare pages, APIs, jobs, data, and permissions from module.ts."],
+        ["Host foundation", "Auth, workspace, admin, billing, and files are owned by the host."],
         [
-          "Ready out of the box",
-          "The site, sign-in, and user center can run before business modules arrive."
+          "Module increment",
+          "Business modules implement their own pages, handlers, and product logic."
         ]
       ]
     },
     "pages": {
       "about": {
         "title": "About PloyKit",
-        "subtitle": "PloyKit is an application base for open-source products, tools sites, and internal systems.",
-        "body": "It starts with a public site, auth, user center, and admin frame, so teams begin from a running product and plug in the business capabilities that make it different.",
+        "subtitle": "PloyKit is a single-version, contract-first host for modular products.",
+        "body": "It keeps auth, workspace, admin, runtime storage, jobs, files, and commercial foundations on the host side, while business differences are expressed through the current module contract. The goal is not more abstraction; it is a boundary that both developers and AI can read from one module.ts.",
         "highlights": [
           {
-            "title": "Open start",
-            "body": "Public pages, auth, and the workspace run first, then evolve into your product."
+            "title": "Single-version mindset",
+            "body": "No old contract compatibility story is shown to users; the current repository is the current fact surface."
           },
           {
-            "title": "Extend by use case",
-            "body": "CMS, CRM, tools sites, and internal systems can start from small modules."
+            "title": "Modules add only the increment",
+            "body": "Modules declare pages, APIs, jobs, data, and permissions while shared capabilities stay with the host runtime."
           },
           {
-            "title": "Less repeated work",
-            "body": "Common product foundations exist already, so teams can focus on their core work."
+            "title": "Built for AI collaboration",
+            "body": "Explicit contracts, capability docs, and diagnostic commands let models guess less and make verifiable changes."
           }
         ]
       },
@@ -75,29 +75,29 @@
       },
       "docs": {
         "title": "Docs",
-        "subtitle": "Read by path: build a product, develop a module, or prepare for launch.",
+        "subtitle": "Read by path: understand the host, write a module, or validate delivery.",
         "cards": [
           [
-            "Module development",
-            "Declare pages, APIs, jobs, data tables, and host capability permissions."
+            "Module contract",
+            "Declare pages, APIs, jobs, data, permissions, and host capabilities from module.ts."
           ],
           [
-            "Page overrides",
-            "Replace the public site, auth flow, and workspace home through product presentation."
+            "Host boundary",
+            "Understand which capabilities belong to the host and which code should stay inside a module."
           ],
           [
             "Runtime validation",
-            "Use module doctor, the browser matrix, and the RC gate to validate delivery quality."
+            "Use modules:check, module:doctor, module:test, and browser checks to validate delivery quality."
           ]
         ],
         "start": {
-          "title": "Start with the path that matches your goal",
-          "body": "Whether you are building a product, writing a module, or preparing launch, start from the matching section instead of reading the whole architecture first."
+          "title": "Start from the current contract",
+          "body": "Confirm host capabilities and module.ts fields before implementation, so boundaries are explicit before code is written."
         }
       },
       "pricing": {
         "title": "Pricing",
-        "subtitle": "Choose a plan, then use local checkout during development to prove the flow.",
+        "subtitle": "Validate entitlements, credits, and orders from the current billing catalog; local development can use local checkout.",
         "billingProvider": "Billing mode",
         "checkout": "Checkout status",
         "plans": "Plan count",
@@ -111,12 +111,12 @@
         },
         "flow": {
           "title": "Run the flow first, connect payments later",
-          "body": "Use local checkout during development and demos. When you are ready to charge, connect the same plans to Stripe."
+          "body": "Use local checkout during development to validate orders, entitlements, and credit flow. When you are ready to charge, connect the same catalog to Stripe."
         }
       },
       "contact": {
         "title": "Contact",
-        "subtitle": "Tell us about the module, deployment plan, or product question you are working through.",
+        "subtitle": "Tell us about your module boundary, host capability needs, or deployment plan.",
         "received": "Your message was received. We will continue by email.",
         "failed": "Message submission failed. Check required fields and try again.",
         "name": "Name",
@@ -126,24 +126,24 @@
         "company": "Company / team",
         "optional": "Optional",
         "message": "Request",
-        "messagePlaceholder": "Briefly describe your module, deployment environment, or product plan.",
+        "messagePlaceholder": "Briefly describe your module, host capability needs, deployment environment, or product plan.",
         "submit": "Send",
         "aside": {
           "title": "Tell us what you want to build",
-          "body": "Use this for module integration, deployment planning, or commercialization questions. We record the request and handle it by email.",
-          "topics": ["Product questions", "Deployment help", "Commercial path"]
+          "body": "Use this for module contracts, host capabilities, deployment planning, or commercialization questions. We record the request and handle it by email.",
+          "topics": ["Module contract", "Host capabilities", "Deployment plan"]
         }
       }
     },
     "homeExperience": {
       "hero": {
-        "titleLines": ["Build deployable apps faster", "with AI-ready", "module contracts"],
-        "subtitle": "PloyKit uses module contracts to constrain boundaries while host capabilities carry common product logic. AI only needs to focus on the current module to generate pages, APIs, jobs, and data structures with less context.",
+        "titleLines": ["One current contract", "modules run", "inside the host"],
+        "subtitle": "PloyKit keeps the public site, auth, workspace, admin, runtime storage, and commercial capabilities on the host side. Modules declare pages, APIs, jobs, data, and permissions through the current module.ts, so developers and AI share one boundary.",
         "primaryCta": "Get started for free",
         "docsCta": "View documentation",
         "githubCta": "GitHub",
-        "codeFilename": "cms.module.ts",
-        "stackIntro": "A modern web stack works with the module runtime, taking products from local development to deployable releases."
+        "codeFilename": "content-studio/module.ts",
+        "stackIntro": "The current implementation is built around Next.js, TypeScript, Postgres/Memory Store, and the module runtime, taking products from local validation to deployable releases."
       },
       "stackItems": [
         "Next.js / React",
@@ -151,121 +151,121 @@
         "Tailwind CSS",
         "Postgres / Memory Store",
         "Outbox Worker",
-        "Event Queue"
+        "Module Doctor"
       ],
       "trustItems": [
         {
-          "title": "Modular extension",
-          "body": "Pages, APIs, jobs, and data plug in as modules with clearer product boundaries."
+          "title": "Single-version contract",
+          "body": "No old-contract compatibility story: development, diagnostics, and docs center on the current module.ts."
         },
         {
-          "title": "Built-in capabilities",
-          "body": "Auth, dashboard, files, billing, notifications, and workers are available by default."
+          "title": "Host capabilities",
+          "body": "Auth, workspace, files, billing, notifications, and workers are handled by the host runtime."
         },
         {
-          "title": "Easy deployment",
-          "body": "Local development, module composition, runtime storage, and deployment stay aligned."
+          "title": "Verifiable runtime",
+          "body": "Module scan, Doctor, tests, and runtime evidence stay on one validation path."
         },
         {
           "title": "Open and controllable",
-          "body": "Code, modules, and product pages are versioned in-repo for review and extension."
+          "body": "Host, modules, docs, and product pages live in-repo for review and adaptation."
         }
       ],
       "features": {
-        "title": "Why PloyKit works for AI-assisted development",
-        "body": "Module contracts and host capabilities keep context focused on the current task.",
+        "title": "Why this works for AI-assisted development",
+        "body": "AI does not need to understand the entire platform first; it can start from the current module contract and host capabilities.",
         "cards": [
           {
             "title": "Contract-first modules",
             "body": "Pages, APIs, data, jobs, permissions, and events live in one declaration, so AI does not have to guess the project shape."
           },
           {
-            "title": "Smaller context",
-            "body": "Each task can focus on the current module and contract, reducing global code reading, shortening prompts, and stabilizing output."
+            "title": "Smaller boundaries",
+            "body": "Module code stays in the module directory, host capabilities are called through ctx, and cross-layer edits are easier to spot."
           },
           {
-            "title": "Clear delivery path",
-            "body": "Generated modules plug into host capabilities, then move through the same runtime path for validation and deployment."
+            "title": "Clear validation path",
+            "body": "After generation, scan, Doctor, module tests, and page checks can trace issues back to concrete contract fields."
           }
         ]
       },
       "capabilities": {
-        "title": "Host capabilities are ready, modules only add business logic",
-        "body": "Auth, routing, data, files, jobs, events, and diagnostics are handled by the host. Modules declare what they need through contracts, then run, trace, and deploy through one runtime.",
+        "title": "The host carries the base; modules add business logic",
+        "body": "Auth, routing, data, files, jobs, events, and diagnostics are handled by the host. Modules declare what they need, then run, trace, and validate through one runtime.",
         "cards": [
           {
             "title": "Data & schema",
-            "body": "Declare data models, migrations, and access boundaries while the host handles storage and runtime mapping."
+            "body": "Declare data models, migrations, and access boundaries while the host handles storage, scope, and runtime mapping."
           },
           {
             "title": "Pages & routes",
-            "body": "Modules declare public, user-center, and admin entries, then the host mounts them consistently."
+            "body": "Modules declare public, workspace, and admin entries, then the host mounts and frames them consistently."
           },
           {
             "title": "Jobs & events",
-            "body": "Scheduled jobs, webhooks, business events, and result tracking flow through the shared runtime."
+            "body": "Jobs, webhooks, business events, and result tracking flow through the host runtime."
           },
           {
             "title": "Files & artifacts",
             "body": "Uploads, storage, permissions, and module-generated files are managed by the host."
           },
           {
-            "title": "Service connectors",
-            "body": "AI, email, payments, and external APIs connect to modules as host capabilities."
+            "title": "Service calls",
+            "body": "AI, email, payments, and external APIs are provided to modules as host capabilities."
           },
           {
             "title": "Module Doctor",
-            "body": "Scan contracts, permissions, routes, and dependencies to catch integration risks early."
+            "body": "Scan contracts, permissions, routes, dependencies, and source boundaries to catch integration risks early."
           }
         ]
       },
       "composition": {
-        "title": "Start with one module and compose a complete app",
-        "body": "Declare one module, attach the host capabilities it needs, then compose CMS, CRM, commerce, or internal tools around the use case.",
+        "title": "Start with one module, not a pile of adapters",
+        "body": "Declare what the module needs, then implement pages, handlers, and data. Only real business needs should enter the module.",
         "steps": [
           {
             "title": "Declare",
-            "body": "Declare pages, APIs, schema, jobs, and permissions through the contract."
+            "body": "Declare pages, APIs, schema, jobs, and permissions through the current contract."
           },
           {
-            "title": "Attach",
-            "body": "Choose the auth, workspace, file, billing, or event capabilities it needs."
+            "title": "Call the host",
+            "body": "Use auth, workspace, file, billing, or event capabilities through ctx."
           },
           {
-            "title": "Ship",
-            "body": "Compose CMS, CRM, commerce, or internal tools and launch."
+            "title": "Validate delivery",
+            "body": "Run scan, Doctor, tests, and browser checks until the module is real."
           }
         ]
       },
       "buildCards": [
         {
-          "title": "CMS",
-          "body": "Content models, editorial flows, publishing."
+          "title": "Content module",
+          "body": "Content models, editor pages, publish APIs, and file capability."
         },
         {
-          "title": "Shop",
-          "body": "Catalogs, orders, payments, files."
+          "title": "Resource module",
+          "body": "Data tables, list pages, detail pages, and permission boundaries."
         },
         {
-          "title": "CRM",
-          "body": "Customers, leads, activities, pipelines."
+          "title": "Public tool",
+          "body": "Public pages, lightweight APIs, and controlled anonymous access."
         },
         {
-          "title": "Workflow",
-          "body": "Connect apps, jobs, and tasks."
+          "title": "Background work",
+          "body": "Jobs, events, webhooks, and run records."
         },
         {
-          "title": "Automation",
-          "body": "Jobs, triggers, and workflows."
+          "title": "AI/RAG",
+          "body": "Text generation, retrieval, files, and usage metering."
         },
         {
-          "title": "Reports",
-          "body": "Dashboards, analytics, exports."
+          "title": "Operations admin",
+          "body": "Module state, runtime evidence, audit, and diagnostics."
         }
       ],
       "final": {
-        "title": "Start with a module contract and let the host run the product.",
-        "body": "Read the docs, inspect the module contract, and plug your business capability into PloyKit. Common capabilities stay in the host while modules focus on product logic.",
+        "title": "Write the module contract first, then let the host run it.",
+        "body": "Read the current docs, inspect a real module.ts, and plug your business capability into PloyKit. Common capabilities stay in the host while modules focus on product logic.",
         "githubCta": "Star on GitHub",
         "startCta": "Get started"
       }
@@ -610,7 +610,7 @@
       "consoleLabel": "Product console",
       "platformLabel": "Platform",
       "platformFullName": "PloyKit Platform",
-      "version": "v2.1.0",
+      "version": "Current contract",
       "navigation": "Navigation",
       "areaNavigation": {
         "admin": "Admin navigation",
@@ -1697,24 +1697,24 @@
   "seo": {
     "default": {
       "title": "PloyKit",
-      "description": "PloyKit is an open-source app base with a public site, auth, workspace, and admin."
+      "description": "PloyKit is a single-version module host with a public site, auth, workspace, admin, and module runtime."
     },
     "pages": {
       "home": {
-        "title": "PloyKit product site",
-        "description": "Start from the default public pages, auth pages, and workspace entry points, then replace them with modules when your product needs to specialize."
+        "title": "PloyKit current module host",
+        "description": "Declare pages, APIs, jobs, data, and permissions through the current module contract, then run and validate them through the host."
       },
       "about": {
         "title": "About PloyKit",
-        "description": "Learn which product scenarios PloyKit is built for."
+        "description": "Learn PloyKit's single-version contract, host boundary, and module development model."
       },
       "pricing": {
         "title": "Pricing",
-        "description": "Choose a plan, then use local checkout during development to prove the flow."
+        "description": "Validate the current billing catalog, entitlements, credits, and local checkout flow."
       },
       "docs": {
         "title": "Docs",
-        "description": "PloyKit documentation for product composition, module development, and host operations."
+        "description": "PloyKit documentation for the current module contract, host boundary, and runtime validation."
       },
       "contact": {
         "title": "Contact",

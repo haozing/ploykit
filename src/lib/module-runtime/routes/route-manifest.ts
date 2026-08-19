@@ -1,6 +1,6 @@
 import type {
-  ModuleApiRoute,
-  ModulePageRoute,
+  ModuleApiDefinitionContract,
+  ModulePageDefinition,
   ModuleRouteAuth,
   PermissionValue,
 } from '@ploykit/module-sdk';
@@ -15,7 +15,7 @@ import {
 export type ModuleRuntimeRouteKind = 'site' | 'dashboard' | 'admin' | 'api';
 export type ModuleRuntimeRouteSource = 'route' | 'alias' | 'publicAlias';
 
-export type ModuleRuntimeRouteDefinition = ModulePageRoute | ModuleApiRoute;
+export type ModuleRuntimeRouteDefinition = ModulePageDefinition | ModuleApiDefinitionContract;
 
 export interface ModuleRuntimeRouteEntry {
   moduleId: string;
@@ -73,7 +73,7 @@ export function createModuleRouteManifest(
 
   for (const contract of contracts) {
     for (const kind of ['site', 'dashboard', 'admin'] as const) {
-      for (const route of contract.routes[kind]) {
+      for (const route of contract.pages.filter((page) => page.area === kind)) {
         entries.push(createEntry(contract, kind, route));
 
         for (const alias of route.aliases ?? []) {
@@ -88,7 +88,7 @@ export function createModuleRouteManifest(
       }
     }
 
-    entries.push(...contract.routes.api.map((route) => createEntry(contract, 'api', route)));
+    entries.push(...contract.apis.map((route) => createEntry(contract, 'api', route)));
   }
 
   return entries.sort((left, right) => {

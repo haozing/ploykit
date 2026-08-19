@@ -83,7 +83,7 @@ ownership guard。
 
 - `presentation.whiteLabel` 打开白牌模式。
 - `presentation.replaces` 必须列出被替换的 host surface。
-- 白牌模块还需要 `resources.locales`、`i18n`、`themeScope` 和页面
+- 白牌模块还需要 `assets.locales`、`i18n`、`themeScope` 和页面
   presentation loader。
 
 ## 需要特别小心的点

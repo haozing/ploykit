@@ -367,7 +367,9 @@ async function checkModuleLocales(): Promise<void> {
         ...(contract.definition.presentation?.whiteLabel ? productLanguages : []),
       ]),
     ];
-    const defaultResource = contract.resources.locales?.[defaultLanguage];
+    const localeResources = contract.assets.locales ?? {};
+    const localeResourcePath = 'assets.locales';
+    const defaultResource = localeResources[defaultLanguage];
     const moduleSummary: ModuleLocaleSummary = {
       moduleId: contract.id,
       defaultLanguage,
@@ -382,7 +384,7 @@ async function checkModuleLocales(): Promise<void> {
         'error',
         'MODULE_I18N_DEFAULT_RESOURCE_MISSING',
         `Module "${contract.id}" does not declare a locale resource for default language "${defaultLanguage}".`,
-        `modules.${contract.id}.resources.locales.${defaultLanguage}`
+        `modules.${contract.id}.${localeResourcePath}.${defaultLanguage}`
       );
       continue;
     }
@@ -411,13 +413,13 @@ async function checkModuleLocales(): Promise<void> {
     }
 
     for (const language of requiredLanguages) {
-      const resource = contract.resources.locales?.[language];
+      const resource = localeResources[language];
       if (!resource) {
         addDiagnostic(
           'error',
           'MODULE_I18N_REQUIRED_RESOURCE_MISSING',
           `Module "${contract.id}" does not declare a locale resource for required language "${language}".`,
-          `modules.${contract.id}.resources.locales.${language}`
+          `modules.${contract.id}.${localeResourcePath}.${language}`
         );
         continue;
       }

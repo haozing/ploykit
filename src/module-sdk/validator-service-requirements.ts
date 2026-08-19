@@ -58,7 +58,7 @@ function operationManagedServiceHeaders(operation: ModuleServiceOperationDefinit
   return headers;
 }
 
-function serviceRequirementUsesV2Policy(requirement: ServiceRequirement): boolean {
+function serviceRequirementUsesOperationPolicy(requirement: ServiceRequirement): boolean {
   return Boolean(
     requirement.kind ||
       requirement.connection ||
@@ -190,17 +190,6 @@ export function validateServiceRequirement(
       'MODULE_SERVICE_PROVIDER_EMPTY',
       `Service requirement "${name}" provider must not be empty when declared.`,
       `serviceRequirements.${name}.provider`
-    );
-  }
-
-  const usesV2Policy = serviceRequirementUsesV2Policy(requirement);
-  if (usesV2Policy && definition.contractVersion !== 2) {
-    addError(
-      diagnostics,
-      'MODULE_CONTRACT_V2_REQUIRED',
-      `Service requirement "${name}" uses operation policy and must declare contractVersion: 2.`,
-      'contractVersion',
-      'Set contractVersion: 2 for modules that use service operation policies.'
     );
   }
 

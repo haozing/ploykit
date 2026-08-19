@@ -15,7 +15,7 @@ test('P20 diagnostics presenter groups severity and produces AI repair prompt wi
       severity: 'error',
       code: 'MODULE_ROUTE_HANDLER_MISSING',
       message: 'Missing handler.',
-      path: 'routes.api.0.handler',
+      path: 'apis.0.handler',
       fix: 'Add a local handler path.',
     }),
     createModuleDiagnostic({
@@ -68,12 +68,9 @@ test('P20 developer platform report exposes templates and modules with errors', 
   });
 
   assert.equal(report.modulesWithErrors[0], 'demo');
-  assert.ok(report.templates.some((template) => template.id === 'billing-aware'));
-  assert.ok(report.templates.some((template) => template.id === 'ai-rag'));
-  assert.ok(report.templates.some((template) => template.id === 'signed-service'));
-  assert.ok(report.templates.some((template) => template.id === 'product'));
-  assert.ok(report.templates.some((template) => template.id === 'service-backed'));
-  assert.ok(report.templates.some((template) => template.id === 'background'));
-  assert.ok(report.templates.some((template) => template.id === 'product-app'));
+  assert.ok(report.templates.some((template) => template.id === 'app'));
+  assert.ok(report.templates.some((template) => template.id === 'resource'));
+  assert.ok(report.templates.some((template) => template.id === 'tool'));
+  assert.ok(report.templates.some((template) => template.id === 'connector'));
   assert.match(report.aiFixPrompts.demo, /DEMO_ERROR/);
 });

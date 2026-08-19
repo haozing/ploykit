@@ -1,4 +1,4 @@
-import type { ModuleDataDefinition } from './data';
+import type { ModuleDataDefinition, ModuleDataScope } from './data';
 import type { ModuleContext } from './context';
 import type { PermissionValue } from './permissions';
 import type { ModuleI18nDefinition, ModulePresentationDefinition } from './presentation';
@@ -7,6 +7,7 @@ export type ModuleRouteAuth = 'public' | 'auth' | 'admin';
 export type ModuleHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type ModuleSurfaceMode = 'append' | 'prepend' | 'replace' | 'panel' | 'action';
 export type ModuleWorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
+export type ModuleKind = 'product' | 'host-extension';
 export type ModuleActionSideEffect =
   | 'none'
   | 'read'
@@ -23,7 +24,8 @@ export type ModuleSurfaceVisibility =
 
 export interface ModuleContractPartsDefinition {
   data?: string;
-  routes?: string;
+  pages?: string;
+  apis?: string;
   presentation?: string;
   theme?: string;
   i18n?: string;
@@ -58,6 +60,7 @@ export interface ModuleRouteBase {
 
 export interface ModulePageRoute extends ModuleRouteBase {
   component: string;
+  frame?: ModulePageFrame | (string & {});
   loader?: string;
   loaderByParam?: ModulePageRouteParamLoaderMap;
   metadata?: string;
@@ -107,12 +110,45 @@ export interface ModuleApiRoute extends ModuleRouteBase {
   };
 }
 
+export type ModuleSchemaPrimitive =
+  | 'string'
+  | 'text'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'json'
+  | 'uuid';
+
+export interface ModuleSchemaFieldDefinition {
+  type: ModuleSchemaPrimitive;
+  required?: boolean;
+  array?: boolean;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  enum?: readonly string[];
+  description?: string;
+  default?: unknown;
+}
+
+export interface ModuleSchemaDefinition {
+  $$type: 'ploykit.schema';
+  name?: string;
+  description?: string;
+  fields: Record<string, ModuleSchemaFieldDefinition>;
+}
+
+export type ModuleSchemaReference = string | ModuleSchemaDefinition;
+
 export interface ModuleActionDefinition {
   handler: string;
   auth?: ModuleRouteAuth;
   permissions?: readonly PermissionValue[];
   commercial?: ModuleCommercialRequirement;
-  input?: string;
+  input?: ModuleSchemaReference;
+  output?: ModuleSchemaReference;
   timeoutMs?: number;
   sideEffect?: ModuleActionSideEffect;
   confirmation?: {
@@ -151,11 +187,31 @@ export type DefinedAction<
   readonly $$ploykit: ModuleActionDefinitionMarker;
 };
 
-export interface ModuleRoutesDefinition {
-  site?: readonly ModulePageRoute[];
-  dashboard?: readonly ModulePageRoute[];
-  admin?: readonly ModulePageRoute[];
-  api?: readonly ModuleApiRoute[];
+export type ModulePageArea = 'site' | 'dashboard' | 'admin';
+export type ModulePageFrame = 'public' | 'site' | 'dashboard' | 'workspace' | 'admin' | 'none';
+
+export interface ModulePageDefinition extends ModuleRouteBase {
+  $$type?: 'ploykit.page';
+  id: string;
+  area: ModulePageArea;
+  frame: ModulePageFrame | (string & {});
+  component: string;
+  loader?: string;
+  loaderByParam?: ModulePageRouteParamLoaderMap;
+  metadata?: string;
+  metadataByParam?: ModulePageRouteParamLoaderMap;
+  metadataResult?: ModulePageRoute['metadataResult'];
+  aliases?: readonly string[];
+  publicAliases?: readonly string[];
+  cache?: ModulePageRouteCacheDefinition;
+  cacheByParam?: ModulePageRouteParamCacheMap;
+}
+
+export interface ModuleApiDefinitionContract extends ModuleApiRoute {
+  $$type?: 'ploykit.api-route';
+  id: string;
+  input: ModuleSchemaReference;
+  output: ModuleSchemaReference;
 }
 
 export interface ModuleNavigationItem {
@@ -199,13 +255,13 @@ export interface ModuleSurfaceDefinition {
   };
 }
 
-export interface ModuleResourcesDefinition {
+export interface ModuleAssetsDefinition {
   locales?: Record<string, string>;
   icons?: Record<
     string,
     | {
         kind: 'lucide';
-        name: string;
+        name?: string;
       }
     | {
         kind: 'svg';
@@ -218,6 +274,52 @@ export interface ModuleResourcesDefinition {
     contentType?: string;
     maxBytes?: number;
   }[];
+}
+
+export interface ModuleResourceStorageDefinition {
+  table?: string;
+  document?: string;
+}
+
+export interface ModuleResourceDefinition {
+  $$type?: 'ploykit.resource';
+  scope: ModuleDataScope;
+  schema: ModuleSchemaReference;
+  storage?: ModuleResourceStorageDefinition;
+  permissions?: readonly PermissionValue[];
+}
+
+export interface ModuleProvidedCapabilityDefinition {
+  provider: string;
+  permissions?: readonly PermissionValue[];
+  description?: string;
+}
+
+export type ModuleProvidedAdminResourceRisk = 'read' | 'write' | 'dangerous';
+
+export interface ModuleProvidedAdminResourceOperationDefinition {
+  handler: string;
+  permission: PermissionValue;
+  risk: ModuleProvidedAdminResourceRisk;
+  auditEvent?: string;
+  confirmation?: {
+    field: string;
+    value: string;
+  };
+}
+
+export interface ModuleProvidedAdminResourceDefinition {
+  label?: string;
+  operations: Record<string, ModuleProvidedAdminResourceOperationDefinition>;
+}
+
+export interface ModuleProvidesDefinition {
+  capabilities?: Record<string, ModuleProvidedCapabilityDefinition>;
+  adminResources?: Record<string, ModuleProvidedAdminResourceDefinition>;
+}
+
+export interface ModuleUsesDefinition {
+  capabilities?: readonly string[];
 }
 
 export interface ModuleThemeDefinition {
@@ -472,20 +574,24 @@ export interface ModuleProductDefinition {
 }
 
 export interface ModuleDefinition {
-  contractVersion?: 1 | 2;
   id: string;
   name: string;
   version: string;
   description?: string;
+  kind?: ModuleKind;
   product?: ModuleProductDefinition;
   parts?: ModuleContractPartsDefinition;
+  uses?: ModuleUsesDefinition;
+  provides?: ModuleProvidesDefinition;
   permissions?: readonly PermissionValue[];
   scope?: ModuleScopeDefinition;
   data?: ModuleDataDefinition;
-  routes?: ModuleRoutesDefinition;
+  pages?: readonly ModulePageDefinition[];
+  apis?: readonly ModuleApiDefinitionContract[];
   navigation?: ModuleNavigationItem | readonly ModuleNavigationItem[];
   surfaces?: Record<string, ModuleSurfaceDefinition>;
-  resources?: ModuleResourcesDefinition;
+  assets?: ModuleAssetsDefinition;
+  resources?: Record<string, ModuleResourceDefinition>;
   i18n?: ModuleI18nDefinition;
   presentation?: ModulePresentationDefinition;
   theme?: ModuleThemeDefinition;

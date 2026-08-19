@@ -1,6 +1,24 @@
 export { defineModule } from './define-module';
 export { defineApi } from './define-api';
 export { action, defineAction } from './define-action';
+export { api } from './api';
+export { assets } from './assets';
+export { page } from './page';
+export { resource } from './resource';
+export {
+  booleanField,
+  dateField,
+  datetimeField,
+  integerField,
+  jsonField,
+  numberField,
+  schema,
+  stringField,
+  textField,
+  toJsonSchema,
+  uuidField,
+  createFixture,
+} from './schema';
 export {
   Permission,
   PermissionRegistry,
@@ -28,6 +46,7 @@ export {
   normalizeModuleNpmDependencyInputs,
 } from './dependencies';
 export { validateModuleDefinition } from './validator';
+export * from './ui';
 export { createTestingModuleContext } from './testing';
 export { HOST_COMMERCIAL_ORDER_STATUS_EVENT_NAME, HostEvent } from './host-events';
 export {

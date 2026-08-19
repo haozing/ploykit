@@ -38,6 +38,7 @@ export {
   defineProductPresentation,
   validateProductPresentation,
 } from '../../src/module-sdk/presentation.ts';
+export * from '../../src/module-sdk/ui.tsx';
 export type * from '../../src/module-sdk/context.ts';
 export type * from '../../src/module-sdk/data.ts';
 export type * from '../../src/module-sdk/diagnostics.ts';

@@ -759,6 +759,8 @@ export function mapCatalogState(row: Row): ModuleCatalogModuleState {
     bundleId: row.bundle_id ?? undefined,
     required: Boolean(row.required),
     scopeProfile: row.scope_profile ?? undefined,
+    trust: row.trust ?? 'product',
+    allowedProvides: Array.isArray(row.allowed_provides) ? row.allowed_provides : [],
     diagnostics: row.diagnostics ?? [],
     updatedAt: toIso(row.updated_at),
   };

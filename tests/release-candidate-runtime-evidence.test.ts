@@ -714,7 +714,7 @@ test('P21 RC gate reads product presentation manifest evidence', () => {
     checkedAt: '2026-05-23T00:00:00.000Z',
     product: { id: 'test-product', supportedLanguages: ['zh', 'en'] },
     pages: {
-      'site.home': { moduleId: 'white-label-site-demo', enabled: true },
+      'site.home': { moduleId: 'public-tool-smoke', enabled: true },
     },
     diagnostics: [],
   });

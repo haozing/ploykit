@@ -45,17 +45,20 @@ export function validateResources(
   diagnostics: ModuleDiagnostic[],
   definition: ModuleDefinition
 ): void {
-  for (const [locale, localePath] of Object.entries(definition.resources?.locales ?? {})) {
+  const staticResources = definition.assets;
+  const staticPath = 'assets';
+
+  for (const [locale, localePath] of Object.entries(staticResources?.locales ?? {})) {
     validateLocalModulePath(
       diagnostics,
       localePath,
-      `resources.locales.${locale}`,
+      `${staticPath}.locales.${locale}`,
       'Locale resource'
     );
   }
 
-  for (const [key, icon] of Object.entries(definition.resources?.icons ?? {})) {
-    const iconPath = `resources.icons.${key}`;
+  for (const [key, icon] of Object.entries(staticResources?.icons ?? {})) {
+    const iconPath = `${staticPath}.icons.${key}`;
     if (!MODULE_ICON_KEY_PATTERN.test(key)) {
       addError(
         diagnostics,
@@ -110,15 +113,15 @@ export function validateResources(
     );
   }
 
-  for (const [index, asset] of (definition.resources?.assets ?? []).entries()) {
-    validateLocalModulePath(diagnostics, asset.path, `resources.assets.${index}.path`, 'Asset');
+  for (const [index, asset] of (staticResources?.assets ?? []).entries()) {
+    validateLocalModulePath(diagnostics, asset.path, `${staticPath}.assets.${index}.path`, 'Asset');
 
     if (asset.path.endsWith('.wasm') && asset.kind !== 'wasm') {
       addError(
         diagnostics,
         'MODULE_ASSET_WASM_KIND_REQUIRED',
         'WASM assets must explicitly declare kind: "wasm".',
-        `resources.assets.${index}.kind`,
+        `${staticPath}.assets.${index}.kind`,
         'Add kind: "wasm".'
       );
     }
@@ -128,7 +131,7 @@ export function validateResources(
         diagnostics,
         'MODULE_ASSET_WORKER_KIND_REQUIRED',
         'Worker assets must explicitly declare kind: "worker".',
-        `resources.assets.${index}.kind`,
+        `${staticPath}.assets.${index}.kind`,
         'Add kind: "worker".'
       );
     }
@@ -138,7 +141,7 @@ export function validateResources(
         diagnostics,
         'MODULE_ASSET_MAX_BYTES_INVALID',
         'Asset maxBytes must be greater than zero.',
-        `resources.assets.${index}.maxBytes`
+        `${staticPath}.assets.${index}.maxBytes`
       );
     }
   }
@@ -150,7 +153,8 @@ export function validateI18n(diagnostics: ModuleDiagnostic[], definition: Module
     return;
   }
 
-  const localeResources = definition.resources?.locales ?? {};
+  const localeResources = definition.assets?.locales ?? {};
+  const localePath = 'assets.locales';
   const requiredLanguages = i18n.requiredLanguages ?? [];
 
   if (i18n.defaultLanguage && !localeResources[i18n.defaultLanguage]) {
@@ -159,7 +163,7 @@ export function validateI18n(diagnostics: ModuleDiagnostic[], definition: Module
       'MODULE_I18N_DEFAULT_LOCALE_MISSING',
       `Default language "${i18n.defaultLanguage}" must have a declared locale resource.`,
       'i18n.defaultLanguage',
-      `Add resources.locales.${i18n.defaultLanguage}.`
+      `Add ${localePath}.${i18n.defaultLanguage}.`
     );
   }
 
@@ -170,7 +174,7 @@ export function validateI18n(diagnostics: ModuleDiagnostic[], definition: Module
         'MODULE_I18N_REQUIRED_LOCALE_MISSING',
         `Required language "${language}" must have a declared locale resource.`,
         `i18n.requiredLanguages.${language}`,
-        `Add resources.locales.${language}.`
+        `Add ${localePath}.${language}.`
       );
     }
   }

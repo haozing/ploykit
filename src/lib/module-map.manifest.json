@@ -4,20 +4,14 @@
   "generatedAt": "1970-01-01T00:00:00.000Z",
   "modules": [
     {
-      "id": "ai-rag-demo",
-      "name": "AI RAG Demo",
+      "id": "executor-extension-smoke",
+      "name": "Executor Extension Smoke",
       "version": "0.1.0",
-      "rootDir": "modules/ai-rag-demo",
-      "pages": [
-        "pages/AiRagPage"
-      ],
-      "apis": [
-        "api/ask"
-      ],
+      "rootDir": "modules/executor-extension-smoke",
+      "pages": [],
+      "apis": [],
       "loaders": [],
-      "actions": [
-        "actions/ask"
-      ],
+      "actions": [],
       "services": [],
       "components": [],
       "surfaces": [],
@@ -29,68 +23,63 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "03a812ad71d7cf5773414ae33fb2cd0f231ba4f94806f2f07ddb315df53b8826",
-        "contractDigest": "44f53eacecba1c7403f838fab0f9e448012ac4dac95dd2efb08be1cd871ad7c7",
+        "sourceHash": "7f420a1a2b48a1bc59288f924014b4be5b54ce200c841af8066e135c724a0f6e",
+        "contractDigest": "76717e7019b32b7a31e51a50804b369b26f104047c5bc92c97357c2e11a7cfd5",
         "sourceFiles": [
-          "actions/ask.ts",
-          "api/ask.ts",
-          "lib/run-ai-rag.ts",
-          "module.ts",
-          "pages/AiRagPage.tsx"
+          "admin/executor-health.read.ts",
+          "capabilities/executor.ts",
+          "module.ts"
         ],
         "capabilitySummary": {
-          "routes": 2,
+          "routes": 0,
           "dataModels": 0,
-          "permissions": 8,
+          "permissions": 1,
           "backgroundHandlers": 0,
           "providerRequirements": 0,
-          "commercialRequirements": 1,
-          "presentationContributions": 1
+          "commercialRequirements": 0,
+          "presentationContributions": 0
         }
       },
-      "navigation": {
-        "location": "dashboard.sidebar",
-        "fallbackLabel": "AI/RAG Demo",
-        "path": "/ai-rag-demo",
-        "weight": 70,
-        "requires": {
-          "entitlements": [
-            "ploykit.demo_modules"
-          ]
+      "admin": [
+        {
+          "name": "admin/executor-health.read",
+          "path": "admin/executor-health.read"
         }
-      }
+      ],
+      "capabilities": [
+        {
+          "name": "executor",
+          "path": "capabilities/executor"
+        }
+      ]
     },
     {
-      "id": "capability-demo",
-      "name": "Capability Demo",
+      "id": "platform-smoke",
+      "name": "Platform Smoke",
       "version": "0.1.0",
-      "rootDir": "modules/capability-demo",
+      "rootDir": "modules/platform-smoke",
       "pages": [
-        "pages/DashboardPage",
-        "pages/JobPage",
-        "pages/PublicToolPage"
+        "pages/PlatformSmokePage"
       ],
       "apis": [
-        "api/ask",
-        "api/workflow-status"
+        "api/ping"
       ],
-      "loaders": [
-        "loaders/public-tool-metadata"
-      ],
+      "loaders": [],
       "actions": [
-        "actions/ask",
-        "actions/enqueue-report"
+        "actions/ping"
       ],
       "services": [],
       "components": [],
-      "surfaces": [],
-      "lifecycle": [],
+      "surfaces": [
+        "surfaces/PlatformSmokeWidget"
+      ],
+      "lifecycle": [
+        "lifecycle/install"
+      ],
       "jobs": [
-        "jobs/generate-report",
-        "jobs/reindex"
+        "jobs/generate-report"
       ],
       "events": [
-        "events/indexed",
         "events/reported"
       ],
       "webhooks": [
@@ -101,187 +90,25 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "8dd518b202a1fe1c96cbc19ab3f3418ad663d3b43636ab4ac242192c122bd7b4",
-        "contractDigest": "6d437861bc5cdd3520770de63cc4770234b052edbce1728d0805b3a69060fa41",
+        "sourceHash": "7a12efc8a9de490c58a0b92d62e4e59a2c1341d1b0a12ecc30b483af6f109a59",
+        "contractDigest": "b7352977f353d99ba52b61a038545ab11ed1f223a3e092be23fd65de6a91470e",
         "sourceFiles": [
-          ".ploykit/generated/data-plan.json",
-          ".ploykit/generated/data-types.ts",
-          "actions/ask.ts",
-          "actions/enqueue-report.ts",
-          "api/ask.ts",
-          "api/workflow-status.ts",
-          "events/indexed.ts",
+          "actions/ping.ts",
+          "api/ping.ts",
           "events/reported.ts",
           "jobs/generate-report.ts",
-          "jobs/reindex.ts",
-          "loaders/public-tool-metadata.ts",
-          "migrations/0001_generated.sql",
+          "lifecycle/install.ts",
           "module.ts",
-          "pages/DashboardPage.tsx",
-          "pages/JobPage.tsx",
-          "pages/PublicToolPage.tsx",
-          "README.md",
+          "pages/PlatformSmokePage.tsx",
+          "surfaces/PlatformSmokeWidget.tsx",
           "webhooks/ingest.ts",
           "webhooks/workflow-ingest.ts"
         ],
         "capabilitySummary": {
-          "routes": 5,
-          "dataModels": 1,
-          "permissions": 20,
-          "backgroundHandlers": 6,
-          "providerRequirements": 0,
-          "commercialRequirements": 1,
-          "presentationContributions": 1
-        }
-      },
-      "navigation": {
-        "location": "dashboard.sidebar",
-        "fallbackLabel": "Capability Demo",
-        "path": "/capability-demo",
-        "weight": 30,
-        "requires": {
-          "entitlements": [
-            "ploykit.demo_modules"
-          ]
-        }
-      }
-    },
-    {
-      "id": "cms-demo",
-      "name": "CMS Demo",
-      "version": "0.1.0",
-      "rootDir": "modules/cms-demo",
-      "pages": [
-        "pages/CmsStudioPage",
-        "pages/NotesPage",
-        "pages/PublicCmsPage"
-      ],
-      "apis": [
-        "api/notes",
-        "api/posts"
-      ],
-      "loaders": [
-        "loaders/cms-metadata",
-        "loaders/notes",
-        "loaders/public-posts",
-        "loaders/studio"
-      ],
-      "actions": [
-        "actions/create-note",
-        "actions/publish-post"
-      ],
-      "services": [],
-      "components": [],
-      "surfaces": [
-        "surfaces/AdminSummary"
-      ],
-      "lifecycle": [],
-      "jobs": [],
-      "events": [],
-      "webhooks": [],
-      "assets": [],
-      "release": {
-        "generatedAt": "1970-01-01T00:00:00.000Z",
-        "buildId": "local-dev",
-        "sourceHash": "9945ec48afe0f3074ef410d0d58c134793f0953d8d50746fe807a0b43fedc345",
-        "contractDigest": "1bc7a2a456e5825d486676b3a265fe93f028794700720c335470839c1a5c6e54",
-        "sourceFiles": [
-          ".ploykit/generated/data-plan.json",
-          ".ploykit/generated/data-types.ts",
-          "actions/create-note.ts",
-          "actions/publish-post.ts",
-          "api/notes.ts",
-          "api/posts.ts",
-          "loaders/cms-metadata.ts",
-          "loaders/notes.ts",
-          "loaders/public-posts.ts",
-          "loaders/studio.ts",
-          "migrations/0001_generated.sql",
-          "module.ts",
-          "pages/CmsStudioPage.tsx",
-          "pages/NotesPage.tsx",
-          "pages/PublicCmsPage.tsx",
-          "surfaces/AdminSummary.tsx"
-        ],
-        "capabilitySummary": {
-          "routes": 5,
-          "dataModels": 3,
-          "permissions": 10,
-          "backgroundHandlers": 0,
-          "providerRequirements": 0,
-          "commercialRequirements": 0,
-          "presentationContributions": 2
-        }
-      },
-      "navigation": {
-        "location": "dashboard.sidebar",
-        "fallbackLabel": "CMS",
-        "path": "/cms-demo",
-        "weight": 45,
-        "requires": {
-          "entitlements": [
-            "ploykit.demo_modules"
-          ]
-        }
-      }
-    },
-    {
-      "id": "hello",
-      "name": "Hello Module",
-      "version": "0.1.0",
-      "rootDir": "modules/hello",
-      "pages": [
-        "pages/HelloPage"
-      ],
-      "apis": [
-        "api/hello"
-      ],
-      "loaders": [],
-      "actions": [
-        "actions/ping"
-      ],
-      "services": [],
-      "components": [],
-      "surfaces": [
-        "surfaces/HelloWidget"
-      ],
-      "lifecycle": [
-        "lifecycle/install"
-      ],
-      "jobs": [
-        "jobs/say-hello"
-      ],
-      "events": [
-        "events/hello-greeted"
-      ],
-      "webhooks": [
-        "webhooks/echo"
-      ],
-      "assets": [],
-      "release": {
-        "generatedAt": "1970-01-01T00:00:00.000Z",
-        "buildId": "local-dev",
-        "sourceHash": "109b96460717c10d2262afc7d92cf2c87d8c943500575b45b112be23cf436161",
-        "contractDigest": "7b5506c1356f813ce227caa95e6268997d2db9f902261eb77ec92516f9e41784",
-        "sourceFiles": [
-          ".ploykit/generated/data-plan.json",
-          ".ploykit/generated/data-types.ts",
-          "actions/ping.ts",
-          "api/hello.ts",
-          "events/hello-greeted.ts",
-          "jobs/say-hello.ts",
-          "lifecycle/install.ts",
-          "migrations/0001_generated.sql",
-          "module.ts",
-          "pages/HelloPage.tsx",
-          "surfaces/HelloWidget.tsx",
-          "webhooks/echo.ts"
-        ],
-        "capabilitySummary": {
           "routes": 2,
-          "dataModels": 2,
-          "permissions": 13,
-          "backgroundHandlers": 3,
+          "dataModels": 0,
+          "permissions": 10,
+          "backgroundHandlers": 4,
           "providerRequirements": 0,
           "commercialRequirements": 0,
           "presentationContributions": 2
@@ -289,40 +116,30 @@
       },
       "navigation": {
         "location": "dashboard.sidebar",
-        "fallbackLabel": "Hello",
-        "path": "/hello",
-        "weight": 10,
-        "requires": {
-          "entitlements": [
-            "ploykit.demo_modules"
-          ]
-        }
+        "fallbackLabel": "Platform Smoke",
+        "path": "/platform-smoke",
+        "weight": 10
       }
     },
     {
-      "id": "public-tools-demo",
-      "name": "Public Tools Demo",
+      "id": "public-tool-smoke",
+      "name": "Public Tool Smoke",
       "version": "0.1.0",
-      "rootDir": "modules/public-tools-demo",
+      "rootDir": "modules/public-tool-smoke",
       "pages": [
-        "pages/PublicToolsPage"
+        "pages/PublicToolPage"
       ],
       "apis": [
-        "api/csv-to-json",
-        "api/format-json",
-        "api/json-to-csv",
-        "api/text-utils"
+        "api/format-json"
       ],
       "loaders": [
-        "loaders/public-tools-metadata"
+        "loaders/public-tool-metadata"
       ],
       "actions": [
         "actions/format-sample"
       ],
       "services": [],
-      "components": [
-        "components/PublicToolsWorkbench"
-      ],
+      "components": [],
       "surfaces": [],
       "lifecycle": [],
       "jobs": [],
@@ -332,60 +149,53 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "2425443e60d3839b51ef5e71e15bcf00082a7b003b4a2b89cff28e11640bcf58",
-        "contractDigest": "bb60da6883b62cd1c2fd21cea8837d000a2f386087b3976a187cfac01c82dddd",
+        "sourceHash": "597c5166e297730e7a42944cbf30165cda33a088d02b931b4f668fa9a97e45a5",
+        "contractDigest": "5685a7ccdbefa0f074ec627211869c33cfde757e34ad96f64bb8ed591f2eaf7a",
         "sourceFiles": [
           "actions/format-sample.ts",
-          "api/csv-to-json.ts",
           "api/format-json.ts",
-          "api/json-to-csv.ts",
-          "api/text-utils.ts",
-          "components/PublicToolsWorkbench.tsx",
-          "lib/csv.ts",
-          "loaders/public-tools-metadata.ts",
+          "loaders/public-tool-metadata.ts",
           "module.ts",
-          "pages/PublicToolsPage.tsx"
+          "pages/PublicToolPage.tsx"
         ],
         "capabilitySummary": {
-          "routes": 5,
+          "routes": 2,
           "dataModels": 0,
           "permissions": 2,
           "backgroundHandlers": 0,
           "providerRequirements": 0,
           "commercialRequirements": 1,
-          "presentationContributions": 0
+          "presentationContributions": 1
         }
+      },
+      "navigation": {
+        "location": "site.header",
+        "fallbackLabel": "JSON Tool",
+        "path": "/tools/json",
+        "weight": 30
       }
     },
     {
-      "id": "shop-demo",
-      "name": "Shop Demo",
+      "id": "resource-smoke",
+      "name": "Resource Smoke",
       "version": "0.1.0",
-      "rootDir": "modules/shop-demo",
+      "rootDir": "modules/resource-smoke",
       "pages": [
-        "pages/BillingToolPage",
-        "pages/ShopOpsPage",
-        "pages/ShopfrontPage"
+        "pages/NoteCreatePage",
+        "pages/NoteDetailPage",
+        "pages/NoteEditPage",
+        "pages/NotesListPage"
       ],
       "apis": [
-        "api/billing-status",
-        "api/orders",
-        "api/products"
+        "api/notes"
       ],
-      "loaders": [
-        "loaders/ops",
-        "loaders/shop-metadata",
-        "loaders/shopfront"
-      ],
+      "loaders": [],
       "actions": [
-        "actions/checkout-cart",
-        "actions/run-paid-tool"
+        "actions/create-note"
       ],
       "services": [],
       "components": [],
-      "surfaces": [
-        "surfaces/AdminSummary"
-      ],
+      "surfaces": [],
       "lifecycle": [],
       "jobs": [],
       "events": [],
@@ -394,176 +204,37 @@
       "release": {
         "generatedAt": "1970-01-01T00:00:00.000Z",
         "buildId": "local-dev",
-        "sourceHash": "d6038c029417f0c3f0446f95c6a21b9ef7b2e2d768bd05081058d6b5fc3449da",
-        "contractDigest": "990540f80f781c293641b5c14cb024ddb4dd8536ca64da829377afbac22cf997",
+        "sourceHash": "c1ec2897cc65bfa169b4c5ed4174274f2b61a613b6fc256c8b5b0cd1311e934b",
+        "contractDigest": "57a761066fbbbc2c02da1d31233ef89ea909638f9c55090eae89740ec1851143",
         "sourceFiles": [
           ".ploykit/generated/data-plan.json",
           ".ploykit/generated/data-types.ts",
-          "actions/checkout-cart.ts",
-          "actions/run-paid-tool.ts",
-          "api/billing-status.ts",
-          "api/orders.ts",
-          "api/products.ts",
-          "loaders/ops.ts",
-          "loaders/shop-metadata.ts",
-          "loaders/shopfront.ts",
+          ".ploykit/generated/openapi.json",
+          "actions/create-note.ts",
+          "api/notes.ts",
           "migrations/0001_generated.sql",
           "module.ts",
-          "pages/BillingToolPage.tsx",
-          "pages/ShopfrontPage.tsx",
-          "pages/ShopOpsPage.tsx",
-          "surfaces/AdminSummary.tsx"
+          "pages/NoteCreatePage.tsx",
+          "pages/NoteDetailPage.tsx",
+          "pages/NoteEditPage.tsx",
+          "pages/NotesListPage.tsx"
         ],
         "capabilitySummary": {
-          "routes": 6,
-          "dataModels": 3,
-          "permissions": 15,
-          "backgroundHandlers": 0,
-          "providerRequirements": 0,
-          "commercialRequirements": 3,
-          "presentationContributions": 3
-        }
-      },
-      "navigation": [
-        {
-          "location": "dashboard.sidebar",
-          "fallbackLabel": "Shop",
-          "path": "/shop-demo",
-          "weight": 48,
-          "requires": {
-            "entitlements": [
-              "ploykit.demo_modules"
-            ]
-          }
-        },
-        {
-          "location": "dashboard.sidebar",
-          "fallbackLabel": "Billing Guard",
-          "path": "/shop-demo/billing",
-          "weight": 49,
-          "requires": {
-            "entitlements": [
-              "ploykit.demo_modules",
-              "demo.entitlement"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "id": "white-label-site-demo",
-      "name": "White Label Site Demo",
-      "version": "0.1.0",
-      "rootDir": "modules/white-label-site-demo",
-      "pages": [],
-      "apis": [],
-      "loaders": [
-        "loaders/about-meta",
-        "loaders/auth-forgot-password-meta",
-        "loaders/auth-login-meta",
-        "loaders/auth-register-meta",
-        "loaders/auth-reset-password-meta",
-        "loaders/contact-meta",
-        "loaders/dashboard-home-meta",
-        "loaders/docs-meta",
-        "loaders/home-meta",
-        "loaders/page-meta",
-        "loaders/pricing-meta",
-        "loaders/privacy-meta",
-        "loaders/terms-meta"
-      ],
-      "actions": [],
-      "services": [],
-      "components": [],
-      "surfaces": [
-        "surfaces/AboutPage",
-        "surfaces/AdminModulesActions",
-        "surfaces/ContactPage",
-        "surfaces/DashboardHomePage",
-        "surfaces/DocsPage",
-        "surfaces/ForgotPasswordPage",
-        "surfaces/HomeHero",
-        "surfaces/HomePage",
-        "surfaces/LoginPage",
-        "surfaces/PricingPage",
-        "surfaces/PrivacyPage",
-        "surfaces/RegisterPage",
-        "surfaces/ResetPasswordPage",
-        "surfaces/TermsPage",
-        "surfaces/auth-view",
-        "surfaces/content-view"
-      ],
-      "lifecycle": [],
-      "jobs": [],
-      "events": [],
-      "webhooks": [],
-      "assets": [],
-      "release": {
-        "generatedAt": "1970-01-01T00:00:00.000Z",
-        "buildId": "local-dev",
-        "sourceHash": "cd56d9c63b58385b9c189b2b2b6dcc682e1301371c6a01a8b6339a43e152fd09",
-        "contractDigest": "0b72b2604a45c8832642fe874d797e198edf88aa92e6dfbe7219e58fcf8651b9",
-        "sourceFiles": [
-          "loaders/about-meta.ts",
-          "loaders/auth-forgot-password-meta.ts",
-          "loaders/auth-login-meta.ts",
-          "loaders/auth-register-meta.ts",
-          "loaders/auth-reset-password-meta.ts",
-          "loaders/contact-meta.ts",
-          "loaders/dashboard-home-meta.ts",
-          "loaders/docs-meta.ts",
-          "loaders/home-meta.ts",
-          "loaders/page-meta.ts",
-          "loaders/pricing-meta.ts",
-          "loaders/privacy-meta.ts",
-          "loaders/terms-meta.ts",
-          "locales.ts",
-          "locales/en.json",
-          "locales/zh.json",
-          "module.ts",
-          "surfaces/AboutPage.tsx",
-          "surfaces/AdminModulesActions.tsx",
-          "surfaces/auth-view.tsx",
-          "surfaces/ContactPage.tsx",
-          "surfaces/content-view.tsx",
-          "surfaces/DashboardHomePage.tsx",
-          "surfaces/DocsPage.tsx",
-          "surfaces/ForgotPasswordPage.tsx",
-          "surfaces/HomeHero.tsx",
-          "surfaces/HomePage.tsx",
-          "surfaces/LoginPage.tsx",
-          "surfaces/PricingPage.tsx",
-          "surfaces/PrivacyPage.tsx",
-          "surfaces/RegisterPage.tsx",
-          "surfaces/ResetPasswordPage.tsx",
-          "surfaces/TermsPage.tsx"
-        ],
-        "capabilitySummary": {
-          "routes": 0,
-          "dataModels": 0,
+          "routes": 5,
+          "dataModels": 5,
           "permissions": 4,
           "backgroundHandlers": 0,
           "providerRequirements": 0,
           "commercialRequirements": 0,
-          "presentationContributions": 33
+          "presentationContributions": 1
         }
       },
-      "navigation": [
-        {
-          "location": "site.header",
-          "labelKey": "nav.dashboard",
-          "fallbackLabel": "Workspace",
-          "path": "/dashboard",
-          "weight": 50
-        },
-        {
-          "location": "site.footer",
-          "labelKey": "nav.support",
-          "fallbackLabel": "Support",
-          "path": "/contact",
-          "weight": 10
-        }
-      ]
+      "navigation": {
+        "location": "dashboard.sidebar",
+        "fallbackLabel": "Resource Smoke",
+        "path": "/resource-smoke",
+        "weight": 20
+      }
     }
   ]
 }

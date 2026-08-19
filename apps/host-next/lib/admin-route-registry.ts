@@ -130,6 +130,8 @@ export const ADMIN_ROUTE_REGISTRY = [
   api('outbox.deadLetters.read', '/api/admin/outbox/dead-letters', ['GET'], 'admin.webhooks.read'),
   api('outbox.deadLetters.write', '/api/admin/outbox/dead-letters', ['POST'], 'admin.webhooks.write', 'dangerous'),
   api('serviceConnections', '/api/admin/service-connections', ['GET'], 'admin.serviceConnections.read'),
+  api('resources.read', '/api/admin/resources', ['GET'], 'admin.operations.read'),
+  api('resources.execute', '/api/admin/resources/[resourceId]/[operationName]', ['POST'], 'admin.operations.write', 'dangerous'),
   api('search', '/api/admin/search', ['GET'], 'admin.access'),
   api('security.catalog', '/api/admin/security/catalog', ['GET'], 'admin.operations.read'),
 

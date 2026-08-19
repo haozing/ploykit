@@ -2,34 +2,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const MODULE_TEMPLATES = new Set([
-  'ai-rag',
-  'basic',
-  'billing-aware',
-  'dashboard',
-  'product',
-  'crud',
+  'app',
   'connector',
-  'signed-service',
-  'job',
-  'white-label',
-  'product-app',
+  'resource',
+  'tool',
 ]);
 
-export const MODULE_EXTENSIONS = new Set(['service-backed', 'background']);
-export const TEMPLATES_WITH_DATA_ARTIFACTS = new Set(['crud', 'product']);
+export const MODULE_EXTENSIONS = new Set();
+export const TEMPLATES_WITH_DATA_ARTIFACTS = new Set(['resource']);
 
 export function formatChoiceList(values) {
   return [...values].sort().join('|');
 }
 
 export function createUsage() {
-  return `Usage: npm run module:create -- <module-id> [--template ${formatChoiceList(MODULE_TEMPLATES)}] [--with ${formatChoiceList(MODULE_EXTENSIONS).replaceAll('|', ',')}]`;
+  return `Usage: npm run module:create -- <module-id> [--template ${formatChoiceList(MODULE_TEMPLATES)}]`;
 }
 
 export function listModuleTemplateCatalog(projectRoot, helpers) {
   const { slash, toProjectPath } = helpers;
   const templateRoot = path.join(projectRoot, 'templates', 'modules');
-  const extensionRoot = path.join(projectRoot, 'templates', 'module-extensions');
 
   const listFiles = (dir) =>
     fs.existsSync(dir)
@@ -51,14 +43,5 @@ export function listModuleTemplateCatalog(projectRoot, helpers) {
       files: listFiles(dir),
     };
   });
-  const extensions = [...MODULE_EXTENSIONS].sort().map((name) => {
-    const dir = path.join(extensionRoot, name);
-    return {
-      name,
-      path: toProjectPath(dir),
-      files: listFiles(dir),
-    };
-  });
-
-  return { templates, extensions };
+  return { templates, extensions: [] };
 }

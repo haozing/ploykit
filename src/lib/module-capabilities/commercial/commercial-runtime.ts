@@ -42,7 +42,6 @@ export interface ModuleCommercialRuntime {
 export interface CreateInMemoryModuleCommercialRuntimeOptions {
   now?: () => Date;
   plansByUser?: Record<string, ModuleBillingPlan>;
-  redeemCodes?: Record<string, string>;
 }
 
 function toIso(now: () => Date): string {
@@ -801,9 +800,9 @@ export function createInMemoryModuleCommercialRuntime(
           )
         );
       },
-      async redeemCode(code, _userId) {
-        const entitlement = options.redeemCodes?.[code];
-        return entitlement ? { ok: true, entitlement } : { ok: false };
+      async redeemCode(code, userId) {
+        const result = await redeemCodes.redeem({ code, subject: userSubject(userId) });
+        return { ok: result.ok, entitlement: result.entitlement };
       },
     };
 
@@ -1000,9 +999,8 @@ export function createInMemoryModuleCommercialRuntime(
       async redeem(input) {
         const codeHash = redeemCodeRawToHash.get(input.code) ?? hashRedeemCode(input.code);
         const record = redeemCodeRecords.get(codeHash);
-        const entitlement = record?.entitlement ?? options.redeemCodes?.[input.code];
         if (
-          (!record && !entitlement) ||
+          !record ||
           record?.status === 'frozen' ||
           record?.status === 'revoked' ||
           (record?.expiresAt && new Date(record.expiresAt).getTime() <= now().getTime())
@@ -1010,8 +1008,8 @@ export function createInMemoryModuleCommercialRuntime(
           return { ok: false };
         }
         const subject = subjectFromInput(input);
-        const redemptionCodeId = record?.id ?? `legacy:${codeHash}`;
-        if (record && !redeemBindAllows(record.metadata.bind, { subject, email: input.email })) {
+        const redemptionCodeId = record.id;
+        if (!redeemBindAllows(record.metadata.bind, { subject, email: input.email })) {
           return { ok: false };
         }
         const existing = redemptions.find(
@@ -1030,13 +1028,13 @@ export function createInMemoryModuleCommercialRuntime(
         const usedCount = redemptions.filter(
           (redemption) => redemption.codeId === redemptionCodeId
         ).length;
-        if (record && usedCount >= record.maxRedemptions) {
+        if (usedCount >= record.maxRedemptions) {
           return { ok: false };
         }
-        if (entitlement) {
+        if (record.entitlement) {
           await entitlements.grant({
             subject,
-            entitlement,
+            entitlement: record.entitlement,
             source: 'redeem',
             sourceId: codeHash,
             idempotencyKey: input.idempotencyKey,
@@ -1057,14 +1055,14 @@ export function createInMemoryModuleCommercialRuntime(
           id: `redemption_${randomUUID()}`,
           codeId: redemptionCodeId,
           subject,
-          entitlement,
+          entitlement: record.entitlement,
           credits: record?.credits,
           idempotencyKey: input.idempotencyKey,
           metadata: input.metadata ?? {},
           createdAt: toIso(now),
         };
         redemptions.push(redemption);
-        return { ok: true, entitlement, credits: record?.credits, redemption };
+        return { ok: true, entitlement: record.entitlement, credits: record.credits, redemption };
       },
       async freeze(input) {
         let frozen = 0;

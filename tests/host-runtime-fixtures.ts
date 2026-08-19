@@ -1,8 +1,12 @@
 import {
   action,
+  api,
   defineApi,
   defineModule,
+  page,
   Permission,
+  schema,
+  stringField,
   type ModuleContext,
 } from '@ploykit/module-sdk';
 import type { ModuleMapArtifact } from '../src/lib/module-runtime';
@@ -11,6 +15,13 @@ export interface TestMessage {
   id: string;
   message: string;
 }
+
+const payloadSchema = schema({
+  name: 'HostRuntimePayload',
+  fields: {
+    value: stringField(),
+  },
+});
 
 export const testModule = defineModule({
   id: 'host-test',
@@ -32,136 +43,168 @@ export const testModule = defineModule({
       },
     },
   },
-  routes: {
-    site: [
-      {
-        path: '/tools/host-test',
-        component: './pages/PublicToolPage',
-        metadata: './loaders/public-tool-metadata',
-        auth: 'public',
-        cache: {
-          strategy: 'public',
-          revalidateSeconds: 300,
-          tags: ['host-test'],
+  assets: {},
+  pages: [
+    page({
+      id: 'host-test.public-tool',
+      area: 'site',
+      path: '/tools/host-test',
+      frame: 'site',
+      component: './pages/PublicToolPage',
+      metadata: './loaders/public-tool-metadata',
+      auth: 'public',
+      cache: {
+        strategy: 'public',
+        revalidateSeconds: 300,
+        tags: ['host-test'],
+      },
+      publicAliases: ['/public-host-test'],
+    }),
+    page({
+      id: 'host-test.dashboard',
+      area: 'dashboard',
+      path: '/dashboard/:slug',
+      frame: 'workspace',
+      component: './pages/DashboardPage',
+      loader: './loaders/dashboard-state',
+      metadata: './loaders/dashboard-metadata',
+      auth: 'auth',
+    }),
+    page({
+      id: 'host-test.workspace',
+      area: 'dashboard',
+      path: '/workspace',
+      frame: 'workspace',
+      component: './pages/WorkspaceDashboardPage',
+      loader: './loaders/workspace-state',
+      metadata: './loaders/workspace-metadata',
+      auth: 'auth',
+      aliases: ['/workspace-dashboard', '/dashboard/special'],
+    }),
+    page({
+      id: 'host-test.sections',
+      area: 'dashboard',
+      path: '/sections/[section]',
+      frame: 'workspace',
+      component: './pages/DashboardPage',
+      loader: './loaders/section-default-state',
+      loaderByParam: {
+        section: {
+          agents: './loaders/section-agents-state',
+          traces: './loaders/section-traces-state',
         },
-        publicAliases: ['/public-host-test'],
       },
-    ],
-    dashboard: [
-      {
-        path: '/dashboard/:slug',
-        component: './pages/DashboardPage',
-        loader: './loaders/dashboard-state',
-        metadata: './loaders/dashboard-metadata',
-        auth: 'auth',
+      metadata: './loaders/section-default-metadata',
+      metadataByParam: {
+        section: {
+          agents: './loaders/section-agents-metadata',
+          traces: './loaders/section-default-metadata',
+        },
       },
-      {
-        path: '/workspace',
-        component: './pages/WorkspaceDashboardPage',
-        loader: './loaders/workspace-state',
-        metadata: './loaders/workspace-metadata',
-        auth: 'auth',
-        aliases: ['/workspace-dashboard', '/dashboard/special'],
+      cache: {
+        strategy: 'private',
+        revalidateSeconds: 30,
       },
-      {
-        path: '/sections/[section]',
-        component: './pages/DashboardPage',
-        loader: './loaders/section-default-state',
-        loaderByParam: {
-          section: {
-            agents: './loaders/section-agents-state',
-            traces: './loaders/section-traces-state',
+      cacheByParam: {
+        section: {
+          agents: {
+            strategy: 'private',
+            revalidateSeconds: 30,
+          },
+          traces: {
+            strategy: 'private',
+            revalidateSeconds: 5,
+            tags: ['host-test-traces'],
           },
         },
-        metadata: './loaders/section-default-metadata',
-        metadataByParam: {
-          section: {
-            agents: './loaders/section-agents-metadata',
-            traces: './loaders/section-default-metadata',
-          },
-        },
-        cache: {
-          strategy: 'private',
-          revalidateSeconds: 30,
-        },
-        cacheByParam: {
-          section: {
-            agents: {
-              strategy: 'private',
-              revalidateSeconds: 30,
-            },
-            traces: {
-              strategy: 'private',
-              revalidateSeconds: 5,
-              tags: ['host-test-traces'],
-            },
-          },
-        },
-        auth: 'auth',
       },
-      {
-        path: '/module-loader-error',
-        component: './pages/ExplodingLoaderPage',
-        loader: './loaders/exploding-loader-state',
-        metadata: './loaders/module-chrome-metadata',
-        auth: 'auth',
+      auth: 'auth',
+    }),
+    page({
+      id: 'host-test.loader-error',
+      area: 'dashboard',
+      path: '/module-loader-error',
+      frame: 'none',
+      component: './pages/ExplodingLoaderPage',
+      loader: './loaders/exploding-loader-state',
+      metadata: './loaders/module-chrome-metadata',
+      auth: 'auth',
+    }),
+    page({
+      id: 'host-test.metadata-error',
+      area: 'dashboard',
+      path: '/module-metadata-error',
+      frame: 'workspace',
+      component: './pages/ExplodingMetadataPage',
+      metadata: './loaders/exploding-metadata',
+      auth: 'auth',
+    }),
+  ],
+  apis: [
+    api({
+      id: 'host-test.public-limited',
+      path: '/public-limited',
+      handler: './api/public-limited',
+      auth: 'public',
+      methods: ['POST'],
+      input: payloadSchema,
+      output: payloadSchema,
+      anonymousPolicy: {
+        rateLimit: { bucket: ['ip', 'route'], limit: 1, window: '1m' },
+        maxUploadBytes: 8,
+        captcha: 'never',
+        allowHighCostActions: false,
       },
-      {
-        path: '/module-metadata-error',
-        component: './pages/ExplodingMetadataPage',
-        metadata: './loaders/exploding-metadata',
-        auth: 'auth',
+    }),
+    api({
+      id: 'host-test.public-high-cost',
+      path: '/public-high-cost',
+      handler: './api/public-high-cost',
+      auth: 'public',
+      methods: ['GET'],
+      input: payloadSchema,
+      output: payloadSchema,
+      commercial: { entitlements: ['host-test.pro'] },
+      anonymousPolicy: {
+        rateLimit: { bucket: 'route', limit: 10, window: '1m' },
+        allowHighCostActions: false,
       },
-    ],
-    api: [
-      {
-        path: '/public-limited',
-        handler: './api/public-limited',
-        auth: 'public',
-        methods: ['POST'],
-        anonymousPolicy: {
-          rateLimit: { bucket: ['ip', 'route'], limit: 1, window: '1m' },
-          maxUploadBytes: 8,
-          captcha: 'never',
-          allowHighCostActions: false,
-        },
-      },
-      {
-        path: '/public-high-cost',
-        handler: './api/public-high-cost',
-        auth: 'public',
-        methods: ['GET'],
-        commercial: { entitlements: ['host-test.pro'] },
-        anonymousPolicy: {
-          rateLimit: { bucket: 'route', limit: 10, window: '1m' },
-          allowHighCostActions: false,
-        },
-      },
-      {
-        path: '/state',
-        handler: './api/state',
-        auth: 'auth',
-        methods: ['GET'],
-      },
-      {
-        path: '/machine-state',
-        handler: './api/machine-state',
-        auth: 'auth',
-        machineAuth: 'apiKey',
-        methods: ['GET'],
-      },
-      {
-        path: '/hybrid-state',
-        handler: './api/hybrid-state',
-        auth: 'auth',
-        machineAuth: 'user-or-apiKey',
-        methods: ['GET'],
-      },
-    ],
-  },
+    }),
+    api({
+      id: 'host-test.state',
+      path: '/state',
+      handler: './api/state',
+      auth: 'auth',
+      methods: ['GET'],
+      input: payloadSchema,
+      output: payloadSchema,
+    }),
+    api({
+      id: 'host-test.machine-state',
+      path: '/machine-state',
+      handler: './api/machine-state',
+      auth: 'auth',
+      machineAuth: 'apiKey',
+      methods: ['GET'],
+      input: payloadSchema,
+      output: payloadSchema,
+    }),
+    api({
+      id: 'host-test.hybrid-state',
+      path: '/hybrid-state',
+      handler: './api/hybrid-state',
+      auth: 'auth',
+      machineAuth: 'user-or-apiKey',
+      methods: ['GET'],
+      input: payloadSchema,
+      output: payloadSchema,
+    }),
+  ],
   actions: {
     writeMessage: {
       handler: './actions/write-message',
+      input: payloadSchema,
+      output: payloadSchema,
       auth: 'auth',
     },
   },

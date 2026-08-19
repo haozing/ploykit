@@ -90,7 +90,7 @@ function moduleNavigationLabel(
     return translateModuleMessage(host.runtime, item.moduleId, language, item.item.labelKey);
   }
 
-  return host.getContract(item.moduleId)?.name ?? item.moduleId;
+  return item.item.fallbackLabel || host.getContract(item.moduleId)?.name || item.moduleId;
 }
 
 function moduleNavigationGroupLabel(
@@ -183,39 +183,19 @@ function readMetadataString(metadata: unknown, key: 'title' | 'description'): st
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
-function readDashboardShellChrome(
-  metadata: unknown
-): 'none' | 'site' | 'workspace' | 'admin' | undefined {
-  if (!metadata || typeof metadata !== 'object') {
-    return undefined;
+function dashboardResultUsesModuleFrame(
+  result: DashboardChromeRouteResult | null | undefined
+): boolean {
+  if (!result) {
+    return false;
   }
 
-  const shell = (metadata as Record<string, unknown>).shell;
-  if (!shell || typeof shell !== 'object') {
-    return undefined;
-  }
-
-  const chrome = (shell as Record<string, unknown>).chrome;
-  return chrome === 'none' || chrome === 'site' || chrome === 'workspace' || chrome === 'admin'
-    ? chrome
-    : undefined;
+  return result.ok && result.page.route.frame === 'none';
 }
 
 type DashboardChromeRouteResult =
   | ResolveModulePageRouteResult
   | ResolveModulePageRouteMetadataResult;
-
-function dashboardResultShellChrome(
-  result: DashboardChromeRouteResult | null | undefined
-): 'none' | 'site' | 'workspace' | 'admin' | undefined {
-  if (!result) {
-    return undefined;
-  }
-
-  return result.ok
-    ? readDashboardShellChrome(result.page.metadata)
-    : readDashboardShellChrome(result.routeContext?.metadata);
-}
 
 function dashboardNavigationLabel(
   host: ModuleHost,
@@ -799,7 +779,7 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
       const nextModuleId = dashboardModuleId(modulePageResult);
       return {
         moduleChrome: nextModuleChrome,
-        usesModuleChrome: dashboardResultShellChrome(modulePageResult) === 'none',
+        usesModuleChrome: dashboardResultUsesModuleFrame(modulePageResult),
         moduleSearchHref: dashboardModuleSearchHref(host, nextModuleId),
         activePath: dashboardActivePath(modulePageResult, pathname),
         moduleId: nextModuleId,

@@ -164,6 +164,8 @@ create table if not exists module_catalog_states (
   bundle_id text,
   required boolean not null default false,
   scope_profile text,
+  trust text not null default 'product',
+  allowed_provides jsonb not null default '[]'::jsonb,
   diagnostics jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   primary key (product_id, module_id)

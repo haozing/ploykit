@@ -1,9 +1,9 @@
 import { PermissionRegistry } from '@ploykit/module-sdk';
 import type {
   ModuleActionDefinition,
-  ModuleApiRoute,
+  ModuleApiDefinitionContract,
   ModuleCommercialRequirement,
-  ModulePageRoute,
+  ModulePageDefinition,
 } from '@ploykit/module-sdk';
 import type { ModuleRuntimeCapabilitySummary, RuntimeModuleDefinition } from './types';
 
@@ -12,7 +12,7 @@ function keys(value: Record<string, unknown> | undefined): string[] {
 }
 
 function routeCommercialRequirements(
-  routes: readonly ((ModulePageRoute | ModuleApiRoute) & {
+  routes: readonly ((ModulePageDefinition | ModuleApiDefinitionContract) & {
     commercial?: ModuleCommercialRequirement;
   })[]
 ): ModuleCommercialRequirement[] {
@@ -40,11 +40,11 @@ function hasCredits(requirements: readonly ModuleCommercialRequirement[]): boole
 export function createModuleCapabilitySummary(
   definition: RuntimeModuleDefinition
 ): ModuleRuntimeCapabilitySummary {
-  const routes = definition.routes ?? {};
-  const siteRoutes = routes.site ?? [];
-  const dashboardRoutes = routes.dashboard ?? [];
-  const adminRoutes = routes.admin ?? [];
-  const apiRoutes = routes.api ?? [];
+  const pages = definition.pages ?? [];
+  const siteRoutes = pages.filter((page) => page.area === 'site');
+  const dashboardRoutes = pages.filter((page) => page.area === 'dashboard');
+  const adminRoutes = pages.filter((page) => page.area === 'admin');
+  const apiRoutes = definition.apis ?? [];
   const actions = definition.actions ?? {};
   const routeCommercial = routeCommercialRequirements([
     ...siteRoutes,
@@ -60,11 +60,28 @@ export function createModuleCapabilitySummary(
       dashboard: dashboardRoutes.length,
       admin: adminRoutes.length,
       api: apiRoutes.length,
-      publicAliases: siteRoutes.reduce((count, route) => count + (route.publicAliases?.length ?? 0), 0),
+      publicAliases: siteRoutes.reduce(
+        (count, route) => count + (route.publicAliases?.length ?? 0),
+        0
+      ),
     },
     data: {
-      tables: keys(definition.data?.tables),
-      documents: keys(definition.data?.documents),
+      tables: [
+        ...new Set([
+          ...keys(definition.data?.tables),
+          ...Object.values(definition.resources ?? {})
+            .map((resource) => resource?.storage?.table)
+            .filter((name): name is string => typeof name === 'string'),
+        ]),
+      ].sort(),
+      documents: [
+        ...new Set([
+          ...keys(definition.data?.documents),
+          ...Object.values(definition.resources ?? {})
+            .map((resource) => resource?.storage?.document)
+            .filter((name): name is string => typeof name === 'string'),
+        ]),
+      ].sort(),
       views: keys(definition.data?.views),
       grants: keys(definition.data?.grants),
       checks: keys(definition.data?.checks),

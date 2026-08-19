@@ -68,14 +68,15 @@ test('X9 auth session cookies include kid and verify rotated key refs', () => {
     delete process.env.PLOYKIT_AUTH_SECRET_REF;
     delete process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS;
     const cookie = createHostSessionCookie('demo-admin');
-    assert.match(decodeURIComponent(cookie), /^ploykit_session=v3\.current\./);
+    assert.match(decodeURIComponent(cookie), /^ploykit_session=current\.current\./);
     assert.equal(readHostSessionCookie(cookie)?.userId, 'demo-admin');
+    assert.equal(readHostSessionCookie(cookie.replace('current.current.', 'v3.current.')), undefined);
 
     process.env.PLOYKIT_AUTH_TEST_SECRET_NEXT = 'test-next-secret';
     process.env.PLOYKIT_AUTH_KEY_REFS = 'next=env:PLOYKIT_AUTH_TEST_SECRET_NEXT';
     process.env.PLOYKIT_AUTH_VERIFY_SECRET_REFS = 'current=env:PLOYKIT_AUTH_TEST_SECRET';
     assert.equal(readHostSessionCookie(cookie)?.userId, 'demo-admin');
-    assert.match(decodeURIComponent(createHostSessionCookie('demo-admin')), /^ploykit_session=v3\.next\./);
+    assert.match(decodeURIComponent(createHostSessionCookie('demo-admin')), /^ploykit_session=current\.next\./);
   } finally {
     restoreEnv('NODE_ENV', previousNodeEnv);
     restoreEnv('PLOYKIT_AUTH_TEST_SECRET', previousSecret);

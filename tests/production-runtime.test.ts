@@ -708,21 +708,35 @@ test('commercial runtime supports idempotent usage, metering, credits, and comme
   assert.equal(commercial.listUsage().length, 1);
 });
 
-test('commercial runtime keeps legacy redeem code redemptions isolated by code', async () => {
-  const commercial = createInMemoryModuleCommercialRuntime({
-    redeemCodes: {
-      CODE_A: 'feature.a',
-      CODE_B: 'feature.b',
-    },
-  });
+test('commercial runtime rejects undeclared redeem codes and isolates current records by code', async () => {
+  const commercial = createInMemoryModuleCommercialRuntime();
   const moduleCommercial = commercial.forModule('prod-test');
 
+  assert.deepEqual(
+    await moduleCommercial.redeemCodes.redeem({
+      code: 'CODE_A',
+      subject: { type: 'user', id: 'user_1' },
+    }),
+    { ok: false }
+  );
+
+  const batchA = await moduleCommercial.redeemCodes.createBatch({
+    count: 1,
+    entitlement: 'feature.a',
+    maxRedemptions: 1,
+  });
+  const batchB = await moduleCommercial.redeemCodes.createBatch({
+    count: 1,
+    entitlement: 'feature.b',
+    maxRedemptions: 1,
+  });
+
   const first = await moduleCommercial.redeemCodes.redeem({
-    code: 'CODE_A',
+    code: batchA.codes[0]?.metadata.rawCode as string,
     subject: { type: 'user', id: 'user_1' },
   });
   const second = await moduleCommercial.redeemCodes.redeem({
-    code: 'CODE_B',
+    code: batchB.codes[0]?.metadata.rawCode as string,
     subject: { type: 'user', id: 'user_1' },
   });
 

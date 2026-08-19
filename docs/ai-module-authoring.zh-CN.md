@@ -84,7 +84,7 @@ CRUD 模块提示词：
 ```text
 给 <module-id> 增加一个白牌或页面替换能力：
 1. 在 module.ts 声明 presentation.whiteLabel、presentation.replaces、themeScope 和 locale 资源。
-2. 用 resources.locales 和 navigation.labelKey 承载可见文案。
+2. 用 assets.locales 和 navigation.labelKey 承载可见文案。
 3. 页面 presentation loader 返回 shell、SEO、cache、i18n 和 theme 元数据。
 4. 运行 presentation:check、i18n:check、theme:check、seo:check 和 white-label:smoke。
 ```

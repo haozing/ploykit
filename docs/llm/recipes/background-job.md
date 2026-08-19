@@ -4,28 +4,35 @@ Intent: move long work into declared jobs with observable runs and artifacts.
 
 ## Use
 
-- `module.ts`: `jobs` and any action/API route that requests work.
-- Runtime: enqueue through host job APIs and write artifacts/notifications from the job.
-- Permissions: `Permission.JobsEnqueue`, `Permission.JobsRegister`, `Permission.ArtifactsWrite`, `Permission.NotificationsSend`, `Permission.UsageWrite`.
-- Reference: `modules/capability-demo/module.ts` and `modules/capability-demo/jobs/generate-report.ts`.
+- Declare `jobs` and the action or API that enqueues work.
+- Enqueue through `ctx.jobs.enqueue`.
+- Write artifacts, usage, and notifications from the job when needed.
+- Permissions: `Permission.JobsEnqueue`, `Permission.JobsRegister`, `Permission.ArtifactsWrite`, `Permission.NotificationsSend`, and `Permission.UsageWrite` as needed.
 
 ## Contract Shape
 
 ```ts
-permissions: [
-  Permission.JobsEnqueue,
-  Permission.JobsRegister,
-  Permission.ArtifactsWrite,
-  Permission.NotificationsSend,
-  Permission.UsageWrite,
-],
-jobs: {
-  generate_report: {
-    handler: './jobs/generate-report',
-    timeoutMs: 15000,
-    retries: 2,
+import { defineModule, Permission } from '@ploykit/module-sdk';
+
+export default defineModule({
+  id: 'reports',
+  name: 'Reports',
+  version: '0.1.0',
+  permissions: [
+    Permission.JobsEnqueue,
+    Permission.JobsRegister,
+    Permission.ArtifactsWrite,
+    Permission.NotificationsSend,
+    Permission.UsageWrite,
+  ],
+  jobs: {
+    generate_report: {
+      handler: './jobs/generate-report',
+      timeoutMs: 15000,
+      retries: 2,
+    },
   },
-},
+});
 ```
 
 ## Job Shape
@@ -60,4 +67,4 @@ npm run module:test -- <id> --summary
 
 - Do not do slow work in loaders or page components.
 - Do not create hidden local queues.
-- Do not omit run/artifact evidence for long work.
+- Do not omit run or artifact evidence for long work.

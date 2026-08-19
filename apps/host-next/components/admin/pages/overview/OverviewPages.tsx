@@ -19,7 +19,8 @@ import {
 import { localizedPath, type SupportedLanguage } from '@host/lib/i18n';
 import { adminInlineText } from '@host/lib/admin-inline-i18n';
 import { getAdminOverviewCopy } from '@host/lib/admin-copy';
-import type { AdminOperationsSnapshot, RuntimeStoreHostUser } from '@/lib/module-runtime';
+import type { AdminOperationsSnapshot } from '@host/lib/admin/operations-center';
+import type { RuntimeStoreHostUser } from '@/lib/module-runtime';
 import type { AdminProviderStatusView } from '@host/lib/admin-provider-status';
 import type { AdminWorkerStatusView } from '@host/lib/admin-worker-status';
 import type { HostRuntimeStoreStatus } from '@host/lib/runtime-store';

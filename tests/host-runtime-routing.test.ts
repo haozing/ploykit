@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { defineModule, Permission, type ModuleContext } from '@ploykit/module-sdk';
+import { defineModule, page, Permission, type ModuleContext } from '@ploykit/module-sdk';
 import { createModuleHost, type ModuleMapArtifact } from '../src/lib/module-runtime';
 import {
   createDashboardModuleRenderPropsForTest,
@@ -86,17 +86,19 @@ test('createModuleHost resolves page route metadata without running page loader'
             id: 'metadata-only-test',
             name: 'Metadata Only Test',
             version: '0.1.0',
-            routes: {
-              dashboard: [
-                {
-                  path: '/metadata-only/:slug',
-                  component: './pages/MetadataPage',
-                  loader: './loaders/page-state',
-                  metadata: './loaders/page-metadata',
-                  auth: 'auth',
-                },
-              ],
-            },
+            assets: {},
+            pages: [
+              page({
+                id: 'metadata-only-test.page',
+                area: 'dashboard',
+                path: '/metadata-only/:slug',
+                frame: 'workspace',
+                component: './pages/MetadataPage',
+                loader: './loaders/page-state',
+                metadata: './loaders/page-metadata',
+                auth: 'auth',
+              }),
+            ],
           }),
         }),
         pages: {

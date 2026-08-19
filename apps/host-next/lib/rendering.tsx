@@ -1,4 +1,4 @@
-import { createElement, type ElementType, type ReactNode } from 'react';
+import { createElement, isValidElement, type ElementType, type ReactNode } from 'react';
 import { readModuleDefaultExport } from '@/lib/module-runtime/adapters/module-export';
 import type { ModuleHost } from '@/lib/module-runtime/host/create-module-host';
 import type { ModuleHostSession } from '@/lib/module-runtime/host/session';
@@ -6,6 +6,10 @@ import { renderModuleSurface } from '@/lib/module-runtime/ui/surface-renderer';
 
 export function callModuleComponent(component: unknown, props?: unknown): ReactNode {
   const exported = readModuleDefaultExport(component);
+  if (isValidElement(exported)) {
+    return exported;
+  }
+
   if (!isReactComponentType(exported)) {
     throw new TypeError('Module UI entry must export a valid React component type.');
   }

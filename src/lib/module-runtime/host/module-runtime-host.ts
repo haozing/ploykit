@@ -1,4 +1,8 @@
 import type { ModuleDataApi, ModuleUser } from '@ploykit/module-sdk';
+import {
+  createModuleAdminResourceRegistry,
+  type ModuleAdminResourceRegistry,
+} from '../admin/admin-resources';
 import { createModuleActionRegistry, type ModuleActionRegistry } from '../actions';
 import {
   filterModuleContractsByCatalog,
@@ -23,6 +27,7 @@ export interface ModuleRuntimeHost {
   routes: readonly ModuleRuntimeRouteEntry[];
   actions: ModuleActionRegistry;
   surfaces: ModuleSurfaceRegistry;
+  adminResources: ModuleAdminResourceRegistry;
   createDataApi?: ModuleRuntimeDataApiFactory;
   getMapEntry(moduleId: string): ModuleRuntimeMapEntry | null;
   getContract(moduleId: string): ModuleRuntimeContract | null;
@@ -64,6 +69,10 @@ export async function createModuleRuntimeHost(
     routes: createModuleRouteManifest(contracts),
     actions: createModuleActionRegistry(contracts),
     surfaces: createModuleSurfaceRegistry(contracts),
+    adminResources: createModuleAdminResourceRegistry({
+      contracts,
+      catalog: options.catalog,
+    }),
     createDataApi: options.createDataApi,
     getMapEntry(moduleId) {
       return runtimeArtifact.modules[moduleId] ?? null;
