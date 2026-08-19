@@ -92,27 +92,27 @@ npm run data:diff
 npm run data:verify
 npm run runtime:stores:verify
 npm run runtime:check
-npm run release:rc-gate
+npm run release:maintainer-gate
 npm run host:build
 npm run host:start
 ```
 
 Use targeted tests first, then broaden:
 
-`release:rc-gate`, `host:browser-matrix`, and
+`release:maintainer-gate`, `host:browser-matrix`, and
 `host:accessibility-smoke` are host/product release checks. For module-only
 changes, do not add module-specific routes or required checks to those global
 gates; use module-local tests and module README E2E instructions instead.
 
 ```bash
-npm run test:host-runtime
+npm run test:runtime-checks
 npm run test:web-shell
 npm run host:browser-matrix -- --required
 npm run host:theme-matrix -- --required
 npm run host:accessibility-smoke -- --required
 npm run test:data-runtime
 npm run test:runtime-stores
-npm run test:ai-provider
+npm run test:ai-provider-runtime
 npm run test:rag-files
 npm run test:release-candidate
 ```

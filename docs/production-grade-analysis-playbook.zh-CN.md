@@ -136,7 +136,7 @@ P3 可穿插处理，但不应挤占 P0/P1。
 | --- | --- | --- | --- |
 | `apps/host-next` | Next.js 宿主、页面、API、管理后台、认证 | route 安全、UI 大文件、配置默认值 | `test:web-shell`、`host:build` |
 | `src/module-sdk` | 模块作者 API、类型、validator、权限 | 契约漂移、类型与运行时不一致 | `test:module-contract`、`module:doctor` |
-| `src/lib/module-runtime` | 模块加载、上下文、权限、数据、路由 | capability guard、store 差异、访问策略 | `test:host-runtime`、`test:runtime-stores` |
+| `src/lib/module-runtime` | 模块加载、上下文、权限、数据、路由 | capability guard、store 差异、访问策略 | `test:runtime-checks`、`test:runtime-stores` |
 | `src/lib/module-capabilities` | 文件、商业、AI、RAG、事件、任务、Webhook | 成本、安全、幂等、重试、外部集成 | capability 专项 smoke |
 | `modules` | 默认参考模块 | demo 与生产边界不清、示例误导 | `module:test -- all` |
 | `templates/modules` | 新模块模板 | 生成旧模式、缺少安全声明 | `module:doctor`、模板 smoke |
@@ -303,7 +303,7 @@ rg -n "modules/(hello|shop-demo|cms-demo|capability-demo|ai-rag-demo|white-label
 ```bash
 npm run test:security-runtime
 npm run test:security-hardening
-npm run test:production-runtime
+npm run runtime:check
 npm run runtime:check
 ```
 
@@ -955,7 +955,7 @@ npm run test:developer-experience
 | --- | --- |
 | SDK 类型/validator | `test:module-contract`、`module:doctor` |
 | capability guard | `test:security-runtime`、deny/allow case |
-| module runtime adapter | `test:host-runtime`、对应 API/action test |
+| module runtime adapter | `test:runtime-checks`、对应 API/action test |
 | store | `test:runtime-stores`、Postgres smoke |
 | commercial | `test:commercial-ledger`、billing smoke |
 | UI 页面 | `test:web-shell`、browser/accessibility smoke |

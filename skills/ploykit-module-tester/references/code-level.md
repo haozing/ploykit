@@ -74,14 +74,14 @@ For shared runtime changes:
 
 ```bash
 npm run typecheck
-npm run test:host-runtime
+npm run test:runtime-checks
 npm run test:web-shell
 ```
 
 Before RC-level claims:
 
 ```bash
-npm run release:rc-gate
+npm run release:maintainer-gate
 ```
 
 RC-level claims are for host/product release readiness. Do not add

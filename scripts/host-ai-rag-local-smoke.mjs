@@ -94,7 +94,7 @@ function checkFromJsonSmoke(id, result) {
   };
 }
 
-const aiProvider = npmRun('test:ai-provider');
+const aiProvider = npmRun('test:ai-provider-runtime');
 const ragFiles = npmRun('test:rag-files');
 const ragProvider = npmRun('host:rag-provider-smoke');
 const checks = [

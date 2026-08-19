@@ -67,7 +67,7 @@ export function DevConsoleEnvironmentPanel({
               'Production target',
               modulesWithDiagnostics.length > 0 ? 'blocked' : 'ready',
               `${modulesWithDiagnostics.length} modules have diagnostics before ${view.environment.targetEnvironment}`,
-              'npm run release:rc-gate',
+              'npm run release:maintainer-gate',
             ],
           ]}
           minWidthClass="min-w-[860px]"

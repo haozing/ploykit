@@ -266,7 +266,6 @@ npm run docs:encoding-check
 npm run test:module-map
 npm run test:developer-experience
 npm run test:catalog-runtime
-npm run test:admin-operations
 ```
 
 ### Phase 7：最终重扫和全量回归

@@ -33,7 +33,7 @@
 ## 验证入口
 
 - `npm run test:security-runtime`
-- `npm run test:production-runtime`
+- `npm run runtime:check`
 - `npm run module:doctor -- <module-id>`
 - `npm run module:test -- <module-id>`
 - `npm run module:service-contract -- <module-id> --openapi ../service/openapi.yaml`

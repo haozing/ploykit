@@ -231,7 +231,7 @@ npm run i18n:check
 npm run theme:check
 npm run seo:check
 npm run white-label:smoke
-npm run test:host-runtime
+npm run test:runtime-checks
 npm run test:web-shell
 npm run runtime:check
 ```

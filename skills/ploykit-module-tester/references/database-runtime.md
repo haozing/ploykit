@@ -44,10 +44,9 @@ operations, or product scope:
 
 ```bash
 npm run test:runtime-stores
-npm run test:admin-operations
 npm run test:commercial-ledger
 npm run test:files-storage
-npm run test:background-reliability
+npm run test:runtime-checks
 ```
 
 If a seed or test needs a deterministic run record, `createRun` now accepts a

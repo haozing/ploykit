@@ -44,11 +44,10 @@
 - `npm run test:runtime-stores` ✅（Postgres 子测试因本机 `127.0.0.1:55432` 不可达而 skip）
 - `npm run test:commercial-postgres` ✅（Postgres 不可达，测试按设计 skip）
 - `npm run test:ai-provider-runtime` ✅
-- `npm run test:production-runtime` ✅
+- `npm run runtime:check` ✅
 - `npm run test:security-runtime` ✅
 - `npm run test:module-contract` ✅
-- `npx tsx --test tests/api-key-store.test.ts tests/rate-limit.test.ts tests/host-runtime.test.ts tests/module-contract.test.ts` ✅
-- `npm run test:background-reliability` ✅
+- `npm run test:runtime-checks` ✅
 - `npx tsx --test tests/web-shell-auth.test.ts tests/web-shell-security.test.ts` ✅
 - `npx tsx --test tests/web-shell-commercial.test.ts tests/web-shell.test.ts` ✅
 - `npm run docs:encoding-check` ✅

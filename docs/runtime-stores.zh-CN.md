@@ -83,13 +83,11 @@ runtime store migration 采用 forward-only 策略：已经发布并进入
 
 ```bash
 npm run test:runtime-stores
-npm run test:admin-operations
-npm run test:api-key-store
 npm run test:ai-provider-runtime
 npm run test:commercial-ledger
 npm run test:commercial-postgres
 npm run test:files-storage
-npm run test:background-reliability
+npm run test:runtime-checks
 npm run runtime:stores:verify
 npm run host:backup-restore-smoke -- --required
 npm run host:postgres-physical-restore-smoke -- --required

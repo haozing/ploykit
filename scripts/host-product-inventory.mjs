@@ -372,7 +372,7 @@ function inventoryProviders() {
         'scripts/host-ai-rag-local-smoke.mjs',
       ],
       requiredCommand:
-        'npm run host:ai-rag-local-smoke (local provider) or npm run test:ai-provider && npm run test:rag-files',
+        'npm run host:ai-rag-local-smoke (local provider) or npm run test:ai-provider-runtime && npm run test:rag-files',
     },
   ];
 

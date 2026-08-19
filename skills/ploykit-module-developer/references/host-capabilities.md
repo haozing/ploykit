@@ -64,7 +64,7 @@ For a host capability fix, prefer this order:
 
 ```bash
 npm run typecheck
-npm run test:host-runtime
+npm run test:runtime-checks
 npm run test:web-shell
 npm run runtime:check
 ```

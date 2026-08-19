@@ -820,7 +820,7 @@ reviewer 反馈了 7 条关键问题，全部采纳并写入本规约：
 | 3 | 全局 icon key 跨模块易冲突，A/B 模块都叫 `workerHat` 语义不同 | 模块本地 key 写法不变，generator 自动命名空间化为 `<moduleId>:<localKey>`；同 lucide 名内部去重，不暴露命名竞争 | §4.2、§5.2、§16 |
 | 4 | bundle 目标与"声明即打包"冲突，unused warn 但 generator 仍写入 `MODULE_ICONS` | 第一版严格按"navigation 实际引用"打包，未引用声明仅 doctor warn 不进 bundle | §3.1、§5.2、§8.1 |
 | 5 | SVG 清洗规则缺口：`url(...)` 没限制 scheme、`<use>` 的 `href` 没限制、路径校验仅 `startsWith` 不识别 symlink/Windows、用正则清洗有边角漏洞 | 改用 SVGO + XML AST 双层校验，明确允许 `url(#id)` 形式，`href`/`xlink:href` 仅允许 `#local-id`，路径用 `realpath + path.relative` 判断 | §7.1、§7.2 |
-| 6 | dev/build 生命周期未写死，承诺"npm run dev 自动 watch"过于乐观 | `predev`/`prebuild`/`pretypecheck` 显式 hook 串联；CI `modules:check` + `git diff` 守卫；不承诺 watch；Sidebar 加 fallback 防止 stale registry 时空白 | §5.4、§5.6、§9 |
+| 6 | dev/build 生命周期未写死，承诺"开发命令自动 watch"过于乐观 | `module:dev`/`host:dev` 只做显式检查和启动提示；CI `modules:check` + `git diff` 守卫；不承诺 watch；Sidebar 加 fallback 防止 stale registry 时空白 | §5.4、§5.6、§9 |
 | 7 | `MobileNav` 当前不渲染 item icon，原方案"同样改造"是错的 | 第一版仅同步 type alias，不引入 `MODULE_ICONS` 查表；MobileNav 行为不变；移动端 icon 渲染列入后续扩展 | §3.2、§5.5、§14 |
 
 ### 17.2 决策落地范围
