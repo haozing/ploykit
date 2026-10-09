@@ -70,14 +70,17 @@ func TestDevHandlerRebuildOnChange(t *testing.T) {
 	}
 
 	bumpEntry(t, dh)
-	deadline := time.Now().Add(5 * time.Second)
+	// 30s instead of a snappier 5s: the rebuild runs a real esbuild pass and
+	// CI runners (2 shared vCPUs, full suite at -p 2) starve it for seconds —
+	// 5s failed every CI run while passing instantly on dev machines.
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		got := body(t, get(t, dh, "/"))
 		if strings.Contains(got, "build-2-/") {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("源码变更后 5s 内未重建（响应=%q, builds=%d）", got, builds.Load())
+			t.Fatalf("源码变更后 30s 内未重建（响应=%q, builds=%d）", got, builds.Load())
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
