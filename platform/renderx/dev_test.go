@@ -48,8 +48,11 @@ func bumpEntry(t *testing.T, dh *DevHandler) {
 	if !filepath.IsAbs(entry) && dh.buildOpts.AbsWorkingDir != "" {
 		entry = filepath.Join(dh.buildOpts.AbsWorkingDir, entry)
 	}
-	next := time.Now().Add(2 * time.Second)
-	if err := os.Chtimes(entry, next, next); err != nil {
+	// Rewrite the file instead of os.Chtimes: on CI runners the utimes-only
+	// mtime bump proved invisible to the polling watcher (rebuild never fired
+	// in 30s, builds stayed 1, no rebuild warnings), while a real content
+	// edit — what the watcher actually exists to serve — is unambiguous.
+	if err := os.WriteFile(entry, []byte("export default {} // bump\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -80,7 +83,9 @@ func TestDevHandlerRebuildOnChange(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("源码变更后 30s 内未重建（响应=%q, builds=%d）", got, builds.Load())
+			entry, _ := os.Stat(filepath.Join(dh.buildOpts.AbsWorkingDir, filepath.Base(dh.buildOpts.EntryPoints[0])))
+			t.Fatalf("源码变更后 30s 内未重建（响应=%q, builds=%d, entryModTime=%v, fingerprint=%q）",
+				got, builds.Load(), entry.ModTime(), devFingerprint(dh.buildOpts))
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
