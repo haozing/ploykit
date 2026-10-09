@@ -34,7 +34,8 @@ func ParseUniversalOptions(raw string) (*redis.UniversalOptions, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, errors.New("redisx: empty REDIS_URL")
 	}
-	u, err := url.Parse(raw)
+	single, hostList, multi := firstHostURL(raw)
+	u, err := url.Parse(single)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +72,11 @@ func ParseUniversalOptions(raw string) (*redis.UniversalOptions, error) {
 		}
 		return out, nil
 	case "redis+cluster", "rediss+cluster", "redis+sentinel", "rediss+sentinel":
-		addrs, err := splitHosts(u.Host)
+		host := u.Host
+		if multi {
+			host = hostList
+		}
+		addrs, err := splitHosts(host)
 		if err != nil {
 			return nil, err
 		}
@@ -109,4 +114,34 @@ func splitHosts(host string) ([]string, error) {
 		return nil, errors.New("redisx: cluster/sentinel URL requires at least one host")
 	}
 	return out, nil
+}
+
+var multiHostSchemes = map[string]bool{
+	"redis+cluster": true, "rediss+cluster": true,
+	"redis+sentinel": true, "rediss+sentinel": true,
+}
+
+// firstHostURL rewrites a multi-host URL down to its first address for
+// url.Parse: Go < 1.27 rejects comma-separated hosts in the authority
+// (RFC 3986 has no multi-host form; Go 1.27 relaxed url.Parse to accept
+// them). The untouched host list is returned separately so cluster and
+// sentinel URLs behave identically on every supported Go version.
+func firstHostURL(raw string) (single, hostList string, multi bool) {
+	scheme, rest, ok := strings.Cut(raw, "://")
+	if !ok || !multiHostSchemes[scheme] {
+		return raw, "", false
+	}
+	authority, tail := rest, ""
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		authority, tail = rest[:i], rest[i:]
+	}
+	if !strings.Contains(authority, ",") {
+		return raw, "", false
+	}
+	credentials, hosts := "", authority
+	if j := strings.LastIndex(authority, "@"); j >= 0 {
+		credentials, hosts = authority[:j+1], authority[j+1:]
+	}
+	first, _, _ := strings.Cut(hosts, ",")
+	return scheme + "://" + credentials + first + tail, hosts, true
 }
