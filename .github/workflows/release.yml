@@ -1,0 +1,37 @@
+# Release — publish @ploykit/* to npm via OIDC trusted publishing.
+# Prerequisites (one-time, on npmjs.com):
+#   1. Create the "ploykit" organization (claims the @ploykit scope).
+#   2. Publish each package once locally (npm login + npm publish) so the
+#      package pages exist.
+#   3. On each package's Settings → Trusted Publisher, register:
+#      GitHub / haozing / ploykit / .github/workflows/release.yml
+# After that, `git tag v0.2.1 && git push --tags` publishes automatically —
+# no NPM_TOKEN secret, no long-lived tokens (npm automation tokens that bypass
+# 2FA are deprecated; see github.blog 2026-07-08 changelog).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - run: npm ci
+      - name: Build packages (topological: ui needs client + runtime dist)
+        run: npm run build
+      # Publish order matters: @ploykit/ui depends on client + runtime.
+      - run: npm publish -w @ploykit/client --access public --provenance
+      - run: npm publish -w @ploykit/runtime --access public --provenance
+      - run: npm publish -w @ploykit/ui --access public --provenance

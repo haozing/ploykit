@@ -38,7 +38,8 @@
   "description": "React 前端壳：登录/工作区/计费的 Headless Hook + 默认页面。产物为 ESM（相对导入无扩展名，消费方需经 vite/esbuild 等打包器解析）；exports 的 development 条件指向源码，供 monorepo 开发期直出消费。",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [],
   "author": "",
@@ -53,5 +54,10 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haozing/ploykit.git",
+    "directory": "packages/ui"
   }
 }

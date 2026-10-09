@@ -5,11 +5,17 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "description": "渲染指令通道的同构契约（框架唯一下沉 JS 的包）：emitDirective 双端实现、routeTable 路由真源、SSR/水合入口工厂。产物为 ESM（相对导入无扩展名，消费方需经 vite/esbuild 等打包器解析）；exports 的 development 条件指向源码，供 monorepo 开发期直出消费；react 系全为 peerDependencies 不打包。",
-  "keywords": ["ploykit", "ssr", "rendering", "seo"],
+  "keywords": [
+    "ploykit",
+    "ssr",
+    "rendering",
+    "seo"
+  ],
   "license": "ISC",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "exports": {
     ".": {
@@ -61,5 +67,10 @@
     "react-router": "7.18.4",
     "typescript": "5.9.3",
     "vitest": "5.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haozing/ploykit.git",
+    "directory": "packages/runtime"
   }
 }

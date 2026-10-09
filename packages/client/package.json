@@ -26,11 +26,17 @@
     "gen:types": "openapi-typescript ../../docs/openapi.yaml -o src/types.ts",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "verify:types": "openapi-typescript ../../docs/openapi.yaml -o src/types.ts --check"
+    "verify:types": "openapi-typescript ../../docs/openapi.yaml -o src/types.ts --check",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "openapi-typescript": "^7",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haozing/ploykit.git",
+    "directory": "packages/client"
   }
 }
