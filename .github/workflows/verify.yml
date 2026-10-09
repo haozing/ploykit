@@ -43,10 +43,21 @@ jobs:
       - run: go build ./...
       - run: go vet ./...
       # Pure unit run — no TEST_DATABASE_URL, so integration tests skip and -p 2 is safe.
-      - run: go test -p 2 ./...
+      # On failure, surface the failing tests as annotations (logs otherwise need admin auth).
+      - run: |
+          go test -p 2 ./... > /tmp/unit.log 2>&1 || {
+            grep -E '^(--- FAIL|    --- FAIL|FAIL)' /tmp/unit.log | sed 's/^/::error::/'
+            cat /tmp/unit.log
+            exit 1
+          }
       # DB integration run — serial only: parallel packages racing on the shared database
       # (concurrent schema migration) is what kept this job red when the env was job-wide.
-      - run: go test -p 1 -count=1 ./...
+      - run: |
+          go test -p 1 -count=1 ./... > /tmp/integ.log 2>&1 || {
+            grep -E '^(--- FAIL|    --- FAIL|FAIL)' /tmp/integ.log | sed 's/^/::error::/'
+            cat /tmp/integ.log
+            exit 1
+          }
         env:
           TEST_DATABASE_URL: postgres://pk:pk@localhost:5437/pk?sslmode=disable
 
