@@ -34,8 +34,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 12
-    env:
-      TEST_DATABASE_URL: postgres://pk:pk@localhost:5437/pk?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -44,8 +42,13 @@ jobs:
           cache: true
       - run: go build ./...
       - run: go vet ./...
+      # Pure unit run — no TEST_DATABASE_URL, so integration tests skip and -p 2 is safe.
       - run: go test -p 2 ./...
+      # DB integration run — serial only: parallel packages racing on the shared database
+      # (concurrent schema migration) is what kept this job red when the env was job-wide.
       - run: go test -p 1 -count=1 ./...
+        env:
+          TEST_DATABASE_URL: postgres://pk:pk@localhost:5437/pk?sslmode=disable
 
   # API contract drift: docs/openapi.yaml ↔ route registration (pure Python standard library, zero dependencies).
   contract:
