@@ -81,6 +81,12 @@ func NewDevHandler(deps DevHandlerDeps) (*DevHandler, error) {
 		}
 	}
 
+	// Snapshot the fingerprint synchronously BEFORE the initial build: if the
+	// watcher goroutine took its own snapshot on first run, any source edit
+	// landing in the scheduling gap between NewDevHandler returning and that
+	// first run would be folded into the baseline and lost forever (seen as
+	// a permanently-missed rebuild under CPU contention, e.g. CI runners).
+	baseline := devFingerprint(deps.BuildOpts)
 	bundle, err := BuildSSRBundle(deps.BuildOpts)
 	if err != nil {
 		return nil, fmt.Errorf("renderx: dev 初始 SSR 构建失败: %w", err)
@@ -111,7 +117,7 @@ func NewDevHandler(deps DevHandlerDeps) (*DevHandler, error) {
 		Lang:     deps.Lang,
 		Registry: deps.Registry,
 	})
-	d.startWatcher(deps)
+	d.startWatcher(deps, baseline)
 	return d, nil
 }
 
@@ -127,14 +133,13 @@ func (d *DevHandler) Close() {
 	})
 }
 
-func (d *DevHandler) startWatcher(deps DevHandlerDeps) {
+func (d *DevHandler) startWatcher(deps DevHandlerDeps, prev string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
 	go func() {
 		defer close(d.done)
 		ticker := time.NewTicker(deps.Interval)
 		defer ticker.Stop()
-		prev := devFingerprint(d.buildOpts)
 		for {
 			select {
 			case <-ctx.Done():
