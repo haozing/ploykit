@@ -1,0 +1,10 @@
+{
+  "entries_hash": "21c1f03691444363abb6e12233cc463dafb2454d5c4bd9877419217229c5117c",
+  "entry_set_hash": "0c53f404125d1195f0a9e60d3bbb366d7e5d17ae36074327efe157ac0eab5a5a",
+  "policy_version": 1,
+  "schema_version": 1,
+  "required_capabilities": [
+    "cap-a",
+    "cap-b"
+  ]
+}

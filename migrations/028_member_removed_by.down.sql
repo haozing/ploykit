@@ -1,0 +1,1 @@
+ALTER TABLE member DROP COLUMN IF EXISTS removed_by;

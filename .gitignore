@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.exe
+.env
+*.log
+*.exe~
+example/cmd/app/frontend/
+g*.txt
+example/ck*.txt
+example/renderx-cache/
+example/.vite/
+example/web/ck*.txt
+example/web/cookies.txt
+# 例外：test-docs 报告引用的运行证据 log（*.log 全局规则会误伤，见 00-测试总览与各阶段报告）
+!test-docs/**/*.log

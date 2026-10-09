@@ -1,0 +1,37 @@
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pk
+      POSTGRES_PASSWORD: pk
+      POSTGRES_DB: pk
+    ports:
+      - "5437:5432" # 仅给 Windows 侧调试工具（psql/DBeaver）用；后端不走这个口
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pk -d pk"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  app:
+    build:
+      context: ..
+      dockerfile: example/Dockerfile
+    environment:
+      DATABASE_URL: postgres://pk:pk@postgres:5432/pk?sslmode=disable # 容器名直连
+      AUTH_SECRET: dev-pepper
+      DEV_CODE: "000000"
+      ADDR: ":8030"
+      FRONTEND_ORIGIN: http://localhost:5173
+      WEBHOOK_ALLOW_PRIVATE_TARGET: "1"
+    ports:
+      - "8030:8030"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

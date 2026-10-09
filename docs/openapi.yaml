@@ -1,0 +1,4591 @@
+# ploykit 中央 OpenAPI 契约。
+#
+# 覆盖面 = example 应用实际挂载的全部路由（框架各域 adapters/http + example 自有 task/config/健康检查/ws）。
+# 路径参数名与 Go 1.22 路由 pattern 逐字一致（{workspaceId}/{id}/{userId}/{invId}/{linkId}/
+# {provider}/{channel}/{taskId}/{subscriptionId}/{deliveryId}），供 tools/check_api.py 做漂移比对。
+# 共享 schema 字段以 packages/ui 既有 TS 类型（PloykitProvider.tsx 等，前端已消费验证）为准对齐。
+# 生成物：packages/client/src/types.ts（openapi-typescript，`npm run gen:types`）。
+openapi: 3.1.0
+info:
+  title: ploykit API
+  version: 0.3.0
+  description: |
+    ploykit 框架 + example 产品应用的 HTTP 契约。
+
+    认证两通道（webx.Authenticate）：
+    - 浏览器会话 Cookie `tk_auth`（写请求须带 X-CSRF-Token，/config 拉取 masked token）；
+    - PAT `Authorization: Bearer tk_*`（豁免 CSRF）。
+
+    扁平路由（/api/billing/*、/api/usage、/api/audit*、/api/tasks*）的工作区上下文
+    由 `X-Workspace-Id` 请求头注入（@ploykit/client 自动携带）。
+
+    错误信封统一为 ErrorBody（webx.ErrorBody）：`{"error":"E_*","message":string,"details"?}`。
+security:
+  - sessionCookie: []
+  - patBearer: []
+tags:
+  - name: auth
+    description: identity 域——验证码/密码登录注册
+  - name: oauth
+    description: identity 域——第三方登录（env 驱动，未配置时 503）
+  - name: account
+    description: identity 域——密码重置/邮箱验证（账号自助）
+  - name: session
+    description: identity 域——会话与资料
+  - name: pat
+    description: identity 域——个人访问令牌
+  - name: workspace
+    description: workspace 域——工作区/成员/邀请/分享链接
+  - name: billing
+    description: billing 域——套餐/结账/订单/webhook 回调
+  - name: notify
+    description: notify 域——收件箱/角标/已读
+  - name: usage
+    description: quota 域——套餐用量
+  - name: audit
+    description: audit 域——工作区审计查询/导出
+  - name: admin
+    description: admin 域——平台管理（要求 platform admin）
+  - name: webhooks
+    description: webhooks 域——出站 webhook 订阅管理。投递签名头：X-Signature（当前钥
+      HMAC-SHA256）+ X-Signature-Old（secret 轮换后 24h 宽限期内的旧钥双签名，接收方可
+      用 VerifySignAny 双候选验签）；时间戳 X-Timestamp、事件 X-Event-Id/X-Event-Type、
+      投递 X-Delivery-Id。手动重投复用原 event_id（同事件多 attempt 按投递行 id 区分）。
+      接收方逃生协议（Svix abort-message 先例）——接收方可对失败响应（非 2xx）
+      携带响应头 Webhook-Delivery 值为 abort-message，投递方收到后直接将本条投递置
+      dead 终态、不再重试；对 2xx 响应该头无效果。重试退避含 ±20% 随机抖动，
+      防同刻失败惊群。
+  - name: tasks
+    description: example 产品域——任务（业务域示例）
+  - name: system
+    description: example——配置/健康检查/调试
+  - name: ws
+    description: platform/wsx——实时推送通道
+
+paths:
+  # ---------- identity：登录/注册（公开） ----------
+  /auth/send-code:
+    post:
+      operationId: sendCode
+      tags: [auth]
+      summary: 发送登录验证码（dev 模式回 DEV_CODE）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCodeRequest'
+      responses:
+        '200':
+          description: 已发送（无论邮箱是否存在均回同值，防枚举）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusSent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/verify-code:
+    post:
+      operationId: verifyCode
+      tags: [auth]
+      summary: 验证码登录（成功签发会话 Cookie tk_auth）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyCodeRequest'
+      responses:
+        '200':
+          description: 登录成功（Set-Cookie tk_auth）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: 邮箱密码注册（成功即登录）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: 注册成功（Set-Cookie tk_auth）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: 邮箱密码登录
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功（Set-Cookie tk_auth）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- identity：OAuth（公开） ----------
+  /auth/fed/start:
+    get:
+      operationId: fedStart
+      tags: [oauth]
+      summary: OIDC 联邦登录入口（按工作区 slug 定位 IdP，PKCE S256；302 到 IdP authorize）
+      security: []
+      parameters:
+        - name: workspace
+          in: query
+          required: true
+          schema: { type: string }
+          description: 工作区 slug
+      responses:
+        '302':
+          description: 重定向到工作区配置的 OIDC IdP（Set-Cookie tk_fed_oauth，HttpOnly+Lax+10min）
+          headers:
+            Location:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/fed/callback:
+    get:
+      operationId: fedCallback
+      tags: [oauth]
+      summary: OIDC 联邦回调（code+state+PKCE；同邮箱 JIT 关联；成功 302 /app，失败 302 /login?error=fed）
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: 成功回 {APP_URL}/app（Set-Cookie tk_auth；tk_fed_oauth 立即作废）
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}/sso:
+    put:
+      operationId: putWorkspaceSSO
+      tags: [workspace]
+      summary: 配置工作区 OIDC 联邦（owner/admin）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SSOConfigRequest'
+      responses:
+        '200':
+          description: 已保存的联邦配置（secret 脱敏）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSOConfig'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    get:
+      operationId: getWorkspaceSSO
+      tags: [workspace]
+      summary: 查看工作区 OIDC 联邦配置（owner/admin；secret 脱敏）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: 联邦配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSOConfig'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteWorkspaceSSO
+      tags: [workspace]
+      summary: 移除工作区 OIDC 联邦配置（owner/admin）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: 已移除
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/oauth/{provider}/start:
+    get:
+      operationId: oauthStart
+      tags: [oauth]
+      summary: 发起第三方登录（302 跳转提供商）
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/OAuthProvider'
+      responses:
+        '302':
+          description: 重定向到提供商授权页（state 双提交 Cookie）
+          headers:
+            Location:
+              schema:
+                type: string
+              description: 提供商授权 URL
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/oauth/{provider}/callback:
+    get:
+      operationId: oauthCallback
+      tags: [oauth]
+      summary: OAuth 回调（签发会话后 302 回前端；失败 302 /login?error=oauth）
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/OAuthProvider'
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+          description: 提供商授权码
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+          description: 防 CSRF 状态串
+      responses:
+        '302':
+          description: 成功回 {APP_URL}/app（Set-Cookie tk_auth）；失败回 /login?error=oauth
+          headers:
+            Location:
+              schema:
+                type: string
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- identity：账号自助（公开） ----------
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [account]
+      summary: 申请密码重置邮件（不泄露邮箱存在性）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '204':
+          description: 已受理（无论邮箱是否存在）
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [account]
+      summary: 凭邮件令牌重置密码（成功后旧会话全吊销）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: 重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/send-verification:
+    post:
+      operationId: sendVerification
+      tags: [account]
+      summary: 发送邮箱验证邮件（仅浏览器会话）
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: 已发送
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [account]
+      summary: 凭令牌验证邮箱
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- identity：会话与资料 ----------
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [session]
+      summary: 登出（吊销当前会话并清 Cookie）
+      responses:
+        '200':
+          description: 已登出
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [session]
+      summary: 当前用户
+      description: |
+        模拟会话（管理员 impersonation 签发）额外透出 impersonated_by
+        （发起管理员 userID，ADR 0008）；普通会话无此字段。
+      responses:
+        '200':
+          description: 当前用户资料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PKUser'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    patch:
+      operationId: updateMe
+      tags: [session]
+      summary: 更新资料（昵称/头像）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+      responses:
+        '200':
+          description: 更新后的用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PKUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteMe
+      tags: [session]
+      summary: 账号注销（软删除，仅浏览器会话）
+      description: |
+        软删除当前账号：display_name 置空、密码/PAT 全吊销、tokens_valid_after
+        双闸使当前会话即刻失效，响应同时清会话 Cookie。幂等二调（用户已注销）
+        返回 404。PAT 调用返回 403（仅浏览器会话可执行）。
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: 已注销
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [session]
+      summary: 修改密码（成功后轮换会话 Cookie，其余会话吊销；仅浏览器会话）
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: 修改成功（Set-Cookie 新会话）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpiresAtResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/sessions:
+    get:
+      operationId: listSessions
+      tags: [session]
+      summary: 当前用户活跃会话列表（仅浏览器会话）
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 会话列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionInfo'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: revokeAllSessions
+      tags: [session]
+      summary: 吊销全部会话（含当前，登出所有设备；仅浏览器会话）
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 已全部吊销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/sessions/{sessionId}:
+    delete:
+      operationId: revokeSession
+      tags: [session]
+      summary: 吊销单个会话（设备管理；仅浏览器会话）
+      description: |
+        吊销本人名下指定会话。吊销"当前会话"等价登出（后端不特判、不清
+        Cookie，前端按 GET /auth/sessions 的 current 标记提示处理）。
+        不存在/已吊销/非本人 → 404（重复吊销幂等）。PAT 调用返回 403
+        （仅浏览器会话可执行）。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 会话 ID（GET /auth/sessions 返回的 id）
+      responses:
+        '204':
+          description: 已吊销
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- identity：PAT ----------
+  /api/tokens:
+    get:
+      operationId: listPATs
+      tags: [pat]
+      summary: PAT 列表（仅浏览器会话）
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: PAT 列表（不含密钥本体）
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PAT'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createPAT
+      tags: [pat]
+      summary: 创建 PAT（token 仅本次响应出现一次；仅浏览器会话）
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePATRequest'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePATResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/tokens/{id}:
+    delete:
+      operationId: revokePAT
+      tags: [pat]
+      summary: 吊销 PAT（仅浏览器会话）
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenId'
+      responses:
+        '200':
+          description: 已吊销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- workspace：我的工作区 ----------
+  /api/workspaces:
+    get:
+      operationId: listMyWorkspaces
+      tags: [workspace]
+      summary: 我的工作区列表（含我的角色）
+      responses:
+        '200':
+          description: 工作区列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PKWorkspace'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createWorkspace
+      tags: [workspace]
+      summary: 创建工作区（当前用户成为 owner）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceRequest'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}:
+    patch:
+      operationId: renameWorkspace
+      tags: [workspace]
+      summary: 工作区改名（workspace:update）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameWorkspaceRequest'
+      responses:
+        '200':
+          description: 更新后的工作区
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteWorkspace
+      tags: [workspace]
+      summary: 删除工作区（workspace:delete，owner 级动作）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '204':
+          description: 已删除
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- workspace：成员 / 离开 ----------
+  /api/workspaces/{id}/members:
+    get:
+      operationId: listMembers
+      tags: [workspace]
+      summary: 成员列表（members:read；分页信封）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+          description: 页码（默认 1）
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+          description: 每页条数（默认 50，上限 200）
+      responses:
+        '200':
+          description: 成员列表（分页信封：裸数组 → {items,total}）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{id}/members/{userId}:
+    patch:
+      operationId: updateMemberRole
+      tags: [workspace]
+      summary: 改成员角色（members:write；不能改自己的角色）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRequest'
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: removeMember
+      tags: [workspace]
+      summary: 移除成员（members:remove）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: 已移除
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{id}/leave:
+    post:
+      operationId: leaveWorkspace
+      tags: [workspace]
+      summary: 退出工作区（last-owner 拒绝）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+      responses:
+        '200':
+          description: 已退出
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  # tenant 侧所有权转让，
+  # 与 POST /api/admin/workspaces/{id}/transfer-ownership 同域方法双入口。
+  /api/workspaces/{id}/transfer-ownership:
+    post:
+      operationId: transferOwnership
+      tags: [workspace]
+      summary: 转让所有权（owner 发起；单事务目标升 owner、原 owner 降 member）
+      description: |
+        发起者须为本工作区 owner（守卫在 workspace 域，不经 authz 权限矩阵——
+        所有权不是成员管理权）。GitLab"至少一个 human owner"语义在域层落地：
+        先升后降单事务，任何中途/终态保有 ≥1 owner。域钩子 BeforeOwnerChange
+        （Validating 可阻断）/OnOwnerTransfer（Observational）与审计
+        workspace.owner_transfer 照旧。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, description: 新 owner（须是本工作区既有活跃成员且账号未禁用） }
+      responses:
+        '200':
+          description: 已转让
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: 发起者非本工作区 owner
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: 目标已是 owner/转给自己/目标账号 disabled/并发竞态/BeforeOwnerChange 拦截
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- workspace：邀请 ----------
+  /api/workspaces/{id}/invitations:
+    get:
+      operationId: listInvitations
+      tags: [workspace]
+      summary: 邀请列表（invites:read；仅 pending 且未过期；分页信封）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+          description: 页码（默认 1）
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+          description: 每页条数（默认 50，上限 200）
+      responses:
+        '200':
+          description: 邀请列表（分页信封：裸数组 → {items,total}）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createInvitation
+      tags: [workspace]
+      summary: 发邀请（members:invite）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: 已创建（邮件由服务端异步发送）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{id}/invitations/{invId}:
+    delete:
+      operationId: revokeInvitation
+      tags: [workspace]
+      summary: 撤回邀请（members:invite）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - name: invId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 邀请 ID
+      responses:
+        '204':
+          description: 已撤回
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/invitations/mine:
+    get:
+      operationId: myInvitations
+      tags: [workspace]
+      summary: 收到的待处理邀请（带工作区名）
+      responses:
+        '200':
+          description: 邀请列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvitationWithWorkspace'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/invitations/{id}/accept:
+    post:
+      operationId: acceptInvitation
+      tags: [workspace]
+      summary: 接受邀请（加入工作区）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 邀请 ID
+      responses:
+        '200':
+          description: 加入的工作区
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/invitations/{id}/decline:
+    post:
+      operationId: declineInvitation
+      tags: [workspace]
+      summary: 拒绝邀请
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 邀请 ID
+      responses:
+        '200':
+          description: 已拒绝
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- workspace：分享链接 ----------
+  /api/workspaces/{id}/share-links:
+    get:
+      operationId: listShareLinks
+      tags: [workspace]
+      summary: 分享链接列表（invites:read；仅未撤销且未过期；分页信封）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+          description: 页码（默认 1）
+        - name: page_size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+          description: 每页条数（默认 50，上限 200）
+      responses:
+        '200':
+          description: 分享链接列表（分页信封：裸数组 → {items,total}）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLinkPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createShareLink
+      tags: [workspace]
+      summary: 创建分享链接（members:invite；完整 code 仅本次响应出现一次）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShareLinkRequest'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateShareLinkResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{id}/share-links/{linkId}:
+    delete:
+      operationId: revokeShareLink
+      tags: [workspace]
+      summary: 作废分享链接（members:invite）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 工作区 ID
+        - name: linkId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 分享链接 ID
+      responses:
+        '204':
+          description: 已作废
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/share-links/redeem:
+    post:
+      operationId: redeemShareLink
+      tags: [workspace]
+      summary: 兑换分享链接码加入工作区
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemShareLinkRequest'
+      responses:
+        '200':
+          description: 加入的工作区
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- billing ----------
+  /api/billing/subscription:
+    get:
+      operationId: getBillingSubscription
+      tags: [billing]
+      summary: 当前工作区套餐 + 近 20 笔订单（billing:read；X-Workspace-Id）
+      responses:
+        '200':
+          description: 订阅态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/billing/usage-preview:
+    get:
+      operationId: billingUsagePreview
+      tags: [billing]
+      summary: 当期计量用量与超额预估（billing:read；X-Workspace-Id）
+      responses:
+        '200':
+          description: 当期预估
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsagePreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/billing/checkout:
+    post:
+      operationId: createCheckout
+      tags: [billing]
+      summary: 创建结账会话（billing:manage；X-Workspace-Id；跳转 action_url 完成支付）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutRequest'
+      responses:
+        '201':
+          description: 结账会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/billing/orders/{id}/cancel:
+    post:
+      operationId: cancelOrder
+      tags: [billing]
+      summary: 取消未支付订单（billing:manage；X-Workspace-Id）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 订单 ID
+      responses:
+        '200':
+          description: 已取消
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/billing/plans:
+    get:
+      operationId: listPlans
+      tags: [billing]
+      summary: 套餐目录（公开）
+      security: []
+      responses:
+        '200':
+          description: 套餐列表（按 sort_no）
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /webhooks/billing/{channel}:
+    post:
+      operationId: billingWebhook
+      tags: [billing]
+      summary: 支付渠道 webhook 回调（公开；渠道适配器验签 + 事件幂等；豁免 CSRF——服务器间回调）
+      security: []
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [stripe, alipay, wechat]
+          description: 支付渠道名
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 渠道原始事件负载（签名在头部，适配器内验签）
+        # webhook 负载为渠道原始格式，不做 schema 约束
+      responses:
+        '200':
+          description: 已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusReceived'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- notify ----------
+  /api/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notify]
+      summary: 收件箱（按用户隔离，最近优先）
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            maximum: 100
+            default: 20
+          description: 条数（非整数或 >100 拒绝 400；≤0 由服务层静默归一为缺省 20——不按违约 400）
+      responses:
+        '200':
+          description: 通知列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notifications/badge:
+    get:
+      operationId: notificationBadge
+      tags: [notify]
+      summary: 未读角标数
+      responses:
+        '200':
+          description: 未读数
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadgeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notify]
+      summary: 全部标记已读
+      responses:
+        '204':
+          description: 已全部标记
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notify]
+      summary: 单条标记已读
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 通知 ID
+      responses:
+        '204':
+          description: 已标记
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notifications/{id}/archive:
+    post:
+      operationId: archiveNotification
+      tags: [notify]
+      summary: 单条归档（收件箱移除、数据保留；重复归档幂等）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 通知 ID
+      responses:
+        '204':
+          description: 已归档
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notification-preferences:
+    get:
+      operationId: listNotificationPreferences
+      tags: [notify]
+      summary: 通知偏好（只含显式设置过的行；缺行 = 双渠道默认开启）
+      responses:
+        '200':
+          description: 偏好行列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenceList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notification-preferences/{type}:
+    put:
+      operationId: upsertNotificationPreference
+      tags: [notify]
+      summary: 更新单类型通知偏好（按用户隔离；至少一个渠道）
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { type: string }
+          description: 通知类型（≤64 字符，见 /api/notification-types 目录）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                email_enabled:
+                  type: boolean
+                in_app_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: 更新后的偏好行
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preference'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/notification-types:
+    get:
+      operationId: listNotificationTypes
+      tags: [notify]
+      summary: 通知类型目录（偏好页渲染数据源；须登录）
+      description: |
+        example 装配层下发的类型目录（最小静态实现：quota_near_limit /
+        quota_exhausted / task.created），前端偏好页据此渲染可配置清单并与偏好行合并
+        （缺行 = 双渠道默认开启）。
+      responses:
+        '200':
+          description: 类型目录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTypeList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- quota ----------
+  /api/usage:
+    get:
+      operationId: getUsage
+      tags: [usage]
+      summary: 当前工作区套餐用量（usage:read；X-Workspace-Id；key 排序稳定）
+      responses:
+        '200':
+          description: 各配额维度用量
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResp'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- audit（工作区级） ----------
+  /api/audit:
+    get:
+      operationId: listAuditEvents
+      tags: [audit]
+      summary: 当前工作区审计事件（audit:read；X-Workspace-Id；created_at 倒序）
+      parameters:
+        - $ref: '#/components/parameters/AuditActorID'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditResourceType'
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditLimit'
+        - $ref: '#/components/parameters/AuditOffset'
+      responses:
+        '200':
+          description: 审计事件 + 过滤命中总数
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/audit/export.csv:
+    get:
+      operationId: exportAuditCsv
+      tags: [audit]
+      summary: 当前工作区审计 CSV 导出（同 list 过滤参数；单次查询内存缓冲，上限 5000 行，limit 超上界按 5000 截断且无截断标记头——与 admin 导出的 50000 行流式/截断头是两套实现）
+      parameters:
+        - $ref: '#/components/parameters/AuditActorID'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditResourceType'
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditLimit'
+        - $ref: '#/components/parameters/AuditOffset'
+      responses:
+        '200':
+          description: CSV 附件（列头 created_at,actor_type,actor_id,actor_email,action,resource_type,resource_id,request_id,metadata）
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- admin（platform admin） ----------
+  /api/admin/stats:
+    get:
+      operationId: adminStats
+      tags: [admin]
+      summary: 平台统计概览（platform admin）
+      responses:
+        '200':
+          description: 平台统计
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStats'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      summary: 用户列表（platform admin；分页）
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 用户分页列表（items 为当前页，total 为总数）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUser'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/users/{id}/status:
+    patch:
+      operationId: adminSetUserStatus
+      tags: [admin]
+      summary: 启用/禁用用户（platform admin）
+      parameters:
+        - $ref: '#/components/parameters/AdminUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserStatusRequest'
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/users/{id}/admin:
+    patch:
+      operationId: adminSetPlatformAdmin
+      tags: [admin]
+      summary: 授予/撤销 platform admin（platform admin）
+      parameters:
+        - $ref: '#/components/parameters/AdminUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAdminRequest'
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/users/{id}/impersonate:
+    post:
+      operationId: adminImpersonate
+      tags: [admin]
+      summary: 模拟用户登录（platform admin；签发目标用户会话 Cookie）
+      description: |
+        管理员客服排障用：为目标用户签发带模拟标记的新会话（session.impersonated_by
+        = 发起管理员 ID，迁移 034 / ADR 0008）并 Set-Cookie tk_auth，
+        管理员浏览器即换入目标身份。目标须存在、active、非平台管理员
+        （管理员互模禁止）且非操作者本人；发起方本身是模拟会话 → 403
+        （链式模拟拦截）。审计 admin.impersonate 留痕
+        （actor=管理员快照，meta 带 session_token_hash 指纹）。
+        保留语义：管理员原会话被覆盖，退出即回登录页；模拟会话不设独立
+        TTL（复用会话 TTL 与吊销机制，退出由发起管理员控制）。
+      parameters:
+        - $ref: '#/components/parameters/AdminUserId'
+      responses:
+        '200':
+          description: 已换入目标用户会话（Set-Cookie tk_auth）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpersonationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/workspaces:
+    get:
+      operationId: adminListWorkspaces
+      tags: [admin]
+      summary: 工作区列表（platform admin；分页 + 搜索）
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+          description: 搜索过滤——名称任意子串 / slug 前缀（ilike），空 = 不过滤
+      responses:
+        '200':
+          description: 工作区分页列表（items 为当前页，total 为总数）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminWorkspace'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/workspaces/{id}/plan:
+    patch:
+      operationId: adminChangePlan
+      tags: [admin]
+      summary: 手动改工作区套餐（platform admin；审计留痕）
+      parameters:
+        - $ref: '#/components/parameters/AdminWorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminChangePlanRequest'
+      responses:
+        '200':
+          description: 已变更
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/audit:
+    get:
+      operationId: adminListAudit
+      tags: [admin]
+      summary: 平台级审计查询（platform admin；跨工作区过滤）
+      parameters:
+        - $ref: '#/components/parameters/AuditWorkspace'
+        - $ref: '#/components/parameters/AuditActorID'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditResourceType'
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditLimit'
+        - $ref: '#/components/parameters/AuditOffset'
+      responses:
+        '200':
+          description: 审计事件 + 过滤命中总数
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/audit/export.csv:
+    get:
+      operationId: adminExportAuditCsv
+      tags: [admin]
+      summary: 平台级审计 CSV 导出（platform admin；同 adminListAudit 过滤参数）
+      parameters:
+        - $ref: '#/components/parameters/AuditWorkspace'
+        - $ref: '#/components/parameters/AuditActorID'
+        - $ref: '#/components/parameters/AuditAction'
+        - $ref: '#/components/parameters/AuditResourceType'
+        - $ref: '#/components/parameters/AuditFrom'
+        - $ref: '#/components/parameters/AuditTo'
+        - $ref: '#/components/parameters/AuditLimit'
+        - $ref: '#/components/parameters/AuditOffset'
+      responses:
+        '200':
+          description: CSV 附件
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  # ---------- admin 操作面：用户/工作区/计费/设置管理 ----------
+  /api/admin/users/{id}:
+    get:
+      operationId: adminGetUserDetail
+      tags: [admin]
+      summary: 用户详情聚合（资料+在途会话+PAT+所属工作区；platform admin）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 详情聚合 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+    delete:
+      operationId: adminDeleteUser
+      tags: [admin]
+      summary: 软删账号（?confirm=<email> 二次确认；不可删自己/另一平台管理员）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: confirm, in: query, required: false, schema: { type: string }, description: 目标邮箱二次确认 }
+      responses:
+        '200':
+          description: 已软删（status=deleted+邮箱改写+PAT 全吊销）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '400': { $ref: '#/components/responses/DefaultError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/kick:
+    post:
+      operationId: adminKickUser
+      tags: [admin]
+      summary: 踢下线（吊销目标全部在途会话）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已吊销
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '503': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/sessions/{sid}/revoke:
+    post:
+      operationId: adminRevokeUserSession
+      tags: [admin]
+      summary: 吊销单个会话（不存在/已吊销/非本人会话 → 404 幂等）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: sid, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已吊销
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/password-reset:
+    post:
+      operationId: adminResetUserPassword
+      tags: [admin]
+      summary: 触发密码重置邮件（复用自助流：防枚举/1 分钟冷却）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已发送
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/resend-verification:
+    post:
+      operationId: adminResendVerification
+      tags: [admin]
+      summary: 补发邮箱验证邮件（已验证 409 / 冷却 429）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已发送
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        '429': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/mark-verified:
+    post:
+      operationId: adminMarkVerified
+      tags: [admin]
+      summary: 直接标记邮箱已验证（幂等）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已标记
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/pats:
+    get:
+      operationId: adminListUserPATs
+      tags: [admin]
+      summary: 目标用户 PAT 元数据列表（只读，不含凭据材料）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: PAT 列表 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/pats/{patID}/revoke:
+    post:
+      operationId: adminRevokeUserPAT
+      tags: [admin]
+      summary: 吊销目标用户 PAT（404 幂等）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: patID, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已吊销
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/workspaces/{id}:
+    get:
+      operationId: adminGetWorkspaceDetail
+      tags: [admin]
+      summary: 工作区详情（基础信息+成员表）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 详情 }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+    delete:
+      operationId: adminDeleteWorkspace
+      tags: [admin]
+      summary: 删除工作区（?confirm=<slug>；走 workspace 域钩子与级联）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: confirm, in: query, required: true, schema: { type: string }, description: 工作区 slug 二次确认 }
+      responses:
+        '200':
+          description: 已删除
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '400': { $ref: '#/components/responses/DefaultError' }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/workspaces/{id}/members/{uid}:
+    patch:
+      operationId: adminUpdateMemberRole
+      tags: [admin]
+      summary: 修改成员角色（平台管理员豁免成员校验；last-owner/枚举保护照旧）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: uid, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [owner, admin, member] }
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+    delete:
+      operationId: adminRemoveMember
+      tags: [admin]
+      summary: 移除成员（平台管理员豁免；last-owner 保护照旧）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: uid, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已移除
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/workspaces/{id}/quota/grant:
+    post:
+      operationId: adminGrantQuota
+      tags: [admin]
+      summary: 手动调整配额（quota.Grant；同 (ws,key,reason,ref) 幂等一次）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, reason, amount]
+              properties:
+                key: { type: string }
+                reason: { type: string }
+                ref: { type: string }
+                amount: { type: integer, description: 正数加成额度 }
+      responses:
+        '200':
+          description: 已授予
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/notify:
+    post:
+      operationId: adminSendAnnouncement
+      tags: [admin]
+      summary: 通知公告（user 单发 / all 全员上限 1000）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target, title, body]
+              properties:
+                target: { type: string, enum: [user, all] }
+                user_id: { type: string }
+                title: { type: string }
+                body: { type: string }
+                link: { type: string }
+      responses:
+        '200':
+          description: 已发送（sent/failed 计数；DedupKey 命中的用户计入 sent）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [target, sent, failed]
+                properties:
+                  target: { type: string, enum: [user, all] }
+                  sent: { type: integer }
+                  failed: { type: integer }
+        '503': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/plans:
+    get:
+      operationId: adminListPlans
+      tags: [admin]
+      summary: 套餐目录（items 码表 + plans 视图——透出 trial_days/currency）
+      description: |
+        items = 套餐码表（sort_no 序，既有契约不变）；plans = 套餐视图行
+        （trial_days 从 plan.limits["trial_days"] 投影为显式字段、currency 为
+        plan 单币种；limits 全量透传，单一事实源仍是 plan.limits——编辑回写走
+        plan.limits，管理台暂无套餐编辑面）。
+      responses:
+        '200':
+          description: 码表 + 套餐视图
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: string }
+                  plans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plan'
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/orders:
+    get:
+      operationId: adminListOrders
+      tags: [admin]
+      summary: 跨工作区订单分页
+      parameters:
+        - { name: workspace_id, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { type: string } }
+        - { name: page, in: query, required: false, schema: { type: integer } }
+        - { name: page_size, in: query, required: false, schema: { type: integer } }
+      responses:
+        '200': { description: 订单列表（含 workspace_name） }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/orders/{id}:
+    delete:
+      operationId: adminCancelOrder
+      tags: [admin]
+      summary: 取消 pending 订单（保留状态机校验；非 pending 409）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已取消
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/orders/{id}/mark-paid:
+    post:
+      operationId: adminMarkOrderPaid
+      tags: [admin]
+      summary: 管理员核销 manual 订单（线下收款确认后 pending→paid，超额 manual 单闭环）
+      description: |
+        仅 manual 渠道订单可核销（stripe 等渠道订单核销 = 绕过支付渠道记账，
+        400）；状态机 pending→paid（乐观锁，非 pending 409）。与状态迁移同事务
+        出口 billing.order_marked_paid 事务性事件（outbox），落双层审计
+        （billing.order_marked_paid[admin:true] + admin.order_mark_paid）。
+        不触发换档/配额发放——超额单出账时工作区已在其套餐上；非超额 manual
+        套餐购买单核销后如需升档走既有管理面套餐变更。
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 已核销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400': { $ref: '#/components/responses/DefaultError', description: 非 manual 渠道订单 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        '409': { $ref: '#/components/responses/DefaultError', description: 非 pending（已支付/已取消等） }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/payment-events:
+    get:
+      operationId: adminListPaymentEvents
+      tags: [admin]
+      summary: 支付事件幂等层分页（含处理状态/错误）
+      parameters:
+        - { name: workspace_id, in: query, required: false, schema: { type: string } }
+        - { name: page, in: query, required: false, schema: { type: integer } }
+        - { name: page_size, in: query, required: false, schema: { type: integer } }
+      responses:
+        '200': { description: 事件列表 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/run-expiry:
+    post:
+      operationId: adminRunExpiry
+      tags: [admin]
+      summary: 手动触发一轮到期降级（幂等）
+      responses:
+        '200': { description: 已执行（expired 计数） }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/run-overage:
+    post:
+      operationId: adminRunOverage
+      tags: [admin]
+      summary: 手动触发一轮超额计量出账（需 Usage 装配否则 503）
+      responses:
+        '200': { description: 已执行（orders_created 计数） }
+        '503': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/webhook-deliveries:
+    get:
+      operationId: adminListWebhookDeliveries
+      tags: [admin]
+      summary: 跨工作区 webhook 投递分页（join subscription 带归属/URL）
+      parameters:
+        - { name: workspace_id, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, delivered, dead] } }
+        - { name: page, in: query, required: false, schema: { type: integer } }
+        - { name: page_size, in: query, required: false, schema: { type: integer } }
+      responses:
+        '200': { description: 投递列表 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/webhook-deliveries/{id}/redeliver:
+    post:
+      operationId: adminRedeliverWebhook
+      tags: [admin]
+      summary: 管理员重投（复制为全新 pending 行，event_id 带 .r 溯源后缀）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 新投递行 }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+
+  /api/admin/billing/config:
+    get:
+      operationId: adminBillingConfig
+      tags: [admin]
+      summary: 支付渠道配置可见性（key 掩码/webhook 状态；不回传密钥本体）
+      responses:
+        '200':
+          description: 渠道列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        configured: { type: boolean }
+                        key_masked: { type: string, description: "如 sk_live_***abc9；未配置为空" }
+                        webhook_configured: { type: boolean }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/test-connection:
+    post:
+      operationId: adminTestChannelConnection
+      tags: [admin]
+      summary: 测试支付渠道连接（stripe 调 Balance API 验 key）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                channel: { type: string }
+      responses:
+        '200': { description: 连接正常 }
+        '400': { $ref: '#/components/responses/DefaultError', description: "未配置密钥 E_CHANNEL_NOT_CONFIGURED / 不支持测试 E_CHANNEL_TEST_UNSUPPORTED" }
+        '502': { $ref: '#/components/responses/DefaultError', description: 渠道侧连接失败 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/workspaces/{id}/cancel-subscription:
+    post:
+      operationId: adminCancelSubscription
+      tags: [admin]
+      summary: 取消订阅（先 provider 侧取消，成功后本地降级 free；provider 失败 502 不降级）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 已取消并降级 }
+        '400': { $ref: '#/components/responses/DefaultError', description: 无可取消订阅/渠道定位失败 }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        '409': { $ref: '#/components/responses/DefaultError' }
+        '502': { $ref: '#/components/responses/DefaultError', description: provider 取消失败，本地未降级 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/settings:
+    get:
+      operationId: adminGetSettings
+      tags: [admin]
+      summary: 站点设置四面（当前值/生效值/默认值/键说明；8 键白名单）
+      description: |
+        白名单 8 键 = 5 个既有键（banner_text/banner_kind/maintenance_mode/
+        allow_signup/allowed_domains）+ 限流三键
+        （rate_limit_per_user_per_min / rate_limit_per_ip_per_min /
+        rate_limit_allowlist；0 = 关闭限流，
+        allowlist 为逗号分隔 IP/CIDR；修改后重启生效，不热重载）。
+      responses:
+        '200':
+          description: 设置全景
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: object, additionalProperties: { type: string } }
+                  effective: { type: object, additionalProperties: { type: string } }
+                  defaults: { type: object, additionalProperties: { type: string } }
+                  descriptions: { type: object, additionalProperties: { type: string } }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/settings/{key}:
+    put:
+      operationId: adminPutSetting
+      tags: [admin]
+      summary: 更新站点设置键（白名单外 400）
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string }
+      responses:
+        '200': { description: 已更新 }
+        '400': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/settings/test-email:
+    post:
+      operationId: adminTestEmail
+      tags: [admin]
+      summary: 发送测试邮件（dev 通道回 mode=dev 提示；smtp 回 sent）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string, format: email }
+      responses:
+        '200':
+          description: 已发送或 dev 模式提示
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string, enum: [dev, smtp] }
+                  status: { type: string }
+                  hint: { type: string }
+        '502': { $ref: '#/components/responses/DefaultError', description: E_MAIL_SEND }
+        default: { $ref: '#/components/responses/DefaultError' }
+
+  /api/admin/workspaces/{id}/transfer-ownership:
+    post:
+      operationId: adminTransferOwnership
+      tags: [admin]
+      summary: 转让所有权（目标须为成员；单事务：目标升 owner、原 owner 降 member；平台管理员豁免发起权）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string }
+      responses:
+        '200': { description: 已转让 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/DefaultError', description: 目标非成员 }
+        '409': { $ref: '#/components/responses/DefaultError', description: 目标已 owner/disabled/并发竞态/无 owner 区 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/sso:
+    get:
+      operationId: adminListSSOProviders
+      tags: [admin]
+      summary: SSO 联邦概览（跨工作区 provider 元数据；secret 值不回传，仅密封状态位）
+      responses:
+        '200':
+          description: provider 列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        workspace_id: { type: string }
+                        workspace_slug: { type: string }
+                        workspace_name: { type: string }
+                        issuer_url: { type: string }
+                        client_id: { type: string }
+                        scopes: { type: string }
+                        secret_sealed: { type: boolean, description: "true=sealed:v1 加密；false=明文凭（警告）" }
+                        created_at: { type: string, format: date-time }
+                        updated_at: { type: string, format: date-time }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/users/{id}/export:
+    get:
+      operationId: adminExportUserdata
+      tags: [admin]
+      summary: GDPR 用户数据导出（JSON 附件；password_hash/token_hash 类字段源头不选）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 聚合数据 JSON 附件（filename 为 userdata-{id}.json；body 键含 user/memberships/sessions/personal_access_tokens/audit_events/exported_at）
+          content:
+            application/json: {}
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
+
+  /api/admin/analytics:
+    get:
+      operationId: adminAnalyticsSummary
+      tags: [admin]
+      summary: 事件埋点汇总（platform admin；按 event_type 聚合）
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 7
+          description: 统计窗口天数（缺省 7；显式传入非法值返回 400，不静默钳制）
+      responses:
+        '200':
+          description: 事件聚合列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalyticsSummaryRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- admin：最近活动流 ----------
+  /api/admin/analytics/recent:
+    get:
+      operationId: adminAnalyticsRecent
+      tags: [admin]
+      summary: 最近活动流（platform admin；最近埋点事件 created_at 倒序，type 可选过滤）
+      description: |
+        只读活动流（与 Supabase Logs / Audit Explorer 同构）：
+        复用 analytics 域端口（eventType 空 = 全类型走 Recent，否则走既有
+        RecentByType）。limit 缺省 20、上限 100——显式非法值 400 而非静默钳制
+        （与 /api/admin/analytics 的 days 校验同款）；端口未接线 503。
+        analytics_event 已按月分区（迁移 036），浅取 LIMIT 走分区裁剪可接受；
+        深翻页应走 keyset 游标，本端点不提供 offset。
+      parameters:
+        - { name: type, in: query, required: false, schema: { type: string }, description: 事件类型过滤（空 = 全类型） }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 }, description: 条数（默认 20 上限 100） }
+      responses:
+        '200':
+          description: 最近事件列表（created_at 倒序）
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    workspace_id: { type: string }
+                    user_id: { type: string }
+                    event_type: { type: string }
+                    entity_type: { type: string }
+                    entity_id: { type: string }
+                    payload: { type: object, additionalProperties: true }
+                    created_at: { type: string, format: date-time }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/DefaultError'
+          description: 活动流端口未接线（E_UNAVAILABLE）
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- webhooks（订阅管理） ----------
+  /api/workspaces/{workspaceId}/webhooks/events:
+    get:
+      operationId: listWebhookEvents
+      tags: [webhooks]
+      summary: 可注册事件目录（webhooks:read；建订阅时枚举用——目录由产品装配注册，example 含 task.* 与 billing.payment_failed / billing.order_marked_paid）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: 事件类型目录
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookEventItem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}/webhooks/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      tags: [webhooks]
+      summary: 投递记录（webhooks:read；倒序）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 条数（服务层钳制）
+      responses:
+        '200':
+          description: 投递列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDelivery'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}/webhooks/deliveries/{deliveryId}/redeliver:
+    post:
+      operationId: redeliverWebhook
+      tags: [webhooks]
+      summary: 手动重投一条投递（webhooks:manage；复用原 event_id 生成新 pending 行——同事件已有 pending 时幂等返回该行）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: deliveryId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 投递 ID
+      responses:
+        '200':
+          description: 新建的投递行
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookDelivery'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}/webhooks/subscriptions:
+    get:
+      operationId: listWebhookSubscriptions
+      tags: [webhooks]
+      summary: 订阅列表（webhooks:read）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: 订阅列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookSubscription'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createWebhookSubscription
+      tags: [webhooks]
+      summary: 创建订阅（webhooks:manage；secret 仅本次响应出现一次）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookSubscriptionRequest'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWebhookSubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}/webhooks/subscriptions/{subscriptionId}:
+    patch:
+      operationId: setWebhookSubscriptionActive
+      tags: [webhooks]
+      summary: 暂停/恢复订阅（webhooks:manage）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/SubscriptionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSubscriptionActiveRequest'
+      responses:
+        '200':
+          description: 更新后的订阅
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookSubscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteWebhookSubscription
+      tags: [webhooks]
+      summary: 删除订阅（webhooks:manage）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '204':
+          description: 已删除（投递历史随订阅级联删除）
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{workspaceId}/webhooks/subscriptions/{subscriptionId}/ping:
+    post:
+      operationId: pingWebhookSubscription
+      tags: [webhooks]
+      summary: 发一条 ping 探活投递（webhooks:manage；结果看投递记录）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '204':
+          description: 已入队
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /api/workspaces/{workspaceId}/webhooks/subscriptions/{subscriptionId}/rotate-secret:
+    post:
+      operationId: rotateWebhookSecret
+      tags: [webhooks]
+      summary: 轮换订阅签名密钥（webhooks:manage；旧钥保留 24h 双签名宽限，新 secret 仅本次响应出现一次；不幂等——重复调用即再轮换）
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '200':
+          description: 已轮换（新明文密钥只此一次；宽限期内投递携带 X-Signature 与 X-Signature-Old 双签名）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateWebhookSecretResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- example：task 业务域 ----------
+  /api/tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: 任务列表（tasks:read；X-Workspace-Id；number 倒序，上限 100）
+      responses:
+        '200':
+          description: 任务列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: 创建任务（tasks:write；tasks_monthly 配额预扣）
+      description: |
+        支持 Idempotency-Key 请求头做创建幂等——同 key 重放
+        返回已存在行（200，不重复落库、不重复扣配额）；并发同 key 的败者也会
+        收到胜者已建行（200）。title trim 后 1..200 字符（rune 计）。
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string }
+          description: 幂等键（工作区内唯一；软删后同 key 再建视为新资源）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '200':
+          description: 幂等重放——同 Idempotency-Key 的已存在任务（不重复落库）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '402':
+          $ref: '#/components/responses/QuotaExceeded'
+        '409':
+          description: 并发同幂等键且无法取回胜者行（E_CONFLICT）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/tasks/{taskId}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: 任务详情（tasks:read；X-Workspace-Id）
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 任务 ID
+      responses:
+        '200':
+          description: 任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: 编辑任务（tasks:write；body 至少提供 title/done 一项）
+      description: |
+        200 返回更新后任务；不存在/已删/跨工作区 → 404；title 校验同创建口径。
+        done 置 true 视为一次完成，发与 POST /done 相同的完成事件（埋点/webhook/WS）。
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 任务 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: 更新后任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: 软删任务（tasks:write；204 无响应体；回退 tasks_monthly 配额）
+      description: 行仅标记 removed_at（保留审计痕迹、号码不复用），一切列表/详情/属主判定排除已删行；重复删除 → 404。
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 任务 ID
+      responses:
+        '204':
+          description: 已删除（无响应体）
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/tasks/{taskId}/done:
+    post:
+      operationId: completeTask
+      tags: [tasks]
+      summary: 标记完成（tasks:write；tasks:write_own 覆盖时仅创建者本人）
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+          description: 任务 ID
+      responses:
+        '200':
+          description: 已完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/task-stats:
+    get:
+      operationId: taskStats
+      tags: [tasks]
+      summary: 24h 任务创建埋点计数（tasks:read；X-Workspace-Id，工作区口径）
+      description: |
+        要求工作区上下文（X-Workspace-Id，须为成员），
+        聚合按 workspace_id 行级过滤——只计本工作区事件，不跨工作区泄露计数。
+        匿名 401；缺 X-Workspace-Id 400；非成员 404；无 tasks:read 403。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: X-Workspace-Id
+          in: header
+          required: true
+          schema: { type: string }
+          description: 工作区 ID（wsMW 校验成员后注入聚合过滤）
+      responses:
+        '200':
+          description: 计数（仅本工作区）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStats'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- example：system ----------
+  /config:
+    get:
+      operationId: getConfig
+      tags: [system]
+      summary: 前端 bootstrap（CSRF masked token + 已注册 OAuth 提供商）
+      security: []
+      responses:
+        '200':
+          description: 配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /healthz:
+    get:
+      operationId: healthz
+      tags: [system]
+      summary: 进程存活探针（不查下游）
+      security: []
+      responses:
+        '200':
+          description: 存活
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+  /readyz:
+    get:
+      operationId: readyz
+      tags: [system]
+      summary: 依赖就绪探针（db + workers；单项 2s 预算）
+      security: []
+      responses:
+        '200':
+          description: 就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '503':
+          description: 存在失败检查项（body 列出名称）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /debug/pool:
+    get:
+      operationId: debugPool
+      tags: [system]
+      summary: pg 连接池状态（排障用；须平台管理员）
+      description: |
+        匿名 401、已认证非平台管理员 403；DEV_DEBUG_POOL=1 时 dev 环境可免认证
+        （生产默认关）。
+      responses:
+        '200':
+          description: 池状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoolStats'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ---------- platform/wsx：实时通道 ----------
+  /ws:
+    get:
+      operationId: wsConnect
+      tags: [ws]
+      summary: 实时推送通道（WebSocket 升级；非 REST）
+      description: |
+        wsx Hub 的 WebSocket 通道（协议见 platform/wsx/wswire）：
+        - 升级时 `?workspace_id=<id>` 直接入 workspace scope（会话 Cookie 经全局 Authenticate 注入身份）；
+          无 Cookie 的客户端可连接后发控制帧 `{"type":"auth","token":"tk_*"}` 用 PAT 认证；
+        - 帧格式 `{"type":string,"payload":any,"event_id":string}`，client 级 event_id 环形去重；
+        - 广播 scope 形如 `workspace:<id>` / `user:<id>`；workspace 房间入住房间须过
+          成员闸门（装配层注入 WorkspaceMember 回调，非成员 rejected，
+          平台管理员豁免，查询失败 fail-closed）；
+        - 业务事件广播：task 域向 `workspace:<id>` 广播
+          `task.created` / `task.completed` / `task.deleted` 帧，
+          payload 形如 `{"workspace_id":…, "task":…}`。
+        Origin 白名单校验在升级前完成（AllowedOrigins）。
+      security: []
+      parameters:
+        - name: workspace_id
+          in: query
+          required: false
+          schema: { type: string }
+          description: 要加入的工作区 scope（可后续经控制帧 subscribe 切换）
+      responses:
+        '101':
+          description: Switching Protocols——WebSocket 升级成功（后续走 wswire 帧协议）
+        '403':
+          description: Origin 不在白名单
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+
+  /api/schedules:
+    get:
+      operationId: listSchedules
+      tags: [schedules]
+      summary: 调度计划列表（schedules:manage；X-Workspace-Id；next_fire_at 正序）
+      responses:
+        '200':
+          description: 计划列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchedulePlan'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createSchedule
+      tags: [schedules]
+      summary: 创建调度计划（schedules:manage；cron 表达式与 IANA 时区经 cronx 校验）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulePlanInput'
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulePlan'
+        '400':
+          $ref: '#/components/responses/DefaultError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/schedules/{id}:
+    patch:
+      operationId: updateSchedule
+      tags: [schedules]
+      summary: 更新计划（启停/换表达式/换时区/换 missed 策略；schedules:manage）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulePlanInput'
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulePlan'
+        '404':
+          $ref: '#/components/responses/DefaultError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteSchedule
+      tags: [schedules]
+      summary: 删除计划（schedules:manage；204 无响应体）
+      description: 行级删除（非软删）；在途触发由执行端 plan-gone 分支兜底（删除后恰有一发在途 → completed no-op）。重复删除 → 404；跨工作区不可见。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: 已删除（无响应体）
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/DefaultError'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/schedules/preview:
+    post:
+      operationId: previewSchedule
+      tags: [schedules]
+      summary: 预览下次 N 次触发（schedules:manage；cronx 单一事实源，N 默认 3 上限 10）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cron_expr, timezone]
+              properties:
+                cron_expr: { type: string, description: 5 字段 cron 表达式 }
+                timezone: { type: string, description: IANA 时区名（如 Asia/Shanghai） }
+                count: { type: integer, minimum: 1, maximum: 10, default: 3 }
+      responses:
+        '200':
+          description: 触发时间列表（UTC ISO8601）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: string, format: date-time }
+        '400':
+          $ref: '#/components/responses/DefaultError'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: tk_auth
+      description: 浏览器会话 Cookie（webx.Authenticate 签发/续期；写请求须另带 X-CSRF-Token）
+    patBearer:
+      type: http
+      scheme: bearer
+      description: '个人访问令牌（Authorization: Bearer tk_*，CSRF 豁免）'
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema: { type: string }
+      description: 工作区 ID
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string }
+      description: 成员用户 ID
+    TokenId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: PAT ID
+    OAuthProvider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [github, google]
+      description: OAuth 提供商（env 驱动注册，未配置时 503）
+    AdminUserId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: 用户 ID
+    AdminWorkspaceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: 工作区 ID
+    SubscriptionId:
+      name: subscriptionId
+      in: path
+      required: true
+      schema: { type: string }
+      description: webhook 订阅 ID
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: 页码
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: 每页条数
+    AuditWorkspace:
+      name: workspace
+      in: query
+      required: false
+      schema: { type: string, format: uuid }
+      description: 过滤：工作区 ID（uuid）
+    AuditActorID:
+      name: actor_id
+      in: query
+      required: false
+      schema: { type: string }
+      description: 过滤：操作者 ID
+    AuditAction:
+      name: action
+      in: query
+      required: false
+      schema: { type: string }
+      description: 过滤：动作（如 workspace.rename）
+    AuditResourceType:
+      name: resource_type
+      in: query
+      required: false
+      schema: { type: string }
+      description: 过滤：资源类型
+    AuditFrom:
+      name: from
+      in: query
+      required: false
+      schema: { type: string, format: date-time }
+      description: 过滤：created_at >= from（RFC3339）
+    AuditTo:
+      name: to
+      in: query
+      required: false
+      schema: { type: string, format: date-time }
+      description: 过滤：created_at < to（RFC3339）
+    AuditLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+      description: 每页条数（1..500，缺省 100）
+    AuditOffset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: 偏移
+
+  responses:
+    DefaultError:
+      description: 其他错误（统一 ErrorBody 信封）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    BadRequest:
+      description: 参数非法（E_VALIDATION / E_BAD_JSON / E_PAYLOAD_TOO_LARGE）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Unauthenticated:
+      description: 未认证（E_UNAUTHENTICATED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Forbidden:
+      description: 无权限（E_FORBIDDEN）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    NotFound:
+      description: 不存在（E_NOT_FOUND）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Conflict:
+      description: 冲突（E_CONFLICT）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    RateLimited:
+      description: 限流（E_RATE_LIMITED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    QuotaExceeded:
+      description: 配额用尽（E_QUOTA_EXCEEDED）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Unavailable:
+      description: 服务未接线/不可用（E_UNAVAILABLE）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+
+  schemas:
+    # ---- 统一错误信封（webx.ErrorBody） ----
+    ErrorBody:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: 错误码（E_UNAUTHENTICATED / E_FORBIDDEN / E_NOT_FOUND / E_VALIDATION / E_CONFLICT / E_RATE_LIMITED / E_QUOTA_EXCEEDED / E_INTERNAL / E_TIMEOUT / E_PAYLOAD_TOO_LARGE / E_UNAVAILABLE）
+        message:
+          type: string
+        details:
+          description: 可选补充（通常为字符串详情）
+    StatusOK:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    StatusSent:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [sent]
+    StatusReceived:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [received]
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+    DeletedResponse:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          enum: [deleted]
+    BadgeResponse:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+
+    # ---- identity（字段对齐 packages/ui PKUser） ----
+    PKUser:
+      type: object
+      required: [id, email, display_name, status, is_platform_admin, email_verified, created_at]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          description: 空串或 http(s):// 前缀且 ≤2048 字节（与前端 zod 同语义）
+        status:
+          type: string
+          enum: [active, disabled, deleted]
+        is_platform_admin:
+          type: boolean
+        email_verified:
+          type: boolean
+        created_at:
+          type: string
+        impersonated_by:
+          type: string
+          description: |
+            仅 GET /auth/me 出现且仅在模拟会话下（发起模拟的平台管理员
+            userID；session.impersonated_by，迁移 034 / ADR 0008）。普通
+            会话省略该字段。登录/注册响应不含此字段。
+          format: date-time
+    LoginResponse:
+      type: object
+      required: [user, expires_at]
+      properties:
+        user:
+          $ref: '#/components/schemas/PKUser'
+        expires_at:
+          type: string
+          format: date-time
+    ExpiresAtResponse:
+      type: object
+      required: [expires_at]
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+    SessionInfo:
+      type: object
+      required: [id, ip_hash, user_agent, last_seen_at, expires_at, created_at]
+      properties:
+        id:
+          type: string
+        ip_hash:
+          type: string
+        user_agent:
+          type: string
+        last_seen_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    PAT:
+      type: object
+      required: [id, name, prefix, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        prefix:
+          type: string
+          description: 展示用前缀（密钥本体不回传）
+        expires_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    CreatePATResponse:
+      type: object
+      required: [pat, token]
+      properties:
+        pat:
+          $ref: '#/components/schemas/PAT'
+        token:
+          type: string
+          description: 完整令牌（tk_*，仅本次出现一次）
+    SendCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+    VerifyCodeRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+        code:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [email, password, display_name]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: trim 后 1..100 字符（rune 计）
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+    EmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+    ResetPasswordRequest:
+      type: object
+      required: [email, token, new_password]
+      properties:
+        email:
+          type: string
+        token:
+          type: string
+        new_password:
+          type: string
+    VerifyEmailRequest:
+      type: object
+      required: [email, token]
+      properties:
+        email:
+          type: string
+        token:
+          type: string
+    UpdateMeRequest:
+      type: object
+      required: [display_name, avatar_url]
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: trim 后 1..100 字符（rune 计）
+        avatar_url:
+          type: string
+          maxLength: 2048
+          description: 空串（清除头像）或 http(s):// 前缀 URL，≤2048 字节（与前端 zod 同语义）
+    ChangePasswordRequest:
+      type: object
+      required: [old_password, new_password]
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+    CreatePATRequest:
+      type: object
+      required: [name, ttl_hours]
+      properties:
+        name:
+          type: string
+        ttl_hours:
+          type: integer
+          description: 有效期小时数（0 = 不过期）
+
+    # ---- workspace（PKWorkspace 对齐 packages/ui） ----
+    Workspace:
+      type: object
+      required: [id, slug, name, plan_code, created_at]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        plan_code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    PKWorkspace:
+      allOf:
+        - $ref: '#/components/schemas/Workspace'
+        - type: object
+          required: [role]
+          properties:
+            role:
+              type: string
+              enum: [owner, admin, member]
+              description: 我在该工作区的角色
+    Member:
+      type: object
+      required: [user_id, email, display_name, role, created_at]
+      properties:
+        user_id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, member]
+        created_at:
+          type: string
+          format: date-time
+    Invitation:
+      type: object
+      required: [id, workspace_id, email, role, status, expires_at, created_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, member]
+        status:
+          type: string
+          enum: [pending, accepted, declined, revoked, expired]
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    InvitationWithWorkspace:
+      allOf:
+        - $ref: '#/components/schemas/Invitation'
+        - type: object
+          required: [workspace_name, workspace_slug]
+          properties:
+            workspace_name:
+              type: string
+            workspace_slug:
+              type: string
+    ShareLink:
+      type: object
+      required: [id, code_prefix, role, max_uses, uses, expires_at, created_at]
+      properties:
+        id:
+          type: string
+        code_prefix:
+          type: string
+          description: 展示用前缀（完整 code 仅创建响应出现一次）
+        role:
+          type: string
+          enum: [admin, member]
+        max_uses:
+          type: integer
+        uses:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    MemberPage:
+      type: object
+      description: 成员列表分页信封（total 为过滤命中总数，非本页条数）
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        total:
+          type: integer
+    InvitationPage:
+      type: object
+      description: 邀请列表分页信封（total 为过滤命中总数，非本页条数）
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invitation'
+        total:
+          type: integer
+    ShareLinkPage:
+      type: object
+      description: 分享链接列表分页信封（total 为过滤命中总数，非本页条数）
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShareLink'
+        total:
+          type: integer
+    CreateWorkspaceRequest:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+    RenameWorkspaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+    UpdateMemberRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+    CreateInvitationRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+    CreateShareLinkRequest:
+      type: object
+      required: [role, max_uses, ttl_hours]
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+        max_uses:
+          type: integer
+        ttl_hours:
+          type: integer
+    CreateShareLinkResponse:
+      type: object
+      required: [link, code]
+      properties:
+        link:
+          $ref: '#/components/schemas/ShareLink'
+        code:
+          type: string
+          description: 完整兑换码（仅本次出现一次）
+    RedeemShareLinkRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+
+    # ---- billing（PKPlan/PKOrder/Subscription 对齐 packages/ui） ----
+    Plan:
+      type: object
+      required: [code, name, limits, sort_no]
+      properties:
+        code:
+          type: string
+          description: 套餐码（free / starter / pro / enterprise）
+        name:
+          type: string
+        currency:
+          type: string
+          description: 套餐单币种（ISO 4217；缺省 CNY）
+        trial_days:
+          type: integer
+          description: 试用天数（plan.limits["trial_days"] 的显式投影，0 = 无试用；单一事实源仍是 limits）
+        limits:
+          type: object
+          additionalProperties:
+            type: number
+          description: 配额维度（-1 = 不限）；含价格键 price_monthly/price_yearly/price_one_time_cents 与 trial_days
+        sort_no:
+          type: integer
+    Order:
+      type: object
+      required: [id, plan_code, interval, amount_cents, currency, status, created_at]
+      properties:
+        id:
+          type: string
+        plan_code:
+          type: string
+        interval:
+          type: string
+          enum: [monthly, yearly, one_time]
+        amount_cents:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, paid, failed, canceled, refunded]
+        created_at:
+          type: string
+          format: date-time
+        workspace_id:
+          type: string
+        user_id:
+          type: string
+        channel:
+          type: string
+        channel_ref:
+          type: string
+        paid_at:
+          type: string
+          format: date-time
+        canceled_at:
+          type: string
+          format: date-time
+        refunded_at:
+          type: string
+          format: date-time
+    Subscription:
+      type: object
+      required: [plan_code, orders]
+      properties:
+        plan_code:
+          type: string
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+    SSOConfigRequest:
+      type: object
+      required: [issuer_url, client_id, client_secret]
+      properties:
+        issuer_url:
+          type: string
+          description: IdP 基址（自动 discovery .well-known/openid-configuration）
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        scopes:
+          type: string
+          default: openid email profile
+    SSOConfig:
+      type: object
+      required: [workspace_id, issuer_url, client_id, client_secret, scopes, updated_at]
+      properties:
+        workspace_id:
+          type: string
+        issuer_url:
+          type: string
+        client_id:
+          type: string
+        client_secret:
+          type: string
+          description: 恒为 ***（脱敏）
+        scopes:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    UsagePreview:
+      type: object
+      required: [period, items, projected_total_cents]
+      properties:
+        period:
+          type: string
+          description: 当期 UTC 月（YYYY-MM）
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsagePreviewItem'
+        projected_total_cents:
+          type: integer
+    UsagePreviewItem:
+      type: object
+      required: [dim, used, included, unit_cents, projected_overage_cents]
+      properties:
+        dim:
+          type: string
+          description: 计量维度（与 quota 维度同名）
+        used:
+          type: integer
+        included:
+          type: integer
+          description: 基础包含量
+        unit_cents:
+          type: integer
+        projected_overage_cents:
+          type: integer
+    CheckoutSession:
+      type: object
+      required: [order_id, channel, action_url, session_ref, expires_at]
+      properties:
+        order_id:
+          type: string
+        channel:
+          type: string
+          enum: [stripe, alipay, wechat]
+        action_url:
+          type: string
+          description: 客户端跳转的支付页
+        session_ref:
+          type: string
+          description: 渠道会话 ID
+        expires_at:
+          type: string
+          format: date-time
+    CreateCheckoutRequest:
+      type: object
+      required: [plan_code, interval, channel]
+      properties:
+        plan_code:
+          type: string
+        interval:
+          type: string
+          enum: [monthly, yearly, one_time]
+        channel:
+          type: string
+          enum: [stripe, alipay, wechat]
+
+    # ---- notify（Notification 对齐 packages/ui NotificationBell） ----
+    Notification:
+      type: object
+      required: [id, type, title, body, count, created_at]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          description: 通知类型（quota_near_limit / quota_exhausted / ...）
+        title:
+          type: string
+        body:
+          type: string
+        link:
+          type: [string, 'null']
+          description: 可选跳转链接
+        count:
+          type: integer
+          description: 合并计数
+        read_at:
+          type: [string, 'null']
+          format: date-time
+          description: 已读时间（未读为 null/缺省）
+        created_at:
+          type: string
+          format: date-time
+    Preference:
+      type: object
+      description: 一条显式设置过的通知偏好（缺行 = 双渠道默认开启）
+      required: [notification_type, email_enabled, in_app_enabled, updated_at]
+      properties:
+        notification_type:
+          type: string
+        email_enabled:
+          type: boolean
+        in_app_enabled:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+    PreferenceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Preference'
+    NotificationTypeMeta:
+      type: object
+      description: 通知类型目录条目（产品装配层下发）
+      required: [type, label]
+      properties:
+        type:
+          type: string
+        label:
+          type: string
+          description: 展示名（zh-CN）
+        description:
+          type: string
+          description: 可选说明
+    NotificationTypeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTypeMeta'
+
+    # ---- quota ----
+    UsageResp:
+      type: object
+      required: [workspace_id, plan_code, period, items]
+      properties:
+        workspace_id:
+          type: string
+        plan_code:
+          type: string
+        period:
+          type: string
+          description: 计费周期键（如 2026-10）
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageItem'
+    UsageItem:
+      type: object
+      required: [key, limit, used, granted, reserved, period]
+      properties:
+        key:
+          type: string
+          description: 配额维度键（如 tasks_monthly）
+        limit:
+          type: integer
+          description: 套餐上限（-1 = 不限；0 = 维度未定义）
+        used:
+          type: integer
+        granted:
+          type: integer
+          description: 解锁额度（超出套餐的加成）
+        reserved:
+          type: integer
+          description: 两阶段预留中合计（quota_counter.reserved；Reserve 未结算/未释放的量）
+        reservations:
+          type: array
+          description: 预留明细（仅当前周期 reserved 状态的行；无预留时缺省）
+          items:
+            $ref: '#/components/schemas/ReservationBrief'
+        period:
+          type: string
+    ReservationBrief:
+      type: object
+      required: [id, amount, status, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+          description: 预留量（最小单位）
+        status:
+          type: string
+          enum: [reserved]
+          description: 明细只含 reserved 行（settled/released/expired 不返回）
+        expires_at:
+          type: string
+          format: date-time
+          description: 过期时间（默认创建+24h，sweeper 到期回收）
+
+    SchedulePlan:
+      type: object
+      required: [id, workspace_id, kind, cron_expr, timezone, next_fire_at, misfire, created_at, enabled]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+        kind:
+          type: string
+          description: 执行器类型（如 task.cleanup；未识别 kind 触发时 no-op 记日志）
+        cron_expr:
+          type: string
+          description: 5 字段 cron 表达式（cronx 校验）
+        timezone:
+          type: string
+          description: IANA 时区名
+        next_fire_at:
+          type: string
+          format: date-time
+          description: 下次触发（UTC 存储；advance 语义=从当前时间重算，隐式 skip）
+        misfire:
+          type: string
+          enum: [skip, once]
+          description: 错过触发策略（默认 skip；once=补发最近一次，60s grace 窗口）
+        last_fired_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        enabled:
+          type: boolean
+    SchedulePlanInput:
+      type: object
+      required: [kind, cron_expr, timezone]
+      properties:
+        kind: { type: string }
+        cron_expr: { type: string }
+        timezone: { type: string }
+        misfire:
+          type: string
+          enum: [skip, once]
+        enabled: { type: boolean, default: true }
+
+    # ---- audit ----
+    AuditEvent:
+      type: object
+      required: [id, workspace_id, actor_type, actor_id, actor_snapshot, action, resource_type, resource_id, metadata, created_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+          description: 工作区 ID（平台级事件为空串）
+        actor_type:
+          type: string
+          enum: [user, pat, system]
+        actor_id:
+          type: [string, 'null']
+          description: 操作者 ID（system 为 null）
+        actor_snapshot:
+          type: object
+          additionalProperties: true
+          description: 操作时身份快照（email / role / workspace_id）
+        action:
+          type: string
+          description: 动作（如 workspace.rename / billing.plan_changed）
+        resource_type:
+          type: string
+        resource_id:
+          type: [string, 'null']
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    AuditListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          type: integer
+          description: 过滤命中总数（非当页条数）
+
+    # ---- admin ----
+    AdminStats:
+      type: object
+      required: [total_users, active_users, total_workspaces, paid_workspaces, new_users_7d, new_users_30d]
+      properties:
+        total_users:
+          type: integer
+        active_users:
+          type: integer
+        total_workspaces:
+          type: integer
+        paid_workspaces:
+          type: integer
+          description: plan != free 的工作区数
+        new_users_7d:
+          type: integer
+        new_users_30d:
+          type: integer
+    AdminUser:
+      type: object
+      required: [id, email, display_name, status, is_platform_admin, email_verified, created_at]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled]
+        is_platform_admin:
+          type: boolean
+        email_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+    AdminWorkspace:
+      type: object
+      required: [id, slug, name, plan_code, member_count, created_at]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        plan_code:
+          type: string
+        owner_email:
+          type: string
+          nullable: true
+          description: 当前 owner 成员邮箱（零 owner 竞态窗口下为 null）
+        member_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    SetUserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, disabled]
+    SetAdminRequest:
+      type: object
+      required: [is_admin]
+      properties:
+        is_admin:
+          type: boolean
+    AdminChangePlanRequest:
+      type: object
+      required: [plan_code]
+      properties:
+        plan_code:
+          type: string
+    ImpersonationResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/AdminUser'
+      description: 模拟登录结果（user=目标用户摘要；会话经 Set-Cookie 下发）
+    AnalyticsSummaryRow:
+      type: object
+      required: [event_type, count, last_at]
+      properties:
+        event_type:
+          type: string
+        count:
+          type: integer
+        last_at:
+          type: string
+          format: date-time
+
+    # ---- webhooks ----
+    WebhookSubscription:
+      type: object
+      required: [id, workspace_id, event_types, url, description, is_active, created_at]
+      properties:
+        id:
+          type: string
+        workspace_id:
+          type: string
+        event_types:
+          type: array
+          items:
+            type: string
+        url:
+          type: string
+        description:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    CreateWebhookSubscriptionRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          description: 回调 URL（https）
+        events:
+          type: array
+          items:
+            type: string
+          description: 订阅的事件类型（见 events 目录）
+        description:
+          type: string
+    CreateWebhookSubscriptionResponse:
+      type: object
+      required: [subscription, secret]
+      properties:
+        subscription:
+          $ref: '#/components/schemas/WebhookSubscription'
+        secret:
+          type: string
+          description: 签名密钥（仅本次出现一次）
+    SetSubscriptionActiveRequest:
+      type: object
+      required: [is_active]
+      properties:
+        is_active:
+          type: boolean
+    WebhookDelivery:
+      type: object
+      required: [id, subscription_id, event_id, event_type, status, attempts, created_at]
+      properties:
+        id:
+          type: string
+        subscription_id:
+          type: string
+        event_id:
+          type: string
+        event_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, delivered, dead]
+        attempts:
+          type: integer
+        last_status_code:
+          type: integer
+        last_error:
+          type: string
+        delivered_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    RotateWebhookSecretResponse:
+      type: object
+      required: [secret]
+      properties:
+        secret:
+          type: string
+          description: 新签名密钥（whk_ 前缀，仅本次出现一次；旧钥在 24h 宽限期内以 X-Signature-Old 并存）
+    WebhookEventItem:
+      type: object
+      required: [type, description]
+      properties:
+        type:
+          type: string
+        description:
+          type: string
+
+    # ---- example：task ----
+    Task:
+      type: object
+      required: [id, number, title, done, created_at]
+      properties:
+        id:
+          type: string
+        number:
+          type: integer
+          description: 工作区内单调递增序号
+        title:
+          type: string
+        done:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          description: 最近编辑时间（null/缺省 = 从未编辑）
+    CreateTaskRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+    UpdateTaskRequest:
+      type: object
+      description: 编辑任务——至少提供一项；title 校验同创建口径
+      minProperties: 1
+      properties:
+        title:
+          type: string
+        done:
+          type: boolean
+    TaskStats:
+      type: object
+      required: [task_created_24h]
+      properties:
+        task_created_24h:
+          type: integer
+
+    # ---- example：system ----
+    ConfigResponse:
+      type: object
+      required: [csrf_token, oauth_providers, billing_channels]
+      properties:
+        csrf_token:
+          type: string
+          description: masked CSRF token（首次写操作前由 @ploykit/client 拉取）
+        oauth_providers:
+          type: array
+          items:
+            type: string
+          description: 已注册的 OAuth 提供商（未配置为空数组）
+        billing_channels:
+          type: array
+          items:
+            type: string
+          description: 已注册的计费渠道（未注册的渠道前端应置灰，checkout 会 400）
+        mail_mode:
+          type: string
+          enum: [smtp, dev]
+          description: 邮件通道形态（smtp=真实发送 / dev=仅记日志；通知偏好页据此降级标注邮件开关语义）
+        banner_text:
+          type: string
+          description: 站点公告（空=无横幅）
+        banner_kind:
+          type: string
+          enum: [info, warn]
+          description: 公告样式（默认 info）
+        maintenance_mode:
+          type: string
+          enum: ["0", "1"]
+          description: 维护模式标记（默认 0）
+        allow_signup:
+          type: string
+          enum: ["0", "1"]
+          description: 注册开关（env ALLOW_SIGNUP 初值，默认 1；对注册闸门生效需重启）
+        allowed_domains:
+          type: string
+          description: 注册邮箱域名白名单（逗号分隔，空=不限；env ALLOWED_DOMAINS 初值）
+        rate_limit_per_user_per_min:
+          type: string
+          description: API 每用户限流（请求/分，0=关；env RATE_LIMIT_PER_USER_PER_MIN 初值；重启生效）
+        rate_limit_per_ip_per_min:
+          type: string
+          description: 认证路径每客户端 IP 限流（请求/分，0=关；env RATE_LIMIT_PER_IP_PER_MIN 初值；重启生效）
+        rate_limit_allowlist:
+          type: string
+          description: 限流豁免名单（逗号分隔 IP/CIDR，空=无；env RATE_LIMIT_ALLOWLIST 初值；重启生效）
+
+    PoolStats:
+      type: object
+      required: [acquired, idle, total]
+      properties:
+        acquired:
+          type: integer
+        idle:
+          type: integer
+        total:
+          type: integer

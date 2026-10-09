@@ -1,0 +1,71 @@
+# verify — PR/push 门禁（设计：capability-impl-plan-2026-10-06.md §三 能力 E）。
+# 四 job 并行：根 Go 模块 / API 契约漂移 / example 独立模块 / 前端 npm workspaces。
+# DB 集成门（services: postgres + TEST_DATABASE_URL）属第二阶段，不在本 MVP。
+name: verify
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 根 Go 模块：build + vet + test（含 internal/arch 架构边界测试）。
+  # test 用 -p 2：renderx watchdog 全量并行偶发 30s 超时（CPU 争抢 flake），见计划 §一.3。
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -p 2 ./...
+
+  # API 契约漂移：docs/openapi.yaml ↔ 路由注册（纯 python 标准库，零依赖）。
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python tools/check_api.py
+
+  # example 独立 Go 模块（go.mod replace 指向 ../，仓库根即可构建）。
+  example:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+          cache-dependency-path: example/go.sum
+      - run: go build ./...
+      - run: go test ./...
+
+  # 前端：npm workspaces 单仓（packages/client、runtime、ui + example/web）。
+  # 根目录一次 npm install 即装齐；postinstall 同步桥在 Linux 下照常工作（dev-environment.md）。
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm test
+      - run: npm run check:web

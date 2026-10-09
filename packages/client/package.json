@@ -1,0 +1,36 @@
+{
+  "name": "@ploykit/client",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "description": "API + WebSocket 客户端：CSRF/工作区上下文请求层与 wsx 实时客户端（零 react 依赖）。产物为 ESM（相对导入无扩展名，消费方需经 vite/esbuild 等打包器解析）；exports 的 development 条件指向源码，供 monorepo 开发期（vite dev / tsc customConditions / vitest）直出消费。",
+  "keywords": [
+    "ploykit",
+    "api-client",
+    "websocket"
+  ],
+  "license": "ISC",
+  "scripts": {
+    "gen:types": "openapi-typescript ../../docs/openapi.yaml -o src/types.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "verify:types": "openapi-typescript ../../docs/openapi.yaml -o src/types.ts --check"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+example/web
+packages/ui/overrides
+packages/*/node_modules
+*.exe
+*.exe~
+*.log
+example/ck*.txt

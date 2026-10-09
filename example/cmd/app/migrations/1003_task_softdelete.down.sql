@@ -1,0 +1,5 @@
+
+DROP INDEX IF EXISTS task_ws_idem_key;
+ALTER TABLE task DROP COLUMN IF EXISTS idempotency_key;
+ALTER TABLE task DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE task DROP COLUMN IF EXISTS removed_at;

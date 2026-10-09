@@ -1,0 +1,3 @@
+
+ALTER TABLE plan DROP CONSTRAINT IF EXISTS plan_currency_format;
+ALTER TABLE plan DROP COLUMN IF EXISTS currency;

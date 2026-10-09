@@ -1,0 +1,62 @@
+# golden 测试目录夹具（ploykit-m0-golden-subset.md §4/§5 的 12 例输入载体）。
+# 词汇全部为 R1 占位：操作 ID、角色名不含任何业务语义；按 N1，产品门禁
+#（lifecycle/protection）一律重述为"无规则"（rules 省略）。
+catalog_schema_version: 1
+roles:
+  workspace: [role_ws_a, role_ws_b]
+  project: [role_caller, role_manager, role_member]
+operations:
+  # G-1/G-2：会话操作（认证方式分离轴）
+  - operation_id: op.project.invoke
+    auth_method: session
+    scope: project_path
+    allowed_project_roles: [role_caller]
+    assurance: aal1
+    recent_auth: none
+    idempotency: required
+  # G-3：凭据绑定 scope（scoped_token + project_credential）
+  - operation_id: op.project.token_read
+    auth_method: scoped_token
+    scope: project_credential
+    allowed_project_roles: [role_caller]
+    assurance: none
+    recent_auth: none
+    idempotency: none
+  # G-4/G-5/CH-1/CH-2：aal2 + password_and_mfa_600s 的重操作
+  - operation_id: op.project.manage
+    auth_method: session
+    scope: project_path
+    allowed_project_roles: [role_manager]
+    assurance: aal2
+    recent_auth: password_and_mfa_600s
+    idempotency: required
+  # G-6/G-7：匿名公开操作（fail-closed：不接受任何主体）
+  - operation_id: op.platform.public
+    auth_method: unauthenticated
+    scope: platform
+    assurance: none
+    recent_auth: none
+    idempotency: none
+  # CH-4①/CH-5：recent_auth=password_600s 且 assurance=aal1（hint 降级档）
+  - operation_id: op.project.password_recent
+    auth_method: session
+    scope: project_path
+    allowed_project_roles: [role_caller]
+    assurance: aal1
+    recent_auth: password_600s
+    idempotency: none
+  # §8.1 派生：工作区层 membership/role 的 deny 侧与 allow 侧
+  - operation_id: op.workspace.admin
+    auth_method: session
+    scope: workspace_path
+    allowed_workspace_roles: [role_ws_a]
+    assurance: aal1
+    recent_auth: none
+    idempotency: none
+  # §8.1 派生：机器凭据有效窗（无角色门）
+  - operation_id: op.project.machine_run
+    auth_method: machine_credential
+    scope: project_credential
+    assurance: none
+    recent_auth: none
+    idempotency: none

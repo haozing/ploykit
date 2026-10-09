@@ -1,0 +1,19 @@
+{
+  "name": "ploykit",
+  "version": "0.3.0",
+  "private": true,
+  "description": "ploykit 仓库根（npm workspaces）：packages/* 框架前端包 + example/web 产品前端。Go 模块同名与此无关，永不发布。",
+  "workspaces": [
+    "packages/client",
+    "packages/runtime",
+    "packages/ui",
+    "example/web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:web": "npm run dev -w myproduct-web",
+    "check:web": "npm run check -w myproduct-web",
+    "build:web": "npm run build && npm run build -w myproduct-web"
+  }
+}

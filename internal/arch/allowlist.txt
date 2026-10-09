@@ -1,0 +1,6 @@
+admin -> audit # ADR 0002 admin 聚合控制台只读依赖 audit 查询面
+admin/adapters/bridge -> identity/app    # ADR 0004 组合桥接：仅 app 层
+admin/adapters/bridge -> workspace/app   # ADR 0004 组合桥接：仅 app 层
+admin/adapters/bridge -> notify/app      # ADR 0004 组合桥接：仅 app 层
+admin/adapters/bridge -> billing/app     # ADR 0004 组合桥接：仅 app 层
+admin/adapters/bridge -> webhooks/app    # ADR 0004 组合桥接：仅 app 层

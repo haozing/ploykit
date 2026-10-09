@@ -1,0 +1,45 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "contractx fixture API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/workspaces/{workspaceId}/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "responses": {
+          "200": {
+            "description": "task list"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTask",
+        "responses": {
+          "201": {
+            "description": "created"
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspaceId}/tasks/{taskId}": {
+      "get": {
+        "operationId": "getTask",
+        "responses": {
+          "200": {
+            "description": "one task"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTask",
+        "responses": {
+          "204": {
+            "description": "deleted"
+          }
+        }
+      }
+    }
+  }
+}
