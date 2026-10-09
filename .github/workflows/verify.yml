@@ -1,6 +1,6 @@
-# verify — PR/push 门禁（设计：capability-impl-plan-2026-10-06.md §三 能力 E）。
-# 四 job 并行：根 Go 模块 / API 契约漂移 / example 独立模块 / 前端 npm workspaces。
-# DB 集成门（services: postgres + TEST_DATABASE_URL）属第二阶段，不在本 MVP。
+# verify — PR/push gate (design: capability-impl-plan-2026-10-06.md §3, capability E).
+# Four parallel jobs: root Go module / API contract drift / example standalone module / frontend npm workspaces.
+# DB integration gate (services: postgres + TEST_DATABASE_URL) belongs to phase 2 and is out of scope for this MVP.
 name: verify
 
 on:
@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 根 Go 模块：build + vet + test（含 internal/arch 架构边界测试）。
-  # test 用 -p 2：renderx watchdog 全量并行偶发 30s 超时（CPU 争抢 flake），见计划 §一.3。
+  # Root Go module: build + vet + test (including the internal/arch architecture boundary tests).
+  # test runs with -p 2: renderx watchdog occasionally hits a 30s timeout under full parallelism (CPU contention flake), see plan §1.3.
   go:
     runs-on: ubuntu-latest
     steps:
@@ -30,7 +30,7 @@ jobs:
       - run: go vet ./...
       - run: go test -p 2 ./...
 
-  # API 契约漂移：docs/openapi.yaml ↔ 路由注册（纯 python 标准库，零依赖）。
+  # API contract drift: docs/openapi.yaml ↔ route registration (pure Python standard library, zero dependencies).
   contract:
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +40,7 @@ jobs:
           python-version: '3.x'
       - run: python tools/check_api.py
 
-  # example 独立 Go 模块（go.mod replace 指向 ../，仓库根即可构建）。
+  # Example standalone Go module (go.mod replace points to ../, buildable from the repo root).
   example:
     runs-on: ubuntu-latest
     defaults:
@@ -56,8 +56,8 @@ jobs:
       - run: go build ./...
       - run: go test ./...
 
-  # 前端：npm workspaces 单仓（packages/client、runtime、ui + example/web）。
-  # 根目录一次 npm install 即装齐；postinstall 同步桥在 Linux 下照常工作（dev-environment.md）。
+  # Frontend: npm workspaces monorepo (packages/client, runtime, ui + example/web).
+  # A single npm install at the repo root installs everything; the postinstall sync bridge works as usual on Linux (dev-environment.md).
   ui:
     runs-on: ubuntu-latest
     steps:

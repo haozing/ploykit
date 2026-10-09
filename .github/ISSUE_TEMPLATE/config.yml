@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Roadmap
+    url: https://github.com/haozing/ploykit/blob/master/docs/ROADMAP.md
+    about: Trigger-based roadmap — check whether your idea is already booked with a start condition.

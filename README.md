@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/haozing/ploykit/actions/workflows/ci.yml"><img src="https://github.com/haozing/ploykit/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="#-license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white" alt="Go 1.26+" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
@@ -30,6 +31,36 @@ Dependencies are strictly one-way: **product → framework**. Your repository co
 | **Cross-cutting** | `authz` (simple RBAC) · `authorization` (strong profile: YAML operation catalog, staged evaluator, allow / deny / **challenge**) · `contractx` (deterministic hashing, route and OpenAPI comparison) |
 | **Platform packages** (18) | `renderx` (SSR + prerender + QuickJS sandbox) · `pg` (tenant-scoped pools) · `pgmigrate` · `pgpart` · `events` (River) · `webx` · `wsx` (WebSocket rooms) · `egressx` (SSRF-safe egress) · `sealx` (secret sealing) · `storagex` · `redactx` · `logx` · `metrics` · `workers` · `cronx` · `redisx` · `relayx` · `ids` |
 | **Frontend** | `@ploykit/ui` (Base UI component system, 40+ pages) · `@ploykit/client` (typed API + CSRF + realtime) · `@ploykit/runtime` (hydration and prerender bridge) |
+
+## Screenshots
+
+| Product — tasks & usage | Platform admin console |
+|---|---|
+| ![Product dashboard](docs/screenshots/dashboard.png) | ![Admin overview](docs/screenshots/admin-overview.png) |
+
+| Workspace billing — plans & manual channel |
+|---|
+| ![Billing](docs/screenshots/billing.png) |
+
+## Extend it in minutes
+
+Every domain exposes hooks. React to anything your product cares about in a
+few lines — inside your own transaction boundary:
+
+```go
+import "github.com/haozing/ploykit/platform/events"
+
+// react to a domain event emitted by the framework
+events.Subscribe("task.created", func(ctx context.Context, ev events.Event) error {
+    slog.Info("task created", "workspace", ev.WorkspaceID)
+    return nil // return an error to fail the emitting transaction
+})
+```
+
+That is the whole idea: the framework owns the machinery (tenancy, auth,
+billing, quotas, events, rendering); your repository owns the product —
+pages, product migrations (`1001+`), and the reactions that make it yours.
+The [`example/`](example/) app is a complete, working demonstration.
 
 ## Architecture at a glance
 
@@ -95,7 +126,11 @@ python tools/check_api.py                 # OpenAPI ↔ route contract check
 
 ## Contributing
 
-Issues and pull requests are welcome. The architecture tests are the contract: if your change crosses a boundary on purpose, update the ADR and the allowlist in the same PR.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for the full setup and the architecture contract. The short version: the
+architecture tests are the contract; if your change crosses a boundary on
+purpose, update the ADR and the allowlist in the same PR. Security issues go
+through [SECURITY.md](SECURITY.md), never public issues.
 
 ## License
 
