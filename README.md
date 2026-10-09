@@ -32,16 +32,6 @@ Dependencies are strictly one-way: **product → framework**. Your repository co
 | **Platform packages** (18) | `renderx` (SSR + prerender + QuickJS sandbox) · `pg` (tenant-scoped pools) · `pgmigrate` · `pgpart` · `events` (River) · `webx` · `wsx` (WebSocket rooms) · `egressx` (SSRF-safe egress) · `sealx` (secret sealing) · `storagex` · `redactx` · `logx` · `metrics` · `workers` · `cronx` · `redisx` · `relayx` · `ids` |
 | **Frontend** | `@ploykit/ui` (Base UI component system, 40+ pages) · `@ploykit/client` (typed API + CSRF + realtime) · `@ploykit/runtime` (hydration and prerender bridge) |
 
-## Screenshots
-
-| Product — tasks & usage | Platform admin console |
-|---|---|
-| ![Product dashboard](docs/screenshots/dashboard.png) | ![Admin overview](docs/screenshots/admin-overview.png) |
-
-| Workspace billing — plans & manual channel |
-|---|
-| ![Billing](docs/screenshots/billing.png) |
-
 ## Extend it in minutes
 
 Every domain exposes hooks. React to anything your product cares about in a
