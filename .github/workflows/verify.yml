@@ -46,7 +46,7 @@ jobs:
       # On failure, surface the failing tests as annotations (logs otherwise need admin auth).
       - run: |
           go test -p 2 ./... > /tmp/unit.log 2>&1 || {
-            grep -E '^(--- FAIL|    --- FAIL|FAIL)' /tmp/unit.log | sed 's/^/::error::/'
+            grep -E '^(--- FAIL|    --- FAIL|FAIL)|未重建|重建失败|renderx\(dev\)' /tmp/unit.log | sed 's/^/::error::/' | sort -u | head -40
             cat /tmp/unit.log
             exit 1
           }
@@ -54,7 +54,7 @@ jobs:
       # (concurrent schema migration) is what kept this job red when the env was job-wide.
       - run: |
           go test -p 1 -count=1 ./... > /tmp/integ.log 2>&1 || {
-            grep -E '^(--- FAIL|    --- FAIL|FAIL)' /tmp/integ.log | sed 's/^/::error::/'
+            grep -E '^(--- FAIL|    --- FAIL|FAIL)|未重建|重建失败|renderx\(dev\)' /tmp/integ.log | sed 's/^/::error::/' | sort -u | head -40
             cat /tmp/integ.log
             exit 1
           }
