@@ -21,6 +21,7 @@ build:
 	go run ./cmd/render prerender
 	rm -rf cmd/app/frontend
 	cp -r web/dist cmd/app/frontend
+	touch cmd/app/frontend/.placeholder
 	CGO_ENABLED=0 go build -o app.exe ./cmd/app
 	@echo "✅ 构建完成: ./app.exe (打开 http://localhost:8080)"
 

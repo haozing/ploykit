@@ -191,7 +191,7 @@ mux.Handle("/", renderx.Handler(renderx.HandlerDeps{
 build:
 	cd web && npx vite build                 # client (SPA + hydration entry), with build.manifest enabled
 	go run ./cmd/render prerender            # prerender: code-determined pages into dist/prerender/, data-determined pages optionally warmed
-	rm -rf cmd/app/frontend && cp -r web/dist cmd/app/frontend
+	rm -rf cmd/app/frontend && cp -r web/dist cmd/app/frontend && touch cmd/app/frontend/.placeholder
 	CGO_ENABLED=0 go build -o app.exe ./cmd/app
 ```
 

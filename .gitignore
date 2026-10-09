@@ -4,7 +4,8 @@ dist/
 .env
 *.log
 *.exe~
-example/cmd/app/frontend/
+example/cmd/app/frontend/*
+!example/cmd/app/frontend/.placeholder
 g*.txt
 example/ck*.txt
 example/renderx-cache/

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,6 +31,9 @@ func TestFrontendAssetMissIs404(t *testing.T) {
 }
 
 func TestFrontendClientRouteFallsBackToShell(t *testing.T) {
+	if _, err := fs.ReadFile(frontendFS, "frontend/index.html"); err != nil {
+		t.Skip("前端产物未构建（embed 内无 index.html），回壳行为由 make -C example build 后的本地/发布构建验证")
+	}
 	resp := getFrontend(t, "/settings/workspace/schedules")
 	if resp.Code != http.StatusOK {
 		t.Errorf("客户端路由应 200 回壳页, got %d", resp.Code)
