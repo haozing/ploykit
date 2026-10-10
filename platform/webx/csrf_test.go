@@ -208,3 +208,128 @@ func TestCSRFExemptPrefixes_F1(t *testing.T) {
 		})
 	}
 }
+
+// 漂移端口（vite 5173 被占顺延到 5176）曾造成"登录正常、读正常、全站写 403"：
+// gorilla/csrf 对 TrustedOrigins 是含端口的精确字符串匹配，单值 localhost:5173
+// 永远配不上漂移后的 Origin。
+func TestCSRFTrustLocalhostAnyPort(t *testing.T) {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+
+	// newHandler 返回的中间件包装了一个捕获 GET 期 masked token 的 next，
+	// 因为有效 token 只能由同一 key 的 Protect 实例签发。
+	newHandler := func(anyPort bool) (http.Handler, *string) {
+		token := ""
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				token = CSRFMaskedToken(r)
+			}
+			csrfOk(w, r)
+		})
+		h := CSRFConditional(&CSRFConfig{
+			Key:                   key,
+			TrustedOrigins:        []string{"localhost:5173"},
+			TrustLocalhostAnyPort: anyPort,
+		}, false)(next)
+		return h, &token
+	}
+	harvest := func(t *testing.T, h http.Handler, token *string) *http.Cookie {
+		t.Helper()
+		g := httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+		gw := httptest.NewRecorder()
+		h.ServeHTTP(gw, g)
+		require.Equal(t, http.StatusOK, gw.Code, gw.Body.String())
+		var cookie *http.Cookie
+		for _, c := range gw.Result().Cookies() {
+			if c.Name == "ploykit_csrf" {
+				cookie = c
+			}
+		}
+		require.NotNil(t, cookie, "GET 应下发 csrf cookie")
+		require.NotEmpty(t, *token)
+		return cookie
+	}
+	driftedPOST := func(cookie *http.Cookie, token, origin string) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{}`))
+		r.Host = "localhost:8080"
+		r.AddCookie(cookie)
+		r.Header.Set("X-CSRF-Token", token)
+		r.Header.Set("Origin", origin)
+		return r
+	}
+
+	t.Run("开启后漂移端口 5176 的会话写请求过", func(t *testing.T) {
+		h, token := newHandler(true)
+		cookie := harvest(t, h, token)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, driftedPOST(cookie, *token, "http://localhost:5176"))
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	})
+
+	t.Run("未开启时同一请求 403，且错误带 origin 诊断而非笼统 token 文案", func(t *testing.T) {
+		h, token := newHandler(false)
+		cookie := harvest(t, h, token)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, driftedPOST(cookie, *token, "http://localhost:5176"))
+
+		require.Equal(t, http.StatusForbidden, w.Code)
+		body := w.Body.String()
+		assert.Contains(t, body, "origin check failed")
+		assert.Contains(t, body, "http://localhost:5176")
+		assert.Contains(t, body, "localhost:5173")
+		assert.NotContains(t, body, "CSRF token missing or invalid")
+	})
+
+	t.Run("开启也不放行非回环主机（evil.com:5173）", func(t *testing.T) {
+		h, token := newHandler(true)
+		cookie := harvest(t, h, token)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, driftedPOST(cookie, *token, "http://evil.com:5173"))
+
+		require.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "evil.com")
+	})
+
+	t.Run("HTTPS 无 Origin 时漂移端口的 Referer 也归一（token 类失败而非 origin 类）", func(t *testing.T) {
+		// secure=true 才走 gorilla 的 TLS Referer 闸
+		h := CSRFConditional(&CSRFConfig{
+			Key:                   key,
+			TrustedOrigins:        []string{"localhost:5173"},
+			TrustLocalhostAnyPort: true,
+		}, true)(http.HandlerFunc(csrfOk))
+		r := httptest.NewRequest(http.MethodPost, "https://localhost:8443/api/tasks", strings.NewReader(`{}`))
+		r.Header.Set("Referer", "https://localhost:5199/")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+
+		// origin/referer 闸已过（否则文案是 origin check failed），死在缺 token
+		require.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "CSRF token missing or invalid")
+	})
+}
+
+func TestNormalizeLoopbackOrigin(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"http://localhost:5176", "http://localhost", true},
+		{"https://localhost:5173", "https://localhost", true},
+		{"http://127.0.0.1:3000", "http://127.0.0.1", true},
+		{"http://[::1]:5174", "http://[::1]", true},
+		{"http://localhost", "http://localhost", true},
+		{"http://evil.com:5176", "", false},
+		{"http://192.168.1.10:5176", "", false},
+		{"", "", false},
+		{":::not-a-url", "", false},
+	}
+	for _, tc := range cases {
+		got, ok := normalizeLoopbackOrigin(tc.in)
+		require.Equal(t, tc.ok, ok, "input %q", tc.in)
+		if tc.ok {
+			assert.Equal(t, tc.want, got, "input %q", tc.in)
+		}
+	}
+}
