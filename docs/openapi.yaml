@@ -120,7 +120,7 @@ paths:
     post:
       operationId: register
       tags: [auth]
-      summary: 邮箱密码注册（成功即登录）
+      summary: 邮箱密码注册（成功即登录；不收 code 字段——验证码建号走 send-code → verify-code，见 docs/api-conventions.md）
       security: []
       requestBody:
         required: true

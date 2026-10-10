@@ -92,6 +92,26 @@ npm run check:web           # example/web tsc --noEmit
 npm run dev:web             # example/web vite dev (source directly; edits hot-reload)
 ```
 
+**dev 与生产构建的行为差异**：vite dev server 命中 `@ploykit/*` exports 的
+`development` 条件直连包源码，**不需要**预构建；生产构建（`vite build`）走
+`default` 条件指向 `dist/`——所以 **`example/web` 能 dev 不能直接 build 是预期行为**，
+构建顺序固定为：根 `npm run build`（产出 packages/*/dist）→ 再 build 产品。
+
+## 无 make 环境（Windows / Git Bash）的等效命令
+
+`make` 在 Windows 的 Git Bash 里通常不可用，每条目标的原生等效如下（risk-engine-server
+实测可用）：
+
+| make 目标 | 等效命令 |
+|---|---|
+| `make verify` | `python tools/check_api.py && go build ./... && go vet ./... && go test ./...` |
+| `make verify-ui` | `cd packages/ui && npx vitest run` |
+| `make test-db` | `set TEST_DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable&& go test ./...`（Git Bash 用 `TEST_DATABASE_URL=... go test ./...`） |
+| `make -C example db-up` | `docker run -d --name ploykit-pg -e POSTGRES_USER=pk -e POSTGRES_PASSWORD=pk -e POSTGRES_DB=pk -p 5437:5432 postgres:16-alpine` |
+| `make -C example backend` | `cd example && DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable AUTH_SECRET=dev-pepper DEV_CODE=000000 go run ./cmd/app` |
+| `make -C example frontend` | `cd example/web && npx vite --port 5173` |
+| `make -C example build` | 见 example/Makefile（npm build → prerender → cp dist → go build；无 make 时按目标逐行执行） |
+
 Clean rebuild (after switching machines or wiping installs):
 
 ```bash

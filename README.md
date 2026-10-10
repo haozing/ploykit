@@ -98,6 +98,10 @@ make -C example frontend
 
 Open **http://localhost:5173**, register with the dev verification code `000000`, and the whole stack is yours. Prefer a single production-style binary? `make -C example build` prerenders the frontend and embeds it into one Go executable.
 
+> No `make` on your machine (Windows/Git Bash)? Every target has a native equivalent in [docs/dev-environment.md](docs/dev-environment.md). Building example/web for production requires the root `npm run build` first (dev mode consumes package sources directly, prod consumes `dist/`) — details in the same doc.
+>
+> Integrating against the HTTP API? Read [docs/api-conventions.md](docs/api-conventions.md) first — CSRF token rotation on session establishment is the #1 integration pitfall.
+
 Full-stack verification:
 
 ```bash
