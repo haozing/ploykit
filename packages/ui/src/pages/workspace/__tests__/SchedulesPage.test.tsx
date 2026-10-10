@@ -10,7 +10,7 @@ import { browserTzLabel, formatDateTimeTz } from '../../../lib/utils'
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn(),
 }))
-vi.mock('../../../hooks/useApi', () => ({ useApi: () => apiMocks }))
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({ useApi: () => apiMocks }))
 
 const clientPost = vi.hoisted(() => vi.fn())
 vi.mock('@ploykit/client', () => {
@@ -30,7 +30,7 @@ vi.mock('@ploykit/client', () => {
   }
 })
 
-vi.mock('../../../hooks/useWorkspace', () => ({
+vi.mock('../../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspace: () => ({
     current: { id: 'ws-1', name: 'Acme', slug: 'acme', plan_code: 'free', role: 'owner' },
     switchTo: vi.fn(),

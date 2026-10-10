@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { FormField } from '../FormField'
-import { useZodForm } from '../../hooks/useZodForm'
+import { useZodForm } from '@ploykit/hooks'
 
 const schema = z.object({ email: z.string().email('邮箱格式无效') })
 type FormValues = z.infer<typeof schema>

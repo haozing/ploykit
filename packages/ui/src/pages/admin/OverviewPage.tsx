@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
-import { useApi } from '../../hooks/useApi';
+import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { formatDateTime } from '../../lib/utils';
 import { adminError } from './shared';

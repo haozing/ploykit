@@ -7,7 +7,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from './ui/menu'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '@ploykit/hooks'
 import { toast } from './toast'
 
 export interface UserMenuExtraItem {

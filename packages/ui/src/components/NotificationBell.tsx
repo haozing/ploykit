@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type APINotification, type components } from '@ploykit/client'
-import { queryKeys } from '../provider/PloykitProvider'
+import { queryKeys } from '@ploykit/hooks'
 import { cn, formatDateTime } from '../lib/utils'
 
 

@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Skeleton } from '../../components/ui/skeleton'
 import { toast } from '../../components/toast'
-import { useApi } from '../../hooks/useApi'
-import { useWorkspace } from '../../hooks/useWorkspace'
-import { queryKeys, type PKSubscription } from '../../provider/PloykitProvider'
+import { useApi } from '@ploykit/hooks'
+import { useWorkspace } from '@ploykit/hooks'
+import { queryKeys, type PKSubscription } from '@ploykit/hooks'
 
 const POLL_MS = 5_000
 const MAX_TRIES = 12

@@ -1,5 +1,5 @@
 
-import { useSEO } from '@ploykit/ui'
+import { useSEO } from '@ploykit/hooks'
 import { Link } from 'react-router-dom'
 
 

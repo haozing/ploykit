@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
-import { useApi } from '../../hooks/useApi';
+import { useApi } from '@ploykit/hooks';
 import { formatDateTime, shortID, statusLabel } from '../../lib/utils';
 import {
   ADMIN_PAGE_SIZE,

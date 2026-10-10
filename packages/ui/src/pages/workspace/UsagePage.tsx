@@ -7,7 +7,7 @@ import {
   Progress, ProgressLabel, ProgressValue,
 } from '../../components/ui/progress'
 import { DataTable, type Column } from '../../components/DataTable'
-import { useUsage, type PKUsageItem } from '../../hooks/useUsage'
+import { useUsage, type PKUsageItem } from '@ploykit/hooks'
 import { apiErrorMessage } from '../../lib/api-error'
 
 

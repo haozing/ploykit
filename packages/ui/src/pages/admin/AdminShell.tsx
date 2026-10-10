@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { buttonVariants } from '../../components/ui/Button';
 import { UserMenu } from '../../components/UserMenu';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '@ploykit/hooks';
 import { cn } from '../../lib/utils';
 
 interface AdminNavItem {

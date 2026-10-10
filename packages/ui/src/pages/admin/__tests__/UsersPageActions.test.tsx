@@ -27,7 +27,7 @@ vi.mock('@ploykit/client', () => ({
     }
   },
 }))
-vi.mock('../../../hooks/useApi', () => ({
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({
   useApi: () => ({
     get: mockedGet,
     put: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock('../../../hooks/useApi', () => ({
     delete: vi.fn(),
   }),
 }))
-vi.mock('../../../hooks/useAuth', () => ({
+vi.mock('../../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'me-1', email: 'admin@audit.local', is_platform_admin: true },
     loading: false,

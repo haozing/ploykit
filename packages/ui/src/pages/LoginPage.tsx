@@ -1,9 +1,9 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router'
-import { useLogin } from '../hooks/useLogin'
-import { useApi } from '../hooks/useApi'
-import { useAuth } from '../hooks/useAuth'
+import { useLogin } from '@ploykit/hooks'
+import { useApi } from '@ploykit/hooks'
+import { useAuth } from '@ploykit/hooks'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'

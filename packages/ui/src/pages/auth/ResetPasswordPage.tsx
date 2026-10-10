@@ -4,7 +4,7 @@ import { AuthShell } from '../../layouts/AuthShell'
 import { FormField } from '../../components/FormField'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { usePasswordReset } from '../../hooks/usePasswordReset'
+import { usePasswordReset } from '@ploykit/hooks'
 import { passwordSchema } from './RegisterPage'
 
 export interface ResetPasswordPageProps {

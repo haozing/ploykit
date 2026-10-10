@@ -1,6 +1,6 @@
 
 import { TriangleAlert } from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '@ploykit/hooks'
 import { cn } from '../lib/utils'
 
 export function ImpersonationBanner({ className }: { className?: string }) {

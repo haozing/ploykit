@@ -34,7 +34,8 @@ jobs:
       - run: npm ci
       - name: Build packages (topological order — ui needs client + runtime dist)
         run: npm run build
-      # Publish order matters: @ploykit/ui depends on client + runtime.
+      # Publish order matters: @ploykit/ui depends on client + runtime + hooks.
       - run: npm publish -w @ploykit/client --access public --provenance
       - run: npm publish -w @ploykit/runtime --access public --provenance
+      - run: npm publish -w @ploykit/hooks --access public --provenance
       - run: npm publish -w @ploykit/ui --access public --provenance

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   error: null as Error | null,
   setPref: vi.fn(),
 }))
-vi.mock('../../../hooks/useNotificationPrefs', () => ({
+vi.mock('../../../../../hooks/src/hooks/useNotificationPrefs', () => ({
   useNotificationPrefs: () => ({ prefs: mocks.prefs, loading: mocks.loading, error: mocks.error, refetch: vi.fn() }),
   useSetNotificationPref: () => ({ setPref: mocks.setPref, loading: false, error: null }),
 }))

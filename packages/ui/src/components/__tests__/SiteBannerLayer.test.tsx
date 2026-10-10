@@ -5,7 +5,7 @@ import { SiteBannerLayer } from '../SiteBannerLayer'
 
 
 const mocked = vi.hoisted(() => ({ data: undefined as Record<string, string> | undefined }))
-vi.mock('../../hooks/useSiteConfig', () => ({
+vi.mock('../../../../hooks/src/hooks/useSiteConfig', () => ({
   useSiteConfig: () => ({ data: mocked.data }),
 }))
 

@@ -3,10 +3,10 @@ import { useId } from 'react'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
 import { Switch } from '../../components/ui/switch'
 import { toast } from '../../components/toast'
-import { useSEO } from '../../hooks/useSEO'
+import { useSEO } from '@ploykit/hooks'
 import {
   useNotificationPrefs, useSetNotificationPref, type NotificationPreference,
-} from '../../hooks/useNotificationPrefs'
+} from '@ploykit/hooks'
 
 export interface NotificationTypeMeta {
   type: string

@@ -4,7 +4,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { OnboardingChecklist } from '../OnboardingChecklist'
 
-vi.mock('../../hooks/useAuth', () => ({
+vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { email: 'alice@example.com', display_name: 'Alice' },
     workspaces: [{ id: 'ws-1', name: 'Acme' }],

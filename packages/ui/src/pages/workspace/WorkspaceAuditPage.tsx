@@ -10,7 +10,7 @@ import { toast } from '../../components/toast'
 import {
   useAudit, exportAuditCsv,
   type AuditFilters, type PKAuditEvent,
-} from '../../hooks/useAudit'
+} from '@ploykit/hooks'
 import { formatDateTime } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
 

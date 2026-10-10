@@ -6,7 +6,7 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { useApi } from '../../hooks/useApi';
+import { useApi } from '@ploykit/hooks';
 import { formatDateTime } from '../../lib/utils';
 import { ADMIN_PAGE_SIZE, adminError } from './shared';
 

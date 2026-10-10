@@ -2,10 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '../deps'
 import type { WsFrame, WsStatus } from '@ploykit/client'
-import {
-  useWorkspace, useWsStatus, useWsScope, useWsFrame, bridgeWsToQuery,
-  PageHeader, PageEmpty, Button, cn, STATUS_TONE_CLASS,
-} from '@ploykit/ui'
+import { useWorkspace, useWsStatus, useWsScope, useWsFrame, bridgeWsToQuery } from '@ploykit/hooks'
+import { PageHeader, PageEmpty, Button, cn, STATUS_TONE_CLASS } from '@ploykit/ui'
 import { wsClient } from '../ws'
 
 const MAX_LOG = 50

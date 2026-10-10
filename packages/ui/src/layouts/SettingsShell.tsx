@@ -2,8 +2,8 @@
 import { Link, useLocation, useNavigate } from 'react-router'
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
-import { roleSatisfies, type Perm } from '../lib/perm'
-import { useWorkspace } from '../hooks/useWorkspace'
+import { roleSatisfies, type Perm } from '@ploykit/hooks'
+import { useWorkspace } from '@ploykit/hooks'
 import { buttonVariants } from '../components/ui/Button'
 import { Separator } from '../components/ui/separator'
 import {

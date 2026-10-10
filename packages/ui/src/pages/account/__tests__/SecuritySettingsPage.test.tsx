@@ -16,10 +16,10 @@ const mocks = vi.hoisted(() => ({
   revoke: vi.fn(),
   revokeAll: vi.fn(),
 }))
-vi.mock('../../../hooks/useApi', () => ({
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({
   useApi: () => ({ post: mocks.post, get: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() }),
 }))
-vi.mock('../../../hooks/useAuth', () => ({
+vi.mock('../../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({ user: null, loading: false, refresh: mocks.refresh, logout: mocks.logout, workspaces: [] }),
 }))
 vi.mock('../../../components/toast', () => ({
@@ -28,7 +28,7 @@ vi.mock('../../../components/toast', () => ({
 vi.mock('../../../components/ConfirmDialog', () => ({
   useConfirm: () => mocks.confirm,
 }))
-vi.mock('../../../hooks/useSessions', () => ({
+vi.mock('../../../../../hooks/src/hooks/useSessions', () => ({
   useSessions: () => ({ sessions: mocks.sessions, loading: mocks.loading, error: null, refetch: vi.fn() }),
   useRevokeSession: () => ({ revoke: mocks.revoke, loading: false, error: null }),
   useRevokeAllSessions: () => ({ revokeAll: mocks.revokeAll, loading: false, error: null }),

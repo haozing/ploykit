@@ -10,10 +10,10 @@ import { Badge } from '../../components/ui/Badge'
 import { ImpactConfirmation } from '../../components/SecretModal'
 import { toast } from '../../components/toast'
 import { apiErrorMessage } from '../../lib/api-error'
-import { useApi } from '../../hooks/useApi'
-import { useAuth } from '../../hooks/useAuth'
-import { useZodForm } from '../../hooks/useZodForm'
-import type { PKUser } from '../../provider/PloykitProvider'
+import { useApi } from '@ploykit/hooks'
+import { useAuth } from '@ploykit/hooks'
+import { useZodForm } from '@ploykit/hooks'
+import type { PKUser } from '@ploykit/hooks'
 
 
 

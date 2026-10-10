@@ -11,7 +11,7 @@ import { SidebarProvider } from '../ui/sidebar'
 const switchTo = vi.fn()
 const create = vi.fn(async (name: string, slug: string) => ({ id: 'ws-new', name, slug }))
 let mockError: unknown = null
-vi.mock('../../hooks/useWorkspace', () => ({
+vi.mock('../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspaceSwitch: () => ({
     current: { id: 'ws-1', name: 'Acme', plan_code: 'free', role: 'owner' },
     list: [

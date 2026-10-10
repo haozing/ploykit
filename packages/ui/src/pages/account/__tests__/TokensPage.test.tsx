@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   revoke: vi.fn(),
   confirm: vi.fn(),
 }))
-vi.mock('../../../hooks/useTokens', () => ({
+vi.mock('../../../../../hooks/src/hooks/useTokens', () => ({
   useTokens: () => ({ tokens: mocks.tokens, loading: mocks.loading, error: null, refetch: vi.fn() }),
   useCreateToken: () => ({ create: mocks.create, loading: false, error: null }),
   useRevokeToken: () => ({ revoke: mocks.revoke, loading: false, error: null }),

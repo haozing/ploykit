@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { UsagePage } from '../UsagePage'
 
 const usageMocks = vi.hoisted(() => ({ useUsage: vi.fn() }))
-vi.mock('../../../hooks/useUsage', () => ({ useUsage: usageMocks.useUsage }))
+vi.mock('../../../../../hooks/src/hooks/useUsage', () => ({ useUsage: usageMocks.useUsage }))
 
 const usage = {
   workspace_id: 'ws-1',

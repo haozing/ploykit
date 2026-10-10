@@ -3,13 +3,13 @@ import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { OnboardingChecklist } from '../../components/OnboardingChecklist'
-import { PloykitProvider } from '../../provider/PloykitProvider'
+import { PloykitProvider } from '@ploykit/hooks'
 import { LandingPage } from '../LandingPage'
 import { LoginPage } from '../LoginPage'
 
 
 
-vi.mock('../../hooks/useAuth', () => ({
+vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { email: 'ssr@example.com', display_name: 'SSR' },
     workspaces: [{ id: 'ws-1', name: 'Acme' }],

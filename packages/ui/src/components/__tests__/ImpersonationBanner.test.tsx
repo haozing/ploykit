@@ -7,7 +7,7 @@ import type { PKUser } from '../../provider/PloykitProvider'
 
 
 const mocks = vi.hoisted(() => ({ impersonatedBy: undefined as string | undefined, user: null as PKUser | null }))
-vi.mock('../../hooks/useAuth', () => ({
+vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: mocks.user,
     workspaces: [],

@@ -7,14 +7,14 @@ import { WebhooksPage } from '../WebhooksPage'
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn(),
 }))
-vi.mock('../../../hooks/useApi', () => ({ useApi: () => apiMocks }))
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({ useApi: () => apiMocks }))
 
 const wsMock = vi.hoisted(() => ({
   current: {
     id: 'ws-1', name: 'Acme', slug: 'acme', plan_code: 'free', role: 'owner',
   },
 }))
-vi.mock('../../../hooks/useWorkspace', () => ({
+vi.mock('../../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspace: () => ({
     ...wsMock,
     switchTo: vi.fn(),

@@ -6,7 +6,7 @@ import { SettingsShell, type SettingsNavGroup } from '../SettingsShell'
 
 
 const mocks = vi.hoisted(() => ({ role: undefined as string | undefined }))
-vi.mock('../../hooks/useWorkspace', () => ({
+vi.mock('../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspace: () => ({
     current: mocks.role ? { id: 'ws-1', name: 'Acme', slug: 'acme', role: mocks.role } : null,
     switchTo: vi.fn(),

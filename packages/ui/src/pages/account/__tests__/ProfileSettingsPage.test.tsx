@@ -17,10 +17,10 @@ const mocks = vi.hoisted(() => ({
   user: null as PKUser | null,
   loading: false,
 }))
-vi.mock('../../../hooks/useApi', () => ({
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({
   useApi: () => ({ patch: mocks.patch, post: mocks.post, delete: mocks.del, get: vi.fn(), put: vi.fn() }),
 }))
-vi.mock('../../../hooks/useAuth', () => ({
+vi.mock('../../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({ user: mocks.user, loading: mocks.loading, refresh: mocks.refresh, logout: mocks.logout, workspaces: [] }),
 }))
 vi.mock('../../../components/toast', () => ({

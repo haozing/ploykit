@@ -6,13 +6,13 @@ import { FormField } from '../../components/FormField';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { FieldDescription, FieldSeparator } from '../../components/ui/field';
-import { useApi } from '../../hooks/useApi';
-import { useAuth } from '../../hooks/useAuth';
-import { useSiteConfig } from '../../hooks/useSiteConfig';
-import { useZodForm } from '../../hooks/useZodForm';
+import { useApi } from '@ploykit/hooks';
+import { useAuth } from '@ploykit/hooks';
+import { useSiteConfig } from '@ploykit/hooks';
+import { useZodForm } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { toast } from '../../components/toast';
-import type { PKUser } from '../../provider/PloykitProvider';
+import type { PKUser } from '@ploykit/hooks';
 
 
 function passwordKinds(pw: string): number {

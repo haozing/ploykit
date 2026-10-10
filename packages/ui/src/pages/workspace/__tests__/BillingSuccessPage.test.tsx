@@ -16,7 +16,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ getQueryData: () => cacheData }),
 }))
 
-vi.mock('../../../hooks/useWorkspace', () => ({
+vi.mock('../../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspace: () => ({
     current: { id: 'ws-1', name: 'Acme', slug: 'acme', plan_code: 'free', role: 'owner' },
     switchTo: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('../../../hooks/useWorkspace', () => ({
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn(),
 }))
-vi.mock('../../../hooks/useApi', () => ({ useApi: () => apiMocks }))
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({ useApi: () => apiMocks }))
 
 const toastMocks = vi.hoisted(() => ({
   success: vi.fn(), error: vi.fn(), info: vi.fn(),

@@ -32,7 +32,7 @@ vi.mock('@ploykit/client', () => ({
 }));
 
 
-vi.mock('../../../hooks/useAuth', () => ({
+vi.mock('../../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'op-admin', email: 'op@test.local' },
     loading: false,

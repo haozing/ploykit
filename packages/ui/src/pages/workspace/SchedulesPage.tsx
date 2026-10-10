@@ -16,9 +16,9 @@ import { Switch } from '../../components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../../components/ui/dialog'
-import { useApi } from '../../hooks/useApi'
-import { useWorkspace } from '../../hooks/useWorkspace'
-import { useZodForm } from '../../hooks/useZodForm'
+import { useApi } from '@ploykit/hooks'
+import { useWorkspace } from '@ploykit/hooks'
+import { useZodForm } from '@ploykit/hooks'
 import { useConfirm } from '../../components/ConfirmDialog'
 import { browserTzLabel, formatDateTimeTz } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'

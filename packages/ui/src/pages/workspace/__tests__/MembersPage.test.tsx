@@ -15,10 +15,10 @@ const apiMocks = vi.hoisted(() => ({
   patch: vi.fn(),
   delete: vi.fn(),
 }))
-vi.mock('../../../hooks/useApi', () => ({ useApi: () => apiMocks }))
+vi.mock('../../../../../hooks/src/hooks/useApi', () => ({ useApi: () => apiMocks }))
 
 const wsMocks = vi.hoisted(() => ({ role: 'owner' as string }))
-vi.mock('../../../hooks/useWorkspace', () => ({
+vi.mock('../../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspace: () => ({
     current: { id: 'ws-1', name: 'Acme', slug: 'acme', plan_code: 'free', role: wsMocks.role },
     switchTo: vi.fn(),

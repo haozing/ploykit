@@ -8,7 +8,7 @@ const invMocks = vi.hoisted(() => ({
   accept: { mutateAsync: vi.fn(), isPending: false },
   decline: { mutateAsync: vi.fn(), isPending: false },
 }))
-vi.mock('../../../hooks/useMembers', () => ({
+vi.mock('../../../../../hooks/src/hooks/useMembers', () => ({
   useMyInvitations: () => ({
     invitations: [
       {

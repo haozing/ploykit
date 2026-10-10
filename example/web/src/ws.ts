@@ -1,5 +1,5 @@
 
-import { createWsClient, defaultWsUrl } from '@ploykit/ui'
+import { createWsClient, defaultWsUrl } from '@ploykit/hooks'
 
 let currentWorkspaceId: string | null = null
 

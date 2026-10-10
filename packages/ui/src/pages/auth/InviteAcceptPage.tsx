@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { PageLoading, PageEmpty } from '../../components/Page'
 import { toast } from '../../components/toast'
-import { useMyInvitations } from '../../hooks/useMembers'
+import { useMyInvitations } from '@ploykit/hooks'
 import { formatDateTime } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
 

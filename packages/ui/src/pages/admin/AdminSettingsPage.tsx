@@ -23,9 +23,9 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import { Switch } from '../../components/ui/switch';
-import { useApi } from '../../hooks/useApi';
+import { useApi } from '@ploykit/hooks';
 import { SiteBanner } from '../../components/SiteBanner';
-import { SITE_CONFIG_QUERY_KEY } from '../../hooks/useSiteConfig';
+import { SITE_CONFIG_QUERY_KEY } from '@ploykit/hooks';
 import { adminError } from './shared';
 
 

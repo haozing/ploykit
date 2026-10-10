@@ -1,0 +1,61 @@
+{
+  "name": "@ploykit/hooks",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "react": "^19.0.0"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
+    "@ploykit/client": "^0.2.0",
+    "@ploykit/runtime": "^0.1.0",
+    "react-hook-form": "^7.0.0",
+    "zod": "^4.0.0"
+  },
+  "description": "React hooks 层：鉴权/工作区/计费/实时等 Headless Hooks 与 Provider，零 UI 依赖，不依赖 tailwind/组件库。",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ploykit",
+    "hooks",
+    "react"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "jsdom": "^29.1.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3",
+    "zod": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haozing/ploykit.git",
+    "directory": "packages/hooks"
+  }
+}

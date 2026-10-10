@@ -1,6 +1,6 @@
 
 import { SiteBanner } from './SiteBanner';
-import { useSiteConfig } from '../hooks/useSiteConfig';
+import { useSiteConfig } from '@ploykit/hooks';
 
 export interface SiteBannerLayerProps {
   

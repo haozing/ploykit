@@ -10,7 +10,7 @@ import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { toast } from '../../components/toast';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { useApi } from '../../hooks/useApi';
+import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { shortID, formatDateTime } from '../../lib/utils';
 import { ADMIN_PAGE_SIZE, adminError } from './shared';

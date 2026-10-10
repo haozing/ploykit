@@ -8,7 +8,7 @@ const auditMocks = vi.hoisted(() => ({
   useAudit: vi.fn(),
   exportAuditCsv: vi.fn(),
 }))
-vi.mock('../../../hooks/useAudit', async (importOriginal) => {
+vi.mock('../../../../../hooks/src/hooks/useAudit', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../../../hooks/useAudit')>()
   return { ...orig, useAudit: auditMocks.useAudit, exportAuditCsv: auditMocks.exportAuditCsv }
 })

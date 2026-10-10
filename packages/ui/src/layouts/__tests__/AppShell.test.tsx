@@ -7,7 +7,7 @@ import { AppShell } from '../AppShell'
 
 
 const mocks = vi.hoisted(() => ({ impersonatedBy: undefined as string | undefined }))
-vi.mock('../../hooks/useAuth', () => ({
+vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: {
       email: 'alice@example.com',

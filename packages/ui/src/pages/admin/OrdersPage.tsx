@@ -22,7 +22,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../../components/ui/tabs';
-import { useApi } from '../../hooks/useApi';
+import { useApi } from '@ploykit/hooks';
 import { formatDateTime, shortID, statusLabel } from '../../lib/utils';
 import {
   ADMIN_PAGE_SIZE,

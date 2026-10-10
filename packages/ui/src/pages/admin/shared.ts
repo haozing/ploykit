@@ -1,5 +1,5 @@
 
-import { ApiError } from '../../hooks/useApi';
+import { ApiError } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 
 

@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { Progress, ProgressLabel, ProgressValue } from './ui/progress'
 import { Button } from './ui/Button'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth } from '@ploykit/hooks'
 
 export interface OnboardingItem {
   key: string

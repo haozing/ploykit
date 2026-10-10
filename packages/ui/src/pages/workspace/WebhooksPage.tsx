@@ -24,13 +24,13 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '../../components/ui/menu'
-import { useApi } from '../../hooks/useApi'
-import { useWorkspace } from '../../hooks/useWorkspace'
-import { useZodForm } from '../../hooks/useZodForm'
-import { queryKeys } from '../../provider/PloykitProvider'
+import { useApi } from '@ploykit/hooks'
+import { useWorkspace } from '@ploykit/hooks'
+import { useZodForm } from '@ploykit/hooks'
+import { queryKeys } from '@ploykit/hooks'
 import { formatDateTime } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
-import { roleSatisfies } from '../../lib/perm'
+import { roleSatisfies } from '@ploykit/hooks'
 
 
 

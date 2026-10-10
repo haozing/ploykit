@@ -6,7 +6,7 @@ import { LoginPage, loginRedirectTarget } from '../LoginPage'
 
 
 const loginMock = vi.hoisted(() => ({ submit: vi.fn(async () => ({ ok: true })) }))
-vi.mock('../../hooks/useLogin', () => ({
+vi.mock('../../../../hooks/src/hooks/useLogin', () => ({
   useLogin: () => ({
     sendCode: vi.fn(),
     submit: loginMock.submit,
@@ -15,11 +15,11 @@ vi.mock('../../hooks/useLogin', () => ({
   }),
 }))
 const mockedPost = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useApi', () => ({
+vi.mock('../../../../hooks/src/hooks/useApi', () => ({
   useApi: () => ({ post: mockedPost, get: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() }),
 }))
 const mockedRefresh = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useAuth', () => ({
+vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({ refresh: mockedRefresh, user: null, workspaces: [], loading: false, logout: vi.fn() }),
 }))
 

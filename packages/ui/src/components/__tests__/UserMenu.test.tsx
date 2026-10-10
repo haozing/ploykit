@@ -9,7 +9,7 @@ import type { PKUser } from '../../provider/PloykitProvider'
 
 const logout = vi.fn(async () => {})
 const mocks = vi.hoisted(() => ({ isPlatformAdmin: false }))
-vi.mock('../../hooks/useAuth', () => ({
+vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: {
       email: 'alice@example.com',

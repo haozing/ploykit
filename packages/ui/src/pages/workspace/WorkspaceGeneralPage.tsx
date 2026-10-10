@@ -11,12 +11,12 @@ import { useConfirm } from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import { useApi } from '../../hooks/useApi'
-import { useWorkspace } from '../../hooks/useWorkspace'
-import { useZodForm } from '../../hooks/useZodForm'
-import { queryKeys, type PKWorkspace } from '../../provider/PloykitProvider'
+import { useApi } from '@ploykit/hooks'
+import { useWorkspace } from '@ploykit/hooks'
+import { useZodForm } from '@ploykit/hooks'
+import { queryKeys, type PKWorkspace } from '@ploykit/hooks'
 import { apiErrorMessage } from '../../lib/api-error'
-import { roleSatisfies } from '../../lib/perm'
+import { roleSatisfies } from '@ploykit/hooks'
 
 
 
