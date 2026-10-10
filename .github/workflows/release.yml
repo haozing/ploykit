@@ -8,6 +8,11 @@
 # After that, `git tag v0.2.1 && git push --tags` publishes automatically —
 # no NPM_TOKEN secret, no long-lived tokens (npm automation tokens that bypass
 # 2FA are deprecated; see github.blog 2026-07-08 changelog).
+# Before tagging, make sure the number is fresh:
+#   git ls-remote --exit-code --tags origin "refs/tags/vX.Y.Z"   # must fail
+# Published tags are immutable — sumdb / npm registry records cannot be
+# rewritten, so a re-used tag number permanently poisons that version for
+# every `go get` / npm consumer. Bump the version instead.
 name: Release
 
 on:
@@ -22,6 +27,31 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      # Belt to the per-package "already published — skipping" npm check below:
+      # refuse to release a tag number that was already released. This workflow
+      # runs on the tag push itself, so the git tag always exists by now — the
+      # meaningful immutability oracle is proxy.golang.org, the permanent record
+      # for this module's versions (sumdb entries cannot be rewritten). A
+      # re-used tag would permanently poison that version for every
+      # `go get` / npm consumer.
+      - name: Guard against re-using an already-released tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://proxy.golang.org/${GITHUB_REPOSITORY,,}/@v/${tag}.info")
+          case "$code" in
+            200)
+              echo "::error::tag ${tag} was already released — published tags are immutable (sumdb records cannot be rewritten; a re-used tag number permanently poisons that version for every go get / npm consumer). Bump the version instead."
+              exit 1
+              ;;
+            404|410)
+              echo "tag ${tag} not yet recorded by proxy.golang.org — first release, proceeding"
+              ;;
+            *)
+              echo "::error::cannot verify tag ${tag} against proxy.golang.org (HTTP ${code}); refusing to publish while immutability cannot be checked"
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

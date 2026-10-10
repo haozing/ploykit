@@ -13,7 +13,7 @@ Go + React multi-tenant SaaS full-stack framework: business domains (identity / 
 - Business domains must not import identity — decouple via webx.Principal / MemberCheck / RoleOf closure injection (docs/architecture.md §4.2)
 - `platform/*` has zero business dependencies
 - `authz` is a cross-cutting shared layer: business domains may depend on it; it must not depend on business domains or identity
-- `authorization` (the strict-authorization profile) is self-contained — it must not import any other package in this module (A6); `contractx` has zero business dependencies (A7)
+- `authorization` (the strict-authorization profile) is self-contained — it must not import any other package in this module (A6)
 - No lateral imports between business domains (exceptions: admin → audit read-only queries, docs/adr/0002; admin/adapters/bridge composition bridge, docs/adr/0004)
 - `migrations/` (001–999) are a framework contract, evolved only by the framework; product migrations are numbered from 1001
 - `internal/` is not exposed to products
@@ -51,3 +51,4 @@ Transactional = returning an error rolls back the whole operation; Observational
   2. Rate-limit / BodyLimit gates are per-prefix (`pathGate(..., "/api/", "/auth/")`) — paths outside those prefixes are silently unprotected; add yours explicitly.
   3. Scope enforcement for machine (PAT) callers follows the `authz.CanIn` pattern in API handlers — replicate it in your handler.
   4. Audit the mounted endpoint via `Recorder.Record` / `RecordTx` (in-transaction) — mounting does not auto-audit.
+- **Step-up (sudo mode) for sensitive operations**: `webx.RequireRecentAuth(maxAge)` after `Authenticate` — 403 `E_REAUTH_REQUIRED` + `details.max_age_seconds`, client confirms via `POST /auth/confirm-password` then retries (ADR 0011, protocol in docs/api-conventions.md). PAT/system callers get a plain 403 (machines can never step up). Do NOT double-mount with authorization/'s challenge rules on the same operation.
