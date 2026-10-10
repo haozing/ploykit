@@ -357,7 +357,7 @@ Frontend product-facing dependencies ≤ 10 (what example/web declares besides t
 ```
 react / react-dom / react-router / @tanstack/react-query / @base-ui/react / zod / lucide-react / tailwindcss
 ```
-react-hook-form is an internal dependency of @ploykit/ui (wrapped by useZodForm), not something a product has to adopt directly.
+react-hook-form is an internal dependency of @ploykit/hooks (wrapped by useZodForm), not something a product has to adopt directly.
 
 Full selections and rejection rationale: see [component-selection.md](component-selection.md)
 
@@ -369,11 +369,11 @@ Full selections and rejection rationale: see [component-selection.md](component-
 
 ### 5B.1 Composition model: provider + explicit imports
 
-`PloykitProvider` (packages/ui/src/provider) wires auth/session context and react-query — a default `QueryClient` is created when none is passed. All data hooks (`useAuth` / `useBilling` / `useWorkspace` / ...) read through it. There is no runtime override registry: customization means importing the exported pages and components and rendering your own composition. The framework prepares typed Props; the product decides layout and which slots to fill.
+Frontend packages are layered client → runtime → hooks → ui: `@ploykit/hooks` (packages/hooks) is the zero-UI-dependency hooks layer — `PloykitProvider` (packages/hooks/src/provider) wires auth/session context and react-query — a default `QueryClient` is created when none is passed. All data hooks (`useAuth` / `useBilling` / `useWorkspace` / ...) read through it. There is no runtime override registry: customization means importing the exported pages and components and rendering your own composition. The framework prepares typed Props; the product decides layout and which slots to fill.
 
 ### 5B.2 Component surface
 
-- **Primitives**: Button / Input / Badge plus Base-UI-based dialog, tabs, select, sheet, sidebar, and friends (components/ui) — products can also install their own primitives
+- **Primitives**: components/ui is a **stock mirror of shadcn registry output** (Base-UI kernel, clean-copy policy per ADR 0010: generate via CLI, adopt with path-rewrite only, no business concepts allowed in-directory — enforced by the stock-mirror guard test). Products needing long-tail components `npx shadcn add` them into their own src (same kernel, same tokens — see dev-environment.md)
 - **Composite**: Page (PageHeader/PageLoading/PageEmpty/PageError), DataTable, FormField, ConfirmDialog, NotificationBell, SiteBanner, WorkspaceSwitcher, ImpersonationBanner, ...
 - **Pages**: LoginPage, LandingPage, password reset / email verification, workspace pages, ...
 - **Forms**: `useZodForm` wraps react-hook-form + zod validation

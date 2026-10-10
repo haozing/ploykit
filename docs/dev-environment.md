@@ -3,7 +3,7 @@
 ## npm workspaces single repository
 
 The repository root `package.json` declares workspaces: `packages/client`, `packages/runtime`,
-`packages/ui`, `example/web`. **Install dependencies once, at the repository root only**:
+`packages/hooks`, `packages/ui`, `example/web`. **Install dependencies once, at the repository root only**:
 
 ```bash
 npm install        # generates/updates the root package-lock.json and triggers example/web's postinstall (see below)

@@ -1,6 +1,6 @@
 # @ploykit/ui 重构方案：shadcn 生成自有化 + hooks 拆包 + 导出面补丁
 
-> 状态：已决策，待实施。基于 2026-10-10 的真实代码调研（调研基线：client 0.2.1 / runtime 0.1.1 / ui 0.1.1，master@9e85d12）。
+> 状态：**已实施**（2026-10-10，commits 5a82216/f79027a/ec73061/b2bd3bb + ADR 0010）。原方案存档；调研基线（调研基线：client 0.2.1 / runtime 0.1.1 / ui 0.1.1，master@9e85d12）。
 > 决策原则一句话：**所有权归框架不让步，生产方式全盘拥抱 shadcn CLI（生成后自有化）；components/ui 是不可污染的 stock 镜像，适配单向流动：shadcn → ploykit 调用方 → example**。
 
 ---
