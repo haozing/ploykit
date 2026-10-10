@@ -45,9 +45,9 @@ jobs:
               echo "@ploykit/$pkg@$v already published — skipping"
             else
               echo "publishing @ploykit/$pkg@$v"
-              if ! npm publish -w @ploykit/$pkg --access public --provenance 2>&1 | tee /tmp/pub-$pkg.log; then
-                echo "::error::publish failed for @ploykit/$pkg@$v — full log follows"
-                sed 's/^/::error::/' "/tmp/pub-$pkg.log" | head -30
+              if ! npm publish -w @ploykit/$pkg --access public --provenance > /tmp/pub-$pkg.log 2>&1; then
+                last=$(tr '\n' '|' < "/tmp/pub-$pkg.log" | tr -cd '\40-\176' | tail -c 1500)
+                echo "::error::PUBFAIL @ploykit/$pkg@$v :: $last"
                 exit 1
               fi
             fi
