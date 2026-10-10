@@ -204,7 +204,7 @@ The WS wire protocol vocabulary is a public platform package so that products bu
 |---|---|---|
 | NewWorkers | `NewWorkers(log *slog.Logger) *Workers` | Worker registry constructor |
 | Workers.Add / AddFunc | `Add(w Worker)` / `AddFunc(name, run)`, chainable | Registers at assembly time; panics on registration after Start / duplicate names (registration races are strangled at startup) |
-| Workers.Start / Drain / AllHealthy / AnyCrashed | `Start(ctx)` runs each worker in its own goroutine; `Drain(timeout)` waits for wind-down (gives up on timeout); `AllHealthy()` = all workers still running (a normal exit also removes the green; used by /readyz); `AnyCrashed()` = whether anyone panicked (for post-shutdown forensics) | The four lifecycle ports (AllHealthy is probe semantics, always false after Drain) |
+| Workers.Start / Drain / AllHealthy / AnyCrashed | `Start(ctx)` runs each worker in its own goroutine; `Drain(timeout)` waits for wind-down (gives up on timeout); `AllHealthy()` = all workers still running (a normal exit also removes the green; used by /readyz); `AnyCrashed()` = whether anyone panicked (for post-shutdown forensics) | The four lifecycle ports (AllHealthy is probe semantics, always false after Drain). Drain timeout alignment: pick `timeout` >= the events soft-stop window (`SoftStopTimeout` 30s + 15s margin = 45s default) — a shorter Drain force-kills in-flight event handlers mid-work (aiblog A2/D4) |
 | Worker interface | `Name() string` + `Run(ctx) error` (blocks until ctx is cancelled) | The minimal worker contract |
 
 ## platform/logx (Structured logging)

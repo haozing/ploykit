@@ -241,16 +241,20 @@ export function LoginPage({
           </details>
         )}
 
-        <div className="flex items-center justify-between text-sm">
-          <a href={resetPath} className="text-primary hover:underline">
-            忘记密码？
-          </a>
-          {registerPath && (
-            <a href={registerPath} data-testid="register-link" className="text-primary hover:underline">
-              创建账号
-            </a>
-          )}
-        </div>
+        {(resetPath || registerPath) && (
+          <div className="flex items-center justify-between text-sm">
+            {resetPath && (
+              <a href={resetPath} className="text-primary hover:underline">
+                忘记密码？
+              </a>
+            )}
+            {registerPath && (
+              <a href={registerPath} data-testid="register-link" className="text-primary hover:underline">
+                创建账号
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -48,6 +48,20 @@ csrfMW := webx.CSRFConditional(&webx.CSRFConfig{
 }, authCfg.Secure)
 ```
 
+- **Public-page cacheability (CDN)**: the middleware sets `ploykit_csrf` on the first GET
+  and `Vary: Cookie` on every response it processes, so shared caches cannot serve anything
+  behind it. For a public, read-only GET tree (feeds, published articles, marketing pages)
+  exempt the prefix the same way — GET-only public content has no CSRF surface to protect,
+  and exempted responses carry neither the cookie nor the Vary header:
+
+```go
+ExemptPrefixes: []string{"/open/", "/feed.xml", "/archives/"}, // server-to-server APIs + public GET tree
+```
+
+  Exemption is all-methods under the prefix: never exempt a prefix that also serves
+  browser-session writes. Cached responses additionally need an explicit `Cache-Control`
+  from the product — the framework does not set one.
+
 ## The two registration paths
 
 | Path | Flow | Use when |
@@ -72,6 +86,12 @@ Common misconception: sending `code` to register. openapi.yaml is the field-cont
 
 > Naming note: the Go field is `Code` with JSON name `error` - historical. Unchanged in 0.x
 > (renaming breaks every existing consumer); the semantics above are the contract.
+
+> Producer-side rule (aiblog D4 field report): never write raw driver errors to the HTTP
+> surface — `http.Error(w, err.Error(), 500)` on a public page leaked the DB
+> username/host/port to anonymous visitors during an outage. Handlers emit errors through
+> `webx.WriteError(...)` / the `webx.ErrInternal(w)` shorthand (500 `E_INTERNAL`, no
+> detail); the underlying error goes to the log with the request ID, never the body.
 
 ## Step-up reauthentication (E_REAUTH_REQUIRED, two-phase protocol)
 

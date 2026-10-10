@@ -189,7 +189,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 ### 其他常用导出
 
 - **布局**：`AppShell` / `SettingsShell` / `AuthShell` / `AdminShell` + 全套 Sidebar。
-- **页面**：`LoginPage`（props：`resetPath` / `registerPath` / `oauthProviders` / `enableFedLogin` / `onSuccess` / `title` / `description`）、`RegisterPage`、`ForgotPasswordPage`、`ResetPasswordPage`、`VerifyEmailPage`、`InviteAcceptPage`，以及 workspace/account/admin 各默认页面。
+- **页面**：`LoginPage`（props：`resetPath` / `registerPath` / `oauthProviders` / `enableFedLogin` / `onSuccess` / `title` / `description`；`resetPath` / `registerPath` **传空串即隐藏对应链接**——产品未挂载 /forgot-password、/register 路由时防止死链 404）、`RegisterPage`、`ForgotPasswordPage`、`ResetPasswordPage`、`VerifyEmailPage`、`InviteAcceptPage`，以及 workspace/account/admin 各默认页面。
 - **反馈与状态**：`StatusBadge`、`PageHeader` / `PageLoading` / `PageEmpty` / `PageError`、`ErrorBoundary`、`ReauthDialog`（step-up sudo 模式弹窗）。
 - **工具**：`cn`、`formatDate` / `formatDateTime` / `shortID`、`statusTone` / `statusLabel`、`apiErrorMessage`、`FormField`、`CronInput`。
 - 基础 UI 件（Button / Input / Card / Tabs / AlertDialog / DropdownMenu / Popover / Switch / Checkbox / Progress / Avatar / Breadcrumb / Empty / Field / Label / Tooltip / Skeleton / Separator…）全部从 barrel 导出；也可走子路径 `import { Button } from '@ploykit/ui/components/ui/button'`（推荐统一走 barrel）。

@@ -142,6 +142,32 @@ describe('LoginPage 验证码发送（P3-26）', () => {
   })
 })
 
+describe('LoginPage 认证辅助链接（aiblog-15：未挂载路由须可隐藏）', () => {
+  it('默认渲染 忘记密码/创建账号，指向 resetPath/registerPath 默认路由', () => {
+    renderLogin({})
+    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/forgot-password')
+    expect(screen.getByRole('link', { name: '创建账号' })).toHaveAttribute('href', '/register')
+  })
+
+  it('resetPath/registerPath 传空串时对应链接隐藏（产品未挂载该路由）', () => {
+    renderLogin({ resetPath: '', registerPath: '' })
+    expect(screen.queryByRole('link', { name: '忘记密码？' })).toBeNull()
+    expect(screen.queryByRole('link', { name: '创建账号' })).toBeNull()
+  })
+
+  it('仅隐藏 reset 链接时 register 链接仍渲染', () => {
+    renderLogin({ resetPath: '' })
+    expect(screen.queryByRole('link', { name: '忘记密码？' })).toBeNull()
+    expect(screen.getByRole('link', { name: '创建账号' })).toBeInTheDocument()
+  })
+
+  it('自定义路径覆盖默认路由', () => {
+    renderLogin({ resetPath: '/my-reset', registerPath: '/my-register' })
+    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/my-reset')
+    expect(screen.getByRole('link', { name: '创建账号' })).toHaveAttribute('href', '/my-register')
+  })
+})
+
 describe('LoginPage 深链回跳（B-settings-8）', () => {
   it('location.state.from 为站内路径时，登录成功回跳该路径', async () => {
     locState.state = { from: '/admin/settings' }
