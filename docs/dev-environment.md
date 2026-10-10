@@ -253,3 +253,51 @@ transaction-level set_config is the only safe approach (this package will never 
 session-level setter); accessors referenced by policies must be STABLE and wrapped in
 `(select fn())`, with a leading index on the tenant column; cross-tenant background
 operations always go explicitly through `pg.WithService`, never implicitly.
+
+## 产品侧用 shadcn CLI 补长尾组件
+
+框架的 `@ploykit/ui` 自带 23 个 `components/ui` 组件（Base UI 内核 + cva/cn/Tailwind 语义
+token，与 shadcn 新版同构同源）。产品侧的默认动作是**直接从 `@ploykit/ui` 导入**（root
+策展导出，或 `@ploykit/ui/components/ui/<name>` 子路径导出）。shadcn CLI 只服务于一个场景：
+补**框架没有的长尾组件**（calendar、command、drawer 这一类）。框架已有的 23 件**不要**用
+CLI 再拉一份 —— 那会变成同一套 token 的双实现，框架升级后两份各自漂移。
+
+shadcn 新版 CLI 的默认内核就是 Base UI，与框架同源：拉下来的组件与框架组件无内核冲突、
+token 同套（example/web/src/index.css 里就是完整的 shadcn token 集），所以产品侧混用两条
+来源不会打架。具体步骤（以 example/web 为例）：
+
+```bash
+# 1) 在产品目录初始化（cd example/web）
+npx shadcn@latest init
+
+# 2) 按需生成长尾组件
+npx shadcn@latest add calendar
+
+# 3) 生成后必须在仓库根目录确认全仓只有一份 Base UI
+npm ls @base-ui/react
+```
+
+`init` 的关键配置：
+
+- **内核选 Base UI**（CLI 默认即是，保持默认即可）。
+- **Tailwind CSS 路径**指向产品的 `src/index.css`（不是 packages/ui 里的那份）。
+- **组件别名**按产品自己的 tsconfig，生成到产品的 `src/components/ui`。
+- **cn 工具**指向产品自建的 `src/lib/utils` —— 产品需要自己建这个两行文件
+  （clsx + tailwind-merge，可参照 `packages/ui/src/lib/utils.ts`）。
+
+第 3 步的判定：框架把 `@base-ui/react` 钉在 `^1.8.0`，workspace hoist 应把两处声明合成
+一份；`npm ls @base-ui/react` 出现**两份**时必须先解决（对齐版本范围）再构建，否则 Go SSR
+构建的 node_modules 解析会出问题。
+
+边界与注意事项：
+
+- **import 来源分清，不要重名混用**：框架组件从 `@ploykit/ui` 导入，产品组件从产品自己的
+  `src/components/ui` 导入；同名时优先删掉产品侧那份、改从框架导入。
+- **CLI 顺带装的产品依赖不进同步桥**：cmdk、react-day-picker 等不属于"react 五件套"
+  （react/react-dom/react-router/react-router-dom/@tanstack/react-query），不需要进
+  `example/web/scripts/sync-hoisted-deps.mjs`（见上文 render CLI dependency sync bridge
+  一节）；esbuild SSR 构建会从产品目录向上解析到仓库根 `node_modules`。
+- **blocks 同一通道**：shadcn 官方 blocks（整页布局模板）也走同一通道，产品想自定义整套
+  布局时可用。
+
+一句话原则：**核心组件用框架的（保持单副本和升级一致性），CLI 只补长尾。**
