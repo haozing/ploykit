@@ -46,7 +46,8 @@ jobs:
             else
               echo "publishing @ploykit/$pkg@$v"
               if ! npm publish -w @ploykit/$pkg --access public --provenance 2>&1 | tee /tmp/pub-$pkg.log; then
-                grep -iE 'npm error|ENEEDAUTH|E403|E404|EPUBLISHCONFLICT|not found|denied' /tmp/pub-$pkg.log | sed 's/^/::error::/' | head -10
+                echo "::error::publish failed for @ploykit/$pkg@$v — full log follows"
+                sed 's/^/::error::/' "/tmp/pub-$pkg.log" | head -30
                 exit 1
               fi
             fi
