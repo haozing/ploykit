@@ -28,7 +28,7 @@ Dependencies are strictly one-way: **product → framework**. Your repository co
 | Layer | What you get |
 |---|---|
 | **Business domains** (11) | identity · workspace · billing · quota · admin · notify · audit · analytics · webhooks · schedule · settings |
-| **Cross-cutting** | `authz` (simple RBAC) · `authorization` (strong profile: YAML operation catalog, staged evaluator, allow / deny / **challenge**) · `contractx` (deterministic hashing, route and OpenAPI comparison) |
+| **Cross-cutting** | `authz` (simple RBAC) · `authorization` (strong profile: YAML operation catalog, staged evaluator, allow / deny / **challenge**) |
 | **Platform packages** (18) | `renderx` (SSR + prerender + QuickJS sandbox) · `pg` (tenant-scoped pools) · `pgmigrate` · `pgpart` · `events` (River) · `webx` · `wsx` (WebSocket rooms) · `egressx` (SSRF-safe egress) · `sealx` (secret sealing) · `storagex` · `redactx` · `logx` · `metrics` · `workers` · `cronx` · `redisx` · `relayx` · `ids` |
 | **Frontend** | `@ploykit/ui` (Base UI component system, 40+ pages) · `@ploykit/client` (typed API + CSRF + realtime) · `@ploykit/runtime` (hydration and prerender bridge) |
 
@@ -68,7 +68,7 @@ graph LR
     end
     subgraph Framework["ploykit framework"]
         DOMAINS["11 business domains<br/>identity · workspace · billing · quota · …"]
-        CORE["authz · authorization · contractx"]
+        CORE["authz · authorization"]
         PLATFORM["18 platform packages<br/>renderx · pg · events · webx · sealx · …"]
     end
     DB[("PostgreSQL")]

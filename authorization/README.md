@@ -22,7 +22,7 @@ assurance / recent-auth 两条通用 step-up 规则，产品可注入自有规�
 | 需要 step-up（AAL2 / recent-auth / sudo 模式） | **authorization**：challenge 是一等决策，携带目标操作、要求的 assurance、max-age |
 | 凭据要绑 scope（细粒度 PAT / 机器凭据，GitHub FG-PAT 形态） | **authorization**：`ScopedTokenPrincipal` / `MachineCredentialPrincipal`，scope 精确匹配不可替换 |
 | 需要 deny 可解释（哪个阶段、什么原因码）供审计/反枚举策略 | **authorization**：`Decision{Stage, ReasonCode}` 结构化拒绝 |
-| 操作集要可哈希、可对账（目录 ↔ 路由 ↔ 契约比对） | **authorization**：`Catalog.Hash()` 确定性哈希是 C4 contractx 的地基 |
+| 操作集要可哈希、可对账（目录 ↔ 路由 ↔ 契约比对） | **authorization**：`Catalog.Hash()` 确定性哈希（对账伴侣包 contractx 已按 ADR 0012 删除——角色配置界面裁定为写入边界校验，不对账） |
 | 嵌套 scope（workspace → project 两层） | 两档都留了形状；强档的 scope 输入类型（`WorkspaceScope` / `ProjectScope`）两层原生 |
 
 ### 词汇对应表
@@ -69,6 +69,22 @@ default:                             // deny：阶段 + 原因码可审计
 - 只做两层 scope 输入形状（workspace → project），不做任意深度；
 - 不做 ReBAC / 策略引擎；不内置 TTL 缓存；
 - 审批编排、Phase0、具名审批不进（组织纪律留产品）。
+
+## 与 webx step-up 的关系（ADR 0011）
+
+step-up 有两条路，按策略形态选一条，**同一操作禁止双挂载**（会双重挑战，第二次
+挑战在第一次完成后立即触发，用户永远过不去）：
+
+- **静态路由级**（"删除工作区要最近 15 分钟内输过密码"）→ `webx.RequireRecentAuth(maxAge)`
+  + `POST /auth/confirm-password`，机制长在认证层，与业界（Laravel password.confirm /
+  GitHub sudo / Clerk Reverification）同构；不需要本包。
+- **计算型**（目录/规则驱动："只对生产资源要求""改动他人数据时才要求"）→ 本包
+  Challenge 决策：内置 assurance / recent-auth 规则经 FactsProvider 读 session 的
+  `password_confirmed_at`（与 webx 盖的是同一列，ADR 0011），投影为
+  `ErrReauthenticationRequired` 后由产品粘到 webx 的重认证流程再重试。
+
+窗口长短是产品策略：webx 侧逐挂载点显式传 `maxAge`；本包 `RecentAuthWindow`
+常量（600s）仅为内置规则的默认投影，产品规则可覆盖。
 
 ## golden 基准
 
