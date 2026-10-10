@@ -40,7 +40,7 @@ jobs:
       - run: |
           set -o pipefail
           for pkg in client runtime hooks ui; do
-            v=$(node -p "require('./packages/'$pkg'/package.json').version")
+            v=$(node -p "require('./packages/$pkg/package.json').version")
             if [ "$(npm view @ploykit/$pkg version 2>/dev/null)" = "$v" ]; then
               echo "@ploykit/$pkg@$v already published — skipping"
             else
