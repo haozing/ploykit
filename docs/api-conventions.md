@@ -28,6 +28,14 @@ or middleware-ordering problem. Remember this line before debugging.
   (example wires it to `SECURE_COOKIE`). The reverse default once made plain-HTTP
   deployments fail login with an opaque CSRF error whose root cause was two layers away
   (the cookie is never sent back over plain HTTP).
+- **Origin drift note**: `TrustedOrigins` matches `host[:port]` exactly. A dev server that
+  drifts off its port (vite 5173 -> 5176 when 5173 is taken) fails the origin check while
+  login and reads keep working - the signature is "every write 403s", easily misread as a
+  permission problem. In development set `TrustLocalhostAnyPort: true` (the example derives
+  it from `PRODUCTION`): the loopback family (`localhost`, `127.0.0.1`, `[::1]`) is then
+  trusted on any port. Production must enumerate exact origins. A failed origin check now
+  self-describes - the 403 details carry `request_origin` and `trusted_origins` next to an
+  "origin check failed" message, instead of hiding behind "token missing or invalid".
 - **PAT (Bearer) requests are exempt from CSRF by design** - server-to-server integrations
   need no CSRF handling at all.
 - For product-exposed **server-to-server APIs** (no browser session, own auth such as an
@@ -64,6 +72,34 @@ Common misconception: sending `code` to register. openapi.yaml is the field-cont
 
 > Naming note: the Go field is `Code` with JSON name `error` - historical. Unchanged in 0.x
 > (renaming breaks every existing consumer); the semantics above are the contract.
+
+## Step-up reauthentication (E_REAUTH_REQUIRED, two-phase protocol)
+
+Sensitive operations can require a fresh password confirmation (the Laravel
+`password.confirm` / GitHub sudo-mode pattern). Server side this is
+`webx.RequireRecentAuth(maxAge)` mounted after `Authenticate`; clients see:
+
+```json
+HTTP 403
+{ "error": "E_REAUTH_REQUIRED", "message": "password confirmation required",
+  "details": { "max_age_seconds": 900 } }
+```
+
+The recovery protocol is **two-phase, not a redirect**:
+
+1. catch the 403 (note: **403, never 401** — the caller IS authenticated, only the
+   assurance is stale; treating it as 401 wrongly steers SPAs into full re-login);
+2. prompt for the password, `POST /auth/confirm-password` `{"password": "..."}`
+   (sessions born from password login/registration/password change start confirmed;
+   code/third-party logins start unconfirmed — see ADR 0011);
+3. **retry the original request** — the confirmation stamps the current session, no
+   new cookie is issued.
+
+Machine callers (PAT / system) get a plain `E_FORBIDDEN` instead — they can never
+reauthenticate interactively, so scoped PATs must not reach actions reserved for a
+present human. Failed confirmations share the login attempt limiter (429 after the
+configured window). The reference wiring lives in example (workspace delete /
+transfer-ownership, 15-minute window, `workspacehttp.Deps.StepUp`).
 
 ## Route style (Go stdlib ServeMux pitfalls)
 

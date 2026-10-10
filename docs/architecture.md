@@ -97,7 +97,6 @@ These are not business domains and not platform packages; the dependency rules t
 |---|---|
 | **authz** | cross-cutting authorization, simple profile: permission catalog + role sets (owner/admin/member) + Authorizer + HTTP gates (Require/RequireOwn). Business domains may depend on it; it may depend only on platform |
 | **authorization** | authorization, strong profile: self-contained registry/rules/evaluator with caller-injected facts. Imports nothing else in this module (including authz) |
-| **contractx** | API contract tooling: manifest build/hash/compare + OpenAPI helpers. Zero business dependencies, same bar as platform |
 | **internal/contract** | lowest-level shared contracts (error codes / apierr). Depends on nothing in-module; internal/ is not exposed to products |
 
 ### 2.4 Final package layout
@@ -117,9 +116,8 @@ ploykit/ (Go module)
 ├── settings/
 ├── authz/               ← cross-cutting authorization (simple profile)
 ├── authorization/       ← authorization (strong profile, self-contained)
-├── contractx/           ← API contract tooling
 ├── internal/
-│   ├── arch/            ← architecture boundary tests (rules A1-A7)
+│   ├── arch/            ← architecture boundary tests (rules A1-A6)
 │   └── contract/        ← lowest-level shared contracts (apierr)
 └── platform/            ← platform packages (18 packages, grouped by function; products import as needed)
     ├── pg/              core
@@ -343,7 +341,6 @@ Side effect and its record share success or failure under **the same idempotency
 | A4 | internal/contract is the bottom layer: no business domains, no platform/* |
 | A5 | authz depends only on platform — never on business domains or identity |
 | A6 | authorization imports nothing else in this module; facts and rules are injected by the caller |
-| A7 | contractx has zero business dependencies, same bar as platform |
 
 The only sanctioned cross-domain edges live in `internal/arch/allowlist.txt` (admin→audit read-only queries, ADR 0002; admin/adapters/bridge → app layers of five domains, ADR 0004). The allowlist is freshness-checked: an entry whose edge no longer exists fails the test, so exemptions cannot accumulate silently. Dependency direction stays one-way throughout: products import the framework; the framework never imports products.
 

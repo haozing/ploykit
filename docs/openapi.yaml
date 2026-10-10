@@ -536,6 +536,45 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         default:
           $ref: '#/components/responses/DefaultError'
+  /auth/confirm-password:
+    post:
+      operationId: confirmPassword
+      tags: [session]
+      summary: step-up 重认证（校验密码后为当前会话盖 password_confirmed_at 戳；配合 E_REAUTH_REQUIRED 两段式协议后重试原请求；仅浏览器会话）
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  description: 当前密码
+      responses:
+        '200':
+          description: 确认成功（当前会话新鲜度已更新）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  password_confirmed_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /auth/sessions:
     get:
       operationId: listSessions
@@ -763,6 +802,104 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  # ---------- workspace：角色权限配置（write side of workspace_role, ADR 0012） ----------
+  /api/workspaces/{id}/roles:
+    get:
+      operationId: listRoleConfigs
+      tags: [workspace]
+      summary: 角色权限矩阵（roles:manage；覆盖行完全取代默认角色集，不是合并）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 可配置角色（admin/member；owner 不可配置）+ 有效权限集 + 代码注册的权限目录
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoleConfig'
+                  catalog:
+                    type: array
+                    items: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/workspaces/{id}/roles/{role}:
+    put:
+      operationId: setRolePerms
+      tags: [workspace]
+      summary: 设置角色权限覆盖（roles:manage + step-up；写入边界校验 perms ⊆ 代码目录，未知权限 400 拒绝——UI 数据不漂移）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: role
+          in: path
+          required: true
+          schema: { type: string, enum: [admin, member] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [perms]
+              properties:
+                perms:
+                  type: array
+                  items: { type: string }
+                  description: 该角色的完整权限集（替换语义；去重排序后落库）
+      responses:
+        '200':
+          description: 写入后的角色配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleConfig'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: resetRolePerms
+      tags: [workspace]
+      summary: 清除角色权限覆盖、回退内置默认（roles:manage + step-up；幂等）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: role
+          in: path
+          required: true
+          schema: { type: string, enum: [admin, member] }
+      responses:
+        '204':
+          description: 已回退默认
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         default:
           $ref: '#/components/responses/DefaultError'
 
@@ -3129,7 +3266,7 @@ paths:
       tags: [ws]
       summary: 实时推送通道（WebSocket 升级；非 REST）
       description: |
-        wsx Hub 的 WebSocket 通道（协议见 platform/wsx/wswire）：
+        wsx Hub 的 WebSocket 通道（协议见 platform/wswire）：
         - 升级时 `?workspace_id=<id>` 直接入 workspace scope（会话 Cookie 经全局 Authenticate 注入身份）；
           无 Cookie 的客户端可连接后发控制帧 `{"type":"auth","token":"tk_*"}` 用 PAT 认证；
         - 帧格式 `{"type":string,"payload":any,"event_id":string}`，client 级 event_id 环形去重；
@@ -3722,6 +3859,24 @@ components:
           description: 有效期小时数（0 = 不过期）
 
     # ---- workspace（PKWorkspace 对齐 packages/ui） ----
+    RoleConfig:
+      type: object
+      required: [role, perms, overridden, defaults]
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+        perms:
+          type: array
+          items: { type: string }
+          description: 有效权限集（覆盖存在时来自覆盖行，否则为内置默认；排序）
+        overridden:
+          type: boolean
+          description: true = 存在 workspace_role 覆盖行（替换语义，非合并）
+        defaults:
+          type: array
+          items: { type: string }
+          description: 内置默认权限集（用于 UI 展示差异与回退）
     Workspace:
       type: object
       required: [id, slug, name, plan_code, created_at]

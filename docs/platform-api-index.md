@@ -7,6 +7,16 @@
 
 ## platform/webx (HTTP fundamentals)
 
+### Route registration and introspection
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| Router | `Router` interface: `Handle(pattern, h)` / `HandleFunc(pattern, f)` | The route-registration surface every framework `Mount` function accepts; `*http.ServeMux` satisfies it, so std-mux wiring keeps compiling unchanged |
+| Mux | `NewMux() *Mux`; `Handle` / `HandleFunc` (record + delegate), `Routes() []RouteInfo`, `ServeHTTP` | Recording mux wrapping `*http.ServeMux` — the route introspection the std mux lacks (the chi.Walk equivalent): serving behavior is the delegated std mux unchanged, while every registered pattern is recorded |
+| RouteInfo | `RouteInfo{Method, Path, Pattern}` | One registered route: `Method` is the pattern's leading HTTP method (`""` for method-less mounts/catch-alls — not endpoints, skip them); `Path` is the pattern minus the method prefix, wildcards kept literal |
+
+Runtime contract-test pattern for products: build the production mux as `webx.NewMux()`, mount through the real `Mount` functions, take `mux.Routes()`, skip entries with `Method == ""` (mounts are not endpoints), and diff the remaining `Method + Path` set against the parsed `paths:` object of the OpenAPI spec — fail on any route present on only one side, and pin the total count to the number `tools/check_api.py` reports (the static twin guard). Reference implementation: `example/cmd/app/routes_contract_test.go`. Domains that mount an internal sub-mux under a StripPrefix expose their absolute sub-route infos separately (workspace: `SubrouteInfos()`) — include those in the runtime side.
+
 ### Middleware
 
 | Symbol | Signature essentials | Purpose |
@@ -23,21 +33,22 @@
 | ClientMetadata | `ClientMetadata(next)` | Extracts X-Client-Platform/Version/OS and injects them into the request context |
 | Authenticate | `Authenticate(cfg *AuthConfig, sessions SessionStore, pats PATLookup)` | Dual-channel global authentication (Bearer tk_ → PAT; Cookie → DB validation + sliding renewal); anonymous requests pass through, protected routes additionally mount RequireAuth/P |
 | RequireAuth / RequireHuman | `RequireAuth(next)` / `RequireHuman(next)` | Rejects anonymous requests with 401; RequireHuman restricts to browser sessions (PAT/system → 403), dedicated to sensitive operations |
+| RequireRecentAuth | `RequireRecentAuth(maxAge)` (mounted after Authenticate) | Step-up (sudo mode): only browser sessions with a fresh `PasswordConfirmedAt` pass; stale or never-confirmed → 403 `E_REAUTH_REQUIRED` + `details.max_age_seconds`, the client stamps via `POST /auth/confirm-password` and retries; PAT/system always 403. No default window — pick explicitly per mount site (ADR 0011; protocol in docs/api-conventions.md) |
 | ParseOrigins / ParseTrustedProxies / ClientIP | Parses comma-separated Origin / CIDR lists; ClientIP only trusts X-Forwarded-For from trusted proxies (skipping trusted segments right-to-left) | Input-parsing companions for CORS and AccessLog |
 
 ### Authentication and Principal
 
 | Symbol | Signature essentials | Purpose |
 |---|---|---|
-| Principal | `Principal{UserID, Name, Email, Source, SessionID, PATID, WorkspaceID, Role, Project, Scope, AgentID, IsPlatformAdmin, ImpersonatedBy}` | Unified carrier of identity + workspace context; the core of decoupling business domains from identity (arch rule) |
+| Principal | `Principal{UserID, Name, Email, Source, SessionID, PATID, WorkspaceID, Role, Project, Scope, AgentID, IsPlatformAdmin, ImpersonatedBy, PasswordConfirmedAt}` | Unified carrier of identity + workspace context; the core of decoupling business domains from identity (arch rule). `PasswordConfirmedAt` (zero = never): the password-proof timestamp, the freshness fact behind RequireRecentAuth (`.PasswordConfirmedWithin(maxAge, now)` predicate) |
 | WithPrincipal / PrincipalFrom / PrincipalFromRequest | ctx injection / retrieval (nil = anonymous) | The Principal context channel |
 | Source | `session` / `pat` / `system` constants | Authentication provenance |
 | ProjectScope | `ProjectScope{ID, Role}` | Optional second-level scope beneath workspace (the entity is owned by the product) |
 | CredentialScope | `.AllowsWorkspace(id)` / `.AllowsPermission(perm)`; three states: nil = unconstrained, empty set = reject all; permission points support "domain:*" wildcards | PAT credential scope narrowing |
-| SessionStore / PATLookup | Four session methods (Create/Verify/Renew/Revoke) / `ResolvePAT` | Authentication ports implemented by pgrepo |
+| SessionStore / PATLookup | `CreateSession(ctx, in SessionCreate)` (SessionCreate{UserID, IPHash, UserAgent, PasswordConfirmed, Now}) + Verify/Renew/Revoke / `ResolvePAT` | Authentication ports implemented by pgrepo; `PasswordConfirmed=true` births the session already confirmed (password login / registration / password-change paths) |
 | PrincipalHolder | The `PrincipalHolder()` middleware (outermost → AccessLog → … → Authenticate) | Allocates a per-request PrincipalCell injected into ctx: Authenticate fills it upon successful auth, and the outer AccessLog reads user_id through the cell (the fix for ctx-derived values not flowing back out); when the cell is absent, AccessLog falls back to reading ctx — behavior unchanged |
 | AuthConfig | Cookie name/domain, SessionTTL / AbsoluteTTL, Secure, IPHashSecret (required in production; a first call with an empty salt logs a one-time warning), PATPrefix (empty = DefaultPATPrefix "tk_"); `DefaultAuthConfig()`, `.SetSessionCookie` / `.ClearSessionCookie` | Session cookie configuration and issuance/clearing; the PAT prefix is injected from the same source as the identity side |
-| DefaultPATPrefix | The `"tk_"` constant (single source of truth) | Default PAT token prefix; when changing the prefix, inject the same value into identity TokenService and pgrepo Config.PATPrefix |
+| DefaultPATPrefix | The `"tk_"` constant — **the canonical PAT token prefix** | Default PAT token prefix and the single canonical constant of the PAT chain: wsx.DefaultPATPrefix aliases it, identity/domain.DefaultPATPrefix mirrors it (domain purity — pure stdlib, no framework import), and the internal/arch parity test pins all three to the same `"tk_"` anchor so drift fails the build; when changing the prefix, inject the same value into identity TokenService and pgrepo Config.PATPrefix |
 | MintToken / HashToken / HashIP | 32-byte random hex / sha256 digest for storage / salted IP fingerprint | Session and PAT token infrastructure |
 | Limiter / FailOpenLimiter | The `Allow(ctx, key, perMinute)` abstraction; FailOpen always allows | Rate-limit backend interface and the no-backend fallback |
 | P | `P(fn func(w, r, p *Principal)) http.HandlerFunc` | Standard business handler signature: authenticated + Principal injected |
@@ -47,7 +58,7 @@
 | Symbol | Signature essentials | Purpose |
 |---|---|---|
 | CSRFConditional | `CSRFConditional(cfg *CSRFConfig, secure bool)` | Enforces CSRF on session requests (JSON envelope errors), exempts PATs; secure=false for local http development |
-| CSRFConfig | `Key`, `TrustedOrigins` (host[:port] cross-origin submissions), **`ExemptPrefixes` (exempts all methods under a prefix, for server-to-server callbacks such as /webhooks/billing/)**, `PATPrefix` | The CSRF configuration |
+| CSRFConfig | `Key`, `TrustedOrigins` (host[:port] cross-origin submissions, exact match), `TrustLocalhostAnyPort` (dev convenience: trust `localhost` / `127.0.0.1` / `[::1]` on any port), **`ExemptPrefixes` (exempts all methods under a prefix, for server-to-server callbacks such as /webhooks/billing/)**, `PATPrefix` | The CSRF configuration |
 | DeriveCSRFKey | `DeriveCSRFKey(signingSecret []byte)` | Derives an independent CSRF key from the session signing secret, preventing key reuse |
 | CSRFMaskedToken | `CSRFMaskedToken(r)` | Returns the masked token for the current request (used by /config and template injection) |
 | RequireScope | `RequireScope(required ...string)` | **The default PAT-scope enforcement gate** for machine-facing endpoints (shapes that bypass authz): a PAT missing any required permission domain -> 403; sessions and anonymous requests pass. Mount right after Authenticate. Skipping it while building your own actor = every PAT passes with full power (risk-engine #12) |
@@ -88,7 +99,7 @@
 | Symbol | Signature essentials | Purpose |
 |---|---|---|
 | NewHub | `NewHub(log *slog.Logger) *Hub` | Room registry + gorilla upgrader; the single entry point for hub construction |
-| Hub.BroadcastEvent | `BroadcastEvent(ctx, scope, event string, payload []byte, eventID string) error` | The public broadcast entry for products (wswire.Frame is internal; products cannot get the type); an empty eventID auto-generates a UUIDv7 |
+| Hub.BroadcastEvent | `BroadcastEvent(ctx, scope, event string, payload []byte, eventID string) error` | The public broadcast entry for products (the payload rides a public wswire.Frame — products import platform/wswire directly for the type); an empty eventID auto-generates a UUIDv7 |
 | Hub.Broadcast / SendToUser / DeliverRemote | Delivers by scope (also publishes outward when a Relay is attached) / unicast to a user room / remote messages are dispatched locally only (the second gate of loop suppression) | Frame-level operations (most products only need BroadcastEvent) |
 | Hub.ServeWS / Rooms / RoomSize | Upgrade entry (Origin validation: same-origin is always allowed, allowlist next) / room count / room size | Route mounting and monitoring observability |
 | WorkspaceScope / UserScope | `WorkspaceScope(workspaceID)` / `UserScope(userID)` → `"workspace:<id>"` / `"user:<id>"` | Scope key construction. **Never hand-assemble the "workspace:" prefix** (guarded by arch tests) |
@@ -96,7 +107,22 @@
 | WorkspaceMember / PATResolve / Authorize types | Three closure-injection ports | The injection surface decoupling the hub from business domains (composed at the root with the workspace repository / identity token service) |
 | RegisterScope / RegisterCapability / Capabilities | Lexical validation ([a-z0-9_], ≤32), errors on reserved names and duplicate registration, not concurrency-safe; `Capabilities()` = framework built-ins + product registrations (lexicographic) | Product-defined room scopes and capability words |
 | Hub assembly fields | `Log` `Metrics` `Authorize` `WorkspaceMember` `PATResolve` `PATPrefix` `OnSubscribe` `OnUnsubscribe` `AllowedOrigins` `Capabilities` `Relay` | The composition-root assembly surface; Relay is an inline interface (`PublishOut(ctx, scope, frame)`, wired to relayx); PATPrefix must be injected from the same source as the identity side |
+| DefaultPATPrefix | Aliases `webx.DefaultPATPrefix` (`"tk_"`) | The fallback for the Hub.PATPrefix option when empty (option semantics unchanged); the internal/arch parity test pins mint (identity/domain), parse (webx) and this WS auth gate to the same anchor |
 | Broadcaster / Metrics interfaces | `Broadcast + SendToUser` / `Incr + Gauge` | The minimal dependency surface for event-bridge and metrics injection |
+
+## platform/wswire (WebSocket wire vocabulary)
+
+The WS wire protocol vocabulary is a public platform package so that products building typed WS clients share one source of truth with the framework instead of vendoring drift-prone copies. Products register their own scope/capability names via RegisterScope/RegisterCapability; the framework reserves the scope names workspace/user and the capability names batch/notification/workspace. wsx re-exports RegisterScope/RegisterCapability for convenience.
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| Frame | `Frame{Type, Payload json.RawMessage, EventID}` (JSON: `type` / `payload` / `event_id`) | The wire frame every WS peer sends and receives — shared by the wsx Hub, the relayx envelope, and product-side typed WS clients |
+| Ctrl* constants / ConnectedFrameType | `CtrlAuth` / `CtrlSubscribe` / `CtrlUnsub` / `ConnectedFrameType` = `"connected"`; `ConfirmPrefix` = `"confirmed:"` / `RejectedPrefix` = `"rejected:"` | Control-frame type vocabulary plus the server hello and subscribe ack/nack prefixes |
+| Scope* / Cap* constants | `ScopeWorkspace` = workspace / `ScopeUser` = user; `CapBatch` / `CapNotification` / `CapWorkspace` | Framework-reserved scope and capability names — rejected by the registration functions |
+| RegisterScope / RegisterCapability / IsRegisteredScope | Lexical validation ([a-z0-9_], ≤32, leading lowercase letter), errors on reserved names and duplicate registration, not concurrency-safe; `IsRegisteredScope` probes product registrations (built-ins do not count) | Product-defined room scopes and capability words; register at assembly time |
+| Capabilities | `Capabilities() []string` | Framework built-ins (batch, notification, workspace) plus product registrations, lexicographic |
+| ScopeKey | `ScopeKey(prefix, id)` → `"<prefix>:<id>"` | Scope-key assembly; wsx.WorkspaceScope / UserScope build on it — never hand-assemble the "workspace:" prefix |
+| WSName | `WSName(dotEvent)` → `"a.b"` becomes `"a:b"` | Dot-form event name → WS frame-type name mapping |
 
 ## platform/renderx (Rendering: SSR / prerender / SEO)
 
@@ -202,14 +228,14 @@
 | IsUniqueViolation | `IsUniqueViolation(err, constraint) bool` | Unique-violation 23505 detection (errors.As semantics, wrapped errors work); when constraint is non-empty it requires an exact constraint/index name match — distinguishing same-code different-origin cases (idempotency-key conflict vs number race). **Never hand-write "23505" checks** (guarded by arch tests) |
 | AsDuplicate | `AsDuplicate(err, dup) error` | 23505 → the caller's semantic error (e.g., each domain's ErrDuplicate, 409); everything else passes through — the 23505 sibling of AsNotFound |
 
-## platform/pgmigrate (Embedded SQL migrations)
+## platform/pgmigrate (fs.FS SQL migrations)
 
 | Symbol | Signature essentials | Purpose |
 |---|---|---|
-| New | `New(pool, fsys embed.FS, subdir) *Migrator` | Migrator over an embed.FS data source |
+| New | `New(pool, fsys fs.FS, subdir) *Migrator` | Migrator over any fs.FS migration source (embed.FS remains the canonical wiring; os.DirFS / fstest.MapFS work for tests, tools and external migration dirs) |
 | Migrator.Up / Down / Status | `Up(ctx, limit) ([]string, error)` / `Down(ctx, limit) ([]string, error)` / `Status(ctx) ([]StatusRow, error)` | Bounded migrate / rollback / status reconciliation (serialized by advisory lock) |
 | RegisterPreHook / Hook | `RegisterPreHook(version, Hook)`; `Hook func(ctx, conn *pgxpool.Conn) error` | Pre-execution hook for a given version (seeding / warm-up) |
-| Up (top-level) | `Up(ctx, pool, fsys, subdir) error` | The one-line migration entry (migrate:all) |
+| Up (top-level) | `Up(ctx, pool, fsys, subdir) error` | The one-line migration entry (migrate:all); `fsys` is an `fs.FS`, so an `embed.FS` passes straight through |
 | StatusRow | `{Version, Applied, AppliedAt, Orphan}` | The reconciliation row; a `-- migrate:no-transaction` first-line marker opts out of transactional execution |
 
 ## platform/pgpart (Rolling monthly partition maintenance, ADR 0009 companion)
@@ -226,7 +252,8 @@
 
 | Symbol | Signature essentials | Purpose |
 |---|---|---|
-| New / Sealer | `New(key []byte) (*Sealer, error)` (32-byte AES-256-GCM); `.Encrypt` / `.Decrypt` | Raw AEAD sealing (the DeriveKey domain derivation has been removed; the only key scheme is a 32-byte master key supplied directly from env) |
+| New / Sealer | `New(key []byte) (*Sealer, error)` (32-byte AES-256-GCM); `.Encrypt` / `.Decrypt` | Raw AEAD sealing (the envelope scheme is unchanged: a single 32-byte master key supplied directly from env remains the direct path) |
+| DeriveKey | `DeriveKey(base, domain string) []byte` | HMAC-SHA256 domain-separated derivation of a 32-byte key (length satisfies New/NewSecrets) — the standard helper for products that keep ONE master secret and derive per-purpose keys (credential sealing, IP-hash salt) from it |
 | NewSecrets / NewSecretsFromEnv | `NewSecrets(key)` / `NewSecretsFromEnv()` (reads PLOYKIT_SEAL_KEY, base64; missing key → nil,nil None form) | **The mandatory path for persisting tenant credentials** (AGENTS.md hard constraint) |
 | Secrets.Seal / Unseal | `Seal(plain)` adds the `sealed:v1:` prefix (no key → ErrNoKey rejects new ciphertext writes); `Unseal(stored)` on a plaintext row → ErrPlaintext (plaintext-row reads have been removed; reconfiguring credentials is the only way forward) | The persist / read pair for ciphertext strings |
 | SealedPrefix / EnvKey / ErrNoKey / ErrPlaintext | `"sealed:v1:"` / `"PLOYKIT_SEAL_KEY"` / sentinel for an unset key / sentinel for plaintext rows | Contract constants |

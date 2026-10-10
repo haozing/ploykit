@@ -588,8 +588,9 @@ the `PrefGate` injected into the notify service via `WithPrefGate`, impersonatio
 `/config` mount. All other domains untouched.
 
 Environment note: `/config`'s origin feed and CSRF `TrustedOrigins` derive from `FRONTEND_ORIGIN` (default
-`http://localhost:5173`); if the vite port drifts (e.g. 5174 when 5173 is taken), `FRONTEND_ORIGIN` must be updated in step,
-or CSRF rejects write operations (plain-text 403).
+`http://localhost:5173`). Non-production runs additionally set `TrustLocalhostAnyPort`, so a drifted vite
+port (5174, 5176, ...) no longer turns every write into a CSRF 403; production must point `FRONTEND_ORIGIN`
+at the deployed origin exactly. The `/ws` WebSocket allow-list still matches exact origins only.
 
 ---
 

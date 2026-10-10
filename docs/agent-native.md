@@ -51,7 +51,7 @@ However much infrastructure the framework builds in, nothing beats doing these f
 | Item | Status |
 |---|---|
 | overrides override slots not landed | `web/src/overrides/` as designed in architecture.md §5B.1 does not exist in example, and packages/ui has no overrides directory; docs and AGENTS.md must not reference it until it lands (example/AGENTS.md carries the do-not-reference annotation) |
-| authorization + contractx have zero consumers | shelved under the wiring-discipline rule; ruling, restart triggers, and acceptance criteria in docs/adr/0005-authorization-wiring-deferral.md — when any product needs step-up / closed-set catalogs / hashable operation sets, add the example reference wiring first |
+| authorization has zero consumers | shelved under the wiring-discipline rule; ruling, restart triggers, and acceptance criteria in docs/adr/0005 (addendum 2026-10-10) — step-up landed auth-layer-first in webx (ADR 0011, does not fire the trigger); contractx was deleted per ADR 0012 after the role-config UI chose write-boundary validation |
 
 ---
 
@@ -96,7 +96,6 @@ However much infrastructure the framework builds in, nothing beats doing these f
 | A4 | `internal/contract` must not import business domains or platform |
 | A5 | `authz` must not import business domains or identity (it depends only on `platform/webx` and `platform/ids` — the de facto cross-cutting shared layer) |
 | A6 | `authorization` must not import any other package of this module (self-contained: facts and rules are injected by callers) |
-| A7 | `contractx` must not import business domains (zero business dependencies, same scope as platform) |
 
 Implementation: `internal/arch` builds its own package graph from the `Imports` field of `go list -json ./...` (non-test imports) and judges reachability via BFS; violations print the three-part output: **file:line + the violated rule + fix guidance** (transitive violations get directory-level localization with the full path). Exemptions live in the explicit list `internal/arch/allowlist.txt` (6 entries: `admin -> audit` per ADR 0002, and `admin/adapters/bridge -> {identity,workspace,notify,billing,webhooks}/app` per ADR 0004; matching is by exact package, stale entries are auto-detected and flagged red, and entries must be business-domain → business-domain — A2/A3 are the only consumers of the exemption graph, so edges exempting other rules are flagged red immediately). `arch_canary_test.go` self-checks the rules on a synthetic graph (every rule turns red on a known violation; the healthy layering yields zero false positives; exemptions apply only to A2/A3). `example_reinvention_test.go` guards the reverse wiring-discipline clause: example must not re-implement platform capabilities by hand (e.g. CORS belongs to `webx.CORS`). Silent exemptions are not allowed.
 

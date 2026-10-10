@@ -65,6 +65,7 @@ Maintenance rules:
 | `webx` | Route-registration preflight (friendly errors for ServeMux pattern legality) | Next webx change rides along. At startup, pre-parse all registered patterns and turn stdlib panics (colon wildcards / root-pattern conflicts) into actionable error messages. |
 | `webx` | `webx.MountAPI(mux, path, opts)` | Second non-browser endpoint in any product (aiblog /mcp is the first). Bundle the AGENTS.md mounting checklist into defaults: timeout exemption, rate-limit/BodyLimit coverage, scope-enforcement hook; today every product hand-wires the four pitfalls (example/cmd/app/main.go pathGate block). |
 | `platform/renderx` | Site/tenant dimension on PagePath & cache keys | Multi-site product (aiblog v2 names this the one framework change it needs). Approach reserved in rendering.md §11: add the dimension to PagePath/cache keys + per-tenant invalidation; render pipeline unchanged. |
+| `platform/wsx` | Loopback any-port parity with `webx` CSRF | First field report of `/ws` failing after a dev frontend port drift (webx CSRF now trusts loopback hosts on any port via `TrustLocalhostAnyPort`; the hub's `AllowedOrigins` still exact-matches full `scheme://host[:port]` strings). Mirror the normalization: strip the port from loopback-family origins in the hub's origin gate behind the same flag name. |
 | `webx` | `webx.SPA` helper | When more than one product repeats the same ~20-line SPA fallback. Extract `webx.SPA(fsys, apiPrefixes...)`. |
 
 ## Frontend & Rendering
@@ -72,6 +73,7 @@ Maintenance rules:
 | Area | Item | Trigger / Notes |
 |---|---|---|
 | rendering | Rendering-surface E2E suite | At the next dedicated testing campaign. Build a new test tree instead of overwriting the frozen baseline in place. |
+| ui / example | Canvas (node-graph) example — custom nodes MUST render `<Handle>` | If/when the framework ships a canvas/flow example or doc (React Flow or similar). Field report (frontend walkthrough, P2): custom node cards that render only content and omit React Flow's `<Handle>` anchor make every edge silently disappear from the DOM — nodes render, data is intact, zero console warnings. Any canvas example must render source/target `<Handle>`s in its custom node component and call this pitfall out explicitly; it is third-party behavior the library will never diagnose. |
 | rendering SSR | QuickJS stack-depth fix at the root | When full-chain provider SSR or the next rendering milestone lands. Fork to raise the stack limit and surface a proper JS `RangeError` (today mitigated by a minimal wrap in the entry server). |
 | web | Registration copy i18n | When an i18n effort starts; approach to be decided then. |
 | web | CSP `eval` violation attribution | At the next browser regression run or page audit. One `script-src` eval is blocked per page with no attribution to a dependency; locate the caller with source maps before deciding whether to tighten or allow the CSP. |

@@ -234,7 +234,7 @@ shape as the `app.workspace_id()` accessor created by migration `1007_rls_demo`.
   A's rows; (2) a direct query without context returns 0 rows (fail-closed); (3)
   WithTenant(A) writing to tenant B is rejected by WITH CHECK (42501). Also includes a
   WithService escape-hatch comparison and concurrency without cross-tenant bleed. The tests
-  run migrations themselves (the framework chain via pgm.Up plus the product chain completed
+  run migrations themselves (the framework chain via pgmigrate.Up plus the product chain completed
   from disk under the same bookkeeping convention), create the `ploykit_app` role
   themselves (TEST_DATABASE_URL needs CREATEROLE), and use it as the connection under test —
   **testing as owner is equivalent to not testing at all**.
@@ -264,12 +264,12 @@ owner queries), and policies are narrowed with `TO ploykit_app`:
 | Account | Privileges | Purpose |
 |---|---|---|
 | `ploykit_app` | not owner, no BYPASSRLS | application runtime; RLS policies target it |
-| `ploykit_migrator` | table owner (the table creator is the owner) | connects only during migration windows to run pgm.Up |
+| `ploykit_migrator` | table owner (the table creator is the owner) | connects only during migration windows to run pgmigrate.Up |
 | `ploykit_service` | BYPASSRLS | background jobs / data repair, used only explicitly via `pg.WithService` |
 
 Initialization example (**documented only; compose files unchanged, and not yet applied —
 today the example runs migrations at startup over `DATABASE_URL` itself
-(`example/cmd/app/main.go`, `pgm.Up`); the split `MIGRATE_DATABASE_URL` below is the
+(`example/cmd/app/main.go`, `pgmigrate.Up`); the split `MIGRATE_DATABASE_URL` below is the
 proposed shape, not an env var the code currently reads**; the `POSTGRES_USER`
 bootstrap account is the first owner = the migration account):
 
