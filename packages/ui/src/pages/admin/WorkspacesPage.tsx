@@ -6,9 +6,9 @@ import type { components } from '@ploykit/client';
 import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { toast } from '../../components/toast';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import {
   Select,
   SelectContent,

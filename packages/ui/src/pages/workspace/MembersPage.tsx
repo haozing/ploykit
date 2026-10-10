@@ -11,9 +11,10 @@ import { FormField } from '../../components/FormField'
 import { SecretModal, ImpactConfirmation } from '../../components/SecretModal'
 import { useConfirm } from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
-import { Badge, StatusBadge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
+import { StatusBadge } from '../../components/StatusBadge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,

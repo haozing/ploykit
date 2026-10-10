@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AppShell } from '../AppShell'
@@ -127,5 +127,37 @@ describe('AppShell 地标结构（P3-23）', () => {
     const scrollContainer = container.querySelector('main > div.flex-1.overflow-auto, [data-slot="sidebar-inset"] > div.overflow-auto')
     expect(scrollContainer).not.toBeNull()
     expect(scrollContainer!.textContent).toContain('page-body')
+  })
+})
+
+
+describe('AppShell 侧栏增强（自 stock 镜像化后上提至组合层）', () => {
+  const sidebarState = () => document.querySelector('[data-slot="sidebar"]')?.getAttribute('data-state')
+
+  it('P2-17：sidebar_state=false cookie → 初值折叠（stock provider 只写不读，回读在组合层）', () => {
+    document.cookie = 'sidebar_state=false; path=/'
+    renderAt('/app', false)
+    expect(sidebarState()).toBe('collapsed')
+    document.cookie = 'sidebar_state=; path=/; max-age=0'
+  })
+
+  it('P2-17：无 cookie → 默认展开', () => {
+    document.cookie = 'sidebar_state=; path=/; max-age=0'
+    renderAt('/app', false)
+    expect(sidebarState()).toBe('expanded')
+  })
+
+  it('P3-1：输入焦点时 Ctrl+B 不折叠侧栏（捕获阶段拦截 stock 全局监听）', () => {
+    render(
+      <MemoryRouter initialEntries={['/app']}>
+        <AppShell brand="MyProduct" nav={nav}>
+          <input aria-label="输入框" />
+        </AppShell>
+      </MemoryRouter>,
+    )
+    expect(sidebarState()).toBe('expanded')
+    const input = screen.getByRole('textbox', { name: '输入框' })
+    fireEvent.keyDown(input, { key: 'b', ctrlKey: true })
+    expect(sidebarState()).toBe('expanded')
   })
 })

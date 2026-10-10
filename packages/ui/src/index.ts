@@ -17,10 +17,9 @@ export type { OAuthProviderOption, LoginPageProps } from './pages/LoginPage'
 export { LandingPage } from './pages/LandingPage'
 export type { Feature as LandingFeature, Plan as LandingPlan } from './pages/LandingPage'
 
-export { Button, buttonVariants } from './components/ui/Button'
-export type { ButtonProps } from './components/ui/Button'
-export { Input } from './components/ui/Input'
-export { Badge, badgeVariants, StatusBadge } from './components/ui/Badge'
+export { Button, buttonVariants } from './components/ui/button'
+export { Input } from './components/ui/input'
+export { StatusBadge } from './components/StatusBadge'
 export {
   Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter, DialogClose,
@@ -71,7 +70,7 @@ export {
   DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuCheckboxItem,
   DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator,
   DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
-} from './components/ui/menu'
+} from './components/ui/dropdown-menu'
 export {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel,
   SelectScrollDownButton, SelectScrollUpButton, SelectSeparator, SelectTrigger, SelectValue,
@@ -92,7 +91,7 @@ export {
   BreadcrumbSeparator, BreadcrumbEllipsis,
 } from './components/ui/breadcrumb'
 export {
-  Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia, EmptyFooter,
+  Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia,
 } from './components/ui/empty'
 
 export { SettingsShell } from './layouts/SettingsShell'

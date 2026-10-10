@@ -7,8 +7,9 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { SettingsCard } from '../../components/SettingsCard';
 import { toast } from '../../components/toast';
-import { Badge, StatusBadge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/badge'
+import { StatusBadge } from '../../components/StatusBadge';
+import { Button } from '../../components/ui/button';
 import {
   Select,
   SelectContent,

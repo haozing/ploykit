@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@ploykit/client'
 import { AuthShell } from '../../layouts/AuthShell'
-import { buttonVariants } from '../../components/ui/Button'
+import { buttonVariants } from '../../components/ui/button'
 import {
-  Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyFooter,
+  Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent,
 } from '../../components/ui/empty'
 import { MailCheck, LoaderCircle, CircleX } from 'lucide-react'
 
@@ -65,11 +65,11 @@ export function VerifyEmailPage() {
                 : '请稍候，正在校验邮件链接…'}
           </EmptyDescription>
         </EmptyHeader>
-        <EmptyFooter>
+        <EmptyContent>
           <a href="/login" className={buttonVariants({ variant: 'outline' })}>
             返回登录
           </a>
-        </EmptyFooter>
+        </EmptyContent>
       </Empty>
     </AuthShell>
   )

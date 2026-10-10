@@ -7,15 +7,15 @@ import { cn } from '../lib/utils'
 import { apiErrorMessage } from '../lib/api-error'
 import { useWorkspaceSwitch } from '@ploykit/hooks'
 import { toast } from './toast'
-import { Button } from './ui/Button'
-import { Input } from './ui/Input'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
 import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from './ui/sidebar'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
-} from './ui/menu'
+} from './ui/dropdown-menu'
 
 
 const slugSuffix = (n = 4): string => {

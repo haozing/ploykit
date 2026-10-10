@@ -7,7 +7,15 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "customConditions": ["development"]
+    "customConditions": [
+      "development"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
   "include": [
     "src"

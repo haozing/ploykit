@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog'
-import { Button } from './ui/Button'
+import { Button } from './ui/button'
 
 export function SecretModal({ open, onOpenChange, secretName, secretValue, title }: {
   open: boolean

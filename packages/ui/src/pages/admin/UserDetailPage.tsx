@@ -11,9 +11,10 @@ import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { ImpactConfirmation } from '../../components/SecretModal';
 import { SettingsCard } from '../../components/SettingsCard';
 import { toast } from '../../components/toast';
-import { Badge, StatusBadge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Badge } from '../../components/ui/badge'
+import { StatusBadge } from '../../components/StatusBadge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import { useApi, ApiError } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';

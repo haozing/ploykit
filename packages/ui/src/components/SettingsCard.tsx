@@ -25,7 +25,7 @@ export function SettingsCard({
       <CardHeader>
         {/* G7.1：分块卡标题升 h2（PageHeader h1 之下的文档大纲层级），
             经 card.tsx CardTitle 的 as 多态，样式/props 不变。 */}
-        <CardTitle as="h2" className={cn(danger && 'text-destructive')}>{title}</CardTitle>
+        <h2 data-slot="card-title" className={cn('flex items-center gap-2 font-semibold leading-none tracking-tight', danger && 'text-destructive')}>{title}</h2>
         {description && (
           <CardDescription className={cn(danger && 'text-destructive/80')}>
             {description}

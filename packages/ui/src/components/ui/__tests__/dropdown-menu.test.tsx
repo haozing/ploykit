@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
-} from '../menu'
+} from '../dropdown-menu'
 
 describe('dropdown-menu 冒烟', () => {
   it('Trigger 打开菜单；点击 MenuItem 触发回调并关闭', async () => {

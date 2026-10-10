@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
@@ -5,8 +7,8 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../lib/utils"
 
 import { useIsMobile } from "../../hooks/use-mobile"
-import { Button } from "./Button"
-import { Input } from "./Input"
+import { Button } from "./button"
+import { Input } from "./input"
 import { Separator } from "./separator"
 import {
   Sheet,
@@ -30,16 +32,6 @@ const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
-
-function readSidebarCookie(): boolean | undefined {
-  if (typeof document === "undefined") return undefined
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
-  if (!match) return undefined
-  return match.split("=")[1] === "false" ? false : true
-}
-
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
@@ -62,7 +54,7 @@ function useSidebar() {
 }
 
 function SidebarProvider({
-  defaultOpen,
+  defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -77,14 +69,9 @@ function SidebarProvider({
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
-  
-  
-  
-  
-  const [_open, _setOpen] = React.useState<boolean>(() => {
-    if (defaultOpen !== undefined) return defaultOpen
-    return readSidebarCookie() ?? true
-  })
+  // This is the internal state of the sidebar.
+  // We use openProp and setOpenProp for control from outside the component.
+  const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -95,35 +82,24 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      
+      // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
     },
     [setOpenProp, open]
   )
 
-  
+  // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
   }, [isMobile, setOpen, setOpenMobile])
 
-  
+  // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
         event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
         (event.metaKey || event.ctrlKey)
       ) {
-        
-        
-        
-        const target = event.target as HTMLElement | null
-        if (
-          target?.isContentEditable ||
-          (target && typeof target.matches === "function" &&
-            target.matches("input, textarea, select"))
-        ) {
-          return
-        }
         event.preventDefault()
         toggleSidebar()
       }
@@ -133,9 +109,8 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
 
-  
-  
-  
+  // We add a state so that we can do data-state="expanded" or "collapsed".
+  // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed"
 
   const contextValue = React.useMemo<SidebarContextProps>(
@@ -233,6 +208,7 @@ function Sidebar({
   return (
     <div
       className="group peer hidden text-sidebar-foreground md:block"
+      data-state={state}
       data-collapsible={state === "collapsed" ? collapsible : ""}
       data-variant={variant}
       data-side={side}
@@ -255,7 +231,7 @@ function Sidebar({
         data-side={side}
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
-          
+          // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
             : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
@@ -287,7 +263,7 @@ function SidebarTrigger({
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
       variant="ghost"
-      size="iconSm"
+      size="icon-sm"
       className={cn(className)}
       onClick={(event) => {
         onClick?.(event)
@@ -315,7 +291,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
-        "[[data-side=left][data-collapsible=icon]_&]:cursor-e-resize [[data-side=left][data-collapsible=offcanvas]_&]:cursor-e-resize [[data-side=right][data-collapsible=icon]_&]:cursor-w-resize [[data-side=right][data-collapsible=offcanvas]_&]:cursor-w-resize",
+        "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
@@ -331,7 +307,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[collapsible=icon]:ml-2 md:peer-data-[variant=inset]:peer-data-[collapsible=offcanvas]:ml-2",
+        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className
       )}
       {...props}
@@ -395,7 +371,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
-        "no-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "no-scrollbar flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
         className
       )}
       {...props}
@@ -408,10 +384,7 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-group"
       data-sidebar="group"
-      className={cn(
-        "relative flex w-full min-w-0 flex-col p-2",
-        className
-      )}
+      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
       {...props}
     />
   )
@@ -484,7 +457,7 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu"
       data-sidebar="menu"
-      className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+      className={cn("flex w-full min-w-0 flex-col gap-0", className)}
       {...props}
     />
   )
@@ -631,17 +604,10 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  
-  
-  
-  const id = React.useId()
-  const SKELETON_WIDTHS = ["50%", "58%", "66%", "74%", "82%", "90%"] as const
-  const width =
-    SKELETON_WIDTHS[
-      Math.abs(
-        Array.from(id).reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 7)
-      ) % SKELETON_WIDTHS.length
-    ]
+  // Random width between 50 to 90%.
+  const [width] = React.useState(() => {
+    return `${Math.floor(Math.random() * 40) + 50}%`
+  })
 
   return (
     <div

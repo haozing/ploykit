@@ -10,8 +10,8 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { FormField } from '../../components/FormField'
 import { CronInput, describeCron } from '../../components/CronInput'
 import { toast } from '../../components/toast'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
 import { Switch } from '../../components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,

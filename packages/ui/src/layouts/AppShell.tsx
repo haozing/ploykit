@@ -1,6 +1,6 @@
 
 import { useLocation, useNavigate } from 'react-router'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { FolderKanban } from 'lucide-react'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
@@ -12,6 +12,13 @@ import {
 } from '../components/ui/breadcrumb'
 import { UserMenu } from '../components/UserMenu'
 import { ImpersonationBanner } from '../components/ImpersonationBanner'
+
+// stock SidebarProvider 只写不读 sidebar_state cookie（写入供 SSR 框架回传 defaultOpen）。
+// CSR 产品在组合层回读，保持跨会话折叠状态（P2-17，自 stock 镜像化后上提至此）。
+function readSidebarCookieOpen(): boolean {
+  if (typeof document === 'undefined') return true // SSR 安全
+  return !document.cookie.split('; ').includes('sidebar_state=false')
+}
 
 export interface NavItem {
   path: string
@@ -42,6 +49,20 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarFooter, 
   const location = useLocation()
   const navigate = useNavigate()
 
+  // 输入焦点时不劫持 Ctrl/Cmd+B（P3-1，自 stock 镜像化后上提至此）：
+  // 捕获阶段拦截可编辑目标上的快捷键，阻断 stock SidebarProvider 的全局监听。
+  useEffect(() => {
+    const guard = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+        e.stopImmediatePropagation()
+      }
+    }
+    window.addEventListener('keydown', guard, true)
+    return () => window.removeEventListener('keydown', guard, true)
+  }, [])
+
   const items = nav ?? [
     { path: '/app', label: '概览', icon: <FolderKanban size={17} aria-hidden="true" /> },
   ]
@@ -51,7 +72,7 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarFooter, 
     (location.pathname.startsWith('/settings') || location.pathname.startsWith('/account'))
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={readSidebarCookieOpen()}>
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-2 pb-1 pt-1 group-data-[collapsible=icon]:justify-center">

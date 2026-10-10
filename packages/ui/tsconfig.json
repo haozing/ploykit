@@ -9,8 +9,21 @@
     "esModuleInterop": true,
     "declaration": true,
     "outDir": "dist",
-    "customConditions": ["development"]
+    "customConditions": [
+      "development"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    }
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ]
 }

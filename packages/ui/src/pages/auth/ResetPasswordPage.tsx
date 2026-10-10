@@ -2,8 +2,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { AuthShell } from '../../layouts/AuthShell'
 import { FormField } from '../../components/FormField'
-import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
 import { usePasswordReset } from '@ploykit/hooks'
 import { passwordSchema } from './RegisterPage'
 

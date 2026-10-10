@@ -1,7 +1,7 @@
 
 import { Link } from 'react-router'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
-import { Badge } from '../../components/ui/Badge'
+import { Badge } from '../../components/ui/badge'
 import { Card, CardHeader, CardTitle, CardAction, CardContent } from '../../components/ui/card'
 import {
   Progress, ProgressLabel, ProgressValue,

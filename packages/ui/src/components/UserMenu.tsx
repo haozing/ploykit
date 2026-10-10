@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
-} from './ui/menu'
+} from './ui/dropdown-menu'
 import { useAuth } from '@ploykit/hooks'
 import { toast } from './toast'
 

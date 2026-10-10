@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormField } from '../../components/FormField';
 import { PageError, PageHeader } from '../../components/Page';
 import { toast } from '../../components/toast';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
 import {
   Card,
   CardAction,
@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../../components/ui/card';
-import { Input } from '../../components/ui/Input';
+import { Input } from '../../components/ui/input';
 import {
   Select,
   SelectContent,

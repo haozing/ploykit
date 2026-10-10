@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { roleSatisfies, type Perm } from '@ploykit/hooks'
 import { useWorkspace } from '@ploykit/hooks'
-import { buttonVariants } from '../components/ui/Button'
+import { buttonVariants } from '../components/ui/button'
 import { Separator } from '../components/ui/separator'
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,

@@ -2,7 +2,7 @@
 import { type ReactNode } from 'react'
 import { Inbox, TriangleAlert } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { Button } from './ui/Button'
+import { Button } from './ui/button'
 import {
   Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent,
 } from './ui/empty'

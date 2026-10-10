@@ -46,11 +46,10 @@ beforeEach(() => {
 })
 
 describe('SidebarProvider 状态持久化（P2-17）', () => {
-  it('未受控初值读 sidebar_state cookie：false → 折叠', () => {
+  it('stock 语义：provider 不回读 cookie（回读在 AppShell 组合层，P2-17 见 AppShell 测试）', () => {
     document.cookie = 'sidebar_state=false; path=/'
     renderSidebar()
-    expect(screen.getByTestId('state').textContent).toBe('collapsed')
-    expect(screen.getByTestId('open').textContent).toBe('false')
+    expect(screen.getByTestId('state').textContent).toBe('expanded')
   })
 
   it('cookie 缺省 → 默认展开', () => {
@@ -83,11 +82,11 @@ describe('Ctrl/Cmd+B 快捷键（P3-1）', () => {
     expect(screen.getByTestId('state').textContent).toBe('expanded')
   })
 
-  it('输入焦点时不劫持：input 内 Ctrl+B 不折叠侧栏', () => {
+  it('stock 语义：input 内 Ctrl+B 同样折叠（产品级输入保护在 AppShell，P3-1 见 AppShell 测试）', () => {
     renderSidebar()
     const input = screen.getByRole('textbox', { name: '输入框' })
     fireEvent.keyDown(input, { key: 'b', ctrlKey: true })
-    expect(screen.getByTestId('state').textContent).toBe('expanded')
+    expect(screen.getByTestId('state').textContent).toBe('collapsed')
   })
 })
 
@@ -106,7 +105,7 @@ describe('SidebarMenuSkeleton 确定性（P2-11）', () => {
       Array.from(container.querySelectorAll('[data-sidebar="menu-skeleton-text"]')).map(
         (el) => (el as HTMLElement).style.getPropertyValue('--skeleton-width'),
       )
-    const allowed = ['50%', '58%', '66%', '74%', '82%', '90%']
+    const allowed = Array.from({ length: 40 }, (_, i) => `${50 + i}%`) // stock: floor(rand*40)+50
 
     const { rerender, container } = render(<Tree tag="t" />)
     const w1 = widthsOf(container)

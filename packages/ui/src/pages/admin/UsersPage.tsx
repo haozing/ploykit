@@ -16,9 +16,10 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { ImpactConfirmation } from '../../components/SecretModal';
 import { toast } from '../../components/toast';
-import { Badge, StatusBadge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Badge } from '../../components/ui/badge'
+import { StatusBadge } from '../../components/StatusBadge';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +28,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../../components/ui/menu';
+} from '../../components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,

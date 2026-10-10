@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { Progress, ProgressLabel, ProgressValue } from './ui/progress'
-import { Button } from './ui/Button'
+import { Button } from './ui/button'
 import { useAuth } from '@ploykit/hooks'
 
 export interface OnboardingItem {
@@ -70,7 +70,7 @@ export function OnboardingChecklist({
             {allDone ? '全部完成，开始你的旅程吧！' : `已完成 ${doneCount}/${list.length} 项`}
           </p>
         </div>
-        <Button variant="ghost" size="iconSm" aria-label="关闭引导清单" onClick={dismiss}>
+        <Button variant="ghost" size="icon-sm" aria-label="关闭引导清单" onClick={dismiss}>
           <X />
         </Button>
       </div>

@@ -14,7 +14,7 @@ import {
   Users,
   Webhook,
 } from 'lucide-react';
-import { buttonVariants } from '../../components/ui/Button';
+import { buttonVariants } from '../../components/ui/button';
 import { UserMenu } from '../../components/UserMenu';
 import { useAuth } from '@ploykit/hooks';
 import { cn } from '../../lib/utils';

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { PageEmpty } from './Page'
 import { Skeleton } from './ui/skeleton'
-import { Button } from './ui/Button'
+import { Button } from './ui/button'
 
 export interface Column<T> {
   key: string
