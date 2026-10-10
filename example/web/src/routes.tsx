@@ -24,8 +24,7 @@ import {
   LandingPage,
   AppShell,
   PageError,
-  Toaster,
-  ConfirmProvider,
+  AppProviders as PloykitAppProviders,
   WorkspaceSwitcher,
   ForgotPasswordPage,
   ResetPasswordPage,
@@ -38,6 +37,7 @@ import {
   TokensPage,
   NotificationPreferencesPage,
   MembersPage,
+  RolePermissionsPage,
   WorkspaceGeneralPage,
   WorkspaceAuditPage,
   UsagePage,
@@ -310,6 +310,12 @@ const workspaceNav: SettingsNavGroup[] = [
         icon: icon(Building2),
       },
       { path: '/settings/workspace/members', label: '成员', icon: icon(Users) },
+      {
+        path: '/settings/workspace/roles',
+        label: '角色权限',
+        icon: icon(ShieldIcon),
+        perm: 'owner',
+      },
       {
         path: '/settings/workspace/audit',
         label: '审计',
@@ -686,6 +692,13 @@ function WorkspaceMembers() {
     </SettingsLayout>
   );
 }
+function WorkspaceRoles() {
+  return (
+    <SettingsLayout>
+      <RolePermissionsPage />
+    </SettingsLayout>
+  );
+}
 function WorkspaceAudit() {
   return (
     <SettingsLayout>
@@ -733,15 +746,12 @@ function CatchAll() {
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <PloykitProvider>
-      <ConfirmProvider>
-        <WsSync />
-        {/* B-orders-7：路由级标题（须在 Router 内——entry 双端把本组件挂在 Router 之下） */}
-        <DocumentTitle />
-        {children}
-        <Toaster />
-      </ConfirmProvider>
-    </PloykitProvider>
+    <PloykitAppProviders>
+      <WsSync />
+      {/* B-orders-7：路由级标题（须在 Router 内——entry 双端把本组件挂在 Router 之下） */}
+      <DocumentTitle />
+      {children}
+    </PloykitAppProviders>
   );
 }
 
@@ -779,6 +789,7 @@ const routes = routeTable({
   '/settings': { component: SettingsIndex },
   '/settings/workspace/general': { component: WorkspaceGeneral },
   '/settings/workspace/members': { component: WorkspaceMembers },
+  '/settings/workspace/roles': { component: WorkspaceRoles },
   '/settings/workspace/audit': { component: WorkspaceAudit },
   '/settings/workspace/usage': { component: WorkspaceUsage },
   '/settings/workspace/billing': { component: WorkspaceBilling },

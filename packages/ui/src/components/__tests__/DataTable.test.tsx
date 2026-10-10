@@ -107,8 +107,8 @@ describe('DataTable', () => {
   })
 
   it('P3-10：stale page（有 total 的空页）不整表换空态——空表体+分页栏，保住"上一页"出口', () => {
-    
-    
+
+
     render(
       <DataTable
         columns={columns}
@@ -119,8 +119,90 @@ describe('DataTable', () => {
     )
     expect(screen.queryByText('暂无数据')).not.toBeInTheDocument()
     expect(screen.getByText('本页没有数据，可返回上一页')).toBeInTheDocument()
-    
+
     expect(screen.getByRole('button', { name: '上一页' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled()
+  })
+
+  it('rowKey 回调收到行下标（第二参数），可用于同 code 多行的唯一 key', () => {
+    const seen: Array<[string, number]> = []
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r, index) => {
+          seen.push([r.id, index])
+          return `${r.id}-${index}`
+        }}
+      />,
+    )
+    expect(seen).toEqual([
+      ['a', 0],
+      ['b', 1],
+      ['c', 2],
+    ])
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(3)
+  })
+
+  it('onRowClick：点击行触发回调并携带行数据，行带 cursor-pointer', () => {
+    const onRowClick = vi.fn()
+    render(<DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={onRowClick} />)
+    const firstRow = document.querySelector('tbody tr') as HTMLTableRowElement
+    expect(firstRow.className).toContain('cursor-pointer')
+    fireEvent.click(firstRow)
+    expect(onRowClick).toHaveBeenCalledTimes(1)
+    expect(onRowClick).toHaveBeenCalledWith(rows[0])
+  })
+
+  it('未传 onRowClick 的行无 cursor-pointer 也不响应点击', () => {
+    const onRowClick = vi.fn()
+    render(<DataTable columns={columns} rows={rows} rowKey={(r) => r.id} />)
+    const firstRow = document.querySelector('tbody tr') as HTMLTableRowElement
+    expect(firstRow.className).not.toContain('cursor-pointer')
+    fireEvent.click(firstRow)
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
+  it('renderExpanded：返回非 null 时在行后插入 colSpan 展开行；返回 null 时不插入', () => {
+    const { rerender } = render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        renderExpanded={(r) => (r.id === 'b' ? <div>详情：{r.name}</div> : null)}
+      />,
+    )
+    // 3 行数据 + 仅乙行有展开行 = 4 个 tr
+    const allRows = document.querySelectorAll('tbody tr')
+    expect(allRows).toHaveLength(4)
+    const expandedRow = document.querySelector('[data-slot="data-table-expanded-row"]') as HTMLTableRowElement
+    expect(expandedRow).not.toBeNull()
+    const expandedTd = expandedRow.querySelector('td') as HTMLTableCellElement
+    expect(expandedTd).toHaveAttribute('colspan', '2')
+    expect(screen.getByText('详情：乙')).toBeInTheDocument()
+    // 展开行不应出现在普通数据行里重复渲染
+    expect(allRows[1].querySelector('td')).not.toHaveAttribute('colspan')
+
+    rerender(
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} renderExpanded={() => null} />,
+    )
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(3)
+    expect(document.querySelector('[data-slot="data-table-expanded-row"]')).toBeNull()
+  })
+
+  it('renderExpanded 收到行下标（第二参数）', () => {
+    const seenIndexes: number[] = []
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        renderExpanded={(_r, index) => {
+          seenIndexes.push(index)
+          return null
+        }}
+      />,
+    )
+    expect(seenIndexes).toEqual([0, 1, 2])
   })
 })

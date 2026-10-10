@@ -13,7 +13,10 @@ interface ConfirmOptions {
   danger?: boolean
 }
 
-const ConfirmContext = createContext<(opts: ConfirmOptions) => Promise<boolean>>(async () => false)
+// 缺省值必须是 null + useConfirm fail-fast（对齐 hooks 包 useAuthCtx 的行为）：
+// 曾经的缺省值是 `async () => false`，产品忘挂 ConfirmProvider 时 confirm 静默返回
+// false，"重置 Key"之类的按钮点了没反应且无任何报错，排查损耗极大。
+const ConfirmContext = createContext<((opts: ConfirmOptions) => Promise<boolean>) | null>(null)
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<(ConfirmOptions & { resolve: (v: boolean) => void }) | null>(null)
@@ -68,5 +71,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 }
 
 export function useConfirm() {
-  return useContext(ConfirmContext)
+  const confirm = useContext(ConfirmContext)
+  if (!confirm) throw new Error('useConfirm must be used within ConfirmProvider')
+  return confirm
 }

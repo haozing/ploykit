@@ -3,7 +3,39 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "../../lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Select 根组件：base-ui Select Root 的 string 契约包装。
+ *
+ * 契约：onValueChange 永远收到 string——base-ui 原生回调的 value 可为 null
+ * （清空/取消选择时），包装层统一归一为空串（''），产品侧无需再写
+ * `v ?? ''` 卫语句。受控 value 仍允许 null、类型不收窄（与 base-ui 一致）；
+ * 其余 props（items/defaultValue/children 等）原样透传。
+ * 泛型保留（默认 string）：个别历史调用点用数值 item（如 days），此时
+ * 回调运行时收到的是原始数值——签名仍标为 string，属已知偏差。
+ * 多选（multiple）不在本契约内；如需多选请直接使用
+ * `@base-ui/react/select` 的 Root 原语。
+ */
+function Select<Value = string>({
+  onValueChange,
+  ...props
+}: Omit<
+  SelectPrimitive.Root.Props<Value, false>,
+  "onValueChange" | "multiple"
+> & {
+  onValueChange?: (value: string) => void
+}) {
+  return (
+    <SelectPrimitive.Root<Value, false>
+      {...props}
+      onValueChange={
+        onValueChange
+          ? (value) =>
+              onValueChange(value == null ? "" : (value as unknown as string))
+          : undefined
+      }
+    />
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -25,6 +57,11 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   )
 }
 
+/**
+ * SelectTrigger 触发按钮。size 控制高度档位（经 data-size 落到 Tailwind
+ * data-[size=*] 变体）：'default' = h-8（表单默认高度）；'sm' = h-7 +
+ * 更小圆角（工具栏/紧凑筛选条）。默认 'default'。
+ */
 function SelectTrigger({
   className,
   size = "default",

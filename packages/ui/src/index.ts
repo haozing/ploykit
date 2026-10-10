@@ -10,7 +10,8 @@ export {
 export { Separator } from './components/ui/separator'
 export { Skeleton } from './components/ui/skeleton'
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './components/ui/tooltip'
-export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './components/ui/sheet'
+export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetTrigger, SheetClose } from './components/ui/sheet'
+export { AppProviders } from './AppProviders'
 
 export { LoginPage } from './pages/LoginPage'
 export type { OAuthProviderOption, LoginPageProps } from './pages/LoginPage'
@@ -19,6 +20,7 @@ export type { Feature as LandingFeature, Plan as LandingPlan } from './pages/Lan
 
 export { Button, buttonVariants } from './components/ui/button'
 export { Input } from './components/ui/input'
+export { Textarea } from './components/ui/textarea'
 export { StatusBadge } from './components/StatusBadge'
 export {
   Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle,
@@ -115,6 +117,8 @@ export { NotificationPreferencesPage } from './pages/account/NotificationPrefere
 export type { NotificationPreferencesPageProps, NotificationTypeMeta } from './pages/account/NotificationPreferencesPage'
 
 export { MembersPage } from './pages/workspace/MembersPage'
+export { RolePermissionsPage } from './pages/workspace/RolePermissionsPage'
+export { ReauthDialog } from './components/ReauthDialog'
 export { WorkspaceGeneralPage } from './pages/workspace/WorkspaceGeneralPage'
 export { WorkspaceAuditPage } from './pages/workspace/WorkspaceAuditPage'
 export { UsagePage } from './pages/workspace/UsagePage'

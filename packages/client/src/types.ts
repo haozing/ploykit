@@ -47,7 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 邮箱密码注册（成功即登录） */
+        /** 邮箱密码注册（成功即登录；不收 code 字段——验证码建号走 send-code → verify-code，见 docs/api-conventions.md） */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -289,6 +289,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/confirm-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** step-up 重认证（校验密码后为当前会话盖 password_confirmed_at 戳；配合 E_REAUTH_REQUIRED 两段式协议后重试原请求；仅浏览器会话） */
+        post: operations["confirmPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/sessions": {
         parameters: {
             query?: never;
@@ -399,6 +416,41 @@ export interface paths {
         head?: never;
         /** 工作区改名（workspace:update） */
         patch: operations["renameWorkspace"];
+        trace?: never;
+    };
+    "/api/workspaces/{id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 角色权限矩阵（roles:manage；覆盖行完全取代默认角色集，不是合并） */
+        get: operations["listRoleConfigs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{id}/roles/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 设置角色权限覆盖（roles:manage + step-up；写入边界校验 perms ⊆ 代码目录，未知权限 400 拒绝——UI 数据不漂移） */
+        put: operations["setRolePerms"];
+        post?: never;
+        /** 清除角色权限覆盖、回退内置默认（roles:manage + step-up；幂等） */
+        delete: operations["resetRolePerms"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/workspaces/{id}/members": {
@@ -1938,7 +1990,7 @@ export interface paths {
         };
         /**
          * 实时推送通道（WebSocket 升级；非 REST）
-         * @description wsx Hub 的 WebSocket 通道（协议见 platform/wsx/wswire）：
+         * @description wsx Hub 的 WebSocket 通道（协议见 platform/wswire）：
          *     - 升级时 `?workspace_id=<id>` 直接入 workspace scope（会话 Cookie 经全局 Authenticate 注入身份）；
          *       无 Cookie 的客户端可连接后发控制帧 `{"type":"auth","token":"tk_*"}` 用 PAT 认证；
          *     - 帧格式 `{"type":string,"payload":any,"event_id":string}`，client 级 event_id 环形去重；
@@ -2147,6 +2199,16 @@ export interface components {
             name: string;
             /** @description 有效期小时数（0 = 不过期） */
             ttl_hours: number;
+        };
+        RoleConfig: {
+            /** @enum {string} */
+            role: "admin" | "member";
+            /** @description 有效权限集（覆盖存在时来自覆盖行，否则为内置默认；排序） */
+            perms: string[];
+            /** @description true = 存在 workspace_role 覆盖行（替换语义，非合并） */
+            overridden: boolean;
+            /** @description 内置默认权限集（用于 UI 展示差异与回退） */
+            defaults: string[];
         };
         Workspace: {
             id: string;
@@ -3290,6 +3352,41 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    confirmPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 当前密码 */
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 确认成功（当前会话新鲜度已更新） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        password_confirmed_at?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listSessions: {
         parameters: {
             query?: never;
@@ -3539,6 +3636,93 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listRoleConfigs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 可配置角色（admin/member；owner 不可配置）+ 有效权限集 + 代码注册的权限目录 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["RoleConfig"][];
+                        catalog?: string[];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    setRolePerms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                role: "admin" | "member";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 该角色的完整权限集（替换语义；去重排序后落库） */
+                    perms: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description 写入后的角色配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    resetRolePerms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                role: "admin" | "member";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已回退默认 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             default: components["responses"]["DefaultError"];
         };
     };

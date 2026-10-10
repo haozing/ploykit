@@ -1,5 +1,5 @@
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog'
@@ -7,10 +7,13 @@ import { Button } from './ui/button'
 
 export function SecretModal({ open, onOpenChange, secretName, secretValue, title }: {
   open: boolean
+  /** 关闭回调。契约：用户勾选"我已保存"之前，本组件不会把 false 传进来——ESC、遮罩点击、关闭按钮均被拦截，调用方无需自行兜底。 */
   onOpenChange: (open: boolean) => void
+  /** 密钥名称，用于默认标题「{secretName} 创建成功」。 */
   secretName: string
+  /** 仅显示一次的密钥明文。 */
   secretValue: string
-  
+  /** 可选标题，覆盖默认的「{secretName} 创建成功」——用于"重置/查看"等非创建成功场景。 */
   title?: string
 }) {
   const [copied, setCopied] = useState(false)
@@ -54,6 +57,8 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
   }
 
   return (
+    // 契约（见 props JSDoc）：确认勾选前 onOpenChange 不会收到 false——
+    // ESC/遮罩/关闭按钮在此被统一拦截，防止密钥未保存即被关掉。
     <Dialog open={open} onOpenChange={(o) => confirmed && onOpenChange(o)}>
       <DialogContent>
         <DialogHeader>
@@ -91,10 +96,12 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
 
 export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impacts, confirmText, danger }: {
   open: boolean
+  /** 点击确认按钮后回调；回调返回后组件会立即请求关闭。 */
   onConfirm: () => void
   onOpenChange: (open: boolean) => void
   title: string
-  impacts: string[]
+  /** 影响项列表。支持任意 ReactNode（可含链接/加粗等富文本）；key 按下标生成，注意项内容需自行保证可读。 */
+  impacts: ReactNode[]
   confirmText?: string
   danger?: boolean
 }) {
@@ -107,9 +114,10 @@ export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impac
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>此操作将产生以下影响：</DialogDescription>
         </DialogHeader>
-        <ul className="space-y-1.5">
-          {impacts.map((impact) => (
-            <li key={impact} className="flex items-start gap-2 text-sm text-foreground">
+        {/* max-h + overflow：影响项过多时列表内部滚动，弹窗整体不被撑出视口 */}
+        <ul className="max-h-48 space-y-1.5 overflow-y-auto">
+          {impacts.map((impact, index) => (
+            <li key={index} className="flex items-start gap-2 text-sm text-foreground">
               <span className="text-destructive mt-0.5">•</span> {impact}
             </li>
           ))}

@@ -44,6 +44,8 @@ export { useMembers, useMemberMutations, useMyInvitations, ASSIGNABLE_ROLES } fr
 export type {
   PKMember, PKInvitation, PKShareLink, PKInvitationWithWorkspace, CreateShareLinkResult,
 } from './hooks/useMembers'
+export { useRoleConfig } from './hooks/useRoleConfig'
+export type { PKRoleConfig, RoleConfigList } from './hooks/useRoleConfig'
 export { useAudit, exportAuditCsv, auditQueryString, EMPTY_AUDIT_FILTERS } from './hooks/useAudit'
 export type { AuditFilters, PKAuditEvent } from './hooks/useAudit'
 export { useUsage } from './hooks/useUsage'

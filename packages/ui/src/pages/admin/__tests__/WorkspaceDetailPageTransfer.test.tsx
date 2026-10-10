@@ -48,6 +48,8 @@ vi.mock('react-router', () => ({
 }));
 
 import { WorkspaceDetailPage } from '../WorkspaceDetailPage';
+// fail-fast 后 useConfirm 无 Provider 即抛错：此测试直接渲染页面，须包 ConfirmProvider
+import { ConfirmProvider } from '../../../components/ConfirmDialog';
 
 const DETAIL = {
   id: 'ws-1',
@@ -92,7 +94,9 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <WorkspaceDetailPage />
+      <ConfirmProvider>
+        <WorkspaceDetailPage />
+      </ConfirmProvider>
     </QueryClientProvider>,
   );
 }

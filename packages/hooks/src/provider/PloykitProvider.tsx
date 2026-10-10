@@ -18,6 +18,7 @@ export const queryKeys = {
   members: (wsId: string) => ['workspace', wsId, 'members'] as const,
   invitations: (wsId: string) => ['workspace', wsId, 'invitations'] as const,
   shareLinks: (wsId: string) => ['workspace', wsId, 'share-links'] as const,
+  roleConfig: (wsId: string) => ['workspace', wsId, 'role-config'] as const,
   
   
   
