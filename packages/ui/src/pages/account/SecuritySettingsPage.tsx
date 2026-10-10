@@ -140,7 +140,7 @@ export function SecuritySettingsPage() {
         s.current === undefined ? (
           <span className="text-muted-foreground">—</span>
         ) : s.current ? (
-          <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200">当前设备</Badge>
+          <Badge variant="secondary" className="bg-(--success)/10 text-(--success) border-(--success)/30">当前设备</Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),

@@ -301,3 +301,13 @@ npm ls @base-ui/react
   布局时可用。
 
 一句话原则：**核心组件用框架的（保持单副本和升级一致性），CLI 只补长尾。**
+
+### 令牌合同（@ploykit/ui 的样式依赖面）
+
+`@ploykit/ui` 的全部源码只使用**语义令牌类**（`bg-background` / `text-muted-foreground` / `border-border` …）与 CSS 变量直引语法（`text-(--success)`，用于状态色，词汇表同 `lib/utils` 的 `STATUS_TONE_CLASS`），**不使用任何经典调色板类**（`bg-gray-50`、`text-blue-600`…）——有 semantic-tokens 守卫测试钉住。因此产品侧 CSS 只需保证：
+
+1. 完整的 shadcn 语义令牌集（`@theme inline` 映射 + `:root` 变量）；
+2. ploykit 扩展状态变量 `--success`、`--warning`（亮暗两套）；
+3. `@source` 指到 `@ploykit/ui` 的源码目录（workspace 链接在 node_modules 下，Tailwind 自动探测会跳过）。
+
+产品自己的页面可以自由使用经典调色板类（Tailwind 默认色板始终生成），但框架组件不会。

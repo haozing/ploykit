@@ -119,11 +119,11 @@ export function LoginPage({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-sm space-y-4 p-8 bg-white rounded-lg shadow">
         <div className="text-center">
           <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
 
         <Tabs defaultValue="code">
@@ -136,27 +136,27 @@ export function LoginPage({
           <TabsContent value="code">
             <form onSubmit={handleCodeSubmit} className="space-y-4 pt-2">
               <div className="space-y-1">
-                <label htmlFor="login-email" className="text-sm text-gray-600">邮箱</label>
+                <label htmlFor="login-email" className="text-sm text-foreground">邮箱</label>
                 <input
                   id="login-email"
                   type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com" required autoComplete="email"
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <div className="space-y-1">
-                <label htmlFor="login-code" className="text-sm text-gray-600">验证码</label>
+                <label htmlFor="login-code" className="text-sm text-foreground">验证码</label>
                 <div className="flex gap-2">
                   <input
                     id="login-code"
                     type="text" value={code} onChange={(e) => setCode(e.target.value)}
                     placeholder="6位数字" maxLength={6} required autoComplete="one-time-code"
-                    className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <button
                     type="button" onClick={handleSendCode}
                     disabled={sending || cooldown > 0 || !email}
-                    className="px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                    className="px-4 py-2 text-sm text-primary border border-primary/30 rounded-md hover:bg-primary/10 disabled:opacity-50"
                   >
                     {cooldown > 0
                       ? `重发（${cooldown}s）`
@@ -169,11 +169,11 @@ export function LoginPage({
                 </div>
               </div>
               {/* P3-29：错误 p 补 role="alert"（读屏即时播报） */}
-              {sendError && <p role="alert" className="text-red-500 text-sm">{sendError}</p>}
-              {codeError && <p role="alert" className="text-red-500 text-sm">{codeError}</p>}
+              {sendError && <p role="alert" className="text-destructive text-sm">{sendError}</p>}
+              {codeError && <p role="alert" className="text-destructive text-sm">{codeError}</p>}
               <button
                 type="submit" disabled={loading || !email || !code}
-                className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="w-full py-2 px-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 disabled:opacity-50"
               >
                 {loading ? '登录中…' : '登录'}
               </button>
@@ -197,7 +197,7 @@ export function LoginPage({
                   autoComplete="current-password"
                 />
               </FormField>
-              {pwError && <p role="alert" className="text-red-500 text-sm">{pwError}</p>}
+              {pwError && <p role="alert" className="text-destructive text-sm">{pwError}</p>}
               <Button type="submit" className="w-full" disabled={pwLoading || !email || !password}>
                 {pwLoading ? '登录中…' : '登录'}
               </Button>
@@ -208,14 +208,14 @@ export function LoginPage({
         {oauthProviders.length > 0 && (
           <div className="space-y-2 pt-1" data-testid="oauth-providers">
             <div className="relative py-2 text-center">
-              <span className="absolute inset-x-0 top-1/2 border-t border-gray-200" />
-              <span className="relative z-10 bg-white px-2 text-xs text-gray-400">或使用以下方式登录</span>
+              <span className="absolute inset-x-0 top-1/2 border-t border-border" />
+              <span className="relative z-10 bg-card px-2 text-xs text-muted-foreground">或使用以下方式登录</span>
             </div>
             {oauthProviders.map((p) => (
               <a
                 key={p.id}
                 href={'/auth/oauth/' + p.id + '/start'}
-                className="block w-full py-2 px-4 text-center text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                className="block w-full py-2 px-4 text-center text-sm border border-input rounded-md hover:bg-background"
               >
                 使用 {p.label} 登录
               </a>
@@ -225,15 +225,15 @@ export function LoginPage({
 
         {enableFedLogin && (
           <details className="pt-1" data-testid="fed-login">
-            <summary className="text-sm text-gray-500 cursor-pointer select-none">企业登录</summary>
+            <summary className="text-sm text-muted-foreground cursor-pointer select-none">企业登录</summary>
             <form method="get" action="/auth/fed/start" className="mt-2 space-y-2">
               <input
                 type="text" name="workspace" placeholder="工作区标识（slug）" required
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 type="submit"
-                className="w-full py-2 px-4 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-900"
+                className="w-full py-2 px-4 bg-primary text-primary-foreground text-sm rounded-md hover:bg-primary/80"
               >
                 通过企业 IdP 登录
               </button>
@@ -242,11 +242,11 @@ export function LoginPage({
         )}
 
         <div className="flex items-center justify-between text-sm">
-          <a href={resetPath} className="text-blue-600 hover:underline">
+          <a href={resetPath} className="text-primary hover:underline">
             忘记密码？
           </a>
           {registerPath && (
-            <a href={registerPath} data-testid="register-link" className="text-blue-600 hover:underline">
+            <a href={registerPath} data-testid="register-link" className="text-primary hover:underline">
               创建账号
             </a>
           )}

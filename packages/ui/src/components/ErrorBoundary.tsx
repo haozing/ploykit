@@ -35,9 +35,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return (
       <div role="alert" className="flex flex-col items-center justify-center py-12 text-center">
         <div className="text-4xl mb-3">⚠️</div>
-        <p className="text-sm text-red-600">出错了</p>
-        {error.message && <p className="mt-1 text-xs text-gray-400">{error.message}</p>}
-        <button onClick={this.reset} className="mt-4 px-4 py-2 text-sm border rounded-md hover:bg-gray-50">
+        <p className="text-sm text-destructive">出错了</p>
+        {error.message && <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>}
+        <button onClick={this.reset} className="mt-4 px-4 py-2 text-sm border rounded-md hover:bg-muted">
           重试
         </button>
       </div>

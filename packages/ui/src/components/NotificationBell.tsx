@@ -73,7 +73,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
           
           
           <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px]
-            px-1 text-xs font-bold text-white bg-red-500 rounded-full">
+            px-1 text-xs font-bold text-white bg-destructive rounded-full">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
@@ -92,7 +92,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
               <button
                 onClick={() => markAllReadM.mutate()}
                 disabled={markAllReadM.isPending}
-                className="text-xs text-blue-600 hover:underline disabled:opacity-50
+                className="text-xs text-primary hover:underline disabled:opacity-50
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
               >全部已读</button>
             )}
@@ -100,9 +100,9 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
           <ul className="max-h-80 overflow-y-auto list-none p-0 m-0" data-slot="notification-list">
             {listQ.isPending ? (
               
-              <li className="py-8 text-center text-sm text-gray-400" aria-live="polite">加载中…</li>
+              <li className="py-8 text-center text-sm text-muted-foreground" aria-live="polite">加载中…</li>
             ) : notifications.length === 0 ? (
-              <li className="py-8 text-center text-sm text-gray-400">暂无通知</li>
+              <li className="py-8 text-center text-sm text-muted-foreground">暂无通知</li>
             ) : notifications.map((n) => (
               <li key={n.id} className="border-b last:border-0">
                 {/* P2-19：条目是可操作元素——button 语义（Tab 可达、Enter 可触发）， */}
@@ -111,19 +111,19 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
                   type="button"
                   onClick={() => { if (n.link) onNavigate?.(n.link); markReadM.mutate(n.id); setOpen(false) }}
                   className={cn(
-                    'w-full text-left px-4 py-3 cursor-pointer hover:bg-gray-50 ' +
-                      'focus-visible:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    !n.read_at && 'bg-blue-50/50',
+                    'w-full text-left px-4 py-3 cursor-pointer hover:bg-muted ' +
+                      'focus-visible:outline-none focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    !n.read_at && 'bg-accent/50',
                   )}
                 >
                   <span className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium text-gray-900">{n.title}</span>
+                    <span className="text-sm font-medium text-foreground">{n.title}</span>
                     {n.count > 1 && (
-                      <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full shrink-0">×{n.count}</span>
+                      <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full shrink-0">×{n.count}</span>
                     )}
                   </span>
-                  {n.body && <span className="block mt-0.5 text-xs text-gray-500 line-clamp-2">{n.body}</span>}
-                  <span className="block mt-1 text-[10px] text-gray-400">{formatDateTime(n.created_at)}</span>
+                  {n.body && <span className="block mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.body}</span>}
+                  <span className="block mt-1 text-[10px] text-muted-foreground">{formatDateTime(n.created_at)}</span>
                 </button>
               </li>
             ))}

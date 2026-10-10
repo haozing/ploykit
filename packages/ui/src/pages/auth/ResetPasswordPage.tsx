@@ -88,7 +88,7 @@ export function ResetPasswordPage({ onDone }: ResetPasswordPageProps) {
 
         {done ? (
           <div className="space-y-2 text-center" data-testid="reset-done">
-            <p className="text-sm text-emerald-600">密码已重置，全部旧会话已失效。</p>
+            <p className="text-sm text-(--success)">密码已重置，全部旧会话已失效。</p>
             <p className="text-sm text-muted-foreground">
               {countdown > 0 ? `${countdown} 秒后跳转登录页…` : '正在跳转…'}
             </p>

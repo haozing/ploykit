@@ -50,7 +50,7 @@ export function VerifyEmailPage() {
       <Empty className="border-none p-0">
         <EmptyHeader>
           <EmptyMedia variant="icon" data-testid="verify-state">
-            {state === 'ok' && <MailCheck className="text-emerald-600" aria-hidden="true" />}
+            {state === 'ok' && <MailCheck className="text-(--success)" aria-hidden="true" />}
             {state === 'verifying' && <LoaderCircle className="animate-spin" aria-hidden="true" />}
             {state === 'failed' && <CircleX className="text-destructive" aria-hidden="true" />}
           </EmptyMedia>

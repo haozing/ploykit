@@ -135,12 +135,12 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {user.email_verified ? (
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+              <Badge variant="secondary" className="bg-(--success)/10 text-(--success) border-(--success)/30">
                 已验证
               </Badge>
             ) : (
               <>
-                <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50">未验证</Badge>
+                <Badge variant="outline" className="text-(--warning) border-(--warning)/40 bg-(--warning)/15">未验证</Badge>
                 <Button variant="outline" size="sm" onClick={handleResend} disabled={sending}>
                   {sending ? '发送中…' : '重新发送验证邮件'}
                 </Button>

@@ -56,7 +56,7 @@ export function InviteAcceptPage({ onAccepted, onDeclined }: InviteAcceptPagePro
           {loading ? (
             <PageLoading label="加载邀请…" />
           ) : error ? (
-            <div className="py-6 text-center text-sm text-red-600">
+            <div className="py-6 text-center text-sm text-destructive">
               {apiErrorMessage(error, '邀请加载失败')}
               <div className="mt-3">
                 <Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>
