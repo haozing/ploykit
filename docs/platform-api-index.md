@@ -50,6 +50,8 @@
 | CSRFConfig | `Key`, `TrustedOrigins` (host[:port] cross-origin submissions), **`ExemptPrefixes` (exempts all methods under a prefix, for server-to-server callbacks such as /webhooks/billing/)**, `PATPrefix` | The CSRF configuration |
 | DeriveCSRFKey | `DeriveCSRFKey(signingSecret []byte)` | Derives an independent CSRF key from the session signing secret, preventing key reuse |
 | CSRFMaskedToken | `CSRFMaskedToken(r)` | Returns the masked token for the current request (used by /config and template injection) |
+| RequireScope | `RequireScope(required ...string)` | **PAT scope 默认 enforcement 闸**（非 authz 形态的机器端点）：PAT 缺任一所需权限域 → 403；会话/匿名放行。挂载在 Authenticate 之后。绕过它自构 actor 的端点 = 任何 PAT 全权通过（risk-engine #12） |
+| RequireWorkspaceScope | `RequireWorkspaceScope()` | 固定工作区语境的 PAT 边界检查（声明清单外 → 403）；请求派生的工作区仍在 handler 走 authz.CanIn |
 | ConfigHandler | `ConfigHandler(d ConfigDeps) http.HandlerFunc` | The GET /config handler: always outputs `{csrf_token, oauth_providers, billing_channels}` — the hard contract behind @ploykit/client CSRF bootstrap |
 | ConfigDeps | `OAuthProviders` / `BillingChannels` function injection (nil → empty arrays); `Extra func() map[string]any` — returned key-value pairs are merged verbatim into the response body (Extra wins on conflicts; nil-safe) | Optional extension surface of /config; platform does not import business domains; public settings-domain configuration such as announcements/maintenance mode is delivered through `Extra` |
 

@@ -54,6 +54,19 @@ func (s *CredentialScope) AllowsPermission(perm string) bool {
 	return false
 }
 
+// Allows reports whether the scope covers ALL of the required permissions
+// (same per-permission semantics as AllowsPermission; nil Permissions =
+// unrestricted). The default enforcement gate for machine-facing mounts:
+// webx.RequireScope(required...) is exactly `p.Scope.Allows(required...)`.
+func (s *CredentialScope) Allows(required ...string) bool {
+	for _, perm := range required {
+		if !s.AllowsPermission(perm) {
+			return false
+		}
+	}
+	return true
+}
+
 func permDomain(perm string) string {
 	if i := strings.IndexByte(perm, ':'); i > 0 {
 		return perm[:i]

@@ -49,12 +49,22 @@ func (c *AuthConfig) patPrefix() string {
 	return c.PATPrefix
 }
 
+// DefaultAuthConfig returns the shared defaults. Secure defaults to **false**:
+// a production-true default made every local-HTTP / intranet deployment fail
+// login with an opaque CSRF error (the Secure cookie is never sent back over
+// plain HTTP — two layers away from the root cause, see aiblog/risk-engine
+// field reports). Production deployments must opt in explicitly:
+//
+//	cfg := webx.DefaultAuthConfig()
+//	cfg.Secure = env == "production"
+//
+// example wires it to SECURE_COOKIE the same way.
 func DefaultAuthConfig() AuthConfig {
 	return AuthConfig{
 		CookieName:  "tk_auth",
 		SessionTTL:  7 * 24 * time.Hour,
 		AbsoluteTTL: 30 * 24 * time.Hour,
-		Secure:      true,
+		Secure:      false,
 	}
 }
 

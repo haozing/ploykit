@@ -17,6 +17,7 @@ POST /api/anything      (T1)     → 200
 **会话建立的响应（verify-code / login / register）之后，必须重新 `GET /config` 取新令牌**，旧令牌随之作废。这个设计的目的是防固定 token（合理），但表象是"登录成功但所有写操作 403"——极易误判为权限或中间件顺序问题，排查前先想起这一条。
 
 - 令牌经 `X-CSRF-Token` 请求头携带；`/config` 每次返回当前有效令牌（掩码后下发）。
+- **本地 HTTP 联调提示**：会话 cookie 默认 `Secure=false`（本地/内网开箱即用）；生产部署必须显式 `cfg.Secure = true`（example 经 `SECURE_COOKIE` 接线）。反向默认曾使纯 HTTP 部署的登录以 CSRF 报错失败、根因隔两层（cookie 不回发）。
 - **PAT（Bearer）请求天然豁免 CSRF**——服务器间集成用 PAT 时无需任何 CSRF 处理。
 - 产品暴露**服务器间 API**（无浏览器会话、自带鉴权如 X-API-Key）时，应在 CSRF 中间件配置前缀豁免：
 

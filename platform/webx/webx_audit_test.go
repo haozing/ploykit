@@ -98,6 +98,7 @@ func TestSetSessionCookie_AttributesLocked(t *testing.T) {
 	cfg := DefaultAuthConfig()
 	cfg.CookieDomain = "app.example.com"
 	cfg.IPHashSecret = "unit-test-salt"
+	cfg.Secure = true // 生产姿态显式打开（缺省 false，见 DefaultAuthConfig 注释）
 	rec := httptest.NewRecorder()
 	exp := time.Now().Add(24 * time.Hour).UTC()
 	cfg.SetSessionCookie(rec, "tok-1", exp)
@@ -110,13 +111,14 @@ func TestSetSessionCookie_AttributesLocked(t *testing.T) {
 	assert.Equal(t, "/", ck.Path)
 	assert.Equal(t, "app.example.com", ck.Domain)
 	assert.True(t, ck.HttpOnly, "会话 cookie 必须 HttpOnly")
-	assert.True(t, ck.Secure, "缺省 Secure=true")
+	assert.True(t, ck.Secure, "显式 Secure=true 应落 cookie")
 	assert.Equal(t, http.SameSiteLaxMode, ck.SameSite)
 	assert.WithinDuration(t, exp, ck.Expires, time.Second)
 }
 
 func TestClearSessionCookie_AttributesLocked(t *testing.T) {
 	cfg := DefaultAuthConfig()
+	cfg.Secure = true
 	rec := httptest.NewRecorder()
 	cfg.ClearSessionCookie(rec)
 
@@ -130,6 +132,13 @@ func TestClearSessionCookie_AttributesLocked(t *testing.T) {
 	assert.True(t, ck.HttpOnly)
 	assert.True(t, ck.Secure)
 	assert.Equal(t, http.SameSiteLaxMode, ck.SameSite)
+}
+
+func TestDefaultAuthConfig_SecureDefaultsFalse(t *testing.T) {
+	// 本地 HTTP / 内网部署的默认可用性：Secure 缺省 false（aiblog/risk-engine
+	// 实录——true 默认使登录在纯 HTTP 下以 CSRF 报错失败，根因隔两层）。
+	// 生产必须在配置处显式 cfg.Secure = true。
+	assert.False(t, DefaultAuthConfig().Secure)
 }
 
 func TestSecurityHeaders_HeadersLocked(t *testing.T) {
