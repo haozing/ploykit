@@ -50,8 +50,8 @@
 | CSRFConfig | `Key`, `TrustedOrigins` (host[:port] cross-origin submissions), **`ExemptPrefixes` (exempts all methods under a prefix, for server-to-server callbacks such as /webhooks/billing/)**, `PATPrefix` | The CSRF configuration |
 | DeriveCSRFKey | `DeriveCSRFKey(signingSecret []byte)` | Derives an independent CSRF key from the session signing secret, preventing key reuse |
 | CSRFMaskedToken | `CSRFMaskedToken(r)` | Returns the masked token for the current request (used by /config and template injection) |
-| RequireScope | `RequireScope(required ...string)` | **PAT scope 默认 enforcement 闸**（非 authz 形态的机器端点）：PAT 缺任一所需权限域 → 403；会话/匿名放行。挂载在 Authenticate 之后。绕过它自构 actor 的端点 = 任何 PAT 全权通过（risk-engine #12） |
-| RequireWorkspaceScope | `RequireWorkspaceScope()` | 固定工作区语境的 PAT 边界检查（声明清单外 → 403）；请求派生的工作区仍在 handler 走 authz.CanIn |
+| RequireScope | `RequireScope(required ...string)` | **The default PAT-scope enforcement gate** for machine-facing endpoints (shapes that bypass authz): a PAT missing any required permission domain -> 403; sessions and anonymous requests pass. Mount right after Authenticate. Skipping it while building your own actor = every PAT passes with full power (risk-engine #12) |
+| RequireWorkspaceScope | `RequireWorkspaceScope()` | PAT workspace bounding for fixed single-workspace contexts (outside the declared list -> 403); request-derived workspaces still go through authz.CanIn in the handler |
 | ConfigHandler | `ConfigHandler(d ConfigDeps) http.HandlerFunc` | The GET /config handler: always outputs `{csrf_token, oauth_providers, billing_channels}` — the hard contract behind @ploykit/client CSRF bootstrap |
 | ConfigDeps | `OAuthProviders` / `BillingChannels` function injection (nil → empty arrays); `Extra func() map[string]any` — returned key-value pairs are merged verbatim into the response body (Extra wins on conflicts; nil-safe) | Optional extension surface of /config; platform does not import business domains; public settings-domain configuration such as announcements/maintenance mode is delivered through `Extra` |
 
@@ -110,7 +110,7 @@
 | ParseViteManifest | `ParseViteManifest(data []byte, entryKey string) (ViteAssets, error)` | Parses vite manifest.json for hydration assets (empty entryKey = "index.html") |
 | ViteBuildID / OutputVersion | `ViteBuildID(data []byte) string`; `OutputVersion` const | Build identifier = sha256 of (`OutputVersion` + manifest): a frontend rebuild or a renderer-output change both rotate the ID, so caches never survive either |
 | ViteAssets | `{CSS []string, JS []string}` | The data source for the template injection slots {{CSS_LINKS}}/{{HYDRATE_SCRIPT}} |
-| RenderOnce | `RenderOnce(ctx, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets) (CacheEntry, error)` | **一次性渲染入口**：单个页面 → 完整 HTML（不经缓存/HTTP 层），与预渲染/handler 未命中/缓存回填共用同一组装；草稿预览、邮件合成、调试直接调用，语义与预渲染管线一致（props 规范化、空输出与 <title> 校验） |
+| RenderOnce | `RenderOnce(ctx, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets) (CacheEntry, error)` | **One-shot render entry**: single page -> complete HTML (no cache/HTTP layer); the same assembly prerender / handler misses / cache backfill share. Draft previews, email rendering and debugging call it directly - semantics identical to the prerender pipeline (props normalization, empty-output and <title> checks) |
 
 ### Engine and runtime
 
@@ -159,9 +159,9 @@
 |---|---|---|
 | Event | `Event{Kind, WorkspaceID, Payload, IDempotencyKey}` | One business event pending delivery (at-least-once) |
 | New | `New(pool, wks *workers.Workers, opts ...Option) (*Emitter, error)`; wks=nil = emit-only, no consuming | Assembles the River client and optionally attaches it to the workers registry |
-| Migrate | `Migrate(ctx, pool *pgxpool.Pool) error` | **River schema bootstrap**（river_job 等作业表，幂等）：产品启动序列在 events.New 之后、workers.Start 之前调用一次；不并入 ploykit migrations（river schema 归属其库版本序列）。跳过它的产品首个事务事件即报 relation "river_job" does not exist |
+| Migrate | `Migrate(ctx, pool *pgxpool.Pool) error` | **River schema bootstrap** (river_job and friends; idempotent): call once at product boot after events.New and before workers.Start; deliberately NOT part of ploykit migrations (river schema follows the river library version sequence). Skipping it makes the first transactional event fail with relation "river_job" does not exist |
 | Emitter.Emit | `Emit(ctx, tx pgx.Tx, ev Event, opts ...river.InsertOpts) error` | **Enqueues inside the caller's transaction** (outbox semantics: commit guarantees delivery, rollback dies together); a returned error must roll back the entire transaction |
-| Emitter.EmitAt | `EmitAt(ctx, tx pgx.Tx, ev Event, at time.Time) error` | 一次性定时投递（river ScheduledAt 的类型化糖）：未来某刻做一件事用它；周期计划仍走 schedule 域 |
+| Emitter.EmitAt | `EmitAt(ctx, tx pgx.Tx, ev Event, at time.Time) error` | One-shot scheduled delivery (typed sugar over river ScheduledAt): use for "do X once at time T"; recurring plans still go through the schedule domain |
 | Subscribe | `Subscribe(kind string, h Handler)` | Registers subscriptions at assembly time; panics on registration after worker start / duplicate registration of the same kind; **idempotency is the subscriber's contract** |
 | Handler / Option | `func(ctx, Event) error` (error → exponential backoff retry; **a failed final attempt escalates to Error-level logging** — discarded dead-letters remain visible in the logs; same-kind events may run concurrently (MaxWorkers=10), so handlers must be thread-safe); `Option func(*river.Config)` as the escape hatch | Subscription signature and River configuration customization |
 | QueueEvents | The `"events"` constant | The dedicated event queue, isolated from the default queue of product-built River clients |

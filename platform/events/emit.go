@@ -61,9 +61,10 @@ func (e *Emitter) Emit(ctx context.Context, tx pgx.Tx, ev Event, opts ...river.I
 	return nil
 }
 
-// EmitAt 在指定时刻投递一次性事件（river ScheduledAt 的类型化糖）。
-// 适合"未来某刻做一件事"的一次性计划；需要周期计划仍走 schedule 域。
-// 与 Emit 一样必须在事务内调用。
+// EmitAt schedules a one-shot event for a specific time (typed sugar over
+// river's ScheduledAt). Use for "do X once at time T"; recurring plans still
+// belong to the schedule domain. Must be called inside a transaction, like
+// Emit.
 func (e *Emitter) EmitAt(ctx context.Context, tx pgx.Tx, ev Event, at time.Time) error {
 	if at.IsZero() {
 		return fmt.Errorf("events: emit_at: zero time")

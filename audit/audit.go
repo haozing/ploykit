@@ -27,14 +27,18 @@ func NewRecorder(pool *pgxpool.Pool, log *slog.Logger) *Recorder {
 	return &Recorder{pool: pool, log: log}
 }
 
-// execer 抽象 pool 与 tx 的共同写入面，使 Record / RecordTx 共享一条 SQL 真源。
+// execer abstracts the shared write surface of pool and tx so Record /
+// RecordTx keep one SQL source of truth.
 type execer interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
-// RecordTx 在调用方事务内写审计：失败返回 error（由调用方决定回滚），不吞错、
-// 不脱离调用方 ctx（与 Record 的 fire-and-forget 语义相反）。产品域的"业务写与
-// 审计同生共死"闸门应使用本方法，而不是手抄 INSERT SQL（schema 演进会脱钩）。
+// RecordTx writes the audit entry inside the caller's transaction: failures
+// return an error (the caller decides whether to roll back) - no swallowing,
+// no detaching from the caller's ctx (opposite of Record's fire-and-forget).
+// Product gates that need "business write and audit live or die together"
+// should use this instead of hand-writing INSERT SQL (which silently decouples
+// from schema evolution).
 func (r *Recorder) RecordTx(ctx context.Context, tx execer, workspaceID *string, p *webx.Principal, action, resourceType, resourceID string, meta map[string]any) error {
 	_, err := r.record(ctx, tx, workspaceID, p, action, resourceType, resourceID, meta)
 	return err

@@ -28,7 +28,7 @@ Go + React multi-tenant SaaS full-stack framework: business domains (identity / 
 | Cross-cutting authorization | `authz/` |
 | Rendering (SSR / prerender / SEO) | `platform/renderx` + docs/rendering.md |
 | API contract | docs/openapi.yaml + tools/check_api.py |
-| API 使用约定与集成陷阱（CSRF 轮换/注册双路径/路由风格） | docs/api-conventions.md |
+| API integration conventions & pitfalls (CSRF rotation / registration paths / route style) | docs/api-conventions.md |
 | Platform capabilities | `platform/<pkg>` |
 | Platform API surface (middleware/helpers — check before writing code) | docs/platform-api-index.md → `platform/<pkg>` |
 | Frontend | packages/ui, packages/client |

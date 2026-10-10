@@ -92,25 +92,57 @@ npm run check:web           # example/web tsc --noEmit
 npm run dev:web             # example/web vite dev (source directly; edits hot-reload)
 ```
 
-**dev 与生产构建的行为差异**：vite dev server 命中 `@ploykit/*` exports 的
-`development` 条件直连包源码，**不需要**预构建；生产构建（`vite build`）走
-`default` 条件指向 `dist/`——所以 **`example/web` 能 dev 不能直接 build 是预期行为**，
-构建顺序固定为：根 `npm run build`（产出 packages/*/dist）→ 再 build 产品。
+**Dev vs production build behavior**: the vite dev server resolves `@ploykit/*` exports via
+the `development` condition straight to package sources - **no pre-build needed**; a
+production build (`vite build`) resolves the `default` condition pointing at `dist/`. So
+"example/web can dev but cannot build directly" is expected: the build order is fixed -
+root `npm run build` (produces packages/*/dist) first, then the product build.
 
-## 无 make 环境（Windows / Git Bash）的等效命令
+## Native equivalents when make is unavailable (Windows / Git Bash)
 
-`make` 在 Windows 的 Git Bash 里通常不可用，每条目标的原生等效如下（risk-engine-server
-实测可用）：
+`make` is usually absent from Windows Git Bash. Native equivalents per target
+(verified by risk-engine-server in the field):
 
-| make 目标 | 等效命令 |
+| make target | Native equivalent |
 |---|---|
 | `make verify` | `python tools/check_api.py && go build ./... && go vet ./... && go test ./...` |
 | `make verify-ui` | `cd packages/ui && npx vitest run` |
-| `make test-db` | `set TEST_DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable&& go test ./...`（Git Bash 用 `TEST_DATABASE_URL=... go test ./...`） |
+| `make test-db` | `TEST_DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable go test ./...` |
 | `make -C example db-up` | `docker run -d --name ploykit-pg -e POSTGRES_USER=pk -e POSTGRES_PASSWORD=pk -e POSTGRES_DB=pk -p 5437:5432 postgres:16-alpine` |
 | `make -C example backend` | `cd example && DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable AUTH_SECRET=dev-pepper DEV_CODE=000000 go run ./cmd/app` |
 | `make -C example frontend` | `cd example/web && npx vite --port 5173` |
-| `make -C example build` | 见 example/Makefile（npm build → prerender → cp dist → go build；无 make 时按目标逐行执行） |
+| `make -C example build` | Follow example/Makefile line by line (npm build -> prerender -> cp dist -> go build) |
+
+## Build and verification commands (run at the repository root)
+
+```bash
+npm install                 # install dependencies + sync bridge
+npm run build               # tsc output (dist) for the three packages + example/web vite build
+npm test                    # all vitest for packages/{client,runtime,ui}
+npm run check:web           # example/web tsc --noEmit
+npm run dev:web             # example/web vite dev (source directly; edits hot-reload)
+```
+
+**Dev vs production build behavior**: the vite dev server resolves `@ploykit/*` exports via
+the `development` condition straight to package sources - **no pre-build needed**; a
+production build (`vite build`) resolves the `default` condition pointing at `dist/`. So
+"example/web can dev but cannot build directly" is expected: the build order is fixed -
+root `npm run build` (produces packages/*/dist) first, then the product build.
+
+## Native equivalents when make is unavailable (Windows / Git Bash)
+
+`make` is usually absent from Windows Git Bash. Native equivalents per target
+(verified by risk-engine-server in the field):
+
+| make target | Native equivalent |
+|---|---|
+| `make verify` | `python tools/check_api.py && go build ./... && go vet ./... && go test ./...` |
+| `make verify-ui` | `cd packages/ui && npx vitest run` |
+| `make test-db` | `TEST_DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable go test ./...` |
+| `make -C example db-up` | `docker run -d --name ploykit-pg -e POSTGRES_USER=pk -e POSTGRES_PASSWORD=pk -e POSTGRES_DB=pk -p 5437:5432 postgres:16-alpine` |
+| `make -C example backend` | `cd example && DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable AUTH_SECRET=dev-pepper DEV_CODE=000000 go run ./cmd/app` |
+| `make -C example frontend` | `cd example/web && npx vite --port 5173` |
+| `make -C example build` | Follow example/Makefile line by line (npm build -> prerender -> cp dist -> go build) |
 
 Clean rebuild (after switching machines or wiping installs):
 
@@ -274,60 +306,72 @@ session-level setter); accessors referenced by policies must be STABLE and wrapp
 `(select fn())`, with a leading index on the tenant column; cross-tenant background
 operations always go explicitly through `pg.WithService`, never implicitly.
 
-## 产品侧用 shadcn CLI 补长尾组件
+## Adding long-tail components from the shadcn CLI (product side)
 
-框架的 `@ploykit/ui` 自带 23 个 `components/ui` 组件（Base UI 内核 + cva/cn/Tailwind 语义
-token，与 shadcn 新版同构同源）。产品侧的默认动作是**直接从 `@ploykit/ui` 导入**（root
-策展导出，或 `@ploykit/ui/components/ui/<name>` 子路径导出）。shadcn CLI 只服务于一个场景：
-补**框架没有的长尾组件**（calendar、command、drawer 这一类）。框架已有的 23 件**不要**用
-CLI 再拉一份 —— 那会变成同一套 token 的双实现，框架升级后两份各自漂移。
+`@ploykit/ui` ships 23 `components/ui` components (Base-UI kernel + cva/cn/Tailwind semantic
+tokens, isomorphic with current shadcn). The product default is to **import from
+`@ploykit/ui`** (root curated exports, or the `@ploykit/ui/components/ui/<name>` subpath
+exports). The shadcn CLI serves exactly one scenario: **long-tail components the framework
+does not have** (calendar, command, drawer, ...). Do not re-pull the 23 framework components
+through the CLI - that would create a second implementation of the same tokens, and the two
+copies drift apart as the framework upgrades.
 
-shadcn 新版 CLI 的默认内核就是 Base UI，与框架同源：拉下来的组件与框架组件无内核冲突、
-token 同套（example/web/src/index.css 里就是完整的 shadcn token 集），所以产品侧混用两条
-来源不会打架。具体步骤（以 example/web 为例）：
+Current shadcn CLIs default to the Base-UI kernel - same kernel as the framework, same token
+set (example/web/src/index.css already carries the full shadcn tokens), so mixing both
+sources does not conflict. Steps (example/web as the example):
 
 ```bash
-# 1) 在产品目录初始化（cd example/web）
+# 1) init in the product directory (cd example/web)
 npx shadcn@latest init
 
-# 2) 按需生成长尾组件
+# 2) generate long-tail components as needed
 npx shadcn@latest add calendar
 
-# 3) 生成后必须在仓库根目录确认全仓只有一份 Base UI
+# 3) after generating, verify a single Base UI copy repo-wide (root)
 npm ls @base-ui/react
 ```
 
-`init` 的关键配置：
+init key settings:
 
-- **内核选 Base UI**（CLI 默认即是，保持默认即可）。
-- **Tailwind CSS 路径**指向产品的 `src/index.css`（不是 packages/ui 里的那份）。
-- **组件别名**按产品自己的 tsconfig，生成到产品的 `src/components/ui`。
-- **cn 工具**指向产品自建的 `src/lib/utils` —— 产品需要自己建这个两行文件
-  （clsx + tailwind-merge，可参照 `packages/ui/src/lib/utils.ts`）。
+- **Kernel: Base UI** (the CLI default - keep it).
+- **Tailwind CSS path**: the product's own `src/index.css` (not the one in packages/ui).
+- **Component aliases**: per the product tsconfig, generated into the product's
+  `src/components/ui`.
+- **cn utility**: the product's own `src/lib/utils` - a two-line file (clsx + tailwind-merge);
+  see `packages/ui/src/lib/utils.ts` for the reference.
 
-第 3 步的判定：框架把 `@base-ui/react` 钉在 `^1.8.0`，workspace hoist 应把两处声明合成
-一份；`npm ls @base-ui/react` 出现**两份**时必须先解决（对齐版本范围）再构建，否则 Go SSR
-构建的 node_modules 解析会出问题。
+Step 3 rationale: the framework pins `@base-ui/react` to `^1.8.0`; workspace hoisting should
+merge both declarations into one copy. Two copies shown by `npm ls` must be resolved (align
+version ranges) before building, or the Go SSR build's node_modules resolution breaks.
 
-边界与注意事项：
+Boundaries and notes:
 
-- **import 来源分清，不要重名混用**：框架组件从 `@ploykit/ui` 导入，产品组件从产品自己的
-  `src/components/ui` 导入；同名时优先删掉产品侧那份、改从框架导入。
-- **CLI 顺带装的产品依赖不进同步桥**：cmdk、react-day-picker 等不属于"react 五件套"
-  （react/react-dom/react-router/react-router-dom/@tanstack/react-query），不需要进
-  `example/web/scripts/sync-hoisted-deps.mjs`（见上文 render CLI dependency sync bridge
-  一节）；esbuild SSR 构建会从产品目录向上解析到仓库根 `node_modules`。
-- **blocks 同一通道**：shadcn 官方 blocks（整页布局模板）也走同一通道，产品想自定义整套
-  布局时可用。
+- **Distinguish import sources, never mix same-named copies**: framework components come
+  from `@ploykit/ui`, product components from the product's own `src/components/ui`. When a
+  name collides, prefer deleting the product-side copy and importing from the framework.
+- **Dependencies the CLI pulls in do not join the sync bridge**: cmdk, react-day-picker and
+  friends are not part of the "react five" (react/react-dom/react-router/react-router-dom/
+  @tanstack/react-query) and need no entry in `example/web/scripts/sync-hoisted-deps.mjs`
+  (see the render CLI dependency sync bridge section above); the esbuild SSR build resolves
+  upward from the product directory to the repo-root `node_modules`.
+- **shadcn blocks** (full-page layout templates) travel the same channel when a product
+  wants a fully custom layout.
 
-一句话原则：**核心组件用框架的（保持单副本和升级一致性），CLI 只补长尾。**
+One-line principle: **core components come from the framework (single copy, coherent
+upgrades); the CLI is for the long tail only.**
 
-### 令牌合同（@ploykit/ui 的样式依赖面）
+### Token contract (the styling dependency surface of @ploykit/ui)
 
-`@ploykit/ui` 的全部源码只使用**语义令牌类**（`bg-background` / `text-muted-foreground` / `border-border` …）与 CSS 变量直引语法（`text-(--success)`，用于状态色，词汇表同 `lib/utils` 的 `STATUS_TONE_CLASS`），**不使用任何经典调色板类**（`bg-gray-50`、`text-blue-600`…）——有 semantic-tokens 守卫测试钉住。因此产品侧 CSS 只需保证：
+All `@ploykit/ui` sources use **semantic token classes** only (`bg-background`,
+`text-muted-foreground`, `border-border`, ...) plus the CSS-variable direct syntax for
+status colors (`text-(--success)`, same vocabulary as `STATUS_TONE_CLASS` in `lib/utils`) -
+**never classic palette classes** (`bg-gray-50`, `text-blue-600`, ...); a semantic-tokens
+guard test enforces this. Product CSS therefore needs exactly:
 
-1. 完整的 shadcn 语义令牌集（`@theme inline` 映射 + `:root` 变量）；
-2. ploykit 扩展状态变量 `--success`、`--warning`（亮暗两套）；
-3. `@source` 指到 `@ploykit/ui` 的源码目录（workspace 链接在 node_modules 下，Tailwind 自动探测会跳过）。
+1. The full shadcn semantic token set (`@theme inline` mapping + `:root` variables);
+2. The ploykit extension status variables `--success` and `--warning` (light + dark);
+3. An `@source` directive pointing at the `@ploykit/ui` sources (workspace links live under
+   node_modules, which Tailwind's automatic detection skips).
 
-产品自己的页面可以自由使用经典调色板类（Tailwind 默认色板始终生成），但框架组件不会。
+Product pages may freely use classic palette classes (the Tailwind default palette is
+always generated); framework components never do.

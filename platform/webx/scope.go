@@ -34,7 +34,7 @@ func RequireScope(required ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if p := PrincipalFrom(r.Context()); p != nil && p.Source == SourcePAT && !p.Scope.Allows(required...) {
-				ErrForbidden(w, "PAT scope 不包含所需权限")
+				ErrForbidden(w, "PAT scope does not include the required permission")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -55,7 +55,7 @@ func RequireWorkspaceScope() func(http.Handler) http.Handler {
 					ws = strings.TrimPrefix(r.Header.Get("X-Workspace-Id"), "")
 				}
 				if !p.Scope.AllowsWorkspace(ws) {
-					ErrForbidden(w, "PAT scope 不包含目标工作区")
+					ErrForbidden(w, "PAT scope does not include the target workspace")
 					return
 				}
 			}

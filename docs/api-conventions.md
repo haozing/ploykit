@@ -1,65 +1,84 @@
-# API 使用约定与陷阱（产品对接必读）
+# API Conventions & Integration Pitfalls (read before integrating)
 
-> 面向 API 消费方（脚本/集成/前端）的成文约定，来自真实产品接入实录（risk-engine-server W1–W8、aiblog）中被绊过的地方。框架内部机制见 docs/architecture.md 与 docs/platform-api-index.md。
+> Written conventions for API consumers (scripts, integrations, frontends), sourced from real
+> integration field reports (risk-engine-server W1-W8, aiblog). Framework internals live in
+> docs/architecture.md and docs/platform-api-index.md.
 
-## CSRF 生命周期（最容易踩的坑）
+## CSRF lifecycle (the #1 integration pitfall)
 
-CSRF 令牌**与会话绑定，会话建立时轮换**：
+The CSRF token is **bound to the session and rotates on session establishment**:
 
 ```
-GET  /config                     → csrf_token = T0（匿名令牌）
-POST /auth/send-code    (T0)     → 200
-POST /auth/verify-code  (T0)     → 200 —— 会话在此建立，csrf_token 轮换为 T1
-POST /api/anything      (T0)     → 403 E_FORBIDDEN "CSRF token missing or invalid"
-POST /api/anything      (T1)     → 200
+GET  /config                     -> csrf_token = T0 (anonymous token)
+POST /auth/send-code    (T0)     -> 200
+POST /auth/verify-code  (T0)     -> 200 -- session established here; token rotates to T1
+POST /api/anything      (T0)     -> 403 E_FORBIDDEN "CSRF token missing or invalid"
+POST /api/anything      (T1)     -> 200
 ```
 
-**会话建立的响应（verify-code / login / register）之后，必须重新 `GET /config` 取新令牌**，旧令牌随之作废。这个设计的目的是防固定 token（合理），但表象是"登录成功但所有写操作 403"——极易误判为权限或中间件顺序问题，排查前先想起这一条。
+**After a session-establishing response (verify-code / login / register), re-fetch `/config`
+for the new token** - the old one is dead. This exists to prevent token fixation (sensible),
+but the symptom is "login succeeded yet every write is 403" - easily misread as a permission
+or middleware-ordering problem. Remember this line before debugging.
 
-- 令牌经 `X-CSRF-Token` 请求头携带；`/config` 每次返回当前有效令牌（掩码后下发）。
-- **本地 HTTP 联调提示**：会话 cookie 默认 `Secure=false`（本地/内网开箱即用）；生产部署必须显式 `cfg.Secure = true`（example 经 `SECURE_COOKIE` 接线）。反向默认曾使纯 HTTP 部署的登录以 CSRF 报错失败、根因隔两层（cookie 不回发）。
-- **PAT（Bearer）请求天然豁免 CSRF**——服务器间集成用 PAT 时无需任何 CSRF 处理。
-- 产品暴露**服务器间 API**（无浏览器会话、自带鉴权如 X-API-Key）时，应在 CSRF 中间件配置前缀豁免：
+- The token travels in the `X-CSRF-Token` request header; `/config` always returns the
+  currently valid (masked) token.
+- **Local HTTP note**: the session cookie defaults to `Secure=false` so local/intranet
+  logins work out of the box; production MUST opt in explicitly with `cfg.Secure = true`
+  (example wires it to `SECURE_COOKIE`). The reverse default once made plain-HTTP
+  deployments fail login with an opaque CSRF error whose root cause was two layers away
+  (the cookie is never sent back over plain HTTP).
+- **PAT (Bearer) requests are exempt from CSRF by design** - server-to-server integrations
+  need no CSRF handling at all.
+- For product-exposed **server-to-server APIs** (no browser session, own auth such as an
+  API key), exempt the prefix in the CSRF middleware config:
 
 ```go
 csrfMW := webx.CSRFConditional(&webx.CSRFConfig{
     Key: ..., TrustedOrigins: ...,
-    ExemptPrefixes: []string{"/open/"}, // 服务器间 API（自带鉴权，无会话）
+    ExemptPrefixes: []string{"/open/"}, // server-to-server API (own auth, no session)
 }, authCfg.Secure)
 ```
 
-## 注册的两条路径（分工）
+## The two registration paths
 
-| 路径 | 流程 | 适用 |
+| Path | Flow | Use when |
 |---|---|---|
-| **验证码即登录**（quickstart 用的这条） | `POST /auth/send-code` → `POST /auth/verify-code`（email+code）——验证即建号（不存在则创建）即建会话 | 面向人的默认注册/登录流，无密码体系 |
-| **邮箱密码注册** | `POST /auth/register`（email+password+display_name，**不收 code 字段**，带了会 E_BAD_JSON）→ 登录走密码 | 需要密码体系的产品 |
+| **Code-as-login** (the quickstart path) | `POST /auth/send-code` -> `POST /auth/verify-code` (email+code) - verification creates the account if absent and establishes the session | The default human-facing flow, no passwords |
+| **Email+password registration** | `POST /auth/register` (email+password+display_name; **does not accept a `code` field** - sending one yields E_BAD_JSON) -> login via password | Products that want a password system |
 
-对接方常见误解：给 register 带 code 字段。openapi.yaml 是字段合同的第一真源。
+Common misconception: sending `code` to register. openapi.yaml is the field-contract source of truth.
 
-## 错误响应的语义
+## Error response semantics
 
 ```json
-{ "error": "E_VALIDATION", "message": "邮箱格式非法" }
+{ "error": "E_VALIDATION", "message": "invalid email" }
 ```
 
-- `error` 字段承载**业务码**（`E_*` 枚举，完整清单见 openapi.yaml 的 ErrorBody schema），不是错误信息本身；
-- `message` 是人类可读描述；
-- HTTP status 与业务码的映射是稳定的（400=E_VALIDATION/E_BAD_JSON、401=E_UNAUTHENTICATED、403=E_FORBIDDEN、404、409=E_CONFLICT、429=E_RATE_LIMITED）——**不要把 `error` 字段当 message 读，也不要用 HTTP status 细分业务语义**。
+- The `error` field carries the **business code** (`E_*` enum; full list in the ErrorBody
+  schema of openapi.yaml), not the human message.
+- `message` is the human-readable description.
+- The HTTP status / business code mapping is stable (400=E_VALIDATION/E_BAD_JSON,
+  401=E_UNAUTHENTICATED, 403=E_FORBIDDEN, 404, 409=E_CONFLICT, 429=E_RATE_LIMITED) -
+  **do not read `error` as a message, and do not branch business semantics on HTTP status**.
 
-> 命名注记：Go 侧字段名是 `Code`、JSON 名是 `error`——历史遗留。0.x 保持不变（改名破坏所有现存消费方），语义以上述为准。
+> Naming note: the Go field is `Code` with JSON name `error` - historical. Unchanged in 0.x
+> (renaming breaks every existing consumer); the semantics above are the contract.
 
-## 路由风格约定（Go stdlib ServeMux 的坑）
+## Route style (Go stdlib ServeMux pitfalls)
 
-框架全部动作端点用**斜杠风格**：`POST /{id}/accept`、`POST /{id}/transfer-ownership`。产品侧请保持一致，因为直觉的冒号写法在 Go 1.22+ ServeMux 下**启动即 panic**：
+All action endpoints in the framework use the **slash style**: `POST /{id}/accept`,
+`POST /{id}/transfer-ownership`. Keep it in products, because the intuitive colon style
+panics at startup under Go 1.22+ ServeMux:
 
 ```go
-// ❌ panic: parsing "POST /admin/v1/fields/{id}:disable": at offset 22:
+// FAIL: parsing "POST /admin/v1/fields/{id}:disable": at offset 22:
 //         bad wildcard segment (must end with '}')
 mux.HandleFunc("POST /admin/v1/fields/{id}:disable", h)
 
-// ✅ 框架约定
+// framework convention
 mux.HandleFunc("POST /admin/v1/fields/{id}/disable", h)
 ```
 
-另一个同族坑：**根兜底必须写裸 `/`**，写 `GET /` 会与已注册模式冲突 panic。
+Sibling pitfall: the **root fallback must be the bare `/`** - registering `GET /` conflicts
+with existing patterns and panics.

@@ -70,6 +70,7 @@ jobs:
         with:
           python-version: '3.x'
       - run: python tools/check_api.py
+      - run: python tools/check_docs_language.py
 
   # Example standalone Go module (go.mod replace points to ../, buildable from the repo root).
   example:

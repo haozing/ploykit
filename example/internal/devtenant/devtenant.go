@@ -1,10 +1,12 @@
 // Package devtenant provisions a ready-to-use default tenant (user + owned
 // workspace) for development, testing and seeding — idempotent.
 //
-// 放置说明：本助手组合 identity + workspace 两个业务域，属产品级组装而非
-// platform 原语（A1 边界：platform/* 零业务依赖，internal/arch 强制）——
-// 故驻留在 example 的 internal 下。其它产品按需照抄（SQL 真源仍在框架
-// repo 层，不会脱钩）。
+// Placement: this helper composes two business domains (identity +
+// workspace), so it is product-level assembly rather than a platform
+// primitive (A1 boundary: platform/* has zero business dependencies,
+// enforced by internal/arch) - hence it lives under example's internal.
+// Other products copy it as needed; the SQL source of truth stays in the
+// framework repo layer, so it cannot silently decouple.
 //
 // Field-report origin (aiblog #3): workspace/user tables are owned by the
 // framework migrations, but before the first identity flow runs they are
@@ -39,7 +41,6 @@ const (
 	DefaultUserName  = "Dev Tenant"
 	DefaultWorkspace = "dev"
 	DefaultWSName    = "Dev Workspace"
-	defaultDevPassH  = "" // 见 ensureUser：空密码哈希 = 不可密码登录，只能走验证码/邀请流
 )
 
 // Result describes what the call settled on (existing or freshly created).
@@ -49,7 +50,7 @@ type Result struct {
 	WorkspaceID    string
 	WorkspaceSlug  string
 	UserCreated    bool
-	WorkspaceExist bool // workspace 已存在（幂等命中）
+	WorkspaceExist bool // workspace already existed (idempotent hit)
 }
 
 // Options overrides the conventional defaults.
@@ -109,14 +110,14 @@ func Ensure(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, opts *Opt
 	idRepo := idpgrepo.New(pool, idpgrepo.Config{})
 	wsRepo := pgrepo.New(pool)
 
-	// user：按 email 幂等（email 唯一约束为真源）。
+	// user: idempotent by email (the unique constraint is the source of truth).
 	var err error
 	res.UserID, err = ensureUser(ctx, idRepo, opts, now)
 	if err != nil {
 		return res, fmt.Errorf("devtenant: user: %w", err)
 	}
 
-	// workspace：按 slug 幂等（唯一约束为真源）。
+	// workspace: idempotent by slug (the unique constraint is the source of truth).
 	var exists bool
 	res.WorkspaceID, exists, err = ensureWorkspace(ctx, wsRepo, opts, res.UserID, now)
 	if err != nil {
@@ -149,8 +150,10 @@ func ensureUser(ctx context.Context, repo *idpgrepo.Repo, opts *Options, now fun
 		}
 		return u.ID, nil
 	}
-	// 无凭据用户走 UpsertUserByEmail（验证码建号的同款路径：password_hash 落 NULL，
-	// 满足 user_password_hash_check；email 冲突即更新时间戳返回现用户，天然幂等）。
+	// Credential-less users go through UpsertUserByEmail (the same path the
+	// verification-code flow uses: password_hash stays NULL, satisfying
+	// user_password_hash_check; an email conflict just bumps the timestamp and
+	// returns the existing user - idempotent by construction).
 	u, err := repo.UpsertUserByEmail(ctx, opts.email(), now())
 	if err != nil {
 		return "", err
@@ -166,7 +169,7 @@ func ensureWorkspace(ctx context.Context, repo *pgrepo.Repo, opts *Options, owne
 	}
 	ws, err := repo.CreateWorkspaceWithOwner(ctx, opts.wsSlug(), opts.wsName(), ownerUserID, now())
 	if err != nil {
-		// 并发 boot 竞态：slug 唯一约束命中即回读。
+		// Concurrent-boot race: slug unique-constraint hit -> read back.
 		if againID, ok, e2 := repo.FindWorkspaceIDBySlug(ctx, opts.wsSlug()); e2 == nil && ok {
 			return againID, true, nil
 		}

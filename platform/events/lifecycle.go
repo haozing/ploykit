@@ -28,11 +28,13 @@ const (
 
 type Option func(*river.Config)
 
-// Migrate 把 river 作业表（river_job 等）迁移到最新（幂等，重复执行安全）。
-// 故意不并入 ploykit migrations（001–999）：river schema 归属 river 库自身的
-// 版本序列，由其官方迁移器自适应管理，嵌入会钉死在特定 river 版本。
-// 产品启动序列中于 events.New 之后、workers.Start 之前调用一次即可；
-// 已有自身迁移管线的部署可改在自己流程里调这一函数。
+// Migrate brings the river job tables (river_job etc.) up to date (idempotent).
+// Deliberately NOT part of ploykit migrations (001-999): the river schema
+// follows the river library's own version sequence, managed adaptively by its
+// official migrator - embedding it would pin us to one river version. Call it
+// once in the product boot sequence after events.New and before
+// workers.Start; deployments with their own migration pipeline may call it
+// from there instead.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
 	if err != nil {
