@@ -54,7 +54,7 @@ func clearFedLoginCookie(w http.ResponseWriter) {
 	})
 }
 
-func MountFedAdmin(mux *http.ServeMux, d Deps) {
+func MountFedAdmin(mux webx.Router, d Deps) {
 	guard := d.FedAdminGuard
 	if guard == nil {
 		panic("identity: MountFedAdmin requires Deps.FedAdminGuard (workspace owner/admin closure); nil guard would expose tenant SSO secrets")

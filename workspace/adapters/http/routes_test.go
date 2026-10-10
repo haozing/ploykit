@@ -23,6 +23,28 @@ type fakeRepo struct {
 	workspaces map[string]wsapp.Workspace
 	members    map[string]wsapp.Member
 	deleted    []string
+
+	roleOverrides map[string][]authz.Permission
+}
+
+func (f *fakeRepo) ListRoleOverrides(_ context.Context, workspaceID string) (map[string][]authz.Permission, error) {
+	out := map[string][]authz.Permission{}
+	for k, v := range f.roleOverrides {
+		if ws, role, ok := strings.Cut(k, "|"); ok && ws == workspaceID {
+			out[role] = v
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) UpsertRolePerms(_ context.Context, workspaceID, role string, perms []authz.Permission, _ time.Time) error {
+	f.roleOverrides[workspaceID+"|"+role] = perms
+	return nil
+}
+
+func (f *fakeRepo) DeleteRolePerms(_ context.Context, workspaceID, role string) error {
+	delete(f.roleOverrides, workspaceID+"|"+role)
+	return nil
 }
 
 func (f *fakeRepo) GetMember(_ context.Context, wsID, userID string) (wsapp.Member, bool, error) {
@@ -650,6 +672,208 @@ func TestRevokeRoutesReturn204(t *testing.T) {
 		w := do(t, mux, "DELETE", "/api/workspaces/ws-1/invitations/inv-x", "", &webx.Principal{UserID: "carol"})
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestDeleteRouteStepUpComposition(t *testing.T) {
+	// The composition contract of Deps.sensitive: the permission check is
+	// outermost (role denial is terminal), the step-up challenge inner
+	// (recoverable). Proof: a member with a stale confirmation still gets
+	// E_FORBIDDEN — if step-up ran first they would see E_REAUTH_REQUIRED.
+	stepUpMux := func() *http.ServeMux {
+		f := &fakeRepo{
+			workspaces: map[string]wsapp.Workspace{
+				"ws-1": {ID: "ws-1", Slug: "acme", Name: "Acme", PlanCode: "free"},
+			},
+			members: map[string]wsapp.Member{
+				"ws-1|alice": {UserID: "alice", Role: "owner"},
+				"ws-1|bob":   {UserID: "bob", Role: "member"},
+			},
+		}
+		svc := wsapp.NewWorkspaceService(f, authz.New(nil, nil), nil, nil, wsapp.WorkspaceConfig{MaxPerUser: -1},
+			func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) })
+		mux := http.NewServeMux()
+		Mount(mux, Deps{Svc: svc, Members: f, Authz: authz.New(nil, nil),
+			StepUp: webx.RequireRecentAuth(15 * time.Minute)})
+		return mux
+	}
+
+	t.Run("member 确认过期 → 仍是 E_FORBIDDEN（角色拒绝优先于重认证）", func(t *testing.T) {
+		mux := stepUpMux()
+		w := do(t, mux, "DELETE", "/api/workspaces/ws-1", "",
+			&webx.Principal{UserID: "bob", Source: webx.SourceSession})
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		if c := errCode(t, w); c != "E_FORBIDDEN" {
+			t.Fatalf("code = %s, want E_FORBIDDEN", c)
+		}
+	})
+
+	t.Run("owner 确认过期 → E_REAUTH_REQUIRED 携带窗口", func(t *testing.T) {
+		mux := stepUpMux()
+		w := do(t, mux, "DELETE", "/api/workspaces/ws-1", "",
+			&webx.Principal{UserID: "alice", Source: webx.SourceSession})
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		var body struct {
+			Code    string `json:"error"`
+			Details struct {
+				MaxAgeSeconds int `json:"max_age_seconds"`
+			} `json:"details"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Code != "E_REAUTH_REQUIRED" {
+			t.Fatalf("code = %s", body.Code)
+		}
+		if body.Details.MaxAgeSeconds != 900 {
+			t.Fatalf("max_age_seconds = %d, want 900", body.Details.MaxAgeSeconds)
+		}
+	})
+
+	t.Run("owner 确认新鲜 → 204 放行", func(t *testing.T) {
+		mux := stepUpMux()
+		w := do(t, mux, "DELETE", "/api/workspaces/ws-1", "",
+			&webx.Principal{UserID: "alice", Source: webx.SourceSession,
+				PasswordConfirmedAt: time.Now().Add(-time.Minute)})
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("owner PAT 调用 → E_FORBIDDEN（机器凭据永远过不了 step-up）", func(t *testing.T) {
+		mux := stepUpMux()
+		w := do(t, mux, "DELETE", "/api/workspaces/ws-1", "",
+			&webx.Principal{UserID: "alice", Source: webx.SourcePAT,
+				PasswordConfirmedAt: time.Now()})
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		if c := errCode(t, w); c != "E_FORBIDDEN" {
+			t.Fatalf("code = %s, want E_FORBIDDEN", c)
+		}
+	})
+}
+
+
+func TestRoleConfigRoutes(t *testing.T) {
+	newRoleMux := func() (*http.ServeMux, *fakeRepo) {
+		f := &fakeRepo{
+			workspaces: map[string]wsapp.Workspace{
+				"ws-1": {ID: "ws-1", Slug: "acme", Name: "Acme", PlanCode: "free"},
+			},
+			members: map[string]wsapp.Member{
+				"ws-1|alice": {UserID: "alice", Role: "owner"},
+				"ws-1|carol": {UserID: "carol", Role: "admin"},
+				"ws-1|bob":   {UserID: "bob", Role: "member"},
+			},
+			roleOverrides: map[string][]authz.Permission{},
+		}
+		svc := wsapp.NewWorkspaceService(f, authz.New(nil, nil), nil, nil, wsapp.WorkspaceConfig{MaxPerUser: -1},
+			func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) })
+		mux := http.NewServeMux()
+		Mount(mux, Deps{Svc: svc, Members: f, Authz: authz.New(nil, nil),
+			StepUp: webx.RequireRecentAuth(15 * time.Minute)})
+		return mux, f
+	}
+
+	t.Run("owner GET 200（矩阵 + 目录含 roles:manage）", func(t *testing.T) {
+		mux, _ := newRoleMux()
+		w := do(t, mux, "GET", "/api/workspaces/ws-1/roles", "", &webx.Principal{UserID: "alice"})
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		var body struct {
+			Items []struct {
+				Role       string   `json:"role"`
+				Overridden bool     `json:"overridden"`
+			} `json:"items"`
+			Catalog []string `json:"catalog"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Items) != 2 {
+			t.Fatalf("items = %+v", body.Items)
+		}
+		found := false
+		for _, p := range body.Catalog {
+			if p == "roles:manage" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("catalog missing roles:manage: %v", body.Catalog)
+		}
+	})
+
+	t.Run("member GET 403（roles:manage 默认 owner 专属）", func(t *testing.T) {
+		mux, _ := newRoleMux()
+		w := do(t, mux, "GET", "/api/workspaces/ws-1/roles", "", &webx.Principal{UserID: "bob"})
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d", w.Code)
+		}
+	})
+
+	t.Run("admin GET 403（默认角色集不给 admin roles:manage，防自授权）", func(t *testing.T) {
+		mux, _ := newRoleMux()
+		w := do(t, mux, "GET", "/api/workspaces/ws-1/roles", "", &webx.Principal{UserID: "carol"})
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status = %d", w.Code)
+		}
+	})
+
+	t.Run("owner PUT 确认过期 → E_REAUTH_REQUIRED；确认新鲜 → 200 落库", func(t *testing.T) {
+		mux, f := newRoleMux()
+		stale := &webx.Principal{UserID: "alice", Source: webx.SourceSession}
+		w := do(t, mux, "PUT", "/api/workspaces/ws-1/roles/member", `{"perms":["workspace:read"]}`, stale)
+		if w.Code != http.StatusForbidden || errCode(t, w) != "E_REAUTH_REQUIRED" {
+			t.Fatalf("status = %d code=%s body=%s", w.Code, errCode(t, w), w.Body.String())
+		}
+		if len(f.roleOverrides) != 0 {
+			t.Fatal("step-up 未通过不得落库")
+		}
+
+		fresh := &webx.Principal{UserID: "alice", Source: webx.SourceSession,
+			PasswordConfirmedAt: time.Now().Add(-time.Minute)}
+		w = do(t, mux, "PUT", "/api/workspaces/ws-1/roles/member", `{"perms":["workspace:read","billing:manage"]}`, fresh)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		got := f.roleOverrides["ws-1|member"]
+		if len(got) != 2 || got[0] != "billing:manage" || got[1] != "workspace:read" {
+			t.Fatalf("override = %v", got)
+		}
+	})
+
+	t.Run("owner PUT 未知权限 → 400 不落库", func(t *testing.T) {
+		mux, f := newRoleMux()
+		fresh := &webx.Principal{UserID: "alice", Source: webx.SourceSession,
+			PasswordConfirmedAt: time.Now()}
+		w := do(t, mux, "PUT", "/api/workspaces/ws-1/roles/admin", `{"perms":["nope:nope"]}`, fresh)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		if len(f.roleOverrides) != 0 {
+			t.Fatalf("被拒写入不得落库: %v", f.roleOverrides)
+		}
+	})
+
+	t.Run("owner DELETE → 204", func(t *testing.T) {
+		mux, f := newRoleMux()
+		f.roleOverrides["ws-1|member"] = []authz.Permission{"workspace:read"}
+		fresh := &webx.Principal{UserID: "alice", Source: webx.SourceSession,
+			PasswordConfirmedAt: time.Now()}
+		w := do(t, mux, "DELETE", "/api/workspaces/ws-1/roles/member", "", fresh)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		if _, ok := f.roleOverrides["ws-1|member"]; ok {
+			t.Fatal("override 未删除")
 		}
 	})
 }

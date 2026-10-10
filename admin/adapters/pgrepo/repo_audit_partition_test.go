@@ -17,7 +17,7 @@ import (
 	"github.com/haozing/ploykit/audit"
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 )
 
 func boundLit(m time.Time) string { return "'" + m.UTC().Format("2006-01-02T15:04:05+00:00") + "'" }
@@ -32,7 +32,7 @@ func TestExportAuditCSV_AcrossPartitions(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(db.Close)
 	pool := db.Pool()
-	require.NoError(t, pgm.Up(ctx, pool, migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(ctx, pool, migrations.FS, "."))
 	repo := New(pool)
 
 	now := time.Now().UTC()

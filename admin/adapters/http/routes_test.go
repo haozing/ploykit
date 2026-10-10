@@ -221,8 +221,8 @@ type fakeMinter struct {
 	returnedTokenHook int
 }
 
-func (f *fakeMinter) CreateSession(_ context.Context, userID, ipHash, userAgent string, _ time.Time) (string, time.Time, error) {
-	return f.create(userID, "", ipHash, userAgent)
+func (f *fakeMinter) CreateSession(_ context.Context, in webx.SessionCreate) (string, time.Time, error) {
+	return f.create(in.UserID, "", in.IPHash, in.UserAgent)
 }
 
 func (f *fakeMinter) CreateImpersonatedSession(_ context.Context, userID, impersonatedBy, ipHash, userAgent string, _ time.Time) (string, time.Time, error) {

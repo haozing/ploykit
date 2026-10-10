@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
 	"github.com/haozing/ploykit/platform/ids"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 func newTestRedisClient(t *testing.T) *redis.Client {

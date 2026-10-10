@@ -50,6 +50,22 @@ func (f *fakeRepo) UpdateProfile(_ context.Context, id, displayName, avatarURL s
 	return app.User{ID: id, Email: "u1@example.com", DisplayName: displayName, AvatarURL: avatarURL, Status: "active"}, nil
 }
 
+func (f *fakeRepo) CountRecentAttempts(_ context.Context, _, _ string, _ time.Time) (int, error) {
+	return f.attempts, nil
+}
+
+func (f *fakeRepo) RecordAttempt(_ context.Context, _, _ string, success bool, _ time.Time) error {
+	f.attempts++
+	_ = success
+	return nil
+}
+
+func (f *fakeRepo) ConfirmSessionPassword(_ context.Context, sessionID string, at time.Time) error {
+	f.confirmedSessionID = sessionID
+	f.confirmedAt = at
+	return nil
+}
+
 func newSessionMux(f *fakeRepo) *http.ServeMux {
 	clock := func() time.Time { return frozen }
 	sessions := app.NewSessionService(f, fakeMail{}, app.SessionConfig{AllowSignup: true, SecretPepper: "p"}, time.Hour, 0, clock)
@@ -270,5 +286,55 @@ func TestDisplayNameLimit_FT28(t *testing.T) {
 		w := patchMe(t, newSessionMux(f), dn)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		assert.Equal(t, [3]string{"u1", strings.Repeat("名", 100), "https://cdn.example.com/a.png"}, f.updatedProfile)
+	})
+}
+
+func TestConfirmPasswordRoute(t *testing.T) {
+	hash, err := app.HashPassword("correct horse battery")
+	require.NoError(t, err)
+	sessionUser := &webx.Principal{UserID: "u1", SessionID: "s-cur", Source: webx.SourceSession}
+
+	newRepo := func() *fakeRepo {
+		return newFakeRepo(app.User{ID: "u1", Email: "u1@example.com", Status: "active", PasswordHash: hash})
+	}
+
+	t.Run("密码正确 → 200 并盖戳当前会话", func(t *testing.T) {
+		f := newRepo()
+		w := doJSON(t, newSessionMux(f), http.MethodPost, "/auth/confirm-password",
+			map[string]string{"password": "correct horse battery"}, sessionUser)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Equal(t, "s-cur", f.confirmedSessionID)
+		assert.False(t, f.confirmedAt.IsZero())
+		var body struct {
+			PasswordConfirmedAt time.Time `json:"password_confirmed_at"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		assert.False(t, body.PasswordConfirmedAt.IsZero())
+	})
+
+	t.Run("密码错误 → 401 且不盖戳", func(t *testing.T) {
+		f := newRepo()
+		w := doJSON(t, newSessionMux(f), http.MethodPost, "/auth/confirm-password",
+			map[string]string{"password": "wrong"}, sessionUser)
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+		code, _ := errEnvelope(t, w)
+		assert.Equal(t, webx.CodeUnauthenticated, code)
+		assert.Empty(t, f.confirmedSessionID)
+	})
+
+	t.Run("PAT 调用 → 403（step-up 只属于交互会话）", func(t *testing.T) {
+		f := newRepo()
+		w := doJSON(t, newSessionMux(f), http.MethodPost, "/auth/confirm-password",
+			map[string]string{"password": "correct horse battery"},
+			&webx.Principal{UserID: "u1", Source: webx.SourcePAT})
+		require.Equal(t, http.StatusForbidden, w.Code)
+		assert.Empty(t, f.confirmedSessionID)
+	})
+
+	t.Run("未认证 → 401", func(t *testing.T) {
+		f := newRepo()
+		w := doJSON(t, newSessionMux(f), http.MethodPost, "/auth/confirm-password",
+			map[string]string{"password": "correct horse battery"}, nil)
+		require.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }

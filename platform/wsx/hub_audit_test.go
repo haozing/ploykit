@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 func TestAuthGraceZombieEvicted(t *testing.T) {

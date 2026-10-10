@@ -37,6 +37,11 @@ type fakeRepo struct {
 	softDeleted     []string
 	softDeleteErr   error
 
+	confirmedSessions  []string
+	confirmedAt        time.Time
+	confirmedSessionID string
+	confirmNotFound    bool
+
 	failedAttempts int
 	attemptLog     []bool
 }

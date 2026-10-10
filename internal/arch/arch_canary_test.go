@@ -39,7 +39,6 @@ func TestRulesCatchSyntheticViolations(t *testing.T) {
 		pkg("internal/contract/apierr", "billing/app"),
 		pkg("authz", "workspace/app"),
 		pkg("authorization", "authz"),
-		pkg("contractx", "billing/app"),
 	})
 	want := map[string][]string{
 		"A1": {"platform/pg -> workspace", "platform/logx -> workspace"},
@@ -48,7 +47,6 @@ func TestRulesCatchSyntheticViolations(t *testing.T) {
 		"A4": {"internal/contract/apierr -> billing", "internal/contract/apierr -> workspace"},
 		"A5": {"authz -> workspace"},
 		"A6": {"authorization -> authz", "authorization -> workspace"},
-		"A7": {"contractx -> billing", "contractx -> workspace"},
 	}
 
 	known := map[string]bool{}
@@ -89,7 +87,6 @@ func TestRulesCleanOnHealthyGraph(t *testing.T) {
 		pkg("platform/webx", "internal/contract/apierr"),
 		pkg("internal/contract/apierr"),
 		pkg("authorization"),
-		pkg("contractx"),
 	})
 	for _, r := range rules {
 		for _, v := range violationsOf(r, g, g.adj) {
@@ -102,12 +99,12 @@ func TestExemptGraphAppliesOnlyToA2A3(t *testing.T) {
 	g := canaryGraph([]*pkgInfo{
 		pkg("quota/app", "identity/app"),
 		pkg("identity/app"),
-		pkg("contractx", "billing/app"),
+		pkg("internal/contract/apierr", "billing/app"),
 		pkg("billing/app"),
 	})
 	allow := []allowEntry{
 		{from: "quota/app", to: "identity/app"},
-		{from: "contractx", to: "billing/app"},
+		{from: "internal/contract", to: "billing/app"},
 	}
 	a2 := ruleByID("A2")
 	if vs := violationsOf(a2, g, edgesForRule(a2, g, allow)); len(vs) != 0 {
@@ -115,9 +112,9 @@ func TestExemptGraphAppliesOnlyToA2A3(t *testing.T) {
 			t.Errorf("[A2] 已豁免的边（quota -> identity）不应再报违规：%s  %s", v.loc, v.arrow)
 		}
 	}
-	a7 := ruleByID("A7")
-	if vs := violationsOf(a7, g, edgesForRule(a7, g, allow)); len(vs) == 0 {
-		t.Error("[A7] 豁免不得对 A2/A3 之外的规则生效：contractx -> billing 应照常报违规")
+	a4 := ruleByID("A4")
+	if vs := violationsOf(a4, g, edgesForRule(a4, g, allow)); len(vs) == 0 {
+		t.Error("[A4] 豁免不得对 A2/A3 之外的规则生效：internal/contract -> billing 应照常报违规")
 	}
 }
 

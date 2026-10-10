@@ -46,7 +46,7 @@ func (d Deps) fail(w http.ResponseWriter, r *http.Request, err error) {
 	d.errLog(w, r, err)
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/webhooks/events", d.member(d.handleEvents))
 	mux.HandleFunc("GET /api/workspaces/{workspaceId}/webhooks/deliveries", d.member(d.handleDeliveries))
 	mux.HandleFunc("POST /api/workspaces/{workspaceId}/webhooks/deliveries/{deliveryId}/redeliver", d.admin(d.handleRedeliver))

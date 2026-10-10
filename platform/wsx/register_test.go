@@ -3,7 +3,7 @@ package wsx
 import (
 	"testing"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 func TestWorkspaceScopeMatchesWswire(t *testing.T) {

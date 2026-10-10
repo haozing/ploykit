@@ -14,7 +14,7 @@ type UserOpsDeps struct {
 	Ops *app.UserOpsService
 }
 
-func MountUserOps(mux *http.ServeMux, d UserOpsDeps) {
+func MountUserOps(mux webx.Router, d UserOpsDeps) {
 	admin := d.requireAdmin
 
 	mux.Handle("GET /api/admin/users/{id}", admin(d.userDetail))

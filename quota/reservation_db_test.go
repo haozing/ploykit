@@ -11,14 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/migrations"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
 func reservationTestDB(t *testing.T) *Service {
 	t.Helper()
 	pool := testPool(t)
-	_, err := pgm.New(pool, migrations.FS, ".").Up(context.Background(), 0)
+	_, err := pgmigrate.New(pool, migrations.FS, ".").Up(context.Background(), 0)
 	require.NoError(t, err, "迁移自举到最新（含 024_quota_reservation）")
 	return NewService(pool)
 }

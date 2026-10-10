@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/platform/pg"
+	"github.com/haozing/ploykit/platform/webx"
 )
 
 func TestImpersonatedSession_Marking(t *testing.T) {
@@ -32,7 +33,7 @@ func TestImpersonatedSession_Marking(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = repo.RevokeSession(ctx, impToken) })
 
-	normToken, _, err := repo.CreateSession(ctx, target.ID, "h", "ua", time.Now().UTC())
+	normToken, _, err := repo.CreateSession(ctx, webx.SessionCreate{UserID: target.ID, IPHash: "h", UserAgent: "ua", Now: time.Now().UTC()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = repo.RevokeSession(ctx, normToken) })
 

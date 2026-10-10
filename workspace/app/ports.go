@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/haozing/ploykit/authz"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -66,6 +67,13 @@ type Repo interface {
 	OldestActiveOwner(ctx context.Context, workspaceID string) (Member, bool, error)
 
 	TransferOwnershipTx(ctx context.Context, tx pgx.Tx, workspaceID, fromUserID, toUserID string) error
+
+	// Role-config write side (read side lives in authz's Provider). An
+	// override row REPLACES the role's built-in permission set entirely —
+	// not a merge.
+	ListRoleOverrides(ctx context.Context, workspaceID string) (map[string][]authz.Permission, error)
+	UpsertRolePerms(ctx context.Context, workspaceID, role string, perms []authz.Permission, now time.Time) error
+	DeleteRolePerms(ctx context.Context, workspaceID, role string) error
 }
 
 type PoolDeps struct {

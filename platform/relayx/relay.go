@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
 	"github.com/haozing/ploykit/platform/ids"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 type Envelope struct {

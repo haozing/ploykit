@@ -130,13 +130,6 @@ var rules = []ruleSpec{
 			return !inTree(tgt, "authorization")
 		},
 	},
-	{
-		id:        "A7",
-		desc:      "contractx 不得到达业务域",
-		fix:       "contractx 是契约工具层，与 platform 同口径零业务依赖（docs/architecture.md §2.1）",
-		inScope:   func(rel string) bool { return inTree(rel, "contractx") },
-		forbidden: func(src, tgt string) bool { return isBusiness(tgt) },
-	},
 }
 
 func checkRule(t *testing.T, r ruleSpec, g *graph, adj map[string][]string) {

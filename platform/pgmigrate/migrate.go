@@ -1,8 +1,7 @@
-package pgm
+package pgmigrate
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -31,12 +30,12 @@ type StatusRow struct {
 
 type Migrator struct {
 	pool   *pgxpool.Pool
-	fsys   embed.FS
+	fsys   fs.FS
 	subdir string
 	hooks  map[string][]Hook
 }
 
-func New(pool *pgxpool.Pool, fsys embed.FS, subdir string) *Migrator {
+func New(pool *pgxpool.Pool, fsys fs.FS, subdir string) *Migrator {
 	return &Migrator{pool: pool, fsys: fsys, subdir: subdir, hooks: map[string][]Hook{}}
 }
 
@@ -350,7 +349,7 @@ func noTxBookkeepError(mf migrationFile, err error) error {
 		mf.name, err, mf.version)
 }
 
-func Up(ctx context.Context, pool *pgxpool.Pool, fsys embed.FS, subdir string) error {
+func Up(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, subdir string) error {
 	_, err := New(pool, fsys, subdir).Up(ctx, 0)
 	return err
 }

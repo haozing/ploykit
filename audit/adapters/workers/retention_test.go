@@ -11,7 +11,7 @@ import (
 
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/pgpart"
 )
 
@@ -24,7 +24,7 @@ func TestRetentionWorker_RoundNoopOnFreshPartitions(t *testing.T) {
 	db, err := pg.Connect(ctx, dsn, pg.Options{})
 	require.NoError(t, err)
 	t.Cleanup(db.Close)
-	require.NoError(t, pgm.Up(ctx, db.Pool(), migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(ctx, db.Pool(), migrations.FS, "."))
 	pool := db.Pool()
 
 	w := &RetentionWorker{Table: &pgpart.Table{Pool: pool, Parent: "audit_event"}}

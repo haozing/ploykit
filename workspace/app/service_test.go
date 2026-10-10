@@ -24,6 +24,8 @@ type fake struct {
 	calls      []string
 	joinRole   string
 
+	roleOverrides map[string][]authz.Permission
+
 	userStatus       map[string]string
 	boomAfterPromote bool
 }
@@ -34,13 +36,14 @@ type fakeLink struct{ l ShareLink }
 
 func newFake() *fake {
 	return &fake{
-		workspaces: map[string]Workspace{},
-		members:    map[string]fakeMember{},
-		invites:    map[string]Invitation{},
-		links:      map[string]fakeLink{},
-		linkWS:     map[string]string{},
-		joinRole:   "member",
-		userStatus: map[string]string{},
+		workspaces:    map[string]Workspace{},
+		members:       map[string]fakeMember{},
+		invites:       map[string]Invitation{},
+		links:         map[string]fakeLink{},
+		linkWS:        map[string]string{},
+		joinRole:      "member",
+		roleOverrides: map[string][]authz.Permission{},
+		userStatus:    map[string]string{},
 	}
 }
 

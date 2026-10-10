@@ -60,9 +60,10 @@ func (f *thirdPartyRepo) UpsertUserByEmail(_ context.Context, email string, _ ti
 	return u, nil
 }
 func (f *thirdPartyRepo) SetEmailVerified(context.Context, string, time.Time) error { return nil }
-func (f *thirdPartyRepo) CreateSession(_ context.Context, _, _, _ string, _ time.Time) (string, time.Time, error) {
+func (f *thirdPartyRepo) CreateSession(_ context.Context, _ webx.SessionCreate) (string, time.Time, error) {
 	return "tp-sess-tok", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), nil
 }
+func (f *thirdPartyRepo) ConfirmSessionPassword(context.Context, string, time.Time) error { return nil }
 func (f *thirdPartyRepo) VerifySession(_ context.Context, _ string, _ time.Time) (*webx.Principal, error) {
 	return &webx.Principal{SessionID: "tp-sess-1", Source: webx.SourceSession}, nil
 }

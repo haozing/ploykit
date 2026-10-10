@@ -18,7 +18,8 @@ import (
 	"github.com/haozing/ploykit/identity/domain"
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/webx"
 )
 
 func delTestDB(t *testing.T) (*Repo, *pgxpool.Pool, func()) {
@@ -30,7 +31,7 @@ func delTestDB(t *testing.T) (*Repo, *pgxpool.Pool, func()) {
 	ctx := context.Background()
 	db, err := pg.Connect(ctx, dsn, pg.Options{})
 	require.NoError(t, err)
-	require.NoError(t, pgm.Up(ctx, db.Pool(), migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(ctx, db.Pool(), migrations.FS, "."))
 	repo := New(db.Pool(), Config{})
 	return repo, db.Pool(), db.Close
 }
@@ -52,7 +53,7 @@ func seedDeletable(t *testing.T, repo *Repo, pool *pgxpool.Pool) delFixture {
 		INSERT INTO "user" (id, email, display_name, password_hash, avatar_url)
 		VALUES ($1, $2, 'to delete', '$argon2id$fake', 'https://cdn/x.png')`, uid, email)
 	require.NoError(t, err)
-	token, _, err := repo.CreateSession(ctx, uid, "iph", "ua", time.Now().UTC())
+	token, _, err := repo.CreateSession(ctx, webx.SessionCreate{UserID: uid, IPHash: "iph", UserAgent: "ua", Now: time.Now().UTC()})
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO personal_access_token (user_id, name, token_hash, prefix)

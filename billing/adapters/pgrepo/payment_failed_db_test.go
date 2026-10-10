@@ -20,7 +20,7 @@ import (
 	"github.com/haozing/ploykit/billing/domain"
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/events"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 )
 
 func newBillingScratchPool(t *testing.T) *pgxpool.Pool {
@@ -44,7 +44,7 @@ func newBillingScratchPool(t *testing.T) *pgxpool.Pool {
 	pool, err := pgxpool.New(ctx, u.String())
 	require.NoError(t, err)
 
-	require.NoError(t, pgm.Up(ctx, pool, migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(ctx, pool, migrations.FS, "."))
 	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
 	require.NoError(t, err)
 	_, err = migrator.Migrate(ctx, rivermigrate.DirectionUp, nil)

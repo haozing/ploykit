@@ -19,7 +19,7 @@ import (
 
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 )
 
 const (
@@ -50,7 +50,7 @@ func newRLSEnv(t *testing.T) *rlsEnv {
 	require.NoError(t, err)
 	t.Cleanup(admin.Close)
 
-	require.NoError(t, pgm.Up(ctx, admin.Pool(), migrations.FS, "."), "框架迁移链")
+	require.NoError(t, pgmigrate.Up(ctx, admin.Pool(), migrations.FS, "."), "框架迁移链")
 	require.NoError(t, applyProductMigrations(ctx, t, admin.Pool()), "产品迁移链 1001+")
 	ensureRlsRole(ctx, t, admin.Pool())
 

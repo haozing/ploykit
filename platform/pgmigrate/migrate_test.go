@@ -1,8 +1,9 @@
-package pgm
+package pgmigrate
 
 import (
 	"context"
 	"embed"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,6 +37,19 @@ func TestScanSortsNumerically(t *testing.T) {
 func TestScanDuplicateDownRejected(t *testing.T) {
 	m := New(nil, testFS, "testdata/dupdown")
 	_, _, _, err := m.scan()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `duplicate down version "002"`)
+}
+
+func TestScanAcceptsNonEmbedFS(t *testing.T) {
+	// os.DirFS 而非 embed.FS：New/scan 只依赖 fs.FS 接口（外部迁移目录、fstest.MapFS 同理可用）
+	m := New(nil, os.DirFS("testdata"), ".")
+	_, _, versions, err := m.scan()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"002", "500", "999", "1001"}, versions)
+
+	m = New(nil, os.DirFS("testdata"), "dupdown")
+	_, _, _, err = m.scan()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `duplicate down version "002"`)
 }

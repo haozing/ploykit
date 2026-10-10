@@ -19,7 +19,7 @@ type Deps struct {
 	Authz *authz.Authorizer
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	mux.Handle("GET /api/audit", d.ws(webx.P(d.list)))
 	mux.Handle("GET /api/audit/export.csv", d.ws(webx.P(d.export)))
 }

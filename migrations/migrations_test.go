@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 )
 
-func testMigrator(t *testing.T) (*pgxpool.Pool, *pgm.Migrator) {
+func testMigrator(t *testing.T) (*pgxpool.Pool, *pgmigrate.Migrator) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -28,13 +28,13 @@ func testMigrator(t *testing.T) (*pgxpool.Pool, *pgm.Migrator) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	pool := db.Pool()
-	m := pgm.New(pool, FS, ".")
+	m := pgmigrate.New(pool, FS, ".")
 	_, err = m.Up(ctx, 0)
 	require.NoError(t, err, "基线：全量 up 自举（幂等）")
 	return pool, m
 }
 
-func rollbackAbove(t *testing.T, m *pgm.Migrator, pool *pgxpool.Pool, version string) []string {
+func rollbackAbove(t *testing.T, m *pgmigrate.Migrator, pool *pgxpool.Pool, version string) []string {
 	t.Helper()
 	st, err := m.Status(context.Background())
 	require.NoError(t, err)

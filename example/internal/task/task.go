@@ -56,7 +56,7 @@ type Deps struct {
 	Emitter *events.Emitter
 }
 
-func Mount(mux *http.ServeMux, d Deps, wsMW func(http.Handler) http.Handler) {
+func Mount(mux webx.Router, d Deps, wsMW func(http.Handler) http.Handler) {
 	require := authz.Require(d.Authz, "tasks:read")
 	write := authz.Require(d.Authz, "tasks:write")
 	done := authz.RequireOwn(d.Authz, "tasks:write", d.taskOwner)

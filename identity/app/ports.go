@@ -46,8 +46,12 @@ type Repo interface {
 	IncChallengeAttempts(ctx context.Context, id string) error
 	ConsumeChallenge(ctx context.Context, id string) error
 
-	CreateSession(ctx context.Context, userID, ipHash, userAgent string, now time.Time) (token string, exp time.Time, err error)
+	CreateSession(ctx context.Context, in webx.SessionCreate) (token string, exp time.Time, err error)
 	VerifySession(ctx context.Context, token string, now time.Time) (*webx.Principal, error)
+
+	// ConfirmSessionPassword stamps password_confirmed_at on a live session
+	// (step-up): POST /auth/confirm-password → RequireRecentAuth unblocks.
+	ConfirmSessionPassword(ctx context.Context, sessionID string, now time.Time) error
 
 	RenewSession(ctx context.Context, token string, now time.Time) (exp time.Time, renewed bool, err error)
 	RevokeSession(ctx context.Context, token string) error

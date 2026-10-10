@@ -14,7 +14,7 @@ type Deps struct {
 	Guard func(http.Handler) http.Handler
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	g := d.Guard
 	if g == nil {
 		g = func(h http.Handler) http.Handler { return h }

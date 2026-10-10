@@ -12,8 +12,24 @@ import (
 	"time"
 )
 
+// SessionCreate carries the inputs of SessionStore.CreateSession.
+type SessionCreate struct {
+	UserID    string
+	IPHash    string
+	UserAgent string
+
+	// PasswordConfirmed marks a session born right after an explicit password
+	// proof (password login, registration, password change). Such sessions
+	// start with PasswordConfirmedAt set and satisfy RequireRecentAuth
+	// immediately; code/third-party logins stay unconfirmed until the caller
+	// completes a step-up (POST /auth/confirm-password).
+	PasswordConfirmed bool
+
+	Now time.Time
+}
+
 type SessionStore interface {
-	CreateSession(ctx context.Context, userID, ipHash, userAgent string, now time.Time) (token string, exp time.Time, err error)
+	CreateSession(ctx context.Context, in SessionCreate) (token string, exp time.Time, err error)
 
 	VerifySession(ctx context.Context, token string, now time.Time) (*Principal, error)
 
@@ -26,6 +42,12 @@ type PATLookup interface {
 	ResolvePAT(ctx context.Context, token string, now time.Time) (*Principal, error)
 }
 
+// DefaultPATPrefix is the canonical PAT token prefix: webx parses the Bearer
+// token with it, wsx.DefaultPATPrefix aliases it for WebSocket first-frame
+// auth, and identity/domain keeps a mirrored constant (domain purity — pure
+// stdlib, no framework import). internal/arch's parity test pins the three
+// together; changing the prefix means changing them in lockstep and handling
+// already-stored tokens.
 const DefaultPATPrefix = "tk_"
 
 type AuthConfig struct {

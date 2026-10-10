@@ -8,8 +8,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 type client struct {

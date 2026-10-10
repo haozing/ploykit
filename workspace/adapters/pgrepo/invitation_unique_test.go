@@ -11,14 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/migrations"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/workspace/app"
 )
 
 func TestCreateInvitation_DuplicatePending_DQ_DEF_4(t *testing.T) {
 	pool := testPool(t)
 
-	require.NoError(t, pgm.Up(context.Background(), pool, migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(context.Background(), pool, migrations.FS, "."))
 	repo := New(pool)
 	ctx := context.Background()
 	owner, _ := seedUser(t, pool)
@@ -38,7 +38,7 @@ func TestCreateInvitation_DuplicatePending_DQ_DEF_4(t *testing.T) {
 
 func TestCreateInvitation_ConcurrentDuplicate_DQ_DEF_4(t *testing.T) {
 	pool := testPool(t)
-	require.NoError(t, pgm.Up(context.Background(), pool, migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(context.Background(), pool, migrations.FS, "."))
 	repo := New(pool)
 	ctx := context.Background()
 	owner, _ := seedUser(t, pool)

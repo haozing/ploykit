@@ -15,7 +15,7 @@ import (
 
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/quota"
 )
 
@@ -28,7 +28,7 @@ func workerTestDB(t *testing.T) (*quota.Service, *pgxpool.Pool) {
 	ctx := context.Background()
 	db, err := pg.Connect(ctx, dsn, pg.Options{})
 	require.NoError(t, err)
-	_, err = pgm.New(db.Pool(), migrations.FS, ".").Up(ctx, 0)
+	_, err = pgmigrate.New(db.Pool(), migrations.FS, ".").Up(ctx, 0)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return quota.NewService(db.Pool()), db.Pool()

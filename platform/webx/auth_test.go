@@ -24,7 +24,7 @@ type fakeSessions struct {
 func (f *fakeSessions) VerifySession(_ context.Context, _ string, _ time.Time) (*Principal, error) {
 	return f.p, f.verifyErr
 }
-func (f *fakeSessions) CreateSession(_ context.Context, _, _, _ string, _ time.Time) (string, time.Time, error) {
+func (f *fakeSessions) CreateSession(_ context.Context, _ SessionCreate) (string, time.Time, error) {
 	return "tok", time.Now().Add(time.Hour), nil
 }
 func (f *fakeSessions) RenewSession(_ context.Context, _ string, _ time.Time) (time.Time, bool, error) {

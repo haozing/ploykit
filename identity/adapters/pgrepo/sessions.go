@@ -12,25 +12,31 @@ import (
 	"github.com/haozing/ploykit/platform/webx"
 )
 
-func (r *Repo) CreateSession(ctx context.Context, userID, ipHash, userAgent string, now time.Time) (string, time.Time, error) {
-	return r.insertSession(ctx, userID, "", ipHash, userAgent, now)
+func (r *Repo) CreateSession(ctx context.Context, in webx.SessionCreate) (string, time.Time, error) {
+	return r.insertSession(ctx, in, "")
 }
 
 func (r *Repo) CreateImpersonatedSession(ctx context.Context, userID, impersonatedBy, ipHash, userAgent string, now time.Time) (string, time.Time, error) {
-	return r.insertSession(ctx, userID, impersonatedBy, ipHash, userAgent, now)
+	return r.insertSession(ctx, webx.SessionCreate{
+		UserID: userID, IPHash: ipHash, UserAgent: userAgent, Now: now,
+	}, impersonatedBy)
 }
 
-func (r *Repo) insertSession(ctx context.Context, userID, impersonatedBy, ipHash, userAgent string, now time.Time) (string, time.Time, error) {
+func (r *Repo) insertSession(ctx context.Context, in webx.SessionCreate, impersonatedBy string) (string, time.Time, error) {
 	token, err := webx.MintToken()
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	exp := now.Add(r.cfg.SessionTTL)
-	abs := now.Add(r.cfg.AbsoluteTTL)
+	exp := in.Now.Add(r.cfg.SessionTTL)
+	abs := in.Now.Add(r.cfg.AbsoluteTTL)
+	var confirmedAt any
+	if in.PasswordConfirmed {
+		confirmedAt = in.Now
+	}
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO session (user_id, token_hash, ip_hash, user_agent, expires_at, absolute_expires_at, created_at, last_seen_at, impersonated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)`,
-		userID, webx.HashToken(token), nullIfEmpty(ipHash), nullIfEmpty(userAgent), exp, abs, now, nullIfEmpty(impersonatedBy))
+		INSERT INTO session (user_id, token_hash, ip_hash, user_agent, expires_at, absolute_expires_at, created_at, last_seen_at, impersonated_by, password_confirmed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)`,
+		in.UserID, webx.HashToken(token), nullIfEmpty(in.IPHash), nullIfEmpty(in.UserAgent), exp, abs, in.Now, nullIfEmpty(impersonatedBy), confirmedAt)
 	if err != nil {
 		return "", time.Time{}, mapErr(err)
 	}
@@ -40,8 +46,9 @@ func (r *Repo) insertSession(ctx context.Context, userID, impersonatedBy, ipHash
 func (r *Repo) VerifySession(ctx context.Context, token string, now time.Time) (*webx.Principal, error) {
 	var p webx.Principal
 	var sessionID string
+	var confirmedAt *time.Time
 	err := r.pool.QueryRow(ctx, `
-		SELECT s.id, u.id, u.email, u.display_name, u.is_platform_admin, COALESCE(s.impersonated_by::text, '')
+		SELECT s.id, u.id, u.email, u.display_name, u.is_platform_admin, COALESCE(s.impersonated_by::text, ''), s.password_confirmed_at
 		FROM session s
 		JOIN "user" u ON u.id = s.user_id
 		WHERE s.token_hash = $1
@@ -51,7 +58,7 @@ func (r *Repo) VerifySession(ctx context.Context, token string, now time.Time) (
 		  AND u.status = 'active'
 		  AND u.tokens_valid_after < s.created_at`,
 		webx.HashToken(token), now).
-		Scan(&sessionID, &p.UserID, &p.Email, &p.Name, &p.IsPlatformAdmin, &p.ImpersonatedBy)
+		Scan(&sessionID, &p.UserID, &p.Email, &p.Name, &p.IsPlatformAdmin, &p.ImpersonatedBy, &confirmedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -61,7 +68,24 @@ func (r *Repo) VerifySession(ctx context.Context, token string, now time.Time) (
 	}
 	p.Source = webx.SourceSession
 	p.SessionID = sessionID
+	if confirmedAt != nil {
+		p.PasswordConfirmedAt = *confirmedAt
+	}
 	return &p, nil
+}
+
+func (r *Repo) ConfirmSessionPassword(ctx context.Context, sessionID string, now time.Time) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE session SET password_confirmed_at = $2
+		WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2`,
+		sessionID, now)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return app.ErrNotFound
+	}
+	return nil
 }
 
 func (r *Repo) RenewSession(ctx context.Context, token string, now time.Time) (time.Time, bool, error) {

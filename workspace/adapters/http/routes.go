@@ -18,20 +18,48 @@ type Deps struct {
 	Members MemberChecker
 
 	Authz *authz.Authorizer
+
+	// StepUp, when non-nil, wraps the domain's destructive operations (delete
+	// workspace, transfer ownership). Products mount
+	// webx.RequireRecentAuth(maxAge) here — requiring a fresh password
+	// confirmation for destructive actions is a product policy, the domain
+	// only marks which operations are destructive. Nil = no step-up.
+	StepUp func(http.Handler) http.Handler
 }
 
 func (d Deps) guard(perm authz.Permission, fn func(w http.ResponseWriter, r *http.Request, p *webx.Principal)) http.HandlerFunc {
 	return authz.Require(d.Authz, perm)(webx.P(fn))
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+// sensitive guards a destructive operation. The permission check is outermost
+// (a role denial is terminal), the step-up challenge inner (recoverable:
+// confirm password, retry) — an unauthorized member must not be teased
+// through a reauthentication for an action they can never perform.
+func (d Deps) sensitive(perm authz.Permission, fn func(w http.ResponseWriter, r *http.Request, p *webx.Principal)) http.HandlerFunc {
+	var h http.Handler = webx.P(fn)
+	if d.StepUp != nil {
+		h = d.StepUp(h)
+	}
+	return authz.Require(d.Authz, perm)(http.HandlerFunc(h.ServeHTTP))
+}
+
+// subroutePrefix is the URL prefix Mount strips before delegating to the
+// workspace sub-mux. Mount keeps the literal string inside StripPrefix
+// (tools/check_api.py stitches the sub-mux's relative routes back to absolute
+// paths by matching that literal); this constant exists so SubrouteInfos
+// applies exactly the same prefix — keep the two in lockstep.
+const subroutePrefix = "/api/workspaces"
+
+func Mount(mux webx.Router, d Deps) {
 	mux.HandleFunc("GET /api/workspaces", d.listMine)
 	mux.HandleFunc("POST /api/workspaces", d.create)
 
 	wsCtx := d.workspaceCtx
 	mux.Handle("PATCH /api/workspaces/{workspaceId}", wsCtx(http.HandlerFunc(d.guard("workspace:update", d.renameWorkspace))))
-	mux.Handle("DELETE /api/workspaces/{workspaceId}", wsCtx(http.HandlerFunc(d.guard("workspace:delete", d.deleteWorkspace))))
+	mux.Handle("DELETE /api/workspaces/{workspaceId}", wsCtx(d.sensitive("workspace:delete", d.deleteWorkspace)))
 
+	// The StripPrefix literal below is subroutePrefix — kept inline because
+	// tools/check_api.py reconstructs the sub-mux's absolute paths from it.
 	mux.Handle("/api/workspaces/{workspaceId}/", d.workspaceCtx(http.StripPrefix("/api/workspaces", workspaceSubroutes(d))))
 
 	mux.HandleFunc("GET /api/invitations/mine", d.myInvitations)
@@ -40,13 +68,20 @@ func Mount(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("POST /api/share-links/redeem", d.redeemShareLink)
 }
 
-func workspaceSubroutes(d Deps) http.Handler {
-	sub := http.NewServeMux()
+// workspaceSubroutes builds the recording sub-mux of workspace-scoped routes.
+// Patterns are relative (/{id}/...): the caller strips subroutePrefix before
+// delegating, and SubrouteInfos stitches the prefix back for enumeration.
+func workspaceSubroutes(d Deps) *webx.Mux {
+	sub := webx.NewMux()
 	sub.HandleFunc("GET /{id}/members", d.guard("members:read", d.listMembers))
 	sub.HandleFunc("PATCH /{id}/members/{userId}", d.guard("members:write", d.updateMember))
 	sub.HandleFunc("DELETE /{id}/members/{userId}", d.guard("members:remove", d.removeMember))
 
-	sub.HandleFunc("POST /{id}/transfer-ownership", d.guard("workspace:read", d.transferOwnership))
+	sub.HandleFunc("GET /{id}/roles", d.guard("roles:manage", d.listRoles))
+	sub.Handle("PUT /{id}/roles/{role}", d.sensitive("roles:manage", d.setRolePerms))
+	sub.Handle("DELETE /{id}/roles/{role}", d.sensitive("roles:manage", d.resetRolePerms))
+
+	sub.Handle("POST /{id}/transfer-ownership", d.sensitive("workspace:read", d.transferOwnership))
 
 	sub.HandleFunc("POST /{id}/leave", d.guard("workspace:read", d.leaveWorkspace))
 	sub.HandleFunc("GET /{id}/invitations", d.guard("invites:read", d.listInvitations))
@@ -56,6 +91,24 @@ func workspaceSubroutes(d Deps) http.Handler {
 	sub.HandleFunc("POST /{id}/share-links", d.guard("members:invite", d.createShareLink))
 	sub.HandleFunc("DELETE /{id}/share-links/{linkId}", d.guard("members:invite", d.revokeShareLink))
 	return sub
+}
+
+// SubrouteInfos returns the absolute routes the sub-mux serves once Mount
+// mounts it under "/api/workspaces/{workspaceId}/": subroutePrefix applied to
+// each recorded sub-mux pattern. The root router records only the subtree
+// mount (no method prefix — not an endpoint), so runtime route enumeration —
+// e.g. a contract test comparing mounted routes against the OpenAPI spec —
+// must consult this list in addition to the root Mux.Routes(). It shares the
+// registration with the serving path (workspaceSubroutes), so the two cannot
+// drift; the zero-value Deps only produce handler closures that are never
+// invoked here.
+func SubrouteInfos() []webx.RouteInfo {
+	infos := workspaceSubroutes(Deps{}).Routes()
+	for i := range infos {
+		infos[i].Path = subroutePrefix + infos[i].Path
+		infos[i].Pattern = subroutePrefix + infos[i].Pattern
+	}
+	return infos
 }
 
 func (d Deps) workspaceCtx(next http.Handler) http.Handler {

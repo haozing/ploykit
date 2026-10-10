@@ -25,7 +25,7 @@ func (d Deps) guard(perm authz.Permission, next http.Handler) http.Handler {
 	return authz.Require(d.Authz, perm)(next.ServeHTTP)
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	wsMW := d.WsMW
 	if wsMW == nil {
 		wsMW = func(next http.Handler) http.Handler { return next }

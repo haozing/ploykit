@@ -21,7 +21,7 @@ func (d WsOpsDeps) mounted(next func(w http.ResponseWriter, r *http.Request, p *
 	}
 }
 
-func MountWsOps(mux *http.ServeMux, d WsOpsDeps) {
+func MountWsOps(mux webx.Router, d WsOpsDeps) {
 	admin := (&Deps{}).requireAdmin
 	mux.Handle("GET /api/admin/workspaces/{id}", admin(d.mounted(d.wsDetail)))
 	mux.Handle("PATCH /api/admin/workspaces/{id}/members/{uid}", admin(d.mounted(d.wsMemberRole)))

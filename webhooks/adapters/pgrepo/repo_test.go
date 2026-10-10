@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/migrations"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/webhooks/app"
 )
 
@@ -29,7 +29,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("connect: %v", err)
 	}
 
-	if err := pgm.Up(ctx, pool, migrations.FS, "."); err != nil {
+	if err := pgmigrate.Up(ctx, pool, migrations.FS, "."); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(pool.Close)

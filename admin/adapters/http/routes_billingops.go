@@ -23,7 +23,7 @@ func (d BillingOpsDeps) mounted(next func(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func MountBillingOps(mux *http.ServeMux, d BillingOpsDeps) {
+func MountBillingOps(mux webx.Router, d BillingOpsDeps) {
 	admin := (&Deps{}).requireAdmin
 	mux.Handle("GET /api/admin/plans", admin(d.mounted(d.listPlans)))
 	mux.Handle("GET /api/admin/orders", admin(d.mounted(d.listOrders)))

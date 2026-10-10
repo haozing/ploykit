@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/platform/pg"
+	"github.com/haozing/ploykit/platform/webx"
 )
 
 func TestRenewSession_ReleasesConnectionAndReturnsExp(t *testing.T) {
@@ -27,7 +28,7 @@ func TestRenewSession_ReleasesConnectionAndReturnsExp(t *testing.T) {
 	u, err := repo.UpsertUserByEmail(ctx, email, time.Now().UTC())
 	require.NoError(t, err)
 
-	token, _, err := repo.CreateSession(ctx, u.ID, "h", "ua", time.Now().UTC().Add(-6*24*time.Hour))
+	token, _, err := repo.CreateSession(ctx, webx.SessionCreate{UserID: u.ID, IPHash: "h", UserAgent: "ua", Now: time.Now().UTC().Add(-6 * 24 * time.Hour)})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = repo.RevokeSession(ctx, token) })
 

@@ -18,8 +18,8 @@ import (
 )
 
 type SessionMinter interface {
-	CreateSession(ctx context.Context, userID, ipHash, userAgent string, now time.Time) (token string, exp time.Time, err error)
-	CreateImpersonatedSession(ctx context.Context, userID, impersonatedBy, ipHash, userAgent string, now time.Time) (token string, exp time.Time, err error)
+	CreateSession(ctx context.Context, in webx.SessionCreate) (token string, exp time.Time, err error)
+	CreateImpersonatedSession(ctx context.Context, userID, impersonatedBy, ipHash, userAgent string, now time.Time) (string, time.Time, error)
 }
 
 type AuditRecorder interface {
@@ -38,7 +38,7 @@ type Deps struct {
 	Hooks *admin.Hooks
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	admin := d.requireAdmin
 
 	mux.Handle("GET /api/admin/stats", admin(d.stats))

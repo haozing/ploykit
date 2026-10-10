@@ -13,7 +13,7 @@ import (
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/notify/app"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 )
 
 func prefTestDB(t *testing.T) (*Repo, *pgxpool.Pool, func()) {
@@ -25,7 +25,7 @@ func prefTestDB(t *testing.T) (*Repo, *pgxpool.Pool, func()) {
 	ctx := context.Background()
 	db, err := pg.Connect(ctx, dsn, pg.Options{})
 	require.NoError(t, err)
-	require.NoError(t, pgm.Up(ctx, db.Pool(), migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(ctx, db.Pool(), migrations.FS, "."))
 	repo := New(db.Pool())
 	return repo, db.Pool(), db.Close
 }

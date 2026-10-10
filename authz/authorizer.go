@@ -69,6 +69,10 @@ func New(catalog *Catalog, builtin *RoleSet, opts ...Option) *Authorizer {
 
 func (a *Authorizer) Catalog() *Catalog { return a.catalog }
 
+// BuiltinPerms returns the built-in (non-overridden) permission set of a
+// role, sorted — used by role-config management to show defaults.
+func (a *Authorizer) BuiltinPerms(role string) []Permission { return a.builtin.Perms(role) }
+
 func (a *Authorizer) Can(p *webx.Principal, perm Permission) bool {
 	return a.CanIn(context.Background(), p, perm)
 }

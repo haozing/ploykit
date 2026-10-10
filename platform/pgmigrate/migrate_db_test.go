@@ -1,4 +1,4 @@
-package pgm
+package pgmigrate
 
 import (
 	"context"

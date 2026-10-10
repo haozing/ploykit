@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -78,8 +79,20 @@ func (f *fakeRepo) CreateUserWithPassword(ctx context.Context, email, passwordHa
 	return f.CreateUserWithPasswordTx(ctx, nil, email, passwordHash, displayName)
 }
 
-func (f *fakeRepo) CreateSession(_ context.Context, _, _, _ string, _ time.Time) (string, time.Time, error) {
+func (f *fakeRepo) CreateSession(_ context.Context, in webx.SessionCreate) (string, time.Time, error) {
+	if in.PasswordConfirmed {
+		f.confirmedSessions = append(f.confirmedSessions, in.UserID)
+	}
 	return "sess-token", frozen.Add(time.Hour), nil
+}
+
+func (f *fakeRepo) ConfirmSessionPassword(_ context.Context, sessionID string, at time.Time) error {
+	if f.confirmNotFound {
+		return app.ErrNotFound
+	}
+	f.confirmedAt = at
+	f.confirmedSessionID = sessionID
+	return nil
 }
 
 func (f *fakeRepo) VerifySession(_ context.Context, _ string, _ time.Time) (*webx.Principal, error) {
@@ -401,4 +414,67 @@ func TestRegisterDisplayNameLimit_FT28(t *testing.T) {
 	res, err := svc.Register(t.Context(), "iph", "ua", "ft28-ok@example.com", "StrongPass123!", dn)
 	require.NoError(t, err)
 	assert.Equal(t, strings.Repeat("世", 100), res.User.DisplayName, "100 rune 边界放行且 trim 归一")
+}
+
+func TestConfirmPasswordStepUp(t *testing.T) {
+	hash, err := app.HashPassword("StrongPass123!")
+	require.NoError(t, err)
+	u := seedUser("u1", "u1@example.com", false)
+	u.PasswordHash = hash
+
+	t.Run("密码正确 → 盖戳当前会话并返回确认时间", func(t *testing.T) {
+		f, m := newFakeRepo(u), &fakeMail{}
+		svc := newSessionSvc(f, m)
+		p := &webx.Principal{UserID: "u1", SessionID: "sess-9", Source: webx.SourceSession}
+		at, err := svc.ConfirmPassword(t.Context(), "iph", p, "StrongPass123!")
+		require.NoError(t, err)
+		assert.False(t, at.IsZero())
+		assert.Equal(t, "sess-9", f.confirmedSessionID)
+		assert.Equal(t, frozen, f.confirmedAt)
+	})
+
+	t.Run("密码错误 → 401 且不盖戳、记失败尝试", func(t *testing.T) {
+		f, m := newFakeRepo(u), &fakeMail{}
+		svc := newSessionSvc(f, m)
+		p := &webx.Principal{UserID: "u1", SessionID: "sess-9", Source: webx.SourceSession}
+		_, err := svc.ConfirmPassword(t.Context(), "iph", p, "WrongPass123!")
+		var we *webx.Error
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusUnauthorized, we.Status)
+		assert.Empty(t, f.confirmedSessionID)
+	})
+
+	t.Run("会话已失效(NotFound) → 401", func(t *testing.T) {
+		f, m := newFakeRepo(u), &fakeMail{}
+		f.confirmNotFound = true
+		svc := newSessionSvc(f, m)
+		p := &webx.Principal{UserID: "u1", SessionID: "sess-dead", Source: webx.SourceSession}
+		_, err := svc.ConfirmPassword(t.Context(), "iph", p, "StrongPass123!")
+		var we *webx.Error
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusUnauthorized, we.Status)
+	})
+}
+
+func TestSessionBornConfirmed(t *testing.T) {
+	hash, err := app.HashPassword("StrongPass123!")
+	require.NoError(t, err)
+	u := seedUser("u1", "u1@example.com", false)
+	u.PasswordHash = hash
+
+	t.Run("密码登录/注册/改密的会话天生已确认", func(t *testing.T) {
+		f, m := newFakeRepo(u), &fakeMail{}
+		svc := newSessionSvc(f, m)
+		_, err := svc.LoginWithPassword(t.Context(), "iph", "ua", "u1@example.com", "StrongPass123!")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"u1"}, f.confirmedSessions)
+	})
+
+	t.Run("验证码登录的会话不确认", func(t *testing.T) {
+		f, m := newFakeRepo(u), &fakeMail{}
+		svc := newSessionSvc(f, m)
+		_, err := svc.CompleteThirdPartyLogin(t.Context(), "u1", false, "iph", "ua")
+		require.NoError(t, err)
+		assert.Empty(t, f.confirmedSessions, "第三方/验证码登录没有密码证明，不得天生确认")
+	})
 }

@@ -37,7 +37,7 @@ type AdminDeps struct {
 	Log *slog.Logger
 }
 
-func MountAdmin(mux *http.ServeMux, d AdminDeps) {
+func MountAdmin(mux webx.Router, d AdminDeps) {
 	if d.Guard == nil {
 		panic("settings: AdminDeps.Guard is required (platform admin closure)")
 	}

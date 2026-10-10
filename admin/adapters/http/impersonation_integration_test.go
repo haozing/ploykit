@@ -19,7 +19,7 @@ import (
 	auditrec "github.com/haozing/ploykit/audit"
 	identitypg "github.com/haozing/ploykit/identity/adapters/pgrepo"
 	"github.com/haozing/ploykit/migrations"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -33,7 +33,7 @@ func TestImpersonate_Integration(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 
-	_, err = pgm.New(pool, migrations.FS, ".").Up(ctx, 0)
+	_, err = pgmigrate.New(pool, migrations.FS, ".").Up(ctx, 0)
 	require.NoError(t, err, "迁移自举到最新")
 
 	suffix := uuid.NewString()[:12]

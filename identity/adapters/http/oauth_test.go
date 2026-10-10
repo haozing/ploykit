@@ -68,9 +68,9 @@ type fakeSessionStore struct {
 	lastUserID string
 }
 
-func (f *fakeSessionStore) CreateSession(_ context.Context, userID, _, _ string, _ time.Time) (string, time.Time, error) {
+func (f *fakeSessionStore) CreateSession(_ context.Context, in webx.SessionCreate) (string, time.Time, error) {
 	f.calls++
-	f.lastUserID = userID
+	f.lastUserID = in.UserID
 	return "sess-tok-1", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), nil
 }
 

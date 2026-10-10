@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,7 +55,7 @@ import (
 	logx "github.com/haozing/ploykit/platform/logx"
 	"github.com/haozing/ploykit/platform/metrics"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/pgpart"
 	"github.com/haozing/ploykit/platform/redactx"
 	"github.com/haozing/ploykit/platform/sealx"
@@ -109,6 +111,51 @@ func envInt(key string, def int) int {
 	return def
 }
 
+// masterSecretEnv optionally holds ONE master secret for the product; when
+// PLOYKIT_SEAL_KEY / IP_HASH_SECRET are unset, per-purpose keys are derived
+// from it via sealx.DeriveKey instead.
+const masterSecretEnv = "PLOYKIT_MASTER_SECRET"
+
+// resolvedSecrets is the outcome of resolving the credential-seal key and the
+// IP-hash salt from env (see resolveSecrets).
+type resolvedSecrets struct {
+	// SealKey is the credential-seal key; nil means "no seal key" (the None
+	// form: sealed writes are rejected, unsealed reads fail).
+	SealKey []byte
+	// SealFromMaster reports that SealKey was derived from PLOYKIT_MASTER_SECRET
+	// (for the boot log).
+	SealFromMaster bool
+	// IPHash is the resolved IP-hash salt; "" means no secret env applies and
+	// the caller keeps its production-fatal / dev-default policy.
+	IPHash string
+}
+
+// resolveSecrets resolves PLOYKIT_SEAL_KEY / IP_HASH_SECRET / the optional
+// PLOYKIT_MASTER_SECRET into the seal key and IP-hash salt. Per concern the
+// explicit env var always wins; otherwise the master secret fills in a
+// domain-derived value. With none of them set the result reproduces the
+// legacy behavior: no seal key, no IP-hash secret.
+func resolveSecrets(getenv func(string) string) (resolvedSecrets, error) {
+	var r resolvedSecrets
+	master := strings.TrimSpace(getenv(masterSecretEnv))
+	if v := strings.TrimSpace(getenv(sealx.EnvKey)); v != "" {
+		key, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return r, fmt.Errorf("%s is not valid base64: %w", sealx.EnvKey, err)
+		}
+		r.SealKey = key
+	} else if master != "" {
+		r.SealKey = sealx.DeriveKey(master, "credential-sealing")
+		r.SealFromMaster = true
+	}
+	if v := getenv("IP_HASH_SECRET"); v != "" {
+		r.IPHash = v
+	} else if master != "" {
+		r.IPHash = hex.EncodeToString(sealx.DeriveKey(master, "ip-hash"))
+	}
+	return r, nil
+}
+
 type mailerChannel interface {
 	identityapp.EmailSender
 	notifyapp.EmailSender
@@ -154,11 +201,11 @@ func main() {
 	pool := db.Pool()
 	defer db.Close()
 
-	if err := pgm.Up(ctx, pool, migrations.FS, "."); err != nil {
+	if err := pgmigrate.Up(ctx, pool, migrations.FS, "."); err != nil {
 		log.Error("framework migrate", "err", err)
 		os.Exit(1)
 	}
-	if err := pgm.Up(ctx, pool, productMigrations, "migrations"); err != nil {
+	if err := pgmigrate.Up(ctx, pool, productMigrations, "migrations"); err != nil {
 		log.Error("product migrate", "err", err)
 		os.Exit(1)
 	}
@@ -192,8 +239,13 @@ func main() {
 		return false
 	}()
 
-	if s := os.Getenv("IP_HASH_SECRET"); s != "" {
-		authCfg.IPHashSecret = s
+	resolved, err := resolveSecrets(os.Getenv)
+	if err != nil {
+		log.Error("secrets env invalid", "err", err)
+		os.Exit(1)
+	}
+	if resolved.IPHash != "" {
+		authCfg.IPHashSecret = resolved.IPHash
 	} else if production {
 		log.Error("IP_HASH_SECRET is required in production: IP fingerprint salt must not be a known default")
 		os.Exit(1)
@@ -271,10 +323,22 @@ func main() {
 		log.Info("oauth providers registered", "providers", oauthSvc.Names())
 	}
 
-	secrets, err := sealx.NewSecretsFromEnv()
-	if err != nil {
-		log.Error("PLOYKIT_SEAL_KEY invalid", "err", err)
-		os.Exit(1)
+	var secrets *sealx.Secrets
+	if resolved.SealKey != nil {
+		secrets, err = sealx.NewSecrets(resolved.SealKey)
+		if err != nil {
+			log.Error("seal key invalid", "err", err)
+			os.Exit(1)
+		}
+		if resolved.SealFromMaster {
+			log.Info("seal key derived from master secret", "env", masterSecretEnv, "domain", "credential-sealing")
+		}
+	} else {
+		secrets, err = sealx.NewSecretsFromEnv() // None form: warn + nil, nil (legacy behavior)
+		if err != nil {
+			log.Error("PLOYKIT_SEAL_KEY invalid", "err", err)
+			os.Exit(1)
+		}
 	}
 	fedOpts := []identityapp.FedOption{}
 	if secrets != nil {
@@ -387,7 +451,7 @@ func main() {
 		return emitter.Emit(ctx, tx, ev)
 	})
 
-	mux := http.NewServeMux()
+	mux := webx.NewMux() // recording mux: Routes() powers the runtime contract test (routes_contract_test.go)
 
 	metricsOn := env("PLOYKIT_METRICS_ENABLED", "true") != "false"
 	mnt := metrics.NewMount(metrics.Config{
@@ -407,7 +471,12 @@ func main() {
 	}
 	identityhttp.Mount(mux, idDeps)
 
-	wsDeps := workspacehttp.Deps{Svc: workspaces, Members: wsRepo, Authz: authorizer}
+	// Destructive workspace operations (delete / transfer ownership) require a
+	// password confirmation no older than 15 minutes — the reference wiring of
+	// webx step-up: RequireRecentAuth ⇄ POST /auth/confirm-password. The
+	// window is product policy: pick per mount site, there is no default.
+	wsDeps := workspacehttp.Deps{Svc: workspaces, Members: wsRepo, Authz: authorizer,
+		StepUp: webx.RequireRecentAuth(15 * time.Minute)}
 	workspacehttp.Mount(mux, wsDeps)
 
 	wsMW := workspacehttp.WorkspaceHeaderCtx(wsRepo)
@@ -661,6 +730,9 @@ func main() {
 		&webx.CSRFConfig{
 			Key:            webx.DeriveCSRFKey([]byte(sessCfg.SecretPepper)),
 			TrustedOrigins: []string{frontendHost},
+
+			// dev 放行回环任意端口：vite 端口漂移（5173→517x）不再全站写操作 403；生产必须精确枚举
+			TrustLocalhostAnyPort: !production,
 
 			ExemptPrefixes: []string{"/webhooks/billing/"},
 		}, authCfg.Secure)

@@ -54,7 +54,9 @@ func (d Deps) completeThirdPartySession(w http.ResponseWriter, r *http.Request, 
 		d.AuthCfg.SetSessionCookie(w, login.Token, login.Exp)
 		return true
 	}
-	token, exp, err := d.Sessions.CreateSession(r.Context(), res.UserID, d.ipHash(r), r.UserAgent(), time.Now().UTC())
+	token, exp, err := d.Sessions.CreateSession(r.Context(), webx.SessionCreate{
+		UserID: res.UserID, IPHash: d.ipHash(r), UserAgent: r.UserAgent(), Now: time.Now().UTC(),
+	})
 	if err != nil {
 		return false
 	}
@@ -189,6 +191,24 @@ func (d Deps) changePassword(w http.ResponseWriter, r *http.Request, p *webx.Pri
 	}
 	d.AuthCfg.SetSessionCookie(w, res.Token, res.Exp)
 	webx.WriteJSON(w, http.StatusOK, map[string]any{"expires_at": res.Exp})
+}
+
+// confirmPassword is the second half of the step-up protocol: after a
+// 403 E_REAUTH_REQUIRED (webx.RequireRecentAuth) the client re-verifies the
+// password here, then retries the original request.
+func (d Deps) confirmPassword(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	var req struct {
+		Password string `json:"password"`
+	}
+	if !webx.DecodeJSON(w, r, &req) {
+		return
+	}
+	confirmedAt, err := d.SessionsSvc.ConfirmPassword(r.Context(), d.ipHash(r), p, req.Password)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]any{"password_confirmed_at": confirmedAt})
 }
 
 func (d Deps) listSessions(w http.ResponseWriter, r *http.Request, p *webx.Principal) {

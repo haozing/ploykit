@@ -55,6 +55,11 @@ const (
 	CodeTimeout         = "E_TIMEOUT"
 	CodePayloadTooLarge = "E_PAYLOAD_TOO_LARGE"
 	CodeUnavailable     = "E_UNAVAILABLE"
+
+	// CodeReauthRequired is the step-up challenge (RequireRecentAuth): the
+	// caller is authenticated but the password confirmation is stale — confirm
+	// via POST /auth/confirm-password, then retry. 403, never 401.
+	CodeReauthRequired = "E_REAUTH_REQUIRED"
 )
 
 func ErrUnauthenticated(w http.ResponseWriter, msg string) {

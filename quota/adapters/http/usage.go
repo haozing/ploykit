@@ -24,7 +24,7 @@ type Deps struct {
 
 type AccountUsageFunc func(ctx context.Context, userID string) (int64, error)
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	h := http.Handler(webx.P(d.usage))
 	if d.WsMW != nil {
 		h = d.WsMW(h)

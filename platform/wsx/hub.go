@@ -14,9 +14,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
 	"github.com/haozing/ploykit/platform/ids"
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 const (
@@ -30,7 +30,11 @@ const (
 
 	maxSubscribeIDLen = 128
 
-	defaultPATPrefix = "tk_"
+	// DefaultPATPrefix is the fallback PAT token prefix for Hub.PATPrefix when
+	// empty. It aliases webx.DefaultPATPrefix — the canonical constant of the
+	// PAT chain (identity/domain mints, webx parses, wsx authenticates the
+	// first WS frame); the internal/arch parity test pins them together.
+	DefaultPATPrefix = webx.DefaultPATPrefix
 )
 
 var (
@@ -339,7 +343,7 @@ func sameOrigin(orig, reqHost string) bool {
 
 func (h *Hub) patPrefix() string {
 	if h.PATPrefix == "" {
-		return defaultPATPrefix
+		return DefaultPATPrefix
 	}
 	return h.PATPrefix
 }

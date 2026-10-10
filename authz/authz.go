@@ -1,5 +1,7 @@
 package authz
 
+import "sort"
+
 type Permission string
 
 const (
@@ -28,11 +30,13 @@ func (c *Catalog) RegisterWithDesc(p Permission, desc string) { c.descs[p] = des
 
 func (c *Catalog) Has(p Permission) bool { _, ok := c.descs[p]; return ok }
 
+// List returns every registered permission, sorted lexically.
 func (c *Catalog) List() []Permission {
 	out := make([]Permission, 0, len(c.descs))
 	for p := range c.descs {
 		out = append(out, p)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
 }
 
@@ -95,6 +99,21 @@ func (r *RoleSet) has(role string, perm Permission) bool {
 
 	_, ok = set[Permission(domainOf(perm)+":*")]
 	return ok
+}
+
+// Perms returns the role's permission set sorted lexically (nil for an
+// unknown role). The read side of role-config management UIs.
+func (r *RoleSet) Perms(role string) []Permission {
+	set, ok := r.roles[role]
+	if !ok {
+		return nil
+	}
+	out := make([]Permission, 0, len(set))
+	for p := range set {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 func domainOf(p Permission) string {

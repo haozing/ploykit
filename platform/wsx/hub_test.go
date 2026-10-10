@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/haozing/ploykit/internal/contract/wswire"
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/platform/wswire"
 )
 
 const testWS = "11111111-1111-1111-1111-111111111111"

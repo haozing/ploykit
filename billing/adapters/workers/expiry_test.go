@@ -17,7 +17,7 @@ import (
 	"github.com/haozing/ploykit/billing/app"
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
-	pgm "github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -30,7 +30,7 @@ func workerTestDB(t *testing.T) (*pgrepo.Repo, *pgxpool.Pool) {
 	ctx := context.Background()
 	db, err := pg.Connect(ctx, dsn, pg.Options{})
 	require.NoError(t, err)
-	require.NoError(t, pgm.Up(ctx, db.Pool(), migrations.FS, "."))
+	require.NoError(t, pgmigrate.Up(ctx, db.Pool(), migrations.FS, "."))
 	t.Cleanup(func() { db.Close() })
 	return pgrepo.New(db.Pool()), db.Pool()
 }

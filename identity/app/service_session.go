@@ -92,7 +92,9 @@ func (s *SessionService) CompleteThirdPartyLogin(ctx context.Context, userID str
 	if err != nil {
 		return nil, err
 	}
-	token, exp, err := s.repo.CreateSession(ctx, user.ID, ipHash, userAgent, s.now())
+	token, exp, err := s.repo.CreateSession(ctx, webx.SessionCreate{
+		UserID: user.ID, IPHash: ipHash, UserAgent: userAgent, Now: s.now(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +222,9 @@ func (s *SessionService) VerifyCode(ctx context.Context, ipHash, userAgent, rawE
 	if user.Status != "active" {
 		return nil, webx.NewForbidden("account disabled")
 	}
-	token, exp, err := s.repo.CreateSession(ctx, user.ID, ipHash, userAgent, s.now())
+	token, exp, err := s.repo.CreateSession(ctx, webx.SessionCreate{
+		UserID: user.ID, IPHash: ipHash, UserAgent: userAgent, Now: s.now(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +285,10 @@ func (s *SessionService) Register(ctx context.Context, ipHash, userAgent, rawEma
 		return nil, err
 	}
 
-	token, exp, err := s.repo.CreateSession(ctx, user.ID, ipHash, userAgent, s.now())
+	token, exp, err := s.repo.CreateSession(ctx, webx.SessionCreate{
+		UserID: user.ID, IPHash: ipHash, UserAgent: userAgent, Now: s.now(),
+		PasswordConfirmed: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +321,10 @@ func (s *SessionService) LoginWithPassword(ctx context.Context, ipHash, userAgen
 		s.fireLoginFailed(ctx, email, ipHash)
 		return nil, webx.NewUnauthenticated("invalid credentials")
 	}
-	token, exp, err := s.repo.CreateSession(ctx, user.ID, ipHash, userAgent, s.now())
+	token, exp, err := s.repo.CreateSession(ctx, webx.SessionCreate{
+		UserID: user.ID, IPHash: ipHash, UserAgent: userAgent, Now: s.now(),
+		PasswordConfirmed: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -326,6 +336,36 @@ func (s *SessionService) LoginWithPassword(ctx context.Context, ipHash, userAgen
 		}
 	}
 	return &LoginResult{Token: token, Exp: exp, User: user}, nil
+}
+
+// ConfirmPassword re-verifies the caller's password and stamps the current
+// session (step-up). It backs the two-phase protocol of
+// webx.RequireRecentAuth: 403 E_REAUTH_REQUIRED → confirm here → retry the
+// original request. Failed confirmations go through the same attempt limiter
+// as login (a hijacked session must not brute-force the password).
+func (s *SessionService) ConfirmPassword(ctx context.Context, ipHash string, p *webx.Principal, password string) (time.Time, error) {
+	user, err := s.repo.GetUser(ctx, p.UserID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if limited, err := s.tooManyAttempts(ctx, ipHash, user.Email); err != nil {
+		return time.Time{}, err
+	} else if limited {
+		return time.Time{}, webx.NewRateLimited("too many attempts, retry later")
+	}
+	if password == "" || !VerifyPassword(password, user.PasswordHash) {
+		_ = s.repo.RecordAttempt(ctx, ipHash, user.Email, false, s.now())
+		s.fireLoginFailed(ctx, user.Email, ipHash)
+		return time.Time{}, webx.NewUnauthenticated("invalid password")
+	}
+	now := s.now()
+	if err := s.repo.ConfirmSessionPassword(ctx, p.SessionID, now); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return time.Time{}, webx.NewUnauthenticated("session no longer valid")
+		}
+		return time.Time{}, err
+	}
+	return now, nil
 }
 
 func (s *SessionService) ChangePassword(ctx context.Context, p *webx.Principal, oldPassword, newPassword string) (*LoginResult, error) {
@@ -354,7 +394,10 @@ func (s *SessionService) ChangePassword(ctx context.Context, p *webx.Principal, 
 	if err := s.repo.RevokeAllUserSessions(ctx, user.ID); err != nil {
 		return nil, err
 	}
-	token, exp, err := s.repo.CreateSession(ctx, user.ID, "", "", s.now())
+	token, exp, err := s.repo.CreateSession(ctx, webx.SessionCreate{
+		UserID: user.ID, Now: s.now(),
+		PasswordConfirmed: true,
+	})
 	if err != nil {
 		return nil, err
 	}

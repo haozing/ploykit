@@ -13,7 +13,7 @@ type Deps struct {
 	Svc *app.NotifyService
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 	mux.HandleFunc("GET /api/notifications", webx.P(d.handleInbox))
 	mux.HandleFunc("GET /api/notifications/badge", webx.P(d.handleBadge))
 	mux.HandleFunc("POST /api/notifications/{id}/read", webx.P(d.handleMarkRead))

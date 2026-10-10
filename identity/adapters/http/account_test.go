@@ -36,6 +36,10 @@ type fakeRepo struct {
 	softDeleted     bool
 	softDeletedID   string
 
+	confirmedSessionID string
+	confirmedAt        time.Time
+	attempts           int
+
 	updatedProfile [3]string
 }
 

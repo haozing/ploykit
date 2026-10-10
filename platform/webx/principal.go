@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Source string
@@ -93,6 +94,21 @@ type Principal struct {
 	IsPlatformAdmin bool
 
 	ImpersonatedBy string
+
+	// PasswordConfirmedAt records when the caller last proved the password for
+	// this session: a password login / registration / password change births
+	// the session already confirmed, and POST /auth/confirm-password (step-up)
+	// re-stamps it later. Zero = never proved (code login, third-party login,
+	// impersonation, PAT). Consumed by RequireRecentAuth.
+	PasswordConfirmedAt time.Time
+}
+
+// PasswordConfirmedWithin reports whether the password confirmation is fresh
+// enough for a step-up window of maxAge (never-confirmed and future-dated
+// stamps both fail).
+func (p *Principal) PasswordConfirmedWithin(maxAge time.Duration, now time.Time) bool {
+	at := p.PasswordConfirmedAt
+	return !at.IsZero() && !at.After(now) && !at.Before(now.Add(-maxAge))
 }
 
 type principalKey struct{}

@@ -34,7 +34,7 @@ func Routes(d Deps) http.Handler {
 	return webx.Authenticate(&d.AuthCfg, d.Sessions, d.PATs)(mux)
 }
 
-func Mount(mux *http.ServeMux, d Deps) {
+func Mount(mux webx.Router, d Deps) {
 
 	mux.HandleFunc("POST /auth/send-code", d.handleSendCode)
 	mux.HandleFunc("POST /auth/verify-code", d.handleVerifyCode)
@@ -57,6 +57,7 @@ func Mount(mux *http.ServeMux, d Deps) {
 	mux.HandleFunc("PATCH /auth/me", d.requireAuthFunc(d.updateMe))
 	mux.HandleFunc("DELETE /auth/me", webx.RequireHuman(d.handle(d.deleteMe)))
 	mux.HandleFunc("POST /auth/change-password", webx.RequireHuman(d.handle(d.changePassword)))
+	mux.HandleFunc("POST /auth/confirm-password", webx.RequireHuman(d.handle(d.confirmPassword)))
 	mux.HandleFunc("GET /auth/sessions", webx.RequireHuman(d.handle(d.listSessions)))
 	mux.HandleFunc("DELETE /auth/sessions", webx.RequireHuman(d.handle(d.revokeAllSessions)))
 	mux.HandleFunc("DELETE /auth/sessions/{sessionId}", webx.RequireHuman(d.handle(d.revokeSession)))

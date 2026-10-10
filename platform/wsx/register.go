@@ -1,6 +1,6 @@
 package wsx
 
-import "github.com/haozing/ploykit/internal/contract/wswire"
+import "github.com/haozing/ploykit/platform/wswire"
 
 func RegisterScope(name string) error { return wswire.RegisterScope(name) }
 
