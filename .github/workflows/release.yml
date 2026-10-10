@@ -38,12 +38,16 @@ jobs:
       # Skip packages whose current version is already on the registry —
       # a tag only republishes what actually bumped.
       - run: |
+          set -o pipefail
           for pkg in client runtime hooks ui; do
             v=$(node -p "require('./packages/'$pkg'/package.json').version")
             if [ "$(npm view @ploykit/$pkg version 2>/dev/null)" = "$v" ]; then
               echo "@ploykit/$pkg@$v already published — skipping"
             else
               echo "publishing @ploykit/$pkg@$v"
-              npm publish -w @ploykit/$pkg --access public --provenance
+              if ! npm publish -w @ploykit/$pkg --access public --provenance 2>&1 | tee /tmp/pub-$pkg.log; then
+                grep -iE 'npm error|ENEEDAUTH|E403|E404|EPUBLISHCONFLICT|not found|denied' /tmp/pub-$pkg.log | sed 's/^/::error::/' | head -10
+                exit 1
+              fi
             fi
           done
