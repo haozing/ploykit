@@ -39,5 +39,6 @@ Semantics quick reference: Transactional = returning an error rolls back the ent
 | Surface | Source of truth |
 |---|---|
 | HTTP endpoints | docs/openapi.yaml (drift guarded by tools/check_api.py) |
-| Frontend components / hooks | packages/ui/src/index.ts, packages/client/src/index.ts |
+| Frontend components / hooks | packages/ui/src/index.ts, packages/client/src/index.ts, packages/hooks/src/index.ts |
+| audit Recorder (Record fire-and-forget / **RecordTx in-transaction**; same SQL source) | audit/audit.go godoc |
 | Platform packages | godoc of each platform/<pkg> package |

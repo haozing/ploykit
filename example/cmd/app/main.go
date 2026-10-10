@@ -373,6 +373,10 @@ func main() {
 
 	wk := workers.NewWorkers(log)
 
+	if err := events.Migrate(ctx, pool); err != nil {
+		log.Error("events substrate migrate", "err", err)
+		os.Exit(1)
+	}
 	emitter, err := events.New(pool, wk)
 	if err != nil {
 		log.Error("events substrate", "err", err)

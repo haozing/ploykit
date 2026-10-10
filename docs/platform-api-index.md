@@ -108,6 +108,7 @@
 | ParseViteManifest | `ParseViteManifest(data []byte, entryKey string) (ViteAssets, error)` | Parses vite manifest.json for hydration assets (empty entryKey = "index.html") |
 | ViteBuildID / OutputVersion | `ViteBuildID(data []byte) string`; `OutputVersion` const | Build identifier = sha256 of (`OutputVersion` + manifest): a frontend rebuild or a renderer-output change both rotate the ID, so caches never survive either |
 | ViteAssets | `{CSS []string, JS []string}` | The data source for the template injection slots {{CSS_LINKS}}/{{HYDRATE_SCRIPT}} |
+| RenderOnce | `RenderOnce(ctx, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets) (CacheEntry, error)` | **一次性渲染入口**：单个页面 → 完整 HTML（不经缓存/HTTP 层），与预渲染/handler 未命中/缓存回填共用同一组装；草稿预览、邮件合成、调试直接调用，语义与预渲染管线一致（props 规范化、空输出与 <title> 校验） |
 
 ### Engine and runtime
 
@@ -156,7 +157,9 @@
 |---|---|---|
 | Event | `Event{Kind, WorkspaceID, Payload, IDempotencyKey}` | One business event pending delivery (at-least-once) |
 | New | `New(pool, wks *workers.Workers, opts ...Option) (*Emitter, error)`; wks=nil = emit-only, no consuming | Assembles the River client and optionally attaches it to the workers registry |
+| Migrate | `Migrate(ctx, pool *pgxpool.Pool) error` | **River schema bootstrap**（river_job 等作业表，幂等）：产品启动序列在 events.New 之后、workers.Start 之前调用一次；不并入 ploykit migrations（river schema 归属其库版本序列）。跳过它的产品首个事务事件即报 relation "river_job" does not exist |
 | Emitter.Emit | `Emit(ctx, tx pgx.Tx, ev Event, opts ...river.InsertOpts) error` | **Enqueues inside the caller's transaction** (outbox semantics: commit guarantees delivery, rollback dies together); a returned error must roll back the entire transaction |
+| Emitter.EmitAt | `EmitAt(ctx, tx pgx.Tx, ev Event, at time.Time) error` | 一次性定时投递（river ScheduledAt 的类型化糖）：未来某刻做一件事用它；周期计划仍走 schedule 域 |
 | Subscribe | `Subscribe(kind string, h Handler)` | Registers subscriptions at assembly time; panics on registration after worker start / duplicate registration of the same kind; **idempotency is the subscriber's contract** |
 | Handler / Option | `func(ctx, Event) error` (error → exponential backoff retry; **a failed final attempt escalates to Error-level logging** — discarded dead-letters remain visible in the logs; same-kind events may run concurrently (MaxWorkers=10), so handlers must be thread-safe); `Option func(*river.Config)` as the escape hatch | Subscription signature and River configuration customization |
 | QueueEvents | The `"events"` constant | The dedicated event queue, isolated from the default queue of product-built River clients |

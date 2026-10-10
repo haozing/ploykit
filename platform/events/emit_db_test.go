@@ -12,8 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/riverqueue/river/rivermigrate"
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/platform/ids"
@@ -42,10 +40,7 @@ func newScratchPool(t *testing.T) *pgxpool.Pool {
 	pool, err := pgxpool.New(ctx, u.String())
 	require.NoError(t, err)
 
-	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
-	require.NoError(t, err)
-	_, err = migrator.Migrate(ctx, rivermigrate.DirectionUp, nil)
-	require.NoError(t, err)
+	require.NoError(t, Migrate(ctx, pool)) // 狗粮：框架自用导出的引导入口
 
 	t.Cleanup(func() {
 		pool.Close()
@@ -222,4 +217,33 @@ func TestEvents_Roundtrip(t *testing.T) {
 	wks.Drain(20 * time.Second)
 	require.False(t, wks.AnyCrashed(), "river_events worker should exit cleanly, not crash")
 	require.Equal(t, 1, countJobs(t, pool, "state = 'completed'"), "handled job completes exactly once")
+}
+
+
+func TestMigrate_Idempotent(t *testing.T) {
+	pool := newScratchPool(t) // 内部已 Migrate 一次
+	ctx := context.Background()
+	require.NoError(t, Migrate(ctx, pool)) // 再跑一遍应无副作用
+	var n int
+	require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM river_job").Scan(&n))
+	require.Equal(t, 0, n)
+}
+
+
+func TestEmitAt_ScheduledAtPersisted(t *testing.T) {
+	pool := newScratchPool(t)
+	em, err := New(pool, nil)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	at := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
+	tx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	require.NoError(t, em.EmitAt(ctx, tx, Event{Kind: "probe.once", Payload: []byte(`{}`)}, at))
+	require.NoError(t, tx.Commit(ctx))
+
+	var got time.Time
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT scheduled_at FROM river_job WHERE args->>'kind' = 'probe.once'`).Scan(&got))
+	require.WithinDuration(t, at, got, time.Second, "scheduled_at 应等于传入时刻")
 }

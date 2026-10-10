@@ -18,6 +18,7 @@ Maintenance rules:
 
 | Area | Item | Trigger / Notes |
 |---|---|---|
+| `schedule` | One-shot schedules (run_at) | First product needing "do X once at time T" with domain visibility (aiblog scheduled publishing). Add a `run_at` one-shot plan type beside cron plans (completion semantics + admin visibility); until then `events.EmitAt(ctx, tx, ev, at)` covers fire-and-forget one-shots — it exists so products stop hand-rolling due-scan loops. |
 | `schedule` | Missed-run backfill for schedule plans | A concrete requirement for full catch-up (fire every missed occurrence). Extend the domain's misfire policy set — today `skip` drops missed runs and `once` fires at most one inside the grace window — e.g. an `all` policy emitting one fire per missed interval in `PlanFires`. Fixed-time cron runs (expression + timezone + `next_fire_at`), the kind registration surface (`RegisterKind`), and the River scanner/fire workers are already the substrate; do not add a parallel scheduler (the in-house one stays removed; cron parsing lives in `platform/cronx`). |
 
 ## Observability
@@ -25,12 +26,14 @@ Maintenance rules:
 | Area | Item | Trigger / Notes |
 |---|---|---|
 | `platform/metrics` | OpenTelemetry tracing | Multi-instance / multi-service deployments. The metrics package already bridges OTel metrics to Prometheus and installs the TraceContext propagator; add the tracing half (TracerProvider + span exporter). |
+| `platform/events` | Dead-letter surface / fan-out ergonomics | First real event whose terminal failure needs tracking beyond the final-attempt Error log (today: retries exhaust → log only; one handler per kind by river design). Options: DLQ sidecar table written on final failure, or document a fan-out idiom (single handler fanning to registered sub-handlers). |
 | `platform/pgpart` + admin | Retention partition health panel | After the first rolling-archive operational incident. Surface the retention worker's last-success time and lag in the admin overview. |
 
 ## Security
 
 | Area | Item | Trigger / Notes |
 |---|---|---|
+| identity | First-class machine identity (agent principals) | Second machine-identity consumer beyond the `agent:<name>` PAT naming convention. Either wire `Principal.AgentID` (field exists; zero reads/writes today) from PAT token naming, or officialize the shadow-user + PAT pattern with a helper; include audit attribution. |
 | `authz` | Row-level filtering via injected predicates | A product requires row-level authorization beyond tenant isolation (tenant isolation already holds, including real RLS tests). Inject filter predicates through authz closures; business domains stay untouched. |
 | logging | Log redaction pipeline | Compliance requirements on log output. Re-express the redaction semantics as a log encoder/hook, or scrub in the shipping pipeline (e.g. Vector VRL). |
 | settings / public `/config` | Rate-limit allowlist exposure cleanup | If the allowlist surfacing in the public `/config` payload is judged an information leak. Today the example spreads the whole `settings.Effective` map into the payload, allowlist included. Drop the key on the `/config` side: consumers read it through the dedicated `settings.RateLimits` accessor, so the payload change breaks nothing. |
@@ -54,8 +57,11 @@ Maintenance rules:
 | `tools/check_api.py` | Schema-level contract reconciliation | When contract drift shows up in audits again. Extend route-path diffing with response-field and status-code spot checks (OpenAPI ↔ route registration, both sides); CI-able. |
 | `GET /auth/sessions` | Sessions list pagination | When per-user session counts make full rendering / auditing painful (hundreds of rows). Add `limit`/`offset` + total envelope, sync OpenAPI, thread params through the client hook, wire DataTable pagination on the page. |
 | `/api/audit` | Keyset pagination for audit events | When audit volume demands deep pagination (at an OpenAPI contract-versioning window). Replace OFFSET with a two-key keyset cursor `(created_at, id)` (the list already orders by `created_at DESC, id DESC`); align with the admin-side keyset precedent. Contract change. |
+| `quota` | Period granularity beyond monthly | First product with a non-monthly cadence (aiblog daily publishing). `quota.Period(now)` hardcodes "2006-01"; period is already a plain string through counters/idempotency, so adding a granularity dimension is contained — decide the config surface (per-key vs per-workspace default) when triggered. |
 | usage / quota API | Period-over-period usage comparison | When trend / cycle-comparison demand appears. `quota_counter` rows persist per period and freeze once a period ends, but the usage API reads only the current period (`quota.Period(now)`); add a history read, and decide whether frozen counter rows suffice or a period-close snapshot is required. A storage-backed new feature, not a bug fix. |
 | schedule list API | Schedule plan list pagination | When per-workspace plan counts approach the current list cap. The `next_fire_at` ordering is naturally keyset-friendly. |
+| `webx` | `webx.MountAPI(mux, path, opts)` | Second non-browser endpoint in any product (aiblog /mcp is the first). Bundle the AGENTS.md mounting checklist into defaults: timeout exemption, rate-limit/BodyLimit coverage, scope-enforcement hook; today every product hand-wires the four pitfalls (example/cmd/app/main.go pathGate block). |
+| `platform/renderx` | Site/tenant dimension on PagePath & cache keys | Multi-site product (aiblog v2 names this the one framework change it needs). Approach reserved in rendering.md §11: add the dimension to PagePath/cache keys + per-tenant invalidation; render pipeline unchanged. |
 | `webx` | `webx.SPA` helper | When more than one product repeats the same ~20-line SPA fallback. Extract `webx.SPA(fsys, apiPrefixes...)`. |
 
 ## Frontend & Rendering

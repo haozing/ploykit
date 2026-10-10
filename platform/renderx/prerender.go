@@ -41,7 +41,11 @@ func (v ViteAssets) hydrateScript() string {
 	return strings.Join(tags, "\n  ")
 }
 
-func renderPage(ctx context.Context, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets) (CacheEntry, error) {
+// RenderOnce 把单个页面渲染成完整 HTML 文档——不经过缓存与 HTTP 层的
+// 一次性渲染入口，预渲染 / handler 未命中 / 缓存回填共用此组装。
+// 预览（草稿渲染）、邮件合成、调试等场景直接调用即可，语义与预渲染管线
+// 完全一致（props 规范化、空输出校验、head 指令与 <title> 校验）。
+func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets) (CacheEntry, error) {
 	propsJSON, err := normalizeProps(props)
 	if err != nil {
 		return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）props 非法: %w", location, pageID, err)
@@ -299,7 +303,7 @@ func renderPrerenderTask(ctx context.Context, deps PrerenderDeps, reg *Registry,
 	if err != nil {
 		return PrerenderManifestEntry{}, fmt.Errorf("页面 %s（pageId=%s）取数失败: %w", location, t.route.PageID, err)
 	}
-	ent, err := renderPage(ctx, deps.Renderer, t.route.PageID, location, props, deps.Lang, deps.ViteAssets)
+	ent, err := RenderOnce(ctx, deps.Renderer, t.route.PageID, location, props, deps.Lang, deps.ViteAssets)
 	if err != nil {
 		return PrerenderManifestEntry{}, err
 	}

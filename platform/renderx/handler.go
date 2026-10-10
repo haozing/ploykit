@@ -134,7 +134,7 @@ func (h *handler) serveStatic(w http.ResponseWriter, r *http.Request, path strin
 		if perr != nil {
 			return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）取数失败: %w", path, rt.PageID, perr)
 		}
-		return renderPage(ctx, h.deps.Renderer, rt.PageID, path, props, h.deps.Lang, h.deps.Assets)
+		return RenderOnce(ctx, h.deps.Renderer, rt.PageID, path, props, h.deps.Lang, h.deps.Assets)
 	})
 	if err == nil {
 		h.serveHTML(w, r, ent.HTML, h.deps.CacheControl, ent.PropsSHA256)

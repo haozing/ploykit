@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/haozing/ploykit/platform/webx"
@@ -26,7 +27,27 @@ func NewRecorder(pool *pgxpool.Pool, log *slog.Logger) *Recorder {
 	return &Recorder{pool: pool, log: log}
 }
 
+// execer 抽象 pool 与 tx 的共同写入面，使 Record / RecordTx 共享一条 SQL 真源。
+type execer interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+// RecordTx 在调用方事务内写审计：失败返回 error（由调用方决定回滚），不吞错、
+// 不脱离调用方 ctx（与 Record 的 fire-and-forget 语义相反）。产品域的"业务写与
+// 审计同生共死"闸门应使用本方法，而不是手抄 INSERT SQL（schema 演进会脱钩）。
+func (r *Recorder) RecordTx(ctx context.Context, tx execer, workspaceID *string, p *webx.Principal, action, resourceType, resourceID string, meta map[string]any) error {
+	_, err := r.record(ctx, tx, workspaceID, p, action, resourceType, resourceID, meta)
+	return err
+}
+
 func (r *Recorder) Record(ctx context.Context, workspaceID *string, p *webx.Principal, action, resourceType, resourceID string, meta map[string]any) {
+	ctx = context.WithoutCancel(ctx)
+	if _, err := r.record(ctx, r.pool, workspaceID, p, action, resourceType, resourceID, meta); err != nil {
+		r.log.Error("audit write failed", "action", action, "err", err)
+	}
+}
+
+func (r *Recorder) record(ctx context.Context, q execer, workspaceID *string, p *webx.Principal, action, resourceType, resourceID string, meta map[string]any) (pgconn.CommandTag, error) {
 	actorType, actorID := "system", ""
 	snapshot := map[string]any{}
 	if p != nil {
@@ -47,16 +68,11 @@ func (r *Recorder) Record(ctx context.Context, workspaceID *string, p *webx.Prin
 	if workspaceID != nil {
 		wsID = *workspaceID
 	}
-
-	ctx = context.WithoutCancel(ctx)
-	_, err := r.pool.Exec(ctx, `INSERT INTO audit_event
+	return q.Exec(ctx, `INSERT INTO audit_event
 		(workspace_id, actor_type, actor_id, actor_snapshot, action, resource_type, resource_id, request_id, metadata)
 		VALUES ($1, $2, $3, COALESCE($4, '{}'::jsonb), $5, $6, $7, $8, COALESCE($9, '{}'::jsonb))`,
 		wsID, actorType, actorID, snapshot, action, resourceType, strOrNil(resourceID),
 		r.requestID(ctx), metaOrNil(meta))
-	if err != nil {
-		r.log.Error("audit write failed", "action", action, "err", err)
-	}
 }
 
 func (r *Recorder) requestID(ctx context.Context) any {

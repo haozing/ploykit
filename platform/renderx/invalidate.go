@@ -170,7 +170,7 @@ func (s *Service) rerender(ctx context.Context, path string) {
 		s.warnf("renderx: Refresh 取数 %s 失败: %v", path, err)
 		return
 	}
-	ent, err := renderPage(ctx, s.Renderer, rt.PageID, path, props, s.Lang, s.Assets)
+	ent, err := RenderOnce(ctx, s.Renderer, rt.PageID, path, props, s.Lang, s.Assets)
 	if err != nil {
 		s.warnf("renderx: Refresh 重渲染 %s 失败: %v", path, err)
 		return

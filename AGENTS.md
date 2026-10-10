@@ -37,3 +37,13 @@ Go + React multi-tenant SaaS full-stack framework: business domains (identity / 
 ## Hook semantics quick reference
 
 Transactional = returning an error rolls back the whole operation; Observational = logging only; Validating = may block the operation; Cleanup = best-effort, one item failing does not block the rest. See docs/api-index.md for the per-hook table.
+
+
+## Operational gotchas (from real product consumers)
+
+- **River schema bootstrap**: call `events.Migrate(ctx, pool)` once at boot (after `events.New`, before `workers.Start`) — before the first transactional event fires. Deliberately NOT part of migrations 001–999 (river's schema belongs to the river library's own version sequence). Symptom when skipped: `relation "river_job" does not exist`.
+- **Mounting non-browser endpoints (SSE / MCP / webhooks)** — four pitfalls, hand-wired today in `example/cmd/app/main.go`:
+  1. Long-lived transports need timeout exemption: `webx.TimeoutExcept(5*time.Second, "/ws", "/mcp")` — a 5s timeout kills SSE streams.
+  2. Rate-limit / BodyLimit gates are per-prefix (`pathGate(..., "/api/", "/auth/")`) — paths outside those prefixes are silently unprotected; add yours explicitly.
+  3. Scope enforcement for machine (PAT) callers follows the `authz.CanIn` pattern in API handlers — replicate it in your handler.
+  4. Audit the mounted endpoint via `Recorder.Record` / `RecordTx` (in-transaction) — mounting does not auto-audit.

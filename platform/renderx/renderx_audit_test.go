@@ -159,7 +159,7 @@ func (bodyTitleRenderer) Render(_ context.Context, _, _ string, _ json.RawMessag
 }
 
 func TestMissingTitleNotSatisfiedByBodyTitle(t *testing.T) {
-	_, err := renderPage(context.Background(), bodyTitleRenderer{}, "p1", "/x", nil, "", ViteAssets{})
+	_, err := RenderOnce(context.Background(), bodyTitleRenderer{}, "p1", "/x", nil, "", ViteAssets{})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrMissingTitle)
 }
