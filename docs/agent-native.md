@@ -51,7 +51,7 @@ However much infrastructure the framework builds in, nothing beats doing these f
 | Item | Status |
 |---|---|
 | overrides override slots not landed | `web/src/overrides/` as designed in architecture.md §5B.1 does not exist in example, and packages/ui has no overrides directory; docs and AGENTS.md must not reference it until it lands (example/AGENTS.md carries the do-not-reference annotation) |
-| authorization has zero consumers | shelved under the wiring-discipline rule; ruling, restart triggers, and acceptance criteria in docs/adr/0005 (addendum 2026-10-10) — step-up landed auth-layer-first in webx (ADR 0011, does not fire the trigger); contractx was deleted per ADR 0012 after the role-config UI chose write-boundary validation |
+| authorization had zero consumers | **closed 2026-10-11** (ADR 0013): the runlynk rebuild fired restart triggers #1+#2; example reference wiring landed first per ADR 0005's order clause — workspace delete / transfer ownership behind the catalog evaluator (batch 1), TOTP MFA freshness with token.create as the AAL2-grade op (batch 2), per-operation transport exclusivity (batch 3). The "switch one operation at a time" claim now has a concrete instance: example/internal/authorization |
 
 ---
 

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,6 +24,7 @@ import (
 	audithttp "github.com/haozing/ploykit/audit/adapters/http"
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
+	identityapp "github.com/haozing/ploykit/identity/app"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
 	"github.com/haozing/ploykit/platform/webx"
 	quotahttp "github.com/haozing/ploykit/quota/adapters/http"
@@ -38,7 +40,7 @@ import (
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-const expectedRouteCount = 136
+const expectedRouteCount = 142
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
@@ -62,7 +64,12 @@ func mountProductionRoutes(mux *webx.Mux) {
 	mux.Handle("/metrics", http.NotFoundHandler())
 	mux.Handle("/", http.NotFoundHandler())
 
-	identityhttp.Mount(mux, identityhttp.Deps{})
+	// the MFA routes are mounted only when Deps.MFA is wired (ADR 0013
+	// batch 2); production main.go always wires them, so the contract
+	// assembly does too — the zero-deps service registers but never serves
+	identityhttp.Mount(mux, identityhttp.Deps{
+		MFA: identityapp.NewMFAService(nil, nil, nil, "contract", time.Now),
+	})
 	workspacehttp.Mount(mux, workspacehttp.Deps{})
 	identityhttp.MountFedAdmin(mux, identityhttp.Deps{FedAdminGuard: passthrough})
 	billinghttp.Mount(mux, billinghttp.Deps{})

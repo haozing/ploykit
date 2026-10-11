@@ -101,6 +101,13 @@ type Principal struct {
 	// re-stamps it later. Zero = never proved (code login, third-party login,
 	// impersonation, PAT). Consumed by RequireRecentAuth.
 	PasswordConfirmedAt time.Time
+
+	// MFAConfirmedAt records when the caller last proved a second factor for
+	// this session (TOTP / backup code via POST /auth/verify-mfa). Sessions
+	// born from a login that completed MFA start confirmed
+	// (SessionCreate.MFAConfirmed); password-only logins stay unconfirmed.
+	// Zero = no MFA proof on this session. Consumed by RequireRecentMFA.
+	MFAConfirmedAt time.Time
 }
 
 // PasswordConfirmedWithin reports whether the password confirmation is fresh
@@ -108,6 +115,14 @@ type Principal struct {
 // stamps both fail).
 func (p *Principal) PasswordConfirmedWithin(maxAge time.Duration, now time.Time) bool {
 	at := p.PasswordConfirmedAt
+	return !at.IsZero() && !at.After(now) && !at.Before(now.Add(-maxAge))
+}
+
+// MFAConfirmedWithin is MFAConfirmedWithin's second factor twin: it reports
+// whether the MFA proof on this session is fresh enough for a
+// RequireRecentMFA window of maxAge.
+func (p *Principal) MFAConfirmedWithin(maxAge time.Duration, now time.Time) bool {
+	at := p.MFAConfirmedAt
 	return !at.IsZero() && !at.After(now) && !at.Before(now.Add(-maxAge))
 }
 

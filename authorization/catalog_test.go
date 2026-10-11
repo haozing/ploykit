@@ -64,8 +64,8 @@ func TestCatalogParsesGoldenFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseCatalog(golden.yaml): %v", err)
 	}
-	if got := len(catalog.Operations); got != 7 {
-		t.Fatalf("operations = %d, want 7", got)
+	if got := len(catalog.Operations); got != 9 {
+		t.Fatalf("operations = %d, want 9", got)
 	}
 
 	if catalog.Operations[0].OperationID != "op.platform.public" {
@@ -215,6 +215,42 @@ func TestCatalogRejectsWildcards(t *testing.T) {
 		"idempotency: none", "idempotency: none\n    rules: [op.*]", 1), "wildcard")
 }
 
+func TestCatalogRecentAuthWindowRequiredAndExplicit(t *testing.T) {
+	// recent_auth without an explicit window is rejected — no package default
+	// (ADR 0011: the window is product policy; ADR 0013 batch 1 moved it into
+	// the catalog, replacing the hardcoded 600s constant).
+	assertParseError(t, strings.Replace(validCatalogYAML,
+		"recent_auth: none\n    idempotency: none",
+		"recent_auth: password\n    idempotency: none", 1),
+		"must declare a positive recent_auth_window_seconds")
+	// non-positive windows are rejected
+	assertParseError(t, strings.Replace(validCatalogYAML,
+		"recent_auth: none\n    idempotency: none",
+		"recent_auth: password\n    recent_auth_window_seconds: 0\n    idempotency: none", 1),
+		"must declare a positive recent_auth_window_seconds")
+	assertParseError(t, strings.Replace(validCatalogYAML,
+		"recent_auth: none\n    idempotency: none",
+		"recent_auth: password\n    recent_auth_window_seconds: -15\n    idempotency: none", 1),
+		"must declare a positive recent_auth_window_seconds")
+	// a window on a none rule is dead config — forbidden (closed-set discipline)
+	assertParseError(t, strings.Replace(validCatalogYAML,
+		"recent_auth: none\n    idempotency: none",
+		"recent_auth: none\n    recent_auth_window_seconds: 600\n    idempotency: none", 1),
+		"forbidden when recent_auth is none")
+
+	// a valid explicit window round-trips and converts
+	catalog := mustParse(t, strings.Replace(validCatalogYAML,
+		"recent_auth: none\n    idempotency: none",
+		"recent_auth: password\n    recent_auth_window_seconds: 900\n    idempotency: none", 1))
+	op, ok := catalog.Operation("op.project.read")
+	if !ok {
+		t.Fatal("op.project.read missing")
+	}
+	if op.RecentAuthWindowSeconds != 900 || op.RecentAuthWindow() != 900*1e9 {
+		t.Fatalf("window round-trip broken: %+v (%s)", op, op.RecentAuthWindow())
+	}
+}
+
 func TestCatalogScopeSemanticsMatrix(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -245,8 +281,8 @@ func TestCatalogScopeSemanticsMatrix(t *testing.T) {
 		}, "non-session operation cannot declare assurance"},
 		{"mfa recent auth without aal2", func(s string) string {
 			return strings.Replace(s, "assurance: aal1\n    recent_auth: none\n    idempotency: none\n  - operation_id: op.project.token_read",
-				"assurance: aal1\n    recent_auth: password_and_mfa_600s\n    idempotency: none\n  - operation_id: op.project.token_read", 1)
-		}, "password_and_mfa_600s recent_auth requires aal2"},
+				"assurance: aal1\n    recent_auth: password_and_mfa\n    recent_auth_window_seconds: 600\n    idempotency: none\n  - operation_id: op.project.token_read", 1)
+		}, "password_and_mfa recent_auth requires aal2"},
 		{"unauthenticated outside platform", func(s string) string {
 			return strings.Replace(s, "auth_method: unauthenticated\n    scope: platform", "auth_method: unauthenticated\n    scope: workspace_path", 1)
 		}, "unauthenticated operation must use platform scope"},

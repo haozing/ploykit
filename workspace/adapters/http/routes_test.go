@@ -759,7 +759,6 @@ func TestDeleteRouteStepUpComposition(t *testing.T) {
 	})
 }
 
-
 func TestRoleConfigRoutes(t *testing.T) {
 	newRoleMux := func() (*http.ServeMux, *fakeRepo) {
 		f := &fakeRepo{
@@ -789,8 +788,8 @@ func TestRoleConfigRoutes(t *testing.T) {
 		}
 		var body struct {
 			Items []struct {
-				Role       string   `json:"role"`
-				Overridden bool     `json:"overridden"`
+				Role       string `json:"role"`
+				Overridden bool   `json:"overridden"`
 			} `json:"items"`
 			Catalog []string `json:"catalog"`
 		}
@@ -876,4 +875,58 @@ func TestRoleConfigRoutes(t *testing.T) {
 			t.Fatal("override 未删除")
 		}
 	})
+}
+
+// TestStrongGuardReplacesStepUpOnDestructivePair pins the ADR 0013 batch 1
+// wiring: when StrongGuard is set, exactly the destructive pair (delete
+// workspace / transfer ownership) runs through it — the remaining sensitive
+// routes (role perms set/reset) stay on StepUp. Double-mounting is
+// impossible by construction: destructive() swaps the inner layer.
+func TestStrongGuardReplacesStepUpOnDestructivePair(t *testing.T) {
+	f := &fakeRepo{
+		workspaces: map[string]wsapp.Workspace{
+			"ws-1": {ID: "ws-1", Slug: "acme", Name: "Acme", PlanCode: "free"},
+		},
+		members: map[string]wsapp.Member{
+			"ws-1|alice": {UserID: "alice", Role: "owner"},
+		},
+	}
+	svc := wsapp.NewWorkspaceService(f, authz.New(nil, nil), nil, nil,
+		wsapp.WorkspaceConfig{MaxPerUser: -1}, func() time.Time { return time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC) })
+
+	strongHits, stepUpHits := 0, 0
+	mux := http.NewServeMux()
+	Mount(mux, Deps{Svc: svc, Members: f, Authz: authz.New(nil, nil),
+		StepUp: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				stepUpHits++
+				next.ServeHTTP(w, r)
+			})
+		},
+		StrongGuard: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				strongHits++
+				next.ServeHTTP(w, r)
+			})
+		}})
+
+	owner := &webx.Principal{UserID: "alice", Source: webx.SourceSession}
+	hit := func(method, path string) {
+		t.Helper()
+		w := do(t, mux, method, path, "", owner)
+		if w.Code == http.StatusUnauthorized {
+			t.Fatalf("%s %s: principal did not reach the route", method, path)
+		}
+	}
+	hit("DELETE", "/api/workspaces/ws-1")                  // destructive pair → strong
+	hit("POST", "/api/workspaces/ws-1/transfer-ownership") // (handlers fail later; guards counted)
+	hit("PUT", "/api/workspaces/ws-1/roles/admin")         // role perms → StepUp
+	hit("DELETE", "/api/workspaces/ws-1/roles/admin")      // role perms → StepUp
+
+	if strongHits != 2 {
+		t.Fatalf("strong guard hits = %d, want 2 (delete + transfer)", strongHits)
+	}
+	if stepUpHits != 2 {
+		t.Fatalf("step-up hits = %d, want 2 (role perms set/reset)", stepUpHits)
+	}
 }

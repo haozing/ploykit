@@ -25,6 +25,16 @@ type SessionCreate struct {
 	// completes a step-up (POST /auth/confirm-password).
 	PasswordConfirmed bool
 
+	// MFAConfirmed marks a session born from a login that completed the
+	// second factor (TOTP / backup code). Such sessions start with
+	// MFAConfirmedAt set and satisfy RequireRecentMFA immediately;
+	// password-only logins stay MFA-unconfirmed until the caller completes
+	// POST /auth/verify-mfa. Password-only and MFA-only births are both
+	// expressible — the two stamps are independent facts (ADR 0013 batch 2:
+	// a login completing MFA stamps both, a password-only login only the
+	// password fact).
+	MFAConfirmed bool
+
 	Now time.Time
 }
 
@@ -121,8 +131,14 @@ func Authenticate(cfg *AuthConfig, sessions SessionStore, pats PATLookup) func(h
 			ctx := r.Context()
 			now := time.Now()
 
-			if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer "+cfg.patPrefix()) {
-				token := strings.TrimPrefix(h, "Bearer ")
+			// The transport classification is the single source of truth for
+			// which credential this request carries (ADR 0013 batch 3): a
+			// mixed request is rejected outright — never resolved by picking
+			// one credential while the other silently steers CSRF or
+			// authorization gates (GitLab #22435 class).
+			switch cfg.ClassifyTransport(r) {
+			case TransportBearer:
+				token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 				p, err := pats.ResolvePAT(ctx, token, now)
 				if err != nil {
 
@@ -136,30 +152,35 @@ func Authenticate(cfg *AuthConfig, sessions SessionStore, pats PATLookup) func(h
 				fillPrincipalCell(ctx, p)
 				next.ServeHTTP(w, r.WithContext(WithPrincipal(ctx, p)))
 				return
-			}
+			case TransportMixed:
+				slog.Warn("webx: mixed auth transport rejected", "path", r.URL.Path,
+					"method", r.Method)
+				WriteError(w, http.StatusUnauthorized, CodeAuthTransportConflict,
+					"request carries multiple authentication credentials (session cookie and bearer token); send exactly one", nil)
+				return
+			case TransportSessionCookie:
+				ck, _ := r.Cookie(cfg.CookieName)
+				p, err := sessions.VerifySession(ctx, ck.Value, now)
+				if err != nil {
+					ErrUnavailable(w, "认证服务暂不可用")
+					return
+				}
+				if p == nil {
 
-			ck, err := r.Cookie(cfg.CookieName)
-			if err != nil || ck.Value == "" {
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+
+				exp, renewed, err := sessions.RenewSession(ctx, ck.Value, now)
+				if err == nil && renewed {
+					cfg.SetSessionCookie(w, ck.Value, exp)
+				}
+				fillPrincipalCell(ctx, p)
+				next.ServeHTTP(w, r.WithContext(WithPrincipal(ctx, p)))
+				return
+			default: // TransportNone: fall through unauthenticated
 				next.ServeHTTP(w, r.WithContext(ctx))
-				return
 			}
-			p, err := sessions.VerifySession(ctx, ck.Value, now)
-			if err != nil {
-				ErrUnavailable(w, "认证服务暂不可用")
-				return
-			}
-			if p == nil {
-
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
-			exp, renewed, err := sessions.RenewSession(ctx, ck.Value, now)
-			if err == nil && renewed {
-				cfg.SetSessionCookie(w, ck.Value, exp)
-			}
-			fillPrincipalCell(ctx, p)
-			next.ServeHTTP(w, r.WithContext(WithPrincipal(ctx, p)))
 		})
 	}
 }

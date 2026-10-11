@@ -46,6 +46,24 @@ make verify-ui
 python tools/check_api.py
 ```
 
+## 敏感操作与 step-up（两条路，ADR 0011/0013）
+
+example 同时示范 step-up 的两条路，**同一操作只挂一条**（双挂载 = 永远过不去的
+双重挑战）：
+
+- **计算型（强档）**：`workspace.delete` / `workspace.transfer_ownership` /
+  `token.create`（PAT 创建，AAL2 级：要求密码与 MFA 双新鲜）走
+  `internal/authorization` 的目录评估器——闭集 catalog + 路由 resolver + 事务内
+  facts。challenge 投影为 403 `E_REAUTH_REQUIRED`，客户端按 `details.factor`
+  （`password` → `POST /auth/confirm-password`；`mfa` → `POST /auth/verify-mfa`）
+  完成验证后重试原请求。
+- **静态路由级（简单档）**：角色权限设置/重置路由仍走
+  `webx.RequireRecentAuth(15m)`（窗口是产品策略，逐挂载点显式传）。
+- MFA（TOTP + 一次性备份码）端点：`POST /auth/mfa/enroll|enable|disable|
+  regenerate-backup-codes`、`GET /auth/mfa/status`、`POST /auth/verify-mfa`。
+  密钥经 sealx 封存——`PLOYKIT_SEAL_KEY` 未配置时注册被拒（能力缺席而非降级）；
+  MFA 设置变更（disable / regenerate）挂密码 step-up 守卫。
+
 ## 环境变量
 
 | 变量 | 默认 | 说明 |

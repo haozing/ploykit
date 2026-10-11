@@ -25,6 +25,17 @@ type Deps struct {
 	// confirmation for destructive actions is a product policy, the domain
 	// only marks which operations are destructive. Nil = no step-up.
 	StepUp func(http.Handler) http.Handler
+
+	// StrongGuard, when non-nil, replaces StepUp on exactly the destructive
+	// pair (delete workspace / transfer ownership): the product's
+	// strong-profile middleware (catalog evaluator + challenge projection,
+	// ADR 0013 batch 1) computed from the operation catalog. StepUp stays in
+	// force for the remaining sensitive routes (role perms set/reset) — the
+	// two roads may coexist across operations but NEVER on the same
+	// operation: a static challenge after a computed one completes can never
+	// be satisfied (ADR 0011's double-mount prohibition). Nil = the pair
+	// stays on StepUp (simple-profile consumers).
+	StrongGuard func(http.Handler) http.Handler
 }
 
 func (d Deps) guard(perm authz.Permission, fn func(w http.ResponseWriter, r *http.Request, p *webx.Principal)) http.HandlerFunc {
@@ -43,6 +54,18 @@ func (d Deps) sensitive(perm authz.Permission, fn func(w http.ResponseWriter, r 
 	return authz.Require(d.Authz, perm)(http.HandlerFunc(h.ServeHTTP))
 }
 
+// destructive is sensitive's strong-profile twin: it pins the step-up layer
+// to the product's StrongGuard (catalog-driven evaluator) instead of the
+// static webx middleware, for the operations the strong profile owns. Same
+// composition order — permission check outermost, challenge inner.
+func (d Deps) destructive(perm authz.Permission, fn func(w http.ResponseWriter, r *http.Request, p *webx.Principal)) http.HandlerFunc {
+	adapted := d
+	if d.StrongGuard != nil {
+		adapted.StepUp = d.StrongGuard
+	}
+	return adapted.sensitive(perm, fn)
+}
+
 // subroutePrefix is the URL prefix Mount strips before delegating to the
 // workspace sub-mux. Mount keeps the literal string inside StripPrefix
 // (tools/check_api.py stitches the sub-mux's relative routes back to absolute
@@ -56,7 +79,7 @@ func Mount(mux webx.Router, d Deps) {
 
 	wsCtx := d.workspaceCtx
 	mux.Handle("PATCH /api/workspaces/{workspaceId}", wsCtx(http.HandlerFunc(d.guard("workspace:update", d.renameWorkspace))))
-	mux.Handle("DELETE /api/workspaces/{workspaceId}", wsCtx(d.sensitive("workspace:delete", d.deleteWorkspace)))
+	mux.Handle("DELETE /api/workspaces/{workspaceId}", wsCtx(d.destructive("workspace:delete", d.deleteWorkspace)))
 
 	// The StripPrefix literal below is subroutePrefix — kept inline because
 	// tools/check_api.py reconstructs the sub-mux's absolute paths from it.
@@ -81,7 +104,7 @@ func workspaceSubroutes(d Deps) *webx.Mux {
 	sub.Handle("PUT /{id}/roles/{role}", d.sensitive("roles:manage", d.setRolePerms))
 	sub.Handle("DELETE /{id}/roles/{role}", d.sensitive("roles:manage", d.resetRolePerms))
 
-	sub.Handle("POST /{id}/transfer-ownership", d.sensitive("workspace:read", d.transferOwnership))
+	sub.Handle("POST /{id}/transfer-ownership", d.destructive("workspace:read", d.transferOwnership))
 
 	sub.HandleFunc("POST /{id}/leave", d.guard("workspace:read", d.leaveWorkspace))
 	sub.HandleFunc("GET /{id}/invitations", d.guard("invites:read", d.listInvitations))

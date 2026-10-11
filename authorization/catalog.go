@@ -10,6 +10,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -55,8 +56,8 @@ type RecentAuthRule string
 
 const (
 	RecentAuthNone           RecentAuthRule = "none"
-	RecentAuthPassword       RecentAuthRule = "password_600s"
-	RecentAuthPasswordAndMFA RecentAuthRule = "password_and_mfa_600s"
+	RecentAuthPassword       RecentAuthRule = "password"
+	RecentAuthPasswordAndMFA RecentAuthRule = "password_and_mfa"
 )
 
 func (r RecentAuthRule) valid() bool {
@@ -96,16 +97,29 @@ type RoleVocab struct {
 }
 
 type Operation struct {
-	OperationID           string          `yaml:"operation_id" json:"operation_id"`
-	AuthMethod            AuthMethod      `yaml:"auth_method" json:"auth_method"`
-	Scope                 ScopeKind       `yaml:"scope" json:"scope"`
-	AllowedWorkspaceRoles []string        `yaml:"allowed_workspace_roles" json:"allowed_workspace_roles,omitempty"`
-	AllowedProjectRoles   []string        `yaml:"allowed_project_roles" json:"allowed_project_roles,omitempty"`
-	Assurance             Assurance       `yaml:"assurance" json:"assurance"`
-	RecentAuth            RecentAuthRule  `yaml:"recent_auth" json:"recent_auth"`
-	Idempotency           IdempotencyRule `yaml:"idempotency" json:"idempotency"`
+	OperationID           string         `yaml:"operation_id" json:"operation_id"`
+	AuthMethod            AuthMethod     `yaml:"auth_method" json:"auth_method"`
+	Scope                 ScopeKind      `yaml:"scope" json:"scope"`
+	AllowedWorkspaceRoles []string       `yaml:"allowed_workspace_roles" json:"allowed_workspace_roles,omitempty"`
+	AllowedProjectRoles   []string       `yaml:"allowed_project_roles" json:"allowed_project_roles,omitempty"`
+	Assurance             Assurance      `yaml:"assurance" json:"assurance"`
+	RecentAuth            RecentAuthRule `yaml:"recent_auth" json:"recent_auth"`
+	// RecentAuthWindowSeconds is the step-up window for recent-auth operations,
+	// declared explicitly per operation — there is deliberately no package
+	// default (ADR 0011: the window is product policy; the hardcoded 600s
+	// package constant was removed with this field). Required (positive) when
+	// recent_auth is not none; forbidden (zero) when it is.
+	RecentAuthWindowSeconds int             `yaml:"recent_auth_window_seconds" json:"recent_auth_window_seconds,omitempty"`
+	Idempotency             IdempotencyRule `yaml:"idempotency" json:"idempotency"`
 
 	Rules []string `yaml:"rules" json:"rules,omitempty"`
+}
+
+// RecentAuthWindow converts the declared window to a duration. Only
+// meaningful for operations with recent_auth != none (validation guarantees a
+// positive value there).
+func (op Operation) RecentAuthWindow() time.Duration {
+	return time.Duration(op.RecentAuthWindowSeconds) * time.Second
 }
 
 func (c Catalog) Operation(operationID string) (Operation, bool) {
@@ -330,7 +344,17 @@ func validateOperationSemantics(op Operation) error {
 			return errors.New("session operation must declare aal1 or aal2 assurance")
 		}
 		if op.RecentAuth == RecentAuthPasswordAndMFA && op.Assurance != AssuranceAAL2 {
-			return errors.New("password_and_mfa_600s recent_auth requires aal2 assurance")
+			return errors.New("password_and_mfa recent_auth requires aal2 assurance")
+		}
+		switch op.RecentAuth {
+		case RecentAuthNone:
+			if op.RecentAuthWindowSeconds != 0 {
+				return errors.New("recent_auth_window_seconds is forbidden when recent_auth is none")
+			}
+		default:
+			if op.RecentAuthWindowSeconds <= 0 {
+				return errors.New("recent_auth operations must declare a positive recent_auth_window_seconds (no package default)")
+			}
 		}
 	} else {
 		if op.Assurance != AssuranceNone {

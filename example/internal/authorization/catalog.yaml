@@ -1,0 +1,34 @@
+# example 强档案操作目录（ADR 0013 batch 1 的参考接线，docs/plan-strong-profile-restart.md §3）。
+#
+# 闭集目录：角色词汇与 member.role 的 DB CHECK 约束（'owner','admin','member'）一致；
+# 操作逐条显式声明，任何未在此声明的 operation ID 一律 fail-closed 拒绝。
+# 窗口是逐操作显式字段（无包级默认，ADR 0011/0013）：两条破坏性操作沿用原
+# webx.RequireRecentAuth(15m) 接线的 15 分钟窗口（900s）。
+catalog_schema_version: 1
+roles:
+  workspace: [owner, admin, member]
+  project: []
+operations:
+  - operation_id: token.create
+    auth_method: session
+    scope: platform
+    assurance: aal2
+    recent_auth: password_and_mfa
+    recent_auth_window_seconds: 900
+    idempotency: none
+  - operation_id: workspace.delete
+    auth_method: session
+    scope: workspace_path
+    allowed_workspace_roles: [owner]
+    assurance: aal1
+    recent_auth: password
+    recent_auth_window_seconds: 900
+    idempotency: none
+  - operation_id: workspace.transfer_ownership
+    auth_method: session
+    scope: workspace_path
+    allowed_workspace_roles: [owner]
+    assurance: aal1
+    recent_auth: password
+    recent_auth_window_seconds: 900
+    idempotency: none

@@ -193,6 +193,15 @@ func TestGoldenG7PublicOperationRejectsPrincipal(t *testing.T) {
 
 func assertChallenge(t *testing.T, decision Decision, wantAssurance Assurance, id string) {
 	t.Helper()
+	op, ok := goldenCatalog(t).Operation(id)
+	if !ok {
+		t.Fatalf("golden fixture is missing operation %q", id)
+	}
+	assertChallengeWindow(t, decision, wantAssurance, id, op.RecentAuthWindow())
+}
+
+func assertChallengeWindow(t *testing.T, decision Decision, wantAssurance Assurance, id string, window time.Duration) {
+	t.Helper()
 	if decision.Outcome != OutcomeChallenge {
 		t.Fatalf("decision = %+v, want challenge", decision)
 	}
@@ -205,12 +214,8 @@ func assertChallenge(t *testing.T, decision Decision, wantAssurance Assurance, i
 	if decision.Challenge.RequiredAssurance != wantAssurance {
 		t.Errorf("challenge required assurance = %q, want %q", decision.Challenge.RequiredAssurance, wantAssurance)
 	}
-
-	if decision.Challenge.MaxAge != 600*time.Second {
-		t.Errorf("challenge max-age = %s, want 600s", decision.Challenge.MaxAge)
-	}
-	if decision.Challenge.MaxAge != RecentAuthWindow {
-		t.Errorf("challenge max-age = %s, want recent-auth window %s (同源)", decision.Challenge.MaxAge, RecentAuthWindow)
+	if decision.Challenge.MaxAge != window {
+		t.Errorf("challenge max-age = %s, want the operation's declared window %s", decision.Challenge.MaxAge, window)
 	}
 }
 
@@ -285,7 +290,6 @@ func TestGoldenCH3ChallengeProjectionStable(t *testing.T) {
 		denial.ReauthHint.MaxAge != 600*time.Second {
 		t.Errorf("reauth hint payload incomplete: %+v", denial.ReauthHint)
 	}
-
 	denyDecision := Evaluate(Request{
 		Operation: goldenOperation(t, goldenCatalog(t), "op.project.manage"),
 		Principal: goldenSessionPrincipal(now, AssuranceAAL2),
@@ -408,5 +412,83 @@ func TestGoldenCH5RecentAuthWindowSemantics(t *testing.T) {
 		if decision.Outcome != OutcomeChallenge {
 			t.Errorf("%s: decision = %+v, want challenge", name, decision)
 		}
+	}
+}
+
+func TestGoldenCH6WindowParameterizedPerOperation(t *testing.T) {
+	// ADR 0013 batch 1: the recent-auth window is a per-operation catalog
+	// field, not a package constant. Same rule, different declared windows —
+	// each operation's freshness verdict and challenge projection carry its
+	// OWN window (regression pin: no hardcoded 600s fallback).
+	now := goldenNow()
+	catalog := goldenCatalog(t)
+	baseFacts := Facts{
+		ActiveUser: true, ActiveSession: true,
+		ActiveWorkspaceMembership: true, ActiveProjectMembership: true,
+		ProjectRoles: []string{"role_caller"},
+		Assurance:    AssuranceAAL1,
+	}
+	op2h := goldenOperation(t, catalog, "op.project.password_recent_2h")
+	if op2h.RecentAuthWindowSeconds != 7200 {
+		t.Fatalf("fixture window = %d, want 7200", op2h.RecentAuthWindowSeconds)
+	}
+
+	staleForDefault, freshFor2h := now.Add(-61*time.Minute), now.Add(-61*time.Minute)
+	facts := baseFacts
+	facts.RecentPasswordAt = freshFor2h
+	if decision := Evaluate(Request{
+		Operation: op2h,
+		Principal: goldenSessionPrincipal(now, AssuranceAAL1),
+		Scope:     ProjectScope{WorkspaceID: goldenTenant, ProjectID: goldenProject},
+		Facts:     facts,
+		Now:       now,
+	}); !decision.Allowed() {
+		t.Fatalf("61m-old stamp must be inside a 7200s window: %+v", decision)
+	}
+
+	facts.RecentPasswordAt = staleForDefault
+	if decision := Evaluate(Request{
+		Operation: goldenOperation(t, catalog, "op.project.password_recent"),
+		Principal: goldenSessionPrincipal(now, AssuranceAAL1),
+		Scope:     ProjectScope{WorkspaceID: goldenTenant, ProjectID: goldenProject},
+		Facts:     facts,
+		Now:       now,
+	}); decision.Outcome != OutcomeChallenge {
+		t.Fatalf("61m-old stamp must be outside a 600s window: %+v", decision)
+	}
+
+	facts.RecentPasswordAt = now.Add(-2*time.Hour - time.Second)
+	decision := Evaluate(Request{
+		Operation: op2h,
+		Principal: goldenSessionPrincipal(now, AssuranceAAL1),
+		Scope:     ProjectScope{WorkspaceID: goldenTenant, ProjectID: goldenProject},
+		Facts:     facts,
+		Now:       now,
+	})
+	assertChallengeWindow(t, decision, AssuranceAAL1, "op.project.password_recent_2h", 7200*time.Second)
+
+	// non-default window on an MFA op: 601s-old MFA stamp is stale for 900s…
+	mfaOp := goldenOperation(t, catalog, "op.project.manage_mfa_900s")
+	manage := goldenManageFacts(now)
+	manage.RecentMFAAt = now.Add(-901 * time.Second)
+	decision = Evaluate(Request{
+		Operation: mfaOp,
+		Principal: goldenSessionPrincipal(now, AssuranceAAL2),
+		Scope:     ProjectScope{WorkspaceID: goldenTenant, ProjectID: goldenProject},
+		Facts:     manage,
+		Now:       now,
+	})
+	assertChallengeWindow(t, decision, AssuranceAAL2, "op.project.manage_mfa_900s", 900*time.Second)
+
+	// …and exactly 900s old is still in-window (edge semantics per CH-5)
+	manage.RecentMFAAt = now.Add(-900 * time.Second)
+	if decision := Evaluate(Request{
+		Operation: mfaOp,
+		Principal: goldenSessionPrincipal(now, AssuranceAAL2),
+		Scope:     ProjectScope{WorkspaceID: goldenTenant, ProjectID: goldenProject},
+		Facts:     manage,
+		Now:       now,
+	}); !decision.Allowed() {
+		t.Fatalf("900s-old stamp must sit on the in-window edge: %+v", decision)
 	}
 }

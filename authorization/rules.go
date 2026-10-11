@@ -22,8 +22,11 @@ type builtinRecentAuthRule struct{}
 func (builtinRecentAuthRule) RuleName() string { return RuleNameRecentAuth }
 func (builtinRecentAuthRule) Stage() Stage     { return StageAuthentication }
 func (builtinRecentAuthRule) Evaluate(req Request) (Decision, bool) {
+	// The window is the operation's own declared catalog field (ADR 0011: the
+	// window is product policy — per-operation, explicit, no package default).
+	window := req.Operation.RecentAuthWindow()
 	recent := func(at time.Time) bool {
-		return !at.IsZero() && !at.After(req.Now) && !at.Before(req.Now.Add(-RecentAuthWindow))
+		return !at.IsZero() && !at.After(req.Now) && !at.Before(req.Now.Add(-window))
 	}
 	insufficient := true
 	switch req.Operation.RecentAuth {
@@ -56,7 +59,7 @@ func NewChallenge(op Operation) Decision {
 		Challenge: &Challenge{
 			TargetOperationID: op.OperationID,
 			RequiredAssurance: required,
-			MaxAge:            RecentAuthWindow,
+			MaxAge:            op.RecentAuthWindow(),
 		},
 	}
 }

@@ -28,6 +28,18 @@ type CSRFConfig struct {
 	ExemptPrefixes []string
 
 	PATPrefix string
+
+	// SessionCookieName is the auth session cookie's name — the CSRF skip is
+	// a clean bearer transport only; a request that also carries this cookie
+	// is mixed and falls through to the CSRF check. Wire it to
+	// AuthConfig.CookieName (empty = never treat requests as cookie-carrying).
+	SessionCookieName string
+}
+
+// classifyTransport is the shared transport classifier (transport.go) with
+// the CSRF config's own fields — same rule, same place, no drift.
+func (c *CSRFConfig) classify(r *http.Request) TransportKind {
+	return classifyTransport(c.SessionCookieName, c.patPrefix(), r)
 }
 
 func (c *CSRFConfig) patPrefix() string {
@@ -141,7 +153,18 @@ func CSRFConditional(cfg *CSRFConfig, secure bool) func(http.Handler) http.Handl
 					return
 				}
 			}
-			if isPATRequest(r, cfg.patPrefix()) {
+			// The CSRF skip is a CLEAN bearer transport only (ADR 0013 batch
+			// 3): a request that also carries the session cookie is mixed —
+			// it falls through to the CSRF check, so the cookie can never
+			// ride a skip keyed off the header credential. (The PAT principal
+			// already in the context covers assemblies where the CSRF layer
+			// sits inside Authenticate — such a principal can only have come
+			// from a resolved bearer credential.)
+			if cfg.classify(r) == TransportBearer {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if p := PrincipalFrom(r.Context()); p != nil && p.Source == SourcePAT {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -154,13 +177,6 @@ func CSRFConditional(cfg *CSRFConfig, secure bool) func(http.Handler) http.Handl
 			protected.ServeHTTP(w, r)
 		})
 	}
-}
-
-func isPATRequest(r *http.Request, patPrefix string) bool {
-	if p := PrincipalFrom(r.Context()); p != nil && p.Source == SourcePAT {
-		return true
-	}
-	return strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "+patPrefix)
 }
 
 func CSRFMaskedToken(r *http.Request) string { return csrf.Token(r) }

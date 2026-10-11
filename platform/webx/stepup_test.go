@@ -1,9 +1,11 @@
 package webx
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,16 +22,16 @@ func TestRequireRecentAuth(t *testing.T) {
 	const maxAge = 15 * time.Minute
 	now := time.Now()
 	cases := []struct {
-		name    string
-		principal *Principal
+		name       string
+		principal  *Principal
 		wantStatus int
 		wantCode   string
 	}{
 		{
-			name:        "unauthenticated is rejected as 401, not reauth",
-			principal:   nil,
-			wantStatus:  http.StatusUnauthorized,
-			wantCode:    CodeUnauthenticated,
+			name:       "unauthenticated is rejected as 401, not reauth",
+			principal:  nil,
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   CodeUnauthenticated,
 		},
 		{
 			name: "PAT callers can never step up",
@@ -46,8 +48,8 @@ func TestRequireRecentAuth(t *testing.T) {
 			wantCode:   CodeForbidden,
 		},
 		{
-			name: "never confirmed session gets the challenge",
-			principal: &Principal{UserID: "u1", Source: SourceSession},
+			name:       "never confirmed session gets the challenge",
+			principal:  &Principal{UserID: "u1", Source: SourceSession},
 			wantStatus: http.StatusForbidden,
 			wantCode:   CodeReauthRequired,
 		},
@@ -122,5 +124,81 @@ func TestRequireRecentAuth_ChallengeCarriesWindow(t *testing.T) {
 	}
 	if body.Details.ConfirmedAt != "" {
 		t.Fatalf("never-confirmed challenge must omit confirmed_at, got %q", body.Details.ConfirmedAt)
+	}
+}
+
+func TestRequireRecentMFA(t *testing.T) {
+	const window = 15 * time.Minute
+	gate := RequireRecentMFA(window)
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	run := func(p *Principal) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/x", nil)
+		if p != nil {
+			req = req.WithContext(WithPrincipal(req.Context(), p))
+		}
+		w := httptest.NewRecorder()
+		gate(next).ServeHTTP(w, req)
+		return w
+	}
+
+	// fresh MFA proof passes
+	fresh := &Principal{Source: SourceSession, MFAConfirmedAt: time.Now()}
+	if w := run(fresh); w.Code != http.StatusOK {
+		t.Fatalf("fresh MFA: %d, want 200", w.Code)
+	}
+
+	// stale MFA proof → 403 E_REAUTH_REQUIRED with factor=mfa
+	stale := &Principal{Source: SourceSession, MFAConfirmedAt: time.Now().Add(-2 * window)}
+	w := run(stale)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("stale MFA: %d, want 403", w.Code)
+	}
+	var body struct {
+		Code    string         `json:"error"`
+		Details map[string]any `json:"details"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code != CodeReauthRequired || body.Details["factor"] != string(FactorMFA) {
+		t.Fatalf("challenge shape: %+v", body)
+	}
+
+	// never-confirmed → challenge
+	w = run(&Principal{Source: SourceSession})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("never-confirmed: %d, want 403", w.Code)
+	}
+
+	// machine principals get a plain 403 — never a challenge
+	for _, src := range []Source{SourcePAT, SourceSystem} {
+		w := run(&Principal{Source: src, MFAConfirmedAt: time.Now()})
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("%s: %d, want 403", src, w.Code)
+		}
+		if strings.Contains(w.Body.String(), CodeReauthRequired) {
+			t.Fatalf("%s must not receive the challenge protocol", src)
+		}
+	}
+
+	// anonymous → 401
+	if w := run(nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous: %d, want 401", w.Code)
+	}
+
+	// the password twin is unaffected: fresh MFA does not satisfy RequireRecentAuth
+	if w := run(fresh); w.Code == http.StatusOK {
+		_ = w
+	}
+	gateAuth := RequireRecentAuth(window)
+	w = httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/x", nil).WithContext(
+		WithPrincipal(context.Background(), fresh))
+	gateAuth(next).ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("MFA stamp must not satisfy the password gate: %d", w.Code)
 	}
 }

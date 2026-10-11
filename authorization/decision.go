@@ -46,8 +46,6 @@ const (
 	ReasonIdempotencyInvalid           = "idempotency_invalid"
 )
 
-const RecentAuthWindow = 600 * time.Second
-
 type Challenge struct {
 	TargetOperationID string
 	RequiredAssurance Assurance

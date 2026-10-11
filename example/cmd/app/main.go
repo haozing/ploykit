@@ -87,6 +87,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"myproduct/internal/authorization"
 	"myproduct/internal/blog"
 	"myproduct/internal/eventsdemo"
 	"myproduct/internal/task"
@@ -469,15 +470,43 @@ func main() {
 		Fed: fedSvc,
 
 		TrustedProxies: webx.ParseTrustedProxies(env("TRUSTED_PROXIES", "")),
+
+		// AAL2 step-up machinery (ADR 0013 batch 2): TOTP flows mounted only
+		// when the seal key exists — MFA secrets are stored sealed, so without
+		// PLOYKIT_SEAL_KEY enrollment is refused upstream and the capability
+		// stays absent rather than degraded.
+		MFA: identityapp.NewMFAService(idRepo, sessions, secrets, "ploykit-example", now),
+		// MFA settings changes (disable / regenerate backup codes) sit behind
+		// the password step-up — GitHub's sudo-guarded 2FA settings shape.
+		// The window is product policy: explicit per mount site.
+		MFAChangeGuard: webx.RequireRecentAuth(15 * time.Minute),
 	}
+	// Strong-profile reference wiring (ADR 0005 restart / ADR 0013 batch 1):
+	// the destructive pair (workspace delete / transfer ownership) is gated
+	// by the catalog evaluator — closed-set catalog + route resolver +
+	// in-tx facts — instead of the static webx step-up. The challenge projects
+	// onto the same webx flow (403 E_REAUTH_REQUIRED → POST /auth/confirm-password
+	// → retry), so clients see one protocol on both roads. StepUp remains for
+	// the role-perms routes (simple profile); double-mounting both on one
+	// operation is forbidden (ADR 0011/0013).
+	strongAuthz, err := authorization.New(db, authCfg, log)
+	if err != nil {
+		log.Error("strong-profile authorization", "err", err)
+		os.Exit(1)
+	}
+	// AAL2-grade operation over the computed road (ADR 0013 batch 2): PAT
+	// creation requires a fresh password AND MFA proof — the catalog's
+	// password_and_mfa rule projects the challenge, /auth/verify-mfa clears it.
+	idDeps.PATCreateGuard = strongAuthz.Middleware()
+
 	identityhttp.Mount(mux, idDeps)
 
-	// Destructive workspace operations (delete / transfer ownership) require a
-	// password confirmation no older than 15 minutes — the reference wiring of
-	// webx step-up: RequireRecentAuth ⇄ POST /auth/confirm-password. The
-	// window is product policy: pick per mount site, there is no default.
+	// webx.RequireRecentAuth(15m) still guards the role-perms routes: the
+	// simple-profile road. The window is product policy — pick per mount
+	// site, there is no default.
 	wsDeps := workspacehttp.Deps{Svc: workspaces, Members: wsRepo, Authz: authorizer,
-		StepUp: webx.RequireRecentAuth(15 * time.Minute)}
+		StepUp:      webx.RequireRecentAuth(15 * time.Minute),
+		StrongGuard: strongAuthz.Middleware()}
 	workspacehttp.Mount(mux, wsDeps)
 
 	wsMW := workspacehttp.WorkspaceHeaderCtx(wsRepo)
@@ -736,6 +765,10 @@ func main() {
 			TrustLocalhostAnyPort: !production,
 
 			ExemptPrefixes: []string{"/webhooks/billing/"},
+
+			// ADR 0013 batch 3: CSRF 的 bearer 豁免只对"干净 bearer 传输"生效 —
+			// 同请求带着会话 cookie 即为 mixed，落入 CSRF 检查
+			SessionCookieName: authCfg.CookieName,
 		}, authCfg.Secure)
 
 	spaCsp := func(next http.Handler) http.Handler {

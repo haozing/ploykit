@@ -575,6 +575,178 @@ paths:
           $ref: '#/components/responses/RateLimited'
         default:
           $ref: '#/components/responses/DefaultError'
+  /auth/mfa/status:
+    get:
+      operationId: mfaStatus
+      tags: [session]
+      summary: 当前账号的 MFA 状态（enabled = 已确认启用；pending = 已开始注册但未验证首码）
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: MFA 状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  pending:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/mfa/enroll:
+    post:
+      operationId: mfaEnroll
+      tags: [session]
+      summary: 开始 TOTP 注册：生成密钥（sealx 封存存储）并返回 otpauth:// URI（QR 载荷）与 base32 密钥（手动录入）；已启用时 409
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 注册载荷（密钥仅此一次返回明文）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpauth_uri, secret, issuer]
+                properties:
+                  otpauth_uri:
+                    type: string
+                  secret:
+                    type: string
+                    description: base32（无填充）密钥
+                  issuer:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/mfa/enable:
+    post:
+      operationId: mfaEnable
+      tags: [session]
+      summary: 启用 MFA：验证首码后确认注册，签发一次性备份码并为当前会话盖 mfa_confirmed_at 戳
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 认证器 6 位码
+      responses:
+        '200':
+          description: 启用成功（备份码仅此一次返回）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backup_codes:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/mfa/disable:
+    post:
+      operationId: mfaDisable
+      tags: [session]
+      summary: 关闭 MFA（挂载点 step-up 守卫；撤销该用户全部会话）
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 已关闭
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/mfa/regenerate-backup-codes:
+    post:
+      operationId: mfaRegenerateBackupCodes
+      tags: [session]
+      summary: 重新生成备份码（挂载点 step-up 守卫；旧码全部作废，新码仅此一次返回）
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 新备份码
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backup_codes:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /auth/verify-mfa:
+    post:
+      operationId: verifyMFA
+      tags: [session]
+      summary: AAL2 step-up 盖戳（confirm-password 的第二因子孪生）：验证 TOTP 或一次性备份码后为当前会话盖 mfa_confirmed_at；尝试限流与登录/confirm-password 同族
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 6 位 TOTP 或一次性备份码（不区分大小写、连字符可选）
+      responses:
+        '200':
+          description: 验证成功（当前会话已盖 MFA 戳）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mfa_confirmed_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /auth/sessions:
     get:
       operationId: listSessions

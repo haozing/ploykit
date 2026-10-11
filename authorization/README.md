@@ -62,6 +62,35 @@ default:                             // deny：阶段 + 原因码可审计
 }
 ```
 
+## 参考消费者（ADR 0005 重启，ADR 0013）
+
+"逐操作切换到强档"的实例在 `example/internal/authorization`（ADR 0013 batch 1-3）：
+
+- `catalog.yaml` —— 产品操作目录（`workspace.delete` / `workspace.transfer_ownership`
+  / `token.create`），闭集 + 逐操作显式 recent-auth 窗口；
+- `resolver.go` —— method+path → operationID（组合根职责，arch A6；第二个消费者
+  （runlynk）确认形状后才考虑提升为框架包），启动期与目录双向绑定（Bind）防漂移；
+- `facts.go` —— 事务内 FactsProvider 参考实现（读调用方自己的 `pgx.Tx`，TOCTOU 回归
+  钉：同事务撤销成员资格 → 同事务决策翻转为 deny）；
+- `middleware.go` —— 决策投影：allow 放行；deny → 403 `PERMISSION_DENIED`
+  （stage+reason）；challenge → 403 `E_REAUTH_REQUIRED`（details 携带 target_operation /
+  required_assurance / max_age_seconds / factor），粘到 webx 重认证流程
+  （`POST /auth/confirm-password` 或 `POST /auth/verify-mfa`）后重试。
+
+## 强档接线四步（照抄 example 的形状）
+
+1. **resolver**：路由形状 → 操作 ID；未登记形状一律拒绝（fail-closed）。启动时
+   `Bind`：目录里每个操作必须有路由、每条路由必须指向目录操作，漂移在启动期爆；
+2. **transport 匹配**：一次分类（`webx.AuthConfig.ClassifyTransport`，与
+   Authenticate 同源）对照操作声明的 `auth_method`（映射就五行，留在组合根）；
+   **mixed（cookie + bearer 同时出现）→ 401 `E_AUTH_TRANSPORT_CONFLICT`**，永不
+   按优先级择一解析（GitLab #22435 教训）；
+3. **评估**：FactsProvider 在调用方事务内取事实；challenge 路径先做 terminal
+   复核（强制新鲜重评估，membership/role 仍然 deny 则最终答案 deny —— ADR 0011
+   组合次序的计算形态）；
+4. **投影**：见上；403 永远携带 stage+reason（可审计），challenge 永远携带
+   target hint（可恢复）。
+
 ## 护栏（明确不做）
 
 - 目录内禁 `域:*` 通配（与简单档互斥）；
@@ -70,24 +99,40 @@ default:                             // deny：阶段 + 原因码可审计
 - 不做 ReBAC / 策略引擎；不内置 TTL 缓存；
 - 审批编排、Phase0、具名审批不进（组织纪律留产品）。
 
-## 与 webx step-up 的关系（ADR 0011）
+## 与 webx step-up 的关系（ADR 0011 / 0013）
 
 step-up 有两条路，按策略形态选一条，**同一操作禁止双挂载**（会双重挑战，第二次
-挑战在第一次完成后立即触发，用户永远过不去）：
+挑战在第一次完成后立即触发，用户永远过不去）。禁令覆盖三个坐标轴——静态 vs 计算、
+password vs MFA、以及本包 vs `webx.RequireRecentMFA`：
 
 - **静态路由级**（"删除工作区要最近 15 分钟内输过密码"）→ `webx.RequireRecentAuth(maxAge)`
-  + `POST /auth/confirm-password`，机制长在认证层，与业界（Laravel password.confirm /
-  GitHub sudo / Clerk Reverification）同构；不需要本包。
+  / `webx.RequireRecentMFA(maxAge)`（第二因子孪生，ADR 0013 batch 2）+
+  `POST /auth/confirm-password` / `POST /auth/verify-mfa`，机制长在认证层，与业界
+  （Laravel password.confirm / GitHub sudo / Clerk Reverification）同构；不需要本包。
 - **计算型**（目录/规则驱动："只对生产资源要求""改动他人数据时才要求"）→ 本包
   Challenge 决策：内置 assurance / recent-auth 规则经 FactsProvider 读 session 的
-  `password_confirmed_at`（与 webx 盖的是同一列，ADR 0011），投影为
-  `ErrReauthenticationRequired` 后由产品粘到 webx 的重认证流程再重试。
+  `password_confirmed_at` / `mfa_confirmed_at`（与 webx 盖的是同两列，ADR 0011
+  数据源规则），投影为 `ErrReauthenticationRequired` 后由产品粘到 webx 的重认证
+  流程再重试。
 
-窗口长短是产品策略：webx 侧逐挂载点显式传 `maxAge`；本包 `RecentAuthWindow`
-常量（600s）仅为内置规则的默认投影，产品规则可覆盖。
+窗口长短是产品策略（GitHub 2h / Laravel 3h / example 15min）：webx 侧逐挂载点
+显式传 `maxAge`；本包侧逐操作声明 `recent_auth_window_seconds`（必填、无包级
+默认——原 600s 包级常量已随 ADR 0013 batch 1 删除）。
+
+组合次序（两条路共用，测试钉死）：权限检查最外层（角色拒绝是终态），step-up
+挑战在内层（可恢复）——无权成员永远不该被"哄着"去重认证。计算形态下由
+challenge 路径的 terminal 复核保证（example/middleware.go 的
+forcedFreshFacts 重评估）。
+
+## 机器主体语义
+
+PAT / 机器凭据在 challenge 面前永远拿**普通 403**，绝不是 challenge：机器无法
+交互式重认证，作用域凭据不得触及"留给在场的真人"的操作（webx 中间件与强档
+投影一致；测试钉死在 example 与 webx 两侧）。
 
 ## golden 基准
 
 `evaluator_golden_test.go` 锁定评估器的确定性语义（阶段顺序/原因码/challenge 投影）
-（`docs/ploykit-m0-golden-subset.md`，12 例：G-1..G-7 两值 + CH-1..CH-5 挑战），
-全部在"空产品注册表 + 仅内置规则"下通过——空注册表可过 = 通用。
+（`docs/ploykit-m0-golden-subset.md`，13 例：G-1..G-7 两值 + CH-1..CH-6 挑战，
+CH-6 为 ADR 0013 batch 1 的逐操作窗口参数化钉），全部在"空产品注册表 + 仅内置
+规则"下通过——空注册表可过 = 通用。

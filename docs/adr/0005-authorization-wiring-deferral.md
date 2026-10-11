@@ -1,6 +1,6 @@
 # ADR 0005 · authorization + contractx with zero wiring: shelve and book as debt
 
-Status: accepted (2026-10-07), in force — the decision is **shelve and book as debt**, not a permanent exemption; supersede this ADR (do not delete) when wiring lands or the shelve is reversed
+Status: accepted (2026-10-07); the **shelve** was superseded 2026-10-11 by ADR 0013 (restart executed, example-first) — retained as the record of the deferral, its restart triggers, and the acceptance criteria re-verified in ADR 0013's batch 4
 
 ## Background
 
@@ -57,3 +57,14 @@ A four-way external survey (Go authorization libraries / full-stack frameworks /
 **Ruling on contractx's fate**: it is bound to the **role-management configuration UI** project (registered in the docs/ROADMAP.md Security section — the #1 pain point the survey validated that customers actually pay for). UI-editable role→permission data creates exactly the drift surface (DB permissions ↔ code guards ↔ routes/OpenAPI) that contractx's comparator addresses. When that project's design asks "do we drift-guard the permission data?", contractx either gains its first consumer (the exemption converts to wired) or is deleted via a superseding ADR recording "market vacuum + the sole candidate consumer declined". It is NOT deleted today: the carrying cost is near zero (self-contained per A7, zero consumers, tests green), and the role-UI decision will land well before the 2027-04 revisit point above.
 
 **Outcome (same day, later batch)**: the role-config UI shipped and chose **write-boundary validation** (the management API rejects permissions absent from the code-registered catalog, fail-closed) — reconciliation is unnecessary for the only data-defined permission surface. contractx deleted per **ADR 0012**; trigger #3 retired; this ADR's shelving now covers authorization/ alone, with trigger #1 narrowed by ADR 0011.
+
+## Addendum (2026-10-11): restart executed — shelving superseded by ADR 0013
+
+The runlynk rebuild fired triggers #1 and #2 simultaneously; per this ADR's order clause the **example reference wiring lands first** (batch 1 of ADR 0013: the named pair — workspace delete / transfer ownership — moves behind the catalog evaluator with YAML catalog + route resolver + in-tx FactsProvider + challenge end-to-end tests). The shelve decision above is superseded: authorization/ is wired, and the wiring-discipline waiver expires with it.
+
+Acceptance criteria re-verification (this ADR's checklist), verified item by item at batch 4 closeout (2026-10-11):
+
+1. **1-2 highly sensitive example operations on strong-profile evaluation** — ✅ batch 1: `workspace.delete` + `workspace.transfer_ownership` behind the catalog evaluator (YAML catalog + route resolver + in-tx FactsProvider fully assembled); batch 2 added `token.create` as the AAL2-grade op.
+2. **Challenge/step-up e2e (challenge → re-auth → allow, replay not re-denied)** — ✅ batch 1 (`TestStrongChallengeConfirmRetry`: the retried request passes, handler ran exactly once); the second half of the criterion ("operation-catalog hash enters the contract reconciliation") is **retired, not silently dropped**: reconciliation was ruled out by ADR 0012 (write-boundary validation), so `Catalog.Hash()` stays available (computed at wiring, logged) but no contract reconciliation consumes it.
+3. **agent-native.md gap entry closed; "one operation at a time" backed by a concrete instance** — ✅ batch 4: the gap-table entry reads "closed 2026-10-11"; `example/internal/authorization` is the instance.
+4. **`check_api` + `make verify` green** — ✅ gated every batch (142 routes, zero drift).

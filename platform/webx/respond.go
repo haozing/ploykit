@@ -60,6 +60,13 @@ const (
 	// caller is authenticated but the password confirmation is stale — confirm
 	// via POST /auth/confirm-password, then retry. 403, never 401.
 	CodeReauthRequired = "E_REAUTH_REQUIRED"
+
+	// CodeAuthTransportConflict rejects mixed-transport requests (session
+	// cookie AND bearer credential on one request — or an ambiguous duplicate
+	// of either): which credential authenticated and which transport the
+	// gates inspected must never diverge (GitLab #22435 class). 401, and
+	// logged as a security signal, never silently disambiguated.
+	CodeAuthTransportConflict = "E_AUTH_TRANSPORT_CONFLICT"
 )
 
 func ErrUnauthenticated(w http.ResponseWriter, msg string) {

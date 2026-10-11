@@ -29,14 +29,17 @@ func (r *Repo) insertSession(ctx context.Context, in webx.SessionCreate, imperso
 	}
 	exp := in.Now.Add(r.cfg.SessionTTL)
 	abs := in.Now.Add(r.cfg.AbsoluteTTL)
-	var confirmedAt any
+	var confirmedAt, mfaConfirmedAt any
 	if in.PasswordConfirmed {
 		confirmedAt = in.Now
 	}
+	if in.MFAConfirmed {
+		mfaConfirmedAt = in.Now
+	}
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO session (user_id, token_hash, ip_hash, user_agent, expires_at, absolute_expires_at, created_at, last_seen_at, impersonated_by, password_confirmed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)`,
-		in.UserID, webx.HashToken(token), nullIfEmpty(in.IPHash), nullIfEmpty(in.UserAgent), exp, abs, in.Now, nullIfEmpty(impersonatedBy), confirmedAt)
+		INSERT INTO session (user_id, token_hash, ip_hash, user_agent, expires_at, absolute_expires_at, created_at, last_seen_at, impersonated_by, password_confirmed_at, mfa_confirmed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10)`,
+		in.UserID, webx.HashToken(token), nullIfEmpty(in.IPHash), nullIfEmpty(in.UserAgent), exp, abs, in.Now, nullIfEmpty(impersonatedBy), confirmedAt, mfaConfirmedAt)
 	if err != nil {
 		return "", time.Time{}, mapErr(err)
 	}
@@ -46,9 +49,9 @@ func (r *Repo) insertSession(ctx context.Context, in webx.SessionCreate, imperso
 func (r *Repo) VerifySession(ctx context.Context, token string, now time.Time) (*webx.Principal, error) {
 	var p webx.Principal
 	var sessionID string
-	var confirmedAt *time.Time
+	var confirmedAt, mfaConfirmedAt *time.Time
 	err := r.pool.QueryRow(ctx, `
-		SELECT s.id, u.id, u.email, u.display_name, u.is_platform_admin, COALESCE(s.impersonated_by::text, ''), s.password_confirmed_at
+		SELECT s.id, u.id, u.email, u.display_name, u.is_platform_admin, COALESCE(s.impersonated_by::text, ''), s.password_confirmed_at, s.mfa_confirmed_at
 		FROM session s
 		JOIN "user" u ON u.id = s.user_id
 		WHERE s.token_hash = $1
@@ -58,7 +61,7 @@ func (r *Repo) VerifySession(ctx context.Context, token string, now time.Time) (
 		  AND u.status = 'active'
 		  AND u.tokens_valid_after < s.created_at`,
 		webx.HashToken(token), now).
-		Scan(&sessionID, &p.UserID, &p.Email, &p.Name, &p.IsPlatformAdmin, &p.ImpersonatedBy, &confirmedAt)
+		Scan(&sessionID, &p.UserID, &p.Email, &p.Name, &p.IsPlatformAdmin, &p.ImpersonatedBy, &confirmedAt, &mfaConfirmedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -71,7 +74,27 @@ func (r *Repo) VerifySession(ctx context.Context, token string, now time.Time) (
 	if confirmedAt != nil {
 		p.PasswordConfirmedAt = *confirmedAt
 	}
+	if mfaConfirmedAt != nil {
+		p.MFAConfirmedAt = *mfaConfirmedAt
+	}
 	return &p, nil
+}
+
+// ConfirmSessionMFA stamps mfa_confirmed_at on a live session — the second
+// freshness fact (POST /auth/verify-mfa step-up), symmetric to
+// ConfirmSessionPassword.
+func (r *Repo) ConfirmSessionMFA(ctx context.Context, sessionID string, now time.Time) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE session SET mfa_confirmed_at = $2
+		WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2`,
+		sessionID, now)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return app.ErrNotFound
+	}
+	return nil
 }
 
 func (r *Repo) ConfirmSessionPassword(ctx context.Context, sessionID string, now time.Time) error {
