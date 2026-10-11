@@ -82,7 +82,7 @@ Platform packages are strictly isolated from business logic (internal/arch tests
 | **billing** | plans / orders / subscriptions / metered overage / payment channel seam (Stripe + Manual built in; manual includes admin-console mark-paid reconciliation; no domestic-payment channel is implemented) |
 | **quota** | four-step quota pipeline: precheck → consume → meter → threshold notification; milestone unlocks |
 | **admin** | admin console API |
-| **notify** | notification port (bell model) + deduplication strategies + email adapter |
+| **notify** | notification port (bell model) + deduplication strategies + email adapter. Optional workspace dimension (F8): `NotifyInput.Workspace` + `?workspace_id=` filter on inbox/badge — for products with workspace-scoped inboxes; example does not wire the filter (its bell is user-global), the boundary is this row + the openapi parameter docs |
 | **audit** | operation audit (actor snapshots) |
 | **analytics** | analytics event ingestion (TrackService.Track) + recent/count queries |
 | **webhooks** | outbound webhooks: registrable event catalog + HMAC signing + retries |

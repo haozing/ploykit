@@ -18,6 +18,32 @@ type EmailSender interface {
 	SendEmailVerification(ctx context.Context, to, link string) error
 }
 
+// NoopEmailSender satisfies EmailSender with every send as a no-op (orkome F12):
+// products that only use code login embed it and override exactly the sends they
+// need, instead of hand-writing no-op stubs for SendInvite / SendPasswordReset /
+// SendEmailVerification on every adapter.
+//
+//	type DevMailer struct {
+//	    app.NoopEmailSender // invites/resets/verifications silently dropped
+//	}
+//	func (DevMailer) SendLoginCode(ctx context.Context, to, code string) error { ... }
+type NoopEmailSender struct{}
+
+func (NoopEmailSender) SendLoginCode(ctx context.Context, to, code string) error {
+	return nil
+}
+func (NoopEmailSender) SendInvite(ctx context.Context, to, workspaceName, invitationID string) error {
+	return nil
+}
+func (NoopEmailSender) SendPasswordReset(ctx context.Context, to, link string) error {
+	return nil
+}
+func (NoopEmailSender) SendEmailVerification(ctx context.Context, to, link string) error {
+	return nil
+}
+
+var _ EmailSender = NoopEmailSender{}
+
 type Auditor interface {
 	Record(ctx context.Context, workspaceID *string, p *webx.Principal, action, resourceType, resourceID string, meta map[string]any)
 }

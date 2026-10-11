@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -40,6 +41,13 @@ func credentialScope(ws, perms []string) *webx.CredentialScope {
 
 func (r *Repo) ResolvePAT(ctx context.Context, token string, now time.Time) (*webx.Principal, error) {
 	if !domain.IsPATFormat(r.cfg.PATPrefix, token) {
+		// F13: the caller sees an opaque 401 "invalid token"; a debug record with
+		// the expected prefix turns the classic three-prefix misconfiguration
+		// (webx / TokenService / pgrepo Config) into a one-line log diagnosis.
+		// Token material is never logged.
+		slog.Debug("pat auth rejected: token does not carry the configured prefix",
+			"configured_prefix", effectivePATPrefix(r.cfg.PATPrefix),
+			"token_length", len(token))
 		return nil, nil
 	}
 	var p webx.Principal
@@ -60,6 +68,10 @@ func (r *Repo) ResolvePAT(ctx context.Context, token string, now time.Time) (*we
 		Scan(&patID, &p.UserID, &p.Email, &p.Name, &p.IsPlatformAdmin, &ws, &perms)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			// F13: distinguish "no active match" (unknown hash / revoked /
+			// expired / user disabled) from the prefix mismatch above — same
+			// external 401, different operational cause.
+			slog.Debug("pat auth rejected: no active token match (unknown hash, revoked, expired, or user disabled)")
 			return nil, nil
 		}
 		return nil, fmt.Errorf("resolve pat: %w", err)
@@ -68,6 +80,15 @@ func (r *Repo) ResolvePAT(ctx context.Context, token string, now time.Time) (*we
 	p.PATID = patID
 	p.Scope = credentialScope(ws, perms)
 	return &p, nil
+}
+
+// effectivePATPrefix mirrors domain.IsPATFormat's empty-prefix fallback, for
+// logging the prefix that was actually checked.
+func effectivePATPrefix(cfgPrefix string) string {
+	if cfgPrefix == "" {
+		return domain.DefaultPATPrefix
+	}
+	return cfgPrefix
 }
 
 func (r *Repo) ListPATs(ctx context.Context, userID string) ([]app.PAT, error) {

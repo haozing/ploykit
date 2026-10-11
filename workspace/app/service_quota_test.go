@@ -55,4 +55,16 @@ func TestCreate_MaxPerUserGuard(t *testing.T) {
 			t.Fatal("不限装配建区应成功")
 		}
 	})
+
+	t.Run("零值=不限（F10：Go 零值无害，第一个工作区不被拒）", func(t *testing.T) {
+		// 零值 WorkspaceConfig{} 与 MaxPerUser:0 同义——旧行为是 0 上限拒绝一切，
+		// 现为零值/负值均不限，只有显式正数才启用配额。
+		svc, f := newSvcWithCap(0)
+		if _, err := svc.Create(ctx, ownerP("alice"), "alice-ws2", "Alice 2"); err != nil {
+			t.Fatalf("zero-value config must not block creation: %v", err)
+		}
+		if _, ok, _ := f.GetWorkspace(ctx, "ws-alice-ws2"); !ok {
+			t.Fatal("零值配置建区应成功")
+		}
+	})
 }

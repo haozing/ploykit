@@ -1538,6 +1538,13 @@ paths:
             maximum: 100
             default: 20
           description: 条数（非整数或 >100 拒绝 400；≤0 由服务层静默归一为缺省 20——不按违约 400）
+        - name: workspace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: 可选的工作区作用域过滤（F8）——缺省返回用户全部收件箱（框架 bell 语义）；携带则只返回该工作区的通知（写入时带 workspace 维度的产品收件箱）。非法 uuid 拒绝 400
       responses:
         '200':
           description: 通知列表
@@ -1558,6 +1565,14 @@ paths:
       operationId: notificationBadge
       tags: [notify]
       summary: 未读角标数
+      parameters:
+        - name: workspace_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: 可选的工作区作用域过滤（F8）——缺省返回用户全部收件箱（框架 bell 语义）；携带则只返回该工作区的通知（写入时带 workspace 维度的产品收件箱）。非法 uuid 拒绝 400
       responses:
         '200':
           description: 未读数

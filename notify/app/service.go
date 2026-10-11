@@ -14,6 +14,7 @@ type Notification struct {
 	Title     string     `json:"title"`
 	Body      string     `json:"body"`
 	Link      string     `json:"link,omitempty"`
+	Workspace string     `json:"workspace_id,omitempty"`
 	Count     int        `json:"count"`
 	ReadAt    *time.Time `json:"read_at,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
@@ -26,6 +27,13 @@ type NotifyInput struct {
 	Body   string
 	Link   string
 
+	// Workspace is the optional workspace dimension (F8): empty = user-global
+	// notification (the framework bell model); set = the notification belongs to
+	// that workspace's scoped inbox. Note dedup: uq_notification_dedup keys on
+	// (user_id, dedup_key) — per-workspace dedup requires the workspace id inside
+	// the DedupKey itself.
+	Workspace string
+
 	DedupKey string
 
 	OncePerMonth bool
@@ -36,9 +44,11 @@ type Clock func() time.Time
 type Repo interface {
 	Insert(ctx context.Context, n NotifyInput, now time.Time) (isNew bool, err error)
 
-	ListInbox(ctx context.Context, userID string, limit int) ([]Notification, error)
+	// ListInbox / UnreadCount take an optional workspaceID filter: empty lists the
+	// whole user inbox (bell semantics), non-empty restricts to that workspace.
+	ListInbox(ctx context.Context, userID, workspaceID string, limit int) ([]Notification, error)
 
-	UnreadCount(ctx context.Context, userID string) (int, error)
+	UnreadCount(ctx context.Context, userID, workspaceID string) (int, error)
 
 	MarkRead(ctx context.Context, userID, notificationID string) error
 	MarkAllRead(ctx context.Context, userID string) error
@@ -96,15 +106,15 @@ func (s *NotifyService) NotifyOncePerMonth(ctx context.Context, input NotifyInpu
 	return err
 }
 
-func (s *NotifyService) Inbox(ctx context.Context, userID string, limit int) ([]Notification, error) {
+func (s *NotifyService) Inbox(ctx context.Context, userID, workspaceID string, limit int) ([]Notification, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.repo.ListInbox(ctx, userID, limit)
+	return s.repo.ListInbox(ctx, userID, workspaceID, limit)
 }
 
-func (s *NotifyService) Badge(ctx context.Context, userID string) (int, error) {
-	return s.repo.UnreadCount(ctx, userID)
+func (s *NotifyService) Badge(ctx context.Context, userID, workspaceID string) (int, error) {
+	return s.repo.UnreadCount(ctx, userID, workspaceID)
 }
 
 func (s *NotifyService) MarkRead(ctx context.Context, userID, id string) error {

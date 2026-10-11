@@ -54,6 +54,11 @@ type Page[T any] struct {
 	Total int `json:"total"`
 }
 
+// WorkspaceConfig configures the workspace service. The zero value is safe:
+// MaxPerUser <= 0 (including the unset zero value) means unlimited workspaces
+// per user; only an explicit positive value caps creation (orkome F10 — the
+// old "0 blocks everything, -1 is unlimited" reading violated Go zero-value
+// conventions and disguised itself as E_QUOTA_EXCEEDED).
 type WorkspaceConfig struct {
 	MaxPerUser int
 }

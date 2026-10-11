@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
+
 	"github.com/haozing/ploykit/notify/app"
 	"github.com/haozing/ploykit/platform/webx"
 )
@@ -38,7 +40,11 @@ func (d Deps) handleInbox(w http.ResponseWriter, r *http.Request, p *webx.Princi
 		}
 		limit = n
 	}
-	list, err := d.Svc.Inbox(r.Context(), p.UserID, limit)
+	ws, ok := workspaceFilter(w, r)
+	if !ok {
+		return
+	}
+	list, err := d.Svc.Inbox(r.Context(), p.UserID, ws, limit)
 	if err != nil {
 		webx.WriteErr(w, err)
 		return
@@ -50,12 +56,32 @@ func (d Deps) handleInbox(w http.ResponseWriter, r *http.Request, p *webx.Princi
 }
 
 func (d Deps) handleBadge(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
-	n, err := d.Svc.Badge(r.Context(), p.UserID)
+	ws, ok := workspaceFilter(w, r)
+	if !ok {
+		return
+	}
+	n, err := d.Svc.Badge(r.Context(), p.UserID, ws)
 	if err != nil {
 		webx.WriteErr(w, err)
 		return
 	}
 	webx.WriteJSON(w, http.StatusOK, map[string]int{"count": n})
+}
+
+// workspaceFilter reads the optional ?workspace_id= scoping parameter (F8):
+// absent = the user's whole inbox (bell semantics); present = that workspace's
+// scoped inbox. Malformed values are rejected up front — a bogus uuid would
+// otherwise surface as an opaque query error.
+func workspaceFilter(w http.ResponseWriter, r *http.Request) (string, bool) {
+	raw := r.URL.Query().Get("workspace_id")
+	if raw == "" {
+		return "", true
+	}
+	if _, err := uuid.Parse(raw); err != nil {
+		webx.ErrValidation(w, "workspace_id must be a uuid")
+		return "", false
+	}
+	return raw, true
 }
 
 func (d Deps) handleMarkRead(w http.ResponseWriter, r *http.Request, p *webx.Principal) {

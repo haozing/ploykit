@@ -92,7 +92,10 @@ func (s *WorkspaceService) Create(ctx context.Context, p *webx.Principal, slug, 
 	var ws Workspace
 	var err error
 	err = s.repo.RunInTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		if s.cfg.MaxPerUser >= 0 {
+		// MaxPerUser > 0 enables the per-user cap; the zero value and negatives
+		// mean unlimited (Go zero-value safety — an unset WorkspaceConfig must
+		// not lock users out of their first workspace; orkome F10).
+		if s.cfg.MaxPerUser > 0 {
 			n, err := s.repo.CountWorkspacesByUserForCreateTx(ctx, tx, p.UserID)
 			if err != nil {
 				return err

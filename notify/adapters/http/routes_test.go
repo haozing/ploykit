@@ -27,6 +27,9 @@ type fakeRepo struct {
 	markReadUser  string
 	markReadID    string
 
+	listedWorkspace string
+	badgeWorkspace  string
+
 	markAllReadCalls int
 	markAllReadUser  string
 
@@ -35,12 +38,14 @@ type fakeRepo struct {
 	archivedID    string
 }
 
-func (f *fakeRepo) ListInbox(_ context.Context, userID string, limit int) ([]app.Notification, error) {
+func (f *fakeRepo) ListInbox(_ context.Context, userID, workspaceID string, limit int) ([]app.Notification, error) {
 	f.listed = limit
+	f.listedWorkspace = workspaceID
 	return f.inbox, nil
 }
 
-func (f *fakeRepo) UnreadCount(_ context.Context, userID string) (int, error) {
+func (f *fakeRepo) UnreadCount(_ context.Context, userID, workspaceID string) (int, error) {
+	f.badgeWorkspace = workspaceID
 	return f.unread, nil
 }
 
@@ -152,6 +157,43 @@ func TestInbox_EmptyIsArray(t *testing.T) {
 	var list []app.Notification
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&list))
 	assert.Empty(t, list, "空收件箱应返回 [] 而非 null")
+}
+
+func TestInbox_WorkspaceFilter_F8(t *testing.T) {
+	t.Run("无参=不限定（bell 语义）", func(t *testing.T) {
+		f := &fakeRepo{}
+		h := asUser("u1", newTestHandler(f))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/notifications", nil))
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Empty(t, f.listedWorkspace)
+	})
+	t.Run("合法 uuid 透传为作用域过滤", func(t *testing.T) {
+		f := &fakeRepo{}
+		h := asUser("u1", newTestHandler(f))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/notifications?workspace_id=11111111-1111-1111-1111-111111111111", nil))
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "11111111-1111-1111-1111-111111111111", f.listedWorkspace)
+	})
+	t.Run("非法 uuid 400 E_VALIDATION", func(t *testing.T) {
+		f := &fakeRepo{}
+		h := asUser("u1", newTestHandler(f))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/notifications?workspace_id=not-a-uuid", nil))
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+		var body webx.ErrorBody
+		require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+		assert.Equal(t, webx.CodeValidation, body.Code)
+	})
+	t.Run("badge 同款作用域参数", func(t *testing.T) {
+		f := &fakeRepo{unread: 3}
+		h := asUser("u1", newTestHandler(f))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/badge?workspace_id=22222222-2222-2222-2222-222222222222", nil))
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "22222222-2222-2222-2222-222222222222", f.badgeWorkspace)
+	})
 }
 
 func TestBadge(t *testing.T) {
