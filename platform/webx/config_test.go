@@ -12,9 +12,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// F20: every realistic wiring serves /config behind CSRFConditional, so the
+// tests exercise the chained shape. The bare handler (CSRF middleware missing
+// from the chain) is a wiring error and now fails loudly — see the last subtest.
+func chainedConfig(t *testing.T, d ConfigDeps) http.Handler {
+	t.Helper()
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	return CSRFConditional(&CSRFConfig{Key: key}, false)(ConfigHandler(d))
+}
+
 func TestConfigHandler(t *testing.T) {
 	t.Run("nil 扩展面：三键齐全且名录为 [] 非 null", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{})
+		h := chainedConfig(t, ConfigDeps{})
 		r := httptest.NewRequest(http.MethodGet, "/config", nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
@@ -33,7 +44,7 @@ func TestConfigHandler(t *testing.T) {
 	})
 
 	t.Run("扩展面注入：透传名录", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{
+		h := chainedConfig(t, ConfigDeps{
 			OAuthProviders:  func() []string { return []string{"github", "google"} },
 			BillingChannels: func() []string { return []string{"stripe"} },
 		})
@@ -53,7 +64,7 @@ func TestConfigHandler(t *testing.T) {
 	})
 
 	t.Run("扩展面返回 nil 切片：仍输出 [] 非 null", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{OAuthProviders: func() []string { return nil }})
+		h := chainedConfig(t, ConfigDeps{OAuthProviders: func() []string { return nil }})
 		r := httptest.NewRequest(http.MethodGet, "/config", nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
@@ -64,7 +75,7 @@ func TestConfigHandler(t *testing.T) {
 	})
 
 	t.Run("Extra 注入键出现在响应", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{
+		h := chainedConfig(t, ConfigDeps{
 			Extra: func() map[string]any {
 				return map[string]any{
 					"banner_text":      "系统维护公告",
@@ -90,7 +101,7 @@ func TestConfigHandler(t *testing.T) {
 	})
 
 	t.Run("Extra 为 nil：行为不变，仅基础三键", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{
+		h := chainedConfig(t, ConfigDeps{
 			OAuthProviders:  func() []string { return []string{"github"} },
 			BillingChannels: func() []string { return []string{"stripe"} },
 			Extra:           nil,
@@ -109,7 +120,7 @@ func TestConfigHandler(t *testing.T) {
 	})
 
 	t.Run("Extra 返回 nil：同样仅基础三键", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{Extra: func() map[string]any { return nil }})
+		h := chainedConfig(t, ConfigDeps{Extra: func() map[string]any { return nil }})
 		r := httptest.NewRequest(http.MethodGet, "/config", nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
@@ -120,7 +131,7 @@ func TestConfigHandler(t *testing.T) {
 	})
 
 	t.Run("Extra 与基础键冲突：以 Extra 为准", func(t *testing.T) {
-		h := ConfigHandler(ConfigDeps{
+		h := chainedConfig(t, ConfigDeps{
 			OAuthProviders: func() []string { return []string{"github"} },
 			Extra: func() map[string]any {
 				return map[string]any{"oauth_providers": []string{"google", "oidc"}}
@@ -135,31 +146,30 @@ func TestConfigHandler(t *testing.T) {
 		assert.Equal(t, []any{"google", "oidc"}, body["oauth_providers"])
 	})
 
-	t.Run("csrf_token：未过 CSRF 中间件语境为空串，过中间件后非空", func(t *testing.T) {
-
+	t.Run("F20：链上无 CSRF 中间件 → 500 点名缺失，不再静默空 token", func(t *testing.T) {
 		h := ConfigHandler(ConfigDeps{})
 		r := httptest.NewRequest(http.MethodGet, "/config", nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		var bare struct {
+
+		require.Equal(t, http.StatusInternalServerError, w.Code)
+		var body ErrorBody
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		assert.Equal(t, CodeInternal, body.Code)
+		assert.Contains(t, body.Message, "csrf middleware missing")
+	})
+
+	t.Run("F20 回归：过 CSRF 中间件后 token 非空（200）", func(t *testing.T) {
+		h := chainedConfig(t, ConfigDeps{})
+		r := httptest.NewRequest(http.MethodGet, "/config", nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		var body struct {
 			CSRFToken string `json:"csrf_token"`
 		}
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &bare))
-		assert.Empty(t, bare.CSRFToken)
-
-		key := make([]byte, 32)
-		_, err := rand.Read(key)
-		require.NoError(t, err)
-		chained := CSRFConditional(&CSRFConfig{Key: key}, false)(h)
-		r2 := httptest.NewRequest(http.MethodGet, "/config", nil)
-		w2 := httptest.NewRecorder()
-		chained.ServeHTTP(w2, r2)
-
-		require.Equal(t, http.StatusOK, w2.Code)
-		var chainedBody struct {
-			CSRFToken string `json:"csrf_token"`
-		}
-		require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &chainedBody))
-		assert.NotEmpty(t, chainedBody.CSRFToken)
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		assert.NotEmpty(t, body.CSRFToken)
 	})
 }

@@ -15,6 +15,34 @@
 | Mux | `NewMux() *Mux`; `Handle` / `HandleFunc` (record + delegate), `Routes() []RouteInfo`, `ServeHTTP` | Recording mux wrapping `*http.ServeMux` — the route introspection the std mux lacks (the chi.Walk equivalent): serving behavior is the delegated std mux unchanged, while every registered pattern is recorded |
 | RouteInfo | `RouteInfo{Method, Path, Pattern}` | One registered route: `Method` is the pattern's leading HTTP method (`""` for method-less mounts/catch-alls — not endpoints, skip them); `Path` is the pattern minus the method prefix, wildcards kept literal |
 
+### Cross-cutting guards over framework routes (F14 pattern)
+
+`Mount(mux webx.Router, ...)` also solves "my product guard cannot reach framework
+routes": wrap the router you pass in, and every framework registration flows
+through your guard — no per-domain hook needed:
+
+```go
+// guardRouter stacks a product middleware onto everything the framework
+// mounts through it (defense-in-depth; membership/authz still apply inside).
+type guardRouter struct {
+    webx.Router
+    guard func(http.Handler) http.Handler
+}
+
+func (g guardRouter) Handle(pattern string, h http.Handler) {
+    g.Router.Handle(pattern, g.guard(h))
+}
+func (g guardRouter) HandleFunc(pattern string, f func(http.ResponseWriter, *http.Request)) {
+    g.Router.HandleFunc(pattern, f)
+}
+
+mux := webx.NewMux()
+workspacehttp.Mount(guardRouter{mux, myWriteGuard}, deps) // guard reaches every mounted route
+```
+
+Field report (orkome P4): a runtime agent-write fence that could not hook the
+webhooks Mount lost its defense-in-depth layer — this pattern restores it.
+
 Runtime contract-test pattern for products: build the production mux as `webx.NewMux()`, mount through the real `Mount` functions, take `mux.Routes()`, skip entries with `Method == ""` (mounts are not endpoints), and diff the remaining `Method + Path` set against the parsed `paths:` object of the OpenAPI spec — fail on any route present on only one side, and pin the total count to the number `tools/check_api.py` reports (the static twin guard). Reference implementation: `example/cmd/app/routes_contract_test.go`. Domains that mount an internal sub-mux under a StripPrefix expose their absolute sub-route infos separately (workspace: `SubrouteInfos()`) — include those in the runtime side.
 
 ### Middleware

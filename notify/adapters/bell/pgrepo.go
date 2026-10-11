@@ -121,3 +121,23 @@ func (r *Repo) Archive(ctx context.Context, userID, notificationID string) error
 	}
 	return app.ErrNotFound
 }
+
+// DeleteAged prunes expired notifications in batches (F8-4): archived rows
+// older than archivedTTL and read-but-not-archived rows older than readTTL.
+// Unread rows are never deleted — they are still the user's pending signal.
+// Returns the number of rows deleted (batch-capped; run to a zero return or
+// on the next tick to drain a large backlog).
+func (r *Repo) DeleteAged(ctx context.Context, archivedTTL, readTTL time.Duration, batch int) (int64, error) {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM notification
+		WHERE id IN (
+			SELECT id FROM notification
+			WHERE (archived_at IS NOT NULL AND archived_at < now() - make_interval(secs => $1))
+			   OR (archived_at IS NULL AND read_at IS NOT NULL AND read_at < now() - make_interval(secs => $2))
+			LIMIT $3
+		)`, archivedTTL.Seconds(), readTTL.Seconds(), batch)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

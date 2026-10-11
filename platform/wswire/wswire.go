@@ -107,6 +107,49 @@ func Capabilities() []string {
 
 const ConnectedFrameType = "connected"
 
+// ControlFrame is the canonical decode target for inbound control frames
+// (auth / subscribe / unsubscribe). Control fields are accepted from EITHER
+// shape (F16): the flat form `{"type":"subscribe","scope":"task","id":"1"}`
+// and the nested form `{"type":"subscribe","payload":{"scope":"task","id":"1"}}`
+// — the JS WsClient's send() encodes the nested one. Top-level fields win
+// when both are present.
+type ControlFrame struct {
+	Type    string          `json:"type"`
+	Token   string          `json:"token"`
+	Scope   string          `json:"scope"`
+	ID      string          `json:"id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// DecodeControl parses a control frame and normalizes the nested payload into
+// the flat fields: if Scope/ID/Token are empty at the top level, they are read
+// out of payload when it is a JSON object.
+func DecodeControl(raw []byte) (ControlFrame, bool) {
+	var cf ControlFrame
+	if json.Unmarshal(raw, &cf) != nil {
+		return ControlFrame{}, false
+	}
+	if len(cf.Payload) > 0 && (cf.Scope == "" || cf.ID == "" || cf.Token == "") {
+		var nested struct {
+			Token string `json:"token"`
+			Scope string `json:"scope"`
+			ID    string `json:"id"`
+		}
+		if json.Unmarshal(cf.Payload, &nested) == nil {
+			if cf.Scope == "" {
+				cf.Scope = nested.Scope
+			}
+			if cf.ID == "" {
+				cf.ID = nested.ID
+			}
+			if cf.Token == "" {
+				cf.Token = nested.Token
+			}
+		}
+	}
+	return cf, true
+}
+
 func ScopeKey(prefix, id string) string { return prefix + ":" + id }
 
 func WSName(dotEvent string) string {

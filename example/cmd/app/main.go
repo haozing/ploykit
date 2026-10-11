@@ -49,6 +49,7 @@ import (
 	emaildev "github.com/haozing/ploykit/notify/adapters/email/emaildev"
 	notifysmtp "github.com/haozing/ploykit/notify/adapters/email/smtp"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
+	notifyworkers "github.com/haozing/ploykit/notify/adapters/workers"
 	notifyapp "github.com/haozing/ploykit/notify/app"
 	"github.com/haozing/ploykit/platform/egressx"
 	"github.com/haozing/ploykit/platform/events"
@@ -861,6 +862,7 @@ func main() {
 					apiBodyLimitMW(chainInner)))))))
 
 	wk.Add(&webhookworkers.DeliveryWorker{Service: whkSvc})
+	wk.Add(&notifyworkers.RetentionWorker{Repo: notifyRepo})
 	wk.Add(&billingworkers.ExpiryWorker{Service: billingSvc})
 	wk.Add(&billingworkers.MeteredOverageWorker{Billing: billingSvc, Usage: quotaSvc.Usage, Every: time.Hour})
 	wk.Add(&quotaworkers.ExpiryWorker{Service: quotaSvc})

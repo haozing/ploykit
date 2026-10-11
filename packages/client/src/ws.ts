@@ -146,6 +146,17 @@ export class WsClient {
     this.socket.send(JSON.stringify({ type, payload }))
   }
 
+  /**
+   * F18: send the PAT auth frame ({type:'auth', payload:{token}}). The hub
+   * accepts it inside the 30s post-connect grace window and the field resolves
+   * from the nested payload (F16) — this is the machine-credential WS path
+   * (agents), the browser path stays cookie-on-upgrade. No-op before the
+   * socket is open; safe to call again after a reconnect.
+   */
+  auth(token: string): void {
+    this.send('auth', { token })
+  }
+
   private openSocket(nextStatus: WsStatus): void {
     this.setStatus(nextStatus)
     const socket = this.socketFactory(this.url)

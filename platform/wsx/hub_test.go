@@ -252,7 +252,10 @@ func TestCapabilitiesInHandshake(t *testing.T) {
 	})
 }
 
-func TestUnknownFrameTypeIgnored(t *testing.T) {
+// F16 flips the old contract: unknown/unparseable control frames are answered
+// with rejected:control instead of dropped in silence — a sender speaking the
+// wrong shape gets a visible rejection, not a dead connection.
+func TestUnknownFrameTypeRejected_F16(t *testing.T) {
 	h := NewHub(nil)
 
 	h.Authorize = func(_ context.Context, _ *webx.Principal, _, _, _ string) bool { return true }
@@ -261,14 +264,21 @@ func TestUnknownFrameTypeIgnored(t *testing.T) {
 	c := dial(t, url)
 
 	require.NoError(t, c.WriteJSON(map[string]any{"type": "future:control", "payload": map[string]string{"x": "y"}}))
+	f := readFrame(t, c)
+	assert.Equal(t, wswire.RejectedPrefix+"control", f.Type)
 
 	require.NoError(t, c.WriteJSON(map[string]any{"type": "", "token": "whatever"}))
+	f = readFrame(t, c)
+	assert.Equal(t, wswire.RejectedPrefix+"control", f.Type)
 
 	require.NoError(t, c.WriteMessage(websocket.TextMessage, []byte("not-json")))
+	f = readFrame(t, c)
+	assert.Equal(t, wswire.RejectedPrefix+"control", f.Type)
 
+	// the connection survives all of the above: a good subscribe still works
 	registerTestScope(t)
 	require.NoError(t, c.WriteJSON(map[string]string{"type": "subscribe", "scope": testScope, "id": "t1"}))
-	f := readFrame(t, c)
+	f = readFrame(t, c)
 	assert.Equal(t, wswire.ConfirmPrefix+wswire.CtrlSubscribe, f.Type)
 	noFrame(t, c)
 }
@@ -571,4 +581,36 @@ func TestWSEvictionCounted(t *testing.T) {
 	}
 	require.Eventually(t, func() bool { return h.RoomSize(scope) == 0 }, 3*time.Second, 20*time.Millisecond)
 	assert.Equal(t, 1, m.incr["ws_evictions"], "eviction count exactly once (concurrent full-buffer collisions deduped by CAS)")
+}
+
+// F16: the JS WsClient's send() encodes control frames with the fields nested
+// under payload — {"type":"subscribe","payload":{"scope":...,"id":...}}. The
+// hub must accept that shape exactly like the flat one (previously it decoded
+// empty scope/id and dropped the frame in silence — the framework's own client
+// could not subscribe at all).
+func TestControlFrame_NestedPayloadShape_F16(t *testing.T) {
+	registerTestScope(t)
+	h := NewHub(nil)
+	h.Authorize = func(_ context.Context, _ *webx.Principal, _, _, _ string) bool { return true }
+	p := &webx.Principal{UserID: "u1", Source: webx.SourceSession}
+	_, url := newHubSrv(t, h, p)
+	c := dial(t, url)
+
+	require.NoError(t, c.WriteJSON(map[string]any{"type": "subscribe", "payload": map[string]string{"scope": testScope, "id": "t1"}}))
+	f := readFrame(t, c)
+	assert.Equal(t, wswire.ConfirmPrefix+wswire.CtrlSubscribe, f.Type)
+
+	h.Broadcast(context.Background(), wswire.ScopeKey(testScope, "t1"), frame(t, "n1"))
+	assert.Equal(t, "n1", readFrame(t, c).EventID, "nested-shape subscription must actually deliver")
+}
+
+func TestControlFrame_UnknownTypeRejected_F16(t *testing.T) {
+	h := NewHub(nil)
+	p := &webx.Principal{UserID: "u1", Source: webx.SourceSession}
+	_, url := newHubSrv(t, h, p)
+	c := dial(t, url)
+
+	require.NoError(t, c.WriteJSON(map[string]string{"type": "mystery", "scope": "task", "id": "x"}))
+	f := readFrame(t, c)
+	assert.Equal(t, wswire.RejectedPrefix+"control", f.Type)
 }

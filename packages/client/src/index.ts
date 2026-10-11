@@ -7,6 +7,7 @@ export {
   isApiError,
   setWorkspaceIdProvider,
   DEFAULT_TIMEOUT_MS,
+  __resetApiForTests,
 } from './api'
 export type { ApiFetchOptions } from './api'
 

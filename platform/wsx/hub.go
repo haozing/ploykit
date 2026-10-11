@@ -349,13 +349,17 @@ func (h *Hub) patPrefix() string {
 }
 
 func (h *Hub) handleControl(c *client, raw []byte) {
-	var in struct {
-		Type  string `json:"type"`
-		Token string `json:"token"`
-		Scope string `json:"scope"`
-		ID    string `json:"id"`
-	}
-	if json.Unmarshal(raw, &in) != nil {
+	// F16: control fields decode from BOTH shapes — the flat form the Go tests
+	// speak and the nested {type,payload:{...}} form the JS WsClient's send()
+	// encodes. Before this, the JS client's subscribe frames carried empty
+	// top-level scope/id and were dropped by IsRegisteredScope("") in total
+	// silence — the framework's own client could not subscribe at all.
+	in, ok := wswire.DecodeControl(raw)
+	if !ok {
+		// Unparseable control frame: name the rejection instead of dropping it
+		// silently — the sender (or the operator reading the client's console)
+		// gets a frame back instead of a dead connection.
+		c.sendJSON(wswire.RejectedPrefix+"control", nil)
 		return
 	}
 	switch in.Type {
@@ -425,6 +429,11 @@ func (h *Hub) handleControl(c *client, raw []byte) {
 		if in.Scope != "" && in.ID != "" {
 			h.leave(c, wswire.ScopeKey(in.Scope, in.ID))
 		}
+	default:
+		// F16: unknown control types used to fall through in silence — a
+		// protocol mismatch on the sender side was indistinguishable from a
+		// working subscription. Reject with the unknown type named.
+		c.sendJSON(wswire.RejectedPrefix+"control", map[string]string{"type": in.Type})
 	}
 }
 
