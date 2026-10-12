@@ -39,7 +39,9 @@ import (
 const (
 	DefaultEmail     = "dev@tenant.local"
 	DefaultUserName  = "Dev Tenant"
-	DefaultWorkspace = "dev"
+	// DefaultWorkspace satisfies the slug CHECK (4+ chars: the tests always
+	// passed an explicit slug, so this default only now meets a real insert).
+	DefaultWorkspace = "dev-tenant"
 	DefaultWSName    = "Dev Workspace"
 )
 

@@ -18,6 +18,13 @@ type Options struct {
 	Format string
 
 	ReplaceAttr func(groups []string, a slog.Attr) slog.Attr
+
+	// WrapHandler, when set, receives the fully built format handler and
+	// returns the handler the logger should actually use. It is the
+	// interception point for observability capture layers such as
+	// logring.Wrap; stdout format and level semantics stay with the
+	// wrapped handler.
+	WrapHandler func(slog.Handler) slog.Handler
 }
 
 func New(opt Options) *slog.Logger {
@@ -38,30 +45,36 @@ func New(opt Options) *slog.Logger {
 		panic("logx: invalid format " + opt.Format + ": " + err.Error())
 	}
 	replace := chainAttrHooks(opt.ReplaceAttr, utcTimeAttr)
+	var base slog.Handler
 	switch format {
 	case "json":
-		return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
+		base = slog.NewJSONHandler(w, &slog.HandlerOptions{
 			Level:       level,
 			ReplaceAttr: replace,
-		}))
+		})
 	case "tint":
-		return slog.New(&tintHandler{w: w, level: level, replaceAttr: opt.ReplaceAttr})
+		base = &tintHandler{w: w, level: level, replaceAttr: opt.ReplaceAttr}
 	case "text":
-		return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
+		base = slog.NewTextHandler(w, &slog.HandlerOptions{
 			Level:       level,
 			ReplaceAttr: replace,
-		}))
+		})
 	case "", "auto":
 		if wantColor(w) {
-			return slog.New(&tintHandler{w: w, level: level, replaceAttr: opt.ReplaceAttr})
+			base = &tintHandler{w: w, level: level, replaceAttr: opt.ReplaceAttr}
+		} else {
+			base = slog.NewTextHandler(w, &slog.HandlerOptions{
+				Level:       level,
+				ReplaceAttr: replace,
+			})
 		}
-		return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
-			Level:       level,
-			ReplaceAttr: replace,
-		}))
 	default:
 		panic("logx: invalid format " + opt.Format + " (tint|text|json)")
 	}
+	if opt.WrapHandler != nil {
+		base = opt.WrapHandler(base)
+	}
+	return slog.New(base)
 }
 
 func utcTimeAttr(_ []string, a slog.Attr) slog.Attr {

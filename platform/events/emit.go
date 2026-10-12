@@ -38,6 +38,17 @@ type Emitter struct {
 	stopWait time.Duration
 }
 
+// Client exposes the underlying river client for inspection and operation
+// surfaces (job listing, retry, cancel, queue pause — see platform/devx).
+// Emission must keep going through Emit; a nil client (Emitter built without
+// New) also returns nil here.
+func (e *Emitter) Client() *river.Client[pgx.Tx] {
+	if e == nil {
+		return nil
+	}
+	return e.client
+}
+
 func (e *Emitter) Emit(ctx context.Context, tx pgx.Tx, ev Event, opts ...river.InsertOpts) error {
 	if ev.Kind == "" {
 		return fmt.Errorf("events: emit: empty kind")

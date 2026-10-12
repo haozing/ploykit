@@ -3446,6 +3446,183 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  # ---------- platform/devx + platform/mcpx：agent 开发面（ADR 0014） ----------
+  # env 门控（PLOYKIT_DEV_ENABLED / PLOYKIT_MCP_ENABLED，默认关），开发期 agent
+  # 排障面：查询类 PAT 须 dev:observe，变更类须 dev:operate；浏览器会话不受
+  # scope 约束。关闭时路由不挂载（404）。
+  /dev/logs:
+    get:
+      operationId: devLogs
+      tags: [system]
+      summary: 取回进程日志（按 request_id 关联或全局尾窗；dev 门控）
+      description: |
+        logring 环形缓冲的查询出口——"一次故障一个 artifact"：失败响应头
+        X-Request-Id → 按该 id 取回其全部日志记录。进程内、有界、重启即失，
+        开发期工具，不替代生产日志栈。
+      parameters:
+        - name: request_id
+          in: query
+          required: false
+          schema: { type: string }
+          description: 按请求 id 精确取回；缺省为全局尾窗
+        - name: level
+          in: query
+          required: false
+          schema: { type: string, enum: [debug, info, warn, error] }
+          description: 最低级别过滤（缺省全量）
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 100 }
+          description: 返回上限（保留最新的）
+      responses:
+        '200':
+          description: 日志条目（时间正序）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevLogEntries'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /dev/jobs:
+    get:
+      operationId: devJobList
+      tags: [system]
+      summary: 后台任务列表（river；按状态/队列/类型过滤；dev 门控）
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: { type: string, enum: [available, cancelled, completed, discarded, pending, retryable, running, scheduled] }
+          description: 任务状态；discarded = 重试耗尽
+        - name: queue
+          in: query
+          required: false
+          schema: { type: string }
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: 任务摘要列表（id/kind/state/attempt/errors）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevJobList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /dev/jobs/{id}:
+    get:
+      operationId: devJobGet
+      tags: [system]
+      summary: 单个后台任务详情（含 args 载荷与逐次尝试错误；dev 门控）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevJobDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/jobs/{id}/retry:
+    post:
+      operationId: devJobRetry
+      tags: [system]
+      summary: 立即重试一个后台任务（dev:operate）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 已排入重试
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/jobs/{id}/cancel:
+    post:
+      operationId: devJobCancel
+      tags: [system]
+      summary: 取消一个后台任务（队列中立即取消，运行中协作取消；dev:operate）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: 已取消
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusOK'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dev/doctor:
+    get:
+      operationId: devDoctor
+      tags: [system]
+      summary: 启动自检（river schema / seal key / cookie / drain 窗口 / 健康探针；dev 门控）
+      description: |
+        逐项 pass/fail + 失败项的 fix_hint——把"经典接线失败"的诊断从
+        agent 的逆向推理变成一次查询。产品可注册自己的检查项。
+      responses:
+        '200':
+          description: 自检结果（全部通过时 ok=true）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevDoctorReport'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  # platform/mcpx 的 /mcp（MCP streamable-HTTP 控制面，PLOYKIT_MCP_ENABLED 门控）
+  # 按 mount 约定不入本 spec（同 /metrics）：协议非 REST，工具清单由
+  # MCP initialize/tools/list 自描述。platform/devx 的 /dev/* 是普通 REST，
+  # 正常入契约。
+
   # ---------- platform/wsx：实时通道 ----------
   /ws:
     get:
@@ -4931,3 +5108,94 @@ components:
           type: integer
         total:
           type: integer
+    DevLogEntry:
+      type: object
+      required: [time, level, message]
+      properties:
+        time:
+          type: string
+          format: date-time
+        level:
+          type: integer
+          description: slog 级别数值（0=info 4=warn 8=error，负数为 debug）
+        message:
+          type: string
+        request_id:
+          type: string
+        attrs:
+          type: array
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key: { type: string }
+              value: { type: string }
+    DevLogEntries:
+      type: object
+      required: [request_id, entries]
+      properties:
+        request_id:
+          type: string
+          description: 精确取回时的请求 id；尾窗模式为空串
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DevLogEntry'
+    DevJobSummary:
+      type: object
+      required: [id, kind, queue, state, attempt, max_attempts, scheduled_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string }
+        queue: { type: string }
+        state: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        attempt: { type: integer }
+        max_attempts: { type: integer }
+        scheduled_at: { type: string, format: date-time }
+        finalized_at: { type: string, format: date-time }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [at, error]
+            properties:
+              at: { type: string, format: date-time }
+              error: { type: string }
+              trace_id: { type: string }
+    DevJobList:
+      type: object
+      required: [jobs]
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/DevJobSummary'
+    DevJobDetail:
+      allOf:
+        - $ref: '#/components/schemas/DevJobSummary'
+        - type: object
+          required: [args]
+          properties:
+            args:
+              type: object
+              description: 任务参数载荷（river job args 原样 JSON）
+    DevDoctorReport:
+      type: object
+      required: [ok, duration_ms, checks]
+      properties:
+        ok: { type: boolean }
+        duration_ms: { type: integer }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, summary, pass, detail]
+            properties:
+              name: { type: string }
+              summary: { type: string }
+              pass: { type: boolean }
+              detail: { type: string }
+              fix_hint: { type: string }

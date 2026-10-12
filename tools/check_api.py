@@ -39,6 +39,7 @@ HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options", "tra
 
 SCAN_FILES = [
     *sorted(ROOT.glob("*/adapters/http/*.go")),
+    *sorted(ROOT.glob("platform/devx/*.go")),
     ROOT / "example" / "cmd" / "app" / "main.go",
     *sorted((ROOT / "example" / "internal").glob("task/*.go")),
 ]

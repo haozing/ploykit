@@ -26,6 +26,7 @@ import (
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
 	identityapp "github.com/haozing/ploykit/identity/app"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
+	"github.com/haozing/ploykit/platform/devx"
 	"github.com/haozing/ploykit/platform/webx"
 	quotahttp "github.com/haozing/ploykit/quota/adapters/http"
 	schedulehttp "github.com/haozing/ploykit/schedule/adapters/http"
@@ -40,7 +41,7 @@ import (
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-const expectedRouteCount = 142
+const expectedRouteCount = 148
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
@@ -90,6 +91,12 @@ func mountProductionRoutes(mux *webx.Mux) {
 	mux.HandleFunc("GET /healthz", noopHandler)
 	mux.HandleFunc("GET /readyz", noopHandler)
 	mux.HandleFunc("GET /debug/pool", noopHandler)
+
+	// Agent dev surface (ADR 0014): env-gated in main.go but part of the
+	// product's route contract — registered here with zero-value deps
+	// (handlers are closures; nothing is dereferenced without a request).
+	// /mcp is a method-less mount, skipped by the count like /metrics.
+	devx.Mount(mux, devx.Deps{})
 }
 
 // runtimeRoutes returns the production endpoint set as "METHOD /path" keys.

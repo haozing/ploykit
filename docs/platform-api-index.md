@@ -219,6 +219,7 @@ The WS wire protocol vocabulary is a public platform package so that products bu
 | Subscribe | `Subscribe(kind string, h Handler)` | Registers subscriptions at assembly time; panics on registration after worker start / duplicate registration of the same kind; **idempotency is the subscriber's contract** |
 | Handler / Option | `func(ctx, Event) error` (error → exponential backoff retry; **a failed final attempt escalates to Error-level logging** — discarded dead-letters remain visible in the logs; same-kind events may run concurrently (MaxWorkers=10), so handlers must be thread-safe); `Option func(*river.Config)` as the escape hatch | Subscription signature and River configuration customization |
 | QueueEvents | The `"events"` constant | The dedicated event queue, isolated from the default queue of product-built River clients |
+| Emitter.Client | `Client() *river.Client[pgx.Tx]` | Inspection/operation access to the underlying River client (job list/retry/cancel, queue pause — consumed by platform/devx); emission keeps going through Emit; nil when the Emitter was not built via New |
 
 ## platform/cronx (cron expressions)
 
@@ -239,8 +240,37 @@ The WS wire protocol vocabulary is a public platform package so that products bu
 
 | Symbol | Signature essentials | Purpose |
 |---|---|---|
-| New | `New(Options{Level, Format, Writer, ReplaceAttr}) *slog.Logger` | Format: `""` (auto: TTY → tint, otherwise text; honors NO_COLOR/TERM=dumb) / `auto` / `tint` / `text` / `json` (lenient about case/whitespace); timestamps are uniformly UTC RFC3339Nano; ReplaceAttr is a pre-write hook shared by the three forms (the redactx redaction wiring point; composing it does not override time normalization); panics on invalid configuration |
+| New | `New(Options{Level, Format, Writer, ReplaceAttr, WrapHandler}) *slog.Logger` | Format: `""` (auto: TTY → tint, otherwise text; honors NO_COLOR/TERM=dumb) / `auto` / `tint` / `text` / `json` (lenient about case/whitespace); timestamps are uniformly UTC RFC3339Nano; ReplaceAttr is a pre-write hook shared by the three forms (the redactx redaction wiring point; composing it does not override time normalization); WrapHandler receives the fully built format handler and returns the handler to actually use (the logring capture insertion point — stdout format/level semantics stay with the wrapped handler); panics on invalid configuration |
 | Component | `Component(l, name) *slog.Logger` | A sub-logger with the `component=name` attribute added |
+
+## platform/logring (In-memory log capture, ADR 0014)
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| New / Handler | `New(next slog.Handler, Options{Capacity, PerRequestCapacity, MaxRequests, Redact}) *Handler` (`.Ring()` reaches the store) | The capture slog.Handler: forwards to `next` unchanged (Enabled follows it) and mirrors every emitted record into a ring indexed per request id (read from ctx via `webx.RequestIDFromCtx`, LRU eviction on distinct ids) plus a global tail window; string values are scrubbed through redactx by default (`Redact:*bool` opts out) |
+| Wrap | `Wrap(out **Ring, Options) func(slog.Handler) slog.Handler` | The `logx.Options.WrapHandler` adapter — one line wires capture into the boot logger and hands the Ring back |
+| Ring queries | `ByRequestID(rid, Query{MinLevel, Limit})` / `Tail(Query)` / `Stats()` | "One artifact per failure": fetch all records behind one request id; or the recent global tail; entries are oldest-first, JSON-serializable |
+| Options defaults | Capacity 4096 / PerRequest 256 / MaxRequests 512 | Process-local and bounded by design — a development-observability surface, not a production log sink |
+
+## platform/devx (Agent dev surface: logs / jobs / doctor, ADR 0014)
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| Mount | `Mount(mux webx.Router, Deps{Logs, Jobs, Doctor, Audit, Log})` | Registers GET /dev/logs, GET /dev/jobs, GET /dev/jobs/{id}, POST /dev/jobs/{id}/retry, POST /dev/jobs/{id}/cancel, GET /dev/doctor. Auth is NOT applied here — mount behind the global Authenticate; PATs are scope-bounded by `webx.RequireScope`: `devx.ScopeObserve` (`dev:observe`) for reads, `devx.ScopeOperate` (`dev:operate`) for retry/cancel. Mutations reach audit via the injected `AuditHook` (platform cannot import the audit domain) |
+| Deps degradation | nil Logs/Jobs/Doctor → the endpoint answers 404 with an explicit "not enabled / not wired" body | Diagnosable degradation, never silent-empty |
+| LogService / JobService | `NewLogService(*logring.Ring)` / `NewJobService(emitter.Client())` (`.Available()` gates) | The service layer shared by the HTTP surface and the MCP tools — both surfaces stay behaviorally identical |
+| Doctor | `NewDoctor()` + `Register(Check{Name, Summary, Run})` (duplicate names panic) + `RunDoctor(ctx, perCheckTimeout)` | The check registry: concurrent execution, per-check timeout, panic containment, results sorted by name; failures carry Detail + FixHint — the agent-readable diagnostic format |
+| Built-in checks | `RiverSchemaCheck(*sql.DB)` / `SealKeyCheck(env)` / `CookieSecureCheck(secure, production)` / `DrainWindowCheck(drain, softStop)` / `HealthProbesCheck(n)` | Executable versions of the AGENTS.md operational gotchas (river migrate timing, seal key, cookie/shape consistency, drain ≥ soft-stop + margin, readiness probes); opt-in per product wiring; products register their own checks alongside |
+| RegisterTools | `RegisterTools(*mcp.Server, *Deps)` | The six built-in MCP tools (tail_request_logs / list_failed_jobs / get_job / retry_job / cancel_job / run_doctor) over the same service layer; each tool re-checks the PAT scope from ctx (stateless transport carries the Authenticate-installed Principal into tool handlers) |
+
+## platform/mcpx (Mountable MCP control plane, ADR 0014)
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| NewMount | `NewMount(Config{Enabled *bool, Path, ServerName, ServerVersion}, register func(*mcp.Server)) *Mount` | The mountable assembly surface (same shape as metrics): Enabled=false is an inert 404 mount (env-gated silent degradation); `register` installs tools before the first session — framework packages (devx.RegisterTools) and product code both hook in here |
+| Mount.Handler / Path | `.Handler() http.Handler` (streamable-HTTP, **stateless mode**) / `.Path()` | Stateless is load-bearing: every POST is self-contained and passes through the product's middleware chain (Authenticate), so ctx values (Principal, request id) reach tool handlers; also the right deployment shape for an embedded control plane (no session affinity). Mount at `.Path()` (default "/mcp"), gate with auth before serving; timeout-exempt the path (pitfall #1 of non-browser mounts) |
+| Mount.Server | `Server() *mcp.Server` (panics on a disabled mount — a wiring bug) | Late tool registration for the product |
+| RawArgs / ToolResultText | `RawArgs(req, &into)` / `ToolResultText(s)` | Small helpers for hand-written-schema tools and plain-text results |
 
 ## platform/pg (Connection pool + transactions + RLS channel)
 

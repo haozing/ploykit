@@ -32,9 +32,12 @@ type Option func(*river.Config)
 // Deliberately NOT part of ploykit migrations (001-999): the river schema
 // follows the river library's own version sequence, managed adaptively by its
 // official migrator - embedding it would pin us to one river version. Call it
-// once in the product boot sequence after events.New and before
+// once in the product boot sequence BEFORE events.New and before
 // workers.Start; deployments with their own migration pipeline may call it
-// from there instead.
+// from there instead. It is the ONLY sanctioned way the river schema comes
+// into existence — products must not copy the river SQL into their own
+// migrations (a duplicate creation collides with the bookkeeping the
+// migrator maintains).
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
 	if err != nil {

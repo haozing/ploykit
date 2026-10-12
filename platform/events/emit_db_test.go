@@ -247,3 +247,4 @@ func TestEmitAt_ScheduledAtPersisted(t *testing.T) {
 		`SELECT scheduled_at FROM river_job WHERE args->>'kind' = 'probe.once'`).Scan(&got))
 	require.WithinDuration(t, at, got, time.Second, "scheduled_at 应等于传入时刻")
 }
+

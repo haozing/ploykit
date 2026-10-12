@@ -44,7 +44,7 @@ However much infrastructure the framework builds in, nothing beats doing these f
 | composition-root exemplar | `example/cmd/app/main.go` | shows how every domain is assembled (including the migration dual track: framework `migrations.FS` + the product's own embedded migrations) |
 | product command entry | `example/Makefile` | stable command names: db-up / db-down / backend / frontend / build / clean |
 | hook semantics tests | `quota/hooks_test.go`, `webhooks/app/hooks_test.go` | hooks carry behavior contracts, not just wiring |
-| architecture boundary tests | `internal/arch` (A1–A7 + allowlist + stale/validity dual detection + synthetic-graph canary self-check, three-part violation output) | the constraint layer's enforcement mechanism, run automatically by `go test ./...` (§4.2) |
+| architecture boundary tests | `internal/arch` (A1–A6 + allowlist + stale/validity dual detection + synthetic-graph canary self-check, three-part violation output) | the constraint layer's enforcement mechanism, run automatically by `go test ./...` (§4.2) |
 
 ### Known open items
 
@@ -61,8 +61,8 @@ However much infrastructure the framework builds in, nothing beats doing these f
 |---|---|---|---|
 | Contract layer | AGENTS.md | dual layer: root + example | landed |
 | Context layer | PROJECT_INDEX / api-index / llms.txt | hooks master table in docs/api-index.md (hand-written; no generator); openapi.yaml is already the machine-readable index of the API surface | partially landed; llms.txt deferred (§5) |
-| Constraint layer | type systems / lint boundaries / arch tests | Go arch tests (`internal/arch` A1–A7) + the TS compiler (ruled in architecture.md §5B.1) + the check_api drift guard | landed |
-| Autonomy layer | CLI doctor/fix, golden datasets | check_api + the hooks tests cover one corner; golden HTTP snapshots remain (§5) | deferred |
+| Constraint layer | type systems / lint boundaries / arch tests | Go arch tests (`internal/arch` A1–A6) + the TS compiler (ruled in architecture.md §5B.1) + the check_api drift guard | landed |
+| Autonomy layer | CLI doctor/fix, golden datasets | check_api + the hooks tests cover one corner; **the doctor landed 2026-10-12 as a library + endpoint (ADR 0014)**: `platform/devx` Doctor registry, five built-in boot checks, GET /dev/doctor + run_doctor MCP tool; golden HTTP snapshots remain (§5) | mostly landed |
 
 ---
 
@@ -124,10 +124,14 @@ Promotion rule: a deferred item starts as soon as its start condition is met.
 | Item | Start condition | Why not now |
 |---|---|---|
 | golden HTTP snapshots | behavioral regressions after refactors, or when adapters need changes | API drift is covered by check_api, hook semantics by the hooks tests; adapter request→response snapshots are the remaining gap |
-| ploykit CLI (doctor / fix / generate) | the same onboarding error recurs in ≥2 product repos | consumption today is go get / npm with no CLI carrier; doctor's check rules should grow out of session evidence first |
-| agentlog JSON log system | after the CLI exists; the renderx build chain (prerender) output offers a landing spot | ploykit remains primarily a library; the error surfacing path is error wrapping + apierr |
-| llms.txt / MCP server | open-sourcing, or external Agent consumers appearing | AGENTS.md + openapi.yaml already cover the role |
+| ploykit CLI (doctor / fix / generate) | the same onboarding error recurs in ≥2 product repos (partially fired: doctor landed 2026-10-12 as a library + /dev/doctor endpoint + MCP tool, ADR 0014 — the library form needs no CLI carrier; a standalone binary stays deferred until a product actually wants one) | consumption today is go get / npm with no CLI carrier; doctor's check rules grew out of session evidence (AGENTS.md gotchas) |
+| llms.txt | open-sourcing | AGENTS.md + openapi.yaml + the MCP docs tools cover the role for now; llms.txt is a cheap follow-up at open-source time |
 | TS props doctor | never | the TS compiler is the contract (architecture.md §5B.1) |
+
+**Promoted 2026-10-12 (ADR 0014, "agent eyes and hands")** — the former "agentlog JSON log system" and "llms.txt / MCP server" rows:
+
+- **agentlog** → landed as `platform/logring` (in-memory ring keyed by request id, capture via `logx.Options.WrapHandler`) + `platform/devx` (GET /dev/logs). The renderx-build-chain landing spot is obsolete: the consumer is the running app itself, queried by request id.
+- **MCP server** → landed as `platform/mcpx` (mountable official-SDK control plane, stateless streamable HTTP) + `platform/devx.RegisterTools` (six built-in tools: tail_request_logs / list_failed_jobs / get_job / retry_job / cancel_job / run_doctor). Products add intent-level tools of their own (example: `provision_dev_tenant` in example/internal/devtools). Trigger that fired: five product repos are developed by agents — "external Agent consumers" is past tense.
 
 ---
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"encoding/base64"
 	"encoding/hex"
@@ -19,6 +20,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/haozing/ploykit/admin"
 	"github.com/haozing/ploykit/admin/adapters/bridge"
@@ -51,9 +54,12 @@ import (
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
 	notifyworkers "github.com/haozing/ploykit/notify/adapters/workers"
 	notifyapp "github.com/haozing/ploykit/notify/app"
+	"github.com/haozing/ploykit/platform/devx"
 	"github.com/haozing/ploykit/platform/egressx"
 	"github.com/haozing/ploykit/platform/events"
 	logx "github.com/haozing/ploykit/platform/logx"
+	"github.com/haozing/ploykit/platform/logring"
+	"github.com/haozing/ploykit/platform/mcpx"
 	"github.com/haozing/ploykit/platform/metrics"
 	"github.com/haozing/ploykit/platform/pg"
 	"github.com/haozing/ploykit/platform/pgmigrate"
@@ -89,6 +95,7 @@ import (
 
 	"myproduct/internal/authorization"
 	"myproduct/internal/blog"
+	"myproduct/internal/devtools"
 	"myproduct/internal/eventsdemo"
 	"myproduct/internal/task"
 )
@@ -186,10 +193,15 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 
 func main() {
 
+	// Agent "eyes" (ADR 0014): capture stdout records into an in-memory ring
+	// indexed by request id, so a dev agent can fetch the logs behind one
+	// failed request via GET /dev/logs (off by default).
+	var logRing *logring.Ring
 	log := logx.New(logx.Options{
 		Level:       env("LOG_LEVEL", "info"),
 		Format:      env("LOG_FORMAT", ""),
 		ReplaceAttr: redactAttr,
+		WrapHandler: logring.Wrap(&logRing, logring.Options{}),
 	})
 	slog.SetDefault(log)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -462,6 +474,58 @@ func main() {
 		Token:   env("PLOYKIT_METRICS_TOKEN", ""),
 	})
 	mux.Handle(mnt.Path(), mnt.Handler())
+
+	// Agent "eyes + hands" (ADR 0014): the dev surface (GET /dev/logs,
+	// /dev/jobs, /dev/doctor; POST retry/cancel) and the MCP control plane
+	// (/mcp) are env-gated and OFF by default. When on, they mount behind the
+	// global Authenticate (PAT or session) and enforce dev:observe /
+	// dev:operate scopes on PAT callers. Dev-stage tooling: they expose THIS
+	// process's logs and queue — not a production observability stack.
+	devOn := env("PLOYKIT_DEV_ENABLED", "") == "1"
+	mcpOn := env("PLOYKIT_MCP_ENABLED", "") == "1"
+
+	doctor := devx.NewDoctor()
+	doctor.Register(devx.RiverSchemaCheck(stdlibDB(pool)))
+	doctor.Register(devx.SealKeyCheck(sealx.EnvKey))
+	doctor.Register(devx.CookieSecureCheck(authCfg.Secure, production))
+	const eventsSoftStop = 30 * time.Second // platform/events SoftStopTimeout
+	drainWindow := 10 * time.Second
+	if devOn || mcpOn || env("DEV_DOCTOR_DRAIN", "") != "" {
+		// The real window is known only at shutdown; wire the check against
+		// the constant this boot actually uses (kept in sync below at Drain).
+		drainWindow = 45 * time.Second
+	}
+	doctor.Register(devx.DrainWindowCheck(drainWindow, eventsSoftStop))
+	doctor.Register(devx.HealthProbesCheck(2)) // db + workers, wired below on /readyz
+
+	devDeps := devx.Deps{
+		Logs:   devx.NewLogService(logRing),
+		Jobs:   devx.NewJobService(emitter.Client()),
+		Doctor: doctor,
+		Audit: func(r *http.Request, action, target string) {
+			p := webx.PrincipalFromRequest(r)
+			auditor.Record(context.Background(), nil, p, action, "devx", target, nil)
+		},
+		Log: log,
+	}
+	if devOn {
+		devx.Mount(mux, devDeps)
+	}
+
+	var mcpMount *mcpx.Mount
+	if mcpOn {
+		mcpMount = mcpx.NewMount(mcpx.Config{
+			Enabled:       &mcpOn,
+			ServerName:    "ploykit-example",
+			ServerVersion: "0.0.0-dev",
+		}, func(s *devtools.Server) {
+			devx.RegisterTools(s, &devDeps)
+			// Product-registered tools go here too — the example ships one
+			// reference integration (dev tenant provisioning).
+			devtools.RegisterProductTools(s, pool, log)
+		})
+		mux.Handle(mcpMount.Path(), mcpMount.Handler())
+	}
 
 	idDeps := identityhttp.Deps{
 		AuthCfg: authCfg, Sessions: idRepo, PATs: idRepo, Account: accountSvc,
@@ -774,7 +838,7 @@ func main() {
 			// dev 放行回环任意端口：vite 端口漂移（5173→517x）不再全站写操作 403；生产必须精确枚举
 			TrustLocalhostAnyPort: !production,
 
-			ExemptPrefixes: []string{"/webhooks/billing/"},
+			ExemptPrefixes: []string{"/webhooks/billing/", "/mcp"},
 
 			// ADR 0013 batch 3: CSRF 的 bearer 豁免只对"干净 bearer 传输"生效 —
 			// 同请求带着会话 cookie 即为 mixed，落入 CSRF 检查
@@ -871,7 +935,7 @@ func main() {
 			})
 		}
 	}
-	apiBodyLimitMW := pathGate(webx.BodyLimit(1<<20), "/api/", "/auth/")
+	apiBodyLimitMW := pathGate(webx.BodyLimit(1<<20), "/api/", "/auth/", "/dev/", "/mcp")
 
 	authRateLimitMW := func(next http.Handler) http.Handler { return next }
 	if rlPerIP > 0 {
@@ -892,7 +956,10 @@ func main() {
 			"/api/")
 	}
 
-	chainInner := webx.TimeoutExcept(5*time.Second, "/ws")(
+	// /mcp joins /ws on the timeout exemption: MCP sessions (and tool calls
+	// over the streamable transport) outlive the 5s default — pitfall #1 of
+	// the non-browser mounting checklist.
+	chainInner := webx.TimeoutExcept(5*time.Second, "/ws", "/mcp")(
 		webx.CORS([]string{frontendOrigin}, true)(
 			csrfMW(
 				webx.Recover(log)(
@@ -940,8 +1007,17 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
-	wk.Drain(10 * time.Second)
+	// Drain ≥ events soft-stop (30s) + margin (15s): a shorter window
+	// force-kills in-flight event handlers mid-work (the DrainWindowCheck in
+	// the doctor verifies this contract).
+	wk.Drain(45 * time.Second)
 	log.Info("bye")
+}
+
+// stdlibDB exposes the pool over database/sql for checks that want plain SQL
+// (the doctor's river schema probe) without dragging pgx into devx.
+func stdlibDB(pool *pgxpool.Pool) *sql.DB {
+	return stdlib.OpenDB(*pool.Config().ConnConfig)
 }
 
 type attemptsCleanupWorker struct {

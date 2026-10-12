@@ -12,7 +12,7 @@ Relationship to [ADR 0001](0001-async-substrate-positioning.md): the reopen cond
 
 ## Decision
 
-**Adopt `github.com/riverqueue/river` v0.49 (riverpgxv5 driver) as the event and async substrate**. The framework provides a two-layer thin wrapper at `platform/events` (business code works through `Event`/`Emit`/`Subscribe` and never needs River types, apart from an optional `river.InsertOpts` override on `Emit`), fanning out through the single job kind `"ploykit.event"`, with idempotency keys via unique jobs (ByArgs, hashing only kind/workspace/idempotency_key, not the payload). The river table family is product-side schema: example introduces it through the `1005_river_job` migration (the official 001-008 merged).
+**Adopt `github.com/riverqueue/river` v0.49 (riverpgxv5 driver) as the event and async substrate**. The framework provides a two-layer thin wrapper at `platform/events` (business code works through `Event`/`Emit`/`Subscribe` and never needs River types, apart from an optional `river.InsertOpts` override on `Emit`), fanning out through the single job kind `"ploykit.event"`, with idempotency keys via unique jobs (ByArgs, hashing only kind/workspace/idempotency_key, not the payload). **Schema ownership (amended 2026-10-12, superseding the original "product-side 1005_river_job migration" ruling): the river table family is created and evolved exclusively by `events.Migrate` at product boot** — the product-side hard copy collided with the migrator's bookkeeping on every fresh boot (the copy ran inside pgmigrate without writing river_migration, so the official migrator replayed version 001 into existing tables). One schema, one writer.
 
 Selection comparison:
 
