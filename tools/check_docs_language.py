@@ -14,11 +14,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CJK = re.compile(r'[\u4e00-\u9fff]')
 
-# docs + root guidance: zero Chinese allowed.
+# docs + root guidance: zero Chinese allowed, except the process-artifact
+# prefixes below (delivery audits and execution plans are working records that
+# quote Chinese field reports verbatim; they are referenced once and are not
+# framework contract surface - everything else in docs/ stays English-only).
+PROCESS_DOC_PREFIXES = ('delivery-audit-', 'plan-')
+
 MD_TARGETS = [
     ROOT / 'README.md',
     ROOT / 'AGENTS.md',
-    *sorted((ROOT / 'docs').glob('*.md')),
+    *[f for f in sorted((ROOT / 'docs').glob('*.md'))
+      if not f.name.startswith(PROCESS_DOC_PREFIXES)],
     *sorted((ROOT / 'docs' / 'adr').glob('*.md')),
 ]
 

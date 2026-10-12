@@ -124,3 +124,26 @@ func jitDisplayName(email string) string {
 	}
 	return string(r)
 }
+
+// ListUsersByIDs batch-resolves users (aifengkong #7); unlike GetUser it
+// returns rows regardless of status (a disabled author still deserves a name
+// on audit trails) and skips missing ids instead of failing.
+func (r *Repo) ListUsersByIDs(ctx context.Context, ids []string) ([]app.User, error) {
+	if len(ids) == 0 {
+		return []app.User{}, nil
+	}
+	rows, err := r.pool.Query(ctx, `SELECT `+userCols+` FROM "user" WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+	out := []app.User{}
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, mapErr(err)
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}

@@ -66,6 +66,9 @@ func (f *fakeRepo) restore(s txSnap) {
 }
 
 func (f *fakeRepo) CreateUserWithPasswordTx(_ context.Context, _ pgx.Tx, email, passwordHash, displayName string) (app.User, error) {
+	if _, dup := f.users[email]; dup {
+		return app.User{}, app.ErrDuplicate
+	}
 	u := app.User{
 		ID: "u-" + email, Email: email, DisplayName: displayName,
 		PasswordHash: passwordHash, Status: "active", CreatedAt: f.nowFn(),

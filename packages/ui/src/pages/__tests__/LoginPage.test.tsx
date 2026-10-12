@@ -194,3 +194,36 @@ describe('LoginPage 深链回跳（B-settings-8）', () => {
     expect(loginRedirectTarget(123)).toBe('/app')
   })
 })
+
+describe('LoginPage passwordOnly（aifengkong #4：企业内部纯密码形态）', () => {
+  it('passwordOnly 时无验证码 Tab/表单，密码表单直出', () => {
+    const { container } = renderLogin({ passwordOnly: true })
+    expect(screen.queryByRole('tab', { name: '验证码登录' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: '密码登录' })).toBeNull()
+    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
+    expect(screen.getByLabelText('密码')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '发送' })).toBeNull()
+    expect(container.querySelector('form')).not.toBeNull()
+  })
+
+  it('passwordOnly 提交走 /auth/login', async () => {
+    const onSuccess = vi.fn()
+    renderLogin({ passwordOnly: true, onSuccess })
+    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith('/auth/login', {
+        email: 'user@example.com',
+        password: 'secret-password',
+      }),
+    )
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
+  })
+
+  it('默认形态不受影响（双 Tab 仍在）', () => {
+    renderLogin({})
+    expect(screen.getByRole('tab', { name: '验证码登录' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
+  })
+})

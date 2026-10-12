@@ -2,12 +2,16 @@ package app_test
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/haozing/ploykit/identity"
 	"github.com/haozing/ploykit/identity/app"
 	"github.com/haozing/ploykit/identity/domain"
 	"github.com/haozing/ploykit/platform/webx"
@@ -213,4 +217,93 @@ func TestPATForVariants(t *testing.T) {
 		assert.Equal(t, []string{"p1"}, r.revokedPATs)
 		assertErrCode(t, svc.RevokePATFor(t.Context(), "u1", "px"), 404, webx.CodeNotFound)
 	})
+}
+
+func (f *fakeRepo) ListUsersByIDs(_ context.Context, ids []string) ([]app.User, error) {
+	out := []app.User{}
+	for _, id := range ids {
+		if u, ok := f.byID[id]; ok {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+// aifengkong #1: admin provisioning must not carry self-service side effects
+// (no session, no mail, no signup gate) and must surface duplicate emails as
+// a distinguishable error; AfterRegister fires inside the same tx.
+func TestAdminCreateUser_AF1(t *testing.T) {
+	f := newFakeRepo()
+	m := &fakeMail{}
+	svc := newAccountSvc(f, m)
+
+	t.Run("创建成功：密码哈希落库且明文不存储", func(t *testing.T) {
+		u, err := svc.AdminCreateUser(context.Background(), nil, "New@Example.com", " ops ", "strong-password-1A")
+		require.NoError(t, err)
+		assert.Equal(t, "new@example.com", u.Email, "email normalized")
+		assert.Equal(t, "ops", u.DisplayName)
+		stored, ok, _ := f.GetUserByEmail(context.Background(), "new@example.com")
+		require.True(t, ok)
+		assert.NotEqual(t, "strong-password-1A", stored.PasswordHash, "plaintext never stored")
+		assert.True(t, len(stored.PasswordHash) > 20, "argon2id PHC stored")
+		// no-session / no-mail are structural: AdminCreateUser touches only
+		// repo create + hooks, no CreateSession/mail call sites exist in it
+		// (covered by the method body; fakeMail captures resets for AF2).
+	})
+
+	t.Run("重复邮箱 → E_CONFLICT 可识别错误", func(t *testing.T) {
+		_, err := svc.AdminCreateUser(context.Background(), nil, "new@example.com", "dup", "strong-password-1A")
+		require.Error(t, err)
+		we := &webx.Error{}
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusConflict, we.Status)
+	})
+
+	t.Run("AfterRegister 钩子失败 → 整体失败（事务回滚语义）", func(t *testing.T) {
+		hooked := app.NewAccountService(f, &fakeMail{}, app.AccountConfig{}, func() time.Time { return frozen }).
+			WithIdentityHooks(identity.IdentityHooks{
+				AfterRegister: func(ctx context.Context, tx pgx.Tx, userID string) error {
+					return errors.New("role bind failed")
+				},
+			})
+		_, err := hooked.AdminCreateUser(context.Background(), nil, "hooked@example.com", "h", "strong-password-1A")
+		require.Error(t, err, "hook failure must abort the create")
+		_, ok, _ := f.GetUserByEmail(context.Background(), "hooked@example.com")
+		assert.False(t, ok, "failed hook leaves no user behind (fake is non-tx; the tx contract is the RunInTx wrapping)")
+	})
+}
+
+// aifengkong #2: admin-set password = hash + revoke all sessions + audit,
+// no mail anywhere.
+func TestAdminSetPassword_AF2(t *testing.T) {
+	f := newFakeRepo()
+	f.byID["u9"] = app.User{ID: "u9", Email: "u9@example.com", Status: "active"}
+	m := &fakeMail{}
+	svc := newAccountSvc(f, m)
+
+	err := svc.AdminSetPassword(context.Background(), nil, "u9", "fresh-password-2B")
+	require.NoError(t, err)
+	assert.Equal(t, 1, f.setPW, "hash written")
+	assert.Equal(t, 1, f.revoked, "all sessions revoked")
+	assert.Empty(t, m.reset, "no reset mail")
+
+	err = svc.AdminSetPassword(context.Background(), nil, "ghost", "fresh-password-2B")
+	require.Error(t, err)
+	we := &webx.Error{}
+	require.ErrorAs(t, err, &we)
+	assert.Equal(t, http.StatusNotFound, we.Status)
+}
+
+// aifengkong #7: batch echo resolves present ids and skips missing ones.
+func TestListUsersByIDs_AF7(t *testing.T) {
+	f := newFakeRepo(seedUser("u1", "u1@example.com", false), seedUser("u2", "u2@example.com", false))
+	svc := newAccountSvc(f, &fakeMail{})
+
+	got, err := svc.ListUsersByIDs(context.Background(), []string{"u1", "missing", "u2"})
+	require.NoError(t, err)
+	assert.Len(t, got, 2)
+
+	got, err = svc.ListUsersByIDs(context.Background(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
 }

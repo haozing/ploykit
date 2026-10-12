@@ -27,17 +27,23 @@ export function loginRedirectTarget(from: unknown, fallback = '/app'): string {
 }
 
 export interface LoginPageProps {
-  
+
   resetPath?: string
-  
+
   registerPath?: string
-  
+
   oauthProviders?: OAuthProviderOption[]
-  
+
   enableFedLogin?: boolean
-  
+
+  /**
+   * 纯密码形态（企业内部工具）：隐藏验证码 Tab，页面直接是密码登录——
+   * 不渲染 Tabs 结构，OAuth 槽位照常由 oauthProviders 控制（不传即无）。
+   */
+  passwordOnly?: boolean
+
   onSuccess?: () => void
-  
+
   title?: string
   description?: string
 }
@@ -47,6 +53,7 @@ export function LoginPage({
   registerPath = '/register',
   oauthProviders = [],
   enableFedLogin = false,
+  passwordOnly = false,
   onSuccess,
   title = '登录',
   description = '登录你的账号',
@@ -126,6 +133,28 @@ export function LoginPage({
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
 
+        {passwordOnly ? (
+          <form onSubmit={handlePasswordSubmit} className="space-y-4 pt-2">
+            <FormField label="邮箱" htmlFor="login-pw-email">
+              <Input
+                id="login-pw-email" type="email" value={email} required
+                onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
+                autoComplete="email"
+              />
+            </FormField>
+            <FormField label="密码" htmlFor="login-pw-password">
+              <Input
+                id="login-pw-password" type="password" value={password} required
+                onChange={(e) => setPassword(e.target.value)} placeholder="输入密码"
+                autoComplete="current-password"
+              />
+            </FormField>
+            {pwError && <p role="alert" className="text-destructive text-sm">{pwError}</p>}
+            <Button type="submit" className="w-full" disabled={pwLoading || !email || !password}>
+              {pwLoading ? '登录中…' : '登录'}
+            </Button>
+          </form>
+        ) : (
         <Tabs defaultValue="code">
           <TabsList className="w-full">
             <TabsTrigger value="code">验证码登录</TabsTrigger>
@@ -204,6 +233,7 @@ export function LoginPage({
             </form>
           </TabsContent>
         </Tabs>
+        )}
 
         {oauthProviders.length > 0 && (
           <div className="space-y-2 pt-1" data-testid="oauth-providers">

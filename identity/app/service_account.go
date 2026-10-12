@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/haozing/ploykit/identity"
 	"github.com/haozing/ploykit/identity/domain"
 	"github.com/haozing/ploykit/platform/webx"
 )
@@ -26,10 +27,22 @@ type AccountService struct {
 	cfg     AccountConfig
 	now     Clock
 	auditor Auditor
+
+	// identityHooks is wired by the composition root (WithIdentityHooks) so
+	// admin provisioning can fire AfterRegister transactionally — the same
+	// hook surface self-service Register uses.
+	identityHooks identity.IdentityHooks
 }
 
 func NewAccountService(repo Repo, mail EmailSender, cfg AccountConfig, now Clock) *AccountService {
 	return &AccountService{repo: repo, mail: mail, cfg: cfg, now: now}
+}
+
+// WithIdentityHooks attaches the identity hook surface (AfterRegister etc.)
+// for the admin provisioning paths.
+func (s *AccountService) WithIdentityHooks(h identity.IdentityHooks) *AccountService {
+	s.identityHooks = h
+	return s
 }
 
 func (s *AccountService) WithAuditor(a Auditor) *AccountService {

@@ -103,3 +103,94 @@ func (s *TokenService) RevokePATFor(ctx context.Context, targetUserID, patID str
 	}
 	return nil
 }
+
+// AdminCreateUser provisions a user from the admin surface (aifengkong #1):
+// no email is sent, no session is established, and the signup gate does not
+// apply — this is the no-SMTP / invite-only provisioning path self-service
+// Register cannot express. The initial password is chosen by the caller
+// (typically generated, shown to the admin exactly once); the framework only
+// hashes and stores it. Fires AfterRegister transactionally so products can
+// bind roles inside the same tx.
+func (s *AccountService) AdminCreateUser(ctx context.Context, actor *webx.Principal, rawEmail, displayName, initialPassword string) (User, error) {
+	email := domain.NormalizeEmail(rawEmail)
+	if !domain.EmailOK(email) {
+		return User{}, webx.NewValidation("invalid email")
+	}
+	if !domain.PasswordOK(initialPassword) {
+		return User{}, webx.NewValidation("password too weak (need 10+ chars, 3 of 4 character kinds)")
+	}
+	name, ok := domain.NormalizeDisplayName(displayName)
+	if !ok {
+		return User{}, webx.NewValidation("display_name must be 1-100 characters after trim")
+	}
+	hash, err := HashPassword(initialPassword)
+	if err != nil {
+		return User{}, err
+	}
+	var user User
+	err = s.repo.RunInTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var e error
+		user, e = s.repo.CreateUserWithPasswordTx(ctx, tx, email, hash, name)
+		if e != nil {
+			return e
+		}
+		// afterRegister runs inside the tx on purpose: role binding in the
+		// hook shares the create's atomicity (a failed bind rolls back the user).
+		if s.identityHooks.AfterRegister != nil {
+			return s.identityHooks.AfterRegister(ctx, tx, user.ID)
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, ErrDuplicate) {
+			return User{}, webx.NewConflict("email already registered")
+		}
+		return User{}, err
+	}
+	if s.auditor != nil && actor != nil {
+		s.auditor.Record(ctx, nil, actor, "admin.user_create", "user", user.ID,
+			map[string]any{"email": email})
+	}
+	return user, nil
+}
+
+// AdminSetPassword sets a target user's password directly from the admin
+// surface (aifengkong #2): hash + store + revoke every session of that user +
+// audit. No email is involved (the enterprise intranet path); the new
+// password is caller-generated and shown to the admin exactly once. Whether a
+// platform-admin target may be reset is the caller's policy decision.
+func (s *AccountService) AdminSetPassword(ctx context.Context, actor *webx.Principal, targetUserID, newPassword string) error {
+	if _, err := s.repo.GetUser(ctx, targetUserID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return webx.NewNotFound("user not found")
+		}
+		return err
+	}
+	if !domain.PasswordOK(newPassword) {
+		return webx.NewValidation("password too weak (need 10+ chars, 3 of 4 character kinds)")
+	}
+	hash, err := HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.SetPasswordHash(ctx, targetUserID, hash, s.now()); err != nil {
+		return err
+	}
+	if err := s.repo.RevokeAllUserSessions(ctx, targetUserID); err != nil {
+		return err
+	}
+	if s.auditor != nil && actor != nil {
+		s.auditor.Record(ctx, nil, actor, "admin.user_set_password", "user", targetUserID, nil)
+	}
+	return nil
+}
+
+// ListUsersByIDs batch-resolves users for display echo (aifengkong #7): the
+// created_by audit-trail rendering every admin surface needs. Missing ids are
+// skipped (a stale reference renders as absent, not as an error).
+func (s *AccountService) ListUsersByIDs(ctx context.Context, ids []string) ([]User, error) {
+	if len(ids) == 0 {
+		return []User{}, nil
+	}
+	return s.repo.ListUsersByIDs(ctx, ids)
+}

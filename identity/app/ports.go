@@ -52,6 +52,10 @@ type Repo interface {
 	UpsertUserByEmail(ctx context.Context, email string, now time.Time) (User, error)
 	GetUser(ctx context.Context, id string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, bool, error)
+
+	// ListUsersByIDs batch-resolves users by id (missing ids skipped) — the
+	// display echo for created_by audit trails on admin surfaces.
+	ListUsersByIDs(ctx context.Context, ids []string) ([]User, error)
 	UpdateProfile(ctx context.Context, id, displayName, avatarURL string) (User, error)
 	CreateUserWithPassword(ctx context.Context, email, passwordHash, displayName string) (User, error)
 	SetPasswordHash(ctx context.Context, userID, passwordHash string, now time.Time) error

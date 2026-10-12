@@ -93,9 +93,29 @@ Common misconception: sending `code` to register. openapi.yaml is the field-cont
 > `webx.WriteError(...)` / the `webx.ErrInternal(w)` shorthand (500 `E_INTERNAL`, no
 > detail); the underlying error goes to the log with the request ID, never the body.
 
-## Step-up reauthentication (E_REAUTH_REQUIRED, two-phase protocol)
+## Reusing framework services behind product authorization (aifengkong #3)
 
-Sensitive operations can require a fresh password confirmation (the Laravel
+The framework's admin HTTP endpoints (e.g. `POST /api/admin/users/{id}/status`)
+gate on RequirePlatformAdmin — products building their own menu-permission
+matrices cannot reuse those endpoints. The intended path is the **service
+layer**: `admin/app.AdminService.DisableUser/EnableUser` (and identity's
+`AccountService.AdminCreateUser / AdminSetPassword / ListUsersByIDs`) accept
+the caller as an audit actor, not as an authorization check — mount your own
+permission middleware on your own endpoint and call the service method
+directly. Disable semantics (login rejection + all-session revocation + audit)
+stay identical to the framework endpoint because both share the same method.
+
+## Distinguishing disabled accounts on login (aifengkong #6)
+
+Login failures intentionally collapse to one 401 `invalid credentials`
+(unknown email / wrong password / disabled account are indistinguishable, with
+a dummy-hash timing equalizer) — that is the anti-enumeration default and it
+stays. Operational visibility ("was the account disabled?") is served by the
+`OnLoginFailed` hook: products inspect the user's status inside the hook and
+log/alert on disabled-account attempts — operators see it, attackers probing
+the login form do not.
+
+## Step-up reauthentication (E_REAUTH_REQUIRED, two-phase protocol)Sensitive operations can require a fresh password confirmation (the Laravel
 `password.confirm` / GitHub sudo-mode pattern). Server side this is
 `webx.RequireRecentAuth(maxAge)` mounted after `Authenticate`; clients see:
 
