@@ -348,3 +348,46 @@ func TestRelayEmptySelfGeneratesOrigin(t *testing.T) {
 	assert.NotEmpty(t, origins[0], "信封 origin 必须非空（否则双方空 origin 互丢）")
 	assert.NotEqual(t, "inst-r", origins[0], "生成的 id 不得撞上接收方 origin")
 }
+
+// orkome 增-3: a frame at the hop cap must be refused by Run (with a WARN)
+// instead of looping between replicas forever; Forward bumps Hops and re-aims
+// Origin at the forwarding instance.
+func TestHops_CapDropsAndForwardBumps(t *testing.T) {
+	r := NewRelay("inst-a", nil, nil)
+	over := Envelope{Origin: "inst-b", Scope: "ws:1", Hops: MaxHops}
+	assert.True(t, r.hopsExhausted(over), "frame at cap is exhausted")
+	assert.False(t, r.hopsExhausted(Envelope{Origin: "inst-b", Scope: "ws:1", Hops: 1}), "young frame passes")
+
+	// Forward refuses at cap
+	tp := &publishCountTransport{}
+	fw := NewRelay("inst-a", tp, nil)
+	assert.False(t, fw.Forward(context.Background(), over), "Forward refuses exhausted frames")
+	assert.Zero(t, tp.publishes.Load(), "nothing published for a refused hop")
+
+	// Forward under cap: bumps Hops, re-aims Origin at self
+	assert.True(t, fw.Forward(context.Background(), Envelope{Origin: "inst-b", Scope: "ws:1", Hops: 1}))
+	require.EqualValues(t, 1, tp.publishes.Load())
+	var env Envelope
+	require.NoError(t, json.Unmarshal(<-tp.last, &env))
+	assert.Equal(t, 2, env.Hops)
+	assert.Equal(t, "inst-a", env.Origin)
+}
+
+// publishCountTransport records published payloads on a channel.
+type publishCountTransport struct {
+	publishes atomic.Int32
+	last      chan []byte
+}
+
+func (t *publishCountTransport) Publish(_ context.Context, payload []byte) error {
+	t.publishes.Add(1)
+	if t.last == nil {
+		t.last = make(chan []byte, 8)
+	}
+	select {
+	case t.last <- payload:
+	default:
+	}
+	return nil
+}
+func (t *publishCountTransport) Subscribe(context.Context, func([]byte)) error { return nil }

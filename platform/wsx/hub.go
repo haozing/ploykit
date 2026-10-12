@@ -87,6 +87,9 @@ type Hub struct {
 
 	originCapOnce sync.Once
 
+	// wsMemberWarnOnce guards the nil-WorkspaceMember diagnostic (once per hub).
+	wsMemberWarnOnce sync.Once
+
 	Relay interface {
 		PublishOut(ctx context.Context, scope string, frame wswire.Frame)
 	}
@@ -238,6 +241,19 @@ func (h *Hub) observeConns() {
 
 func (h *Hub) joinWorkspace(c *client, workspaceID string) bool {
 	if workspaceID == "" || c.principal == nil || h.WorkspaceMember == nil {
+		// orkome pack-rollout addendum: a nil WorkspaceMember silently rejects every workspace
+		// subscription — one missed wiring line killed a product's realtime
+		// workspace channel for weeks before anyone noticed. Fail loud on the
+		// first workspace-scoped attempt (once per hub, never per request);
+		// hubs that genuinely run user-scope-only never pass a workspace id,
+		// so the warning stays silent for them.
+		if workspaceID != "" && c.principal != nil && h.WorkspaceMember == nil {
+			h.wsMemberWarnOnce.Do(func() {
+				if h.Log != nil {
+					h.Log.Warn("wsx: workspace-scoped subscribe but Hub.WorkspaceMember is nil — every workspace subscription will be rejected; wire the membership callback (or drop the workspace capability)")
+				}
+			})
+		}
 		return false
 	}
 	if !h.WorkspaceMember(context.Background(), c.principal, workspaceID) {

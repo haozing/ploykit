@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/webhooks"
 )
 
 type fakeRepo struct {
@@ -88,6 +92,10 @@ func (f *fakeRepo) FirstFailureAt(_ context.Context, subscriptionID string) (*ti
 		return nil, f.firstFailureErr
 	}
 	return f.firstFailure[subscriptionID], nil
+}
+
+func (f *fakeRepo) EmitForEvent(_ context.Context, workspaceID string, e OutboundEvent) (int, error) {
+	return 1, nil
 }
 
 func newTestService(repo Repo) *WebhookService {
@@ -284,4 +292,36 @@ func TestEmit_EmptyEventID_FailsFast_P02(t *testing.T) {
 	_, err := svc.Emit(context.Background(), "ws-1", OutboundEvent{Type: "work_item.updated", Payload: map[string]any{"k": 1}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty ID")
+}
+
+// orkome 增-5: services that never wired WithHooks must say so (once) when
+// product traffic proves the domain live — the auto-disable circuit breaker
+// otherwise fires with zero workspace-visible signal and nobody notices the
+// surface exists.
+func TestHooksUnwired_WarnsOnceOnEmit(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	repo := &fakeRepo{}
+	svc := NewWebhookService(repo, NewEventCatalog(), log, func() time.Time { return time.Now() })
+	svc.Catalog().Register("work_item.updated", "test")
+
+	_, err := svc.Emit(context.Background(), "ws-1", OutboundEvent{ID: "e1", Type: "work_item.updated"})
+	require.NoError(t, err)
+	// second emit must not repeat the warn
+	_, err = svc.Emit(context.Background(), "ws-1", OutboundEvent{ID: "e2", Type: "work_item.updated"})
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "WebhookHooks not wired")
+	assert.Equal(t, 1, strings.Count(out, "WebhookHooks not wired"), "once per service")
+
+	// a wired service stays silent
+	var wired bytes.Buffer
+	wiredCat := NewEventCatalog()
+	wiredCat.Register("work_item.updated", "test")
+	wiredSvc := NewWebhookService(repo, wiredCat, slog.New(slog.NewTextHandler(&wired, &slog.HandlerOptions{Level: slog.LevelWarn})), func() time.Time { return time.Now() }).
+		WithHooks(webhooks.WebhookHooks{})
+	_, err = wiredSvc.Emit(context.Background(), "ws-1", OutboundEvent{ID: "e3", Type: "work_item.updated"})
+	require.NoError(t, err)
+	assert.NotContains(t, wired.String(), "WebhookHooks not wired")
 }

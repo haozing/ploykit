@@ -93,6 +93,16 @@ Common misconception: sending `code` to register. openapi.yaml is the field-cont
 > `webx.WriteError(...)` / the `webx.ErrInternal(w)` shorthand (500 `E_INTERNAL`, no
 > detail); the underlying error goes to the log with the request ID, never the body.
 
+## Housekeeping tables you must sweep (identity login_attempt / auth_challenge)
+
+`identity` records login/auth-challenge attempts for its rate limiters and
+grows `login_attempt` / `auth_challenge` unboundedly — the framework provides
+`Repo.CleanupAttempts(ctx, before)` but deliberately no built-in scheduler
+(what "old enough" means is a product policy). Every product must run it on a
+timer (a 30-day retention in a simple ticker worker is the reference wiring in
+example/cmd/app/main.go). Skipping it is invisible until the tables are
+millions of rows and auth-path queries start paging (orkome pack-rollout addendum).
+
 ## Reusing framework services behind product authorization (aifengkong #3)
 
 The framework's admin HTTP endpoints (e.g. `POST /api/admin/users/{id}/status`)

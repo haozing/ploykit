@@ -27,6 +27,17 @@ type CSRFConfig struct {
 
 	ExemptPrefixes []string
 
+	// MaxAge is the CSRF cookie lifetime in seconds, passed through to
+	// gorilla/csrf verbatim (orkome pack-rollout addendum). Zero value keeps the framework's
+	// historical behavior (gorilla's 12h default); a product whose session
+	// TTL exceeds 12h must raise this or long-idle users hit "every write
+	// 403s" until the next /config refetch (the cookie dies before the
+	// session does) — align it with AuthConfig.SessionTTL. Negative means a
+	// session cookie (gorilla semantics). The zero-value-defaults-to-12h
+	// reading is deliberate: an unset config must not change existing
+	// deployments' cookie behavior.
+	MaxAge int
+
 	PATPrefix string
 
 	// SessionCookieName is the auth session cookie's name — the CSRF skip is
@@ -136,16 +147,27 @@ func CSRFConditional(cfg *CSRFConfig, secure bool) func(http.Handler) http.Handl
 		var inner http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r)
 		})
-		protected := csrf.Protect(cfg.Key,
+	protected := func() http.Handler {
+		// gorilla applies its 12h default only for NEGATIVE MaxAge (0 = session
+		// cookie); an unset framework config must keep the historical 12h
+		// cookie, so map 0 → gorilla-default here and pass everything else
+		// through verbatim.
+		age := cfg.MaxAge
+		if age == 0 {
+			age = -1
+		}
+		return csrf.Protect(cfg.Key,
 			csrf.CookieName("ploykit_csrf"),
 			csrf.Path("/"),
 			csrf.Secure(secure), csrf.HttpOnly(true), csrf.SameSite(csrf.SameSiteLaxMode),
 			csrf.TrustedOrigins(trusted),
+			csrf.MaxAge(age),
 
 			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				writeCSRFError(w, r, trusted)
 			})),
 		)(inner)
+	}()
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, prefix := range cfg.ExemptPrefixes {
 				if strings.HasPrefix(r.URL.Path, prefix) {

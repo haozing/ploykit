@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/haozing/ploykit/platform/egressx"
@@ -24,9 +25,16 @@ type WebhookService struct {
 
 	targetGuard *egressx.Guard
 
-	hooks webhooks.WebhookHooks
+	hooks      webhooks.WebhookHooks
+	hooksWired bool
 
 	secrets Secrets
+
+	// hooksWarnOnce guards the one-time diagnostic for products that never
+	// wired WithHooks (orkome 增-5: the auto-disable circuit breaker then
+	// fires with zero workspace-visible signal, and nobody knows the surface
+	// exists).
+	hooksWarnOnce sync.Once
 }
 
 func NewWebhookService(repo Repo, catalog *EventCatalog, log *slog.Logger, now Clock) *WebhookService {
@@ -74,7 +82,22 @@ func (s *WebhookService) WithHTTPClient(c *http.Client) *WebhookService {
 
 func (s *WebhookService) WithHooks(h webhooks.WebhookHooks) *WebhookService {
 	s.hooks = h
+	s.hooksWired = true
 	return s
+}
+
+// warnIfHooksUnwired raises, once per service, that WebhookHooks was never
+// attached (orkome 增-5): subscription auto-disable (the circuit breaker) is
+// then invisible to the workspace — no notification surface, no signal at
+// all. Wiring WithHooks is how the domain talks back; its absence is legal
+// but usually an omission, so it warns lazily on first Emit (once, level
+// Warn, naming the fix).
+func (s *WebhookService) warnIfHooksUnwired() {
+	s.hooksWarnOnce.Do(func() {
+		if !s.hooksWired {
+			s.log.Warn("webhooks: WebhookHooks not wired — subscription auto-disable (circuit breaker) fires with no workspace-visible notification; attach WithHooks to receive OnSubscriptionDisabled")
+		}
+	})
 }
 
 func (s *WebhookService) Catalog() *EventCatalog { return s.catalog }
@@ -186,6 +209,7 @@ func (s *WebhookService) Emit(ctx context.Context, workspaceID string, event Out
 	if event.ID == "" {
 		return 0, fmt.Errorf("webhooks: emit: event %q has empty ID — receivers dedupe on X-Event-Id; pass the bus event's idempotency key", event.Type)
 	}
+	s.warnIfHooksUnwired()
 	if !s.catalog.Has(event.Type) {
 		return 0, fmt.Errorf("event type not registered: %s", event.Type)
 	}

@@ -333,3 +333,28 @@ func TestNormalizeLoopbackOrigin(t *testing.T) {
 		}
 	}
 }
+
+// orkome 增-1: MaxAge flows through to the cookie; 0 keeps the gorilla
+// default (12h). The cookie's Expires/Max-Age attribute is the observable.
+func TestCSRF_MaxAgePassthrough(t *testing.T) {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+
+	fetch := func(maxAge int) *http.Cookie {
+		h := CSRFConditional(&CSRFConfig{Key: key, MaxAge: maxAge}, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/config", nil))
+		cookies := w.Result().Cookies()
+		for _, c := range cookies {
+			if c.Name == "ploykit_csrf" {
+				return c
+			}
+		}
+		t.Fatal("csrf cookie not set")
+		return nil
+	}
+
+	assert.Equal(t, 12*3600, fetch(0).MaxAge, "0 keeps the gorilla 12h default")
+	assert.Equal(t, 7*24*3600, fetch(7*24*3600).MaxAge, "explicit MaxAge passes through (align with session TTL)")
+}

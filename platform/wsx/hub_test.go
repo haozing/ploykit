@@ -1,8 +1,10 @@
 package wsx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -613,4 +615,27 @@ func TestControlFrame_UnknownTypeRejected_F16(t *testing.T) {
 	require.NoError(t, c.WriteJSON(map[string]string{"type": "mystery", "scope": "task", "id": "x"}))
 	f := readFrame(t, c)
 	assert.Equal(t, wswire.RejectedPrefix+"control", f.Type)
+}
+
+// orkome 增-2: a nil WorkspaceMember used to reject every workspace
+// subscription in total silence — one missed wiring line killed a product's
+// realtime channel for weeks. The hub must fail loud (once) when a client
+// actually attempts a workspace-scoped subscribe.
+func TestNilWorkspaceMember_WarnsOnce_FailsClosed(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	h := NewHub(log)
+	p := &webx.Principal{UserID: "u1", Source: webx.SourceSession}
+	_, url := newHubSrv(t, h, p)
+	c := dial(t, url)
+
+	for i := 0; i < 3; i++ {
+		require.NoError(t, c.WriteJSON(map[string]string{"type": "subscribe", "scope": wswire.ScopeWorkspace, "id": testWS}))
+		f := readFrame(t, c)
+		assert.Equal(t, wswire.RejectedPrefix+wswire.CtrlSubscribe, f.Type)
+	}
+
+	out := buf.String()
+	assert.Contains(t, out, "WorkspaceMember is nil")
+	assert.Equal(t, 1, strings.Count(out, "WorkspaceMember is nil"), "warn once per hub, not per request")
 }
