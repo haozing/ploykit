@@ -177,6 +177,15 @@ func (s *WebhookService) Redeliver(ctx context.Context, workspaceID, deliveryID 
 }
 
 func (s *WebhookService) Emit(ctx context.Context, workspaceID string, event OutboundEvent) (int, error) {
+	// P0-2: an empty event ID is a contract violation, not a wiring detail —
+	// every downstream guarantee (X-Event-Id dedupe on receivers, delivery
+	// forensics) is built on it. Failing here turns "event silently never
+	// arrives" into a visible error at the emit call site; the complementary
+	// guard posture (skip-with-WARN at the bridge, for event kinds that
+	// legitimately carry no idempotency key) is what example wires.
+	if event.ID == "" {
+		return 0, fmt.Errorf("webhooks: emit: event %q has empty ID — receivers dedupe on X-Event-Id; pass the bus event's idempotency key", event.Type)
+	}
 	if !s.catalog.Has(event.Type) {
 		return 0, fmt.Errorf("event type not registered: %s", event.Type)
 	}

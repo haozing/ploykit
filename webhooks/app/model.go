@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
+
+	"github.com/haozing/ploykit/platform/whsign"
 )
 
 type Subscription struct {
@@ -63,7 +62,9 @@ const (
 	AbortHeaderValue = "abort-message"
 )
 
-const OldSecretTTL = 24 * time.Hour
+// OldSecretTTL mirrors whsign.OldSecretTTL — the rotation window during which
+// deliveries carry X-Signature-Old alongside X-Signature.
+const OldSecretTTL = whsign.OldSecretTTL
 
 const AutoDisableWindow = 5 * 24 * time.Hour
 
@@ -147,34 +148,21 @@ func MintSecret() (string, error) {
 	return "whk_" + hex.EncodeToString(b), nil
 }
 
+// The signing protocol lives in platform/whsign (a stdlib-only leaf so
+// webhook RECEIVERS can import it without pulling the webhooks domain); these
+// aliases keep the historical export surface of this package compiling.
 func Sign(secret string, timestamp time.Time, body []byte) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(fmt.Sprintf("%d", timestamp.Unix())))
-	mac.Write([]byte("."))
-	mac.Write(body)
-	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	return whsign.Sign(secret, timestamp, body)
 }
 
 func VerifySign(secret string, timestamp time.Time, body []byte, signature string) bool {
-	expected := Sign(secret, timestamp, body)
-	return hmac.Equal([]byte(expected), []byte(signature))
+	return whsign.VerifySign(secret, timestamp, body, signature)
 }
 
 func VerifySignWithWindow(secret string, ts time.Time, body []byte, signature string, maxAge time.Duration, now time.Time) bool {
-	if diff := now.Sub(ts); diff > maxAge || diff < -maxAge {
-		return false
-	}
-	return VerifySign(secret, ts, body, signature)
+	return whsign.VerifySignWithWindow(secret, ts, body, signature, maxAge, now)
 }
 
 func VerifySignAny(secrets []string, timestamp time.Time, body []byte, signature string) bool {
-	for _, s := range secrets {
-		if s == "" {
-			continue
-		}
-		if VerifySign(s, timestamp, body, signature) {
-			return true
-		}
-	}
-	return false
+	return whsign.VerifySignAny(secrets, timestamp, body, signature)
 }

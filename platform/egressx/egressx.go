@@ -58,6 +58,16 @@ func BlockedCIDRs() []string { return prefixStrings(blockedPrivate) }
 
 func PrivateAllowCIDRs() []string { return prefixStrings(blockedPrivate) }
 
+// LoopbackAllowCIDRs is the loopback-only subset of the allow presets
+// (P1-3, orkome pack rollout): 127.0.0.0/8 + ::1, deliberately WITHOUT the
+// rest of RFC1918 or link-local — the shape local integration tests against a
+// loopback pack/dev server want. NewGuard(LoopbackAllowCIDRs()) keeps every
+// other private range blocked. Production allowlists should enumerate the
+// exact destinations they need, not widen further.
+func LoopbackAllowCIDRs() []string {
+	return []string{"127.0.0.0/8", "::1/128"}
+}
+
 func prefixStrings(ps []netip.Prefix) []string {
 	out := make([]string, len(ps))
 	for i, p := range ps {

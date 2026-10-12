@@ -353,3 +353,32 @@ func Up(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, subdir string) erro
 	_, err := New(pool, fsys, subdir).Up(ctx, 0)
 	return err
 }
+
+// Tables lists every base table visible in the current schema, framework and
+// product tables alike, sorted (P1-1, orkome pack rollout): migrations know
+// the DDL surface, so test-isolation code (TRUNCATE lists, allowlist guards)
+// should derive its table list from here instead of hand-maintaining a
+// second inventory that silently rots every time a migration adds a table.
+// The pgmigrate bookkeeping table (schema_migrations) is excluded.
+func Tables(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT table_name FROM information_schema.tables
+		WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
+		ORDER BY table_name`)
+	if err != nil {
+		return nil, fmt.Errorf("pgmigrate: list tables: %w", err)
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("pgmigrate: list tables: %w", err)
+		}
+		if name == "schema_migrations" {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}

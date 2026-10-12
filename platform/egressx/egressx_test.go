@@ -53,3 +53,17 @@ func TestNewGuardInvalidCIDRFailsFast(t *testing.T) {
 	_, err := NewGuard([]string{"not-a-cidr"})
 	assert.Error(t, err)
 }
+
+// P1-3: the loopback preset admits exactly the loopback family — local dev
+// against a loopback server — while the rest of RFC1918 stays blocked.
+func TestLoopbackAllowCIDRs_PresetShape_P13(t *testing.T) {
+	assert.Equal(t, []string{"127.0.0.0/8", "::1/128"}, LoopbackAllowCIDRs())
+
+	g, err := NewGuard(LoopbackAllowCIDRs())
+	require.NoError(t, err)
+	ctx := context.Background()
+	assert.NoError(t, g.ValidateURL(ctx, "http://127.0.0.1:3987/hook"), "loopback v4 admitted")
+	assert.NoError(t, g.ValidateURL(ctx, "http://[::1]:3987/hook"), "loopback v6 admitted")
+	assert.Error(t, g.ValidateURL(ctx, "http://192.168.1.20:3987/hook"), "RFC1918 stays blocked")
+	assert.Error(t, g.ValidateURL(ctx, "http://10.0.0.5:3987/hook"), "RFC1918 stays blocked")
+}

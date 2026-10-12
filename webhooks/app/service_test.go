@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -269,4 +272,16 @@ func TestRetryBackoff(t *testing.T) {
 			t.Errorf("RetryBackoff[%d]=%v want %v", i, RetryBackoff[i], d)
 		}
 	}
+}
+
+// P0-2: an event without a stable ID must fail at the emit boundary — the
+// receiver-side X-Event-Id dedupe contract makes an id-less delivery a defect,
+// and the field report (orkome D4) showed the alternative (silent skip at a
+// downstream guard) hides missing outbox wiring until end-to-end runs.
+func TestEmit_EmptyEventID_FailsFast_P02(t *testing.T) {
+	svc := newTestService(&fakeRepo{})
+	svc.Catalog().Register("work_item.updated", "test")
+	_, err := svc.Emit(context.Background(), "ws-1", OutboundEvent{Type: "work_item.updated", Payload: map[string]any{"k": 1}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty ID")
 }

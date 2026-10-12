@@ -585,6 +585,16 @@ func main() {
 					return nil
 				}
 			}
+			// P0-2 reference guard: a bus event without an idempotency key
+			// would arrive here with an empty event id and webhooks.Emit now
+			// rejects it — log-and-skip (observing the handler must not
+			// crash the whole event stream) instead of the old silent drop
+			// that hid missing outbox wiring until end-to-end runs.
+			if ev.IDempotencyKey == "" {
+				slog.Warn("billing webhook bridge: event without idempotency key — not deliverable as a webhook",
+					"kind", ev.Kind, "workspace_id", ev.WorkspaceID)
+				return nil
+			}
 			_, err := whkSvc.Emit(ctx, ev.WorkspaceID.String(), webhooksapp.OutboundEvent{
 				ID: ev.IDempotencyKey, Type: ev.Kind, Payload: payload,
 			})

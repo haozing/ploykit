@@ -1,6 +1,10 @@
 package pgmigrate
 
 import (
+	"sort"
+
+	"testing/fstest"
+
 	"context"
 	"fmt"
 	"net/url"
@@ -12,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/ids"
 )
 
@@ -157,4 +162,31 @@ func containsByte(s string, b byte) bool {
 		}
 	}
 	return false
+}
+
+// P1-1: Tables must enumerate the live schema (framework + product tables
+// alike) and exclude the bookkeeping table — the single source test-isolation
+// TRUNCATE lists should be derived from.
+func TestTables_ListsSchemaAndExcludesBookkeeping_P11(t *testing.T) {
+	pool := testPool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	require.NoError(t, Up(ctx, pool, migrations.FS, "."))
+
+	// a product-style table via a second migrator (the 1001+ product range)
+	prodFS := fstest.MapFS{"1100_pack_tool.up.sql": &fstest.MapFile{Data: []byte("CREATE TABLE pack_tool_x (id text PRIMARY KEY)")}}
+	require.NoError(t, Up(ctx, pool, prodFS, "."))
+
+	tables, err := Tables(ctx, pool)
+	require.NoError(t, err)
+	set := map[string]bool{}
+	for _, name := range tables {
+		set[name] = true
+	}
+	assert.True(t, set["workspace"], "framework table present")
+	assert.True(t, set["notification"], "framework table present")
+	assert.True(t, set["pack_tool_x"], "product table present")
+	assert.False(t, set["schema_migrations"], "bookkeeping excluded")
+	assert.True(t, sort.StringsAreSorted(tables), "sorted for stable consumption")
 }
