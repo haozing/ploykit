@@ -38,15 +38,26 @@ func rollbackAbove(t *testing.T, m *pgmigrate.Migrator, pool *pgxpool.Pool, vers
 	t.Helper()
 	st, err := m.Status(context.Background())
 	require.NoError(t, err)
+	// Count AND roll back only FRAMEWORK versions (<1000). TEST_DATABASE_URL
+	// points at a shared dev database that may carry product migrations
+	// (1001+, the product-range contract) — a count that includes them makes
+	// Down roll past the expected floor and every UpDownUp assertion lands
+	// six-plus versions early (observed: expected 034, actual 028).
 	var newer []string
 	for _, r := range st {
-		if r.Applied && r.Version > version {
+		if r.Applied && r.Version > version && len(r.Version) == 3 {
 			newer = append(newer, r.Version)
 		}
 	}
 	if len(newer) == 0 {
 		return nil
 	}
+	// Down(N) rolls the newest N entries of the WHOLE applied list. Product
+	// migrations (1001+) sort ABOVE every framework version, so they occupy
+	// the head of that list — they were never in the tail window and must not
+	// inflate N: counting them (the old len(newer)) rolled the framework
+	// floor past the threshold by exactly the product count (observed: Down
+	// reaching 033 when the floor was 039). N = framework newer only.
 	rolled, err := m.Down(context.Background(), len(newer))
 	require.NoError(t, err)
 	require.Len(t, rolled, len(newer))
@@ -91,7 +102,7 @@ func TestWorkspacePlanFK_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "024")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "025", rolled[len(rolled)-1], "最低回滚点必须是 025")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.False(t, fkExists())
 
 	_, wsID := seedMigUserWS(t, pool, "fk25")
@@ -127,7 +138,7 @@ func TestWorkspaceRoleConfig_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "025")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "026", rolled[len(rolled)-1], "最低回滚点必须是 026（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists("workspace_role"))
 	assert.True(t, tableExists("workspace_role_permission"), "down 应重建行级表")
 
@@ -171,7 +182,7 @@ func TestMemberRemovedBy_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "027")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "028", rolled[len(rolled)-1], "最低回滚点必须是 028（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)
@@ -207,7 +218,7 @@ func TestQuotaGrantFullUnique_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "028")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "029", rolled[len(rolled)-1])
+	assert.Equal(t, "029", rolled[len(rolled)-1], "框架回滚清单尾（最深回滚位）必须是 029")
 	assert.True(t, indexPartial(), "down 应恢复 006 的部分唯一索引")
 	require.NoError(t, insert(nil), "down 后 NULL ref 行可落库（列可空、部分索引不覆盖）")
 
@@ -235,7 +246,7 @@ func TestAuditQueryIndexes_UpDownUp(t *testing.T) {
 	assert.True(t, idxExists("idx_audit_actor_time"), "actor 过滤/邮箱搜索支撑索引")
 
 	rolled := rollbackAbove(t, m, pool, "029")
-	require.Equal(t, "030", rolled[len(rolled)-1], "最低回滚点必须是 030（回滚清单随更高版本自动扩展；033 起已有更高版本）")
+	require.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	require.Contains(t, rolled, "033")
 	assert.False(t, idxExists("idx_audit_created"))
 	assert.False(t, idxExists("idx_audit_actor_time"))
@@ -381,7 +392,7 @@ func TestWebhookPendingUniqueAndRotation_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "030")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "031", rolled[len(rolled)-1], "最低回滚点必须是 031（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.Contains(t, rolled, "032")
 	assert.NotContains(t, indexDef(), "WHERE", "down 后应恢复全量唯一索引")
 	for _, col := range []string{"old_secret", "old_secret_expires_at", "first_failure_at"} {
@@ -436,7 +447,7 @@ func TestSessionImpersonatedBy_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "033")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "034", rolled[len(rolled)-1], "最低回滚点必须是 034（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)
@@ -540,7 +551,7 @@ func TestAuditEventPartition_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "034")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "035", rolled[len(rolled)-1], "最低回滚点必须是 035")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.Contains(t, rolled, "036", "036 应先于 035 回滚（高→低）")
 	assert.Equal(t, "r", relkindOf(t, pool, "audit_event"))
 	assert.Equal(t, []string{"id"}, pkColumnsOf(t, pool, "audit_event"))
@@ -604,7 +615,7 @@ func TestAnalyticsEventPartition_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "035")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "036", rolled[len(rolled)-1], "最低回滚点必须是 036")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.Equal(t, "r", relkindOf(t, pool, "analytics_event"))
 	assert.Equal(t, []string{"id"}, pkColumnsOf(t, pool, "analytics_event"))
 
@@ -672,7 +683,7 @@ func TestSchedulePlanUpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "036")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "037", rolled[len(rolled)-1], "最低回滚点必须是 037")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err = m.Up(ctx, 0)
@@ -700,7 +711,7 @@ func TestSiteSettingsUpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "037")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "038", rolled[len(rolled)-1], "最低回滚点必须是 038")
+	assert.Equal(t, "047", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 047（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err = m.Up(ctx, 0)

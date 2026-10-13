@@ -4077,6 +4077,9 @@ components:
         expires_at:
           type: string
           format: date-time
+        csrf_token:
+          type: string
+          description: 会话建立即轮换后的新 CSRF token，与本响应 Set-Cookie 的 ploykit_csrf 同值。三个会话建立端点（verify-code / register / login）均携带；后续写操作直接用它带 X-CSRF-Token，无需再 GET /config 换新。
     ExpiresAtResponse:
       type: object
       required: [expires_at]

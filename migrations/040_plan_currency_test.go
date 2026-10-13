@@ -47,7 +47,7 @@ func TestPlanCurrency_UpDownUp_040(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "039")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "040", rolled[len(rolled)-1], "最低回滚点必须是 040")
+	assert.Equal(t, "040", rolled[len(rolled)-1], "框架回滚清单尾（最深回滚位）必须是 040（更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)

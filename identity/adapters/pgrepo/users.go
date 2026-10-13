@@ -10,13 +10,13 @@ import (
 	"github.com/haozing/ploykit/identity/domain"
 )
 
-const userCols = `id, email, display_name, avatar_url, password_hash, status, is_platform_admin, email_verified_at, created_at`
+const userCols = `id, email, display_name, avatar_url, password_hash, status, is_platform_admin, email_verified_at, created_at, updated_by`
 
 func scanUser(row pgx.Row) (app.User, error) {
 	var u app.User
-	var avatar, passwordHash *string
+	var avatar, passwordHash, updatedBy *string
 	var emailVerifiedAt *time.Time
-	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &avatar, &passwordHash, &u.Status, &u.IsPlatformAdmin, &emailVerifiedAt, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &avatar, &passwordHash, &u.Status, &u.IsPlatformAdmin, &emailVerifiedAt, &u.CreatedAt, &updatedBy)
 	if err != nil {
 		return app.User{}, err
 	}
@@ -25,6 +25,9 @@ func scanUser(row pgx.Row) (app.User, error) {
 	}
 	if passwordHash != nil {
 		u.PasswordHash = *passwordHash
+	}
+	if updatedBy != nil {
+		u.UpdatedBy = *updatedBy
 	}
 	u.EmailVerified = emailVerifiedAt != nil
 	return u, nil
@@ -65,7 +68,7 @@ func (r *Repo) UpdateProfile(ctx context.Context, id, displayName, avatarURL str
 		avatar = avatarURL
 	}
 	u, err := scanUser(r.pool.QueryRow(ctx, `
-		UPDATE "user" SET display_name = $2, avatar_url = $3, updated_at = now()
+		UPDATE "user" SET display_name = $2, avatar_url = $3, updated_at = now(), updated_by = $1
 		WHERE id = $1 AND status = 'active'
 		RETURNING `+userCols, id, displayName, avatar))
 	if isNoRows(err) {

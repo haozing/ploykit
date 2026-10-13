@@ -19,6 +19,10 @@ type User struct {
 
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
+
+	// UpdatedBy is the last human modifier (self-edit = the user themself;
+	// nil for system paths). The audit-trail echo for profile changes.
+	UpdatedBy string `json:"updated_by,omitempty"`
 }
 
 var ErrDuplicate = errors.New("duplicate")

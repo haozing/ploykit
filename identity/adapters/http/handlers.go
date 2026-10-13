@@ -100,7 +100,7 @@ func (d Deps) handleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.AuthCfg.SetSessionCookie(w, res.Token, res.Exp)
-	webx.WriteJSON(w, http.StatusOK, map[string]any{"user": res.User, "expires_at": res.Exp})
+	d.writeSessionEstablished(w, r, res)
 }
 
 func (d Deps) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +118,21 @@ func (d Deps) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.AuthCfg.SetSessionCookie(w, res.Token, res.Exp)
-	webx.WriteJSON(w, http.StatusOK, map[string]any{"user": res.User, "expires_at": res.Exp})
+	d.writeSessionEstablished(w, r, res)
+}
+
+// writeSessionEstablished returns the session payload plus the ALREADY
+// ROTATED csrf token (aifengkong #2, the ROADMAP item): gorilla rotates
+// before the handler runs and stores the NEW masked token in the request
+// context — the same value the Set-Cookie on this response carries — so
+// clients read csrf_token from the body and skip the re-fetch-/config round
+// trip every integration had to hardcode after session establishment.
+func (d Deps) writeSessionEstablished(w http.ResponseWriter, r *http.Request, res *app.LoginResult) {
+	webx.WriteJSON(w, http.StatusOK, map[string]any{
+		"user":       res.User,
+		"expires_at": res.Exp,
+		"csrf_token": webx.CSRFMaskedToken(r),
+	})
 }
 
 func (d Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +149,7 @@ func (d Deps) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.AuthCfg.SetSessionCookie(w, res.Token, res.Exp)
-	webx.WriteJSON(w, http.StatusOK, map[string]any{"user": res.User, "expires_at": res.Exp})
+	d.writeSessionEstablished(w, r, res)
 }
 
 func (d Deps) logout(w http.ResponseWriter, r *http.Request, _ *webx.Principal) {

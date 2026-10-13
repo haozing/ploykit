@@ -38,7 +38,7 @@ func TestQuotaGrantPeriodicUpDownUp_042(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "041")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "042", rolled[len(rolled)-1], "最低回滚点必须是 042")
+	assert.Equal(t, "042", rolled[len(rolled)-1], "框架回滚清单尾（最深回滚位）必须是 042（更高版本自动扩展）")
 	assert.False(t, colExists())
 	var rows int
 	require.NoError(t, pool.QueryRow(ctx,

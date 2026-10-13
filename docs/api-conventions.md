@@ -87,6 +87,14 @@ Common misconception: sending `code` to register. openapi.yaml is the field-cont
 > Naming note: the Go field is `Code` with JSON name `error` - historical. Unchanged in 0.x
 > (renaming breaks every existing consumer); the semantics above are the contract.
 
+> **Unwrapping contract**: `webx.WriteErr` matches via `errors.As(*webx.Error)` — a
+> framework error anywhere in a `%w` wrapping chain is unwrapped and written with
+> its status/code; anything else becomes 500 `E_INTERNAL` + an Error-level log.
+> Division of labor: framework packages construct with `webx.NewValidation/NewNotFound/...`
+> (they own the status/code pairing); products that need custom wrapping build their
+> own error type, embed `*webx.Error` (or wrap one with `%w`), and WriteErr still
+> routes it — products do NOT re-derive status from the error string.
+
 > Producer-side rule (aiblog D4 field report): never write raw driver errors to the HTTP
 > surface — `http.Error(w, err.Error(), 500)` on a public page leaked the DB
 > username/host/port to anonymous visitors during an outage. Handlers emit errors through

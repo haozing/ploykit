@@ -1,9 +1,14 @@
 package webx
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"reflect"
+	"sort"
+	"strings"
 )
 
 type ErrorBody struct {
@@ -41,6 +46,71 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 		return false
 	}
 	return true
+}
+
+// DecodeJSONKnown is the evolution-friendly counterpart of DecodeJSON
+// (aifengkong #3): valid JSON is decoded into dst leniently — type mismatches
+// still fail with 400 — but UNKNOWN field names are captured into the
+// returned slice instead of rejected, so a handler can accept a client that
+// started sending extra data (shadow-field rollout) while still seeing
+// exactly what it ignored. Handlers wanting unknown = 400 keep DecodeJSON.
+func DecodeJSONKnown(w http.ResponseWriter, r *http.Request, dst any) (unknown []string, ok bool) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			WriteError(w, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "request body too large", err.Error())
+			return nil, false
+		}
+		WriteError(w, http.StatusBadRequest, "E_BAD_JSON", "invalid request body", err.Error())
+		return nil, false
+	}
+
+	strict := json.NewDecoder(bytes.NewReader(body))
+	if err := strict.Decode(dst); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			WriteError(w, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "request body too large", err.Error())
+			return nil, false
+		}
+		WriteError(w, http.StatusBadRequest, "E_BAD_JSON", "invalid request body", err.Error())
+		return nil, false
+	}
+	if strict.More() {
+		WriteError(w, http.StatusBadRequest, "E_BAD_JSON", "invalid request body", "trailing data")
+		return nil, false
+	}
+
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(body, &probe); err != nil {
+		WriteError(w, http.StatusBadRequest, "E_BAD_JSON", "invalid request body", err.Error())
+		return nil, false
+	}
+	known := map[string]struct{}{}
+	if dst != nil {
+		t := reflect.TypeOf(dst)
+		if t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		if t.Kind() == reflect.Struct {
+			for _, f := range reflect.VisibleFields(t) {
+				name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+				if name == "" {
+					name = f.Name
+				}
+				if name != "-" {
+					known[name] = struct{}{}
+				}
+			}
+		}
+	}
+	for k := range probe {
+		if _, ok := known[k]; !ok {
+			unknown = append(unknown, k)
+		}
+	}
+	sort.Strings(unknown)
+	return unknown, true
 }
 
 const (

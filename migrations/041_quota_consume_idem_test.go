@@ -40,7 +40,7 @@ func TestQuotaConsumeIdemUpDownUp_041(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "040")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "041", rolled[len(rolled)-1], "最低回滚点必须是 041（更高版本自动扩展）")
+	assert.Equal(t, "041", rolled[len(rolled)-1], "框架回滚清单尾（最深回滚位）必须是 041（更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err := m.Up(ctx, 0)
