@@ -10,10 +10,15 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./lib/ws-query-bridge": {
+      "types": "./dist/lib/ws-query-bridge.d.ts",
+      "default": "./dist/lib/ws-query-bridge.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
@@ -28,7 +33,7 @@
   },
   "description": "React hooks 层：鉴权/工作区/计费/实时等 Headless Hooks 与 Provider，零 UI 依赖，不依赖 tailwind/组件库。",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../tools/fix-esm-extensions.mjs dist",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },

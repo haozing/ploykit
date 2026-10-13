@@ -13,7 +13,7 @@
   ],
   "license": "ISC",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../tools/fix-esm-extensions.mjs dist",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
@@ -51,7 +51,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "peerDependencies": {
     "react": "^19.0.0",
