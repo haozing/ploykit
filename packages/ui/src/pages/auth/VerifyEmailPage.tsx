@@ -10,7 +10,14 @@ import { MailCheck, LoaderCircle, CircleX } from 'lucide-react'
 
 type VerifyState = 'verifying' | 'ok' | 'failed'
 
-export function VerifyEmailPage() {
+export interface VerifyEmailPageProps {
+  /** 三态标题（i18n 覆盖点，走查 #5）：成功 / 失败 / 验证中。 */
+  titles?: { ok?: string; failed?: string; verifying?: string }
+}
+
+export function VerifyEmailPage({
+  titles = { ok: '邮箱验证成功', failed: '验证失败', verifying: '正在验证…' },
+}: VerifyEmailPageProps) {
   const [state, setState] = useState<VerifyState>('verifying')
   const [message, setMessage] = useState<string | null>(null)
   
@@ -55,7 +62,7 @@ export function VerifyEmailPage() {
             {state === 'failed' && <CircleX className="text-destructive" aria-hidden="true" />}
           </EmptyMedia>
           <EmptyTitle>
-            {state === 'ok' ? '邮箱验证成功' : state === 'failed' ? '验证失败' : '正在验证…'}
+            {state === 'ok' ? titles.ok : state === 'failed' ? titles.failed : titles.verifying}
           </EmptyTitle>
           <EmptyDescription>
             {state === 'ok'

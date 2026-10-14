@@ -112,6 +112,39 @@ export function BlogPost({ post }: { post: BlogPostData }) {
 }
 ```
 
+### 4.3 SSR-safe component rules for STATIC pages (read before your first prerender fails)
+
+The SSR bundle's `wrap` is a bare `StaticRouter` — deliberately (the fork-engine
+R13 wasm trap, §5.3 background). That means **no PloykitProvider, no
+QueryClientProvider, no router context** exist during prerender / runtime SSR.
+Any hook that needs them THROWS inside a static page and fails the whole
+prerender — with an error that names the hook, not the cause ("must be used
+within PloykitProvider", "No QueryClient set"). Two real products have hit
+this independently.
+
+**Banned inside a static page's component tree** (static = `render: 'static'`
+rows; CSR pages run in the browser and are unconstrained):
+
+- `useAuth()` / `useWorkspace()` / `useWorkspaceCtx()` / anything from
+  `@ploykit/hooks` that reads the provider context
+- `useQuery` / `useMutation` / `useApi()` (QueryClient + provider)
+- `useLogin` and friends — auth pages are CSR by nature
+
+**What to do instead:**
+
+- Data that must appear in the SEO first screen → move it into the page's Go
+  Loader (props flow; §4.4). This is the intended design, not a workaround.
+- Client-side enhancement (interactive widgets, post-mount personalization)
+  → plain `useEffect` + `fetch`/`api` calls inside the effect, with the
+  server-rendered output showing a complete prop-driven state.
+- "Is the visitor logged in?" on a static page → probe `/auth/me` in an
+  effect (`@ploykit/hooks` now ships `useAuthState()`, a provider-free
+  variant for exactly this).
+
+The long-term fix — wrapping the SSR entry with the same providers as the
+client — is blocked on the engine fork (R13); until then these rules ARE the
+contract.
+
 ### 4.3 Two write-once entries (handwritten; the framework provides the factories)
 
 ```tsx

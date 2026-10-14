@@ -53,7 +53,7 @@ Runtime contract-test pattern for products: build the production mux as `webx.Ne
 | Timeout | `Timeout(d time.Duration)` | Falls back to 504 E_TIMEOUT when the deadline arrives with no write started; the handler finishes in its own goroutine and late writes are dropped; must not wrap /ws upgrades or SSE |
 | TimeoutExcept | `TimeoutExcept(d, exemptPrefixes ...string)` | Same as Timeout but exempts by path prefix — the passthrough for long-lived routes (/ws, SSE); products previously hand-wrote these exemptions |
 | BodyLimit | `BodyLimit(n int64)` | Only wraps MaxBytesReader, no pre-reading; 413 semantics are translated uniformly by DecodeJSON |
-| RateLimit | `RateLimit(l Limiter, dimension string, perMinute int, keyFn)` | Rate-limits by the keyFn dimension; over-limit returns 429 E_RATE_LIMITED + Retry-After; inject redisx.GCRALimiter as the backend |
+| RateLimit | `RateLimit(l Limiter, dimension string, perMinute int, keyFn)` | Rate-limits by the keyFn dimension; over-limit returns 429 E_RATE_LIMITED + Retry-After; inject redisx.GCRALimiter as the backend FailOpenLimiter (no Redis) means limiting is OFF — for single-binary deployments use `webx.NewMemoryLimiter()` (in-process sliding window; per-replica, move to redisx.GCRALimiter when you scale out) |
 | Recover | `Recover(log *slog.Logger)` | Catches handler panics → logs + 500, so connections are never dropped raw |
 | AccessLog | `AccessLog(log, trustedProxies ...*net.IPNet)` | Logs method/path/status/ms/ip/user_id/request_id/client_* with severity leveled by status code; must sit inside RequestIDMiddleware |
 | SecurityHeaders | `SecurityHeaders(next)` | nosniff / X-Frame-Options DENY / Referrer-Policy / CSP default-src 'none' |

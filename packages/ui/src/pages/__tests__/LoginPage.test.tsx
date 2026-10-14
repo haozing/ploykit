@@ -227,3 +227,4 @@ describe('LoginPage passwordOnly（aifengkong #4：企业内部纯密码形态�
     expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
   })
 })
+

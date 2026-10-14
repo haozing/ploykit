@@ -56,3 +56,4 @@ export { useSiteConfig, SITE_CONFIG_QUERY_KEY } from './hooks/useSiteConfig'
 export type { SiteConfig } from './hooks/useSiteConfig'
 
 export { LIST_PAGE_SIZE } from './hooks/useMembers'
+export { useAuthState } from './hooks/useAuthState'

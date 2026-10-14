@@ -10,11 +10,21 @@ import { passwordSchema } from './RegisterPage'
 export interface ResetPasswordPageProps {
   
   onDone?: string
+  
+  /** 页面标题（i18n 覆盖点，走查 #5）。 */
+  title?: string
+  
+  /** 成功态文案（i18n 覆盖点）。 */
+  successHint?: string
 }
 
 const REDIRECT_DELAY_MS = 3000
 
-export function ResetPasswordPage({ onDone }: ResetPasswordPageProps) {
+export function ResetPasswordPage({
+  onDone,
+  title = '设置新密码',
+  successHint = '密码已重置，全部旧会话已失效。',
+}: ResetPasswordPageProps) {
   const { reset } = usePasswordReset()
   
   const [params, setParams] = useState<URLSearchParams | null>(null)
@@ -83,12 +93,12 @@ export function ResetPasswordPage({ onDone }: ResetPasswordPageProps) {
     <AuthShell>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">设置新密码</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         </div>
 
         {done ? (
           <div className="space-y-2 text-center" data-testid="reset-done">
-            <p className="text-sm text-(--success)">密码已重置，全部旧会话已失效。</p>
+            <p className="text-sm text-(--success)">{successHint}</p>
             <p className="text-sm text-muted-foreground">
               {countdown > 0 ? `${countdown} 秒后跳转登录页…` : '正在跳转…'}
             </p>
