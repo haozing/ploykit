@@ -275,3 +275,45 @@ func TestAccountRoutes(t *testing.T) {
 		t.Run(tt.name, tt.run)
 	}
 }
+
+// FP-16: PATCH /auth/me is a PARTIAL update — an absent field keeps its
+// current value; only an explicit "" clears. The old value-type decode
+// silently wiped the avatar on a display_name-only update.
+func TestUpdateMe_PartialSemantics_FP16(t *testing.T) {
+	f := newFakeRepo()
+	u := f.users["u1@example.com"]
+	u.ID = "me-1"
+	u.DisplayName = "Old Name"
+	u.AvatarURL = "https://cdn.example.com/a.png"
+	f.byID["me-1"] = u
+
+	svc := app.NewSessionService(f, fakeMail{}, app.SessionConfig{}, time.Hour, time.Hour, func() time.Time { return frozen })
+	mux := http.NewServeMux()
+	httplib.Mount(mux, httplib.Deps{SessionsSvc: svc})
+	p := &webx.Principal{UserID: "me-1", Source: webx.SourceSession}
+
+	t.Run("只传 display_name：头像保留", func(t *testing.T) {
+		w := doJSON(t, mux, "PATCH", "/auth/me", map[string]any{"display_name": "New Name"}, p)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var got app.User
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		assert.Equal(t, "New Name", got.DisplayName)
+		assert.Equal(t, "https://cdn.example.com/a.png", got.AvatarURL, "absent avatar_url must keep current value")
+	})
+
+	t.Run("显式空串：清空头像（显式清除语义保留）", func(t *testing.T) {
+		w := doJSON(t, mux, "PATCH", "/auth/me", map[string]any{"avatar_url": ""}, p)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var got app.User
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		assert.Empty(t, got.AvatarURL, "explicit empty string clears")
+	})
+
+	t.Run("两个字段都缺：400 点名", func(t *testing.T) {
+		w := doJSON(t, mux, "PATCH", "/auth/me", map[string]any{}, p)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		code, msg := errEnvelope(t, w)
+		assert.Equal(t, "E_VALIDATION", code)
+		assert.Contains(t, msg, "nothing to update")
+	})
+}

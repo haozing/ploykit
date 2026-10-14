@@ -175,14 +175,34 @@ func (d Deps) me(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
 }
 
 func (d Deps) updateMe(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	// PATCH semantics (FP-16): absent fields keep their current values — the
+	// old value-type decode zeroed whatever the request omitted, silently
+	// wiping the avatar on a display_name-only update. Pointer fields make
+	// "absent" distinguishable from "explicitly cleared" ("" clears).
 	var req struct {
-		DisplayName string `json:"display_name"`
-		AvatarURL   string `json:"avatar_url"`
+		DisplayName *string `json:"display_name"`
+		AvatarURL   *string `json:"avatar_url"`
 	}
 	if !webx.DecodeJSON(w, r, &req) {
 		return
 	}
-	user, err := d.SessionsSvc.UpdateProfile(r.Context(), p, req.DisplayName, req.AvatarURL)
+	if req.DisplayName == nil && req.AvatarURL == nil {
+		webx.ErrValidation(w, "nothing to update: provide display_name and/or avatar_url")
+		return
+	}
+	current, err := d.SessionsSvc.Me(r.Context(), p)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	displayName, avatarURL := current.DisplayName, current.AvatarURL
+	if req.DisplayName != nil {
+		displayName = *req.DisplayName
+	}
+	if req.AvatarURL != nil {
+		avatarURL = *req.AvatarURL
+	}
+	user, err := d.SessionsSvc.UpdateProfile(r.Context(), p, displayName, avatarURL)
 	if err != nil {
 		webx.WriteErr(w, err)
 		return
@@ -231,6 +251,9 @@ func (d Deps) listSessions(w http.ResponseWriter, r *http.Request, p *webx.Princ
 		webx.WriteErr(w, err)
 		return
 	}
+	if list == nil {
+		list = []app.SessionInfo{}
+	}
 
 	for i := range list {
 		list[i].Current = list[i].ID == p.SessionID
@@ -273,6 +296,9 @@ func (d Deps) listPATs(w http.ResponseWriter, r *http.Request, p *webx.Principal
 	if err != nil {
 		webx.WriteErr(w, err)
 		return
+	}
+	if list == nil {
+		list = []app.PAT{}
 	}
 	webx.WriteJSON(w, http.StatusOK, list)
 }

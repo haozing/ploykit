@@ -168,6 +168,15 @@ func WorkspaceHeaderCtx(members MemberChecker) func(http.Handler) http.Handler {
 			}
 			wsID := r.Header.Get("X-Workspace-Id")
 			if wsID == "" {
+				// Query fallback for browser-native GETs (downloads: <a download>,
+				// window.open) that cannot carry custom headers. GET-only: a
+				// workspace id in a write request's URL leaks via Referer and
+				// access logs, so writes stay header-only.
+				if r.Method == http.MethodGet {
+					wsID = r.URL.Query().Get("workspace_id")
+				}
+			}
+			if wsID == "" {
 				webx.ErrValidation(w, "X-Workspace-Id header required")
 				return
 			}

@@ -32,12 +32,12 @@ func (s *AccountService) ResendVerificationFor(ctx context.Context, email string
 		return webx.NewNotFound("user not found")
 	}
 	if u.EmailVerified {
-		return webx.NewConflict("邮箱已验证")
+		return webx.NewConflict("email already verified")
 	}
 	if ch, err := s.repo.LatestPendingChallenge(ctx, email, kindVerifyLink); err != nil {
 		return err
 	} else if ch != nil && s.now().Sub(ch.CreatedAt) < linkCooldown {
-		return webx.NewRateLimited("请求过于频繁，请稍后再试")
+		return webx.NewRateLimited("too many requests, retry later")
 	}
 	token, err := domain.MintLinkToken()
 	if err != nil {

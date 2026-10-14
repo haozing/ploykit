@@ -227,7 +227,7 @@ func TestChangePasswordB3B4(t *testing.T) {
 		assertErrCode(t, err, 401, webx.CodeUnauthenticated)
 		var we *webx.Error
 		require.True(t, errors.As(err, &we))
-		assert.Equal(t, "当前密码不正确，请确认后重新输入", we.Message)
+		assert.Equal(t, "current password is incorrect", we.Message)
 		assert.Equal(t, 0, f.revoked, "旧密码错误不得吊销会话")
 		assert.Equal(t, 0, f.setPW, "旧密码错误不得改写哈希")
 	})
@@ -237,7 +237,7 @@ func TestChangePasswordB3B4(t *testing.T) {
 		assertErrCode(t, err, 400, webx.CodeValidation)
 		var we *webx.Error
 		require.True(t, errors.As(err, &we))
-		assert.Equal(t, "新密码不能与当前密码相同", we.Message)
+		assert.Equal(t, "new password must differ from the current password", we.Message)
 		assert.Equal(t, 0, f.revoked, "相同密码不得吊销任何会话")
 		assert.Equal(t, 0, f.setPW, "相同密码不得改写哈希")
 		assert.Equal(t, hash, f.byID["u1"].PasswordHash, "原哈希应保持不变")

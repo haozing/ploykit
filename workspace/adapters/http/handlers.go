@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/workspace/app"
 )
 
 func (d Deps) listMine(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +172,9 @@ func (d Deps) myInvitations(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		webx.WriteErr(w, err)
 		return
+	}
+	if list == nil {
+		list = []app.InvitationWithWorkspace{}
 	}
 	webx.WriteJSON(w, http.StatusOK, list)
 }

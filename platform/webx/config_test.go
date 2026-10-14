@@ -38,6 +38,7 @@ func TestConfigHandler(t *testing.T) {
 		require.Contains(t, raw, "csrf_token")
 		require.Contains(t, raw, "oauth_providers")
 		require.Contains(t, raw, "billing_channels")
+		require.Contains(t, raw, "framework_version")
 
 		assert.Equal(t, "[]", strings.TrimSpace(string(raw["oauth_providers"])))
 		assert.Equal(t, "[]", strings.TrimSpace(string(raw["billing_channels"])))
@@ -113,7 +114,7 @@ func TestConfigHandler(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		var body map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-		assert.Len(t, body, 3)
+		assert.Len(t, body, 4)
 		assert.Contains(t, body, "csrf_token")
 		assert.Equal(t, []any{"github"}, body["oauth_providers"])
 		assert.Equal(t, []any{"stripe"}, body["billing_channels"])
@@ -127,7 +128,7 @@ func TestConfigHandler(t *testing.T) {
 
 		var body map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-		assert.Len(t, body, 3)
+		assert.Len(t, body, 4)
 	})
 
 	t.Run("Extra 与基础键冲突：以 Extra 为准", func(t *testing.T) {

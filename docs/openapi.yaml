@@ -5073,6 +5073,9 @@ components:
           type: string
           enum: [smtp, dev]
           description: 邮件通道形态（smtp=真实发送 / dev=仅记日志；通知偏好页据此降级标注邮件开关语义）
+        framework_version:
+          type: string
+          description: 编译期链接的 ploykit 模块版本（经 Go build info 读取；`go run` 等无模块元数据的运行形态为空串=未知——消费方必须按"unknown"处理而非当作版本号）
         banner_text:
           type: string
           description: 站点公告（空=无横幅）

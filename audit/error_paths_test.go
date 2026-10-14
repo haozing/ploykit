@@ -32,7 +32,7 @@ func TestQuery_DBErrorPropagates_P3_28(t *testing.T) {
 func TestExportCSV_DBErrorPropagates_P3_28(t *testing.T) {
 	r := unreachableRecorder(t)
 	var buf bytes.Buffer
-	err := r.ExportCSV(context.Background(), ListQuery{}, &buf)
+	_, err := r.ExportCSV(context.Background(), ListQuery{}, &buf)
 	require.Error(t, err)
 	assert.Zero(t, buf.Len(), "失败导出不得产出半截内容")
 }

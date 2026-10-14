@@ -3,6 +3,7 @@ package webx
 import (
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 )
 
 type ConfigDeps struct {
@@ -32,6 +33,11 @@ func ConfigHandler(d ConfigDeps) http.HandlerFunc {
 			"csrf_token":       token,
 			"oauth_providers":  nonEmptyStrings(d.OAuthProviders),
 			"billing_channels": nonEmptyStrings(d.BillingChannels),
+			// The framework's own version (FP walk secondary ask): products
+			// were stuffing their wrapper version into Extra; the platform
+			// version belongs in the base payload. Empty when the binary was
+			// not built as a module (dev runs without -trimpath metadata).
+			"framework_version": FrameworkVersion(),
 		}
 
 		if d.Extra != nil {
@@ -51,4 +57,21 @@ func nonEmptyStrings(f func() []string) []string {
 		return s
 	}
 	return []string{}
+}
+
+// FrameworkVersion reports the ploykit version this binary was compiled
+// against, via the module build graph. Empty string when unavailable (go run
+// without module metadata) — consumers must treat "" as "unknown", not as a
+// version.
+func FrameworkVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, m := range info.Deps {
+		if m.Path == "github.com/haozing/ploykit" {
+			return m.Version
+		}
+	}
+	return ""
 }

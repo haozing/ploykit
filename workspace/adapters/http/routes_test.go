@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/haozing/ploykit/authz"
 	"github.com/haozing/ploykit/platform/webx"
@@ -929,4 +930,44 @@ func TestStrongGuardReplacesStepUpOnDestructivePair(t *testing.T) {
 	if stepUpHits != 2 {
 		t.Fatalf("step-up hits = %d, want 2 (role perms set/reset)", stepUpHits)
 	}
+}
+
+// Browser-native downloads (FP walk): GET requests may carry the workspace as
+// ?workspace_id= when the header is absent (an <a download> cannot set
+// headers); writes never accept the query form.
+func TestWorkspaceHeaderCtx_QueryFallback_GetOnly(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	members := headerMembers{member: wsapp.Member{UserID: "alice", Role: "owner"}, found: true}
+	p := &webx.Principal{UserID: "alice"}
+
+	t.Run("GET 无头但有 query：放行", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/api/audit/export.csv?workspace_id=ws-1", nil)
+		r = r.WithContext(webx.WithPrincipal(r.Context(), p))
+		w := httptest.NewRecorder()
+		WorkspaceHeaderCtx(members)(next).ServeHTTP(w, r)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+	t.Run("POST 无头只有 query：仍 400（写不收 URL 形态）", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/api/tasks?workspace_id=ws-1", nil)
+		r = r.WithContext(webx.WithPrincipal(r.Context(), p))
+		w := httptest.NewRecorder()
+		WorkspaceHeaderCtx(members)(next).ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+	t.Run("头存在时 query 不参与（头优先）", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/api/tasks?workspace_id=ws-other", nil)
+		r.Header.Set("X-Workspace-Id", "ws-1")
+		r = r.WithContext(webx.WithPrincipal(r.Context(), p))
+		w := httptest.NewRecorder()
+		WorkspaceHeaderCtx(members)(next).ServeHTTP(w, r)
+		assert.Equal(t, http.StatusOK, w.Code, "header wins; ws-other never consulted")
+	})
+	t.Run("GET query 回退同样过成员检查", func(t *testing.T) {
+		nonMember := headerMembers{found: false}
+		r := httptest.NewRequest(http.MethodGet, "/api/audit/export.csv?workspace_id=ws-1", nil)
+		r = r.WithContext(webx.WithPrincipal(r.Context(), p))
+		w := httptest.NewRecorder()
+		WorkspaceHeaderCtx(nonMember)(next).ServeHTTP(w, r)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
 }

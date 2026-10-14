@@ -252,7 +252,9 @@ func TestRecorderExportCSV(t *testing.T) {
 
 	t.Run("表头 + 过滤 + email 提取 + 转义", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "user.login"}, &buf))
+		n, err := rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "user.login"}, &buf)
+		require.NoError(t, err)
+		require.EqualValues(t, 1, n, "row count returned for truncation detection")
 
 		lines := strings.SplitN(strings.TrimSuffix(buf.String(), "\n"), "\n", 2)
 		require.Len(t, lines, 2, "表头 + 单行数据")
@@ -279,7 +281,8 @@ func TestRecorderExportCSV(t *testing.T) {
 
 	t.Run("系统事件 actor_email 为空、metadata 原样 jsonb 字符串", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "workspace.provisioned"}, &buf))
+		_, err := rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "workspace.provisioned"}, &buf)
+		require.NoError(t, err)
 		rows, err := csv.NewReader(strings.NewReader(buf.String())).ReadAll()
 		require.NoError(t, err)
 		require.Len(t, rows, 2)
@@ -290,7 +293,8 @@ func TestRecorderExportCSV(t *testing.T) {
 
 	t.Run("48h 旧事件（直插快照 email）与导出上限缺省", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, ResourceType: "subscription"}, &buf))
+		_, err2 := rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, ResourceType: "subscription"}, &buf)
+		require.NoError(t, err2)
 		rows, err := csv.NewReader(strings.NewReader(buf.String())).ReadAll()
 		require.NoError(t, err)
 		require.Len(t, rows, 2)
@@ -300,7 +304,8 @@ func TestRecorderExportCSV(t *testing.T) {
 
 	t.Run("无匹配导出仅表头", func(t *testing.T) {
 		var buf bytes.Buffer
-		require.NoError(t, rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "nope.none"}, &buf))
+		_, err0 := rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "nope.none"}, &buf)
+		require.NoError(t, err0)
 		assert.Equal(t,
 			"created_at,actor_type,actor_id,actor_email,action,resource_type,resource_id,request_id,metadata\n",
 			buf.String())
@@ -313,7 +318,8 @@ func TestRecorderExportCSV(t *testing.T) {
 			"ad3.payload", "task", `=SUM(1,9)`, map[string]any{"name": `+cmd|'/c calc'!A1`})
 
 		var buf bytes.Buffer
-		require.NoError(t, rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "ad3.payload"}, &buf))
+		_, err1 := rec.ExportCSV(ctx, ListQuery{WorkspaceID: wsA, Action: "ad3.payload"}, &buf)
+		require.NoError(t, err1)
 		rows, err := csv.NewReader(strings.NewReader(buf.String())).ReadAll()
 		require.NoError(t, err)
 		require.Len(t, rows, 2, "表头 + 单行")

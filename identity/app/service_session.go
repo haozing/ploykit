@@ -375,11 +375,11 @@ func (s *SessionService) ChangePassword(ctx context.Context, p *webx.Principal, 
 	}
 	if !VerifyPassword(oldPassword, user.PasswordHash) {
 
-		return nil, webx.NewUnauthenticated("当前密码不正确，请确认后重新输入")
+		return nil, webx.NewUnauthenticated("current password is incorrect")
 	}
 
 	if newPassword == oldPassword {
-		return nil, webx.NewValidation("新密码不能与当前密码相同")
+		return nil, webx.NewValidation("new password must differ from the current password")
 	}
 	if !domain.PasswordOK(newPassword) {
 		return nil, webx.NewValidation("new password too weak")

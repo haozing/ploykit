@@ -255,8 +255,25 @@ func CSVCell(s string) string {
 	return s
 }
 
-func (r *Recorder) ExportCSV(ctx context.Context, q ListQuery, w io.Writer) error {
-	pg := normalizePage(q.Limit, q.Offset, 5000, 5000)
+// CountFiltered returns how many audit events match q (no pagination) — the
+// export endpoint exposes it so consumers can detect the 5000-row cap
+// truncating their export instead of silently receiving fewer rows.
+func (r *Recorder) CountFiltered(ctx context.Context, q ListQuery) (int, error) {
+	where, args := q.whereClause()
+	var n int
+	if err := r.pool.QueryRow(ctx,
+		`SELECT count(*) FROM audit_event`+where, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ExportMaxRows is the export cap; exports beyond it truncate (surfaced by the
+// endpoint via X-Truncated, not silently).
+const ExportMaxRows = 5000
+
+func (r *Recorder) ExportCSV(ctx context.Context, q ListQuery, w io.Writer) (int, error) {
+	pg := normalizePage(q.Limit, q.Offset, ExportMaxRows, ExportMaxRows)
 	where, args := q.whereClause()
 	all, limitPh, offsetPh := pageArgs(args, pg)
 
@@ -265,31 +282,33 @@ func (r *Recorder) ExportCSV(ctx context.Context, q ListQuery, w io.Writer) erro
 		COALESCE(resource_id, ''), COALESCE(request_id, ''), metadata::text
 		FROM audit_event`+where+` ORDER BY created_at DESC, id DESC LIMIT `+limitPh+` OFFSET `+offsetPh, all...)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer rows.Close()
 
+	n := 0
 	cw := csv.NewWriter(w)
 	if err := cw.Write(csvColumns); err != nil {
-		return err
+		return n, err
 	}
 	for rows.Next() {
 		var createdAt time.Time
 		var actorType, actorID, actorEmail, action, rtype, resourceID, requestID, metadata string
 		if err := rows.Scan(&createdAt, &actorType, &actorID, &actorEmail,
 			&action, &rtype, &resourceID, &requestID, &metadata); err != nil {
-			return err
+			return n, err
 		}
 		if err := cw.Write([]string{
 			createdAt.UTC().Format(time.RFC3339Nano), CSVCell(actorType), CSVCell(actorID), CSVCell(actorEmail),
 			CSVCell(action), CSVCell(rtype), CSVCell(resourceID), CSVCell(requestID), CSVCell(metadata),
 		}); err != nil {
-			return err
+			return n, err
 		}
+		n++
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return n, err
 	}
 	cw.Flush()
-	return cw.Error()
+	return n, cw.Error()
 }

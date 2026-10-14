@@ -118,11 +118,25 @@ func (d Deps) export(w http.ResponseWriter, r *http.Request, p *webx.Principal) 
 	}
 	q.WorkspaceID = p.WorkspaceID
 
-	var buf bytes.Buffer
-	if err := d.Rec.ExportCSV(r.Context(), q, &buf); err != nil {
+	total, err := d.Rec.CountFiltered(r.Context(), q)
+	if err != nil {
 		webx.ErrInternal(w)
 		return
 	}
+	var buf bytes.Buffer
+	written, err := d.Rec.ExportCSV(r.Context(), q, &buf)
+	if err != nil {
+		webx.ErrInternal(w)
+		return
+	}
+	// Compliance surface (FP walk): a silent 5000-row cap is worse than an
+	// error — the consumer cannot tell they are looking at partial audit
+	// data. Name it in headers instead.
+	if total > written {
+		w.Header().Set("X-Truncated", "true")
+	}
+	w.Header().Set("X-Total-Filtered-Count", strconv.Itoa(total))
+	w.Header().Set("X-Rows-Exported", strconv.Itoa(written))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition",
 		`attachment; filename="audit-`+p.WorkspaceID+`-`+time.Now().UTC().Format("20060102")+`.csv"`)

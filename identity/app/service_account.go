@@ -52,7 +52,7 @@ func (s *AccountService) WithAuditor(a Auditor) *AccountService {
 
 func (s *AccountService) DeleteAccount(ctx context.Context, p *webx.Principal) error {
 	if p == nil {
-		return webx.NewUnauthenticated("请先登录")
+		return webx.NewUnauthenticated("authentication required")
 	}
 	err := s.repo.RunInTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		return s.repo.SoftDeleteUserTx(ctx, tx, p.UserID, s.now())
@@ -78,7 +78,7 @@ const (
 func (s *AccountService) RequestPasswordReset(ctx context.Context, rawEmail string) error {
 	email := domain.NormalizeEmail(rawEmail)
 	if !domain.EmailOK(email) {
-		return webx.NewValidation("邮箱格式无效")
+		return webx.NewValidation("invalid email format")
 	}
 	_, ok, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -90,7 +90,7 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, rawEmail stri
 	if ch, err := s.repo.LatestPendingChallenge(ctx, email, kindResetLink); err != nil {
 		return err
 	} else if ch != nil && s.now().Sub(ch.CreatedAt) < linkCooldown {
-		return webx.NewRateLimited("请求过于频繁，请稍后再试")
+		return webx.NewRateLimited("too many requests, retry later")
 	}
 	token, err := domain.MintLinkToken()
 	if err != nil {
@@ -107,21 +107,21 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, rawEmail stri
 func (s *AccountService) ResetPassword(ctx context.Context, rawEmail, token, newPassword string) error {
 	email := domain.NormalizeEmail(rawEmail)
 	if !domain.EmailOK(email) {
-		return webx.NewValidation("邮箱格式无效")
+		return webx.NewValidation("invalid email format")
 	}
 	u, ok, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return webx.NewValidation("重置链接无效或已过期")
+		return webx.NewValidation("reset link invalid or expired")
 	}
 	ch, err := s.verifyLinkChallenge(ctx, email, kindResetLink, token)
 	if err != nil {
 		return err
 	}
 	if !domain.PasswordOK(newPassword) {
-		return webx.NewValidation("新密码强度不足（需 10+ 字符且含三类字符）")
+		return webx.NewValidation("password too weak (need 10+ chars, 3 of 4 character kinds)")
 	}
 	if err := s.repo.ConsumeChallenge(ctx, ch.ID); err != nil {
 		return err
@@ -138,19 +138,19 @@ func (s *AccountService) ResetPassword(ctx context.Context, rawEmail, token, new
 
 func (s *AccountService) SendVerification(ctx context.Context, p *webx.Principal) error {
 	if p == nil {
-		return webx.NewUnauthenticated("请先登录")
+		return webx.NewUnauthenticated("authentication required")
 	}
 	u, err := s.repo.GetUser(ctx, p.UserID)
 	if err != nil {
 		return err
 	}
 	if u.EmailVerified {
-		return webx.NewConflict("邮箱已验证")
+		return webx.NewConflict("email already verified")
 	}
 	if ch, err := s.repo.LatestPendingChallenge(ctx, u.Email, kindVerifyLink); err != nil {
 		return err
 	} else if ch != nil && s.now().Sub(ch.CreatedAt) < linkCooldown {
-		return webx.NewRateLimited("请求过于频繁，请稍后再试")
+		return webx.NewRateLimited("too many requests, retry later")
 	}
 	token, err := domain.MintLinkToken()
 	if err != nil {
@@ -167,14 +167,14 @@ func (s *AccountService) SendVerification(ctx context.Context, p *webx.Principal
 func (s *AccountService) VerifyEmail(ctx context.Context, rawEmail, token string) error {
 	email := domain.NormalizeEmail(rawEmail)
 	if !domain.EmailOK(email) {
-		return webx.NewValidation("邮箱格式无效")
+		return webx.NewValidation("invalid email format")
 	}
 	u, ok, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return webx.NewValidation("验证链接无效或已过期")
+		return webx.NewValidation("verification link invalid or expired")
 	}
 	ch, err := s.verifyLinkChallenge(ctx, email, kindVerifyLink, token)
 	if err != nil {
@@ -192,18 +192,18 @@ func (s *AccountService) verifyLinkChallenge(ctx context.Context, email, kind, t
 		return nil, err
 	}
 	if ch == nil {
-		return nil, webx.NewValidation("链接无效或已过期")
+		return nil, webx.NewValidation("link invalid or expired")
 	}
 	if ch.Attempts >= domain.CodeMaxTries {
-		return nil, webx.NewValidation("尝试次数过多，请重新申请")
+		return nil, webx.NewValidation("too many attempts, request a new code")
 	}
 	if s.now().After(ch.ExpiresAt) {
-		return nil, webx.NewValidation("链接无效或已过期")
+		return nil, webx.NewValidation("link invalid or expired")
 	}
 
 	if !hmac.Equal([]byte(ch.SecretHash), []byte(domain.HashSecret(s.cfg.SecretPepper, token))) {
 		_ = s.repo.IncChallengeAttempts(ctx, ch.ID)
-		return nil, webx.NewValidation("链接无效或已过期")
+		return nil, webx.NewValidation("link invalid or expired")
 	}
 	return ch, nil
 }
