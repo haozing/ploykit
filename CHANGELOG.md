@@ -4,6 +4,41 @@ All notable changes to ploykit are documented here. Format: Keep a Changelog;
 versions follow semver — under 0.x, minor bumps may carry breaking changes
 (each one is called out).
 
+## [0.7.0] — 2026-10-14
+
+Two field-report batches (an FP walkthrough and a rendering-chain walkthrough)
+plus platform hardening.
+
+### Added
+- **webx**: `NewMemoryLimiter()` — in-process sliding-window Limiter; single-binary
+  deployments without Redis previously ran with rate limiting silently OFF.
+- **hooks**: `useAuthState()` — provider-free `/auth/me` probe for product chrome
+  outside AppShell (shares the `['auth','me']` queryKey with useAuth).
+- **ui**: i18n override props on the remaining auth pages — `ResetPasswordPage`
+  (`title`/`successHint`), `VerifyEmailPage` (`titles.{ok,failed,verifying}`).
+- **audit**: export truncation is now visible — `X-Truncated` /
+  `X-Total-Filtered-Count` / `X-Rows-Exported` headers when the 5000-row cap
+  bites (`ExportCSV` returns the row count; `CountFiltered` added).
+- **webx**: `/config` carries `framework_version` (build-info module version).
+
+### Fixed
+- **identity**: `PATCH /auth/me` is a PARTIAL update — absent fields keep their
+  values (an absent `avatar_url` no longer silently wipes the avatar);
+  explicit `""` still clears.
+- **workspace**: `WorkspaceHeaderCtx` accepts `?workspace_id=` on GETs —
+  browser-native downloads (`<a download>`) can pass the workspace without
+  custom headers; writes stay header-only.
+- **identity/webhooks**: empty-list endpoints serialize `[]` not `null`;
+  framework error messages are English-only on the wire (11 translated).
+- **renderx**: prerender logs when a loader route is skipped for not being in
+  `--warm` (was a silent SEO failure).
+
+### Docs
+- rendering.md: loader→props unpacking rule with counter-example; SSR-safe
+  component rules for static pages (banned provider hooks + alternatives);
+  single-language cache-key boundary declared.
+- notify: transactional vs notification email recipe (CAN-SPAM framing).
+
 ## [0.6.1] — 2026-10-12
 
 Go-side fixes (npm packages unchanged from 0.6.0).
