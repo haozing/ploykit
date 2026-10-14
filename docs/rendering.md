@@ -166,6 +166,26 @@ renderx.Refresh(ctx, "/blog/:slug", renderx.Params{"slug": slug})      // or inv
 
 Loaders are Go functions: data lives on the Go side (pool/domain services); build time and runtime share the same data-fetching code and connect straight to the database with no API layer — this is ploykit's differentiation from Node meta-frameworks.
 
+**The loader's return value IS the component's props object — verbatim, no wrapping.** The runtime spreads whatever the loader returned directly onto the page component (`createElement(component, loaderResult)`):
+
+```go
+// loader returns map{"post": post}  ->  component receives { post }  ->  ({ post }) => ...
+return map[string]any{"post": post}, nil
+```
+
+```tsx
+// matching component signature — destructure exactly the loader's keys
+export function BlogPost({ post }: { post: BlogPostData }) { ... }
+```
+
+The classic mistake (a real product onboarding report): wrapping "just to be safe" —
+
+```go
+return map[string]any{"loaderData": map[string]any{"work": w}}, nil   // WRONG
+```
+
+The component then renders with an empty props object and **nothing reports an error** — the page silently renders its loading/empty shell. If a page renders but shows no data, check the loader's return shape first: every key the component destructures must be a top-level key of the loader's map.
+
 (The example wires registration + Handler mount; it does not call `Invalidate`/`Refresh` from a publish hook yet — until a hook exists, runtime-cached pages age out via TTL and buildId versioning.)
 
 ### 4.5 Handler mounting and the build chain
@@ -336,6 +356,8 @@ renderx.RegisterDep(pagePattern, dependsOnPattern)   // invalidation-graph edge:
 - The queryClient inside the Provider must be created fresh per render (the status quo is already `useState(() => createDefaultQueryClient())`, naturally satisfied); client queries after static-page hydration refresh on their own and do not compete with server props for the first screen.
 
 ### 5.8 Caching, invalidation, and serving (core: landing G2+G3)
+
+> **Single-language boundary**: cache keys are `path × buildID` — there is no language dimension. `Lang` only writes the `<html lang>` attribute; two languages of the same path cannot coexist as rendered artifacts. Multi-language sites are out of scope today (a per-language cache key is on the ROADMAP; until then a product either pins one language per deployment or differentiates paths, e.g. `/en/...` vs `/ja/...`).
 
 **Layered cache (cache.go)**: `memory LRU (default 1024 pages) → disk (storagex Local)`. Key = normalized URL path; value = full HTML + propsSha256 + builtAt + **buildId**. The example wires the disk layer at `RENDERX_CACHE_DIR` (default `renderx-cache`) via `storagex.NewLocal`. A Redis shared tier is **not implemented** (memory+disk only); redisx is a real package now, so multi-instance deployments can add one without a framework prerequisite.
 

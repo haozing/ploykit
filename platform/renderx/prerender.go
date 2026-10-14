@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -270,6 +271,11 @@ func collectPrerenderTasks(ctx context.Context, deps PrerenderDeps, reg *Registr
 		_, lerr := reg.LookupLoader(rt.Path)
 		hasLoader := lerr == nil
 		if hasLoader && !warm[rt.Path] {
+			// Intentional skip (large catalogs are not fully warmed), but never
+			// silent: an SEO-sensitive product that assumed the page was
+			// prerendered spent half an hour discovering it was runtime-only.
+			slog.Info("renderx: prerender skipped: route has a Loader but is not in the --warm list (runtime-rendered on first visit)",
+				"route", rt.Path, "page_id", rt.PageID)
 			continue
 		}
 		if !hasParams(rt.Path) {
