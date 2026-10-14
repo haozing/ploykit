@@ -42,10 +42,11 @@ jobs:
           cache: true
       - run: go build ./...
       - run: go vet ./...
-      # Pure unit run — no TEST_DATABASE_URL, so integration tests skip and -p 2 is safe.
+      # Pure unit run — -short drops timing-sensitive waits (renderx corpse
+      # exit) that starve on shared runners; the DB job below runs them full.
       # On failure, surface the failing tests as annotations (logs otherwise need admin auth).
       - run: |
-          go test -p 2 ./... > /tmp/unit.log 2>&1 || {
+          go test -p 2 -short ./... > /tmp/unit.log 2>&1 || {
             grep -E '^(--- FAIL|    --- FAIL|FAIL)|未重建|重建失败|renderx\(dev\)' /tmp/unit.log | sed 's/^/::error::/' | sort -u | head -40
             cat /tmp/unit.log
             exit 1
