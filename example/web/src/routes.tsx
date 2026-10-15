@@ -219,6 +219,7 @@ export function Product() {
     title: 'MyProduct — 让你的团队更高效',
     description:
       '一站式任务管理与团队协作工具。创建工作区、邀请团队成员、追踪任务进度。',
+    canonical: '/',
   });
   return (
     <LandingPage

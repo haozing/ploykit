@@ -118,7 +118,8 @@ python tools/check_api.py                 # OpenAPI ↔ route contract check
 | [docs/architecture.md](docs/architecture.md) | Layering, domain map, hook model, boundary enforcement |
 | [docs/api-index.md](docs/api-index.md) | Every domain extension point (25 hooks) with semantics |
 | [docs/platform-api-index.md](docs/platform-api-index.md) | The full `platform/*` API surface |
-| [docs/rendering.md](docs/rendering.md) | SSR, prerender, hydration, caching, sandboxing |
+| [docs/rendering.md](docs/rendering.md) | SSR, prerender, hydration, caching, sandboxing, SEO companions |
+| [docs/visitor-analytics.md](docs/visitor-analytics.md) | Visitor-statistics boundary + third-party analytics integration recipe |
 | [docs/pages.md](docs/pages.md) | Frontend page inventory and ownership rules |
 | [docs/dev-environment.md](docs/dev-environment.md) | Toolchain, database, sealing keys, RLS playground |
 | [docs/adr/](docs/adr/) | Architecture decision records |

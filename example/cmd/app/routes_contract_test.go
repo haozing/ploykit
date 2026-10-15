@@ -63,6 +63,11 @@ func mountProductionRoutes(mux *webx.Mux) {
 	// PLOYKIT_METRICS_PATH; the real path is env-configurable but never
 	// carries a method prefix.
 	mux.Handle("/metrics", http.NotFoundHandler())
+	// renderx.go: SEO companions — method-less mounts, not endpoints. /sitemap.xml
+	// is registered only when PUBLIC_BASE_URL is set in production; the mirror
+	// records the production shape.
+	mux.Handle("/robots.txt", http.NotFoundHandler())
+	mux.Handle("/sitemap.xml", http.NotFoundHandler())
 	mux.Handle("/", http.NotFoundHandler())
 
 	// the MFA routes are mounted only when Deps.MFA is wired (ADR 0013

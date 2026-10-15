@@ -289,3 +289,113 @@ func TestPropsSHA256(t *testing.T) {
 		t.Fatalf("指纹不稳定或非 hex： %q vs %q", a, b)
 	}
 }
+
+func TestGetOrLoadHitWarmAndCold(t *testing.T) {
+	c := newMemOnlyCache(t, "b1", 8, 0)
+	ctx := context.Background()
+
+	var calls atomic.Int32
+	load := func(context.Context) (CacheEntry, error) {
+		calls.Add(1)
+		return CacheEntry{HTML: []byte("loaded")}, nil
+	}
+
+	ent, hit, err := c.GetOrLoadHit(ctx, "/a", load)
+	if err != nil || hit || string(ent.HTML) != "loaded" {
+		t.Fatalf("cold: ent=%q hit=%v err=%v", ent.HTML, hit, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("cold 应 load 一次, got %d", calls.Load())
+	}
+
+	ent, hit, err = c.GetOrLoadHit(ctx, "/a", load)
+	if err != nil || !hit || string(ent.HTML) != "loaded" {
+		t.Fatalf("warm: ent=%q hit=%v err=%v", ent.HTML, hit, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("warm 不应再 load, got %d", calls.Load())
+	}
+}
+
+func TestGetOrLoadHitReplayReportsHit(t *testing.T) {
+	c := newMemOnlyCache(t, "b1", 8, 0)
+	ctx := context.Background()
+	// 并发写者在本请求外层检查之后把条目填进缓存（invalidate/Refresh 或
+	// 并发请求完成）——单飞闭包（loadOrReplay）的内层复查命中它，必须报 hit。
+	if err := c.Put(ctx, "/a", CacheEntry{HTML: []byte("writer")}); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	res, err := c.loadOrReplay(ctx, "/a", func(context.Context) (CacheEntry, error) {
+		calls.Add(1)
+		return CacheEntry{HTML: []byte("load")}, nil
+	})
+	if err != nil || !res.hit || string(res.ent.HTML) != "writer" || calls.Load() != 0 {
+		t.Fatalf("replay 应报 hit 且不 load: res=%+v calls=%d err=%v", res, calls.Load(), err)
+	}
+}
+
+func TestGetOrLoadHitWaiterSharesLoadResult(t *testing.T) {
+	c := newMemOnlyCache(t, "b1", 8, 0)
+	ctx := context.Background()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if _, _, err := c.GetOrLoadHit(ctx, "/a", func(context.Context) (CacheEntry, error) {
+			calls.Add(1)
+			close(started)
+			<-release
+			return CacheEntry{HTML: []byte("leader")}, nil
+		}); err != nil {
+			t.Errorf("leader err=%v", err)
+		}
+	}()
+	<-started
+
+	var waiterHit bool
+	var waiterHTML string
+	var waiterErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ent, hit, err := c.GetOrLoadHit(ctx, "/a", func(context.Context) (CacheEntry, error) {
+			calls.Add(1)
+			return CacheEntry{HTML: []byte("waiter")}, nil
+		})
+		waiterHit, waiterHTML, waiterErr = hit, string(ent.HTML), err
+	}()
+	// 给等待者时间进入单飞等待：leader 尚未 Put，等待者的外层检查必然 miss，
+	// 因此它并入 leader 的单飞调用而不是走缓存命中短路。
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if waiterErr != nil {
+		t.Fatalf("waiter err=%v", waiterErr)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("单飞应只 load 一次, got %d", calls.Load())
+	}
+	if waiterHit || waiterHTML != "leader" {
+		t.Fatalf("等待者应报 miss 且共享 leader 结果: hit=%v html=%q", waiterHit, waiterHTML)
+	}
+}
+
+func TestGetOrLoadHitLoadError(t *testing.T) {
+	c := newMemOnlyCache(t, "b1", 8, 0)
+	ctx := context.Background()
+	_, hit, err := c.GetOrLoadHit(ctx, "/a", func(context.Context) (CacheEntry, error) {
+		return CacheEntry{}, errors.New("loader 数据坏")
+	})
+	if err == nil || hit {
+		t.Fatalf("错误路径: hit=%v err=%v", hit, err)
+	}
+	if _, ok := c.Get(ctx, "/a"); ok {
+		t.Fatal("失败的 load 不应写缓存")
+	}
+}

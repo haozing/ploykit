@@ -28,8 +28,33 @@ function upsertHeadEntries(entries: HeadEntry[]): void {
       continue
     }
     if (entry.tag === 'meta' && keyedUpsertMeta(entry)) continue
+    if (entry.tag === 'link' && (entry.attrs?.rel ?? '').trim().toLowerCase() === 'canonical') {
+      upsertCanonical(entry)
+      continue
+    }
     upsertOther(entry)
   }
+}
+
+
+// canonical is a singleton per document: emit updates the existing element's
+// attributes in place (hydrating a document whose SSR head already carries a
+// canonical adopts it rather than appending a duplicate). Semantics are
+// sticky, like title/meta — emitting no canonical leaves the current one;
+// pages that must not inherit one should declare their own.
+function upsertCanonical(entry: HeadEntry): void {
+  const attrs = entry.attrs ?? {}
+  const links = document.head.getElementsByTagName('link')
+  for (let i = 0; i < links.length; i++) {
+    if ((links[i].getAttribute('rel') ?? '').trim().toLowerCase() !== 'canonical') continue
+    
+    
+    for (const [k, v] of Object.entries(attrs)) links[i].setAttribute(k, v)
+    return
+  }
+  const el = document.createElement('link')
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)
+  document.head.appendChild(el)
 }
 
 

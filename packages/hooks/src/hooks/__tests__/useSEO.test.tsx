@@ -6,7 +6,7 @@ import { useSEO } from '../useSEO'
 
 
 
-function Probe(props: { title?: string; description?: string; ogImage?: string }) {
+function Probe(props: { title?: string; description?: string; ogImage?: string; canonical?: string }) {
   useSEO(props)
   return <p>probe</p>
 }
@@ -14,7 +14,7 @@ function Probe(props: { title?: string; description?: string; ogImage?: string }
 beforeEach(() => {
   document.title = ''
   document.head
-    .querySelectorAll('meta[name="description"],meta[property^="og:"],meta[name="twitter:card"]')
+    .querySelectorAll('meta[name="description"],meta[property^="og:"],meta[name="twitter:card"],link[rel="canonical"]')
     .forEach((el) => el.remove())
 })
 
@@ -44,5 +44,18 @@ describe('useSEO（经 @ploykit/runtime 指令通道）', () => {
     const metas = document.head.querySelectorAll('meta[name="description"]')
     expect(metas).toHaveLength(1)
     expect(metas[0]).toHaveAttribute('content', 'b')
+  })
+
+  it('canonical：落位 link[rel=canonical]，换页原位更新不重复', () => {
+    const { rerender } = render(<Probe title="A" canonical="https://x.com/a" />)
+    rerender(<Probe title="B" canonical="https://x.com/b" />)
+    const links = document.head.querySelectorAll('link[rel="canonical"]')
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAttribute('href', 'https://x.com/b')
+  })
+
+  it('未传 canonical 不产生条目', () => {
+    render(<Probe title="只有标题" />)
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull()
   })
 })

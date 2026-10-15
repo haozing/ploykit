@@ -25,6 +25,31 @@ const (
 	poisonFileName = "_poison.json"
 )
 
+// HeaderTier names the response header carrying which serving layer produced
+// the response — one of the Tier* values below. It exists for traffic
+// observation (metrics.TrafficConfig consumes it: "did the crawler get cache
+// or SSR?") and for debugging ("why was this request rendered?"). Readers must
+// keep in mind that a CDN caching the HTML replays the header of the origin
+// response that first populated the cache.
+const HeaderTier = "X-Renderx-Tier"
+
+// Tier values, most-specific-first in the serving order: embedded prerender
+// artifact, layered-cache hit, on-the-spot render (miss path), stale copy on
+// render failure, SPA shell fallback (index.html routes incl. the 404 form),
+// static asset passthrough, product error page. The SEO companions carry their
+// own values so traffic middleware can count crawler fetches of them.
+const (
+	TierEmbed   = "embed"
+	TierCache   = "cache"
+	TierRender  = "render"
+	TierStale   = "stale"
+	TierSPA     = "spa"
+	TierAsset   = "asset"
+	TierError   = "error"
+	TierRobots  = "robots"
+	TierSitemap = "sitemap"
+)
+
 type HandlerDeps struct {
 	PrerenderFS fs.FS
 
@@ -110,7 +135,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
 	if html, etag, ok := h.embedPage(path); ok {
-		h.serveHTML(w, r, html, h.deps.CacheControl, etag)
+		h.serveHTML(w, r, html, h.deps.CacheControl, etag, TierEmbed)
 		return
 	}
 
@@ -129,7 +154,7 @@ func (h *handler) serveStatic(w http.ResponseWriter, r *http.Request, path strin
 		h.serveStaleOrError(w, r, path, fmt.Errorf("renderx: 页面 %s 在毒页黑名单中", path))
 		return
 	}
-	ent, err := h.deps.Cache.GetOrLoad(r.Context(), path, func(ctx context.Context) (CacheEntry, error) {
+	ent, hit, err := h.deps.Cache.GetOrLoadHit(r.Context(), path, func(ctx context.Context) (CacheEntry, error) {
 		props, perr := propsForRoute(ctx, h.deps.Registry, rt.Path, params)
 		if perr != nil {
 			return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）取数失败: %w", path, rt.PageID, perr)
@@ -137,7 +162,11 @@ func (h *handler) serveStatic(w http.ResponseWriter, r *http.Request, path strin
 		return RenderOnce(ctx, h.deps.Renderer, rt.PageID, path, props, h.deps.Lang, h.deps.Assets)
 	})
 	if err == nil {
-		h.serveHTML(w, r, ent.HTML, h.deps.CacheControl, ent.PropsSHA256)
+		tier := TierRender
+		if hit {
+			tier = TierCache
+		}
+		h.serveHTML(w, r, ent.HTML, h.deps.CacheControl, ent.PropsSHA256, tier)
 		return
 	}
 
@@ -154,6 +183,7 @@ func (h *handler) serveStatic(w http.ResponseWriter, r *http.Request, path strin
 }
 
 func (h *handler) serveNotFound(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(HeaderTier, TierSPA)
 	if h.deps.SPA == nil {
 		http.NotFound(w, r)
 		return
@@ -184,9 +214,10 @@ func (w *notFoundWriter) Write(b []byte) (int, error) {
 func (h *handler) serveStaleOrError(w http.ResponseWriter, r *http.Request, path string, cause error) {
 	if ent, ok := h.deps.Cache.GetStale(r.Context(), path); ok {
 		h.deps.Warn("renderx: 页面 %s 渲染失败，发过期副本兜底（A6）: %v", path, cause)
-		h.serveHTML(w, r, ent.HTML, "no-cache", ent.PropsSHA256)
+		h.serveHTML(w, r, ent.HTML, "no-cache", ent.PropsSHA256, TierStale)
 		return
 	}
+	w.Header().Set(HeaderTier, TierError)
 	h.deps.ErrorPage(w, r, fmt.Errorf("页面 %s 渲染失败且无过期副本: %w", path, cause))
 }
 
@@ -215,7 +246,8 @@ func (h *handler) buildScopedETag(fingerprint string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (h *handler) serveHTML(w http.ResponseWriter, r *http.Request, html []byte, cacheControl, etag string) {
+func (h *handler) serveHTML(w http.ResponseWriter, r *http.Request, html []byte, cacheControl, etag, tier string) {
+	w.Header().Set(HeaderTier, tier)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", cacheControl)
 	if etag != "" {
@@ -232,12 +264,25 @@ func (h *handler) serveHTML(w http.ResponseWriter, r *http.Request, html []byte,
 }
 
 func (h *handler) spa(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(HeaderTier, spaTier(r.URL.Path))
 	if h.deps.SPA == nil {
 		http.NotFound(w, r)
 		return
 	}
 
 	h.deps.SPA.ServeHTTP(w, r)
+}
+
+// spaTier splits SPA-fallback requests into page shells and static assets
+// (last segment carries a file extension) so traffic counts can separate them.
+// Heuristic boundary (same shape as frontendHandler's 404 rule): a page route
+// whose last segment contains a dot (/blog/v1.2) lands in the asset bucket —
+// acceptable for observation buckets; tighten here if a product grows such routes.
+func spaTier(p string) string {
+	if i := strings.LastIndexByte(p, '/'); strings.Contains(p[i+1:], ".") {
+		return TierAsset
+	}
+	return TierSPA
 }
 
 func staticRoutes(routes []RouteSpec) []RouteSpec {

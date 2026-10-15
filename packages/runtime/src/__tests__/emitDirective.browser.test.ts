@@ -41,20 +41,66 @@ describe('emitDirective（浏览器分支）', () => {
 describe('P3-63 补测：upsertOther（link 等非身份键标签）', () => {
   it('link 首次追加、tag+attrs 全等去重、children 写入且不重复', () => {
     document.head.innerHTML = ''
-    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/x' } }])
-    const first = document.head.querySelector('link[rel="canonical"]')
-    expect(first?.getAttribute('href')).toBe('/x')
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'preload', as: 'font', href: '/x.woff2' } }])
+    expect(document.head.querySelector('link[rel="preload"]')?.getAttribute('href')).toBe('/x.woff2')
 
     
-    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/x' } }])
-    expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'preload', as: 'font', href: '/x.woff2' } }])
+    expect(document.head.querySelectorAll('link[rel="preload"]')).toHaveLength(1)
 
     
-    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/y' } }])
-    expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(2)
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'preload', as: 'font', href: '/y.woff2' } }])
+    expect(document.head.querySelectorAll('link[rel="preload"]')).toHaveLength(2)
 
     
     emitDirective('head', [{ tag: 'style', children: 'body{color:red}' }])
     expect(document.head.querySelector('style')?.textContent).toBe('body{color:red}')
+  })
+})
+
+describe('canonical 单例语义（SEO 身份标签）', () => {
+  it('水合采纳既有 SSR 元素：head 预置 canonical 时原位更新，不追加第二份', () => {
+    document.head.innerHTML = '<link rel="canonical" href="/ssr/a">'
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/live/b' } }])
+    const links = document.head.querySelectorAll('link[rel="canonical"]')
+    expect(links).toHaveLength(1)
+    expect(links[0].getAttribute('href')).toBe('/live/b')
+  })
+
+  it('canonical 首次追加、SPA 导航换页原位改 href 不重复', () => {
+    document.head.innerHTML = ''
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/a' } }])
+    expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('/a')
+
+    
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/b' } }])
+    const links = document.head.querySelectorAll('link[rel="canonical"]')
+    expect(links).toHaveLength(1)
+    expect(links[0].getAttribute('href')).toBe('/b')
+
+    
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'Canonical', href: '/c' } }])
+    expect(document.head.querySelectorAll('link[rel="canonical"],link[rel="Canonical"]')).toHaveLength(1)
+  })
+
+  it('rel 匹配 trim：带空白的 rel 仍按 canonical 处理（与 Go 端 AuditSEO 口径一致）', () => {
+    document.head.innerHTML = ''
+    emitDirective('head', [{ tag: 'link', attrs: { rel: ' canonical ', href: '/x' } }])
+    expect(document.head.querySelectorAll('link[rel="canonical"],link[rel=" canonical "]')).toHaveLength(1)
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'canonical', href: '/y' } }])
+    expect(document.head.querySelectorAll('link')).toHaveLength(1)
+    expect(document.head.querySelector('link')?.getAttribute('href')).toBe('/y')
+  })
+
+  it('非 canonical 的 link 不受单例约束（preload 等仍按全等去重）', () => {
+    document.head.innerHTML = ''
+    emitDirective('head', [
+      { tag: 'link', attrs: { rel: 'canonical', href: '/a' } },
+      { tag: 'link', attrs: { rel: 'preload', href: '/f.woff2' } },
+    ])
+    emitDirective('head', [{ tag: 'link', attrs: { rel: 'preload', href: '/g.woff2' } }])
+    expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
+    expect(document.head.querySelectorAll('link[rel="preload"]')).toHaveLength(2)
   })
 })

@@ -36,6 +36,9 @@ func TestSitemapGolden(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); ct != "application/xml; charset=utf-8" {
 		t.Errorf("Content-Type = %q", ct)
 	}
+	if tier := resp.Header.Get(HeaderTier); tier != TierSitemap {
+		t.Errorf("tier = %q, want %q", tier, TierSitemap)
+	}
 	got := body(t, resp)
 	want := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -51,6 +54,37 @@ func TestSitemapGolden(t *testing.T) {
 	if resp := do(t, h, http.MethodPost, "/sitemap.xml"); resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("POST /sitemap.xml = %d, want 405", resp.StatusCode)
 		resp.Body.Close()
+	} else {
+		if allow := resp.Header.Get("Allow"); allow != "GET, HEAD" {
+			t.Errorf("405 Allow = %q, want %q (RFC 9110)", allow, "GET, HEAD")
+		}
+		if tier := resp.Header.Get(HeaderTier); tier != TierSitemap {
+			t.Errorf("405 tier = %q, want %q", tier, TierSitemap)
+		}
+		resp.Body.Close()
+	}
+}
+
+func TestSitemapHandlerRejectsBadBaseURL(t *testing.T) {
+	mustPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s 应 panic（构造期校验）", name)
+			}
+		}()
+		fn()
+	}
+	routes := []RouteSpec{{Path: "/", PageID: "landing", Render: ModeStatic}}
+	mustPanic("空 baseURL", func() { SitemapHandler(routes, "", SitemapOptions{}) })
+	mustPanic("无 scheme", func() { SitemapHandler(routes, "example.com", SitemapOptions{}) })
+	mustPanic("非 http(s)", func() { SitemapHandler(routes, "ftp://example.com", SitemapOptions{}) })
+	mustPanic("带 query", func() { SitemapHandler(routes, "https://example.com?x=1", SitemapOptions{}) })
+
+	// 合法值（含尾斜杠）不 panic
+	h := SitemapHandler(routes, "https://example.com/", SitemapOptions{})
+	if got := body(t, get(t, h, "/sitemap.xml")); !strings.Contains(got, "<loc>https://example.com/</loc>") {
+		t.Errorf("尾斜杠 origin 应产出正确 loc: %s", got)
 	}
 }
 
@@ -71,6 +105,110 @@ func TestSitemapMissingPathsAndNoFilter(t *testing.T) {
 	got := body(t, get(t, h2, "/sitemap.xml"))
 	if !strings.Contains(got, "<loc>https://x.com/tag/go</loc>") {
 		t.Errorf("无 Filter 应全收: %s", got)
+	}
+}
+
+func TestRobotsHandler(t *testing.T) {
+	h := RobotsHandler(RobotsOptions{
+		SitemapURL: "https://example.com/sitemap.xml",
+		Disallow:   []string{"/api/", "/admin"},
+		Extra:      []string{"User-agent: BadBot", "Disallow: /"},
+	})
+
+	resp := get(t, h, "/robots.txt")
+	if ct := resp.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if tier := resp.Header.Get(HeaderTier); tier != TierRobots {
+		t.Errorf("tier = %q, want %q", tier, TierRobots)
+	}
+	want := "User-agent: *\nDisallow: /api/\nDisallow: /admin\n\nUser-agent: BadBot\nDisallow: /\nSitemap: https://example.com/sitemap.xml\n"
+	if got := body(t, resp); got != want {
+		t.Errorf("robots golden 不符：\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+
+	if resp := do(t, h, http.MethodPost, "/robots.txt"); resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("POST /robots.txt = %d, want 405", resp.StatusCode)
+		resp.Body.Close()
+	}
+}
+
+func TestRobotsHandlerEmptyAndHead(t *testing.T) {
+	h := RobotsHandler(RobotsOptions{})
+	resp := get(t, h, "/robots.txt")
+	if got := body(t, resp); got != "User-agent: *\n" {
+		t.Errorf("空配置 robots = %q", got)
+	}
+
+	head := do(t, h, http.MethodHead, "/robots.txt")
+	if head.StatusCode != http.StatusOK {
+		t.Errorf("HEAD /robots.txt = %d", head.StatusCode)
+	}
+	if got := body(t, head); got != "" {
+		t.Errorf("HEAD 不应有 body, got %q", got)
+	}
+}
+
+func TestRobotsHandlerRejectsMalformedOptions(t *testing.T) {
+	mustPanic := func(name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s 应 panic", name)
+			}
+		}()
+		fn()
+	}
+	mustPanic("Disallow 不以 / 开头", func() { RobotsHandler(RobotsOptions{Disallow: []string{"api/"}}) })
+	mustPanic("Disallow 含换行", func() { RobotsHandler(RobotsOptions{Disallow: []string{"/a\nDisallow: /"}}) })
+	mustPanic("Disallow 含 #（解析器按注释截断）", func() { RobotsHandler(RobotsOptions{Disallow: []string{"/a#b"}}) })
+	mustPanic("Extra 含换行", func() { RobotsHandler(RobotsOptions{Extra: []string{"Allow: /a\r\nDisallow: /"}}) })
+	mustPanic("SitemapURL 含换行（行注入）", func() {
+		RobotsHandler(RobotsOptions{SitemapURL: "https://x.com/sitemap.xml\nUser-agent: EvilBot\nDisallow: /"})
+	})
+	mustPanic("SitemapURL 相对值", func() { RobotsHandler(RobotsOptions{SitemapURL: "/sitemap.xml"}) })
+	mustPanic("SitemapURL 非 http(s)", func() { RobotsHandler(RobotsOptions{SitemapURL: "ftp://x.com/sitemap.xml"}) })
+}
+
+func TestAuditSEO(t *testing.T) {
+	doc := []byte(`<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>标题 &amp; 关键字</title>
+  <meta name="description" content="描述 &lt;含实体&gt;">
+  <link rel="canonical" href="https://example.com/blog/go-tips?a=1&amp;b=2">
+  <link rel="stylesheet" href="/assets/x.css">
+</head>
+<body><div id="root"></div></body>
+</html>
+`)
+	got := AuditSEO(doc)
+	if got.Title != "标题 & 关键字" {
+		t.Errorf("Title = %q", got.Title)
+	}
+	if got.Description != "描述 <含实体>" {
+		t.Errorf("Description = %q", got.Description)
+	}
+	if got.Canonical != "https://example.com/blog/go-tips?a=1&b=2" {
+		t.Errorf("Canonical = %q", got.Canonical)
+	}
+
+	// attribute order independence + missing signals
+	reordered := []byte(`<head><link href="/rel-canvas" rel="canonical"><meta content="d" name="description"><title>t</title></head>`)
+	if got := AuditSEO(reordered); got.Canonical != "/rel-canvas" || got.Description != "d" || got.Title != "t" {
+		t.Errorf("乱序属性审计失败: %+v", got)
+	}
+
+	bare := []byte(`<html><head><meta charset="utf-8"></head><body></body></html>`)
+	if got := AuditSEO(bare); got != (SEOSignals{}) {
+		t.Errorf("缺失信号应全空: %+v", got)
+	}
+
+	// rel matching is case-insensitive; rel="stylesheet" is not canonical
+	mixed := []byte(`<head><link rel="Canonical" href="/x"></head>`)
+	if got := AuditSEO(mixed); got.Canonical != "/x" {
+		t.Errorf("rel 大小写应容错: %+v", got)
 	}
 }
 

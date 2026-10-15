@@ -51,6 +51,10 @@ export default defineConfig(({ command }) => ({
       // storage-walk #14: uploaded objects served by the Go process — proxy
       // so dev fetches hit the same origin as production.
       '/uploads': { target: backend, changeOrigin: true },
+      // visitor-walk: SEO companions served by Go — proxy so dev reflects
+      // production behavior (robots always; sitemap when PUBLIC_BASE_URL is set).
+      '/robots.txt': { target: backend, changeOrigin: true },
+      '/sitemap.xml': { target: backend, changeOrigin: true },
     },
   },
 }))

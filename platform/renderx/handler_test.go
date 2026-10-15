@@ -281,6 +281,127 @@ func TestHandlerETagBuildScoped(t *testing.T) {
 	}
 }
 
+func TestHandlerTierHeader(t *testing.T) {
+	reg := newHandlerTestReg()
+	cache := newMemOnlyCache(t, "b1", 16, 0)
+	fr := newStubRenderer(handlerTestRoutes(), func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "<main>rendered</main>", titleSink("x"), nil
+	})
+	embed := &fstest.MapFS{"pricing.html": {Data: []byte("<html>embed-pricing</html>")}}
+	spa := &spaStub{}
+	h := Handler(HandlerDeps{
+		PrerenderFS: embed, SPA: spa, Cache: cache, Renderer: fr,
+		Routes: handlerTestRoutes(), BuildID: "b1", Registry: reg,
+	})
+	ctx := context.Background()
+	if err := cache.Put(ctx, "/blog/hello", CacheEntry{HTML: []byte("cached-hello")}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct{ path, want string }{
+		{"/pricing", TierEmbed},
+		{"/blog/hello", TierCache},
+		{"/blog/world", TierRender},
+		{"/assets/app.js", TierAsset},
+		{"/about", TierSPA},
+	} {
+		resp := get(t, h, c.path)
+		resp.Body.Close()
+		if got := resp.Header.Get(HeaderTier); got != c.want {
+			t.Errorf("GET %s tier = %q, want %q", c.path, got, c.want)
+		}
+	}
+
+	// the on-the-spot render wrote the cache: the repeat request is a hit
+	resp := get(t, h, "/blog/world")
+	resp.Body.Close()
+	if got := resp.Header.Get(HeaderTier); got != TierCache {
+		t.Errorf("GET /blog/world（二次）tier = %q, want %q", got, TierCache)
+	}
+}
+
+func TestHandlerTierHeaderNotModifiedAndNonGet(t *testing.T) {
+	reg := newHandlerTestReg()
+	cache := newMemOnlyCache(t, "b1", 16, 0)
+	fr := newStubRenderer(handlerTestRoutes(), func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "<main>x</main>", titleSink("x"), nil
+	})
+	embed := &fstest.MapFS{"pricing.html": {Data: []byte("<html>embed-pricing</html>")}}
+	h := Handler(HandlerDeps{
+		PrerenderFS: embed, SPA: &spaStub{}, Cache: cache, Renderer: fr,
+		Routes: handlerTestRoutes(), BuildID: "b1", Registry: reg,
+	})
+
+	first := get(t, h, "/pricing")
+	first.Body.Close()
+	etag := first.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("embed 页应带 ETag")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/pricing", nil)
+	req.Header.Set("If-None-Match", etag)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotModified {
+		t.Fatalf("If-None-Match 应 304, got %d", rec.Code)
+	}
+	if tier := rec.Header().Get(HeaderTier); tier != TierEmbed {
+		t.Errorf("304 tier = %q, want %q", tier, TierEmbed)
+	}
+
+	// 非 GET/HEAD 直接走 SPA 分支，也要带 tier
+	resp := do(t, h, http.MethodPost, "/blog/hello")
+	resp.Body.Close()
+	if tier := resp.Header.Get(HeaderTier); tier != TierSPA {
+		t.Errorf("POST tier = %q, want %q", tier, TierSPA)
+	}
+}
+
+func TestHandlerTierHeaderStaleAndError(t *testing.T) {
+	reg := newHandlerTestReg()
+	cache := newMemOnlyCache(t, "b1", 16, 40*time.Millisecond)
+	fr := newStubRenderer(handlerTestRoutes(), func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "", nil, errors.New("boom")
+	})
+	h := Handler(HandlerDeps{Cache: cache, Renderer: fr, Routes: handlerTestRoutes(), BuildID: "b1", Registry: reg})
+	ctx := context.Background()
+	if err := cache.Put(ctx, "/blog/hello", CacheEntry{HTML: []byte("stale-hello")}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(60 * time.Millisecond)
+
+	resp := get(t, h, "/blog/hello")
+	resp.Body.Close()
+	if got := resp.Header.Get(HeaderTier); got != TierStale {
+		t.Errorf("stale 兜底 tier = %q, want %q", got, TierStale)
+	}
+
+	resp = get(t, h, "/blog/world")
+	resp.Body.Close()
+	if got := resp.Header.Get(HeaderTier); got != TierError {
+		t.Errorf("无 stale 错误页 tier = %q, want %q", got, TierError)
+	}
+}
+
+func TestHandlerTierHeaderNotFoundViaSPA(t *testing.T) {
+	reg := notFoundLoaderReg()
+	cache := newMemOnlyCache(t, "b1", 16, 0)
+	fr := newStubRenderer(handlerTestRoutes(), func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "<main>ok</main>", titleSink("ok"), nil
+	})
+	h := Handler(HandlerDeps{SPA: &spaStub{}, Cache: cache, Renderer: fr, Routes: handlerTestRoutes(), BuildID: "b1", Registry: reg})
+
+	resp := get(t, h, "/blog/gone")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("缺失页应 404, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get(HeaderTier); got != TierSPA {
+		t.Errorf("404 SPA 壳 tier = %q, want %q", got, TierSPA)
+	}
+}
+
 func TestHandlerStaleOnError(t *testing.T) {
 	reg := newHandlerTestReg()
 	cache := newMemOnlyCache(t, "b1", 16, 40*time.Millisecond)
@@ -340,6 +461,9 @@ func TestHandlerPoisonBlacklist(t *testing.T) {
 	if resp := get(t, h1, "/blog/hang"); resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("首次超时应 500, got %d", resp.StatusCode)
 	} else {
+		if tier := resp.Header.Get(HeaderTier); tier != TierError {
+			t.Errorf("超时错误页 tier = %q, want %q", tier, TierError)
+		}
 		resp.Body.Close()
 	}
 	if n := fr.count(); n != 1 {
@@ -349,6 +473,9 @@ func TestHandlerPoisonBlacklist(t *testing.T) {
 	if resp := get(t, h1, "/blog/hang"); resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("黑名单命中应 500, got %d", resp.StatusCode)
 	} else {
+		if tier := resp.Header.Get(HeaderTier); tier != TierError {
+			t.Errorf("黑名单命中 tier = %q, want %q", tier, TierError)
+		}
 		resp.Body.Close()
 	}
 	if n := fr.count(); n != 1 {

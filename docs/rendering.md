@@ -16,8 +16,8 @@
 | G4 | Prerendered artifacts and build-time pages are `go:embed`ded into the single binary; the deployment model is unchanged | `make build` (example/) still produces one app.exe |
 | G5 | Render defects (touching `window`, missing data, engine errors) **explode at build time or first render**, never silently serving empty pages to crawlers | Build failure = release failure; runtime render failures have degradation and alerting |
 | G6 | Zero Node dependency in the production process: the rendering engine is embedded (wazero+QuickJS, no CGo) | `CGO_ENABLED=0 go build` unchanged |
-| G7 | The underlying layer delivers a general "render directive channel"; SEO is just its first consumer | `useCanonical()`-style head-level additions grow in `@ploykit/ui` with no framework/pipeline changes; response-level extensions stay reserved on the channel |
-| G8 | Full SEO companions: sitemap.xml + optional IndexNow push | `/sitemap.xml` lists all static pages; new URLs can be pushed after publishing |
+| G7 | The underlying layer delivers a general "render directive channel"; SEO is just its first consumer | `useCanonical()`-style head-level additions grow in `@ploykit/hooks` with no framework/pipeline changes (the one exception where identity semantics live lower: `link[rel=canonical]` singleton handling in `@ploykit/runtime`, §6); response-level extensions stay reserved on the channel |
+| G8 | Full SEO companions: sitemap.xml + robots.txt + build-time head audit + optional IndexNow push | `/sitemap.xml` lists all static pages (baseURL-validated, mounted only when an origin is configured); robots.txt serves in every startup state; `cmd/render` fails the build on a missing title; new URLs can be pushed after publishing (IndexNow — pending a product publish hook) |
 
 ### Non-goals (explicitly out of scope)
 
@@ -61,7 +61,7 @@ Both types share one render pipeline (same bundle, same directive channel); only
 │                             Handler mount (example/cmd/app)         │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Middle layer (npm, replaceable)                                     │
-│   @ploykit/ui               useSEO — pure policy                    │
+│   @ploykit/hooks            useSEO — pure policy                    │
 │   (merge/dedupe/og-prefix semantics all live at this layer;         │
 │    the framework does not prescribe them)                           │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -104,10 +104,10 @@ export default routeTable({
 
 ```tsx
 // example/web/src/pages/BlogPost.tsx
-import { useSEO } from '@ploykit/ui'
+import { useSEO } from '@ploykit/hooks'
 
 export function BlogPost({ post }: { post: BlogPostData }) {
-  useSEO({ title: post.title, description: post.excerpt })
+  useSEO({ title: post.title, description: post.excerpt, canonical: `/blog/${post.slug}` })
   return <article>...</article>
 }
 ```
@@ -274,11 +274,11 @@ platform/renderx/
 ├── directive.go     §5.5 directive collection: per-render DirectiveSink (4096 entries / 1MB cap; overflow flags truncation and the host fn throws)
 ├── template.go      §5.6 HTML document composition + injection slots + escaping (the props script carries data-page-id; regression lock in place)
 ├── loader.go        §5.7 registry: RegisterPaths/RegisterLoader/RegisterDep + :param matcher + Reconcile + AffectedPatterns invalidation graph
-├── cache.go         §5.8 layered cache: memory LRU → disk storagex + buildId versioning + TTL + singleflight + GetOrLoad/GetStale/EvictMatching/PurgeForeign
+├── cache.go         §5.8 layered cache: memory LRU → disk storagex + buildId versioning + TTL + singleflight + GetOrLoad/GetOrLoadHit/GetStale/EvictMatching/PurgeForeign
 ├── prerender.go     §5.8 build-time pipeline: A1–A4 assertions + render-manifest.json + timeout fail-fast + the renderPage single-page pipeline (shared with the handler)
-├── handler.go       §5.8 runtime serving: embed → poisoned-page blacklist gate → cache/single-flight render → stale degrade → SPA fallback; ETag/304
+├── handler.go       §5.8 runtime serving: embed → poisoned-page blacklist gate → cache/single-flight render → stale degrade → SPA fallback; ETag/304; X-Renderx-Tier response header (HeaderTier/Tier* constants — the traffic-counting contract)
 ├── invalidate.go    G3: invalidation-graph eviction (memory+disk) + Refresh (invalidate, then async re-render on a 30s budget)
-├── seo.go           §5.8 SitemapHandler + IndexNow push
+├── seo.go           §5.8 SEO companions: SitemapHandler + RobotsHandler + IndexNow push + AuditSEO (build-time head-signal audit)
 ├── dev.go           §5.9 NewDevHandler: mtime fingerprint polling → rebuild bundle/engine → atomically swap Renderer → clear memory cache
 └── *_test.go        golden/XSS/matching/reconciliation/invalidation graph/LRU/TTL/singleflight/buildId/watchdog/blacklist/serving order
 ```
@@ -346,7 +346,7 @@ packages/runtime/   (react/react-dom/react-router are peerDeps, consumed via sou
 ├── package.json     # exports: "." "./server" "./browser" "./hydrate" "./routes" "./types" (development condition → src)
 ├── src/types.ts     # Directive / HeadEntry / StatusPayload — the only public contract, semver-managed; includes the __ploykit_* global declarations
 ├── src/server.ts    # createSsrEntry (§4.3): mounts both globals + a per-render isolated directive collector (restores on exit and forwards the pre-injected host)
-├── src/browser.ts   # emitDirective → document.head (title overwrite; meta upsert by name/property); in server mode goes through the host fn (isomorphism decided by typeof window)
+├── src/browser.ts   # emitDirective → document.head (title overwrite; meta upsert by name/property; link[rel=canonical] singleton — §6); in server mode goes through the host fn (isomorphism decided by typeof window)
 ├── src/hydrate.ts   # createClientEntry: __PLOYKIT_PROPS__ + data-page-id → hydrateRoot hydrates the same tree, otherwise createRoot; serializeProps (<→\u003c)
 ├── src/routes.ts    # routeTable(): component-name kebab pageId; routes() assembles the Routes tree (react-router peerDep)
 └── src/index.ts     # re-exports only the react-free public surface (emitDirective + contract types); component entries live on subpaths to prevent duplicate react instances
@@ -436,7 +436,11 @@ GET /blog/hello-renderx
 4. everything else → SPA fallback (index.html); csr pages exactly as today
 ```
 
-**SEO companions (seo.go, reusing the Paths registry, nearly free, G8)**: `renderx.SitemapHandler` — the route table + Paths enumeration generate `/sitemap.xml`, with an optional `Filter` callback (e.g. published-state filtering for Loader pages); `renderx.IndexNow(urls)` — optional push inside a publish hook (the last link of the SEO loop is telling search engines to come crawl). Neither is wired into the example yet.
+**SEO companions (seo.go, reusing the Paths registry, nearly free, G8)**: `renderx.SitemapHandler` — the route table + Paths enumeration generate `/sitemap.xml`, with an optional `Filter` callback (e.g. published-state filtering for Loader pages); baseURL must be an absolute http(s) origin and a malformed value panics at construction. `renderx.RobotsHandler` — serves `/robots.txt` from a static config (Disallow prefixes + verbatim Extra lines + the Sitemap pointer); malformed options panic at wiring time (newlines, `#` in Disallow, non-absolute SitemapURL). Both handlers carry `X-Renderx-Tier: robots|sitemap` so traffic counting sees crawler fetches of them. `renderx.IndexNow(urls)` — optional push inside a publish hook (the last link of the SEO loop is telling search engines to come crawl); it is an outbound client with no response of ours, outside traffic counting; the example has no publish endpoint yet, so nothing calls it there — wire it into the product's publish hook when one exists.
+
+**Wiring in the example**: `/robots.txt` mounts in every startup state (static config). `/sitemap.xml` mounts when `PUBLIC_BASE_URL` holds a valid absolute origin (invalid or unset ⇒ treated as unset, loudly logged) **and** the render pipeline is enabled — the route table comes from the SSR bundle, so the no-bundle degraded mode mounts no sitemap and robots.txt serves without a `Sitemap:` line (never point crawlers at an unmounted route). The sitemap includes every `static` route: the landing page and all blog posts enumerated via the Paths registry (runtime-rendered posts included). Vite dev proxies both paths so dev reflects production behavior.
+
+**SEO observation vs. engine feedback — the framework boundary (visitor-walk)**: "telling search engines" (sitemap.xml, robots.txt, IndexNow) and "auditing your own head signals" (`renderx.AuditSEO`, fed by `cmd/render`'s prerender check: missing `<title>` fails the build, missing description/canonical warn) are framework responsibilities. "Listening to what search engines say back" — Search Console / Bing Webmaster APIs, rankings, coverage reports — is deliberately NOT a framework concern: it requires per-product verified properties and OAuth credentials, and its data is per-product, not per-render. Products wiring that do it on their own side (a scheduled job calling the Search Console API with the product's own credentials). The middle ground — anonymous traffic/bot counts — lives in `platform/metrics` (`Mount.Traffic`, see platform-api-index); it observes requests, not rankings.
 
 **Build time (prerender.go)**: `Paths` enumeration → Loader → render → assertions → write `web/dist/prerender/**.html` + `render-manifest.json` (path/pageId/propsSha256/builtAt/buildId/file). Pages without a Loader must render into embed; pages with a Loader are prerendered only if their pattern is listed in `--warm=` (comma-separated route patterns, e.g. `--warm=/blog/:slug`; skip and leave to runtime when there are many articles). The output directory is wholesale deleted and rebuilt (build-artifact semantics). A render timeout fails the whole prerender run (G5).
 
@@ -449,10 +453,10 @@ GET /blog/hello-renderx
 ## 6. Middle Layer: `useSEO` and `@ploykit/ui`
 
 ```ts
-// packages/ui/src/hooks/useSEO.ts — ordinary business code, not framework
+// packages/hooks/src/hooks/useSEO.ts — ordinary business code, not framework
 import { emitDirective, type HeadEntry } from '@ploykit/runtime'
 
-export function useSEO(meta: { title?: string; description?: string; ogImage?: string }) {
+export function useSEO(meta: { title?: string; description?: string; ogImage?: string; canonical?: string }) {
   const entries: HeadEntry[] = []
   if (meta.title) entries.push({ tag: 'title', children: meta.title })
   if (meta.description) entries.push({ tag: 'meta', attrs: { name: 'description', content: meta.description } })
@@ -460,11 +464,12 @@ export function useSEO(meta: { title?: string; description?: string; ogImage?: s
     entries.push({ tag: 'meta', attrs: { property: 'og:image', content: meta.ogImage } })
     entries.push({ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } })
   }
+  if (meta.canonical) entries.push({ tag: 'link', attrs: { rel: 'canonical', href: meta.canonical } })
   emitDirective('head', entries)   // SSR→host fn; after hydration→document.head
 }
 ```
 
-og prefixes, twitter cards, and the layout-overrides-page merge policy — all at this layer. The framework knows nothing about "SEO". Future `useJsonLd()/useCanonical()` grow in the same pattern without touching the framework (note: JSON-LD needs a `<script>` head entry, which the §9 tag fence denies today — it would ride a deliberate allowlist exception, still no pipeline change).
+og prefixes, twitter cards, and the layout-overrides-page merge policy — all at this layer. The framework knows nothing about "SEO" — with one deliberate exception in the runtime's browser branch: `link[rel=canonical]` is applied as a **singleton** (SPA navigation updates the existing element's href in place instead of appending a duplicate, the same identity-keyed treatment `meta[name|property]` already gets; hydration adopts an SSR-emitted canonical rather than adding a second one). A duplicated canonical is worse than a missing one — crawlers may treat it as ambiguous — so the identity semantics live in `@ploykit/runtime`, and every `link` that is not canonical keeps plain exact-match dedup behavior (`preload` etc.). Matching trims whitespace and is case-insensitive on both sides (browser upsert and Go's `AuditSEO`). Two product-side rules complete the story: canonical is **sticky** (a page emitting none inherits the previous one — declare your own where that is wrong), and **one page, one canonical** (the SSR head path does not dedupe; duplicate emits are caught by the `cmd/render` audit via `SEOSignals.CanonicalCount`). Future `useJsonLd()` grows in the same pattern (note: JSON-LD needs a `<script>` head entry, which the §9 tag fence denies today — it would ride a deliberate allowlist exception, still no pipeline change).
 
 ---
 

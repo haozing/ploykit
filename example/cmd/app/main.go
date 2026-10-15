@@ -67,6 +67,7 @@ import (
 	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/pgpart"
 	"github.com/haozing/ploykit/platform/redactx"
+	"github.com/haozing/ploykit/platform/renderx"
 	"github.com/haozing/ploykit/platform/sealx"
 	"github.com/haozing/ploykit/platform/storagex"
 	"github.com/haozing/ploykit/platform/webx"
@@ -892,18 +893,22 @@ func main() {
 		})
 	}
 
-	renderH, engPool, renderOK, err := renderxHandler(ctx, pool, env("RENDERX_CACHE_DIR", "renderx-cache"))
+	// Traffic observation (visitor walkthrough, batch B): counts the public
+	// surface by bot class × serving tier × status class. No PII, no per-request
+	// storage — the tier comes from renderx's X-Renderx-Tier response header.
+	trafficMW := mnt.Traffic(metrics.TrafficConfig{Header: renderx.HeaderTier})
+	renderH, engPool, renderOK, err := renderxHandler(ctx, mux, pool, env("RENDERX_CACHE_DIR", "renderx-cache"), trafficMW)
 	if err != nil {
 		log.Error("renderx init", "err", err)
 		os.Exit(1)
 	}
 	if renderOK {
 		defer engPool.Close()
-		mux.Handle("/", spaCsp(gzipMW(renderH)))
+		mux.Handle("/", trafficMW(spaCsp(gzipMW(renderH))))
 		log.Info("renderx enabled", "cache_dir", env("RENDERX_CACHE_DIR", "renderx-cache"))
 	} else {
 		log.Warn("renderx 未启用：embed 缺 ssr-bundle.js（构建链：cd web && npx vite build && go run ./cmd/render prerender）")
-		mux.Handle("/", spaCsp(gzipMW(frontendHandler())))
+		mux.Handle("/", trafficMW(spaCsp(gzipMW(frontendHandler()))))
 	}
 
 	var limiter webx.Limiter = webx.FailOpenLimiter{}

@@ -11,7 +11,11 @@ export interface BlogPostData {
 }
 
 export function BlogPost({ post }: { post: BlogPostData }) {
-  useSEO({ title: post.title, description: post.excerpt })
+  useSEO({
+    title: post.title,
+    description: post.excerpt,
+    canonical: `/blog/${post.slug}`,
+  })
   return (
     <main className="min-h-screen bg-white">
       <article className="max-w-3xl mx-auto px-4 py-16">

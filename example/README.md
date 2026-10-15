@@ -75,3 +75,6 @@ example 同时示范 step-up 的两条路，**同一操作只挂一条**（双�
 | DEV_DEBUG_POOL | 关 | 仅 dev：/debug/pool 免认证（默认须平台管理员；生产勿开） |
 | AUDIT_RETENTION_MONTHS | 12 | audit_event 分区保留月数（ADR 0009：合规惯例下限 12；有更长留存义务的行业向上调，勿向下） |
 | ANALYTICS_RETENTION_MONTHS | 12 | analytics_event 分区保留月数（埋点无留存义务，可下调至 6 甚至更短） |
+| PUBLIC_BASE_URL | 空 | 公开站点绝对源（如 https://example.com）。未设置时 /sitemap.xml 不挂载（robots.txt 仍服务并省略 Sitemap 行）——占位域名比错的域名更糟 |
+| PLOYKIT_METRICS_ENABLED | true | /metrics 总开关（`false` 完全关闭）。公开面流量计数（bot×tier×status）经 /metrics 出口，无独立开关 |
+| PLOYKIT_METRICS_PATH / PLOYKIT_METRICS_TOKEN | /metrics / 空 | 指标出口路径与可选 bearer 门（token 不匹配答 404） |

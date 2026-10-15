@@ -27,6 +27,7 @@ Go + React multi-tenant SaaS full-stack framework: business domains (identity / 
 | Domain extension points (hooks) | docs/api-index.md (master table with per-hook semantics) → each domain's `hooks.go` (signatures); transactional events go through `platform/events` (ADR 0003) |
 | Cross-cutting authorization | `authz/` |
 | Rendering (SSR / prerender / SEO) | `platform/renderx` + docs/rendering.md |
+| Visitor statistics & traffic observation (boundary + third-party integration recipe) | docs/visitor-analytics.md (counters: `platform/metrics` Mount.Traffic; SEO companions: renderx seo.go) |
 | API contract | docs/openapi.yaml + tools/check_api.py |
 | API integration conventions & pitfalls (CSRF rotation / registration paths / route style) | docs/api-conventions.md |
 | Platform capabilities | `platform/<pkg>` |

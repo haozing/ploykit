@@ -142,29 +142,54 @@ func (c *LayeredCache) Put(ctx context.Context, path string, ent CacheEntry) err
 }
 
 func (c *LayeredCache) GetOrLoad(ctx context.Context, path string, load func(context.Context) (CacheEntry, error)) (CacheEntry, error) {
+	ent, _, err := c.GetOrLoadHit(ctx, path, load)
+	return ent, err
+}
+
+// cacheLoadResult pairs the served entry with where it came from, so the
+// singleflight leader and all its waiters report one consistent hit value.
+type cacheLoadResult struct {
+	ent CacheEntry
+	hit bool
+}
+
+// GetOrLoadHit is GetOrLoad plus a hit report: hit=true when an existing cache
+// entry (memory or disk) was served — including the singleflight replay path,
+// where a concurrent Put landed after this request's first check and the load
+// never ran. hit=false when the request was answered through the load path
+// (this request's own load, or a coincident one it joined as a singleflight
+// waiter). The X-Renderx-Tier response header is built on it.
+func (c *LayeredCache) GetOrLoadHit(ctx context.Context, path string, load func(context.Context) (CacheEntry, error)) (CacheEntry, bool, error) {
 	if _, err := cacheKey(path); err != nil {
-		return CacheEntry{}, err
+		return CacheEntry{}, false, err
 	}
 	if ent, ok := c.Get(ctx, path); ok {
-		return ent, nil
+		return ent, true, nil
 	}
 	v, err, _ := c.sf.Do(path, func() (any, error) {
-
-		ictx := context.WithoutCancel(ctx)
-		if ent, ok := c.Get(ictx, path); ok {
-			return ent, nil
-		}
-		ent, err := load(ictx)
-		if err != nil {
-			return CacheEntry{}, err
-		}
-		_ = c.Put(ictx, path, ent)
-		return ent, nil
+		return c.loadOrReplay(context.WithoutCancel(ctx), path, load)
 	})
 	if err != nil {
-		return CacheEntry{}, err
+		return CacheEntry{}, false, err
 	}
-	return v.(CacheEntry), nil
+	res := v.(cacheLoadResult)
+	return res.ent, res.hit, nil
+}
+
+// loadOrReplay is the singleflight closure body: re-check the cache first (a
+// concurrent writer may have filled it since the caller's outer check — the
+// re-check finds it, the load is skipped, hit=true), otherwise run the load
+// and write the result through (hit=false).
+func (c *LayeredCache) loadOrReplay(ctx context.Context, path string, load func(context.Context) (CacheEntry, error)) (cacheLoadResult, error) {
+	if ent, ok := c.Get(ctx, path); ok {
+		return cacheLoadResult{ent: ent, hit: true}, nil
+	}
+	ent, err := load(ctx)
+	if err != nil {
+		return cacheLoadResult{}, err
+	}
+	_ = c.Put(ctx, path, ent)
+	return cacheLoadResult{ent: ent}, nil
 }
 
 func (c *LayeredCache) Delete(ctx context.Context, paths ...string) error {

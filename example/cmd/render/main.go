@@ -146,6 +146,72 @@ func main() {
 	for _, p := range manifest.Pages {
 		log.Info("  page", "path", p.Path, "pageId", p.PageID, "file", p.File)
 	}
+
+	// SEO 体检（visitor-walk A 批）：对本次预渲染产物逐页审计 title/description/
+	// canonical（含重复 canonical 查重——SSR 路径不去重，一页一个 canonical 是
+	// 产品侧规则，构建期点名）。title 缺失 = 构建失败（SEO 第一屏的核心信号）；
+	// description/重复 canonical 缺失仅告警——它们是否必须取决于产品（G2 只钉 title）。
+	// 运行期渲染页（--warm 未列入的 Loader 页）不在此列：它们没有构建期产物，
+	// 上线前请用 --warm 预热一次做体检，或在产品侧加监控。
+	auditSEO(log, outDir, manifest)
+}
+
+func auditSEO(log *slog.Logger, outDir string, manifest renderx.PrerenderManifest) {
+	rep, err := auditSEOFiles(outDir, manifest)
+	if err != nil {
+		log.Error("SEO 体检读产物", "err", err)
+		os.Exit(1)
+	}
+	for _, p := range rep.missingDesc {
+		log.Warn("SEO 体检：缺 meta description", "path", p)
+	}
+	for _, p := range rep.missingCanonical {
+		log.Warn("SEO 体检：缺 canonical", "path", p)
+	}
+	for _, p := range rep.duplicateCanonical {
+		log.Warn("SEO 体检：重复 canonical（一页只应有一个；SSR head 不会去重）", "path", p)
+	}
+	if len(rep.missingTitle) > 0 {
+		log.Error("SEO 体检：预渲染产物缺 <title>（useSEO 未调用？）", "pages", rep.missingTitle)
+		os.Exit(1)
+	}
+	log.Info("SEO 体检通过", "pages", len(manifest.Pages),
+		"missing_description", len(rep.missingDesc),
+		"missing_canonical", len(rep.missingCanonical),
+		"duplicate_canonical", len(rep.duplicateCanonical))
+}
+
+// seoReport 是体检的纯结果（auditSEO 负责日志与退出码）。
+type seoReport struct {
+	missingTitle       []string
+	missingDesc        []string
+	missingCanonical   []string
+	duplicateCanonical []string
+}
+
+// auditSEOFiles 按 manifest 逐页读盘审计，汇总四类问题。
+func auditSEOFiles(outDir string, manifest renderx.PrerenderManifest) (seoReport, error) {
+	var rep seoReport
+	for _, p := range manifest.Pages {
+		data, err := os.ReadFile(filepath.Join(outDir, filepath.FromSlash(p.File)))
+		if err != nil {
+			return seoReport{}, fmt.Errorf("页面 %s（%s）: %w", p.Path, p.File, err)
+		}
+		sig := renderx.AuditSEO(data)
+		if sig.Title == "" {
+			rep.missingTitle = append(rep.missingTitle, p.Path)
+		}
+		if sig.Description == "" {
+			rep.missingDesc = append(rep.missingDesc, p.Path)
+		}
+		if sig.Canonical == "" {
+			rep.missingCanonical = append(rep.missingCanonical, p.Path)
+		}
+		if sig.CanonicalCount > 1 {
+			rep.duplicateCanonical = append(rep.duplicateCanonical, p.Path)
+		}
+	}
+	return rep, nil
 }
 
 var (
