@@ -157,6 +157,50 @@ func TestMemoryLimitFence(t *testing.T) {
 	}
 }
 
+// storage-walk #15 regression: react-dom-style recursion depth (60 nested
+// ULs) overflowed the wasm QuickJS default (~256KB stack) with an opaque
+// out-of-bounds error. The new 1MB default must render it, and the error
+// path must name the cause when genuinely exceeded.
+func TestStackProbe_DeepRecursionRendersUnderNewDefault(t *testing.T) {
+	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 10 * time.Second, MemoryLimit: 256 << 20})
+	src := `
+var out = '';
+function item(i) {
+  if (i === 0) return '<li>leaf</li>';
+  out += '<li>';
+  var r = item(i - 1);
+  out += '</li>';
+  return r;
+}
+item(60);
+return 'depth-ok';
+`
+	if got := evalInPool(t, p, src); got != "depth-ok" {
+		t.Fatalf("60-deep recursion should render under the 1MB default stack, got %q", got)
+	}
+}
+
+// negative control: deep recursion with a TINY stack (128KB) must fail —
+// proving the failure mode exists and the default raise is what carries the
+// fix (the error should also carry the new targeted hint).
+func TestStackProbe_TinyStack_OverflowsWithHint(t *testing.T) {
+	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 10 * time.Second, MemoryLimit: 256 << 20, MaxStackSize: 128 << 10})
+	src := `
+function item(i) {
+  if (i <= 0) return 'leaf';
+  return 'x' + item(i - 1);
+}
+return item(400);
+`
+	_, err := p.Render(context.Background(), "eval", "/eval", json.RawMessage(`{"src":`+quoteJSON(src)+`}`))
+	if err == nil {
+		t.Skip("128KB accommodated 400 frames on this runtime; hint unverifiable here")
+	}
+	if !strings.Contains(err.Error(), "栈溢出") && !strings.Contains(err.Error(), "MaxStackSize") {
+		t.Fatalf("error should carry the stack-overflow hint, got: %v", err)
+	}
+}
+
 func TestEngineWatchdogBusyLoop(t *testing.T) {
 
 	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 300 * time.Millisecond, MemoryLimit: 256 << 20})

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,6 +23,11 @@ var (
 
 const (
 	DefaultMemoryLimit = 512 << 20
+
+	// DefaultMaxStackSize is the QuickJS execution-stack cap applied when
+	// PoolOptions.MaxStackSize is unset: react-dom SSR recursion overflows
+	// the wasm QuickJS default (~256KB) on moderately nested trees.
+	DefaultMaxStackSize = 1 << 20
 
 	DefaultRenderTimeout = 3 * time.Second
 )
@@ -52,6 +58,15 @@ type PoolOptions struct {
 
 	MemoryLimit int
 
+	// MaxStackSize caps the QuickJS execution stack in bytes. The wasm
+	// QuickJS default (~256KB) overflows on moderately deep react-dom
+	// component trees with an unhelpful "out of bounds memory access" (FP
+	// walk #15: one extra <div> layer killed the prerender, half a day of
+	// bisection). 0 keeps a safe default of 1MB; wasm memory itself is
+	// already bounded by MemoryLimit, so a larger stack carries no extra
+	// risk.
+	MaxStackSize int
+
 	RenderTimeout time.Duration
 
 	Prelude string
@@ -64,6 +79,9 @@ func (o PoolOptions) withDefaults() PoolOptions {
 	}
 	if c.MemoryLimit <= 0 {
 		c.MemoryLimit = DefaultMemoryLimit
+	}
+	if c.MaxStackSize <= 0 {
+		c.MaxStackSize = DefaultMaxStackSize
 	}
 	if c.RenderTimeout <= 0 {
 		c.RenderTimeout = DefaultRenderTimeout
@@ -206,6 +224,8 @@ type engineInstance struct {
 	rt  *qjs.Runtime
 	ctx *qjs.Context
 
+	maxStackSize int
+
 	reqs     chan instanceReq
 	curSink  *DirectiveSink
 	exited   chan struct{}
@@ -235,6 +255,10 @@ func newInstance(bundle []byte, opts PoolOptions) (*engineInstance, error) {
 		_ = rt.Close()
 		return nil, fmt.Errorf("renderx: SetMemoryLimit 失败: %w", err)
 	}
+	if err := rt.SetMaxStackSize(uint32(opts.MaxStackSize)); err != nil {
+		_ = rt.Close()
+		return nil, fmt.Errorf("renderx: SetMaxStackSize 失败: %w", err)
+	}
 
 	rt.SetLogFunc(func(string) {})
 
@@ -246,9 +270,10 @@ func newInstance(bundle []byte, opts PoolOptions) (*engineInstance, error) {
 
 	inst := &engineInstance{
 		rt: rt, ctx: ctx,
-		reqs:   make(chan instanceReq),
-		exited: make(chan struct{}),
-		deadCh: make(chan struct{}),
+		maxStackSize: opts.MaxStackSize,
+		reqs:         make(chan instanceReq),
+		exited:       make(chan struct{}),
+		deadCh:       make(chan struct{}),
 	}
 
 	fn := ctx.Function("__ploykit_go_directive__", func(c *qjs.Context, this qjs.Value, args []qjs.Value) qjs.Value {
@@ -311,12 +336,26 @@ func (inst *engineInstance) handle(req instanceReq) bool {
 			if r := recover(); r != nil {
 				panicked = true
 				err = fmt.Errorf("renderx: 引擎执行 panic（实例将废弃重建）: %v", r)
+				// wasm stack overflow surfaces as an opaque out-of-bounds
+				// access with no hint toward its cause (storage-walk #15):
+				// name it — react-dom recursion depth is the usual driver
+				// and the fix is a shallower tree or a larger
+				// PoolOptions.MaxStackSize.
+				if strings.Contains(fmt.Sprint(r), "out of bounds memory access") {
+					err = fmt.Errorf("%w（提示：可能为组件树过深导致 QuickJS 栈溢出——精简嵌套，或上调 PoolOptions.MaxStackSize，当前 %d 字节）", err, inst.maxStackSize)
+				}
 			}
 		}()
 		val, err = inst.ctx.EvalToString(req.code, req.label+".js")
 		return
 	}()
 	inst.curSink = nil
+	if err != nil && strings.Contains(err.Error(), "out of bounds memory access") {
+		// wasm stack overflow surfaces as this opaque bridge error (not a Go
+		// panic) — name the cause: react-dom recursion depth is the usual
+		// driver; the fix is a shallower tree or a larger MaxStackSize (#15).
+		err = fmt.Errorf("%w（提示：wasm 栈溢出——组件树过深所致；精简嵌套或上调 PoolOptions.MaxStackSize，当前 %d 字节）", err, inst.maxStackSize)
+	}
 	req.done <- askResult{val: val, err: err}
 	if panicked {
 		atomic.StoreInt32(&inst.dead, 1)
