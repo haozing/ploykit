@@ -39,7 +39,51 @@ plus platform hardening.
   single-language cache-key boundary declared.
 - notify: transactional vs notification email recipe (CAN-SPAM framing).
 
-## [0.7.1] — 2026-10-14 (unreleased; Go only — npm packages unchanged)
+## [0.7.2] — 2026-10-15
+
+Visitor-statistics / SEO-observation walkthrough (framework + example + npm
+packages) plus the renderx #16 tail.
+
+### Added
+- **renderx**: SEO companions wired end-to-end — `RobotsHandler` (static
+  config; malformed options panic at wiring time), `SitemapHandler` baseURL
+  validation (absolute http(s) origin required), `AuditSEO` (head-signal
+  extraction incl. duplicate-canonical count); `X-Renderx-Tier` response
+  header naming the serving layer; `LayeredCache.GetOrLoadHit`. `IndexNow`
+  stays a publish-hook capability (no publish endpoint in the example yet).
+- **metrics**: `Mount.Traffic` — anonymous public-surface counter
+  (`ploykit_traffic_requests{bot,tier,status}`) with `ClassifyUA`
+  (human/google/search/ai/social/tool); UA heuristic, observation only.
+- **hooks**: `useSEO({ canonical })` — canonical link support.
+- **example**: robots/sitemap wiring (sitemap mounts only when
+  `PUBLIC_BASE_URL` is a valid absolute origin; degraded mode never emits a
+  dangling `Sitemap:` pointer); prerender SEO audit in `cmd/render` (a
+  missing `<title>` fails the build; description/canonical/duplicates warn);
+  traffic middleware counts the render surface; vite dev proxies
+  robots/sitemap.
+
+### Fixed
+- **runtime**: `link[rel=canonical]` singleton semantics in the browser
+  branch — SPA navigation updates the element in place and hydration adopts
+  the SSR-emitted canonical instead of appending a duplicate; rel matching
+  trims whitespace (parity with the Go-side audit).
+- **renderx**: robots `SitemapURL` newline-injection guard; sitemap 405
+  carries `Allow`; `GetOrLoadHit` reports a hit when the singleflight
+  re-check serves a concurrently written entry; stack-ceiling errors now
+  distinguish the logical `MaxStackSize` budget from the physical wasm stack
+  (16MB physical ceiling pinned by a regression test).
+- **metrics**: traffic counting survives handler panics (deferred; a
+  response-less panic counts as 5xx) and passes `Flush` through; UA token
+  table extended (Yeti / ImagesiftBot / uptime-kuma / reqwest / …).
+
+### Docs
+- `docs/visitor-analytics.md` — visitor-statistics boundary (why the
+  framework ships no dashboard) + self-hosted analytics integration recipe;
+  rendering.md "SEO observation vs. engine feedback" boundary + G7/G8
+  refresh; ROADMAP trigger item; audit report
+  `docs/delivery-audit-visitor-seo.md`.
+
+## [0.7.1] — 2026-10-14 (Go only — npm packages unchanged)
 
 Go-side fixes from three more walkthrough batches (aifengkong FP walk, a
 rendering-chain walkthrough, and a storage walkthrough).

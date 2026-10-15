@@ -1,6 +1,6 @@
 {
   "name": "@ploykit/ui",
-  "version": "0.7.0",
+  "version": "0.7.2",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,8 +30,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@ploykit/client": "^0.7.0",
-    "@ploykit/hooks": "^0.7.0",
+    "@ploykit/client": "^0.7.2",
+    "@ploykit/hooks": "^0.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.4.0",

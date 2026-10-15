@@ -1,6 +1,6 @@
 {
   "name": "@ploykit/hooks",
-  "version": "0.7.0",
+  "version": "0.7.2",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
-    "@ploykit/client": "^0.7.0",
-    "@ploykit/runtime": "^0.7.0",
+    "@ploykit/client": "^0.7.2",
+    "@ploykit/runtime": "^0.7.2",
     "react-hook-form": "^7.0.0",
     "zod": "^4.0.0"
   },
