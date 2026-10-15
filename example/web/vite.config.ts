@@ -48,6 +48,9 @@ export default defineConfig(({ command }) => ({
       '/healthz': { target: backend, changeOrigin: true },
       '/readyz': { target: backend, changeOrigin: true },
       '/ws': { target: backend, changeOrigin: true, ws: true },
+      // storage-walk #14: uploaded objects served by the Go process — proxy
+      // so dev fetches hit the same origin as production.
+      '/uploads': { target: backend, changeOrigin: true },
     },
   },
 }))

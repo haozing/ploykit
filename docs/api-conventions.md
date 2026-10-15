@@ -62,6 +62,14 @@ ExemptPrefixes: []string{"/open/", "/feed.xml", "/archives/"}, // server-to-serv
   browser-session writes. Cached responses additionally need an explicit `Cache-Control`
   from the product — the framework does not set one.
 
+**Anonymous write endpoints** (storage-walk #13): a POST that is not bound to
+the caller's session — view counters, public telemetry, anonymous votes — has
+no session cookie for an attacker to ride, so CSRF protection is a semantic
+mismatch there (the framework 403s it: no cookie means a fresh token, and the
+request carries none). Decision rule for `ExemptPrefixes`: does the write bind
+to the submitter's identity? Not bound (public counter) → exempt the prefix,
+CSRF adds nothing. Bound → keep CSRF, no exceptions.
+
 ## The two registration paths
 
 | Path | Flow | Use when |

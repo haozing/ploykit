@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"embed"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strconv"
 	"strings"
 	"syscall"
@@ -57,8 +59,8 @@ import (
 	"github.com/haozing/ploykit/platform/devx"
 	"github.com/haozing/ploykit/platform/egressx"
 	"github.com/haozing/ploykit/platform/events"
-	logx "github.com/haozing/ploykit/platform/logx"
 	"github.com/haozing/ploykit/platform/logring"
+	logx "github.com/haozing/ploykit/platform/logx"
 	"github.com/haozing/ploykit/platform/mcpx"
 	"github.com/haozing/ploykit/platform/metrics"
 	"github.com/haozing/ploykit/platform/pg"
@@ -66,6 +68,7 @@ import (
 	"github.com/haozing/ploykit/platform/pgpart"
 	"github.com/haozing/ploykit/platform/redactx"
 	"github.com/haozing/ploykit/platform/sealx"
+	"github.com/haozing/ploykit/platform/storagex"
 	"github.com/haozing/ploykit/platform/webx"
 	"github.com/haozing/ploykit/platform/workers"
 	"github.com/haozing/ploykit/platform/wsx"
@@ -774,6 +777,42 @@ func main() {
 		return m.Role, true, nil
 	}
 	webhookhttp.Mount(mux, webhookhttp.Deps{Service: whkSvc, MemberCheck: whkMembers, Log: log, Authz: authorizer})
+
+	// storage-walk #14 wiring: /uploads serving (read-only, safe defaults) +
+	// a reference upload endpoint. Auth/policy live HERE in product code on
+	// purpose — the framework ships the building blocks, not the policy.
+	uploadsDir := os.Getenv("UPLOADS_DIR")
+	if uploadsDir == "" {
+		uploadsDir = "uploads"
+	}
+	uploadsStore, err := storagex.NewLocal(uploadsDir)
+	if err != nil {
+		log.Error("uploads store", "err", err)
+		os.Exit(1)
+	}
+	mux.Handle("GET /uploads/", http.StripPrefix("", storagex.ServeUploads(uploadsStore)))
+	mux.HandleFunc("POST /api/uploads/avatar", webx.P(func(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+		up, err := storagex.ParseUpload(r, 4<<20)
+		if err != nil {
+			if errors.Is(err, storagex.ErrUploadTooLarge) {
+				webx.WriteError(w, http.StatusRequestEntityTooLarge, "E_PAYLOAD_TOO_LARGE", "file exceeds the 4MB limit", nil)
+				return
+			}
+			webx.ErrValidation(w, "multipart body with a 'file' part required")
+			return
+		}
+		if ct := up.ContentType; !strings.HasPrefix(ct, "image/") {
+			webx.ErrValidation(w, "avatar must be an image (got "+ct+")")
+			return
+		}
+		key := "avatars/" + p.UserID + "/" + time.Now().UTC().Format("20060102T150405") + path.Ext(up.Filename)
+		obj, err := uploadsStore.Put(r.Context(), key, up.ContentType, bytes.NewReader(up.Data))
+		if err != nil {
+			webx.ErrInternal(w)
+			return
+		}
+		webx.WriteJSON(w, http.StatusOK, map[string]any{"key": obj.Key, "url": uploadsStore.URL(obj.Key), "size": obj.Size})
+	}))
 
 	oauthNames := []string{}
 	if oauthSvc != nil {

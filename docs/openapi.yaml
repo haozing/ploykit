@@ -3379,6 +3379,56 @@ paths:
           $ref: '#/components/responses/DefaultError'
 
   # ---------- example：system ----------
+  /uploads/:
+    get:
+      operationId: serveUpload
+      tags: [system]
+      summary: 已存对象只读服务（storagex.ServeUploads；GET/HEAD only，immutable cache，非脚本类型 inline）
+      security: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 存储键（local 后端即 /uploads/ URL 形态）
+      responses:
+        '200':
+          description: 对象内容
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/uploads/avatar:
+    post:
+      operationId: uploadAvatar
+      tags: [system]
+      summary: 头像上传参考端点（example wiring：multipart 'file' 部件、4MB 上限、仅 image/*；产品侧鉴权自定）
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  url: { type: string }
+                  size: { type: integer }
+        '413':
+          $ref: '#/components/responses/DefaultError'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /config:
     get:
       operationId: getConfig

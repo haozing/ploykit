@@ -41,7 +41,7 @@ import (
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-const expectedRouteCount = 148
+const expectedRouteCount = 150
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
@@ -87,6 +87,11 @@ func mountProductionRoutes(mux *webx.Mux) {
 	settingshttp.MountAdmin(mux, settingshttp.AdminDeps{Guard: passthrough})
 	audithttp.Mount(mux, audithttp.Deps{})
 	webhookhttp.Mount(mux, webhookhttp.Deps{})
+	// uploads surface (storage-walk #14): serving is a method-less subtree
+	// mount in main.go — record the endpoint form the openapi contract uses
+	// and the reference upload endpoint.
+	mux.Handle("GET /uploads/", http.NotFoundHandler())
+	mux.HandleFunc("POST /api/uploads/avatar", noopHandler)
 	mux.HandleFunc("GET /config", noopHandler)
 	mux.HandleFunc("GET /healthz", noopHandler)
 	mux.HandleFunc("GET /readyz", noopHandler)

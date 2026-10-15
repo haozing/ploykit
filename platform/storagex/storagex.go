@@ -22,6 +22,13 @@ type Store interface {
 
 	Open(ctx context.Context, key string) (io.ReadCloser, Object, error)
 
+	// List enumerates objects whose key starts with prefix, sorted by key
+	// (storage-walk #10): the enumeration surface for per-workspace quota
+	// accounting and orphan cleanup — without it, products had to track every
+	// key in their own tables just to know what exists. Empty prefix lists
+	// everything. Object metadata only (no bodies opened).
+	List(ctx context.Context, prefix string) ([]Object, error)
+
 	Delete(ctx context.Context, key string) error
 
 	DeleteMulti(ctx context.Context, keys ...string) error

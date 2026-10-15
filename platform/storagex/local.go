@@ -1,6 +1,9 @@
 package storagex
 
 import (
+	"net/url"
+	"sort"
+
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -222,4 +225,63 @@ func (l *LocalBackend) LoadMeta(key string) (meta, error) {
 	}
 	var m meta
 	return m, json.Unmarshal(mb, &m)
+}
+
+// List walks the on-disk tree under the escaped prefix and materializes
+// Objects from the sidecar .meta.json files (storage-walk #10). Objects whose
+// sidecar is missing or unreadable are skipped rather than failing the walk —
+// a half-written or externally tampered file must not break quota accounting
+// for everything else.
+func (l *LocalBackend) List(ctx context.Context, prefix string) ([]Object, error) {
+	root, err := l.realRoot()
+	if err != nil {
+		return nil, err
+	}
+	escaped := escapeKey(prefix)
+	start := filepath.Join(root, filepath.FromSlash(escaped))
+	out := []Object{}
+	walkErr := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(p, ".meta.json") {
+			return nil
+		}
+		rel, rerr := filepath.Rel(root, p)
+		if rerr != nil {
+			return nil
+		}
+		key := strings.TrimSuffix(filepath.ToSlash(rel), ".meta.json")
+		if escaped != "" && !strings.HasPrefix(key, escaped) {
+			return nil
+		}
+		// key is escaped on disk; surface the unescaped form
+		if unescaped, uerr := url.PathUnescape(strings.ReplaceAll(key, "%2F", "%252F")); uerr == nil {
+			key = unescaped
+		}
+		mb, merr := os.ReadFile(p)
+		if merr != nil {
+			return nil // skip unreadable sidecars (see doc comment)
+		}
+		var m meta
+		if jerr := json.Unmarshal(mb, &m); jerr != nil {
+			return nil
+		}
+		out = append(out, Object{Key: key, ContentType: m.ContentType, Size: m.Size, SHA256: m.SHA256})
+		return nil
+	})
+	if walkErr != nil {
+		// A start path that doesn't exist yet (fresh prefix) is an empty
+		// listing, not an error.
+		if os.IsNotExist(walkErr) || (start != root && walkErr != nil && os.IsNotExist(walkErr)) {
+			return out, nil
+		}
+		return nil, walkErr
+	}
+	_ = ctx
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
 }

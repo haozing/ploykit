@@ -1,6 +1,9 @@
 package storagex
 
 import (
+	"sort"
+	"strings"
+
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -222,4 +225,39 @@ func (s *S3Backend) Presign(ctx context.Context, key string, ttl time.Duration) 
 		return "", err
 	}
 	return req.URL, nil
+}
+
+// List pages through ListObjectsV2 under the configured prefix (storage-walk
+// #10); returned keys are stripped of the backend prefix so callers see the
+// same key space they Put with.
+func (s *S3Backend) List(ctx context.Context, prefix string) ([]Object, error) {
+	full := s.Prefix + prefix
+	out := []Object{}
+	var token *string
+	for {
+		page, err := s.Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket:            aws.String(s.Bucket),
+			Prefix:            aws.String(full),
+			ContinuationToken: token,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range page.Contents {
+			if o.Key == nil {
+				continue
+			}
+			out = append(out, Object{
+				Key:         strings.TrimPrefix(*o.Key, s.Prefix),
+				Size:        aws.ToInt64(o.Size),
+				ContentType: "", // ListObjectsV2 does not return Content-Type (needs HeadObject; not needed for quota/cleanup callers)
+			})
+		}
+		if !aws.ToBool(page.IsTruncated) || page.NextContinuationToken == nil {
+			break
+		}
+		token = page.NextContinuationToken
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
 }
