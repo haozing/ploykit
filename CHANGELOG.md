@@ -39,6 +39,44 @@ plus platform hardening.
   single-language cache-key boundary declared.
 - notify: transactional vs notification email recipe (CAN-SPAM framing).
 
+## [0.7.1] — 2026-10-14 (unreleased; Go only — npm packages unchanged)
+
+Go-side fixes from three more walkthrough batches (aifengkong FP walk, a
+rendering-chain walkthrough, and a storage walkthrough).
+
+### Added
+- **webx**: `BodyLimitExcept(n, exemptPrefixes...)` — the exemption BYPASSES
+  the limit reader (layering two MaxBytesReaders clamps to the min; that was
+  the product trap).
+- **webx**: `NewMemoryLimiter()` doc'd in platform-api-index.
+- **storagex**: `Store.List(ctx, prefix)` (Local via WalkDir, S3 via
+  ListObjectsV2); `ServeUploads(store)` read-only handler;
+  `ParseUpload/ParseUploadField` multipart helper;
+  `ErrUploadTooLarge` sentinel.
+- **renderx**: `PoolOptions.MaxStackSize` (default 1MB via
+  `DefaultMaxStackSize`) — react-dom SSR recursion overflowed the wasm
+  QuickJS default (~256KB) with an opaque out-of-bounds error; the error now
+  carries a targeted hint.
+
+### Fixed
+- **identity**: `PATCH /auth/me` partial semantics (absent fields keep
+  values; explicit `""` clears).
+- **workspace**: `WorkspaceHeaderCtx` accepts `?workspace_id=` on GETs
+  (browser-native downloads).
+- **audit**: export truncation surfaced via `X-Truncated` /
+  `X-Total-Filtered-Count` / `X-Rows-Exported`.
+- **identity**: framework error messages translated to English (wire
+  surface).
+- **webx**: `/config` carries `framework_version`.
+- **ci**: renderx watchdog test no longer flakes CI (`-short` in the unit
+  job, 90s budget in the full job).
+
+### Docs
+- sealx key-format package doc (raw vs base64 env vs DeriveKey); identity
+  root-mount contract with the prefixStripper wrapper recipe; rendering.md
+  SSR-safe component rules; notify transactional-email recipe; anonymous-write
+  CSRF decision rule.
+
 ## [0.6.1] — 2026-10-12
 
 Go-side fixes (npm packages unchanged from 0.6.0).
