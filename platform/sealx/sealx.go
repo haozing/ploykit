@@ -1,3 +1,21 @@
+// Package sealx seals tenant credentials at rest with AES-256-GCM
+// (authenticate-then-store; the sealed form carries an authenticated
+// timestamp blob, base64-encoded under the SealedPrefix).
+//
+// # Key format — three layers, read before the first "invalid key" error
+//
+//   - New / NewSecrets take 32 RAW bytes (AES-256 key, not hex, not base64 —
+//     the []byte IS the key material).
+//   - NewSecretsFromEnv reads PLOYKIT_SEAL_KEY and expects that value to be
+//     base64 (StdEncoding) of the 32 raw bytes — i.e. the direct output of
+//     `openssl rand -base64 32` works as-is.
+//   - DeriveKey(base, domain) produces 32 raw bytes from a configured master
+//     secret (HMAC-SHA256, domain-separated) — its output feeds New/NewSecrets
+//     directly with no encoding step.
+//
+// Failure posture (deliberate, see AGENTS.md): no key configured = new sealed
+// writes are rejected and unsealed reads of legacy plaintext error out —
+// there is no plaintext fallback; such credentials must be reconfigured.
 package sealx
 
 import (

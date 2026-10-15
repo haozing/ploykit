@@ -141,7 +141,9 @@ stays. Operational visibility ("was the account disabled?") is served by the
 log/alert on disabled-account attempts — operators see it, attackers probing
 the login form do not.
 
-## Step-up reauthentication (E_REAUTH_REQUIRED, two-phase protocol)Sensitive operations can require a fresh password confirmation (the Laravel
+## Step-up reauthentication (E_REAUTH_REQUIRED, two-phase protocol)
+
+Sensitive operations can require a fresh password confirmation (the Laravel
 `password.confirm` / GitHub sudo-mode pattern). Server side this is
 `webx.RequireRecentAuth(maxAge)` mounted after `Authenticate`; clients see:
 
@@ -166,6 +168,40 @@ reauthenticate interactively, so scoped PATs must not reach actions reserved for
 present human. Failed confirmations share the login attempt limiter (429 after the
 configured window). The reference wiring lives in example (workspace delete /
 transfer-ownership, 15-minute window, `workspacehttp.Deps.StepUp`).
+
+## identity mounts at the root (no /api/ prefix — by design)
+
+Every business domain mounts under `/api/...`, but identity's `/auth/*`,
+`/auth/sessions`, and PAT endpoints mount **at the root** — deliberately:
+"entering the system" endpoints sit outside the API namespace, and the
+cookie path, CSRF posture, and gateway auth chains conventionally treat
+`/auth/` specially. The openapi contract and `@ploykit/client` hardcode these
+root paths.
+
+**Hosts wanting a unified API prefix** (reverse proxy / WAF rule simplicity):
+do NOT change the Mount signature — `Mount` accepts `webx.Router`, so strip
+the prefix at the router you pass in:
+
+```go
+type prefixStripper struct {
+	webx.Router
+	prefix string
+}
+
+func (s prefixStripper) HandleFunc(pattern string, f func(http.ResponseWriter, *http.Request)) {
+	m, p, ok := strings.Cut(pattern, " ")
+	if !ok { // method-less mount
+		s.Router.HandleFunc(pattern, f)
+		return
+	}
+	s.Router.HandleFunc(m+" "+s.prefix+p, f)
+}
+// identityhttp.Mount(prefixStripper{mux, "/api"}, deps)  -> routes land on /api/auth/*
+```
+
+The openapi contract stays at the root form; the rewrite happens at the edge.
+(Parameterizing the Mount signature itself is on the ROADMAP — revisit only if
+this wrapper pattern proves insufficient for a second product.)
 
 ## Route style (Go stdlib ServeMux pitfalls)
 
