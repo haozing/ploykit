@@ -141,6 +141,15 @@ rows; CSR pages run in the browser and are unconstrained):
   effect (`@ploykit/hooks` now ships `useAuthState()`, a provider-free
   variant for exactly this).
 
+- **Component-tree DEPTH has a hard physical ceiling.** The wasm QuickJS
+  binary has a compiled-in stack layout: once the depth exceeds it, rendering
+  dies with an opaque `out of bounds memory access` — raising
+  `PoolOptions.MaxStackSize` (the logical budget, default 1MB) helps only up
+  to that physical line, beyond which NO amount of raising works (verified:
+  a tree that overflows at 16MB). Keep static-page trees shallow; a deep DOM
+  nesting that renders fine in Node SSR is not evidence it will survive here.
+  The error carries a hint naming both ceilings.
+
 The long-term fix — wrapping the SSR entry with the same providers as the
 client — is blocked on the engine fork (R13); until then these rules ARE the
 contract.

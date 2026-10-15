@@ -352,9 +352,12 @@ func (inst *engineInstance) handle(req instanceReq) bool {
 	inst.curSink = nil
 	if err != nil && strings.Contains(err.Error(), "out of bounds memory access") {
 		// wasm stack overflow surfaces as this opaque bridge error (not a Go
-		// panic) — name the cause: react-dom recursion depth is the usual
-		// driver; the fix is a shallower tree or a larger MaxStackSize (#15).
-		err = fmt.Errorf("%w（提示：wasm 栈溢出——组件树过深所致；精简嵌套或上调 PoolOptions.MaxStackSize，当前 %d 字节）", err, inst.maxStackSize)
+		// panic) — name the cause with BOTH ceilings (#15 + #16): MaxStackSize
+		// is the JS engine's logical budget (raising it helps until the wasm
+		// binary's compiled stack layout — the PHYSICAL ceiling — is hit; a
+		// 16MB budget demonstrably still overflows on the same tree). When
+		// raising MaxStackSize stops helping, only a shallower tree works.
+		err = fmt.Errorf("%w（提示：wasm 栈溢出——组件树过深。两层天花板：MaxStackSize 逻辑预算（当前 %d 字节，上调可救更深的树）与 wasm 物理栈（编译期定死，上调无效）；若已显著上调仍爆，只剩精简组件树一条路）", err, inst.maxStackSize)
 	}
 	req.done <- askResult{val: val, err: err}
 	if panicked {
