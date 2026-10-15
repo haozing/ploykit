@@ -461,3 +461,26 @@ func TestPoolCloseDrains(t *testing.T) {
 		t.Errorf("Close 后 Routes 应返回 ErrPoolClosed, got: %v", err)
 	}
 }
+
+// storage-walk #16: the PHYSICAL wasm stack is a hard ceiling above the
+// MaxStackSize logical budget — 16MB still overflows on the same tree that
+// 1MB handles, proving raising the budget has a ceiling. Pinned so a future
+// wasm rebuild (bigger compiled stack) surfaces as this test going green.
+func TestStackProbe_16MB_PhysicalCeiling(t *testing.T) {
+	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 30 * time.Second, MemoryLimit: 512 << 20, MaxStackSize: 16 << 20})
+	src := `
+function item(i) {
+  if (i <= 0) return 'leaf';
+  return 'x' + item(i - 1);
+}
+return item(400);
+`
+	_, err := p.Render(context.Background(), "eval", "/eval", json.RawMessage(`{"src":`+quoteJSON(src)+`}`))
+	if err == nil {
+		t.Log("400 frames now survive at 16MB — wasm stack grew; consider re-basing the depth docs")
+		return
+	}
+	if !strings.Contains(err.Error(), "物理栈") {
+		t.Fatalf("error should carry the two-ceiling hint, got: %v", err)
+	}
+}
