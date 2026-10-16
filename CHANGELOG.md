@@ -4,6 +4,39 @@ All notable changes to ploykit are documented here. Format: Keep a Changelog;
 versions follow semver — under 0.x, minor bumps may carry breaking changes
 (each one is called out).
 
+## [Unreleased]
+
+QuickJS wasm rebuilt in-repo (ADR 0015): the engine's stack guard is restored
+and the physical stack ceiling raised — the #15/#16 deep-tree failure class is
+cured, not mitigated. Rendering behavior for ordinary pages is unchanged.
+
+### Fixed
+- **renderx**: deep component trees no longer die with an uncatchable
+  `out of bounds memory access`. Root cause: the embedded wasm (an upstream
+  prebuilt quickjs-ng 0.11.0 with wasi-ld's default 64KiB shadow stack) had
+  its JS-level stack guard compiled OUT under `__wasi__` — `MaxStackSize` was
+  a silent no-op at every budget and one overflow permanently poisoned the
+  pooled instance. The wasm is now built in-repo (`internal/qjs/csrc/`) from
+  pinned quickjs-ng **v0.17.0** (upstream PR #1700 restores the wasi guard)
+  with an **8MiB** shadow stack. Overflow is once again a catchable
+  `Maximum call stack size exceeded` with a hint naming the budget; the
+  instance survives (verified by probe and pinned by regression tests).
+  Measured capacity for simple recursion: ~3.1k frames at the 1MiB default
+  (was ~999 with no recoverable error), ~8.1k at the 7MiB cap.
+- **renderx**: `PoolOptions.MaxStackSize` above the new `MaxLogicalStackSize`
+  (7MiB = shadow stack − 1MiB headroom) is rejected at `NewEnginePool` with
+  an error naming the physical stack — previously accepted and silently
+  ineffective. If your wiring sets a larger budget, lower it.
+- **renderx**: an instance that does take a wasm trap is now retired and
+  replaced instead of being returned to the pool as a zombie (a trapped
+  instance failed every subsequent render — measured).
+- **renderx**: `bridge.c` hardening (carried in `csrc/`): the string arena
+  grew 4MiB→8MiB (large products' minified SSR bundles sat within 1MiB of the
+  old ceiling) and oversize single allocations now fail cleanly instead of
+  wrapping to offset 0 and overrunning adjacent static data.
+- **renderx**: the embedded wasm is ~760KB after `--strip-debug` (was ~1MB),
+  with the `name` section preserved for stack-trace symbolization.
+
 ## [0.7.2] — 2026-10-15
 
 Visitor-statistics / SEO-observation walkthrough (framework + example + npm

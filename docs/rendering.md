@@ -141,14 +141,20 @@ rows; CSR pages run in the browser and are unconstrained):
   effect (`@ploykit/hooks` now ships `useAuthState()`, a provider-free
   variant for exactly this).
 
-- **Component-tree DEPTH has a hard physical ceiling.** The wasm QuickJS
-  binary has a compiled-in stack layout: once the depth exceeds it, rendering
-  dies with an opaque `out of bounds memory access` — raising
-  `PoolOptions.MaxStackSize` (the logical budget, default 1MB) helps only up
-  to that physical line, beyond which NO amount of raising works (verified:
-  a tree that overflows at 16MB). Keep static-page trees shallow; a deep DOM
-  nesting that renders fine in Node SSR is not evidence it will survive here.
-  The error carries a hint naming both ceilings.
+- **Component-tree DEPTH is bounded by the logical stack budget, not an
+  opaque wall.** The engine's QuickJS guard trips on deep recursion and
+  raises a catchable `Maximum call stack size exceeded` — the instance stays
+  healthy — with the error hint naming `PoolOptions.MaxStackSize` (default
+  1MiB; capacities measured at ~3.1k simple-recursion frames, ~8k at the
+  7MiB `MaxLogicalStackSize` cap). Budgets above the cap are rejected at
+  construction so recursion can never reach the wasm module's physical
+  shadow stack (8MiB, baked in at build time — `internal/qjs/csrc/`).
+  History: this was the #15/#16 "phantom ceiling" — the pre-v0.17.0 engine
+  disabled the guard under wasi, so the only wall was the binary's 64KiB
+  default shadow stack and overflow surfaced as an uncatchable wasm trap
+  that poisoned the instance (ADR 0015). If a static page's tree is so deep
+  it trips the guard even at the cap, the tree genuinely needs flattening —
+  a deep DOM nesting that renders fine in Node SSR can still exceed it.
 
 The long-term fix — wrapping the SSR entry with the same providers as the
 client — is blocked on the engine fork (R13); until then these rules ARE the
@@ -270,7 +276,7 @@ platform/renderx/
 ├── build.go         §5.3 BuildSSRBundle (esbuild Go API; the §5.3 parameter table implemented line by line) + DefaultSSRAliases
 ├── vite.go          §5.3 ParseViteManifest / ViteBuildID / ViteAssets (manifest parsing, hydration assets, build ID)
 ├── engine.go        §5.4 Renderer interface + EnginePool (per-instance owner goroutine, prelude, SetMemoryLimit, watchdog, host functions → per-render Sink)
-├── internal/qjs     vendor/fork of Gaurav-Gosain/quickjs (MIT, with 3 patches: ForceClose / JSValue slot recycling fixing an upstream leak / EvalToString lifting the 64KB truncation)
+├── internal/qjs     Go binding vendored from Gaurav-Gosain/quickjs (MIT) + csrc/ builds the embedded wasm in-repo (quickjs-ng v0.17.0 pinned, 8MiB shadow stack; see csrc/README.md)
 ├── directive.go     §5.5 directive collection: per-render DirectiveSink (4096 entries / 1MB cap; overflow flags truncation and the host fn throws)
 ├── template.go      §5.6 HTML document composition + injection slots + escaping (the props script carries data-page-id; regression lock in place)
 ├── loader.go        §5.7 registry: RegisterPaths/RegisterLoader/RegisterDep + :param matcher + Reconcile + AffectedPatterns invalidation graph
@@ -313,7 +319,7 @@ At startup (and at build time) Go loads the bundle and calls `__ploykit_routes__
 
 ### 5.4 QuickJS sandbox (engine.go)
 
-Selection (finalized by PoC measurements): **`github.com/Gaurav-Gosain/quickjs`** (a wazero port of the buke API: QuickJS-NG→WASM→wazero, MIT, zero CGo), **vendored/forked as the renderx core** (`platform/renderx/internal/qjs`), with the execution timeout added inside the fork. Background: buke/quickjs-go itself proved to be a CGo static library in every published version (violates G6; kept only as the native escape-hatch reference — fastest render at 0.5ms, but 40% slower at eval); Hako has no Go bindings (zero .go files); fastschema/qjs, though also on the wazero path and faster to start (2ms), has an **unguarded cumulative memory cap** (configured 12MB, actually 1GB+), an **ineffective timeout API**, and exposes a libc sandbox surface (`os`/`std`/`setTimeout`; `os.sleep` empirically hangs the host) — eliminated for failing both resource fencing and security.
+Selection (finalized by PoC measurements): **`github.com/Gaurav-Gosain/quickjs`** (a wazero port of the buke API: QuickJS-NG→WASM→wazero, MIT, zero CGo), **vendored as the renderx core** (`platform/renderx/internal/qjs`), with the execution timeout added inside the fork and the embedded wasm **built in-repo** (`internal/qjs/csrc/`: pinned quickjs-ng v0.17.0 + patched bridge.c; ADR 0015). Background: buke/quickjs-go itself proved to be a CGo static library in every published version (violates G6; kept only as the native escape-hatch reference — fastest render at 0.5ms, but 40% slower at eval); Hako has no Go bindings (zero .go files); fastschema/qjs, though also on the wazero path and faster to start (2ms), has an **unguarded cumulative memory cap** (configured 12MB, actually 1GB+), an **ineffective timeout API**, and exposes a libc sandbox surface (`os`/`std`/`setTimeout`; `os.sleep` empirically hangs the host) — eliminated for failing both resource fencing and security.
 
 PoC measurements (i7-12700KF, 700KB bundle, median/p95): startup 7.0/9.3ms (after the wazero global compile cache); eval 53.3/55.3ms; single-page render 1.0/1.5ms; `SetMemoryLimit` effective (memory bomb intercepted). Benchmark fixtures archived under `platform/renderx/testdata/`.
 
@@ -547,7 +553,7 @@ Static pages are globally public pages. Once the runtime cache lands, the tenant
 
 | Dependency | Purpose | Irreplaceability | Status |
 |---|---|---|---|
-| `github.com/Gaurav-Gosain/quickjs` (a wazero port of the buke API, MIT; **vendored/forked as the renderx core**) | build+runtime JS sandbox | finalized by the PoC three-candidate measurements: render 1.0ms/eval 53ms, memory cap effective, zero CGo; fastschema eliminated for its double resource-fence hole, buke all versions CGo (violates G6), Hako no Go bindings. The fork carries the timeout patch; CGo+V8 remains the escape hatch | in place (vendored) |
+| `github.com/Gaurav-Gosain/quickjs` (a wazero port of the buke API, MIT; **vendored as the renderx core**, wasm built in-repo from `csrc/`) | build+runtime JS sandbox | finalized by the PoC three-candidate measurements: render 1.0ms/eval 53ms, memory cap effective, zero CGo; fastschema eliminated for its double resource-fence hole, buke all versions CGo (violates G6), Hako no Go bindings. The binding carries the timeout patch; the engine (quickjs-ng v0.17.0) is pinned and rebuilt via `csrc/` (ADR 0015); CGo+V8 remains the escape hatch | in place (vendored) |
 | `github.com/evanw/esbuild/pkg/api` | SSR bundle | esbuild's official Go library; the alternative = shell out to Node (violates G6) | in place |
 | vitest + DOM (packages' existing infrastructure) | hydration / SSR smoke tests | zero new dependencies: hydration and props-escape cases live in `packages/runtime/src/__tests__`, the ui SSR render smoke in `packages/ui` | in place |
 
@@ -567,6 +573,6 @@ On the npm side, `@ploykit/runtime` is in-house: react/react-dom/react-router ar
 | R8 | Missed invalidation → crawlers get old pages | medium/medium | the invalidation graph (Depends declarations) primary + TTL cap (1h) backstop; docs give common declaration examples | open |
 | R10 | The engine pool queues under high concurrency (miss storm) | low/medium | singleflight blocks same-path; cross-path queueing absorbed by pool growth (bounded by memory); watch the §10 throughput budget | open |
 | R12 | **Pure-compute infinite-loop page = process-level failure** (the corpse goroutine cannot be preempted; the next GC hangs the whole process; the watchdog only guarantees the caller times out and returns) | low probability/high impact | (1) build-time fail-fast: window access / timeout exit non-zero naming the page; (2) runtime poisoned-page blacklist: `_poison.json` persistence, 10min TTL, survives restarts, cleared when `PurgeForeign` regenerates the disk directory; (3) root cure = a C-side interrupt in the fork terminal state (needs the WASI SDK) | (1)(2) in place; (3) open |
-| R13 | **fork engine recursion-depth-limit defect**: deep component trees (full Provider chain) under SSR deterministically trigger a wasm `out of bounds memory access` (bisected to a depth boundary, not size; what should be a JS RangeError pierces through as a wasm trap) | avoided / root cure pending | Avoidance in place: server-side wrap minimal surface (§4.3 wiring note) — static pages are purely props-driven and consume no context, so both ends' output matches; root cure: the fork enlarges the wasm stack or converts stack overflow to RangeError (registered in `docs/ROADMAP.md`) | root cure open |
+| R13 | **engine recursion-depth trap** (FP walks #15/#16): deep component trees under SSR hit the wasm module's default 64KiB shadow stack; overflow pierced through as an uncatchable `out of bounds memory access` trap that poisoned the instance, and the `MaxStackSize` knob was a silent no-op (quickjs-ng disables the guard under `__wasi__` before v0.17.0) | **root cure shipped (ADR 0015)**: wasm rebuilt in-repo from pinned quickjs-ng v0.17.0 (carries upstream PR #1700 — the wasi guard fix) with an 8MiB shadow stack, patched bridge.c (8MiB arena, oversize fail-fast), `MaxStackSize` capped at shadow‑1MiB so the catchable guard always trips first, trap-path instance retirement. Regression probes pin trip/survival/budget behavior | closed |
 
 (Risk numbering is stable — gaps correspond to risks retired by design decisions recorded in §4.3/§5.4/§12.)
