@@ -239,6 +239,14 @@ func main() {
 		log.Error("settings bootstrap", "err", err)
 		os.Exit(1)
 	}
+	// UP-4 (shuijing upstream batch): first platform-admin bootstrap —
+	// promotes BOOTSTRAP_ADMIN_EMAIL only while zero platform admins exist
+	// (never demotes, never mints a second admin). A misconfigured value
+	// refuses to start, same severity as the settings bootstrap above.
+	if err := admin.BootstrapPlatformAdmin(ctx, pool, env("BOOTSTRAP_ADMIN_EMAIL", ""), log); err != nil {
+		log.Error("bootstrap platform admin", "err", err)
+		os.Exit(1)
+	}
 
 	authCfg := webx.DefaultAuthConfig()
 	authCfg.Secure = env("SECURE_COOKIE", "false") == "true"
@@ -763,22 +771,13 @@ func main() {
 	// provider, derived from the public base URL; the runtime callback is
 	// computed per request from Host/X-Forwarded-Proto (identity service).
 	oauthBase := env("SITE_BASE_URL", env("APP_URL", "http://localhost:8030"))
+	// UP-3: the exported four-check guard (401 / platform-admin / no
+	// impersonated sessions / no PATs) replaces the hand-written two-check
+	// closure — reverse clause, framework grows the capability and the
+	// hand-written copy goes away.
 	settingshttp.MountAdmin(mux, settingshttp.AdminDeps{
 		Store: siteSettings,
-		Guard: func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				p := webx.PrincipalFromRequest(r)
-				if p == nil {
-					webx.ErrUnauthenticated(w, "authentication required")
-					return
-				}
-				if !p.IsPlatformAdmin {
-					webx.ErrForbidden(w, "platform admin required")
-					return
-				}
-				next.ServeHTTP(w, r)
-			})
-		},
+		Guard: adminhttp.PlatformAdminGuard(),
 		Mailer:     mailer,
 		MailModeFn: func() string { return mailMode },
 		OAuthInfo: func() []settingshttp.OAuthProviderInfo {

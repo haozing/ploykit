@@ -53,27 +53,44 @@ func Mount(mux webx.Router, d Deps) {
 	mux.Handle("GET /api/admin/analytics", admin(d.analyticsSummary))
 }
 
-func (d Deps) requireAdmin(next func(w http.ResponseWriter, r *http.Request, p *webx.Principal)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		p := webx.PrincipalFromRequest(r)
-		if p == nil {
-			webx.ErrUnauthenticated(w, "authentication required")
-			return
-		}
-		if !p.IsPlatformAdmin {
-			webx.ErrForbidden(w, "platform admin required")
-			return
-		}
-		if p.ImpersonatedBy != "" {
-			webx.ErrForbidden(w, "admin API is not available to impersonated sessions")
-			return
-		}
-		if p.Source == webx.SourcePAT {
-			webx.ErrForbidden(w, "personal access tokens are not accepted on the admin API; use a browser session")
-			return
-		}
-		next(w, r, p)
+// PlatformAdminGuard returns the platform-admin middleware: it requires an
+// authenticated principal that is a platform admin, in a non-impersonated
+// browser session (PATs are rejected). This is the exported form of the guard
+// every admin route runs behind (see Deps.requireAdmin); products mounting
+// their own admin-facing endpoints (e.g. settingshttp.AdminDeps.Guard) should
+// pass this instead of a hand-written closure, which historically missed the
+// impersonation and PAT defenses.
+func PlatformAdminGuard() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p := webx.PrincipalFromRequest(r)
+			if p == nil {
+				webx.ErrUnauthenticated(w, "authentication required")
+				return
+			}
+			if !p.IsPlatformAdmin {
+				webx.ErrForbidden(w, "platform admin required")
+				return
+			}
+			if p.ImpersonatedBy != "" {
+				webx.ErrForbidden(w, "admin API is not available to impersonated sessions")
+				return
+			}
+			if p.Source == webx.SourcePAT {
+				webx.ErrForbidden(w, "personal access tokens are not accepted on the admin API; use a browser session")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
+}
+
+// requireAdmin adapts PlatformAdminGuard to the principal-valued handler shape
+// the admin route handlers use; behavior is exactly the guard's.
+func (d Deps) requireAdmin(next func(w http.ResponseWriter, r *http.Request, p *webx.Principal)) http.HandlerFunc {
+	return PlatformAdminGuard()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next(w, r, webx.PrincipalFromRequest(r))
+	})).ServeHTTP
 }
 
 func (d Deps) stats(w http.ResponseWriter, r *http.Request, _ *webx.Principal) {
