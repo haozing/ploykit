@@ -176,13 +176,38 @@ type mailerChannel interface {
 
 func assembleMailer(log *slog.Logger) (mailerChannel, string) {
 	if host := env("SMTP_HOST", ""); host != "" {
-		return notifysmtp.New(notifysmtp.Config{
+		// UP-7: copy is injectable per product — example ships English to
+		// prove the seam; empty fields fall back to the built-in defaults.
+		tpl := notifysmtp.Templates{
+			LoginCode: notifysmtp.Template{
+				Subject: "Your sign-in code",
+				Body:    "Your sign-in code is {{.Code}}.\n\nIf you did not request it, you can ignore this email.",
+			},
+			Invite: notifysmtp.Template{
+				Subject: "Workspace invitation",
+				Body:    "You have been invited to join workspace \"{{.Workspace}}\".\n\nInvitation reference: {{.InvitationID}}",
+			},
+			PasswordReset: notifysmtp.Template{
+				Subject: "Reset your password",
+				Body:    "Open the link below to reset your password (it expires; ignore this email if it wasn't you):\n{{.Link}}",
+			},
+			EmailVerification: notifysmtp.Template{
+				Subject: "Verify your email",
+				Body:    "Open the link below to verify your email:\n{{.Link}}",
+			},
+		}
+		sender, err := notifysmtp.NewWithTemplates(notifysmtp.Config{
 			Host:     host,
 			Port:     envInt("SMTP_PORT", 587),
 			Username: env("SMTP_USER", ""),
 			Password: env("SMTP_PASS", ""),
 			From:     env("SMTP_FROM", "no-reply@localhost"),
-		}, log), settingshttp.MailModeSMTP
+		}, tpl, log)
+		if err != nil {
+			log.Error("smtp templates invalid", "err", err)
+			os.Exit(1)
+		}
+		return sender, settingshttp.MailModeSMTP
 	}
 	log.Warn("SMTP_HOST not set; mail channel degraded to emaildev (log-only) — set SMTP_HOST/PORT/USER/PASS/FROM to enable real email")
 	return emaildev.New(), settingshttp.MailModeDev

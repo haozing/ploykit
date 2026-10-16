@@ -20,15 +20,32 @@ type Sender struct {
 	cfg    Config
 	log    *slog.Logger
 	client *gomail.Client
+	tpl    *compiledTemplates
 
 	initErr error
 }
 
+// New builds a Sender with the built-in Chinese copy (zero-value Templates).
 func New(cfg Config, log *slog.Logger) *Sender {
+	// The built-in defaults are compile-time constants that always parse
+	// (guarded by TestNewWithTemplates_ZeroValueMatchesLegacyCopy), so the
+	// error here is impossible in practice.
+	s, _ := NewWithTemplates(cfg, Templates{}, log)
+	return s
+}
+
+// NewWithTemplates builds a Sender with a custom copy set. All templates are
+// parsed once here; a parse failure fails construction (fail-fast). Empty
+// Subject/Body fields fall back to the built-in Chinese defaults.
+func NewWithTemplates(cfg Config, tpl Templates, log *slog.Logger) (*Sender, error) {
+	compiled, err := compileTemplates(tpl)
+	if err != nil {
+		return nil, fmt.Errorf("smtp templates: %w", err)
+	}
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Sender{cfg: cfg, log: log}
+	s := &Sender{cfg: cfg, log: log, tpl: compiled}
 	opts := []gomail.Option{
 		gomail.WithPort(cfg.Port),
 		gomail.WithTLSPolicy(gomail.TLSMandatory),
@@ -43,10 +60,10 @@ func New(cfg Config, log *slog.Logger) *Sender {
 	c, err := gomail.NewClient(cfg.Host, opts...)
 	if err != nil {
 		s.initErr = fmt.Errorf("smtp client init: %w", err)
-		return s
+		return s, nil
 	}
 	s.client = c
-	return s
+	return s, nil
 }
 
 func buildMessage(from, to, subject, body string) (*gomail.Msg, error) {
@@ -79,11 +96,11 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 }
 
 func (s *Sender) SendLoginCode(ctx context.Context, to, code string) error {
-	return s.send(ctx, to, "你的登录验证码", "验证码："+code+"\n\n若非本人操作，请忽略本邮件。")
+	return s.renderAndSend(ctx, to, s.tpl.loginCodeSubject, s.tpl.loginCodeBody, LoginCodeData{Code: code})
 }
 
 func (s *Sender) SendInvite(ctx context.Context, to, workspaceName, invitationID string) error {
-	return s.send(ctx, to, "工作区邀请", "你被邀请加入工作区「"+workspaceName+"」。\n\n邀请标识："+invitationID)
+	return s.renderAndSend(ctx, to, s.tpl.inviteSubject, s.tpl.inviteBody, InviteData{Workspace: workspaceName, InvitationID: invitationID})
 }
 
 func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
@@ -91,11 +108,9 @@ func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
 }
 
 func (s *Sender) SendPasswordReset(ctx context.Context, to, link string) error {
-	return s.send(ctx, to, "重置你的密码",
-		"点击以下链接重置密码（有效期有限；若非本人操作，请忽略本邮件）：\n"+link)
+	return s.renderAndSend(ctx, to, s.tpl.passwordResetSubject, s.tpl.passwordResetBody, LinkData{Link: link})
 }
 
 func (s *Sender) SendEmailVerification(ctx context.Context, to, link string) error {
-	return s.send(ctx, to, "验证你的邮箱",
-		"点击以下链接完成邮箱验证：\n"+link)
+	return s.renderAndSend(ctx, to, s.tpl.emailVerificationSubject, s.tpl.emailVerificationBody, LinkData{Link: link})
 }
