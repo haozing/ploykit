@@ -4,11 +4,12 @@ All notable changes to ploykit are documented here. Format: Keep a Changelog;
 versions follow semver — under 0.x, minor bumps may carry breaking changes
 (each one is called out).
 
-## [Unreleased]
+## [0.7.3] — 2026-10-16
 
 QuickJS wasm rebuilt in-repo (ADR 0015): the engine's stack guard is restored
 and the physical stack ceiling raised — the #15/#16 deep-tree failure class is
 cured, not mitigated. Rendering behavior for ordinary pages is unchanged.
+Go-only release (no `@ploykit/*` package changes).
 
 ### Fixed
 - **renderx**: deep component trees no longer die with an uncatchable
