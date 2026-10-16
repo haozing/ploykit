@@ -161,43 +161,69 @@ func TestMemoryLimitFence(t *testing.T) {
 // ULs) overflowed the wasm QuickJS default (~256KB stack) with an opaque
 // out-of-bounds error. The new 1MB default must render it, and the error
 // path must name the cause when genuinely exceeded.
-func TestStackProbe_DeepRecursionRendersUnderNewDefault(t *testing.T) {
+// The rebuilt wasm (quickjs-ng v0.17.0 + 8MiB shadow stack, ADR 0015)
+// carries a working logical stack guard: the default 1MiB budget measured a
+// ~3.1k-frame boundary for this recursion shape — 2000 leaves margin.
+func TestStackProbe_DeepRecursionRendersUnderDefaultBudget(t *testing.T) {
 	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 10 * time.Second, MemoryLimit: 256 << 20})
-	src := `
-var out = '';
-function item(i) {
-  if (i === 0) return '<li>leaf</li>';
-  out += '<li>';
-  var r = item(i - 1);
-  out += '</li>';
-  return r;
-}
-item(60);
-return 'depth-ok';
-`
-	if got := evalInPool(t, p, src); got != "depth-ok" {
-		t.Fatalf("60-deep recursion should render under the 1MB default stack, got %q", got)
-	}
-}
-
-// negative control: deep recursion with a TINY stack (128KB) must fail —
-// proving the failure mode exists and the default raise is what carries the
-// fix (the error should also carry the new targeted hint).
-func TestStackProbe_TinyStack_OverflowsWithHint(t *testing.T) {
-	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 10 * time.Second, MemoryLimit: 256 << 20, MaxStackSize: 128 << 10})
 	src := `
 function item(i) {
   if (i <= 0) return 'leaf';
   return 'x' + item(i - 1);
 }
-return item(400);
+return 'D' + item(2000);
+`
+	got := evalInPool(t, p, src)
+	if want := "D" + strings.Repeat("x", 2000) + "leaf"; got != want {
+		t.Fatalf("2000-deep recursion should render under the 1MiB default budget, got %d bytes", len(got))
+	}
+}
+
+// 5000 frames exceeds the default budget's measured ~3.1k boundary: the guard
+// must trip CATCHABLY (a JS RangeError, never a wasm trap), with the hint
+// naming MaxStackSize — and the same instance must stay healthy afterwards.
+// The pre-rebuild engine had neither: overflow was an uncatchable wasm trap
+// that poisoned the instance (shallow renders in the same pool kept failing
+// with "out of bounds memory access").
+func TestStackProbe_GuardTripsCatchablyAndInstanceSurvives(t *testing.T) {
+	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 10 * time.Second, MemoryLimit: 256 << 20})
+	src := `
+function item(i) {
+  if (i <= 0) return 'leaf';
+  return 'x' + item(i - 1);
+}
+return item(5000);
 `
 	_, err := p.Render(context.Background(), "eval", "/eval", json.RawMessage(`{"src":`+quoteJSON(src)+`}`))
 	if err == nil {
-		t.Skip("128KB accommodated 400 frames on this runtime; hint unverifiable here")
+		t.Fatal("5000 frames should exceed the 1MiB budget and trip the guard")
 	}
-	if !strings.Contains(err.Error(), "栈溢出") && !strings.Contains(err.Error(), "MaxStackSize") {
-		t.Fatalf("error should carry the stack-overflow hint, got: %v", err)
+	if strings.Contains(err.Error(), "out of bounds memory access") {
+		t.Fatalf("the guard must trip before the physical wall; got a wasm trap: %v", err)
+	}
+	if !strings.Contains(err.Error(), "MaxStackSize") {
+		t.Fatalf("error should carry the budget hint naming MaxStackSize, got: %v", err)
+	}
+	if got := evalInPool(t, p, `return 'alive';`); got != "alive" {
+		t.Fatalf("instance must survive a guard trip; shallow render got %q", got)
+	}
+}
+
+// The budget knob is load-bearing again (it was a silent no-op on the
+// pre-rebuild engine): 5000 frames trips at 1MiB (test above) but renders at
+// the 7MiB maximum (measured ~8k boundary).
+func TestStackProbe_BudgetRaisesCeiling(t *testing.T) {
+	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 10 * time.Second, MemoryLimit: 256 << 20, MaxStackSize: MaxLogicalStackSize})
+	src := `
+function item(i) {
+  if (i <= 0) return 'leaf';
+  return 'x' + item(i - 1);
+}
+return 'D' + item(5000);
+`
+	got := evalInPool(t, p, src)
+	if want := "D" + strings.Repeat("x", 5000) + "leaf"; got != want {
+		t.Fatalf("5000 frames should render at MaxLogicalStackSize, got %d bytes", len(got))
 	}
 }
 
@@ -462,25 +488,21 @@ func TestPoolCloseDrains(t *testing.T) {
 	}
 }
 
-// storage-walk #16: the PHYSICAL wasm stack is a hard ceiling above the
-// MaxStackSize logical budget — 16MB still overflows on the same tree that
-// 1MB handles, proving raising the budget has a ceiling. Pinned so a future
-// wasm rebuild (bigger compiled stack) surfaces as this test going green.
-func TestStackProbe_16MB_PhysicalCeiling(t *testing.T) {
-	p := newTestPool(t, PoolOptions{Size: 1, RenderTimeout: 30 * time.Second, MemoryLimit: 512 << 20, MaxStackSize: 16 << 20})
-	src := `
-function item(i) {
-  if (i <= 0) return 'leaf';
-  return 'x' + item(i - 1);
-}
-return item(400);
-`
-	_, err := p.Render(context.Background(), "eval", "/eval", json.RawMessage(`{"src":`+quoteJSON(src)+`}`))
-	if err == nil {
-		t.Log("400 frames now survive at 16MB — wasm stack grew; consider re-basing the depth docs")
-		return
+// #16 root cure (ADR 0015): the physical shadow stack is no longer reachable
+// by recursion — budgets above MaxLogicalStackSize are rejected at
+// construction instead of silently running into an uncatchable wasm trap.
+// (This replaces the old 16MB physical-ceiling pin; if a future rebuild ever
+// moves these numbers, these assertions are the signal to re-base the docs.)
+func TestMaxStackSizeAbovePhysicalRejected(t *testing.T) {
+	if _, err := NewEnginePool([]byte(testBundle), PoolOptions{Size: 1, MaxStackSize: 16 << 20}); err == nil {
+		t.Fatal("16MiB budget should be rejected at construction (physical wall 8MiB)")
+	} else if !strings.Contains(err.Error(), "物理栈") {
+		t.Fatalf("rejection should name the physical stack, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "物理栈") {
-		t.Fatalf("error should carry the two-ceiling hint, got: %v", err)
+
+	p, err := NewEnginePool([]byte(testBundle), PoolOptions{Size: 1, MaxStackSize: MaxLogicalStackSize})
+	if err != nil {
+		t.Fatalf("MaxLogicalStackSize budget should be accepted: %v", err)
 	}
+	p.Close()
 }

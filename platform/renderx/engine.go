@@ -24,9 +24,29 @@ var (
 const (
 	DefaultMemoryLimit = 512 << 20
 
+	// WasmShadowStackSize is the physical C shadow stack baked into the
+	// bundled quickjs.wasm at build time (wasm-ld -z stack-size=8MiB; see
+	// internal/qjs/csrc/README.md). Exhausting it traps the wasm module with
+	// an uncatchable "out of bounds memory access" and leaves the instance
+	// unusable — QuickJS's own catchable guard must trip first, which is why
+	// MaxStackSize is validated against this ceiling minus headroom.
+	WasmShadowStackSize = 8 << 20
+
+	// MaxLogicalStackSize is the largest accepted PoolOptions.MaxStackSize:
+	// the shadow stack minus a 1MiB headroom, so a guard trip on the deepest
+	// legal budget still leaves real stack below it and the physical wall
+	// stays unreachable by recursion.
+	MaxLogicalStackSize = WasmShadowStackSize - 1<<20
+
 	// DefaultMaxStackSize is the QuickJS execution-stack cap applied when
-	// PoolOptions.MaxStackSize is unset: react-dom SSR recursion overflows
-	// the wasm QuickJS default (~256KB) on moderately nested trees.
+	// PoolOptions.MaxStackSize is unset. QuickJS checks it on every nested
+	// call and raises a CATCHABLE "Maximum call stack size exceeded" that
+	// leaves the instance healthy (measured capacities: ~3.1k frames of
+	// simple recursion at this budget, ~8k at MaxLogicalStackSize). History:
+	// the pre-v0.17.0 engine silently disabled this guard under wasi, so the
+	// only visible wall was the binary's 64KiB default shadow stack — the
+	// original #15/#16 "phantom depth ceiling". Rebuilt wasm (csrc/, pinned
+	// quickjs-ng v0.17.0) restores the guard; see ADR 0015.
 	DefaultMaxStackSize = 1 << 20
 
 	DefaultRenderTimeout = 3 * time.Second
@@ -58,13 +78,13 @@ type PoolOptions struct {
 
 	MemoryLimit int
 
-	// MaxStackSize caps the QuickJS execution stack in bytes. The wasm
-	// QuickJS default (~256KB) overflows on moderately deep react-dom
-	// component trees with an unhelpful "out of bounds memory access" (FP
-	// walk #15: one extra <div> layer killed the prerender, half a day of
-	// bisection). 0 keeps a safe default of 1MB; wasm memory itself is
-	// already bounded by MemoryLimit, so a larger stack carries no extra
-	// risk.
+	// MaxStackSize caps the QuickJS execution stack in bytes. QuickJS's
+	// guard trips BEFORE the wasm module's physical shadow stack and raises
+	// a catchable "Maximum call stack size exceeded" — the instance stays
+	// healthy — so this knob trades depth capacity against per-render stack
+	// budget. Values above MaxLogicalStackSize are rejected at construction:
+	// beyond it recursion could reach the physical wall (uncatchable trap,
+	// instance retired). 0 keeps DefaultMaxStackSize (1MiB).
 	MaxStackSize int
 
 	RenderTimeout time.Duration
@@ -114,6 +134,9 @@ func NewEnginePool(bundle []byte, opts PoolOptions) (*EnginePool, error) {
 		return nil, fmt.Errorf("renderx: MemoryLimit %d 超过 QuickJS 引擎的 uint32 上限（%d），将被静默截断；请配置 ≤4GiB 的值", opts.MemoryLimit, uint32(math.MaxUint32))
 	}
 	o := opts.withDefaults()
+	if o.MaxStackSize > MaxLogicalStackSize {
+		return nil, fmt.Errorf("renderx: MaxStackSize %d 超过逻辑栈上限 %d（wasm 物理栈 %d − 1MiB 余量）；继续上调不会生效——超出后爆栈会退化为不可恢复的 wasm trap 并报废实例，请下调", o.MaxStackSize, MaxLogicalStackSize, WasmShadowStackSize)
+	}
 	p := &EnginePool{
 		bundle: bundle,
 		opts:   o,
@@ -336,13 +359,11 @@ func (inst *engineInstance) handle(req instanceReq) bool {
 			if r := recover(); r != nil {
 				panicked = true
 				err = fmt.Errorf("renderx: 引擎执行 panic（实例将废弃重建）: %v", r)
-				// wasm stack overflow surfaces as an opaque out-of-bounds
-				// access with no hint toward its cause (storage-walk #15):
-				// name it — react-dom recursion depth is the usual driver
-				// and the fix is a shallower tree or a larger
-				// PoolOptions.MaxStackSize.
+				// A wasm trap reaching the Go panic path is unexpected now
+				// (recursion overflow is caught by the JS guard; ADR 0015);
+				// name the historical driver for the rare other causes.
 				if strings.Contains(fmt.Sprint(r), "out of bounds memory access") {
-					err = fmt.Errorf("%w（提示：可能为组件树过深导致 QuickJS 栈溢出——精简嵌套，或上调 PoolOptions.MaxStackSize，当前 %d 字节）", err, inst.maxStackSize)
+					err = fmt.Errorf("%w（提示：触发了 wasm 物理栈/内存边界——组件树过深是历史成因；逻辑护栏（当前 %d 字节）应先拦截，出现此错即异常情况）", err, inst.maxStackSize)
 				}
 			}
 		}()
@@ -350,17 +371,30 @@ func (inst *engineInstance) handle(req instanceReq) bool {
 		return
 	}()
 	inst.curSink = nil
-	if err != nil && strings.Contains(err.Error(), "out of bounds memory access") {
-		// wasm stack overflow surfaces as this opaque bridge error (not a Go
-		// panic) — name the cause with BOTH ceilings (#15 + #16): MaxStackSize
-		// is the JS engine's logical budget (raising it helps until the wasm
-		// binary's compiled stack layout — the PHYSICAL ceiling — is hit; a
-		// 16MB budget demonstrably still overflows on the same tree). When
-		// raising MaxStackSize stops helping, only a shallower tree works.
-		err = fmt.Errorf("%w（提示：wasm 栈溢出——组件树过深。两层天花板：MaxStackSize 逻辑预算（当前 %d 字节，上调可救更深的树）与 wasm 物理栈（编译期定死，上调无效）；若已显著上调仍爆，只剩精简组件树一条路）", err, inst.maxStackSize)
+	retire := panicked
+	if err != nil && !panicked {
+		switch {
+		case strings.Contains(err.Error(), "out of bounds memory access"):
+			// A wasm trap, not a JS exception: some linear-memory bound was
+			// violated (the shadow stack being the historical case). The
+			// instance's stack pointer is left corrupted — every later
+			// render on it fails too (measured: a shallow render right after
+			// an overflow still traps) — so retire it instead of reusing a
+			// zombie. With the guard restored this should be unreachable by
+			// recursion (MaxStackSize is capped below the physical stack),
+			// hence the "report it" wording.
+			err = fmt.Errorf("%w（提示：触发了 wasm 物理栈上限（%d 字节）——默认与上限预算下爆栈应先被逻辑护栏拦截，出现即异常情况；实例将废弃重建）", err, WasmShadowStackSize)
+			retire = true
+		case strings.Contains(err.Error(), "Maximum call stack size exceeded"),
+			strings.Contains(err.Error(), "stack overflow"):
+			// The catchable guard: QuickJS refused to recurse past
+			// MaxStackSize. The instance is healthy; the tree is just too
+			// deep for the current budget.
+			err = fmt.Errorf("%w（提示：组件树递归深度超过逻辑栈预算（MaxStackSize=%d 字节）——精简组件树，或上调 PoolOptions.MaxStackSize（上限 %d）；实例未受损）", err, inst.maxStackSize, MaxLogicalStackSize)
+		}
 	}
 	req.done <- askResult{val: val, err: err}
-	if panicked {
+	if retire {
 		atomic.StoreInt32(&inst.dead, 1)
 		inst.close()
 		return false
