@@ -463,7 +463,7 @@ func main() {
 	billingSvc := billingapp.NewBillingService(
 		billingRepo,
 		channels,
-		billingapp.Config{Currency: "CNY", SuccessURL: env("BILLING_SUCCESS_URL", "http://localhost:5173/billing/success")},
+		billingapp.Config{Currency: env("BILLING_CURRENCY", "CNY"), SuccessURL: env("BILLING_SUCCESS_URL", "http://localhost:5173/billing/success")},
 		billingapp.BillingHooks{
 
 			OnPaymentFailed: func(_ context.Context, workspaceID, orderID, reason string) error {

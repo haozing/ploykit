@@ -207,6 +207,19 @@ func (b *BillingOps) ListPlanViews(ctx context.Context) ([]app.AdminPlanView, er
 	return out, nil
 }
 
+func (b *BillingOps) AdminUpdatePlan(ctx context.Context, actor *webx.Principal, code string, in app.AdminPlanUpdateInput) (app.AdminPlanView, error) {
+	v, err := b.Svc.AdminUpdatePlan(ctx, actor, code, billingapp.PlanUpdateInput{
+		Name: in.Name, Currency: in.Currency, SortNo: in.SortNo, Limits: in.Limits,
+	})
+	if err != nil {
+		return app.AdminPlanView{}, err
+	}
+	return app.AdminPlanView{
+		Code: v.Code, Name: v.Name, Currency: v.Currency,
+		TrialDays: v.TrialDays, SortNo: v.SortNo, Limits: v.Limits,
+	}, nil
+}
+
 func (b *BillingOps) MarkOrderPaid(ctx context.Context, actor *webx.Principal, orderID string) error {
 	return b.Svc.MarkOrderPaid(ctx, actor, orderID)
 }

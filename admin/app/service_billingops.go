@@ -85,6 +85,16 @@ func (s *BillingOpsService) ListPlanViews(ctx context.Context) ([]AdminPlanView,
 	return s.billing.ListPlanViews(ctx)
 }
 
+// AdminUpdatePlan is a pass-through to the billing domain, which validates,
+// writes and audits (admin.plan_change with from/to snapshots) — a single
+// audit source, so the admin side records nothing extra here.
+func (s *BillingOpsService) AdminUpdatePlan(ctx context.Context, p *webx.Principal, code string, input AdminPlanUpdateInput) (AdminPlanView, error) {
+	if s.billing == nil {
+		return AdminPlanView{}, errNotWired("billing ops")
+	}
+	return s.billing.AdminUpdatePlan(ctx, p, code, input)
+}
+
 func (s *BillingOpsService) ListWebhookDeliveries(ctx context.Context, workspaceID, status string, page, pageSize int) ([]AdminWebhookDelivery, int, error) {
 	if s.webhooks == nil {
 		return nil, 0, errNotWired("webhook ops")

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,10 @@ type fakeAdminRepo struct {
 	eventsTotal                     int
 
 	codes []string
+
+	gotUpdate  updatePlanCall
+	updateFound bool
+	updateErr   error
 }
 
 func (f *fakeAdminRepo) ListAllOrders(_ context.Context, flt AdminOrderFilter, limit, offset int) ([]AdminOrderView, int, error) {
@@ -51,6 +56,16 @@ func (f *fakeAdminRepo) ListPaymentEvents(_ context.Context, flt PaymentEventFil
 }
 
 func (f *fakeAdminRepo) ListPlanCodes(_ context.Context) ([]string, error) { return f.codes, nil }
+
+type updatePlanCall struct {
+	code, name, limitsJSON, currency string
+	sortNo                           int
+}
+
+func (f *fakeAdminRepo) UpdatePlan(_ context.Context, code, name, limitsJSON string, sortNo int, currency string) (bool, error) {
+	f.gotUpdate = updatePlanCall{code, name, limitsJSON, currency, sortNo}
+	return f.updateFound, f.updateErr
+}
 
 func newAdminOpsForTest(repo Repo, aud Auditor) (*BillingAdminService, *fakeAdminRepo) {
 	core := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, aud,
@@ -239,4 +254,152 @@ func TestBillingAdminListPaymentEventsAndPlanCodes(t *testing.T) {
 	assert.Equal(t, PaymentEventFilter{WorkspaceID: "ws-3"}, ar.gotEvents)
 	assert.Equal(t, 10, ar.gotEventsLimit)
 	assert.Equal(t, 20, ar.gotEventsOffset)
+}
+
+func TestBillingAdminUpdatePlan(t *testing.T) {
+	ctx := context.Background()
+	adminP := &webx.Principal{UserID: "op-1", Email: "op@test.local", IsPlatformAdmin: true}
+
+	// newSvc 预置 core fake repo 的 pro 行（AdminUpdatePlan 要取 from 快照）
+	newSvc := func(aud Auditor) (*BillingAdminService, *fakeAdminRepo) {
+		repo := newFakeRepo()
+		repo.plans["pro"] = domain.Plan{
+			Code: "pro", Name: "Pro", Currency: "CNY", SortNo: 1,
+			Limits: map[string]int{"price_monthly_cents": 4900, "workspaces": 1},
+		}
+		svc, ar := newAdminOpsForTest(repo, aud)
+		ar.codes = []string{"pro"}
+		ar.updateFound = true
+		return svc, ar
+	}
+
+	t.Run("校验矩阵：非法输入 400 且不触库不写审计", func(t *testing.T) {
+		badKey65 := strings.Repeat("a", 65)
+		tests := []struct {
+			name  string
+			input PlanUpdateInput
+		}{
+			{"name 空白（trim 后 0 rune）", PlanUpdateInput{Name: "  ", Currency: "USD"}},
+			{"name 101 rune（按 rune 计，中文）", PlanUpdateInput{Name: strings.Repeat("价", 101), Currency: "USD"}},
+			{"currency 小写", PlanUpdateInput{Name: "Pro", Currency: "usd"}},
+			{"currency 2 字母", PlanUpdateInput{Name: "Pro", Currency: "US"}},
+			{"currency 4 字母", PlanUpdateInput{Name: "Pro", Currency: "USDD"}},
+			{"limits 键大写开头", PlanUpdateInput{Name: "Pro", Currency: "USD", Limits: map[string]int{"Price": 1}}},
+			{"limits 键数字开头", PlanUpdateInput{Name: "Pro", Currency: "USD", Limits: map[string]int{"9price": 1}}},
+			{"limits 键空", PlanUpdateInput{Name: "Pro", Currency: "USD", Limits: map[string]int{"": 1}}},
+			{"limits 键超 64 字符", PlanUpdateInput{Name: "Pro", Currency: "USD", Limits: map[string]int{badKey65: 1}}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				aud := &metaAuditor{}
+				svc, ar := newSvc(aud)
+
+				_, err := svc.AdminUpdatePlan(ctx, adminP, "pro", tt.input)
+				var we *webx.Error
+				require.ErrorAs(t, err, &we)
+				assert.Equal(t, http.StatusBadRequest, we.Status)
+				assert.Equal(t, updatePlanCall{}, ar.gotUpdate, "校验拒绝不得触达 repo")
+				assert.Empty(t, aud.calls, "校验拒绝不写审计")
+			})
+		}
+	})
+
+	t.Run("合法边界放行：name 恰 100 rune / sort_no 负数 / limits nil / -1 无限哨兵", func(t *testing.T) {
+		aud := &metaAuditor{}
+		svc, ar := newSvc(aud)
+
+		view, err := svc.AdminUpdatePlan(ctx, adminP, "pro", PlanUpdateInput{
+			Name: strings.Repeat("价", 100), Currency: "USD", SortNo: -7,
+		})
+		require.NoError(t, err)
+		assert.True(t, ar.updateFound)
+		assert.Equal(t, "pro", ar.gotUpdate.code)
+		assert.Equal(t, strings.Repeat("价", 100), ar.gotUpdate.name)
+		assert.Equal(t, "USD", ar.gotUpdate.currency)
+		assert.Equal(t, -7, ar.gotUpdate.sortNo)
+		assert.JSONEq(t, `{}`, ar.gotUpdate.limitsJSON, "nil limits = 全量替换为空表")
+
+		assert.Equal(t, PlanView{
+			Code: "pro", Name: strings.Repeat("价", 100), Currency: "USD",
+			SortNo: -7, Limits: map[string]int{},
+		}, view)
+	})
+
+	t.Run("全量替换落库 + 返回 PlanView（与 ListPlanViews 同形）", func(t *testing.T) {
+		aud := &metaAuditor{}
+		svc, ar := newSvc(aud)
+
+		view, err := svc.AdminUpdatePlan(ctx, adminP, "pro", PlanUpdateInput{
+			Name: "专业版", Currency: "USD", SortNo: 2,
+			Limits: map[string]int{"price_monthly_cents": 990, "workspaces": -1, "trial_days": 14},
+		})
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"price_monthly_cents":990,"workspaces":-1,"trial_days":14}`, ar.gotUpdate.limitsJSON)
+		assert.Equal(t, PlanView{
+			Code: "pro", Name: "专业版", Currency: "USD", TrialDays: 14, SortNo: 2,
+			Limits: map[string]int{"price_monthly_cents": 990, "workspaces": -1, "trial_days": 14},
+		}, view, "TrialDays 从 limits 投影，与 service_planview.planView 同形")
+	})
+
+	t.Run("未知 code → 404 且不写审计", func(t *testing.T) {
+		aud := &metaAuditor{}
+		svc, ar := newSvc(aud)
+
+		_, err := svc.AdminUpdatePlan(ctx, adminP, "nope", PlanUpdateInput{Name: "x", Currency: "USD"})
+		var we *webx.Error
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusNotFound, we.Status)
+		assert.Equal(t, updatePlanCall{}, ar.gotUpdate, "不存在时不发 UPDATE")
+		assert.Empty(t, aud.calls)
+	})
+
+	t.Run("UPDATE 竞态未命中（found=false）→ 404", func(t *testing.T) {
+		aud := &metaAuditor{}
+		svc, ar := newSvc(aud)
+		ar.updateFound = false
+
+		_, err := svc.AdminUpdatePlan(ctx, adminP, "pro", PlanUpdateInput{Name: "x", Currency: "USD"})
+		var we *webx.Error
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusNotFound, we.Status)
+		assert.Empty(t, aud.calls)
+	})
+
+	t.Run("成功 → 平台级审计 admin.plan_change（from/to 快照，workspaceID nil）", func(t *testing.T) {
+		aud := &metaAuditor{}
+		svc, _ := newSvc(aud)
+
+		_, err := svc.AdminUpdatePlan(ctx, adminP, "pro", PlanUpdateInput{
+			Name: "专业版", Currency: "USD", SortNo: 2,
+			Limits: map[string]int{"price_monthly_cents": 990, "workspaces": -1},
+		})
+		require.NoError(t, err)
+
+		require.Len(t, aud.calls, 1)
+		c := aud.calls[0]
+		assert.Nil(t, c.ws, "平台级事件，workspaceID nil")
+		assert.Equal(t, adminP, c.p, "审计 actor 是管理员本人")
+		assert.Equal(t, "admin.plan_change", c.action)
+		assert.Equal(t, "plan", c.resourceType)
+		assert.Equal(t, "pro", c.resID)
+
+		assert.Equal(t, map[string]any{
+			"from": map[string]any{
+				"code": "pro", "name": "Pro", "currency": "CNY", "sort_no": 1,
+				"limits": map[string]int{"price_monthly_cents": 4900, "workspaces": 1},
+			},
+			"to": map[string]any{
+				"code": "pro", "name": "专业版", "currency": "USD", "sort_no": 2,
+				"limits": map[string]int{"price_monthly_cents": 990, "workspaces": -1},
+			},
+		}, c.meta)
+	})
+
+	t.Run("core 未挂 auditor 不 panic", func(t *testing.T) {
+		svc, _ := newSvc(nil)
+		assert.NotPanics(t, func() {
+			_, err := svc.AdminUpdatePlan(ctx, adminP, "pro", PlanUpdateInput{Name: "x", Currency: "USD"})
+			require.NoError(t, err)
+		})
+	})
 }

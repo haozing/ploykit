@@ -26,6 +26,7 @@ func (d BillingOpsDeps) mounted(next func(w http.ResponseWriter, r *http.Request
 func MountBillingOps(mux webx.Router, d BillingOpsDeps) {
 	admin := (&Deps{}).requireAdmin
 	mux.Handle("GET /api/admin/plans", admin(d.mounted(d.listPlans)))
+	mux.Handle("PATCH /api/admin/plans/{code}", admin(d.mounted(d.updatePlan)))
 	mux.Handle("GET /api/admin/orders", admin(d.mounted(d.listOrders)))
 	mux.Handle("DELETE /api/admin/orders/{id}", admin(d.mounted(d.cancelOrder)))
 
@@ -70,6 +71,30 @@ func (d BillingOpsDeps) listPlans(w http.ResponseWriter, r *http.Request, _ *web
 		return
 	}
 	webx.WriteJSON(w, http.StatusOK, map[string]any{"items": codes, "plans": views})
+}
+
+// updatePlan full-replaces a plan's editable fields (name/currency/sort_no/
+// limits); the code is path identity and never editable. Validation, the write
+// and the admin.plan_change audit live in the billing domain; the response is
+// the same PlanView shape as GET /api/admin/plans rows.
+func (d BillingOpsDeps) updatePlan(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	var req struct {
+		Name     string         `json:"name"`
+		Currency string         `json:"currency"`
+		SortNo   int            `json:"sort_no"`
+		Limits   map[string]int `json:"limits"`
+	}
+	if !webx.DecodeJSON(w, r, &req) {
+		return
+	}
+	view, err := d.Svc.AdminUpdatePlan(r.Context(), p, r.PathValue("code"), app.AdminPlanUpdateInput{
+		Name: req.Name, Currency: req.Currency, SortNo: req.SortNo, Limits: req.Limits,
+	})
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, view)
 }
 
 func (d BillingOpsDeps) listOrders(w http.ResponseWriter, r *http.Request, _ *webx.Principal) {

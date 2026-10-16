@@ -116,4 +116,17 @@ func (r *Repo) ListPlanCodes(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
+// UpdatePlan full-replaces the editable columns of a plan (the code in the
+// WHERE clause is the immutable identity). found reports whether a row
+// matched; false means the caller turns it into a not-found error.
+func (r *Repo) UpdatePlan(ctx context.Context, code, name, limitsJSON string, sortNo int, currency string) (found bool, err error) {
+	ct, err := r.pool.Exec(ctx, `
+		UPDATE plan SET name = $2, limits = $3, sort_no = $4, currency = $5
+		WHERE code = $1`, code, name, limitsJSON, sortNo, currency)
+	if err != nil {
+		return false, mapErr(err)
+	}
+	return ct.RowsAffected() > 0, nil
+}
+
 var _ app.AdminRepo = (*Repo)(nil)

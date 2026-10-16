@@ -60,6 +60,13 @@ type fakeBillingOps struct {
 	gotMarkPaid  string
 	markPaidCall bool
 
+	gotUpdatePlan struct {
+		code  string
+		input app.AdminPlanUpdateInput
+	}
+	updatePlanView app.AdminPlanView
+	updatePlanErr  error
+
 	config         app.AdminBillingConfig
 	gotTestChannel string
 	testChannelErr error
@@ -90,6 +97,11 @@ func (f *fakeBillingOps) ListPlanCodes(context.Context) ([]string, error) { retu
 
 func (f *fakeBillingOps) ListPlanViews(context.Context) ([]app.AdminPlanView, error) {
 	return f.planViews, nil
+}
+
+func (f *fakeBillingOps) AdminUpdatePlan(_ context.Context, _ *webx.Principal, code string, input app.AdminPlanUpdateInput) (app.AdminPlanView, error) {
+	f.gotUpdatePlan.code, f.gotUpdatePlan.input = code, input
+	return f.updatePlanView, f.updatePlanErr
 }
 
 func (f *fakeBillingOps) MarkOrderPaid(_ context.Context, _ *webx.Principal, orderID string) error {
@@ -512,5 +524,49 @@ func TestBillOpsAdminCancelSubscriptionAudits(t *testing.T) {
 		assert.NotPanics(t, func() {
 			require.NoError(t, svc.AdminCancelSubscription(ctx, p, "ws_9"))
 		})
+	})
+}
+
+func TestBillingOpsAdminUpdatePlan(t *testing.T) {
+	ctx := context.Background()
+	p := &webx.Principal{UserID: "op", IsPlatformAdmin: true}
+	input := app.AdminPlanUpdateInput{
+		Name: "专业版", Currency: "USD", SortNo: 2,
+		Limits: map[string]int{"price_monthly_cents": 990},
+	}
+
+	t.Run("透传 billing 侧（code/input 原样，view 原样返回）", func(t *testing.T) {
+		want := app.AdminPlanView{Code: "pro", Name: "专业版", Currency: "USD", SortNo: 2,
+			Limits: map[string]int{"price_monthly_cents": 990}}
+		b := &fakeBillingOps{updatePlanView: want}
+		svc := newBillOpsSvc(b, nil, nil)
+
+		got, err := svc.AdminUpdatePlan(ctx, p, "pro", input)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+		assert.Equal(t, "pro", b.gotUpdatePlan.code)
+		assert.Equal(t, input, b.gotUpdatePlan.input)
+	})
+
+	t.Run("billing 侧校验失败（400）/未知套餐（404）→ 原样透传", func(t *testing.T) {
+		b := &fakeBillingOps{updatePlanErr: webx.NewValidation("plan currency must be a 3-letter uppercase ISO 4217 code")}
+		svc := newBillOpsSvc(b, nil, nil)
+		_, err := svc.AdminUpdatePlan(ctx, p, "pro", input)
+		var we *webx.Error
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusBadRequest, we.Status)
+
+		b2 := &fakeBillingOps{updatePlanErr: webx.NewNotFound("plan not found")}
+		_, err = newBillOpsSvc(b2, nil, nil).AdminUpdatePlan(ctx, p, "nope", input)
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusNotFound, we.Status)
+	})
+
+	t.Run("billing ops 未装配 → 503", func(t *testing.T) {
+		svc := newBillOpsSvc(nil, nil, nil)
+		_, err := svc.AdminUpdatePlan(ctx, p, "pro", input)
+		var we *webx.Error
+		require.ErrorAs(t, err, &we)
+		assert.Equal(t, http.StatusServiceUnavailable, we.Status)
 	})
 }

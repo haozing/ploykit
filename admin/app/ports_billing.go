@@ -73,6 +73,15 @@ type AdminBillingConfig struct {
 	Channels []AdminBillingChannel `json:"channels"`
 }
 
+// AdminPlanUpdateInput is the full-replace payload for AdminUpdatePlan; the
+// plan code rides in the request path and is never editable.
+type AdminPlanUpdateInput struct {
+	Name     string         `json:"name"`
+	Currency string         `json:"currency"`
+	SortNo   int            `json:"sort_no"`
+	Limits   map[string]int `json:"limits"`
+}
+
 type BillingAdminOps interface {
 	ListAllOrders(ctx context.Context, workspaceID, status string, limit, offset int) ([]AdminOrder, int, error)
 
@@ -87,6 +96,8 @@ type BillingAdminOps interface {
 	ListPlanCodes(ctx context.Context) ([]string, error)
 
 	ListPlanViews(ctx context.Context) ([]AdminPlanView, error)
+
+	AdminUpdatePlan(ctx context.Context, actor *webx.Principal, code string, input AdminPlanUpdateInput) (AdminPlanView, error)
 
 	MarkOrderPaid(ctx context.Context, actor *webx.Principal, orderID string) error
 

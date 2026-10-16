@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,12 @@ type httpFakeBillingOps struct {
 
 	planCodes []string
 	planViews []app.AdminPlanView
+
+	gotUpdate struct {
+		code  string
+		input app.AdminPlanUpdateInput
+	}
+	updateErr error
 }
 
 func (f *httpFakeBillingOps) ListAllOrders(context.Context, string, string, int, int) ([]app.AdminOrder, int, error) {
@@ -42,6 +49,16 @@ func (f *httpFakeBillingOps) ListPlanCodes(context.Context) ([]string, error) {
 }
 func (f *httpFakeBillingOps) ListPlanViews(context.Context) ([]app.AdminPlanView, error) {
 	return f.planViews, nil
+}
+func (f *httpFakeBillingOps) AdminUpdatePlan(_ context.Context, _ *webx.Principal, code string, input app.AdminPlanUpdateInput) (app.AdminPlanView, error) {
+	f.gotUpdate.code, f.gotUpdate.input = code, input
+	if f.updateErr != nil {
+		return app.AdminPlanView{}, f.updateErr
+	}
+	return app.AdminPlanView{
+		Code: code, Name: input.Name, Currency: input.Currency,
+		SortNo: input.SortNo, Limits: input.Limits,
+	}, nil
 }
 func (f *httpFakeBillingOps) MarkOrderPaid(_ context.Context, _ *webx.Principal, orderID string) error {
 	f.gotMarkPaid = orderID
@@ -129,4 +146,52 @@ func TestAdminPlansRoute_WithPlanViews(t *testing.T) {
 	require.Len(t, body.Plans, 2)
 	assert.Equal(t, "CNY", body.Plans[1].Currency)
 	assert.Equal(t, 14, body.Plans[1].TrialDays, "trial_days 从 plan.limits 投影透出")
+}
+
+func TestUpdatePlanRoute(t *testing.T) {
+	body := `{"name":"专业版","currency":"USD","sort_no":2,` +
+		`"limits":{"price_monthly_cents":990,"workspaces":-1}}`
+
+	t.Run("成功 200 + 响应 PlanView 同形 + code 取自 path", func(t *testing.T) {
+		f := &httpFakeBillingOps{}
+		mux := newBillingOpsMux(f)
+		r := httptest.NewRequest(http.MethodPatch, "/api/admin/plans/pro", strings.NewReader(body))
+		r = r.WithContext(webx.WithPrincipal(r.Context(),
+			&webx.Principal{UserID: "op", IsPlatformAdmin: true}))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		assert.Equal(t, "pro", f.gotUpdate.code, "code 取自 path，body 不可携带")
+		assert.Equal(t, "专业版", f.gotUpdate.input.Name)
+		assert.Equal(t, "USD", f.gotUpdate.input.Currency)
+		assert.Equal(t, 2, f.gotUpdate.input.SortNo)
+		assert.Equal(t, map[string]int{"price_monthly_cents": 990, "workspaces": -1}, f.gotUpdate.input.Limits)
+
+		var view app.AdminPlanView
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &view))
+		assert.Equal(t, app.AdminPlanView{
+			Code: "pro", Name: "专业版", Currency: "USD", SortNo: 2,
+			Limits: map[string]int{"price_monthly_cents": 990, "workspaces": -1},
+		}, view)
+	})
+
+	t.Run("坏 JSON → 400；billing 侧 404/400 保形", func(t *testing.T) {
+		f := &httpFakeBillingOps{}
+		mux := newBillingOpsMux(f)
+		r := httptest.NewRequest(http.MethodPatch, "/api/admin/plans/pro", strings.NewReader(`{"name":`))
+		r = r.WithContext(webx.WithPrincipal(r.Context(),
+			&webx.Principal{UserID: "op", IsPlatformAdmin: true}))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		f = &httpFakeBillingOps{updateErr: webx.NewNotFound("plan not found")}
+		r = httptest.NewRequest(http.MethodPatch, "/api/admin/plans/nope", strings.NewReader(body))
+		r = r.WithContext(webx.WithPrincipal(r.Context(),
+			&webx.Principal{UserID: "op", IsPlatformAdmin: true}))
+		w = httptest.NewRecorder()
+		newBillingOpsMux(f).ServeHTTP(w, r)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
 }

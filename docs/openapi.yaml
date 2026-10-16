@@ -2546,6 +2546,47 @@ paths:
                     items:
                       $ref: '#/components/schemas/Plan'
         default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/plans/{code}:
+    patch:
+      operationId: adminUpdatePlan
+      tags: [admin]
+      summary: 全量编辑套餐（name/currency/sort_no/limits；code 为路径标识不可改）
+      description: |
+        全量替换语义（UI 整卡提交）：limits 中未出现的键即删除；-1 = 不限哨兵。
+        校验：name 1..100 字符（rune 计）、currency `^[A-Z]{3}$`（与 040 迁移
+        CHECK 对齐）、limits 键 `^[a-z][a-z0-9_]{0,63}$` 且值为 JSON 整数；
+        limits 为自由 KV，未知键服务端放行。落库即生效（checkout / 套餐目录
+        均为请求期直读，无缓存）；既有订单金额为创建时快照，不受影响。
+        成功写平台级审计 admin.plan_change（from/to 快照），可经
+        GET /api/admin/audit?action=admin.plan_change 查询。
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, currency, sort_no, limits]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                currency: { type: string, pattern: '^[A-Z]{3}$' }
+                sort_no: { type: integer, description: 展示序（ORDER BY sort_no），任意整数 }
+                limits:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                  description: 配额/价格 KV（-1 = 不限；键 `^[a-z][a-z0-9_]{0,63}$`）
+      responses:
+        '200':
+          description: 编辑后的套餐视图（与 GET /api/admin/plans 的 plans 行同形）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400': { $ref: '#/components/responses/DefaultError' }
+        '404': { $ref: '#/components/responses/DefaultError' }
+        default: { $ref: '#/components/responses/DefaultError' }
   /api/admin/orders:
     get:
       operationId: adminListOrders

@@ -72,6 +72,7 @@ func TestBillingOpsMountGuards(t *testing.T) {
 	MountBillingOps(mux, BillingOpsDeps{})
 	guardMatrix(t, mux, []struct{ method, path string }{
 		{http.MethodGet, "/api/admin/plans"},
+		{http.MethodPatch, "/api/admin/plans/pro"},
 		{http.MethodGet, "/api/admin/orders"},
 		{http.MethodGet, "/api/admin/webhook-deliveries"},
 		{http.MethodPost, "/api/admin/billing/test-connection"},

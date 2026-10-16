@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowLeft,
   Building2,
+  CreditCard,
   KeyRound,
   LayoutDashboard,
   Receipt,
@@ -42,6 +43,11 @@ const NAV: AdminNavItem[] = [
     to: '/admin/workspaces',
     label: '工作区',
     icon: <Building2 size={16} aria-hidden="true" />,
+  },
+  {
+    to: '/admin/plans',
+    label: '套餐',
+    icon: <CreditCard size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/orders',
