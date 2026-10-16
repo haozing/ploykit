@@ -462,14 +462,20 @@ GET /blog/hello-renderx
 // packages/hooks/src/hooks/useSEO.ts — ordinary business code, not framework
 import { emitDirective, type HeadEntry } from '@ploykit/runtime'
 
-export function useSEO(meta: { title?: string; description?: string; ogImage?: string; canonical?: string }) {
+export function useSEO(meta: {
+  title?: string; description?: string; ogImage?: string; canonical?: string;
+  ogTitle?: string; ogDescription?: string; ogUrl?: string; ogType?: string; twitterSite?: string;
+}) {
   const entries: HeadEntry[] = []
   if (meta.title) entries.push({ tag: 'title', children: meta.title })
   if (meta.description) entries.push({ tag: 'meta', attrs: { name: 'description', content: meta.description } })
-  if (meta.ogImage) {
-    entries.push({ tag: 'meta', attrs: { property: 'og:image', content: meta.ogImage } })
-    entries.push({ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } })
-  }
+  // OG essentials mirror what the page declares (og:title <- title,
+  // og:description <- description, og:url <- canonical; og:type defaults to
+  // 'website') with explicit og* fields overriding; twitter:title/description/
+  // image mirror the og values, twitter:card rides ogImage, twitter:site is
+  // opt-in. Field report #22: without the mirrors the OG card essentials never
+  // reached social/AI scrapers and every consumer invented a side-channel hook.
+  ...
   if (meta.canonical) entries.push({ tag: 'link', attrs: { rel: 'canonical', href: meta.canonical } })
   emitDirective('head', entries)   // SSR→host fn; after hydration→document.head
 }

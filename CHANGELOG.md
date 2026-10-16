@@ -9,6 +9,22 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+### Fixed
+- **hooks**: `useSEO` now emits the OpenGraph card essentials — the four
+  text/URL fields never reached social/AI scrapers before (field report #22:
+  live pages audited at zero og: hits). `og:title`/`og:description`/`og:url`
+  mirror `title`/`description`/`canonical` by default (industry convention)
+  and `og:type` defaults to `website`; explicit `ogTitle`/`ogDescription`/
+  `ogUrl`/`ogType` fields override the mirrors. Twitter mirrors ride along:
+  `twitter:title`/`twitter:description`/`twitter:image` follow the og values,
+  `twitter:card` stays attached to `ogImage` (summary_large_image), and
+  `twitterSite` is a new opt-in field. Behavior note: pages passing
+  `title`/`description` now emit og/twitter metas where they previously
+  emitted none — consumers that hand-rolled a side-channel og hook should
+  remove it in the same upgrade to avoid duplicate tags.
+
 ## [0.7.4] — 2026-10-16
 
 shuijing field-report batch (21-item list + two upstream drafts): the headline

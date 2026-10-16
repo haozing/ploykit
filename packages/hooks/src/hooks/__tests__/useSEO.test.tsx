@@ -1,12 +1,13 @@
 import '@testing-library/jest-dom/vitest'
 import { render } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useSEO } from '../useSEO'
+import { useSEO, type SeoMeta } from '../useSEO'
 
 
 
 
-function Probe(props: { title?: string; description?: string; ogImage?: string; canonical?: string }) {
+
+function Probe(props: SeoMeta) {
   useSEO(props)
   return <p>probe</p>
 }
@@ -14,7 +15,7 @@ function Probe(props: { title?: string; description?: string; ogImage?: string; 
 beforeEach(() => {
   document.title = ''
   document.head
-    .querySelectorAll('meta[name="description"],meta[property^="og:"],meta[name="twitter:card"],link[rel="canonical"]')
+    .querySelectorAll('meta[name="description"],meta[property^="og:"],meta[name^="twitter:"],link[rel="canonical"]')
     .forEach((el) => el.remove())
 })
 
@@ -27,14 +28,6 @@ describe('useSEO（经 @ploykit/runtime 指令通道）', () => {
     expect(document.head.querySelector('meta[name="twitter:card"]')).toHaveAttribute(
       'content', 'summary_large_image',
     )
-  })
-
-  it('未传的可选项不产生条目（空字段不落 head）', () => {
-    render(<Probe title="只有标题" />)
-    expect(document.title).toBe('只有标题')
-    expect(document.head.querySelector('meta[name="description"]')).toBeNull()
-    expect(document.head.querySelector('meta[property="og:image"]')).toBeNull()
-    expect(document.head.querySelector('meta[name="twitter:card"]')).toBeNull()
   })
 
   it('重渲染（SPA 导航语义）：title 覆写、meta 原位更新不重复', () => {
@@ -54,8 +47,64 @@ describe('useSEO（经 @ploykit/runtime 指令通道）', () => {
     expect(links[0]).toHaveAttribute('href', 'https://x.com/b')
   })
 
-  it('未传 canonical 不产生条目', () => {
-    render(<Probe title="只有标题" />)
+  it('空 meta 不产生任何条目', () => {
+    render(<Probe />)
+    expect(document.title).toBe('')
+    expect(document.head.querySelector('meta[property^="og:"]')).toBeNull()
+    expect(document.head.querySelector('meta[name^="twitter:"]')).toBeNull()
+    expect(document.head.querySelector('meta[name="description"]')).toBeNull()
     expect(document.head.querySelector('link[rel="canonical"]')).toBeNull()
+  })
+})
+
+describe('useSEO OG 四要素（#22：镜像默认 + 显式覆盖 + twitter 镜像）', () => {
+  it('title/description/canonical 自动镜像 og:title/og:description/og:url，og:type 默认 website', () => {
+    render(<Probe title="页题" description="描述" canonical="https://x.com/p" />)
+    expect(document.head.querySelector('meta[property="og:title"]')).toHaveAttribute('content', '页题')
+    expect(document.head.querySelector('meta[property="og:description"]')).toHaveAttribute('content', '描述')
+    expect(document.head.querySelector('meta[property="og:url"]')).toHaveAttribute('content', 'https://x.com/p')
+    expect(document.head.querySelector('meta[property="og:type"]')).toHaveAttribute('content', 'website')
+  })
+
+  it('og 块激活时 twitter:title/description 镜像；无 ogImage 则无 twitter:card/image', () => {
+    render(<Probe title="页题" description="描述" />)
+    expect(document.head.querySelector('meta[name="twitter:title"]')).toHaveAttribute('content', '页题')
+    expect(document.head.querySelector('meta[name="twitter:description"]')).toHaveAttribute('content', '描述')
+    expect(document.head.querySelector('meta[name="twitter:card"]')).toBeNull()
+    expect(document.head.querySelector('meta[name="twitter:image"]')).toBeNull()
+  })
+
+  it('显式 og* 字段覆盖镜像值；ogType 覆写默认', () => {
+    render(
+      <Probe
+        title="页题"
+        description="描述"
+        ogTitle="社媒题"
+        ogDescription="社媒描述"
+        ogUrl="https://x.com/social"
+        ogType="article"
+        twitterSite="@brand"
+      />,
+    )
+    expect(document.head.querySelector('meta[property="og:title"]')).toHaveAttribute('content', '社媒题')
+    expect(document.head.querySelector('meta[property="og:description"]')).toHaveAttribute('content', '社媒描述')
+    expect(document.head.querySelector('meta[property="og:url"]')).toHaveAttribute('content', 'https://x.com/social')
+    expect(document.head.querySelector('meta[property="og:type"]')).toHaveAttribute('content', 'article')
+    expect(document.head.querySelector('meta[name="twitter:site"]')).toHaveAttribute('content', '@brand')
+  })
+
+  it('ogImage 附带 twitter:image，twitter:title/description 照常镜像', () => {
+    render(<Probe title="页题" description="描述" ogImage="/cover.png" />)
+    expect(document.head.querySelector('meta[name="twitter:image"]')).toHaveAttribute('content', '/cover.png')
+    expect(document.head.querySelector('meta[name="twitter:title"]')).toHaveAttribute('content', '页题')
+    expect(document.head.querySelector('meta[name="twitter:description"]')).toHaveAttribute('content', '描述')
+    expect(document.head.querySelector('meta[property="og:title"]')).toHaveAttribute('content', '页题')
+  })
+
+  it('仅 ogType 也能激活 og 块（其余四要素缺省不落）', () => {
+    render(<Probe ogType="website" />)
+    expect(document.head.querySelector('meta[property="og:type"]')).toHaveAttribute('content', 'website')
+    expect(document.head.querySelector('meta[property="og:title"]')).toBeNull()
+    expect(document.head.querySelector('meta[name="twitter:title"]')).toBeNull()
   })
 })
