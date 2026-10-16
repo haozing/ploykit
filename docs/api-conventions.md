@@ -169,6 +169,28 @@ present human. Failed confirmations share the login attempt limiter (429 after t
 configured window). The reference wiring lives in example (workspace delete /
 transfer-ownership, 15-minute window, `workspacehttp.Deps.StepUp`).
 
+## Workspace scoping: the X-Workspace-Id header
+
+Workspace-scoped API routes are guarded by `workspace.WorkspaceHeaderCtx`
+(`workspace/adapters/http/routes.go`, wired in example/cmd/app/main.go): it
+requires the `X-Workspace-Id` request header on **all** methods, validates the
+credential's scope (`Principal.Scope.AllowsWorkspace` — a scoped PAT cannot
+reach a workspace outside its grant), checks membership, and injects
+WorkspaceID + Role into the principal before the handler runs.
+
+- **Discovery** (the part integrators could not find): `GET /api/workspaces`
+  — the workspace domain's own list endpoint, no header required — returns the
+  caller's workspaces; a member workspace's id is the header's value. The
+  `@ploykit/client` fetch wrapper attaches the header to `/api` calls
+  automatically once the app registers `setWorkspaceIdProvider(fn)` (the
+  `PloykitProvider` hook wires it to the current workspace).
+- **GET fallback; writes are header-only**: a GET without the header may carry
+  `?workspace_id=` instead — deliberate, for browser-native downloads
+  (`<a download>`, `window.open`) that cannot set custom headers. Writes accept
+  the header ONLY by design: a workspace id embedded in a write request's URL
+  leaks via Referer headers and access logs. Symptom of getting this wrong: a
+  write that puts the id in the URL 400s with `X-Workspace-Id header required`.
+
 ## identity mounts at the root (no /api/ prefix — by design)
 
 Every business domain mounts under `/api/...`, but identity's `/auth/*`,

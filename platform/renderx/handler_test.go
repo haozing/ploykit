@@ -442,6 +442,32 @@ func TestHandlerStaleOnError(t *testing.T) {
 	}
 }
 
+func TestHandlerNoStaleFailureLogsWarn(t *testing.T) {
+	reg := newHandlerTestReg()
+	cache := newMemOnlyCache(t, "b1", 16, 0)
+	fr := newStubRenderer(handlerTestRoutes(), func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "", nil, errors.New("Maximum call stack size exceeded（深树 wasm 溢出）")
+	})
+	var warns []string
+	h := Handler(HandlerDeps{
+		Cache: cache, Renderer: fr, Routes: handlerTestRoutes(), BuildID: "b1", Registry: reg,
+		Warn: func(format string, args ...any) {
+			warns = append(warns, fmt.Sprintf(format, args...))
+		},
+	})
+
+	resp := get(t, h, "/blog/world")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("无 stale 渲染失败应 500, got %d", resp.StatusCode)
+	}
+
+	joined := strings.Join(warns, "\n")
+	if !strings.Contains(joined, "/blog/world") || !strings.Contains(joined, "Maximum call stack size exceeded") {
+		t.Errorf("渲染失败且无过期副本应发 Warn（含路径与底层错误文本）, got %q", warns)
+	}
+}
+
 func TestHandlerPoisonBlacklist(t *testing.T) {
 	reg := newHandlerTestReg()
 	root := t.TempDir()

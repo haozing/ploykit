@@ -217,6 +217,7 @@ func (h *handler) serveStaleOrError(w http.ResponseWriter, r *http.Request, path
 		h.serveHTML(w, r, ent.HTML, "no-cache", ent.PropsSHA256, TierStale)
 		return
 	}
+	h.deps.Warn("renderx: 页面 %s 渲染失败且无过期副本: %v", path, cause)
 	w.Header().Set(HeaderTier, TierError)
 	h.deps.ErrorPage(w, r, fmt.Errorf("页面 %s 渲染失败且无过期副本: %w", path, cause))
 }

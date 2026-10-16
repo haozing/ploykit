@@ -4,6 +4,57 @@ All notable changes to ploykit are documented here. Format: Keep a Changelog;
 versions follow semver — under 0.x, minor bumps may carry breaking changes
 (each one is called out).
 
+Version scope: the Go module and the `@ploykit/*` npm packages are versioned by the same
+vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` code skips
+npm entirely (the npm packages stay at the last release that changed them; each version's
+entry below says whether it is Go-only). Consumers pin each side independently.
+
+## [Unreleased]
+
+shuijing field-report batch (21-item list + two upstream drafts): the headline
+fix is a production hydration bug that silently discarded ALL page props on
+every loader/static page (masked until now because pages refetch their data
+client-side), plus CSRF 403 self-heal, two ui theme/tailwind gaps, and render
+failure observability.
+
+### Fixed
+- **runtime**: production hydration lost every page prop. `pageId` is derived
+  from component display names; the client bundle (vite, minified) mangles
+  those names while the SSR bundle (Go esbuild, unminified) keeps them, so the
+  props script's embedded pageId never matched the client route table's key —
+  components mounted with no props and re-fetched everything (a product's
+  "array field lost in hydration" was this bug wearing a costume: the
+  "surviving" og meta was static SSR head output, not hydration). Hydration
+  now resolves the props' owning page by matching `window.location.pathname`
+  against the client's own route table (route patterns are string literals —
+  minification-proof), keeping the embedded pageId as a legacy fallback and
+  warning once when neither resolves. Pinned by a regression test that
+  minifies a fixture with real esbuild.
+- **client + webx**: a stale CSRF token (cookie expiry at the default 12h
+  MaxAge, or a bootstrap race caching the loser of two concurrent /config
+  responses) made every write 403 until a full page reload, with no recovery.
+  CSRF rejections now carry a machine-readable `details.csrf_rejected` marker
+  (plus gorilla's failure `reason`) from the server, and the client clears its
+  token cache, re-bootstraps from /config, and retries the request exactly
+  once (message-text matching keeps older servers covered). A plain
+  permission 403 is untouched.
+- **renderx**: a runtime render failure with no stale cache entry served the
+  500 error page without any server-side log — the diagnosis (e.g. the wasm
+  stack-overflow hint) never reached operators. The failure now goes through
+  the injectable Warn sink with path and cause; pinned by a handler test.
+- **ui**: `LoginPage`'s auth card and `NotificationBell`'s dropdown hardcoded
+  `bg-white` (the only two non-token surfaces in the package), breaking any
+  dark/custom-surface theme. Now `bg-card` / `bg-popover`.
+
+### Added
+- **ui**: `@ploykit/ui/tailwind.css` — a package-relative `@source "./src"`
+  entry so Tailwind v4 generates framework-component classes for standalone
+  (npm) consumers with one import line. Tailwind skips node_modules in
+  automatic detection and the monorepo blueprint's relative `@source` silently
+  breaks on repo splits (a real product shipped an unstyled login page for
+  weeks); the import resolves in both layouts (validated through the example
+  build). README documents the standalone wiring.
+
 ## [0.7.3] — 2026-10-16
 
 QuickJS wasm rebuilt in-repo (ADR 0015): the engine's stack guard is restored
