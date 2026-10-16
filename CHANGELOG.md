@@ -9,9 +9,71 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.8.0] — 2026-10-16
 
-### Fixed
+Commercialization upstream batch from the shuijing master plan — settings keys
+with credential sealing, the exported platform-admin guard, first-admin
+bootstrap, plan editing, OAuth status card, and injectable email copy — plus
+the useSEO OG-card fix. Spec and audit trail:
+`docs/plan-upstream-shuijing-admin-billing.md` +
+`docs/delivery-audit-shuijing-upstream-migration.md`.
+
+npm: `@ploykit/ui` and `@ploykit/hooks` bumped to 0.8.0; `client`/`runtime`
+unchanged (stay 0.7.4 — this tag does not republish what did not change).
+
+### Breaking
+- **settings**: `settingshttp.AdminDeps.MailMode` (string) → `MailModeFn`
+  (`func() string`) so the mail channel can hot-reload. nil means the
+  integrator does not track it (the list response then reports an empty
+  `mail_mode`). The only known consumer was migrated in the same change.
+
+### Added
+- **settings**: six new admin-editable keys — `smtp_host`/`smtp_port`/
+  `smtp_user`/`smtp_pass`/`smtp_from`/`site_verification_meta` — each with an
+  env fallback (`SMTP_*`) that stays live until the first admin write (the
+  new keys are never bootstrap-seeded; the five pre-existing env-backed keys
+  keep first-boot seeding — the split is documented in `keys.go`). Sensitive
+  values are masked on every surface (`IsSensitive`/`MaskedValue`: the list
+  response's `items` and `effective`, the change log, the PUT response, and a
+  mask-idempotent PUT short-circuit so round-tripping the masked echo never
+  overwrites the stored value). `smtp_pass` seals at rest via
+  `platform/sealx` (`Store.WithSealer`); without a configured seal key, new
+  sensitive writes are rejected — fail-closed, per the tenant-credential
+  sealing rule. Ships `ParseVerificationMeta` (normalized `name|content`
+  storage; `<script>`-class input is a 400) plus `SMTPConfig` /
+  `SiteVerificationMeta` hot-read accessors for product hot-mailer and
+  HTML-injection middleware.
+- **settingshttp**: `OAuthProviderInfo` + optional `AdminDeps.OAuthInfo` —
+  the admin settings list response gains `mail_mode` and an `oauth` array so
+  products can render a read-only OAuth status card (expected callback URL
+  per provider; omitted entirely when the integrator wires nothing).
+- **admin**: exported `PlatformAdminGuard()` — the four-check admin guard
+  (401 / platform-admin / no impersonated sessions / no PATs) that was locked
+  inside unexported `requireAdmin`; products hand-rolling their own guard
+  closures were silently missing the last two checks. `requireAdmin` is now a
+  thin wrapper over it.
+- **admin**: `BootstrapPlatformAdmin(ctx, pool, email, log)` — promotes
+  `BOOTSTRAP_ADMIN_EMAIL` to the first platform admin only while zero admins
+  exist (idempotent on every boot; never demotes or mints a second admin;
+  unknown email warns and skips; no audit record — the startup log is the
+  trail). Replaces hand-SQL'd first-admin bootstrap in products.
+- **billing + admin**: `PATCH /api/admin/plans/{code}` — full-replace plan
+  editing (name / currency / sort_no / limits; code immutable) through the
+  billing domain's admin-ops chain, audited as `admin.plan_change` with
+  from/to snapshots. Plan edits take effect immediately (every reader hits
+  the DB per request) and never touch existing orders (amounts are
+  snapshotted at creation). New in openapi (151==151).
+- **ui**: `PlansPage` — expandable per-plan editor with dynamic limits
+  key/value rows, currency dropdown + free input, and server-error surfacing;
+  registered in the AdminShell nav. `AdminSettingsPage` grows the SMTP card
+  (the pass field never round-trips its real value — empty submit skips the
+  key), the site-verification card, and the OAuth status card (hidden
+  entirely when `oauth` is absent from the envelope).
+- **notify/smtp**: `NewWithTemplates(cfg, Templates, log)` — per-product
+  subject/body overrides for all four transactional emails (`{{.Code}}` /
+  `{{.Link}}` / `{{.Workspace}}` placeholders; parse errors fail at
+  construction). The zero value keeps the previous Chinese copy byte-for-byte,
+  and empty fields fall back per-template.
 - **hooks**: `useSEO` now emits the OpenGraph card essentials — the four
   text/URL fields never reached social/AI scrapers before (field report #22:
   live pages audited at zero og: hits). `og:title`/`og:description`/`og:url`
@@ -24,6 +86,18 @@ entry below says whether it is Go-only). Consumers pin each side independently.
   `title`/`description` now emit og/twitter metas where they previously
   emitted none — consumers that hand-rolled a side-channel og hook should
   remove it in the same upgrade to avoid duplicate tags.
+
+### Fixed
+- **ui**: `BillingPage` no longer renders one-time-only plans (SKU packs) as
+  0-price monthly cards that checkout would reject anyway. The filter is
+  capability-based — a plan with neither `price_monthly_cents` nor
+  `price_yearly_cents` stays out of the subscription grid (a product's
+  `pack_*` naming convention must not leak into a framework page) — and an
+  empty state covers the all-one-time catalog.
+- **example**: the public `/config` endpoint filters
+  `settings.IsSensitive` keys instead of mirroring every effective setting
+  verbatim — the second of the two disclosure surfaces this batch's masking
+  was designed to close.
 
 ## [0.7.4] — 2026-10-16
 
