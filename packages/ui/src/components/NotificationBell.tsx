@@ -81,7 +81,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
 
       {open && (
         <div
-          className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50"
+          className="absolute right-0 mt-2 w-80 bg-popover rounded-lg shadow-lg border z-50"
           role="dialog"
           aria-label="通知列表"
           onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}

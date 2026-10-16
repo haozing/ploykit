@@ -15,11 +15,13 @@
       "types": "./dist/components/ui/*.d.ts",
       "default": "./dist/components/ui/*.js"
     },
+    "./tailwind.css": "./tailwind.css",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "tailwind.css"
   ],
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",

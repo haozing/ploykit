@@ -127,7 +127,7 @@ export function LoginPage({
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-4 p-8 bg-white rounded-lg shadow">
+      <div className="w-full max-w-sm space-y-4 p-8 bg-card rounded-lg shadow">
         <div className="text-center">
           <h1 className="text-2xl font-bold">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>

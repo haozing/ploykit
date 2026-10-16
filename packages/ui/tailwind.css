@@ -1,0 +1,7 @@
+/* Tailwind v4 source registration for @ploykit/ui.
+   Tailwind v4 skips node_modules in automatic content detection, so standalone
+   (npm) consumers must register this package's source explicitly. @source
+   resolves relative to THIS stylesheet, so it points at the package's own src/
+   whether the package is consumed from a monorepo workspace or from node_modules.
+   Standalone consumers: add `@import "@ploykit/ui/tailwind.css";` to their CSS entry. */
+@source "./src";

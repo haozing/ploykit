@@ -145,6 +145,6 @@
   }
 }
 
-@source "../../../packages/ui/src";
+@import "@ploykit/ui/tailwind.css";
 /* ploykit：包源码 class 扫描（workspace 链接在 node_modules 下，Tailwind 自动探测会跳过） */
 @source "../../../packages/hooks/src";

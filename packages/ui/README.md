@@ -194,6 +194,21 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 - **工具**：`cn`、`formatDate` / `formatDateTime` / `shortID`、`statusTone` / `statusLabel`、`apiErrorMessage`、`FormField`、`CronInput`。
 - 基础 UI 件（Button / Input / Card / Tabs / AlertDialog / DropdownMenu / Popover / Switch / Checkbox / Progress / Avatar / Breadcrumb / Empty / Field / Label / Tooltip / Skeleton / Separator…）全部从 barrel 导出；也可走子路径 `import { Button } from '@ploykit/ui/components/ui/button'`（推荐统一走 barrel）。
 
+## Tailwind v4 集成
+
+本包组件的 class 全部走语义令牌（`bg-card`、`text-muted-foreground`…），需要 Tailwind 扫描到本包源码才会生成对应规则。Tailwind v4 的自动内容探测会跳过 node_modules，因此按消费方式二选一：
+
+- **monorepo 消费方**（workspace 软链）：可保留自己写的 `@source "<相对路径>/packages/ui/src";`，也可改用下面的 import（推荐——相对路径在产品拆出独立仓库后会静默失效，曾有产品因此上线了无样式的登录页数周未察觉）。
+- **独立（npm）消费方**：在 CSS 入口（如 `src/index.css`）加一行：
+
+```css
+@import "@ploykit/ui/tailwind.css";
+```
+
+`@ploykit/ui/tailwind.css` 内部只有一条 `@source "./src";`。`@source` 相对样式表文件自身解析，因此无论包位于 monorepo workspace 还是 node_modules，都指向包内的 `src/`，无需消费方关心安装路径。
+
+令牌定义（`--card` / `--popover` 等 CSS 变量与 `@theme` 映射）仍由消费方按 shadcn 惯例在自己的 CSS 里提供（参见 `example/web/src/index.css`）。
+
 ## 自定义三个层级
 
 1. **换皮**：CSS/Tailwind 覆盖样式（组件全部走 design token：`bg-popover`、`text-muted-foreground` 等）。
