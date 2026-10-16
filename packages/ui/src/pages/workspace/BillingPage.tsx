@@ -123,7 +123,10 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
       : null
   const orders: PKOrder[] = subscription?.orders ?? []
   const currentPlanCode = subscription?.plan_code ?? null
-  const sortedPlans = [...plans].sort((a, b) => a.sort_no - b.sort_no)
+  // UP-8/D4 (docs/plan-upstream-shuijing-admin-billing.md): filter by price-key capability, not code-prefix — a plan with neither price_monthly_cents nor price_yearly_cents (one_time pack) must not render as a ¥0 subscription card.
+  const sortedPlans = [...plans]
+    .filter((p) => p.limits.price_monthly_cents !== undefined || p.limits.price_yearly_cents !== undefined)
+    .sort((a, b) => a.sort_no - b.sort_no)
 
   
   
@@ -284,6 +287,10 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
           >
             {manualNote}
           </p>
+        )}
+
+        {sortedPlans.length === 0 && (
+          <PageEmpty label="暂无可订阅套餐" hint="站点尚未配置按月或按年订阅的套餐。" />
         )}
 
         <div className="grid gap-4 lg:grid-cols-3">

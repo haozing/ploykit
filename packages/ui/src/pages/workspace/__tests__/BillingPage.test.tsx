@@ -66,10 +66,10 @@ function SearchProbe() {
   return <span data-testid="search-params">{sp.toString()}</span>
 }
 
-function renderPage(initialUrl = '/billing') {
+function renderPage(initialUrl = '/billing', plansOverride?: typeof plans) {
   billingMocks.useBilling.mockReturnValue({
     subscription: { plan_code: 'free', orders },
-    plans,
+    plans: plansOverride ?? plans,
     loading: false,
     refresh: vi.fn(),
   })
@@ -225,6 +225,36 @@ describe('BillingPage', () => {
     renderPage()
     expect(screen.getByText(/待处理 1 笔/)).toBeInTheDocument()
     expect(screen.queryByText(/待支付/)).not.toBeInTheDocument()
+  })
+})
+
+describe('BillingPage UP-8：one_time 套餐过滤（D4 price-key capability，非 code 前缀）', () => {
+  const packOnly = { code: 'pack_100', name: '积分包 100', limits: { tasks_monthly: 100, price_one_time_cents: 990 }, sort_no: 2 }
+
+  it('仅含 price_one_time_cents 的 plan 不渲染进订阅网格（capability 判据，不看 code 前缀）', () => {
+    renderPage('/billing', [
+      { code: 'free', name: 'Free', limits: { tasks_monthly: 100, price_monthly_cents: 0, price_yearly_cents: 0 }, sort_no: 1 },
+      { code: 'bundle_200', name: 'Bundle 200', limits: { tasks_monthly: 200, price_one_time_cents: 1990 }, sort_no: 3 },
+      packOnly,
+    ])
+    expect(screen.getByText('Free')).toBeInTheDocument()
+    expect(screen.queryByText('积分包 100')).not.toBeInTheDocument()
+    expect(screen.queryByText('Bundle 200')).not.toBeInTheDocument()
+  })
+
+  it('monthly + one_time 双价 plan 照常渲染月付卡（价格取订阅键）', () => {
+    renderPage('/billing', [
+      { code: 'pro', name: 'Pro', limits: { tasks_monthly: 10000, price_monthly_cents: 990, price_yearly_cents: 9900, price_one_time_cents: 499 }, sort_no: 1 },
+    ])
+    expect(screen.getByText('Pro')).toBeInTheDocument()
+    expect(screen.getByText('¥9.90')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '升级' })).toBeEnabled()
+  })
+
+  it('全部 plan 被过滤（仅 one_time 包）→ 空态成立', () => {
+    renderPage('/billing', [packOnly])
+    expect(screen.getByText('暂无可订阅套餐')).toBeInTheDocument()
+    expect(screen.queryByText('积分包 100')).not.toBeInTheDocument()
   })
 })
 
