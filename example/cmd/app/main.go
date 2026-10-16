@@ -358,6 +358,11 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	// UP-1 (shuijing upstream batch): sensitive settings keys (smtp_pass) seal
+	// at rest via sealx. nil secrets (no PLOYKIT_SEAL_KEY and no master secret)
+	// keeps every non-sensitive key working but rejects new sensitive writes —
+	// the fail-closed posture AGENTS.md mandates for sealed credentials.
+	siteSettings = siteSettings.WithSealer(secrets)
 	fedOpts := []identityapp.FedOption{}
 	if secrets != nil {
 		fedOpts = append(fedOpts, identityapp.WithSecrets(secrets))
@@ -749,6 +754,15 @@ func main() {
 		WithWebhookOps(&bridge.WebhookOps{Svc: whkSvc})
 	adminhttp.MountBillingOps(mux, adminhttp.BillingOpsDeps{Svc: billingOpsSvc})
 
+	oauthNames := []string{}
+	if oauthSvc != nil {
+		oauthNames = oauthSvc.Names()
+	}
+
+	// UP-6: the admin settings OAuth card shows the *expected* callback per
+	// provider, derived from the public base URL; the runtime callback is
+	// computed per request from Host/X-Forwarded-Proto (identity service).
+	oauthBase := env("SITE_BASE_URL", env("APP_URL", "http://localhost:8030"))
 	settingshttp.MountAdmin(mux, settingshttp.AdminDeps{
 		Store: siteSettings,
 		Guard: func(next http.Handler) http.Handler {
@@ -765,7 +779,19 @@ func main() {
 				next.ServeHTTP(w, r)
 			})
 		},
-		Mailer: mailer, MailMode: mailMode, Log: log,
+		Mailer:     mailer,
+		MailModeFn: func() string { return mailMode },
+		OAuthInfo: func() []settingshttp.OAuthProviderInfo {
+			out := make([]settingshttp.OAuthProviderInfo, 0, len(oauthNames))
+			for _, n := range oauthNames {
+				out = append(out, settingshttp.OAuthProviderInfo{
+					Name:        n,
+					CallbackURL: oauthBase + "/auth/oauth/" + n + "/callback",
+				})
+			}
+			return out
+		},
+		Log: log,
 	})
 
 	audithttp.Mount(mux, audithttp.Deps{Rec: auditor, WsMW: wsMW, Authz: authorizer})
@@ -815,11 +841,6 @@ func main() {
 		webx.WriteJSON(w, http.StatusOK, map[string]any{"key": obj.Key, "url": uploadsStore.URL(obj.Key), "size": obj.Size})
 	}))
 
-	oauthNames := []string{}
-	if oauthSvc != nil {
-		oauthNames = oauthSvc.Names()
-	}
-
 	mux.HandleFunc("GET /config", webx.ConfigHandler(webx.ConfigDeps{
 		OAuthProviders:  func() []string { return oauthNames },
 		BillingChannels: channels.Names,
@@ -831,6 +852,11 @@ func main() {
 			}
 			out := make(map[string]any, len(eff)+1)
 			for k, v := range eff {
+				// UP-1: /config is public — sensitive keys (smtp_pass) must
+				// never ride along, not even masked.
+				if settings.IsSensitive(k) {
+					continue
+				}
 				out[k] = v
 			}
 

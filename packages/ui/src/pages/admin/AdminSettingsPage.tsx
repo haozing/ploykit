@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import { Copy } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormField } from '../../components/FormField';
 import { PageError, PageHeader } from '../../components/Page';
@@ -29,6 +30,11 @@ import { SITE_CONFIG_QUERY_KEY } from '@ploykit/hooks';
 import { adminError } from './shared';
 
 
+interface OAuthProviderInfo {
+  name: string;
+  callback_url: string;
+}
+
 interface AdminSettingsEnvelope {
   
   items: Record<string, string>;
@@ -36,6 +42,10 @@ interface AdminSettingsEnvelope {
   effective: Record<string, string>;
   defaults: Record<string, string>;
   descriptions: Record<string, string>;
+  /** 出站邮件通道（UP-1）：smtp | dev | "" */
+  mail_mode: string;
+  /** OAuth provider 状态（UP-6）；字段缺失 = 后端未接线，整卡隐藏 */
+  oauth?: OAuthProviderInfo[];
 }
 
 
@@ -72,6 +82,22 @@ function parseRateLimit(
 }
 
 
+// SMTP 端口：留空合法（后端缺省 587），非空必须是 1..65535 的整数
+function parseSmtpPort(
+  raw: string,
+): { ok: true; v: string } | { ok: false; msg: string } {
+  const s = raw.trim();
+  if (s === '') {
+    return { ok: true, v: '' };
+  }
+  const n = Number(s);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 65535) {
+    return { ok: false, msg: '必须是 1..65535 的整数（留空 = 用缺省 587）' };
+  }
+  return { ok: true, v: s };
+}
+
+
 async function putKeys(
   api: { put: (url: string, body: unknown) => Promise<unknown> },
   entries: { key: string; label: string; value: string }[],
@@ -86,6 +112,19 @@ async function putKeys(
     }
   }
   return results;
+}
+
+
+// UP-6 登录方式卡：复制回调地址（与 OverviewPage 复制工作区 ID 同款降级策略）
+function copyCallbackUrl(name: string, url: string) {
+  if (typeof navigator.clipboard?.writeText === 'function') {
+    void navigator.clipboard
+      .writeText(url)
+      .then(() => toast.success(`${name} 回调地址已复制`))
+      .catch(() => toast.error(`复制失败，完整地址：${url}`));
+  } else {
+    toast.info(`当前环境不支持自动复制，完整地址：${url}`);
+  }
 }
 
 export function AdminSettingsPage() {
@@ -108,6 +147,15 @@ export function AdminSettingsPage() {
   const [rlPerIP, setRlPerIP] = useState('30');
   const [rlAllowlist, setRlAllowlist] = useState('');
   const [rlError, setRlError] = useState<string | null>(null);
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('');
+  const [smtpUser, setSmtpUser] = useState('');
+  // UP-1 水合规则：smtp_pass 永不回填（真实值与掩码回显都不进 state），
+  // state 保持空串、placeholder 显示掩码；留空保存 = 不修改密码
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFrom, setSmtpFrom] = useState('');
+  const [smtpError, setSmtpError] = useState<string | null>(null);
+  const [verifyMeta, setVerifyMeta] = useState('');
   const [hydrated, setHydrated] = useState(false);
 
   const eff = settingsQ.data?.effective;
@@ -121,6 +169,11 @@ export function AdminSettingsPage() {
     setRlPerUser(eff.rate_limit_per_user_per_min ?? '0');
     setRlPerIP(eff.rate_limit_per_ip_per_min ?? '30');
     setRlAllowlist(eff.rate_limit_allowlist ?? '');
+    setSmtpHost(eff.smtp_host ?? '');
+    setSmtpPort(eff.smtp_port ?? '');
+    setSmtpUser(eff.smtp_user ?? '');
+    setSmtpFrom(eff.smtp_from ?? '');
+    setVerifyMeta(eff.site_verification_meta ?? '');
     setHydrated(true);
   }, [eff, hydrated]);
 
@@ -235,6 +288,53 @@ export function AdminSettingsPage() {
     },
   });
 
+  
+  // SMTP 发信配置（UP-1）：五键批量提交；smtp_pass 留空（含掩码未动）时
+  // 从提交列表剔除，绝不把空值/掩码落库
+  const smtpM = useMutation({
+    mutationFn: async () => {
+      const port = parseSmtpPort(smtpPort);
+      if (!port.ok) throw new Error(`SMTP 端口：${port.msg}`);
+      setSmtpError(null);
+      const entries: { key: string; label: string; value: string }[] = [
+        { key: 'smtp_host', label: 'SMTP 主机', value: smtpHost.trim() },
+        { key: 'smtp_port', label: 'SMTP 端口', value: port.v },
+        { key: 'smtp_user', label: 'SMTP 用户名', value: smtpUser.trim() },
+        ...(smtpPass !== ''
+          ? [{ key: 'smtp_pass', label: 'SMTP 密码', value: smtpPass }]
+          : []),
+        { key: 'smtp_from', label: '发件人地址', value: smtpFrom.trim() },
+      ];
+      return putKeys(api, entries);
+    },
+    onSuccess: (results) =>
+      reportKeySaves(results, 'SMTP 配置已保存（发信热读，即时生效）', 'SMTP 配置'),
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : 'SMTP 配置保存失败';
+      setSmtpError(msg);
+      toast.error(msg, { duration: ERROR_TOAST_MS });
+    },
+  });
+
+  
+  // 站长验证（UP-2）：原样提交，后端归一为 name|content 存储（400 = 校验拒绝）
+  const verifyM = useMutation({
+    mutationFn: () =>
+      api.put('/api/admin/settings/site_verification_meta', {
+        value: verifyMeta.trim(),
+      }),
+    onSuccess: () => {
+      toast.success('站长验证配置已保存');
+      afterSave();
+    },
+    onError: (e) => {
+      toast.error(adminError(e, '站长验证配置保存失败'), {
+        duration: ERROR_TOAST_MS,
+      });
+      void rollbackToServer();
+    },
+  });
+
   const [testTo, setTestTo] = useState('');
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const testEmailM = useMutation({
@@ -264,13 +364,15 @@ export function AdminSettingsPage() {
     );
   }
   const desc = settingsQ.data?.descriptions ?? {};
+  const mailMode = settingsQ.data?.mail_mode ?? '';
+  const oauth = settingsQ.data?.oauth;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="系统"
         
-        description="站点公告、维护模式、注册管控、API 限流与邮件通道——保存后全站即时生效（API 限流除外：重启后生效）"
+        description="站点公告、维护模式、注册管控、API 限流、邮件通道、站长验证与登录方式——保存后全站即时生效（API 限流除外：重启后生效）"
       />
 
       {/* ① 站点公告 */}
@@ -518,6 +620,100 @@ export function AdminSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* SMTP 发信配置（UP-1）：形态对齐限流卡；smtp_pass 掩码不回填、留空跳过提交 */}
+      <Card>
+        <CardHeader>
+          <CardDescription>发信通道</CardDescription>
+          <CardTitle>SMTP 发信配置</CardTitle>
+          <CardAction>
+            <Badge variant={mailMode === 'smtp' ? 'secondary' : 'outline'}>
+              {mailMode === 'smtp'
+                ? 'SMTP 直发'
+                : mailMode === 'dev'
+                  ? '开发通道'
+                  : '未接入'}
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {desc.smtp_host} 配置后出站邮件走 SMTP 直发，保存即时生效（发信热读，
+            无需重启）。出于安全，密码不回显——输入框恒为空、占位符显示掩码，
+            留空保存表示不修改当前密码。
+          </p>
+          <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
+            <FormField label="SMTP 服务器" htmlFor="smtp-host">
+              <Input
+                id="smtp-host"
+                placeholder="如 smtp.example.com；留空 = 开发通道"
+                value={smtpHost}
+                onChange={(e) => setSmtpHost(e.target.value)}
+              />
+            </FormField>
+            <FormField
+              label="端口（留空 = 缺省 587）"
+              htmlFor="smtp-port"
+              error={smtpError?.startsWith('SMTP 端口') ? smtpError : undefined}
+            >
+              {/* 与限流卡同款处置：text + inputMode（type=number 对垃圾字符静默置空）；
+                  非法端口保存前拒绝并就地提示 */}
+              <Input
+                id="smtp-port"
+                type="text"
+                inputMode="numeric"
+                placeholder="缺省 587"
+                value={smtpPort}
+                onChange={(e) => {
+                  setSmtpPort(e.target.value);
+                  if (smtpError?.startsWith('SMTP 端口')) setSmtpError(null);
+                }}
+                aria-invalid={
+                  smtpError?.startsWith('SMTP 端口') ? true : undefined
+                }
+              />
+            </FormField>
+            <FormField label="SMTP 用户名" htmlFor="smtp-user">
+              <Input
+                id="smtp-user"
+                className="font-mono"
+                placeholder="如 no-reply@example.com"
+                value={smtpUser}
+                onChange={(e) => setSmtpUser(e.target.value)}
+              />
+            </FormField>
+            <FormField label="SMTP 密码（留空 = 不修改）" htmlFor="smtp-pass">
+              <Input
+                id="smtp-pass"
+                type="password"
+                placeholder="******"
+                autoComplete="new-password"
+                value={smtpPass}
+                onChange={(e) => setSmtpPass(e.target.value)}
+              />
+            </FormField>
+            <FormField label="发件人地址" htmlFor="smtp-from">
+              <Input
+                id="smtp-from"
+                type="email"
+                placeholder="如 no-reply@example.com"
+                value={smtpFrom}
+                onChange={(e) => setSmtpFrom(e.target.value)}
+              />
+            </FormField>
+          </div>
+          <div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={smtpM.isPending || !hydrated}
+              onClick={() => smtpM.mutate()}
+            >
+              {smtpM.isPending ? '保存中…' : '保存 SMTP 配置'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ⑤ 测试邮件（P2-14：去产品指代——框架文案不点名 example 接线） */}
       <Card>
         <CardHeader>
@@ -559,6 +755,105 @@ export function AdminSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 站长验证（UP-2）：粘贴完整 meta 标签或 name|content 对，后端归一存储；
+          注入由站点侧中间件完成，用户输入的 HTML 片段永不回显 */}
+      <Card>
+        <CardHeader>
+          <CardDescription>站长验证</CardDescription>
+          <CardTitle>搜索引擎站点验证</CardTitle>
+          <CardAction>
+            <Badge variant={verifyMeta.trim() ? 'secondary' : 'outline'}>
+              {verifyMeta.trim() ? '已注入' : '未配置'}
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {desc.site_verification_meta} 粘贴搜索平台（Google Search
+            Console / Bing 等）提供的完整 meta 标签，或 name|content
+            对；保存后归一为 name|content 存储，页面注入时由服务端重组标签，
+            输入的原文不回显。
+          </p>
+          <FormField
+            label="验证标记（完整 meta 标签或 name|content 对）"
+            htmlFor="site-verification-meta"
+          >
+            <textarea
+              id="site-verification-meta"
+              className="flex min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder={
+                '<meta name="google-site-verification" content="abc123XYZ" /> 或 google-site-verification|abc123XYZ'
+              }
+              value={verifyMeta}
+              onChange={(e) => setVerifyMeta(e.target.value)}
+            />
+          </FormField>
+          <div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={verifyM.isPending || !hydrated}
+              onClick={() => verifyM.mutate()}
+            >
+              {verifyM.isPending ? '保存中…' : '保存验证配置'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 登录方式（UP-6）：只读状态卡；信封无 oauth 字段 = 后端未接线，整卡隐藏 */}
+      {oauth && (
+        <Card>
+          <CardHeader>
+            <CardDescription>登录方式</CardDescription>
+            <CardTitle>OAuth 第三方登录</CardTitle>
+            <CardAction>
+              <Badge variant={oauth.length > 0 ? 'secondary' : 'outline'}>
+                {oauth.length > 0 ? `已启用 ${oauth.length} 个` : '未启用'}
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              下方回调地址为按站点 base URL 推算的期望值，实际以请求 Host
+              现算——反向代理必须转发 Host 与 X-Forwarded-Proto，
+              否则登录会报 redirect_uri_mismatch。
+            </p>
+            {oauth.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                尚未配置任何 OAuth 登录方式——设置 GOOGLE_CLIENT_ID /
+                GOOGLE_SECRET、GITHUB_CLIENT_ID / GITHUB_SECRET
+                环境变量并重启后在此显示。
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {oauth.map((p) => (
+                  <li
+                    key={p.name}
+                    className="flex flex-wrap items-center gap-2 text-sm"
+                  >
+                    <Badge variant="secondary">{p.name}</Badge>
+                    <code className="font-mono text-xs break-all text-muted-foreground">
+                      {p.callback_url}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="size-6 shrink-0 p-0 text-muted-foreground"
+                      aria-label={`复制 ${p.name} 回调地址`}
+                      title={`复制 ${p.name} 回调地址`}
+                      onClick={() => copyCallbackUrl(p.name, p.callback_url)}
+                    >
+                      <Copy size={12} aria-hidden="true" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

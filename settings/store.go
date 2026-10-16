@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/haozing/ploykit/platform/sealx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -11,6 +12,9 @@ import (
 type Store struct {
 	pool *pgxpool.Pool
 	env  func(string) string
+	// sealer encrypts sensitive keys (IsSensitive) at rest; nil = writes of
+	// sensitive keys are rejected (fail-closed). See seal.go / WithSealer.
+	sealer *sealx.Secrets
 }
 
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
@@ -28,7 +32,11 @@ func (s *Store) Get(ctx context.Context, key string) (value string, found bool, 
 }
 
 func (s *Store) Set(ctx context.Context, key, value, actor string) error {
-	_, err := s.pool.Exec(ctx, `
+	value, err := s.sealValue(key, value)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `
 		INSERT INTO site_settings (key, value, updated_at, updated_by)
 		VALUES ($1, $2, now(), $3)
 		ON CONFLICT (key) DO UPDATE

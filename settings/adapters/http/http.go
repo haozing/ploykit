@@ -32,9 +32,37 @@ type AdminDeps struct {
 
 	Mailer Mailer
 
-	MailMode string
+	// MailModeFn reports the active mail channel (MailModeDev / MailModeSMTP)
+	// and is read per request so hot-swapped mailers stay truthful. Breaking
+	// change vs the old static MailMode string. nil = not tracked: the list
+	// response carries an empty "mail_mode" and testEmail takes the smtp
+	// branch (same as the old empty-string default).
+	MailModeFn func() string
+
+	// OAuthInfo optionally reports the configured OAuth providers together
+	// with their EXPECTED callback URLs (derived from the configured base
+	// URL, for comparison against what is registered in the provider
+	// console). The actual runtime callback is computed per-request from
+	// Host + X-Forwarded-Proto, so reverse proxies must forward both. A nil
+	// func omits the "oauth" field from the list response entirely
+	// (silently degrade when unwired).
+	OAuthInfo func() []OAuthProviderInfo
 
 	Log *slog.Logger
+}
+
+// OAuthProviderInfo describes one OAuth provider for the admin status card.
+type OAuthProviderInfo struct {
+	Name        string `json:"name"`
+	CallbackURL string `json:"callback_url"`
+}
+
+// mailMode resolves MailModeFn; "" means the integrator does not track it.
+func (d AdminDeps) mailMode() string {
+	if d.MailModeFn == nil {
+		return ""
+	}
+	return d.MailModeFn()
 }
 
 func MountAdmin(mux webx.Router, d AdminDeps) {
@@ -63,12 +91,31 @@ func (d AdminDeps) list(w http.ResponseWriter, r *http.Request) {
 		webx.ErrInternal(w)
 		return
 	}
-	webx.WriteJSON(w, http.StatusOK, map[string]any{
+	// Both tables are masked: items may hold the sealed smtp_pass blob and
+	// effective the decrypted value — neither may ever reach the client.
+	maskMap(items)
+	maskMap(effective)
+	resp := map[string]any{
 		"items":        items,
 		"effective":    effective,
 		"defaults":     settings.Defaults,
 		"descriptions": settings.Descriptions,
-	})
+		"mail_mode":    d.mailMode(),
+	}
+	if d.OAuthInfo != nil {
+		resp["oauth"] = d.OAuthInfo()
+	}
+	webx.WriteJSON(w, http.StatusOK, resp)
+}
+
+// maskMap masks sensitive values in place. Empty stays empty (nothing to
+// leak); anything else — plaintext or sealed blob — becomes MaskedValue.
+func maskMap(m map[string]string) {
+	for k, v := range m {
+		if settings.IsSensitive(k) && v != "" {
+			m[k] = settings.MaskedValue
+		}
+	}
 }
 
 func (d AdminDeps) put(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +124,13 @@ func (d AdminDeps) put(w http.ResponseWriter, r *http.Request) {
 		Value string `json:"value"`
 	}
 	if !webx.DecodeJSON(w, r, &body) {
+		return
+	}
+	// Mask echo = "unchanged": the UI round-trips the masked read-back, so a
+	// submit of MaskedValue is acknowledged without touching the store (and
+	// without requiring the sealer). Runs before Validate on purpose.
+	if settings.IsSensitive(key) && body.Value == settings.MaskedValue {
+		webx.WriteJSON(w, http.StatusOK, map[string]string{"key": key, "value": settings.MaskedValue})
 		return
 	}
 	if err := settings.Validate(key, body.Value); err != nil {
@@ -98,12 +152,20 @@ func (d AdminDeps) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sensitive keys never appear in the change log or the response body —
+	// neither the new plaintext nor the previous stored (sealed) value.
+	logFrom, logTo := old, value
+	respValue := value
+	if settings.IsSensitive(key) {
+		logFrom, logTo = settings.MaskedValue, settings.MaskedValue
+		respValue = settings.MaskedValue
+	}
 	p := webx.PrincipalFromRequest(r)
 	d.Log.Info("admin.setting_change",
-		"key", key, "from", old, "to", value, "actor", actor,
+		"key", key, "from", logFrom, "to", logTo, "actor", actor,
 		"user_id", pUserID(p), "request_id", webx.RequestID(r))
 
-	webx.WriteJSON(w, http.StatusOK, map[string]string{"key": key, "value": value})
+	webx.WriteJSON(w, http.StatusOK, map[string]string{"key": key, "value": respValue})
 }
 
 func (d AdminDeps) testEmail(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +186,7 @@ func (d AdminDeps) testEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	const subject = "MyProduct 测试邮件"
 	const text = "这是一封来自管理控制台的测试邮件：若你收到它，说明邮件通道工作正常。"
-	if d.MailMode == MailModeDev {
+	if d.mailMode() == MailModeDev {
 		if err := d.Mailer.Send(r.Context(), to, subject, text); err != nil {
 			d.Log.Error("test email (dev)", "to", to, "err", err)
 			webx.ErrInternal(w)

@@ -45,6 +45,36 @@ func TestValidate(t *testing.T) {
 		{"rate_limit_allowlist 空=无豁免", KeyRateLimitAllowlist, "", false},
 		{"rate_limit_allowlist 非 IP/CIDR", KeyRateLimitAllowlist, "example.com", true},
 
+		{"smtp_host 合法", KeySMTPHost, "smtp.example.com", false},
+		{"smtp_host 空=开发通道", KeySMTPHost, "", false},
+		{"smtp_host 带端口拒绝", KeySMTPHost, "smtp.example.com:587", true},
+		{"smtp_host 下划线拒绝", KeySMTPHost, "smtp_under.example.com", true},
+		{"smtp_host 超长", KeySMTPHost, strings.Repeat("a", 254), true},
+		{"smtp_port 合法", KeySMTPPort, "465", false},
+		{"smtp_port 空=缺省", KeySMTPPort, "", false},
+		{"smtp_port 0 拒绝", KeySMTPPort, "0", true},
+		{"smtp_port 65536 拒绝", KeySMTPPort, "65536", true},
+		{"smtp_port 非整数", KeySMTPPort, "abc", true},
+		{"smtp_user 合法", KeySMTPUser, "apikey", false},
+		{"smtp_user 控制字符拒绝", KeySMTPUser, "api\x01key", true},
+		{"smtp_user 超长", KeySMTPUser, strings.Repeat("u", 255), true},
+		{"smtp_pass 合法", KeySMTPPass, "s3cret", false},
+		{"smtp_pass 空=清除", KeySMTPPass, "", false},
+		{"smtp_pass 超长", KeySMTPPass, strings.Repeat("p", 257), true},
+		{"smtp_from 合法", KeySMTPFrom, "no-reply@example.com", false},
+		{"smtp_from 空", KeySMTPFrom, "", false},
+		{"smtp_from 非邮箱", KeySMTPFrom, "not-an-email", true},
+		{"site_verification_meta 完整标签", KeySiteVerificationMeta, `<meta name="google-site-verification" content="abc123XYZ" />`, false},
+		{"site_verification_meta 管道对", KeySiteVerificationMeta, "google-site-verification|abc123XYZ", false},
+		{"site_verification_meta 空=清除", KeySiteVerificationMeta, "", false},
+		{"site_verification_meta 注入向量", KeySiteVerificationMeta, `<meta name=x content=y><script>alert(1)</script>`, true},
+		{"site_verification_meta 裸 script", KeySiteVerificationMeta, `<script>alert(1)</script>`, true},
+		{"site_verification_meta 标签后附加内容", KeySiteVerificationMeta, `<meta name="a" content="b"></meta><script>x</script>`, true},
+		{"site_verification_meta content 空", KeySiteVerificationMeta, `<meta name="a" content="">`, true},
+		{"site_verification_meta name 超长", KeySiteVerificationMeta, strings.Repeat("n", 65) + "|c", true},
+		{"site_verification_meta content 超长", KeySiteVerificationMeta, "n|" + strings.Repeat("c", 257), true},
+		{"site_verification_meta 非法字符", KeySiteVerificationMeta, "name|cont ent", true},
+
 		{"未知键", "not_a_key", "x", true},
 		{"settings 自身不可写整表", "settings", `{"banner_text":"x"}`, true},
 		{"空键", "", "x", true},
@@ -120,6 +150,17 @@ func TestEffectiveValueFallback(t *testing.T) {
 		{"maintenance 无 env 源", KeyMaintenanceMode, "", false, "1", "0"},
 
 		{"env 不可识别 → 默认", KeyAllowSignup, "", false, "junk", "1"},
+
+		{"smtp host env 透传", KeySMTPHost, "", false, "smtp.example.com", "smtp.example.com"},
+		{"smtp host env 空 → 默认", KeySMTPHost, "", false, "", ""},
+		{"smtp user env 透传", KeySMTPUser, "", false, "apikey", "apikey"},
+		{"smtp pass env 透传（未落库）", KeySMTPPass, "", false, "envpass", "envpass"},
+		{"smtp from env 透传", KeySMTPFrom, "", false, "no-reply@x.com", "no-reply@x.com"},
+		{"smtp port env 合法", KeySMTPPort, "", false, "465", "465"},
+		{"smtp port env 非法 → 默认 587", KeySMTPPort, "", false, "junk", "587"},
+		{"smtp port env 0 → 默认", KeySMTPPort, "", false, "0", "587"},
+		{"site meta env 透传", KeySiteVerificationMeta, "", false, "a|b", "a|b"},
+		{"smtp 表值空串也压过 env", KeySMTPPass, "", true, "envpass", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -141,6 +182,48 @@ func TestNormalize(t *testing.T) {
 	assert.Equal(t, "a.com,b.com", Normalize(KeyAllowedDomains, " A.com , b.com ,"))
 	assert.Equal(t, "10.0.0.5,192.168.0.0/16", Normalize(KeyRateLimitAllowlist, " 10.0.0.5 , 192.168.0.0/16 ,"))
 	assert.Equal(t, "120", Normalize(KeyRateLimitPerUserPerMin, " 120 "))
+
+	assert.Equal(t, "smtp.example.com", Normalize(KeySMTPHost, " smtp.example.com "))
+	assert.Equal(t, "google-site-verification|abc123XYZ",
+		Normalize(KeySiteVerificationMeta, `<meta name="google-site-verification" content="abc123XYZ" />`))
+	assert.Equal(t, "a|b", Normalize(KeySiteVerificationMeta, " a | b "))
+	assert.Equal(t, "", Normalize(KeySiteVerificationMeta, "  "))
+}
+
+func TestSensitiveMasking(t *testing.T) {
+	assert.True(t, IsSensitive(KeySMTPPass), "v1 只有 smtp_pass 是敏感键")
+	assert.False(t, IsSensitive(KeySMTPUser))
+	assert.False(t, IsSensitive(KeySMTPHost))
+	assert.False(t, IsSensitive(KeyBannerText))
+	for _, k := range KeyOrder {
+		if k != KeySMTPPass {
+			assert.False(t, IsSensitive(k), "键 %s 不应是敏感键", k)
+		}
+	}
+	assert.Equal(t, "******", MaskedValue)
+}
+
+func TestParseVerificationMeta(t *testing.T) {
+	name, content, err := ParseVerificationMeta("google-site-verification|abc123XYZ")
+	require.NoError(t, err)
+	assert.Equal(t, "google-site-verification", name)
+	assert.Equal(t, "abc123XYZ", content)
+
+	_, _, err = ParseVerificationMeta("no-pipe")
+	assert.Error(t, err, "非管道对拒绝")
+	_, _, err = ParseVerificationMeta("|c")
+	assert.Error(t, err, "name 空拒绝")
+	_, _, err = ParseVerificationMeta("n|")
+	assert.Error(t, err, "content 空拒绝")
+	_, _, err = ParseVerificationMeta("n|b|c")
+	assert.Error(t, err, "content 中的 | 不在白名单")
+	_, _, err = ParseVerificationMeta(strings.Repeat("n", 65) + "|c")
+	assert.Error(t, err, "name 超 64 拒绝")
+	_, _, err = ParseVerificationMeta("n|" + strings.Repeat("c", 257))
+	assert.Error(t, err, "content 超 256 拒绝")
+
+	_, _, err = ParseVerificationMeta("n|aBc123_-./:+=")
+	assert.NoError(t, err, "字符集覆盖 GSC/Bing 内容常见形态")
 }
 
 func TestRateLimitsUnit(t *testing.T) {
@@ -267,6 +350,12 @@ func TestEffectiveAndGateIntegration(t *testing.T) {
 		KeyRateLimitPerUserPerMin: "0",
 		KeyRateLimitPerIPPerMin:   "30",
 		KeyRateLimitAllowlist:     "",
+		KeySMTPHost:               "",
+		KeySMTPPort:               "587",
+		KeySMTPUser:               "",
+		KeySMTPPass:               "",
+		KeySMTPFrom:               "",
+		KeySiteVerificationMeta:   "",
 	}, eff)
 	allow, domains, err := envOnly.RegistrationGate(ctx)
 	require.NoError(t, err)

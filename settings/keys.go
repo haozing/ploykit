@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -19,13 +20,31 @@ const (
 	KeyRateLimitPerUserPerMin = "rate_limit_per_user_per_min"
 	KeyRateLimitPerIPPerMin   = "rate_limit_per_ip_per_min"
 	KeyRateLimitAllowlist     = "rate_limit_allowlist"
-	KindInfo, KindWarn        = "info", "warn"
-	FlagOff, FlagOn           = "0", "1"
+
+	KeySMTPHost = "smtp_host"
+	KeySMTPPort = "smtp_port"
+	KeySMTPUser = "smtp_user"
+	KeySMTPPass = "smtp_pass"
+	KeySMTPFrom = "smtp_from"
+
+	KeySiteVerificationMeta = "site_verification_meta"
+
+	KindInfo, KindWarn = "info", "warn"
+	FlagOff, FlagOn    = "0", "1"
 )
+
+// MaskedValue is what sensitive keys (IsSensitive) render as in every
+// read-back surface: the admin list response (both items and effective), the
+// put response body and the admin.setting_change log entries. A client that
+// submits MaskedValue back means "unchanged" — the put handler short-circuits
+// on it without touching the store.
+const MaskedValue = "******"
 
 var KeyOrder = []string{
 	KeyBannerText, KeyBannerKind, KeyMaintenanceMode, KeyAllowSignup, KeyAllowedDomains,
 	KeyRateLimitPerUserPerMin, KeyRateLimitPerIPPerMin, KeyRateLimitAllowlist,
+	KeySMTPHost, KeySMTPPort, KeySMTPUser, KeySMTPPass, KeySMTPFrom,
+	KeySiteVerificationMeta,
 }
 
 var Defaults = map[string]string{
@@ -37,6 +56,13 @@ var Defaults = map[string]string{
 	KeyRateLimitPerUserPerMin: "0",
 	KeyRateLimitPerIPPerMin:   "30",
 	KeyRateLimitAllowlist:     "",
+
+	KeySMTPHost:             "",
+	KeySMTPPort:             "587",
+	KeySMTPUser:             "",
+	KeySMTPPass:             "",
+	KeySMTPFrom:             "",
+	KeySiteVerificationMeta: "",
 }
 
 var Descriptions = map[string]string{
@@ -48,6 +74,48 @@ var Descriptions = map[string]string{
 	KeyRateLimitPerUserPerMin: "API 每用户限流（请求/分钟）：0 = 关闭；修改后重启生效（启动期静态注入，不热重载）",
 	KeyRateLimitPerIPPerMin:   "认证路径每客户端 IP 限流（请求/分钟）：0 = 关闭；修改后重启生效",
 	KeyRateLimitAllowlist:     "限流豁免名单：逗号分隔 IP 或 CIDR（如 10.0.0.5, 192.168.0.0/16）；修改后重启生效",
+
+	KeySMTPHost:             "SMTP 服务器主机名（如 smtp.example.com；空 = 开发日志通道，邮件只写日志不外发）",
+	KeySMTPPort:             "SMTP 端口（空 = 缺省 587）",
+	KeySMTPUser:             "SMTP 认证用户名（空 = 不认证）",
+	KeySMTPPass:             "SMTP 认证密码：保存后仅以掩码回显；落库前经 PLOYKIT_SEAL_KEY 加密，未配置该环境变量时拒绝保存",
+	KeySMTPFrom:             "发件人邮箱（如 no-reply@example.com；空 = 未配置发件人）",
+	KeySiteVerificationMeta: "站长验证：粘贴搜索引擎给的完整 <meta> 标签或 name|content 对（如 google-site-verification|abc123）；清空即移除",
+}
+
+// IsSensitive reports whether the key holds a credential that must never be
+// echoed in plaintext — every read-back surface masks it with MaskedValue.
+// v1 covers smtp_pass only.
+func IsSensitive(key string) bool { return key == KeySMTPPass }
+
+// Seeding semantics — decision D2 (docs/plan-upstream-shuijing-admin-billing.md):
+// the two generations of env-backed keys deliberately fork at first boot.
+//
+// Old keys (banner_*/maintenance_mode/allow_signup/allowed_domains/
+// rate_limit_*) are BOOTSTRAP-SEEDED: Bootstrap copies the effective env
+// value into site_settings on first boot; from then on the DB row wins over
+// the env ("DB row > env" short-circuit in value()), so env changes after
+// first boot are silently ignored. That was acceptable for flags admins
+// manage from the UI, and existing deployments rely on the behavior.
+//
+// New keys (smtp_*, site_verification_meta) are NEVER SEEDED: seedable()
+// filters them out of the Bootstrap loop. Reasons: (1) smtp_pass is a
+// credential — an env value must not be frozen into the generic
+// site_settings table just because it happened to be set on first boot;
+// (2) unseeded keys keep their env fallback live on every reboot until an
+// admin explicitly saves a value in the admin UI — no "env silently stopped
+// working" trap; (3) the admin list endpoint surfaces the env fallback via
+// Effective(), so the UI reads correctly even with no DB row.
+//
+// Unifying the old keys to "never seed" would strand deployments relying on
+// first-boot seeding; unifying the new keys to "seed everything" re-creates
+// the env-freeze trap. Hence the documented fork instead of one rule.
+func seedable(key string) bool {
+	switch key {
+	case KeySMTPHost, KeySMTPPort, KeySMTPUser, KeySMTPPass, KeySMTPFrom, KeySiteVerificationMeta:
+		return false
+	}
+	return true
 }
 
 func envOf(key string) string {
@@ -62,6 +130,18 @@ func envOf(key string) string {
 		return "RATE_LIMIT_PER_IP_PER_MIN"
 	case KeyRateLimitAllowlist:
 		return "RATE_LIMIT_ALLOWLIST"
+	case KeySMTPHost:
+		return "SMTP_HOST"
+	case KeySMTPPort:
+		return "SMTP_PORT"
+	case KeySMTPUser:
+		return "SMTP_USER"
+	case KeySMTPPass:
+		return "SMTP_PASS"
+	case KeySMTPFrom:
+		return "SMTP_FROM"
+	case KeySiteVerificationMeta:
+		return "SITE_VERIFICATION_META"
 	}
 	return ""
 }
@@ -100,6 +180,14 @@ func (s *Store) effectiveValue(key, tableValue string, found bool) string {
 			if raw := strings.TrimSpace(s.env(envName)); raw != "" {
 				return raw
 			}
+		case KeySMTPHost, KeySMTPUser, KeySMTPPass, KeySMTPFrom, KeySiteVerificationMeta:
+			if raw := strings.TrimSpace(s.env(envName)); raw != "" {
+				return raw
+			}
+		case KeySMTPPort:
+			if n, err := strconv.Atoi(strings.TrimSpace(s.env(envName))); err == nil && validSMTPPort(n) {
+				return strconv.Itoa(n)
+			}
 		}
 	}
 	return Defaults[key]
@@ -109,6 +197,17 @@ func (s *Store) value(ctx context.Context, key string) (string, error) {
 	v, found, err := s.Get(ctx, key)
 	if err != nil {
 		return "", err
+	}
+	if found && IsSensitive(key) {
+		// Fail-closed on reads too: a stored credential row must unseal or
+		// the read errors — there is no plaintext fallback for DB rows
+		// (legacy plaintext surfaces sealx.ErrPlaintext). The env fallback
+		// (no DB row) stays plaintext by design and is never stored.
+		plain, err := s.sealer.Unseal(v) // nil-receiver safe: errors when no sealer is configured
+		if err != nil {
+			return "", fmt.Errorf("settings: read sensitive key %s: %w", key, err)
+		}
+		v = plain
 	}
 	return s.effectiveValue(key, v, found), nil
 }
@@ -142,7 +241,73 @@ func (s *Store) Maintenance(ctx context.Context) (bool, error) {
 	return v == FlagOn, err
 }
 
+// SMTPConfig hot-reads the outbound mail settings (same shape as Maintenance):
+// DB row > env fallback > Defaults, with the stored smtp_pass decrypted. An
+// empty host keeps the dev-channel semantics (log-only mailer); port defaults
+// to 587. Meant for product hot-mailers polling on a short TTL.
+func (s *Store) SMTPConfig(ctx context.Context) (host string, port int, user, pass, from string, err error) {
+	if host, err = s.value(ctx, KeySMTPHost); err != nil {
+		return "", 0, "", "", "", err
+	}
+	portStr, err := s.value(ctx, KeySMTPPort)
+	if err != nil {
+		return "", 0, "", "", "", err
+	}
+	if user, err = s.value(ctx, KeySMTPUser); err != nil {
+		return "", 0, "", "", "", err
+	}
+	if pass, err = s.value(ctx, KeySMTPPass); err != nil {
+		return "", 0, "", "", "", err
+	}
+	if from, err = s.value(ctx, KeySMTPFrom); err != nil {
+		return "", 0, "", "", "", err
+	}
+	return host, parseSMTPPort(portStr), user, pass, from, nil
+}
+
+// SiteVerificationMeta hot-reads the verification meta in its normalized
+// `name|content` stored form (DB row > env SITE_VERIFICATION_META > "").
+// Parse the pair with ParseVerificationMeta and recompose the tag
+// server-side — stored user input is never reflected verbatim.
+func (s *Store) SiteVerificationMeta(ctx context.Context) (string, error) {
+	return s.value(ctx, KeySiteVerificationMeta)
+}
+
 func validRatePerMin(n int) bool { return n >= 0 && n <= 100000 }
+
+func validSMTPPort(n int) bool { return n >= 1 && n <= 65535 }
+
+func parseSMTPPort(v string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || !validSMTPPort(n) {
+		return 587
+	}
+	return n
+}
+
+func hostCharsetOK(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9', r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r == '.', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func printableASCII(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r > 0x7E {
+			return false
+		}
+	}
+	return true
+}
+
+var emailFmtRe = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+
+func emailValid(s string) bool { return len(s) <= 254 && emailFmtRe.MatchString(s) }
 
 func parsePerMin(v string, def int) int {
 	n, err := strconv.Atoi(strings.TrimSpace(v))
@@ -222,6 +387,13 @@ func Normalize(key, value string) string {
 		return strings.Join(SplitDomains(value), ",")
 	case KeyRateLimitAllowlist:
 		return strings.Join(SplitIPAllowlist(value), ",")
+	case KeySiteVerificationMeta:
+		// Unparsable input falls through to the trimmed raw string; the put
+		// path always runs Validate first, so it is rejected before this
+		// normalization result is ever stored.
+		if pair, ok := normalizeVerificationMeta(value); ok {
+			return pair
+		}
 	}
 	return strings.TrimSpace(value)
 }
@@ -263,6 +435,42 @@ func Validate(key, value string) error {
 			}
 		}
 		return nil
+	case KeySMTPHost:
+		if value == "" {
+			return nil // 空 = 开发日志通道
+		}
+		if len(value) > 253 || !hostCharsetOK(value) {
+			return fmt.Errorf("smtp_host 仅允许字母/数字/点/连字符且最多 253 字符（空 = 开发日志通道；端口走 smtp_port）")
+		}
+		return nil
+	case KeySMTPPort:
+		if value == "" {
+			return nil // 空 = 缺省 587
+		}
+		if n, err := strconv.Atoi(strings.TrimSpace(value)); err != nil || !validSMTPPort(n) {
+			return fmt.Errorf("smtp_port 必须是 1..65535 的整数（空 = 缺省 587）")
+		}
+		return nil
+	case KeySMTPUser:
+		if len(value) > 254 || !printableASCII(value) {
+			return fmt.Errorf("smtp_user 最多 254 字符且仅允许可打印 ASCII 字符")
+		}
+		return nil
+	case KeySMTPPass:
+		if len(value) > 256 {
+			return fmt.Errorf("smtp_pass 最多 256 字符")
+		}
+		return nil
+	case KeySMTPFrom:
+		if value == "" {
+			return nil
+		}
+		if !emailValid(value) {
+			return fmt.Errorf("smtp_from 必须是合法邮箱地址（如 no-reply@example.com）或空")
+		}
+		return nil
+	case KeySiteVerificationMeta:
+		return validateVerificationMeta(value)
 	default:
 		return fmt.Errorf("未知设置键 %q（白名单：%s）", key, strings.Join(KeyOrder, ", "))
 	}

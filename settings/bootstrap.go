@@ -13,6 +13,11 @@ func Bootstrap(pool *pgxpool.Pool, envLookup func(string) string) (*Store, error
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, key := range KeyOrder {
+		if !seedable(key) {
+			// Decision D2: new-generation keys (smtp_*, site_verification_meta)
+			// are never seeded — see the comment block in keys.go.
+			continue
+		}
 		_, found, err := s.Get(ctx, key)
 		if err != nil {
 			return nil, fmt.Errorf("settings bootstrap get %s: %w", key, err)
