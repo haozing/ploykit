@@ -2,6 +2,7 @@ package webx
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -357,4 +358,66 @@ func TestCSRF_MaxAgePassthrough(t *testing.T) {
 
 	assert.Equal(t, 12*3600, fetch(0).MaxAge, "0 keeps the gorilla 12h default")
 	assert.Equal(t, 7*24*3600, fetch(7*24*3600).MaxAge, "explicit MaxAge passes through (align with session TTL)")
+}
+
+// The CSRF 403 body must carry a machine-readable marker
+// (details.csrf_rejected = true) so the API client can tell a CSRF rejection
+// apart from any other permission failure and self-heal: re-bootstrap a fresh
+// masked token from /config and retry once, instead of surfacing a dead-end
+// 403 to the user (expired ploykit_csrf cookie / bootstrap race both showed
+// up as "every write 403s until a full page reload").
+func TestCSRFRejectionDetailsMarker(t *testing.T) {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	h := CSRFConditional(&CSRFConfig{Key: key}, false)(http.HandlerFunc(csrfOk))
+
+	decodeDetails := func(t *testing.T, body string) map[string]any {
+		t.Helper()
+		var envelope struct {
+			Error   string         `json:"error"`
+			Message string         `json:"message"`
+			Details map[string]any `json:"details"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &envelope))
+		require.Equal(t, CodeForbidden, envelope.Error)
+		require.NotNil(t, envelope.Details, "403 body must carry a details map")
+		return envelope.Details
+	}
+
+	t.Run("missing token rejection carries csrf_rejected plus the gorilla reason", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{}`))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+
+		require.Equal(t, http.StatusForbidden, w.Code)
+		details := decodeDetails(t, w.Body.String())
+		assert.Equal(t, true, details["csrf_rejected"])
+		assert.Equal(t, "CSRF token not found in request", details["reason"])
+	})
+
+	t.Run("bad token rejection carries csrf_rejected plus the mismatch reason", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{}`))
+		r.Header.Set("X-CSRF-Token", "bogus-token")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+
+		require.Equal(t, http.StatusForbidden, w.Code)
+		details := decodeDetails(t, w.Body.String())
+		assert.Equal(t, true, details["csrf_rejected"])
+		assert.Equal(t, "CSRF token invalid", details["reason"])
+	})
+
+	t.Run("origin rejection carries csrf_rejected on the origin branch", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{}`))
+		r.Header.Set("Origin", "http://evil.example")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+
+		require.Equal(t, http.StatusForbidden, w.Code)
+		details := decodeDetails(t, w.Body.String())
+		assert.Equal(t, true, details["csrf_rejected"])
+		assert.Equal(t, "failed", details["origin_check"], "must be the origin branch of writeCSRFError")
+		assert.Equal(t, "http://evil.example", details["request_origin"])
+	})
 }

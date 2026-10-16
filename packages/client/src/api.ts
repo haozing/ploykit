@@ -165,56 +165,113 @@ function parseRetryAfter(res: Response): number | undefined {
 }
 
 
+// A CSRF rejection is either the framework's machine-readable marker
+// (details.csrf_rejected, set by webx writeCSRFError) or — backward compat
+// with servers older than the marker — a 403 whose message text names CSRF.
+function isCsrfRejection(status: number, body: { error?: unknown; message?: unknown; details?: unknown }): boolean {
+  const details = body.details
+  if (
+    details !== null &&
+    typeof details === 'object' &&
+    (details as { csrf_rejected?: unknown }).csrf_rejected === true
+  ) {
+    return true
+  }
+  return status === 403 && typeof body.message === 'string' && body.message.includes('CSRF')
+}
+
+
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const method = options.method?.toUpperCase() ?? 'GET'
   const isWrite = method !== 'GET' && method !== 'HEAD'
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   if (isWrite) await ensureCsrfToken(timeoutMs)
 
-  const headers = new Headers(options.headers)
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
-  if (options.body !== undefined && !isFormData && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json')
-  }
-  if (isWrite && csrfToken) headers.set('X-CSRF-Token', csrfToken)
-  const workspaceId = workspaceIdProvider()
-  if (workspaceId && path.startsWith('/api')) headers.set('X-Workspace-Id', workspaceId)
+  // Serialize the body once, before the send loop below: a retry must re-send
+  // the exact same payload, and JSON.stringify output is a plain string that
+  // is safely reusable (the raw FormData object is passed through untouched).
+  const requestBody =
+    options.body === undefined
+      ? undefined
+      : isFormData
+        ? (options.body as FormData)
+        : JSON.stringify(options.body)
 
-  
-  
-  
-  
-  const { response: res, readBody } = await fetchWithTimeout(
-    path,
-    {
-      ...options,
-      method,
-      credentials: 'same-origin',
-      headers,
-      body:
-        options.body === undefined
-          ? undefined
-          : isFormData
-            ? (options.body as FormData)
-            : JSON.stringify(options.body),
-    },
-    timeoutMs,
-  )
+  // At most two sends: a CSRF rejection on the first attempt self-heals by
+  // re-bootstrapping a fresh masked token (the cached one can go stale when
+  // the ploykit_csrf cookie expires or a bootstrap race cached the loser of
+  // two concurrent /config responses); anything else fails as before.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const headers = new Headers(options.headers)
+    if (options.body !== undefined && !isFormData && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json')
+    }
+    if (isWrite && csrfToken) headers.set('X-CSRF-Token', csrfToken)
+    const workspaceId = workspaceIdProvider()
+    if (workspaceId && path.startsWith('/api')) headers.set('X-Workspace-Id', workspaceId)
 
-  if (res.status === 204) return undefined as T
-  if (options.responseType === 'blob') {
+    const { response: res, readBody } = await fetchWithTimeout(
+      path,
+      {
+        ...options,
+        method,
+        credentials: 'same-origin',
+        headers,
+        body: requestBody,
+      },
+      timeoutMs,
+    )
+
+    if (res.status === 204) return undefined as T
+    if (options.responseType === 'blob') {
+      if (!res.ok) {
+        let body: { error?: unknown; message?: unknown; details?: unknown } = {}
+        try {
+          body = (await readBody(() => res.json())) as typeof body
+        } catch (err) {
+          
+          if (isApiError(err)) throw err
+        }
+        if (typeof body?.error === 'string') {
+          throw new ApiError(
+            res.status,
+            body.error,
+            typeof body.message === 'string' ? body.message : '请求失败，请稍后重试',
+            body.details,
+            parseRetryAfter(res),
+          )
+        }
+        throw new ApiError(res.status, 'E_MALFORMED_RESPONSE', `HTTP ${res.status} without error envelope`, undefined, parseRetryAfter(res))
+      }
+      return readBody(() => res.blob()) as T
+    }
+    let data: unknown
+    try {
+      data = await readBody(() => res.json())
+    } catch (err) {
+      if (isApiError(err, 'E_TIMEOUT')) throw err
+      if (res.ok) return undefined as T
+      throw new ApiError(res.status, 'E_MALFORMED_RESPONSE', `non-JSON response (${res.status})`, undefined, parseRetryAfter(res))
+    }
     if (!res.ok) {
-      let body: { error?: unknown; message?: unknown; details?: unknown } = {}
-      try {
-        body = (await readBody(() => res.json())) as typeof body
-      } catch (err) {
-        
-        if (isApiError(err)) throw err
+      
+      const body = data as { error?: unknown; message?: unknown; details?: unknown }
+      if (attempt === 0 && isCsrfRejection(res.status, body)) {
+        // Self-heal: drop the stale cached token, re-bootstrap from /config,
+        // and retry exactly once. A second rejection falls through to the
+        // normal error path (no loop). Timeout/abort failures never reach
+        // this branch — they throw before any response exists.
+        csrfToken = null
+        csrfBootstrap = null
+        await ensureCsrfToken(timeoutMs)
+        continue
       }
       if (typeof body?.error === 'string') {
         throw new ApiError(
           res.status,
           body.error,
+          
           typeof body.message === 'string' ? body.message : '请求失败，请稍后重试',
           body.details,
           parseRetryAfter(res),
@@ -222,33 +279,13 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       }
       throw new ApiError(res.status, 'E_MALFORMED_RESPONSE', `HTTP ${res.status} without error envelope`, undefined, parseRetryAfter(res))
     }
-    return readBody(() => res.blob()) as T
+    maybeRefreshCsrf(data)
+    return data as T
   }
-  let data: unknown
-  try {
-    data = await readBody(() => res.json())
-  } catch (err) {
-    if (isApiError(err, 'E_TIMEOUT')) throw err
-    if (res.ok) return undefined as T
-    throw new ApiError(res.status, 'E_MALFORMED_RESPONSE', `non-JSON response (${res.status})`, undefined, parseRetryAfter(res))
-  }
-  if (!res.ok) {
-    
-    const body = data as { error?: unknown; message?: unknown; details?: unknown }
-    if (typeof body?.error === 'string') {
-      throw new ApiError(
-        res.status,
-        body.error,
-        
-        typeof body.message === 'string' ? body.message : '请求失败，请稍后重试',
-        body.details,
-        parseRetryAfter(res),
-      )
-    }
-    throw new ApiError(res.status, 'E_MALFORMED_RESPONSE', `HTTP ${res.status} without error envelope`, undefined, parseRetryAfter(res))
-  }
-  maybeRefreshCsrf(data)
-  return data as T
+  // Unreachable: attempt 0 either returns, throws, or continues, and the
+  // attempt-1 iteration never continues (the retry branch requires
+  // attempt === 0). Present only so the compiler sees a definite exit.
+  throw new Error('unreachable')
 }
 
 export const api = {

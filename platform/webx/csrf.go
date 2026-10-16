@@ -132,10 +132,22 @@ func writeCSRFError(w http.ResponseWriter, r *http.Request, trusted []string) {
 				"request_referer": r.Referer(),
 				"trusted_origins": trusted,
 				"reason":          reason.Error(),
+
+				// Machine-readable marker: the API client keys on this to
+				// self-heal (re-bootstrap a fresh masked token from /config
+				// and retry once) instead of surfacing a dead-end 403.
+				"csrf_rejected": true,
 			})
 		return
 	}
-	WriteError(w, http.StatusForbidden, CodeForbidden, "CSRF token missing or invalid", nil)
+	WriteError(w, http.StatusForbidden, CodeForbidden, "CSRF token missing or invalid",
+		map[string]any{
+			// Same self-heal marker as the origin branch above; reason names
+			// the concrete gorilla failure (e.g. ErrNoCookie vs token
+			// mismatch) for diagnosis.
+			"csrf_rejected": true,
+			"reason":        reason.Error(),
+		})
 }
 
 func CSRFConditional(cfg *CSRFConfig, secure bool) func(http.Handler) http.Handler {

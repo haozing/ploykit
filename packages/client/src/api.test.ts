@@ -118,3 +118,79 @@ describe('FT-D3：apiFetch 超时', () => {
     expect(isApiError(err, 'E_ABORTED')).toBe(true)
   })
 })
+
+describe('CSRF 403 self-heal', () => {
+  function csrfReject(): Response {
+    return jsonResponse(
+      {
+        error: 'E_FORBIDDEN',
+        message: 'CSRF token missing or invalid',
+        details: { csrf_rejected: true, reason: 'CSRF token invalid' },
+      },
+      403,
+    )
+  }
+
+  it('标记型 CSRF 403 → 清缓存重拉 /config，恰好重试一次并成功', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-old' })) // initial bootstrap
+    fetchMock.mockImplementationOnce(async () => csrfReject()) // send #1 rejected
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-new' })) // self-heal re-bootstrap
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ ok: true })) // send #2 succeeds
+
+    const data = await apiFetch<{ ok: boolean }>('/api/x', { method: 'POST', body: { a: 1 } })
+    expect(data).toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(4) // bootstrap + send + re-bootstrap + send
+
+    const send1 = fetchMock.mock.calls[1][1] as RequestInit
+    const send2 = fetchMock.mock.calls[3][1] as RequestInit
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/x')
+    expect(fetchMock.mock.calls[3][0]).toBe('/api/x')
+    expect((send1.headers as Headers).get('X-CSRF-Token')).toBe('tok-old')
+    expect((send2.headers as Headers).get('X-CSRF-Token')).toBe('tok-new')
+    // the retry re-sends the exact same payload (body serialized once, before the send loop)
+    expect(send2.body).toBe(JSON.stringify({ a: 1 }))
+  })
+
+  it('旧服务器兼容：无标记但 message 含 CSRF 的 403 同样触发自愈重试', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-old' }))
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({ error: 'E_FORBIDDEN', message: 'CSRF token missing or invalid' }, 403),
+    )
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-new' }))
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ ok: true }))
+
+    const data = await apiFetch<{ ok: boolean }>('/api/x', { method: 'POST', body: { a: 1 } })
+    expect(data).toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    const send2 = fetchMock.mock.calls[3][1] as RequestInit
+    expect((send2.headers as Headers).get('X-CSRF-Token')).toBe('tok-new')
+  })
+
+  it('普通权限 403（无标记、无 CSRF 字样）→ 不重试，错误照旧抛出', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-1' }))
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse({ error: 'E_FORBIDDEN', message: 'insufficient permission' }, 403),
+    )
+
+    const err = await apiFetch('/api/x', { method: 'POST', body: { a: 1 } }).catch((e: unknown) => e)
+    expect(isApiError(err, 'E_FORBIDDEN')).toBe(true)
+    expect((err as ApiError).message).toBe('insufficient permission')
+    expect(fetchMock).toHaveBeenCalledTimes(2) // bootstrap + exactly one send, no second /config
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/x')
+  })
+
+  it('重试仍被拒 → 第二次错误抛给调用方（不循环）', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-old' }))
+    fetchMock.mockImplementationOnce(async () => csrfReject())
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ csrf_token: 'tok-new' }))
+    fetchMock.mockImplementationOnce(async () => csrfReject())
+
+    const err = await apiFetch('/api/x', { method: 'POST', body: { a: 1 } }).catch((e: unknown) => e)
+    expect(isApiError(err, 'E_FORBIDDEN')).toBe(true)
+    expect((err as ApiError).message).toContain('CSRF')
+    expect((err as ApiError).details).toMatchObject({ csrf_rejected: true })
+    expect(fetchMock).toHaveBeenCalledTimes(4) // no third send
+    const lastInit = fetchMock.mock.calls[3][1] as RequestInit
+    expect((lastInit.headers as Headers).get('X-CSRF-Token')).toBe('tok-new')
+  })
+})
