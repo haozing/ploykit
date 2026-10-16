@@ -54,6 +54,7 @@ import {
   WorkspacesPage,
   WorkspaceDetailPage,
   OrdersPage,
+  PlansPage,
   WebhookDeliveriesPage,
   AuditPage,
   SSOPage,
@@ -155,6 +156,7 @@ const PAGE_TITLES: Array<[RegExp, string]> = [
   [/^\/admin\/workspaces\/./, '工作区详情 · 管理控制台'],
   [/^\/admin\/workspaces/, '工作区 · 管理控制台'],
   [/^\/admin\/orders/, '订单 · 管理控制台'],
+  [/^\/admin\/plans/, '套餐 · 管理控制台'],
   [/^\/admin\/webhook-deliveries/, 'Webhooks · 管理控制台'],
   [/^\/admin\/audit/, '审计 · 管理控制台'],
   [/^\/admin\/sso/, 'SSO · 管理控制台'],
@@ -624,6 +626,15 @@ function AdminAudit() {
     </RequirePlatformAdmin>
   );
 }
+function AdminPlans() {
+  return (
+    <RequirePlatformAdmin>
+      <AdminShell productPath="/app" loginPath="/login">
+        <PlansPage />
+      </AdminShell>
+    </RequirePlatformAdmin>
+  );
+}
 function AdminSSO() {
   return (
     <RequirePlatformAdmin>
@@ -778,6 +789,7 @@ const routes = routeTable({
   '/admin/workspaces': { component: AdminWorkspaces },
   '/admin/workspaces/:id': { component: AdminWorkspaceDetail },
   '/admin/orders': { component: AdminOrders },
+  '/admin/plans': { component: AdminPlans },
   '/admin/webhook-deliveries': { component: AdminWebhookDeliveries },
   '/admin/audit': { component: AdminAudit },
   '/admin/sso': { component: AdminSSO },
