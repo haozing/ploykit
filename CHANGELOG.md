@@ -9,6 +9,45 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.8.2] — 2026-10-17
+
+orkome integration field-report batch (eight findings, all verified against
+source): three code fixes, five contract/doc surfaces. npm: only `@ploykit/ui`
+bumped (0.8.1 — button positioning fix); `client`/`runtime` stay 0.7.4 and
+`hooks` stays 0.8.0.
+
+### Fixed
+- **identity**: `POST /api/tokens` now validates the PAT scope before minting —
+  an empty non-nil `workspace_ids`/`permissions` list is rejected with 400 (the
+  scope semantics make it allow-nothing, so minting was a silent useless
+  token), entries must be workspace UUIDs, and the list is capped at 32.
+  Deliberately NOT the consumer-suggested `[]`→`nil` normalization: that would
+  silently widen deny-all to allow-all. (orkome #1)
+- **authz**: a denial where the principal role is empty (the mount never wired
+  its role middleware) is now diagnosable — the authorizer warns once per
+  process, and `Require`/`RequireOwn` answer 403 `E_ROLE_UNRESOLVED` with a
+  message pointing at the wiring instead of the indistinguishable
+  "insufficient permission". Role-carrying denials keep the original shape.
+  (orkome #2)
+- **ui**: the button base carries `relative` — absolute-positioned children
+  (badges/counters) anchor to the button instead of drifting to the nearest
+  positioned ancestor. (orkome #6)
+
+### Documented
+- **pgmigrate**: `Down` godoc states "N most recently applied, NOT
+  down-to-version" (goose-mental-model misuse is recurrent). (orkome #7)
+- **events**: package doc pins the handler contract — one handler per kind,
+  no cross-kind ordering guarantees; same-phase listener cascades are a
+  consumer-side bus pattern. (orkome #3, attribution corrected)
+- **api-conventions**: CSRF token lifetime vs page lifetime — cookie expiry
+  or key rotation 403s loaded pages; `@ploykit/client` ≥0.7.4 self-heals.
+  (orkome #4)
+- **migration contract**: framework adapters reference framework-table columns
+  (notify bell uses `notification.link`) — product migrations must not drop
+  framework-table columns. In AGENTS.md and the bell adapter doc. (orkome #5)
+- **ROADMAP**: the API-surface unification entry records orkome's hit-list
+  offer and adds PUT/PATCH mixing to the collection. (orkome #8)
+
 ## [0.8.1] — 2026-10-17
 
 Go-only batch from the shuijing blog-migration field report (five findings,
