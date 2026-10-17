@@ -22,6 +22,15 @@ const DefaultIndexNowEndpoint = "https://api.indexnow.org/indexnow"
 type SitemapOptions struct {
 	Filter func(route RouteSpec, location string, params Params) bool
 
+	// Lastmod optionally reports the last-modified time for one sitemap URL.
+	// location is the root-relative path ("/blog/hello"); params carries the
+	// expanded route params (nil for parameterless routes). It runs per URL
+	// during sitemap generation and may do I/O (that is its purpose), hence
+	// the ctx — return ok=false to omit <lastmod> for that URL (unknown slug,
+	// lookup failure: the entry degrades to loc-only, never a 500). Emitted
+	// as a W3C date (YYYY-MM-DD, UTC-normalized) per sitemaps.org.
+	Lastmod func(ctx context.Context, route RouteSpec, location string, params Params) (time.Time, bool)
+
 	Registry *Registry
 }
 
@@ -44,7 +53,7 @@ func SitemapHandler(routes []RouteSpec, baseURL string, opts SitemapOptions) htt
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		locs, err := sitemapLocations(r.Context(), routes, baseURL, opts, reg)
+		locs, err := sitemapEntries(r.Context(), routes, baseURL, opts, reg)
 		if err != nil {
 			http.Error(w, "sitemap 生成失败", http.StatusInternalServerError)
 			return
@@ -52,10 +61,18 @@ func SitemapHandler(routes []RouteSpec, baseURL string, opts SitemapOptions) htt
 		var buf bytes.Buffer
 		buf.WriteString(xml.Header)
 		buf.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-		for _, loc := range locs {
+		for _, e := range locs {
 			buf.WriteString("  <url><loc>")
-			xml.EscapeText(&buf, []byte(loc))
-			buf.WriteString("</loc></url>\n")
+			xml.EscapeText(&buf, []byte(e.loc))
+			buf.WriteString("</loc>")
+			if !e.lastmod.IsZero() {
+				// W3C date（YYYY-MM-DD，sitemaps.org 认可的最短 lastmod 形态；
+				// UTC 归一后取日期，时区信息不进文件）。
+				buf.WriteString("<lastmod>")
+				buf.WriteString(e.lastmod.UTC().Format("2006-01-02"))
+				buf.WriteString("</lastmod>")
+			}
+			buf.WriteString("</url>\n")
 		}
 		buf.WriteString("</urlset>\n")
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
@@ -64,16 +81,32 @@ func SitemapHandler(routes []RouteSpec, baseURL string, opts SitemapOptions) htt
 	})
 }
 
-func sitemapLocations(ctx context.Context, routes []RouteSpec, baseURL string, opts SitemapOptions, reg *Registry) ([]string, error) {
+// sitemapEntry 是 sitemap 的一条输出：loc 必有，lastmod 零值表示不带。
+type sitemapEntry struct {
+	loc     string
+	lastmod time.Time
+}
+
+func sitemapEntries(ctx context.Context, routes []RouteSpec, baseURL string, opts SitemapOptions, reg *Registry) ([]sitemapEntry, error) {
 	base := strings.TrimSuffix(baseURL, "/")
-	var locs []string
+	var entries []sitemapEntry
+	add := func(rt RouteSpec, loc string, params Params) {
+		e := sitemapEntry{loc: base + loc}
+		if opts.Lastmod != nil {
+			if t, ok := opts.Lastmod(ctx, rt, loc, params); ok {
+				// 零值时间视为"回调误报"，同样按无 lastmod 处理。
+				e.lastmod = t
+			}
+		}
+		entries = append(entries, e)
+	}
 	for _, rt := range routes {
 		if rt.Render != ModeStatic {
 			continue
 		}
 		if !hasParams(rt.Path) {
 			if opts.Filter == nil || opts.Filter(rt, rt.Path, nil) {
-				locs = append(locs, base+rt.Path)
+				add(rt, rt.Path, nil)
 			}
 			continue
 		}
@@ -93,11 +126,11 @@ func sitemapLocations(ctx context.Context, routes []RouteSpec, baseURL string, o
 			if opts.Filter != nil && !opts.Filter(rt, loc, pp.Params) {
 				continue
 			}
-			locs = append(locs, base+loc)
+			add(rt, loc, pp.Params)
 		}
 	}
-	sort.Strings(locs)
-	return locs, nil
+	sort.Slice(entries, func(i, j int) bool { return entries[i].loc < entries[j].loc })
+	return entries, nil
 }
 
 // RobotsOptions configures RobotsHandler.

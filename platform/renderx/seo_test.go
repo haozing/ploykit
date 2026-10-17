@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func seoTestRoutes() []RouteSpec {
@@ -62,6 +63,59 @@ func TestSitemapGolden(t *testing.T) {
 			t.Errorf("405 tier = %q, want %q", tier, TierSitemap)
 		}
 		resp.Body.Close()
+	}
+}
+
+func TestSitemapLastmod(t *testing.T) {
+	updated := time.Date(2026, 10, 17, 9, 30, 0, 0, time.FixedZone("CST", 8*3600))
+	reg := NewRegistry()
+	reg.RegisterPaths("/blog/:slug", func(ctx context.Context) ([]PagePath, error) {
+		return []PagePath{{Params: Params{"slug": "hello"}}, {Params: Params{"slug": "ghost"}}}, nil
+	})
+	h := SitemapHandler(seoTestRoutes(), "https://example.com", SitemapOptions{
+		Registry: reg,
+		Lastmod: func(_ context.Context, _ RouteSpec, location string, params Params) (time.Time, bool) {
+			// /blog/:slug 按 params 查时间；未知的 ghost 报 false（该条退化为
+			// 纯 loc）；其余路由不给（ok=false）。
+			if location == "/blog/hello" {
+				return updated, true
+			}
+			if location == "/blog/ghost" {
+				return time.Time{}, false
+			}
+			return time.Time{}, false
+		},
+	})
+	got := body(t, get(t, h, "/sitemap.xml"))
+	want := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/</loc></url>
+  <url><loc>https://example.com/blog/ghost</loc></url>
+  <url><loc>https://example.com/blog/hello</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>https://example.com/pricing</loc></url>
+</urlset>
+`
+	if got != want {
+		t.Errorf("sitemap lastmod golden 不符：\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+
+	// 零值时间即回调误报：同样按无 lastmod 处理（不输出 <lastmod>0001-01-01）。
+	reg2 := NewRegistry()
+	reg2.RegisterPaths("/blog/:slug", func(ctx context.Context) ([]PagePath, error) {
+		return []PagePath{{Params: Params{"slug": "hello"}}}, nil
+	})
+	h2 := SitemapHandler(seoTestRoutes(), "https://example.com", SitemapOptions{
+		Registry: reg2,
+		Lastmod: func(_ context.Context, _ RouteSpec, location string, _ Params) (time.Time, bool) {
+			if location == "/" {
+				return time.Time{}, true
+			}
+			return time.Time{}, false
+		},
+	})
+	got2 := body(t, get(t, h2, "/sitemap.xml"))
+	if strings.Contains(got2, "lastmod") || !strings.Contains(got2, "<loc>https://example.com/</loc>") {
+		t.Errorf("零值 lastmod 应按缺省处理: %s", got2)
 	}
 }
 
