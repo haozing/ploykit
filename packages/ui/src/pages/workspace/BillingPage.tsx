@@ -313,7 +313,7 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
                   {isCurrent && <Badge>当前计划</Badge>}
                 </div>
                 <p className="mt-3 text-3xl font-bold tabular-nums">
-                  {fmtCents(price)}
+                  {fmtCents(price, plan.currency)}
                   {price > 0 && (
                     <span className="text-sm font-normal text-muted-foreground">
                       {` / ${INTERVAL_UNIT[interval]}`}

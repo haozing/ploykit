@@ -256,6 +256,14 @@ describe('BillingPage UP-8：one_time 套餐过滤（D4 price-key capability，�
     expect(screen.getByText('暂无可订阅套餐')).toBeInTheDocument()
     expect(screen.queryByText('积分包 100')).not.toBeInTheDocument()
   })
+
+  it('套餐卡价格按 plan.currency 渲染（USD → "USD 49.99"，此前漏传币种固定显示 ¥）', () => {
+    renderPage('/billing', [
+      { code: 'pro', name: 'Pro USD', currency: 'USD', limits: { tasks_monthly: 10000, price_monthly_cents: 4999, price_yearly_cents: 9900 }, sort_no: 1 },
+    ])
+    expect(screen.getByText('Pro USD')).toBeInTheDocument()
+    expect(screen.getByText('USD 49.99')).toBeInTheDocument()
+  })
 })
 
 describe('BillingPage B1/G4：manual 渠道接线（渠道表动态生成）', () => {
