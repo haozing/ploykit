@@ -41,6 +41,16 @@ type cacheEntry struct {
 
 type Option func(*Authorizer)
 
+// warnUnwiredRoleOnce scopes the empty-role diagnostic to one line per
+// process: the condition is a wiring bug, not a per-request event.
+var warnUnwiredRoleOnce sync.Once
+
+func warnUnwiredRole() {
+	warnUnwiredRoleOnce.Do(func() {
+		slog.Warn("authz: denial with an empty principal role - the mount's role middleware (RoleOf / member-path population) is probably not wired; session and token principals should always carry a role")
+	})
+}
+
 func WithProvider(p Provider) Option { return func(a *Authorizer) { a.provider = p } }
 
 func WithCacheTTL(d time.Duration) Option { return func(a *Authorizer) { a.cacheTTL = d } }
@@ -91,6 +101,15 @@ func (a *Authorizer) CanIn(ctx context.Context, p *webx.Principal, perm Permissi
 	if p.Project != nil {
 		key.ProjectID = p.Project.ID
 		key.Role = p.Project.Role
+	}
+	if key.Role == "" {
+		// An empty role denies below anyway — but at the HTTP surface it is
+		// indistinguishable from a real denial, and its usual cause is a mount
+		// that never wired its role middleware (RoleOf / member-path
+		// population), not a permission problem (orkome field report: a whole
+		// A/B environment bisect spent on exactly this). Say so, once.
+		warnUnwiredRole()
+		return false
 	}
 
 	if a.provider != nil {
