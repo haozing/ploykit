@@ -399,3 +399,54 @@ func TestGetOrLoadHitLoadError(t *testing.T) {
 		t.Fatal("失败的 load 不应写缓存")
 	}
 }
+
+// The on-disk layout must keep file keys and nested-directory namespaces
+// disjoint: /blog (file "blog") and /blog/:slug (files under directory
+// "blog/") used to be mutually exclusive — whichever was written first broke
+// the other (Put failed → memory-only listing) and Delete("/blog") died with
+// "directory not empty" (field report: every /blog invalidation WARNed).
+func TestCacheDiskLayoutSplitsFileAndDirNamespaces(t *testing.T) {
+	c, _ := newDiskCache(t, "b1")
+	ctx := context.Background()
+	ent := func() CacheEntry { return CacheEntry{HTML: []byte("x"), BuiltAt: time.Now()} }
+
+	// Articles claim "blog" as a directory first — the on-disk order that used
+	// to break the listing page's Put and Delete.
+	if err := c.Put(ctx, "/blog/a", ent()); err != nil {
+		t.Fatalf("article put: %v", err)
+	}
+	if err := c.Put(ctx, "/blog", ent()); err != nil {
+		t.Fatalf("listing put must succeed beside nested entries: %v", err)
+	}
+	if _, ok := c.Get(ctx, "/blog"); !ok {
+		t.Fatal("listing should hit from disk")
+	}
+	if _, ok := c.Get(ctx, "/blog/a"); !ok {
+		t.Fatal("article should hit from disk")
+	}
+
+	// The pre-fix failure: deleting the file key hit the non-empty directory.
+	if err := c.Delete(ctx, "/blog"); err != nil {
+		t.Fatalf("delete /blog: %v", err)
+	}
+	if _, ok := c.Get(ctx, "/blog"); ok {
+		t.Fatal("listing should be gone")
+	}
+	if _, ok := c.Get(ctx, "/blog/a"); !ok {
+		t.Fatal("single-key delete must not nuke the subtree")
+	}
+
+	// Reverse write order too (file entry before any nested key).
+	if err := c.Put(ctx, "/docs", ent()); err != nil {
+		t.Fatalf("file-first put: %v", err)
+	}
+	if err := c.Put(ctx, "/docs/x", ent()); err != nil {
+		t.Fatalf("nested put beside a file entry: %v", err)
+	}
+
+	// Keys() reports logical keys only — no raw disk names leak out.
+	got := strings.Join(c.Keys(), ",")
+	if strings.Contains(got, ".entry") || strings.Contains(got, "marker") || strings.Contains(got, "meta.json") {
+		t.Fatalf("raw disk names leaked into Keys(): %s", got)
+	}
+}

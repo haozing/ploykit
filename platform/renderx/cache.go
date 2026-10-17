@@ -70,6 +70,26 @@ func NewLayeredCache(cfg CacheConfig) (*LayeredCache, error) {
 
 const buildMarker = "_build.marker"
 
+// diskEntrySuffix marks cache-entry files on disk. Logical keys and directory
+// namespaces collide in a flat filesystem: key "blog" (for /blog) and keys
+// "blog/x" (for /blog/:slug, stored under directory "blog/") cannot coexist —
+// whichever shape claims the name first silently breaks the other (Put fails
+// → memory-only entry) and turns its Delete into "directory not empty"
+// (field report: every /blog invalidation WARNed while articles were cached).
+// Valid path segments never contain a dot, so a dotted suffix keeps entry
+// files and segment-derived directories in disjoint namespaces. Unsuffixed
+// files (pre-fix layout) are invisible to reads and listings and get wiped by
+// the next PurgeForeign (boot with a new buildID).
+const diskEntrySuffix = ".entry"
+
+func diskKey(key string) string { return key + diskEntrySuffix }
+
+// cacheKey maps a canonical path to its cache key: the path with the leading
+// slash dropped ("/" → "index.html"). The query string is deliberately NOT
+// part of the key — /blog?page=2 serves /blog's entry. Static pages are
+// path-driven by design (route matching ignores the query too): pagination
+// and filters must be path segments (/blog/page/:n), never query params.
+// Segments are whitelisted to [a-zA-Z0-9-_] so the key is filesystem-safe.
 func cacheKey(path string) (string, error) {
 	if path == "/" {
 		return "index.html", nil
@@ -98,14 +118,14 @@ func (c *LayeredCache) Get(ctx context.Context, path string) (CacheEntry, bool) 
 	if c.disk == nil {
 		return CacheEntry{}, false
 	}
-	rc, _, err := c.disk.Open(ctx, key)
+	rc, _, err := c.disk.Open(ctx, diskKey(key))
 	if err != nil {
 		return CacheEntry{}, false
 	}
 	defer rc.Close()
 	var ent CacheEntry
 	if err := json.NewDecoder(rc).Decode(&ent); err != nil {
-		_ = c.disk.Delete(ctx, key)
+		_ = c.disk.Delete(ctx, diskKey(key))
 		return CacheEntry{}, false
 	}
 	if ent.BuildID != c.buildID || c.expired(ent) {
@@ -137,7 +157,7 @@ func (c *LayeredCache) Put(ctx context.Context, path string, ent CacheEntry) err
 	if err != nil {
 		return err
 	}
-	_, err = c.disk.Put(ctx, key, "application/json", bytes.NewReader(body))
+	_, err = c.disk.Put(ctx, diskKey(key), "application/json", bytes.NewReader(body))
 	return err
 }
 
@@ -202,7 +222,7 @@ func (c *LayeredCache) Delete(ctx context.Context, paths ...string) error {
 		}
 		c.mem.delete(key)
 		if c.disk != nil {
-			if err := c.disk.Delete(ctx, key); err != nil {
+			if err := c.disk.Delete(ctx, diskKey(key)); err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", p, err))
 			}
 		}
@@ -221,7 +241,7 @@ func (c *LayeredCache) GetStale(ctx context.Context, path string) (CacheEntry, b
 	if c.disk == nil {
 		return CacheEntry{}, false
 	}
-	rc, _, err := c.disk.Open(ctx, key)
+	rc, _, err := c.disk.Open(ctx, diskKey(key))
 	if err != nil {
 		return CacheEntry{}, false
 	}
@@ -258,7 +278,7 @@ func (c *LayeredCache) EvictMatching(ctx context.Context, match func(key string)
 		}
 		c.mem.delete(k)
 		if c.disk != nil {
-			if err := c.disk.Delete(ctx, k); err != nil {
+			if err := c.disk.Delete(ctx, diskKey(k)); err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", k, err))
 				continue
 			}
@@ -293,10 +313,10 @@ func (c *LayeredCache) diskKeys() ([]string, error) {
 			return nil
 		}
 		key := filepath.ToSlash(rel)
-		if strings.HasPrefix(key, "_") || strings.HasSuffix(key, ".meta.json") {
-			return nil
+		if !strings.HasSuffix(key, diskEntrySuffix) {
+			return nil // marker, sidecar, or a pre-suffix-layout entry — not a readable cache entry
 		}
-		keys = append(keys, key)
+		keys = append(keys, strings.TrimSuffix(key, diskEntrySuffix))
 		return nil
 	})
 	if err != nil {

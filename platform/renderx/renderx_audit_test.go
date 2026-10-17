@@ -199,7 +199,7 @@ func TestEvictMatchingDiskDeleteFailure(t *testing.T) {
 	require.NoError(t, c.Put(ctx, "/a", CacheEntry{HTML: []byte("a")}))
 	require.NoError(t, c.Put(ctx, "/b", CacheEntry{HTML: []byte("b")}))
 
-	blob := filepath.Join(root, "a")
+	blob := filepath.Join(root, "a"+diskEntrySuffix)
 	require.NoError(t, os.Remove(blob))
 	require.NoError(t, os.MkdirAll(filepath.Join(blob, "child"), 0o755))
 
