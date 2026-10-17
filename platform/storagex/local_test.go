@@ -3,7 +3,10 @@ package storagex
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"mime/multipart"
+	"path/filepath"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -129,4 +132,38 @@ func TestParseUpload(t *testing.T) {
 		_, err := ParseUpload(newReq("other", "a.png", []byte("x")), 1<<20)
 		assert.Error(t, err)
 	})
+}
+
+// Objects written outside Put (migrations, rsync) have no .meta.json sidecar;
+// Open used to turn them into a silent ErrNotExist — "file present but served
+// 404, zero logs" (field report: 12 blog images). Missing sidecar now falls
+// back to stat + content sniffing; a corrupt sidecar stays a hard error.
+func TestLocalBackend_OpenWithoutSidecar(t *testing.T) {
+	root := t.TempDir()
+	l, err := NewLocal(root)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	png := append([]byte{0x89}, []byte("PNG\r\n\x1a\n rest of pretend image bytes")...)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "works"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "works", "a.png"), png, 0o644))
+
+	rc, obj, err := l.Open(ctx, "works/a.png")
+	require.NoError(t, err)
+	defer rc.Close()
+	assert.Equal(t, "image/png", obj.ContentType)
+	assert.Equal(t, int64(len(png)), obj.Size)
+	body, err := io.ReadAll(rc)
+	require.NoError(t, err)
+	assert.Equal(t, png, body) // the sniff seek must not consume the body
+
+	// The file itself missing is still a clean ErrNotExist.
+	_, _, err = l.Open(ctx, "works/ghost.png")
+	assert.ErrorIs(t, err, os.ErrNotExist)
+
+	// A corrupt sidecar is metadata damage: hard error, not silent sniffing.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "works", "a.png.meta.json"), []byte("{broken"), 0o644))
+	_, _, err = l.Open(ctx, "works/a.png")
+	assert.Error(t, err)
+	assert.False(t, errors.Is(err, os.ErrNotExist))
 }

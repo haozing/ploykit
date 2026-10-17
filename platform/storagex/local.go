@@ -1,6 +1,7 @@
 package storagex
 
 import (
+	"net/http"
 	"net/url"
 	"sort"
 
@@ -10,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,23 +172,52 @@ func (l *LocalBackend) Open(_ context.Context, key string) (io.ReadCloser, Objec
 	if err != nil {
 		return nil, Object{}, err
 	}
-	mp := p + ".meta.json"
-	mb, err := os.ReadFile(mp)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, Object{}, os.ErrNotExist
-		}
-		return nil, Object{}, err
-	}
-	var m meta
-	if err := json.Unmarshal(mb, &m); err != nil {
-		return nil, Object{}, err
-	}
 	f, err := os.Open(p)
 	if err != nil {
 		return nil, Object{}, err
 	}
-	return f, Object{Key: key, ContentType: m.ContentType, Size: m.Size, SHA256: m.SHA256}, nil
+	obj, err := l.objectFor(key, p, f)
+	if err != nil {
+		f.Close()
+		return nil, Object{}, err
+	}
+	return f, obj, nil
+}
+
+// objectFor loads an object's Put-time metadata sidecar. Files written outside
+// Put (migration tools, rsync, manual copies) have no sidecar; failing those
+// closed made "file present but served 404, zero logs" a multi-hour incident
+// (field report: 12 blog images). A missing sidecar falls back to stat +
+// content sniffing and says so; a CORRUPT sidecar stays a hard error — that is
+// real metadata damage, not an absence.
+func (l *LocalBackend) objectFor(key, p string, f *os.File) (Object, error) {
+	mb, err := os.ReadFile(p+".meta.json")
+	if errors.Is(err, os.ErrNotExist) {
+		return sniffObject(key, f)
+	}
+	if err != nil {
+		return Object{}, err
+	}
+	var m meta
+	if err := json.Unmarshal(mb, &m); err != nil {
+		return Object{}, err
+	}
+	return Object{Key: key, ContentType: m.ContentType, Size: m.Size, SHA256: m.SHA256}, nil
+}
+
+func sniffObject(key string, f *os.File) (Object, error) {
+	st, err := f.Stat()
+	if err != nil {
+		return Object{}, err
+	}
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	ct := http.DetectContentType(head[:n])
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return Object{}, err
+	}
+	slog.Warn("storagex: meta sidecar missing, serving with sniffed content type (object was written outside Put)", "key", key, "content_type", ct)
+	return Object{Key: key, ContentType: ct, Size: st.Size()}, nil
 }
 
 func (l *LocalBackend) Delete(_ context.Context, key string) error {
