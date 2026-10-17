@@ -192,6 +192,12 @@ func (m *Migrator) Up(ctx context.Context, limit int) ([]string, error) {
 	return appliedList, nil
 }
 
+// Down rolls back the N most recently applied migrations (limit > 0), or the
+// entire applied history for a negative limit. It is NOT a goose-style
+// "down-to-version": pass a COUNT, never a target version (orkome field
+// report — a round-trip test written with the goose mental model was wrong
+// from birth). limit == 0 is rejected: the old silent reading of 0 was
+// "roll back everything", which is a real-accident generator.
 func (m *Migrator) Down(ctx context.Context, limit int) ([]string, error) {
 	if limit == 0 {
 		return nil, fmt.Errorf("pgm: Down limit=0 拒绝执行(旧语义静默等于全量回滚):传显式正数回滚最近 N 个;确认要全量回滚传负数(limit<0),会先记 Error 日志")

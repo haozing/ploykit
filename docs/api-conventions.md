@@ -70,6 +70,16 @@ request carries none). Decision rule for `ExemptPrefixes`: does the write bind
 to the submitter's identity? Not bound (public counter) → exempt the prefix,
 CSRF adds nothing. Bound → keep CSRF, no exceptions.
 
+**Token lifetime vs page lifetime** (orkome field report): the token cached
+inside an already-loaded SPA page dies when the `ploykit_csrf` cookie expires
+(`MaxAge`, 12h default) or when a restart rotates the signing key — every
+write then 403s until the page reloads on older clients. `@ploykit/client`
+≥0.7.4 self-heals: the 403 carries a machine-readable `details.csrf_rejected`
+marker, the client clears its cached token, re-pulls `/config`, and retries
+the request once — no user action, and no server-side grace window needed.
+Keep the signing secret stable across restarts to avoid the rotation
+entirely.
+
 ## The two registration paths
 
 | Path | Flow | Use when |

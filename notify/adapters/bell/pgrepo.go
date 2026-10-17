@@ -1,3 +1,14 @@
+// Package pgrepo is the bell's SQL adapter over the notification table.
+//
+// Column contract: the adapter reads and writes the columns defined by
+// framework migration 009 — user_id, workspace_id, type, title, body, link
+// (legacy but referenced by every INSERT/SELECT here), dedup_key,
+// once_per_month, read_at, created_at. Framework-table columns are
+// framework-contract surface: product migrations must deprecate unused
+// columns in product code but must NOT drop them — this SQL (and future
+// framework migrations) references them (orkome field report #5: a product
+// that retired link in its own code could not drop the column). Evolving the
+// contract itself is a framework-side change.
 package pgrepo
 
 import (
