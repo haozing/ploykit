@@ -9,6 +9,44 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+Go-only batch from the shuijing blog-migration field report (five findings,
+all verified against source): two disk-layout bugs, one adopted feature, two
+documented dark constraints.
+
+### Added
+- **renderx**: `SitemapOptions.Lastmod` — an optional per-URL callback
+  (`func(ctx, route, location, params) (time.Time, bool)`) emitting W3C-date
+  `<lastmod>` entries; ok=false or a zero time degrades that URL to loc-only
+  and legacy wiring is byte-compatible (implemented in the field, adopted
+  upstream verbatim).
+
+### Fixed
+- **renderx**: the runtime disk cache's file keys and nested-directory
+  namespaces collided in the flat filesystem — `/blog` (file `blog`) and
+  `/blog/:slug` (files under directory `blog/`) could not coexist: whichever
+  was written first silently broke the other's `Put` (memory-only entry) and
+  made its `Delete` fail with "directory not empty" (every `/blog`
+  invalidation WARNed while articles were cached). Entry files now carry a
+  `.entry` suffix — valid path segments never contain a dot, so the two
+  namespaces are disjoint; pre-suffix files are invisible to reads/listings
+  and wiped by the next `PurgeForeign` (boot with a new buildID).
+- **storagex**: `Local.Open` treated a missing `.meta.json` sidecar as
+  "object does not exist" — files written outside `Put` (migration tools,
+  rsync) were served 404 with zero logs (field report: 12 blog images lost
+  to a silent 404). A missing sidecar now falls back to stat + content
+  sniffing (with a WARN naming the key); a corrupt sidecar stays a hard
+  error.
+
+### Documented
+- **rendering.md**: two dark constraints written down — query strings are not
+  part of the cache key (pagination/filters must be path segments; a
+  query-driven variant of a static page silently renders as its unparameterized
+  twin), and `Intl`/locale-dependent formatting must not run inside
+  SSR-rendered components (the wasm sandbox's Intl data and UTC clock differ
+  from the browser's full ICU + user timezone — hydration text drift).
+
 ## [0.8.0] — 2026-10-16
 
 Commercialization upstream batch from the shuijing master plan — settings keys

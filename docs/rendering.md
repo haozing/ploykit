@@ -141,6 +141,15 @@ rows; CSR pages run in the browser and are unconstrained):
   effect (`@ploykit/hooks` now ships `useAuthState()`, a provider-free
   variant for exactly this).
 
+- **No `Intl`/locale-dependent formatting in SSR-rendered components**
+  (`Intl.DateTimeFormat`, `toLocaleDateString`, `toLocaleString`…). The wasm
+  engine's Intl data and clock differ from the browser's: the sandbox has no
+  timezone database (WASI clocks are UTC) and a compact locale dataset, while
+  the browser has full ICU plus the user's timezone — the same expression can
+  render a different day on the client, and hydration then drifts off the SSR
+  HTML. Format dates/numbers in the Go Loader (props carry the final strings)
+  or with a fixed-format helper of your own.
+
 - **Component-tree DEPTH is bounded by the logical stack budget, not an
   opaque wall.** The engine's QuickJS guard trips on deep recursion and
   raises a catchable `Maximum call stack size exceeded` — the instance stays
@@ -408,6 +417,8 @@ renderx.RegisterDep(pagePattern, dependsOnPattern)   // invalidation-graph edge:
 > **Single-language boundary**: cache keys are `path × buildID` — there is no language dimension. `Lang` only writes the `<html lang>` attribute; two languages of the same path cannot coexist as rendered artifacts. Multi-language sites are out of scope today (a per-language cache key is on the ROADMAP; until then a product either pins one language per deployment or differentiates paths, e.g. `/en/...` vs `/ja/...`).
 
 **Layered cache (cache.go)**: `memory LRU (default 1024 pages) → disk (storagex Local)`. Key = normalized URL path; value = full HTML + propsSha256 + builtAt + **buildId**. The example wires the disk layer at `RENDERX_CACHE_DIR` (default `renderx-cache`) via `storagex.NewLocal`. A Redis shared tier is **not implemented** (memory+disk only); redisx is a real package now, so multi-instance deployments can add one without a framework prerequisite.
+
+> **The query string is NOT part of the cache key** — `/blog?page=2` serves `/blog`'s entry. Route matching ignores the query too, so a query can never reach the page component. Pagination and filters must be path segments (`/blog/page/:n`); a query-driven variant of a static page silently renders as its unparameterized twin (field report: the constraint is invisible until a pager sticks on page one). On-disk entry files carry a `.entry` suffix so a file key (`blog`) and the directory of its nested keys (`blog/…`) never collide in the flat filesystem; pre-suffix files are invisible and wiped by the next `PurgeForeign`.
 
 **buildId versioning (deployment correctness)**: runtime-cached HTML references hashed assets (`/assets/index-*.js`); after the binary is replaced the old assets no longer exist — all existing cache entries become dead links. Therefore: buildId = the hash of the client asset manifest (`ViteBuildID`), injected at build time; entries whose buildId differs from the current one count as misses, and at startup the example calls `PurgeForeign` to clear a foreign-generation disk directory wholesale. **Cache entries never survive across deployments.**
 **Renderer output versioning**: buildId watches more than vite assets — `renderx.OutputVersion` (a framework-owned constant mixed into every `ViteBuildID` hash) invalidates cached HTML when a renderx release changes rendered-output-affecting behavior (shell template, prelude, directive handling, SEO injection), even if the frontend manifest is byte-identical. The constant is bumped in the same change that alters renderer output; `TestViteBuildID` pins the hash preimage so the mixing cannot be silently dropped.
