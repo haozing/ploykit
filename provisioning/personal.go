@@ -38,14 +38,20 @@ type Credit struct {
 }
 
 // PersonalConfig wires the dependencies PersonalWorkspace needs. Workspaces
-// is the workspace domain's app.Repo port (pass the pgrepo adapter); Quota
-// is the quota service whose pool-backed Grant stays available to the rest
-// of the product.
+// is the workspace domain's app.Repo port (pass the pgrepo adapter). Quota
+// is required IFF Credits is non-empty — products running their own credit
+// ledger leave Credits (and Quota) empty and provision the workspace +
+// membership only. Adoption with pre-existing users: migration 048 marks
+// every legacy workspace 'team', so ensure would provision a NEW personal
+// workspace for existing users — classify legacy personal workspaces via a
+// product migration (UPDATE … SET kind='personal' WHERE <product
+// predicate>) BEFORE wiring the factory, or accept the second workspace
+// deliberately (see ADR 0016, "Adoption with existing users").
 type PersonalConfig struct {
 	Pool       *pgxpool.Pool
 	Workspaces workspaceapp.Repo
-	Quota      *quota.Service
-	Credits    []Credit // onboarding grants; optional
+	Quota      *quota.Service // required iff Credits is non-empty
+	Credits    []Credit       // onboarding grants; optional
 	Log        *slog.Logger
 }
 
@@ -81,8 +87,14 @@ func PersonalWorkspace(cfg PersonalConfig) identity.IdentityHooks {
 // workspace + owner membership + credits, and treats the unique-index
 // violations as "already provisioned".
 func (c PersonalConfig) ensure(ctx context.Context, userID string) error {
-	if c.Pool == nil || c.Workspaces == nil || c.Quota == nil {
-		return errors.New("provisioning: PersonalConfig misconfigured: Pool, Workspaces and Quota are required")
+	if c.Pool == nil {
+		return errors.New("provisioning: PersonalConfig misconfigured: Pool is required")
+	}
+	if len(c.Credits) > 0 && c.Quota == nil {
+		return errors.New("provisioning: PersonalConfig misconfigured: Quota is required when Credits is non-empty (or drop Credits to run your own credit ledger)")
+	}
+	if c.Workspaces == nil {
+		return errors.New("provisioning: PersonalConfig misconfigured: Workspaces is required")
 	}
 	log := c.logger()
 

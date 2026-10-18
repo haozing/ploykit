@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // The workspace slug CHECK is '^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$'
@@ -52,5 +54,30 @@ func TestPersonalWorkspaceHookShape(t *testing.T) {
 		t.Fatal("ensure with nil Pool must fail loudly")
 	} else if !strings.Contains(err.Error(), "misconfigured") {
 		t.Fatalf("nil-deps ensure error should name the misconfiguration, got: %v", err)
+	}
+}
+
+// Quota is required IFF Credits is non-empty: products running their own
+// credit ledger provision with Credits/Quota empty, and that configuration
+// must not be rejected as misconfigured (field report #26 from the product
+// that keeps its own ledger).
+func TestPersonalEnsureQuotaOptionalWithoutCredits(t *testing.T) {
+	// Credits non-empty + nil Quota → misconfigured, named at the guard.
+	hooks := PersonalWorkspace(PersonalConfig{
+		Pool:    &pgxpool.Pool{},
+		Credits: []Credit{{Key: "welcome", Amount: 5}},
+	})
+	err := hooks.AfterRegister(context.Background(), "u")
+	if err == nil || !strings.Contains(err.Error(), "Quota is required when Credits is non-empty") {
+		t.Fatalf("credits-without-quota must name the misconfiguration, got: %v", err)
+	}
+
+	// A non-nil (unconnected) pool with Credits/Quota empty passes the
+	// misconfiguration guard — the failure mode for an unconnected pool is a
+	// query error, not a config error; assert the guard specifically.
+	hooks2 := PersonalWorkspace(PersonalConfig{Pool: &pgxpool.Pool{}, Workspaces: nil})
+	err2 := hooks2.AfterRegister(context.Background(), "u")
+	if err2 == nil || !strings.Contains(err2.Error(), "Workspaces is required") {
+		t.Fatalf("nil Workspaces must still be named, got: %v", err2)
 	}
 }

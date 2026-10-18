@@ -27,6 +27,26 @@ Every B2C product needs the same ~20 lines after registration: create the user's
 - The factory provisions **one personal workspace**; teams/invitations stay explicit product flows.
 - No email, no onboarding page, no API surface — hooks only. Products own their UX.
 - Framework migrations (001–999) gain only the `workspace.kind` column + index; RLS policy choices remain product-side.
+- Quota is required only when onboarding credits are configured — products running their own credit ledger leave `Credits`/`Quota` empty and provision the workspace + membership only.
+
+## Adoption with existing users
+
+Migration 048 marks every pre-existing workspace `'team'`. A product that
+already hand-provisioned personal workspaces and now adopts the factory must
+classify those legacy rows **before** wiring the hooks — otherwise `ensure`
+finds no `kind='personal'` workspace for existing users and provisions a
+second (empty) one on their next login, with credits landing in the empty
+bucket. The classification is a product migration (which legacy workspaces
+are "personal" is a product decision the framework cannot guess):
+
+```sql
+UPDATE workspace SET kind = 'personal' WHERE <product predicate>;
+```
+
+Alternatively a product may deliberately accept the second workspace (fresh
+personal space, legacy data stays in the old workspace) — that is a product
+decision, but it must be a decision, not a surprise. Products without
+pre-existing users are unaffected.
 
 ## Consequences
 

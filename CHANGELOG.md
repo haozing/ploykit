@@ -9,6 +9,26 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+Field-verified follow-ups to the v0.9.0 provisioning capability (the product
+that motivated ADR 0016 reviewed the release against its own incident).
+
+### Fixed
+- **provisioning**: `PersonalConfig.Quota` is required only when `Credits`
+  is non-empty — products running their own credit ledger now provision with
+  `Credits`/`Quota` empty instead of being rejected as misconfigured.
+
+### Documented
+- **provisioning / migration 048 / ADR 0016**: the adoption path for
+  products with pre-existing users is now explicit — 048 marks every legacy
+  workspace `'team'`, so wiring the factory without first classifying legacy
+  personal workspaces (product migration: `UPDATE workspace SET
+  kind='personal' WHERE <product predicate>`) provisions a second workspace
+  for existing users. Stated in the migration comment, the
+  `PersonalConfig` docs, and a new "Adoption with existing users" ADR
+  section. (Both found in the product-side review of v0.9.0.)
+
 ## [0.9.0] — 2026-10-18
 
 The tenant-isolation and registration-provisioning batch (field evidence:
