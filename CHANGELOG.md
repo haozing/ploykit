@@ -9,7 +9,7 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.9.0] — 2026-10-18
 
 The tenant-isolation and registration-provisioning batch (field evidence:
 shuijing production incidents — a nil-tx panic in a copied registration hook
