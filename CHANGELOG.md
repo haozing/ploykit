@@ -9,6 +9,63 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+The tenant-isolation and registration-provisioning batch (field evidence:
+shuijing production incidents — a nil-tx panic in a copied registration hook
+that left a half-provisioned account, and two RLS-outages caused by FORCE-RLS
+tables queried through the bare pool). Three workstreams; the identity hooks
+split is breaking.
+
+### Breaking
+- **identity**: `IdentityHooks.AfterRegister` split by lifecycle (ADR 0016).
+  `OnRegisterTx(ctx, tx, userID)` fires inside the user-creation transaction
+  (password register, admin create; error rolls the registration back — bind
+  roles here). `AfterRegister(ctx, userID)` has NO tx parameter by design,
+  fires after commit on every registration path, must be idempotent, and its
+  failure no longer vanishes into a WARN: it logs at ERROR and surfaces as
+  `LoginResult.ProvisioningPending`. `LoginResult` gains `registered` /
+  `provisioning_pending` (wire) and `ProvisioningError` (in-process). The
+  nil-tx trap that killed production is structurally gone — the no-tx hook
+  has no tx parameter. Re-point your hook to the name matching its
+  transactional needs.
+
+### Added
+- **provisioning** (new top-level composition package, ADR 0016):
+  `PersonalWorkspace(cfg) identity.IdentityHooks` — one personal workspace
+  per user (workspace gains a `kind` column with a partial unique index, so
+  idempotency is a database invariant), owner membership, and optional
+  onboarding credits (`quota.GrantTx`, the idempotent grant on a
+  caller-provided transaction). The factory wires AfterRegister AND
+  AfterLogin: every login re-ensures, so JIT half-provisioning and crashes
+  converge on the next login. Migration 048. Example wired.
+- **pg**: `TenantExec` / `TenantScan` — single-statement helpers that run
+  inside a transaction carrying the tenant GUCs and commit immediately.
+  Multi-statement units stay in `WithTenant`; session-level GUCs on pooled
+  connections remain forbidden (the BEGIN/COMMIT cost is the price of
+  correct tenant scoping).
+- **devx**: `RLSCheck` — boot-time RLS guardrail, probe-based: fails when
+  the app role bypasses RLS (superuser/BYPASSRLS — "works on the old
+  machine" made explicit), enumerates FORCE-RLS tables, and probes each
+  without tenant context; visible rows = a live policy that is dead weight.
+  Register it next to the other doctor checks. Example wired.
+- **architecture.md**: new "Tenant isolation (RLS)" section — the normative
+  contract: FORCE-RLS tables make the tenant channel mandatory for every
+  application query; framework migrations never ship RLS; the owner/superuser
+  bypass is not a supported runtime mode.
+- **example**: the task domain's production queries now run on the tenant
+  channel (the RLS test had demonstrated correct usage for months while the
+  production paths bypassed it — the reference implementation walks its talk
+  now).
+
+### Fixed
+- **client**: the CSRF self-heal is now single-flight — N concurrent 403s
+  share one re-bootstrap instead of N serial /config refetches — and a
+  retried request that is rejected again triggers a one-shot
+  `location.reload()` fallback guarded by a 10-second sessionStorage window
+  (a full reload is the only guaranteed recovery; the guard prevents reload
+  loops). (shuijing #24)
+
 ## [0.8.2] — 2026-10-17
 
 orkome integration field-report batch (eight findings, all verified against
