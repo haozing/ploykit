@@ -9,10 +9,13 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.9.1] — 2026-10-18
 
 Field-verified follow-ups to the v0.9.0 provisioning capability (the product
-that motivated ADR 0016 reviewed the release against its own incident).
+that motivated ADR 0016 reviewed the release against its own incident), plus
+the testing-strategy doctrine and three production-fidelity lanes distilled
+from the full escape history (docs/testing-strategy.md). Go-only release (no
+`@ploykit/*` package changes).
 
 ### Fixed
 - **provisioning**: `PersonalConfig.Quota` is required only when `Credits`
