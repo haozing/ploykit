@@ -144,26 +144,50 @@ func validateTitle(raw string) (string, bool) {
 	return t, n >= 1 && n <= 200
 }
 
+// identityFor converts the principal's string ids into the tenant-channel
+// identity. task/workspace ids are uuids end to end; a parse failure means the
+// request never went through workspace middleware and every task query would
+// match nothing anyway — callers turn it into the same 500/404 they would have
+// gotten from a malformed uuid hitting a uuid column.
+func identityFor(ws, user string) (pg.Identity, error) {
+	wsID, err := uuid.Parse(ws)
+	if err != nil {
+		return pg.Identity{}, err
+	}
+	userID, err := uuid.Parse(user)
+	if err != nil {
+		return pg.Identity{}, err
+	}
+	return pg.Identity{WorkspaceID: wsID, UserID: userID}, nil
+}
+
 func (d Deps) taskOwner(r *http.Request, p *webx.Principal) bool {
 	taskID := r.PathValue("taskId")
 	if taskID == "" || d.Pool == nil {
 		return false
 	}
+	id, err := identityFor(p.WorkspaceID, p.UserID)
+	if err != nil {
+		return false
+	}
 	var owner string
-	err := d.Pool.QueryRow(
+	err = pg.TenantScan(
 		r.Context(),
+		d.Pool, id,
 		`SELECT created_by FROM task WHERE id = $1 AND workspace_id = $2 AND removed_at IS NULL`,
-		taskID, p.WorkspaceID,
-	).Scan(&owner)
+		[]any{taskID, p.WorkspaceID},
+		&owner,
+	)
 	return err == nil && owner == p.UserID
 }
 
-func (d Deps) findByIdemKey(ctx context.Context, workspaceID, key string) (Task, bool, error) {
+func (d Deps) findByIdemKey(ctx context.Context, id pg.Identity, key string) (Task, bool, error) {
 	var t Task
-	err := d.Pool.QueryRow(ctx, `
+	err := pg.TenantScan(ctx, d.Pool, id, `
 		SELECT id, number, title, done, created_at, updated_at
 		FROM task WHERE workspace_id = $1 AND idempotency_key = $2 AND removed_at IS NULL`,
-		workspaceID, key).Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		[]any{id.WorkspaceID, key},
+		&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Task{}, false, nil
 	}
@@ -174,46 +198,42 @@ func (d Deps) findByIdemKey(ctx context.Context, workspaceID, key string) (Task,
 }
 
 func (d Deps) insertTask(ctx context.Context, workspaceID, title, userID, idemKey string, t *Task) error {
-	tx, err := d.Pool.Begin(ctx)
+	id, err := identityFor(workspaceID, userID)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx,
-		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "task_number:"+workspaceID); err != nil {
-		return err
-	}
-	err = tx.QueryRow(ctx, `
-		INSERT INTO task (workspace_id, number, title, created_by, idempotency_key)
-		VALUES ($1, (SELECT COALESCE(max(number),0)+1 FROM task WHERE workspace_id=$1), $2, $3, NULLIF($4,''))
-		RETURNING id, number, title, done, created_at, updated_at`,
-		workspaceID, title, userID, idemKey).
-		Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
-		return err
-	}
+	return pg.WithTenant(ctx, d.Pool, id, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "task_number:"+workspaceID); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO task (workspace_id, number, title, created_by, idempotency_key)
+			VALUES ($1, (SELECT COALESCE(max(number),0)+1 FROM task WHERE workspace_id=$1), $2, $3, NULLIF($4,''))
+			RETURNING id, number, title, done, created_at, updated_at`,
+			workspaceID, title, userID, idemKey).
+			Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return err
+		}
 
-	if d.Emitter != nil {
-		wsUUID, uerr := uuid.Parse(workspaceID)
-		if uerr != nil {
-			return uerr
+		if d.Emitter != nil {
+			payload, merr := json.Marshal(map[string]any{
+				"workspace_id": workspaceID, "actor_id": userID, "task": t,
+			})
+			if merr != nil {
+				return merr
+			}
+			if eerr := d.Emitter.Emit(ctx, tx, events.Event{
+				Kind:           KindTaskCreated,
+				WorkspaceID:    id.WorkspaceID,
+				Payload:        payload,
+				IDempotencyKey: "task:" + t.ID,
+			}); eerr != nil {
+				return eerr
+			}
 		}
-		payload, merr := json.Marshal(map[string]any{
-			"workspace_id": workspaceID, "actor_id": userID, "task": t,
-		})
-		if merr != nil {
-			return merr
-		}
-		if eerr := d.Emitter.Emit(ctx, tx, events.Event{
-			Kind:           KindTaskCreated,
-			WorkspaceID:    wsUUID,
-			Payload:        payload,
-			IDempotencyKey: "task:" + t.ID,
-		}); eerr != nil {
-			return eerr
-		}
-	}
-	return tx.Commit(ctx)
+		return nil
+	})
 }
 
 func (d Deps) create(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
@@ -230,8 +250,14 @@ func (d Deps) create(w http.ResponseWriter, r *http.Request, p *webx.Principal) 
 	}
 	idemKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 
+	id, ierr := identityFor(p.WorkspaceID, p.UserID)
+	if ierr != nil {
+		webx.ErrInternal(w)
+		return
+	}
+
 	if idemKey != "" {
-		if t, found, err := d.findByIdemKey(r.Context(), p.WorkspaceID, idemKey); err != nil {
+		if t, found, err := d.findByIdemKey(r.Context(), id, idemKey); err != nil {
 			webx.ErrInternal(w)
 			return
 		} else if found {
@@ -262,7 +288,7 @@ func (d Deps) create(w http.ResponseWriter, r *http.Request, p *webx.Principal) 
 			if pg.IsUniqueViolation(err, idemIndexName) && idemKey != "" {
 
 				release()
-				if ex, found, qerr := d.findByIdemKey(r.Context(), p.WorkspaceID, idemKey); qerr == nil && found {
+				if ex, found, qerr := d.findByIdemKey(r.Context(), id, idemKey); qerr == nil && found {
 					webx.WriteJSON(w, http.StatusOK, ex)
 					return
 				}
@@ -293,34 +319,50 @@ func (d Deps) create(w http.ResponseWriter, r *http.Request, p *webx.Principal) 
 }
 
 func (d Deps) list(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
-	rows, err := d.Pool.Query(r.Context(), `
-		SELECT id, number, title, done, created_at, updated_at
-		FROM task WHERE workspace_id = $1 AND removed_at IS NULL
-		ORDER BY number DESC LIMIT 100`, p.WorkspaceID)
+	id, err := identityFor(p.WorkspaceID, p.UserID)
 	if err != nil {
 		webx.ErrInternal(w)
 		return
 	}
-	defer rows.Close()
 	out := []Task{}
-	for rows.Next() {
-		var t Task
-		if err := rows.Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			webx.ErrInternal(w)
-			return
+	err = pg.WithTenant(r.Context(), d.Pool, id, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT id, number, title, done, created_at, updated_at
+			FROM task WHERE workspace_id = $1 AND removed_at IS NULL
+			ORDER BY number DESC LIMIT 100`, p.WorkspaceID)
+		if err != nil {
+			return err
 		}
-		out = append(out, t)
+		defer rows.Close()
+		for rows.Next() {
+			var t Task
+			if err := rows.Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt); err != nil {
+				return err
+			}
+			out = append(out, t)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		webx.ErrInternal(w)
+		return
 	}
 	webx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (d Deps) done(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
 
+	id, err := identityFor(p.WorkspaceID, p.UserID)
+	if err != nil {
+		webx.ErrInternal(w)
+		return
+	}
 	var t Task
-	err := d.Pool.QueryRow(r.Context(), `
+	err = pg.TenantScan(r.Context(), d.Pool, id, `
 		UPDATE task SET done=true, updated_at=now() WHERE workspace_id=$1 AND id=$2 AND removed_at IS NULL
 		RETURNING id, number, title, done, created_at, updated_at`,
-		p.WorkspaceID, r.PathValue("taskId")).Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		[]any{p.WorkspaceID, r.PathValue("taskId")},
+		&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		webx.ErrNotFound(w, "task not found")
 		return
@@ -339,11 +381,17 @@ func (d Deps) done(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
 }
 
 func (d Deps) get(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	id, err := identityFor(p.WorkspaceID, p.UserID)
+	if err != nil {
+		webx.ErrInternal(w)
+		return
+	}
 	var t Task
-	err := d.Pool.QueryRow(r.Context(), `
+	err = pg.TenantScan(r.Context(), d.Pool, id, `
 		SELECT id, number, title, done, created_at, updated_at
 		FROM task WHERE workspace_id = $1 AND id = $2 AND removed_at IS NULL`,
-		p.WorkspaceID, r.PathValue("taskId")).Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		[]any{p.WorkspaceID, r.PathValue("taskId")},
+		&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		webx.ErrNotFound(w, "task not found")
 		return
@@ -379,16 +427,21 @@ func (d Deps) update(w http.ResponseWriter, r *http.Request, p *webx.Principal) 
 	if req.Done != nil {
 		doneArg = *req.Done
 	}
+	id, err := identityFor(p.WorkspaceID, p.UserID)
+	if err != nil {
+		webx.ErrInternal(w)
+		return
+	}
 	var t Task
-	err := d.Pool.QueryRow(r.Context(), `
+	err = pg.TenantScan(r.Context(), d.Pool, id, `
 		UPDATE task SET
 			title = COALESCE($3, title),
 			done = COALESCE($4, done),
 			updated_at = now()
 		WHERE workspace_id = $1 AND id = $2 AND removed_at IS NULL
 		RETURNING id, number, title, done, created_at, updated_at`,
-		p.WorkspaceID, r.PathValue("taskId"), titleArg, doneArg).
-		Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		[]any{p.WorkspaceID, r.PathValue("taskId"), titleArg, doneArg},
+		&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		webx.ErrNotFound(w, "task not found")
 		return
@@ -410,12 +463,18 @@ func (d Deps) update(w http.ResponseWriter, r *http.Request, p *webx.Principal) 
 }
 
 func (d Deps) delete(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	id, err := identityFor(p.WorkspaceID, p.UserID)
+	if err != nil {
+		webx.ErrInternal(w)
+		return
+	}
 	var t Task
-	err := d.Pool.QueryRow(r.Context(), `
+	err = pg.TenantScan(r.Context(), d.Pool, id, `
 		UPDATE task SET removed_at = now()
 		WHERE workspace_id = $1 AND id = $2 AND removed_at IS NULL
 		RETURNING id, number, title, done, created_at, updated_at`,
-		p.WorkspaceID, r.PathValue("taskId")).Scan(&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		[]any{p.WorkspaceID, r.PathValue("taskId")},
+		&t.ID, &t.Number, &t.Title, &t.Done, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		webx.ErrNotFound(w, "task not found")
 		return
