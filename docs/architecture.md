@@ -344,6 +344,24 @@ Side effect and its record share success or failure under **the same idempotency
 
 The only sanctioned cross-domain edges live in `internal/arch/allowlist.txt` (admin→audit read-only queries, ADR 0002; admin/adapters/bridge → app layers of five domains, ADR 0004). The allowlist is freshness-checked: an entry whose edge no longer exists fails the test, so exemptions cannot accumulate silently. Dependency direction stays one-way throughout: products import the framework; the framework never imports products.
 
+### 4.6 Tenant isolation (RLS)
+
+**The tenant channel is the only sanctioned query path for RLS-protected tables.** The framework provides three entry points, all built on the same primitive (a transaction carrying tenant GUCs):
+
+| Helper | Shape | Use for |
+|---|---|---|
+| `pg.WithTenant(ctx, db, identity, fn)` | one transaction, many statements | multi-statement units of work |
+| `pg.TenantExec(ctx, db, identity, sql, args...)` | one statement, immediate commit | single writes |
+| `pg.TenantScan(ctx, db, identity, sql, args, dest...)` | one query, single row | single reads |
+
+Normative rules:
+
+1. **GUCs are transaction-scoped by design.** The channel sets `app.workspace_id` / `app.user_id` with `set_config(..., is_local => true)`, so they live and die with the transaction. Setting session-level GUCs on a pooled connection is **forbidden** — the next borrower of that connection inherits the previous tenant's row visibility (cross-tenant leak). Each `TenantExec`/`TenantScan` call costs one BEGIN/COMMIT round trip; that is the price of correct scoping — do not optimize it away.
+2. **Framework migrations (001–999) never ship RLS.** Policies are a product decision on product tables; the framework supplies the channel and the guardrail, not the policy set.
+3. **A table with `ENABLE` + `FORCE ROW LEVEL SECURITY` makes the tenant channel mandatory for EVERY application query against it.** Bare-pool queries silently return zero rows (policies fail closed on the unset GUC) — or, on an owner/superuser connection, silently bypass RLS altogether. The second shape is the dangerous one: it works for years, then a fresh machine deploys with a non-bypass role and every unscoped query dies with 42501 in production. "Works on the old machine" is not a supported mode. (`pg.WithService` is the administrative escape hatch for cross-tenant sweeps, not an RLS bypass: a NOSUPERUSER NOBYPASSRLS role still sees zero rows through it.)
+4. **`devx.RLSCheck(conn)` is the boot-time guardrail.** Register it in the doctor with the same connection the application queries through. It fails on a SUPERUSER/BYPASSRLS connection role (every policy dead code), and probes each FORCE-RLS table with an unscoped read: rows coming back name the table whose policy does not reference the tenant GUC or is permissive. It proves the tables deny anonymous reads to this role — it cannot prove the policies are tenant-correct; policy correctness stays with the product's tests.
+5. **Working demonstration**: `example/internal/task/rls_test.go` — a `NOSUPERUSER NOBYPASSRLS` role on a second pool, tenant-scoped reads/writes, and the cross-tenant write dying with 42501. Copy its shape when adding RLS to product tables.
+
 ---
 
 ## 5. Open-Source Components (see the standalone selection document)

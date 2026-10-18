@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -113,4 +114,117 @@ func HealthProbesCheck(readyChecks int) Check {
 			return Result{Pass: true, Detail: fmt.Sprintf("%d probes registered", readyChecks)}
 		},
 	}
+}
+
+// rlsMaxProbes caps how many FORCE-RLS tables the probe reads; a database with
+// more than this many protected tables still fails correctly on the first
+// visible one, the cap only bounds probe latency at boot.
+const rlsMaxProbes = 10
+
+// RLSCheck is the boot-time guardrail tying "RLS-enabled tables" to "the query
+// path sets the tenant GUCs". It probes behavior, not policy text: it checks
+// the connection's role first (SUPERUSER or BYPASSRLS makes every policy dead
+// code — the shape behind "worked for years on the old machine", then 42501
+// the day a fresh machine deployed a non-bypass role), then reads each
+// ENABLE+FORCE RLS table without tenant context. A GUC-based policy fails that
+// read (fail-closed); rows coming back mean the policy does not reference the
+// session variable or is permissive, and the RLS layer is dead weight on this
+// role.
+//
+// Honest limits: passing proves the tables deny anonymous reads to THIS role,
+// not that the policies are tenant-correct (a policy keyed to the wrong GUC,
+// or a permissive OR-ed branch, can still pass); an errored probe is counted
+// as protected because the row stayed invisible, without distinguishing RLS
+// rejection from any other error. conn is a plain *sql.DB — devx does not
+// depend on pgx here, so any driver works. Pass the same connection the
+// application queries through; a check against the admin role proves nothing.
+func RLSCheck(conn *sql.DB) Check {
+	return Check{
+		Name:    "rls_guardrail",
+		Summary: "RLS-enabled tables actually reject reads without tenant context on this connection's role",
+		Run: func(ctx context.Context) Result {
+			// Step 1: the role must not bypass RLS, or every policy below is
+			// unreachable and the probe would be theater.
+			var role string
+			var roleSuper, roleBypass bool
+			err := conn.QueryRowContext(ctx,
+				`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`).Scan(&role, &roleSuper, &roleBypass)
+			if err != nil {
+				return Result{Pass: false, Detail: "cannot inspect the connection role: " + err.Error(), FixHint: "check the database connection; the check needs SELECT on pg_roles"}
+			}
+			if roleSuper || roleBypass {
+				return Result{
+					Pass:    false,
+					Detail:  fmt.Sprintf("connection role %q is superuser or BYPASSRLS: the app connection role bypasses RLS entirely; every RLS policy is dead code and tenant isolation rests on SQL WHERE alone", role),
+					FixHint: "connect the app as a NOSUPERUSER NOBYPASSRLS role and route queries through pg.WithTenant",
+				}
+			}
+
+			// Step 2: find the tables that demand tenant context (FORCE RLS).
+			rows, err := conn.QueryContext(ctx, `SELECT n.nspname, c.relname
+				FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+				WHERE c.relrowsecurity AND c.relforcerowsecurity
+				  AND c.relkind = 'r'
+				  AND n.nspname NOT IN ('pg_catalog','information_schema')`)
+			if err != nil {
+				return Result{Pass: false, Detail: "cannot enumerate FORCE RLS tables: " + err.Error(), FixHint: "the check needs SELECT on pg_class/pg_namespace"}
+			}
+			type table struct{ schema, name string }
+			var tables []table
+			for rows.Next() {
+				var t table
+				if err := rows.Scan(&t.schema, &t.name); err != nil {
+					rows.Close()
+					return Result{Pass: false, Detail: "cannot read FORCE RLS table list: " + err.Error()}
+				}
+				tables = append(tables, t)
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				return Result{Pass: false, Detail: "cannot read FORCE RLS table list: " + err.Error()}
+			}
+			if len(tables) == 0 {
+				return Result{Pass: true, Detail: "no FORCE RLS tables (RLS guardrail not applicable)"}
+			}
+
+			// Step 3: probe each table as-is, with no tenant GUCs set. An
+			// error (typically 42501) is the good outcome: the row stayed
+			// invisible. Rows coming back is the incident shape.
+			var visible, probed []string
+			for _, t := range tables[:min(len(tables), rlsMaxProbes)] {
+				probed = append(probed, t.schema+"."+t.name)
+				var exists bool
+				probe := fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM %s.%s)`, quoteIdent(t.schema), quoteIdent(t.name))
+				switch err := conn.QueryRowContext(ctx, probe).Scan(&exists); {
+				case err != nil:
+					// Properly protected: the query dies without tenant context.
+				case exists:
+					visible = append(visible, t.schema+"."+t.name)
+				}
+				// exists == false: fail-closed policy, protected.
+			}
+			if len(visible) > 0 {
+				return Result{
+					Pass:   false,
+					Detail: fmt.Sprintf("FORCE-RLS table(s) %v return rows to a non-bypass role with no tenant context: the policy does not reference the tenant session variables or is permissive; the RLS layer is dead weight and a live 42501 mine on role changes", visible),
+					FixHint: "write each policy against current_setting('app.workspace_id', true) / 'app.user_id' and query these tables only through pg.WithTenant / pg.TenantExec / pg.TenantScan",
+				}
+			}
+			return Result{Pass: true, Detail: fmt.Sprintf("%d/%d FORCE-RLS table(s) probed, all deny reads without tenant context: %v", len(probed), len(tables), probed)}
+		},
+	}
+}
+
+// quoteIdent defends the probe's %-spliced identifier: table and schema names
+// come from the catalog itself, but the probe rejects anything outside plain
+// identifier characters rather than trusting that. Returns the double-quoted
+// form either way (validated names need no escaping; anything else gets the
+// standard quote-doubling).
+func quoteIdent(s string) string {
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_') {
+			return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+		}
+	}
+	return `"` + s + `"`
 }
