@@ -157,19 +157,31 @@ func (s *Service) Release(ctx context.Context, workspaceID, key string, n int64,
 	return err
 }
 
-func (s *Service) Grant(ctx context.Context, workspaceID, key, reason, refID string, amount int, now time.Time) (bool, error) {
+// grantSQL is the idempotent credit insert shared by Grant and GrantTx.
+// Idempotency key is the uq_quota_grant_dedup unique index on
+// (workspace_id, counter_key, reason, ref_id); ON CONFLICT DO NOTHING keeps
+// replays silent.
+const grantSQL = `
+	INSERT INTO quota_grant (workspace_id, period, counter_key, amount, reason, ref_id)
+	VALUES ($1, $2, $3, $4, $5, $6)
+	ON CONFLICT DO NOTHING`
+
+func grantOnce(ctx context.Context, db execer, workspaceID, key, reason, refID string, amount int, now time.Time) (bool, error) {
 	if strings.TrimSpace(refID) == "" {
 		return false, webx.NewValidation("refID required: Grant is idempotent on (workspace,key,reason,ref)")
 	}
-	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO quota_grant (workspace_id, period, counter_key, amount, reason, ref_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT DO NOTHING`,
-		workspaceID, Period(now), key, amount, reason, refID)
+	tag, err := db.Exec(ctx, grantSQL, workspaceID, Period(now), key, amount, reason, refID)
 	if err != nil {
 		return false, err
 	}
-	unlocked := tag.RowsAffected() > 0
+	return tag.RowsAffected() > 0, nil
+}
+
+func (s *Service) Grant(ctx context.Context, workspaceID, key, reason, refID string, amount int, now time.Time) (bool, error) {
+	unlocked, err := grantOnce(ctx, s.pool, workspaceID, key, reason, refID, amount, now)
+	if err != nil {
+		return false, err
+	}
 
 	if unlocked && s.hooks.OnGrant != nil {
 		if err := s.hooks.OnGrant(ctx, workspaceID, key, reason, refID, amount); err != nil {
@@ -177,4 +189,16 @@ func (s *Service) Grant(ctx context.Context, workspaceID, key, reason, refID str
 		}
 	}
 	return unlocked, nil
+}
+
+// GrantTx runs the same idempotent insert as Grant on the CALLER's
+// transaction (ADR 0016: provisioning grants credits inside the same
+// transaction that inserts the personal workspace). It deliberately does NOT
+// fire the OnGrant hook — hook timing inside a foreign transaction is not
+// definable: the caller may still roll the grant back, and a hook side-fired
+// here would have observed a grant that never committed. Callers that need
+// the hook side-effect must fire it themselves after their transaction
+// commits.
+func (s *Service) GrantTx(ctx context.Context, tx pgx.Tx, workspaceID, key, reason, refID string, amount int, now time.Time) (bool, error) {
+	return grantOnce(ctx, tx, workspaceID, key, reason, refID, amount, now)
 }

@@ -55,6 +55,14 @@ type Repo interface {
 
 	CreateWorkspaceWithOwnerTx(ctx context.Context, tx pgx.Tx, slug, name, ownerUserID string, now time.Time) (Workspace, error)
 
+	// CreatePersonalWorkspaceTx inserts the ADR 0016 personal workspace —
+	// kind='personal', name 'Personal', the plan's default (free) — plus the
+	// owner membership, on the caller's transaction. The partial unique index
+	// uq_workspace_personal(created_by) makes a second insert for the same
+	// owner fail with ErrDuplicate: provisioning callers treat that as
+	// "already provisioned".
+	CreatePersonalWorkspaceTx(ctx context.Context, tx pgx.Tx, slug, ownerUserID string, now time.Time) (Workspace, error)
+
 	AcceptInvitationTx(ctx context.Context, tx pgx.Tx, invitationID, userID, email string, now time.Time) (Workspace, error)
 	RedeemShareLinkTx(ctx context.Context, tx pgx.Tx, codeHash, userID string, now time.Time) (Workspace, error)
 

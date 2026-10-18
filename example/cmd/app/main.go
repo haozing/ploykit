@@ -42,7 +42,6 @@ import (
 	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
 	stripe "github.com/haozing/ploykit/billing/adapters/stripe"
 	billingapp "github.com/haozing/ploykit/billing/app"
-	"github.com/haozing/ploykit/identity"
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
 	oauthgh "github.com/haozing/ploykit/identity/adapters/oauth/github"
 	oauthgoogle "github.com/haozing/ploykit/identity/adapters/oauth/googleoidc"
@@ -73,6 +72,7 @@ import (
 	"github.com/haozing/ploykit/platform/webx"
 	"github.com/haozing/ploykit/platform/workers"
 	"github.com/haozing/ploykit/platform/wsx"
+	"github.com/haozing/ploykit/provisioning"
 
 	billingworkers "github.com/haozing/ploykit/billing/adapters/workers"
 	"github.com/haozing/ploykit/platform/ids"
@@ -404,13 +404,21 @@ func main() {
 	fedSvc := identityapp.NewFedService(idRepo, wsRepo.FindWorkspaceIDBySlug, oidcfed.NewResolver(), now, fedOpts...).
 		WithSecureCookie(authCfg.Secure)
 
-	sessions.WithHooks(identity.IdentityHooks{
-
-		AfterRegister: func(_ context.Context, _ pgx.Tx, userID string) error {
-			log.Info("welcome", "uid", userID)
-			return nil
-		},
-	})
+	// ADR 0016: personal-workspace provisioning as one wiring line, replacing
+	// the old hand-written AfterRegister literal (which only logged a welcome
+	// line — PersonalWorkspace's "personal workspace provisioned" info log
+	// subsumes it). The factory wires AfterRegister (ensure once) and
+	// AfterLogin (re-ensure every login: JIT half-provisioning, crashes
+	// mid-provision and lost races converge); OnRegisterTx stays nil because
+	// a workspace insert must never roll a registration back. Idempotency is
+	// the uq_workspace_personal partial unique index, not code discipline.
+	sessions.WithHooks(provisioning.PersonalWorkspace(provisioning.PersonalConfig{
+		Pool:       pool,
+		Workspaces: wsRepo,
+		Quota:      quotaSvc,
+		Credits:    []provisioning.Credit{{Key: "tasks_monthly", Amount: 5}},
+		Log:        log,
+	}))
 
 	workspaces.WithHooks(workspace.WorkspaceHooks{
 		OnTeardown: func(_ context.Context, _ pgx.Tx, workspaceID string) error {
@@ -528,6 +536,7 @@ func main() {
 
 	doctor := devx.NewDoctor()
 	doctor.Register(devx.RiverSchemaCheck(stdlibDB(pool)))
+	doctor.Register(devx.RLSCheck(stdlibDB(pool)))
 	doctor.Register(devx.SealKeyCheck(sealx.EnvKey))
 	doctor.Register(devx.CookieSecureCheck(authCfg.Secure, production))
 	const eventsSoftStop = 30 * time.Second // platform/events SoftStopTimeout
@@ -801,8 +810,8 @@ func main() {
 	// closure — reverse clause, framework grows the capability and the
 	// hand-written copy goes away.
 	settingshttp.MountAdmin(mux, settingshttp.AdminDeps{
-		Store: siteSettings,
-		Guard: adminhttp.PlatformAdminGuard(),
+		Store:      siteSettings,
+		Guard:      adminhttp.PlatformAdminGuard(),
 		Mailer:     mailer,
 		MailModeFn: func() string { return mailMode },
 		OAuthInfo: func() []settingshttp.OAuthProviderInfo {

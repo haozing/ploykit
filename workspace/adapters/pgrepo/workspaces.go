@@ -43,6 +43,28 @@ func (r *Repo) CreateWorkspaceWithOwnerTx(ctx context.Context, tx pgx.Tx, slug, 
 	return ws, nil
 }
 
+// CreatePersonalWorkspaceTx is the ADR 0016 personal-workspace insert: name
+// and kind are fixed ('Personal' / 'personal'), plan_code takes the column
+// default ('free'). Mirrors CreateWorkspaceWithOwnerTx — workspace row plus
+// the owner membership row in the same transaction — so a 23505 on either
+// insert (uq_workspace_personal, workspace_slug_key, uq_member_active) rolls
+// the whole thing back and surfaces as app.ErrDuplicate.
+func (r *Repo) CreatePersonalWorkspaceTx(ctx context.Context, tx pgx.Tx, slug, ownerUserID string, now time.Time) (app.Workspace, error) {
+	ws, err := scanWorkspace(tx.QueryRow(ctx, `
+		INSERT INTO workspace (slug, name, kind, created_by, created_at, updated_at)
+		VALUES ($1, 'Personal', 'personal', $2, $3, $3)
+		RETURNING `+wsCols, slug, ownerUserID, now))
+	if err != nil {
+		return app.Workspace{}, mapErr(err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO member (workspace_id, user_id, role, created_by, created_at)
+		VALUES ($1, $2, 'owner', $2, $3)`, ws.ID, ownerUserID, now); err != nil {
+		return app.Workspace{}, mapErr(err)
+	}
+	return ws, nil
+}
+
 func (r *Repo) ListWorkspacesByUser(ctx context.Context, userID string) ([]app.WorkspaceMembership, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT w.id, w.slug, w.name, w.plan_code, w.created_at, m.role
