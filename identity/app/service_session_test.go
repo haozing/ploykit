@@ -27,6 +27,35 @@ func (f *fakeRepo) RunInTx(ctx context.Context, fn func(ctx context.Context, tx 
 	return nil
 }
 
+// fakeTx is a non-nil pgx.Tx stand-in: it is handed to the RunInTx callback
+// so tests can prove the transactional hook actually received a tx handle.
+// No method is ever called on it in fake land.
+type fakeTx struct{ pgx.Tx }
+
+// orderedRepo wraps fakeRepo and records the user-creation lifecycle so
+// tests can pin hook ordering against the transaction window (ADR 0016).
+type orderedRepo struct {
+	*fakeRepo
+	events *[]string
+}
+
+func (o *orderedRepo) CreateUserWithPasswordTx(ctx context.Context, tx pgx.Tx, email, passwordHash, displayName string) (app.User, error) {
+	*o.events = append(*o.events, "create")
+	return o.fakeRepo.CreateUserWithPasswordTx(ctx, tx, email, passwordHash, displayName)
+}
+
+func (o *orderedRepo) RunInTx(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
+	*o.events = append(*o.events, "tx-begin")
+	snap := o.fakeRepo.snapshot()
+	if err := fn(ctx, fakeTx{}); err != nil {
+		o.fakeRepo.restore(snap)
+		*o.events = append(*o.events, "tx-rollback")
+		return err
+	}
+	*o.events = append(*o.events, "tx-commit")
+	return nil
+}
+
 type txSnap struct {
 	users       map[string]app.User
 	byID        map[string]app.User
@@ -120,11 +149,11 @@ func newSessionSvc(f *fakeRepo, m *fakeMail) *app.SessionService {
 }
 
 func TestSessionServiceHooks(t *testing.T) {
-	t.Run("AfterRegister 返回 error 时注册整体失败(用户不存在)", func(t *testing.T) {
+	t.Run("OnRegisterTx 返回 error 时注册整体失败(用户不存在)", func(t *testing.T) {
 		f, m := newFakeRepo(), &fakeMail{}
 		var seeded []string
 		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
-			AfterRegister: func(_ context.Context, _ pgx.Tx, userID string) error {
+			OnRegisterTx: func(_ context.Context, _ pgx.Tx, userID string) error {
 				seeded = append(seeded, userID)
 				return errors.New("seed failed")
 			},
@@ -137,21 +166,45 @@ func TestSessionServiceHooks(t *testing.T) {
 		assert.NotEmpty(t, seeded, "钩子应已被调用")
 	})
 
-	t.Run("AfterRegister 成功时用户已建且会话签发", func(t *testing.T) {
-		f, m := newFakeRepo(), &fakeMail{}
-		var seeded []string
-		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
-			AfterRegister: func(_ context.Context, _ pgx.Tx, userID string) error {
-				seeded = append(seeded, userID)
+	t.Run("密码注册双钩子按序触发：OnRegisterTx 在事务内，AfterRegister 在提交后（ADR 0016）", func(t *testing.T) {
+		events := &[]string{}
+		add := func(e string) { *events = append(*events, e) }
+		f := &orderedRepo{fakeRepo: newFakeRepo(), events: events}
+		var txSeenByHook pgx.Tx
+		svc := app.NewSessionService(f, &fakeMail{}, app.SessionConfig{AllowSignup: true, SecretPepper: "p"},
+			time.Hour, 0, func() time.Time { return frozen }).WithHooks(identity.IdentityHooks{
+			OnRegisterTx: func(_ context.Context, tx pgx.Tx, userID string) error {
+				txSeenByHook = tx
+				add("onRegisterTx")
+				return nil
+			},
+			AfterRegister: func(_ context.Context, userID string) error {
+				add("afterRegister")
 				return nil
 			},
 		})
 		res, err := svc.Register(t.Context(), "iph", "ua", "new@example.com", "StrongPass123!", "Newbie")
 		require.NoError(t, err)
-		assert.Equal(t, []string{"u-new@example.com"}, seeded)
-		assert.Equal(t, "sess-token", res.Token)
+		assert.Equal(t, []string{"tx-begin", "create", "onRegisterTx", "tx-commit", "afterRegister"}, *events,
+			"tx 钩子必须落在建号与提交之间；AfterRegister 必须在提交之后")
+		assert.NotNil(t, txSeenByHook, "OnRegisterTx 必须拿到 RunInTx 传入的事务句柄（fakeTx 非 nil）")
+		assert.True(t, res.Registered, "密码注册恒为 Registered")
+		assert.False(t, res.ProvisioningPending)
+	})
+
+	t.Run("AfterRegister 失败：注册仍成功，置 Provisioning 信号（ADR 0016）", func(t *testing.T) {
+		f, m := newFakeRepo(), &fakeMail{}
+		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
+			AfterRegister: func(context.Context, string) error { return errors.New("workspace upsert failed") },
+		})
+		res, err := svc.Register(t.Context(), "iph", "ua", "new@example.com", "StrongPass123!", "Newbie")
+		require.NoError(t, err, "提交后钩子失败不得回滚注册")
+		assert.NotEmpty(t, res.Token)
+		assert.True(t, res.Registered)
+		assert.True(t, res.ProvisioningPending)
+		assert.Equal(t, "workspace upsert failed", res.ProvisioningError)
 		_, ok, _ := f.GetUserByEmail(t.Context(), "new@example.com")
-		assert.True(t, ok)
+		assert.True(t, ok, "提交后钩子失败用户仍在")
 	})
 
 	t.Run("AfterLogin 错误不影响登录结果", func(t *testing.T) {
@@ -325,15 +378,13 @@ func TestVerifyCodeHooks_I4(t *testing.T) {
 		assert.Equal(t, 1, failed)
 	})
 
-	t.Run("新邮箱 JIT 建号触发 AfterRegister（提交后、tx=nil）", func(t *testing.T) {
+	t.Run("新邮箱 JIT 建号触发 AfterRegister（提交后、无事务参数）", func(t *testing.T) {
 		f := newFakeRepo()
 		seedChallenge(f, "fresh@example.com", "login_code", "123456", time.Minute, domain.CodeTTL)
 		var registered []string
-		var regTx pgx.Tx
 		svc := newCodeSvc(f, identity.IdentityHooks{
-			AfterRegister: func(_ context.Context, tx pgx.Tx, userID string) error {
+			AfterRegister: func(_ context.Context, userID string) error {
 				registered = append(registered, userID)
-				regTx = tx
 				return nil
 			},
 		})
@@ -341,7 +392,24 @@ func TestVerifyCodeHooks_I4(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "jit-fresh@example.com", res.User.ID)
 		assert.Equal(t, []string{"jit-fresh@example.com"}, registered, "JIT 建号必须触发 AfterRegister")
-		assert.Nil(t, regTx, "JIT 路径无事务上下文（提交后触发，契约说明见 hooks.go）")
+		assert.True(t, res.Registered, "JIT 建号必须置 Registered")
+		assert.False(t, res.ProvisioningPending)
+		_, ok, _ := f.GetUserByEmail(t.Context(), "fresh@example.com")
+		assert.True(t, ok)
+	})
+
+	t.Run("JIT AfterRegister 失败 → 登录仍成功 + Provisioning 信号（ADR 0016）", func(t *testing.T) {
+		f := newFakeRepo()
+		seedChallenge(f, "fresh@example.com", "login_code", "123456", time.Minute, domain.CodeTTL)
+		svc := newCodeSvc(f, identity.IdentityHooks{
+			AfterRegister: func(context.Context, string) error { return assert.AnError },
+		})
+		res, err := svc.VerifyCode(t.Context(), "iph", "ua", "fresh@example.com", "123456")
+		require.NoError(t, err, "提交后钩子失败不得阻断登录")
+		assert.NotEmpty(t, res.Token)
+		assert.True(t, res.Registered)
+		assert.True(t, res.ProvisioningPending)
+		assert.NotEmpty(t, res.ProvisioningError)
 		_, ok, _ := f.GetUserByEmail(t.Context(), "fresh@example.com")
 		assert.True(t, ok)
 	})
@@ -351,11 +419,12 @@ func TestVerifyCodeHooks_I4(t *testing.T) {
 		seedChallenge(f, "u1@example.com", "login_code", "123456", time.Minute, domain.CodeTTL)
 		var registered int
 		svc := newCodeSvc(f, identity.IdentityHooks{
-			AfterRegister: func(_ context.Context, _ pgx.Tx, _ string) error { registered++; return nil },
+			AfterRegister: func(context.Context, string) error { registered++; return nil },
 		})
-		_, err := svc.VerifyCode(t.Context(), "iph", "ua", "u1@example.com", "123456")
+		res, err := svc.VerifyCode(t.Context(), "iph", "ua", "u1@example.com", "123456")
 		require.NoError(t, err)
 		assert.Zero(t, registered, "存量用户登录不得再触发 AfterRegister")
+		assert.False(t, res.Registered, "存量用户登录 Registered=false")
 	})
 }
 

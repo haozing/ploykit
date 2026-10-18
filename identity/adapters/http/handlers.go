@@ -130,12 +130,21 @@ func (d Deps) handleRegister(w http.ResponseWriter, r *http.Request) {
 // context — the same value the Set-Cookie on this response carries — so
 // clients read csrf_token from the body and skip the re-fetch-/config round
 // trip every integration had to hardcode after session establishment.
+// The register flags (registered / provisioning_pending, ADR 0016) appear
+// only when set — omitting them keeps every existing response byte-compatible.
 func (d Deps) writeSessionEstablished(w http.ResponseWriter, r *http.Request, res *app.LoginResult) {
-	webx.WriteJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"user":       res.User,
 		"expires_at": res.Exp,
 		"csrf_token": webx.CSRFMaskedToken(r),
-	})
+	}
+	if res.Registered {
+		payload["registered"] = true
+	}
+	if res.ProvisioningPending {
+		payload["provisioning_pending"] = true
+	}
+	webx.WriteJSON(w, http.StatusOK, payload)
 }
 
 func (d Deps) handleLogin(w http.ResponseWriter, r *http.Request) {

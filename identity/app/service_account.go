@@ -29,8 +29,9 @@ type AccountService struct {
 	auditor Auditor
 
 	// identityHooks is wired by the composition root (WithIdentityHooks) so
-	// admin provisioning can fire AfterRegister transactionally — the same
-	// hook surface self-service Register uses.
+	// admin provisioning can fire OnRegisterTx transactionally and
+	// AfterRegister post-commit — the same two-hook surface self-service
+	// Register uses (ADR 0016).
 	identityHooks identity.IdentityHooks
 }
 
@@ -38,8 +39,8 @@ func NewAccountService(repo Repo, mail EmailSender, cfg AccountConfig, now Clock
 	return &AccountService{repo: repo, mail: mail, cfg: cfg, now: now}
 }
 
-// WithIdentityHooks attaches the identity hook surface (AfterRegister etc.)
-// for the admin provisioning paths.
+// WithIdentityHooks attaches the identity hook surface (OnRegisterTx /
+// AfterRegister etc.) for the admin provisioning paths.
 func (s *AccountService) WithIdentityHooks(h identity.IdentityHooks) *AccountService {
 	s.identityHooks = h
 	return s

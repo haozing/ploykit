@@ -2,11 +2,12 @@
 
 > The index only points the way; it does not duplicate signatures — signatures live in each domain's `hooks.go`, and semantics and applicable scenarios are carried in the table below.
 
-## Hook master table (25 existing, covering the six hook-bearing domains; semantics quick reference at the end of the table)
+## Hook master table (26 existing, covering the six hook-bearing domains; semantics quick reference at the end of the table)
 
 | Hook | Location | Semantics | What products use it for |
 |---|---|---|---|
-| AfterRegister | identity/hooks.go | Transactional | Seed initial data inside the registration transaction / send welcome emails |
+| OnRegisterTx | identity/hooks.go | Transactional | Bind roles and other must-succeed-with-the-user state inside the registration transaction (password register, admin create only — the JIT paths have no caller transaction) |
+| AfterRegister | identity/hooks.go | Observational (post-commit; failure is logged at ERROR, surfaced as `LoginResult.ProvisioningPending`, re-fired on the account's next login) | Provision personal workspace / welcome email / onboarding credits after commit on EVERY registration path (password, admin create, OAuth JIT, code JIT) — must be idempotent; never bind rollback-required state here (use OnRegisterTx) |
 | AfterLogin | identity/hooks.go | Observational | Post-login analytics / risk control |
 | OnLoginFailed | identity/hooks.go | Observational | Alert on failed-login risk signals |
 | AfterPasswordChange | identity/hooks.go | Observational | Notify other devices that they have been logged out |

@@ -13,8 +13,6 @@ import (
 	httplib "github.com/haozing/ploykit/identity/adapters/http"
 	"github.com/haozing/ploykit/identity/app"
 	"github.com/haozing/ploykit/platform/webx"
-
-	"github.com/jackc/pgx/v5"
 )
 
 type thirdPartyRepo struct {
@@ -98,7 +96,7 @@ type hookSpy struct {
 
 func (s *hookSpy) hooks() identity.IdentityHooks {
 	return identity.IdentityHooks{
-		AfterRegister: func(_ context.Context, _ pgx.Tx, userID string) error {
+		AfterRegister: func(_ context.Context, userID string) error {
 			s.regUIDs = append(s.regUIDs, userID)
 			return s.regErr
 		},

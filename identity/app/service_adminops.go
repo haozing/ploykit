@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 
 	"github.com/jackc/pgx/v5"
@@ -109,8 +110,10 @@ func (s *TokenService) RevokePATFor(ctx context.Context, targetUserID, patID str
 // apply — this is the no-SMTP / invite-only provisioning path self-service
 // Register cannot express. The initial password is chosen by the caller
 // (typically generated, shown to the admin exactly once); the framework only
-// hashes and stores it. Fires AfterRegister transactionally so products can
-// bind roles inside the same tx.
+// hashes and stores it. Fires OnRegisterTx transactionally so products can
+// bind roles inside the same tx (a failed bind rolls the user back), then
+// AfterRegister after commit — a provisioning failure there is logged at
+// ERROR but never un-creates the user (ADR 0016).
 func (s *AccountService) AdminCreateUser(ctx context.Context, actor *webx.Principal, rawEmail, displayName, initialPassword string) (User, error) {
 	email := domain.NormalizeEmail(rawEmail)
 	if !domain.EmailOK(email) {
@@ -134,10 +137,10 @@ func (s *AccountService) AdminCreateUser(ctx context.Context, actor *webx.Princi
 		if e != nil {
 			return e
 		}
-		// afterRegister runs inside the tx on purpose: role binding in the
+		// OnRegisterTx runs inside the tx on purpose: role binding in the
 		// hook shares the create's atomicity (a failed bind rolls back the user).
-		if s.identityHooks.AfterRegister != nil {
-			return s.identityHooks.AfterRegister(ctx, tx, user.ID)
+		if s.identityHooks.OnRegisterTx != nil {
+			return s.identityHooks.OnRegisterTx(ctx, tx, user.ID)
 		}
 		return nil
 	})
@@ -146,6 +149,11 @@ func (s *AccountService) AdminCreateUser(ctx context.Context, actor *webx.Princi
 			return User{}, webx.NewConflict("email already registered")
 		}
 		return User{}, err
+	}
+	if s.identityHooks.AfterRegister != nil {
+		if err := s.identityHooks.AfterRegister(ctx, user.ID); err != nil {
+			slog.Error("identity: AfterRegister hook failed (admin create)", "err", err, "user_id", user.ID)
+		}
 	}
 	if s.auditor != nil && actor != nil {
 		s.auditor.Record(ctx, nil, actor, "admin.user_create", "user", user.ID,

@@ -100,9 +100,12 @@ func (s *SessionService) CompleteThirdPartyLogin(ctx context.Context, userID str
 	}
 
 	_ = s.repo.RecordAttempt(ctx, ipHash, user.Email, true, s.now())
+	res := &LoginResult{Token: token, Exp: exp, User: user, Registered: jitNew}
 	if jitNew && s.hooks.AfterRegister != nil {
-		if err := s.hooks.AfterRegister(ctx, nil, user.ID); err != nil {
-			slog.Warn("identity: AfterRegister hook failed (third-party JIT)", "err", err, "user_id", user.ID)
+		if err := s.hooks.AfterRegister(ctx, user.ID); err != nil {
+			slog.Error("identity: AfterRegister hook failed (third-party JIT)", "err", err, "user_id", user.ID)
+			res.ProvisioningPending = true
+			res.ProvisioningError = err.Error()
 		}
 	}
 	if s.hooks.AfterLogin != nil {
@@ -111,13 +114,26 @@ func (s *SessionService) CompleteThirdPartyLogin(ctx context.Context, userID str
 			slog.Warn("identity: AfterLogin hook failed", "err", err, "user_id", user.ID)
 		}
 	}
-	return &LoginResult{Token: token, Exp: exp, User: user}, nil
+	return res, nil
 }
 
+// LoginResult is the outcome of any session-establishing call. The
+// register-related flags let callers see — and recover from — the split
+// between "the account exists" and "the post-commit provisioning ran"
+// (ADR 0016): a half-provisioned account still logs in, and the next login
+// re-fires the provisioning hook.
 type LoginResult struct {
 	Token string    `json:"-"`
 	Exp   time.Time `json:"expires_at"`
 	User  User      `json:"user"`
+	// Registered reports that THIS login created the user (JIT paths, and
+	// always true for password Register).
+	Registered bool `json:"registered,omitempty"`
+	// ProvisioningPending: post-commit AfterRegister provisioning failed —
+	// the account's next login re-fires it; UIs may show "finishing setup".
+	ProvisioningPending bool `json:"provisioning_pending,omitempty"`
+	// ProvisioningError is in-process diagnostic detail only (never on the wire).
+	ProvisioningError string `json:"-"`
 }
 
 func (s *SessionService) tooManyAttempts(ctx context.Context, ipHash, email string) (bool, error) {
@@ -207,14 +223,13 @@ func (s *SessionService) VerifyCode(ctx context.Context, ipHash, userAgent, rawE
 		}
 	}
 
-	var jitNew bool
-	if s.hooks.AfterRegister != nil {
-		_, existed, err := s.repo.GetUserByEmail(ctx, email)
-		if err != nil {
-			return nil, err
-		}
-		jitNew = !existed
+	// JIT detection is unconditional so LoginResult.Registered is truthful
+	// even when no hooks are wired (one indexed lookup per code login).
+	_, existed, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return nil, err
 	}
+	jitNew := !existed
 	user, err := s.repo.UpsertUserByEmail(ctx, email, s.now())
 	if err != nil {
 		return nil, err
@@ -230,9 +245,12 @@ func (s *SessionService) VerifyCode(ctx context.Context, ipHash, userAgent, rawE
 	}
 	_ = s.repo.RecordAttempt(ctx, ipHash, email, true, s.now())
 
+	res := &LoginResult{Token: token, Exp: exp, User: user, Registered: jitNew}
 	if jitNew && s.hooks.AfterRegister != nil {
-		if err := s.hooks.AfterRegister(ctx, nil, user.ID); err != nil {
-			slog.Warn("identity: AfterRegister hook failed (JIT code login)", "err", err, "user_id", user.ID)
+		if err := s.hooks.AfterRegister(ctx, user.ID); err != nil {
+			slog.Error("identity: AfterRegister hook failed (JIT code login)", "err", err, "user_id", user.ID)
+			res.ProvisioningPending = true
+			res.ProvisioningError = err.Error()
 		}
 	}
 	if s.hooks.AfterLogin != nil {
@@ -241,7 +259,7 @@ func (s *SessionService) VerifyCode(ctx context.Context, ipHash, userAgent, rawE
 			slog.Warn("identity: AfterLogin hook failed", "err", err, "user_id", user.ID)
 		}
 	}
-	return &LoginResult{Token: token, Exp: exp, User: user}, nil
+	return res, nil
 }
 
 func (s *SessionService) Register(ctx context.Context, ipHash, userAgent, rawEmail, password, displayName string) (*LoginResult, error) {
@@ -265,7 +283,7 @@ func (s *SessionService) Register(ctx context.Context, ipHash, userAgent, rawEma
 		return nil, err
 	}
 	var user User
-	if s.hooks.AfterRegister != nil {
+	if s.hooks.OnRegisterTx != nil {
 
 		err = s.repo.RunInTx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 			var err error
@@ -273,7 +291,7 @@ func (s *SessionService) Register(ctx context.Context, ipHash, userAgent, rawEma
 			if err != nil {
 				return err
 			}
-			return s.hooks.AfterRegister(ctx, tx, user.ID)
+			return s.hooks.OnRegisterTx(ctx, tx, user.ID)
 		})
 	} else {
 		user, err = s.repo.CreateUserWithPassword(ctx, email, hash, displayName)
@@ -292,7 +310,18 @@ func (s *SessionService) Register(ctx context.Context, ipHash, userAgent, rawEma
 	if err != nil {
 		return nil, err
 	}
-	return &LoginResult{Token: token, Exp: exp, User: user}, nil
+	// Post-commit provisioning is decoupled from the creation transaction
+	// (ADR 0016): a failure here leaves a live, logged-in account flagged
+	// for convergence on the next login instead of a rolled-back registration.
+	res := &LoginResult{Token: token, Exp: exp, User: user, Registered: true}
+	if s.hooks.AfterRegister != nil {
+		if err := s.hooks.AfterRegister(ctx, user.ID); err != nil {
+			slog.Error("identity: AfterRegister hook failed (password register)", "err", err, "user_id", user.ID)
+			res.ProvisioningPending = true
+			res.ProvisioningError = err.Error()
+		}
+	}
+	return res, nil
 }
 
 func (s *SessionService) LoginWithPassword(ctx context.Context, ipHash, userAgent, rawEmail, password string) (*LoginResult, error) {

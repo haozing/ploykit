@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -100,13 +99,13 @@ func TestCompleteThirdPartyLogin_Hooks_P1_2(t *testing.T) {
 	newUser := app.User{ID: "u-3p", Email: "third@example.com", Status: "active"}
 	oldUser := app.User{ID: "u-old", Email: "old@example.com", Status: "active"}
 
-	t.Run("JIT 新用户：AfterRegister(tx=nil) + AfterLogin + 记账 success", func(t *testing.T) {
+	t.Run("JIT 新用户：AfterRegister + AfterLogin + 记账 success", func(t *testing.T) {
 		f, m := newFakeRepo(newUser), &fakeMail{}
-		var regUID, loginUID, loginSess string
-		var regTx pgx.Tx
+		var regUIDs []string
+		var loginUID, loginSess string
 		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
-			AfterRegister: func(_ context.Context, tx pgx.Tx, userID string) error {
-				regUID, regTx = userID, tx
+			AfterRegister: func(_ context.Context, userID string) error {
+				regUIDs = append(regUIDs, userID)
 				return nil
 			},
 			AfterLogin: func(_ context.Context, userID, sessionID string) error {
@@ -119,8 +118,9 @@ func TestCompleteThirdPartyLogin_Hooks_P1_2(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "u-3p", res.User.ID)
 		assert.Equal(t, "sess-token", res.Token)
-		assert.Equal(t, "u-3p", regUID, "JIT 新用户必须触发 AfterRegister")
-		assert.Nil(t, regTx, "第三方 JIT 的 AfterRegister 契约：tx=nil（提交后触发）")
+		assert.Equal(t, []string{"u-3p"}, regUIDs, "JIT 新用户必须触发 AfterRegister")
+		assert.True(t, res.Registered, "JIT 新用户必须置 Registered")
+		assert.False(t, res.ProvisioningPending)
 		assert.Equal(t, "u-3p", loginUID)
 		assert.Equal(t, "sess-1", loginSess, "AfterLogin 必须携带会话 ID")
 		assert.Equal(t, []bool{true}, f.attemptLog, "成功登录记账 success=true")
@@ -130,26 +130,32 @@ func TestCompleteThirdPartyLogin_Hooks_P1_2(t *testing.T) {
 		f, m := newFakeRepo(oldUser), &fakeMail{}
 		regCalled := false
 		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
-			AfterRegister: func(context.Context, pgx.Tx, string) error {
+			AfterRegister: func(context.Context, string) error {
 				regCalled = true
 				return nil
 			},
 		})
-		_, err := svc.CompleteThirdPartyLogin(context.Background(), "u-old", false, "iph", "ua")
+		res, err := svc.CompleteThirdPartyLogin(context.Background(), "u-old", false, "iph", "ua")
 		require.NoError(t, err)
 		assert.False(t, regCalled, "老用户登录不得触发 AfterRegister")
+		assert.False(t, res.Registered, "老用户登录 Registered=false")
 	})
 
-	t.Run("AfterRegister 失败不阻断登录（幂等契约，I4 同款）", func(t *testing.T) {
+	t.Run("AfterRegister 失败不阻断登录但置 Provisioning 信号（ADR 0016）", func(t *testing.T) {
 		f, m := newFakeRepo(newUser), &fakeMail{}
 		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
-			AfterRegister: func(context.Context, pgx.Tx, string) error {
+			AfterRegister: func(context.Context, string) error {
 				return assert.AnError
 			},
 		})
 		res, err := svc.CompleteThirdPartyLogin(context.Background(), "u-3p", true, "iph", "ua")
 		require.NoError(t, err, "Observational/幂等契约：钩子错误不影响登录结果")
 		assert.NotEmpty(t, res.Token)
+		assert.True(t, res.Registered, "本次登录建号")
+		assert.True(t, res.ProvisioningPending, "JIT 供应失败必须置 ProvisioningPending")
+		assert.Equal(t, assert.AnError.Error(), res.ProvisioningError, "进程内诊断详情")
+		_, ok, _ := f.GetUserByEmail(context.Background(), "third@example.com")
+		assert.True(t, ok, "钩子失败不得回滚已提交的账号")
 	})
 
 	t.Run("AfterLogin 失败不阻断登录（Observational）", func(t *testing.T) {
@@ -157,8 +163,9 @@ func TestCompleteThirdPartyLogin_Hooks_P1_2(t *testing.T) {
 		svc := newSessionSvc(f, m).WithHooks(identity.IdentityHooks{
 			AfterLogin: func(context.Context, string, string) error { return assert.AnError },
 		})
-		_, err := svc.CompleteThirdPartyLogin(context.Background(), "u-3p", false, "iph", "ua")
+		res, err := svc.CompleteThirdPartyLogin(context.Background(), "u-3p", false, "iph", "ua")
 		require.NoError(t, err)
+		assert.False(t, res.ProvisioningPending, "AfterLogin 失败不是 provisioning 失败")
 	})
 
 	t.Run("用户不存在 → 报错不签会话", func(t *testing.T) {

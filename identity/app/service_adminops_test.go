@@ -231,7 +231,8 @@ func (f *fakeRepo) ListUsersByIDs(_ context.Context, ids []string) ([]app.User, 
 
 // aifengkong #1: admin provisioning must not carry self-service side effects
 // (no session, no mail, no signup gate) and must surface duplicate emails as
-// a distinguishable error; AfterRegister fires inside the same tx.
+// a distinguishable error; OnRegisterTx fires inside the same tx and
+// AfterRegister fires post-commit (ADR 0016).
 func TestAdminCreateUser_AF1(t *testing.T) {
 	f := newFakeRepo()
 	m := &fakeMail{}
@@ -259,10 +260,10 @@ func TestAdminCreateUser_AF1(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, we.Status)
 	})
 
-	t.Run("AfterRegister 钩子失败 → 整体失败（事务回滚语义）", func(t *testing.T) {
+	t.Run("OnRegisterTx 钩子失败 → 整体失败（事务回滚语义）", func(t *testing.T) {
 		hooked := app.NewAccountService(f, &fakeMail{}, app.AccountConfig{}, func() time.Time { return frozen }).
 			WithIdentityHooks(identity.IdentityHooks{
-				AfterRegister: func(ctx context.Context, tx pgx.Tx, userID string) error {
+				OnRegisterTx: func(ctx context.Context, tx pgx.Tx, userID string) error {
 					return errors.New("role bind failed")
 				},
 			})
@@ -270,6 +271,18 @@ func TestAdminCreateUser_AF1(t *testing.T) {
 		require.Error(t, err, "hook failure must abort the create")
 		_, ok, _ := f.GetUserByEmail(context.Background(), "hooked@example.com")
 		assert.False(t, ok, "failed hook leaves no user behind (fake is non-tx; the tx contract is the RunInTx wrapping)")
+	})
+
+	t.Run("AfterRegister 提交后失败 → 用户仍在且不报错（ADR 0016）", func(t *testing.T) {
+		hooked := app.NewAccountService(f, &fakeMail{}, app.AccountConfig{}, func() time.Time { return frozen }).
+			WithIdentityHooks(identity.IdentityHooks{
+				AfterRegister: func(context.Context, string) error { return errors.New("workspace upsert failed") },
+			})
+		u, err := hooked.AdminCreateUser(context.Background(), nil, "prov-fail@example.com", "h", "strong-password-1A")
+		require.NoError(t, err, "post-commit provisioning failure must not abort the create")
+		assert.NotEmpty(t, u.ID)
+		_, ok, _ := f.GetUserByEmail(context.Background(), "prov-fail@example.com")
+		assert.True(t, ok, "post-commit provisioning failure leaves the user in place")
 	})
 }
 
