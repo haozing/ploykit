@@ -61,6 +61,13 @@ jobs:
           }
         env:
           TEST_DATABASE_URL: postgres://pk:pk@localhost:5437/pk?sslmode=disable
+      # Production-fidelity cold-boot lane (testing-strategy.md L3; lands with this batch): boots the real app
+      # binary against a fresh database it creates itself (fidelity_e2e) on the same postgres service. The example
+      # module is separate — step-level working-directory + TEST_DATABASE_URL; skips without the env (DB-gated).
+      - run: go test ./internal/fidelity/ -count=1 -v
+        working-directory: example
+        env:
+          TEST_DATABASE_URL: postgres://pk:pk@localhost:5437/pk?sslmode=disable
 
   # API contract drift: docs/openapi.yaml ↔ route registration (pure Python standard library, zero dependencies).
   contract:
@@ -101,5 +108,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Production-fidelity tarball lane (testing-strategy.md L2; lands with this batch): npm pack → scratch
+      # install → integrity/import probe, exercising the dist of all four workspaces built by the step above.
+      - run: node tools/tarball-smoke.mjs
       - run: npm test --workspaces --if-present
       - run: npm run check:web

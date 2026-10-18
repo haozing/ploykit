@@ -13,6 +13,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "smoke:tarball": "node tools/tarball-smoke.mjs",
     "dev:web": "npm run dev -w myproduct-web",
     "check:web": "npm run check -w myproduct-web",
     "build:web": "npm run build && npm run build -w myproduct-web"

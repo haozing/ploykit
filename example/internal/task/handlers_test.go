@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/haozing/ploykit/migrations"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -186,6 +188,14 @@ func newTaskEnv(t *testing.T) *taskEnv {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+
+	// Cold-DB-safe bootstrap (testing-strategy.md normative rule): apply the
+	// framework + product migration chains here instead of assuming a warmer
+	// test ran first — handlers_test sorts before rls_test, and on a fresh
+	// TEST_DATABASE_URL the product tables would not exist yet (the recorded
+	// warm-DB assumption debt, fixed for this package).
+	require.NoError(t, pgmigrate.Up(ctx, pool, migrations.FS, "."), "框架迁移链")
+	require.NoError(t, applyProductMigrations(ctx, t, pool), "产品迁移链 1001+")
 
 	uniq := time.Now().UnixNano()
 	email := fmt.Sprintf("taskfix-%d@test.local", uniq)
