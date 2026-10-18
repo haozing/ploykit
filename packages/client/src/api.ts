@@ -22,6 +22,9 @@ export function isApiError(err: unknown, code?: string): err is ApiError {
 
 let csrfToken: string | null = null
 let csrfBootstrap: Promise<void> | null = null
+// Single-flight guard for the CSRF self-heal (see healCsrf below): concurrent
+// 403s must share one clear+bootstrap cycle instead of each running its own.
+let csrfHeal: Promise<void> | null = null
 
 type WorkspaceIdProvider = () => string | null
 let workspaceIdProvider: WorkspaceIdProvider = () => null
@@ -57,6 +60,23 @@ function maybeRefreshCsrf(data: unknown): void {
   ) {
     csrfToken = (data as { csrf_token: string }).csrf_token
   }
+}
+
+
+// Self-heal for a CSRF rejection: drop the stale cached token and re-bootstrap
+// from /config. Single-flight on purpose — clearing csrfBootstrap inside the
+// heal (the v0.7.4 behavior) removed the only guard protecting /config, so N
+// concurrent 403s each triggered their own serial refetch (a thundering herd;
+// behind a proxy that intermittently drops cookies the storm could keep
+// failing). All concurrent rejections now await the SAME clear+bootstrap
+// cycle; a rejection arriving after the cycle settled starts a fresh one.
+function healCsrf(timeoutMs: number): Promise<void> {
+  csrfHeal ??= (async () => {
+    csrfToken = null
+    csrfBootstrap = null
+    await ensureCsrfToken(timeoutMs)
+  })().finally(() => { csrfHeal = null })
+  return csrfHeal
 }
 
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
@@ -257,15 +277,34 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     if (!res.ok) {
       
       const body = data as { error?: unknown; message?: unknown; details?: unknown }
-      if (attempt === 0 && isCsrfRejection(res.status, body)) {
-        // Self-heal: drop the stale cached token, re-bootstrap from /config,
-        // and retry exactly once. A second rejection falls through to the
-        // normal error path (no loop). Timeout/abort failures never reach
-        // this branch — they throw before any response exists.
-        csrfToken = null
-        csrfBootstrap = null
-        await ensureCsrfToken(timeoutMs)
-        continue
+      if (isCsrfRejection(res.status, body)) {
+        if (attempt === 0) {
+          // Self-heal: drop the stale cached token, re-bootstrap from /config,
+          // and retry exactly once. Concurrent rejections share a single
+          // clear+bootstrap cycle via healCsrf (single-flight). Timeout/abort
+          // failures never reach this branch — they throw before any response
+          // exists.
+          await healCsrf(timeoutMs)
+          continue
+        }
+        // Last resort: even the freshly bootstrapped token was rejected, so
+        // client-side state alone cannot recover (e.g. a proxy keeps dropping
+        // the ploykit_csrf cookie). A full page reload re-bootstraps cookies
+        // and the masked token from scratch and is the only guaranteed
+        // recovery. The sessionStorage timestamp allows at most one reload per
+        // 10s window, preventing reload loops; inside that window (or outside
+        // a browser) we fall through to the normal error path below.
+        if (typeof location !== 'undefined' && typeof sessionStorage !== 'undefined') {
+          const raw = sessionStorage.getItem('ploykit-csrf-reload')
+          const last = raw === null ? NaN : Number(raw)
+          if (!Number.isFinite(last) || Date.now() - last > 10_000) {
+            // Mark the window, schedule the reload, and still throw so the
+            // caller's promise settles before the page tears down.
+            sessionStorage.setItem('ploykit-csrf-reload', String(Date.now()))
+            location.reload()
+            throw new ApiError(403, 'E_CSRF_RELOADING', 'CSRF state unrecoverable — reloading page')
+          }
+        }
       }
       if (typeof body?.error === 'string') {
         throw new ApiError(
@@ -300,4 +339,5 @@ export const api = {
 export function __resetApiForTests(): void {
   csrfToken = null
   csrfBootstrap = null
+  csrfHeal = null
 }
