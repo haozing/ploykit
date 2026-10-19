@@ -46,7 +46,7 @@ func renderxHandler(ctx context.Context, mux *webx.Mux, pool *pgxpool.Pool, cach
 		mux.Handle("/robots.txt", wrap(renderx.RobotsHandler(renderx.RobotsOptions{
 			SitemapURL: sitemapURL,
 			// 应用壳页（CSR 路由）只有空 root，抓了也是空页；API 与上传对象同理。
-			Disallow: []string{"/api/", "/uploads/", "/app", "/account", "/settings", "/realtime"},
+			Disallow: []string{"/api/", "/uploads/", "/app", "/account", "/settings", "/admin", "/dev/"},
 		})))
 	}
 

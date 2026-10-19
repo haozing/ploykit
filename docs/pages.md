@@ -88,7 +88,7 @@ Current IA rules:
 ```
 AppShell main sidebar (product area)
 ├── Overview /app
-├── Product feature pages… (example: realtime)
+├── Product feature pages… (product-specific; the /dev/realtime debug page is reachable by URL, not in the nav)
 └── [bottom] Workspace switcher · User menu (with the "account settings" entry)
 
 Settings mode (sidebar content switches under /account/* and /settings/*)
@@ -264,7 +264,8 @@ export const queryKeys = {
 **WS invalidation bridge** (`bridgeWsToQuery` in `lib/ws-query-bridge.ts`, exported from the barrel): the product owns a
 `WsClient` and registers `WsInvalidationRule`s (frame-type `match` + `invalidate` query-key prefixes); a matching frame
 invalidates the registered keys, and a reconnect (after the first open) invalidates all of them. The example registers its
-product rule in `RealtimePage` (`task.created` → `['tasks']`, `['usage']`).
+product rule in `RealtimePage` (mounted at `/dev/realtime`, outside the main nav;
+`task.created` → `['tasks']`, `['usage']`).
 
 The server does not yet emit notification/member/usage/webhook frames, so the frontend registers no rules for them
 (graceful degradation: NotificationBell polls at 60s; pages expose manual refresh). When the server starts broadcasting a

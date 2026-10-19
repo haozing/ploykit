@@ -2,28 +2,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '../deps'
 import { apiFetch } from '@ploykit/client'
-import type { APIUsageResp, components } from '@ploykit/client'
-import { useApi, useWorkspace, useWsScope, useWsFrame, useUsagePreview } from '@ploykit/hooks'
+import type { components } from '@ploykit/client'
+import { useApi, useWorkspace, useWsScope, useWsFrame, useUsagePreview, useUsage } from '@ploykit/hooks'
 import {
-  useConfirm, DataTable, PageEmpty, PageError, toast, apiErrorMessage,
-  Input, Button, Card, CardHeader, CardTitle, CardContent, type Column,
+  useConfirm, DataTable, PageHeader, PageEmpty, PageError, PageLoading, toast, apiErrorMessage,
+  Input, Button, Card, CardHeader, CardTitle, CardContent,
+  Field, FieldError, Spinner, Alert, AlertTitle, AlertDescription, dimLabel, type Column,
 } from '@ploykit/ui'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, TriangleAlert } from 'lucide-react'
 
 import { wsClient } from '../ws'
 
 
 type Task = components['schemas']['Task']
 type UsageItem = components['schemas']['UsageItem']
-type UsageResp = APIUsageResp
 
 const usageColumns: Column<UsageItem>[] = [
-  { key: 'key', header: '维度', render: (it) => <code className="font-mono text-xs">{it.key}</code> },
-  { key: 'used', header: '已用', render: (it) => <span className="text-foreground">{it.used}</span> },
+  { key: 'key', header: '项目', render: (it) => dimLabel(it.key) },
+  { key: 'used', header: '已用', render: (it) => <span className="text-foreground">{it.used}{it.granted > 0 ? ` (+${it.granted})` : ''}</span> },
   {
     key: 'limit',
     header: '上限',
-    render: (it) => <span className="text-muted-foreground">{it.limit <= 0 ? '不限' : it.limit}</span>,
+    render: (it) => <span className="text-muted-foreground">{it.limit < 0 ? '不限' : it.limit === 0 ? '—' : it.limit}</span>,
   },
 ]
 
@@ -44,11 +44,7 @@ export function Dashboard() {
 
   
   
-  const usage = useQuery({
-    queryKey: ['usage', wsId],
-    enabled: !!wsId,
-    queryFn: () => api.get<UsageResp>('/api/usage'),
-  })
+  const { usage, loading: usageLoading, error: usageError, refetch: refetchUsage } = useUsage()
 
   
   
@@ -134,7 +130,7 @@ export function Dashboard() {
     if (!t) return
     const next = editTitle.trim()
     if (!next) {
-      toast.error('任务标题不能为空')
+      toast.error('请输入任务标题')
       return
     }
     if (next === t.title) return
@@ -151,41 +147,50 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="space-y-6">
+      <PageHeader title="概览" />
       <Card>
         <CardHeader>
-          <CardTitle>我的任务</CardTitle>
+          <CardTitle>任务</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={addTask} className="space-y-1">
-            <div className="flex gap-2">
-              <Input
-                value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value)
-                  if (titleError) setTitleError(null)
-                }}
-                placeholder="新任务标题…"
-                aria-invalid={titleError ? true : undefined}
-              />
-              <Button type="submit" disabled={creating}>
-                {creating ? '添加中…' : '添加'}
-              </Button>
-            </div>
-            {titleError && <p className="text-sm text-destructive" role="alert">{titleError}</p>}
+            <Field data-invalid={!!titleError}>
+              <div className="flex gap-2">
+                <Input
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value)
+                    if (titleError) setTitleError(null)
+                  }}
+                  placeholder="新任务标题…"
+                  aria-invalid={titleError ? true : undefined}
+                  aria-describedby={titleError ? 'new-task-title-error' : undefined}
+                />
+                <Button type="submit" disabled={creating}>
+                  {creating ? (
+                    <>
+                      <Spinner />
+                      添加中…
+                    </>
+                  ) : '添加'}
+                </Button>
+              </div>
+              <FieldError id="new-task-title-error">{titleError}</FieldError>
+            </Field>
           </form>
 
           {!wsId ? (
             <PageEmpty label="请先创建并选择一个工作区" />
           ) : tasksQ.isPending ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">加载中…</p>
+            <PageLoading />
           ) : tasksQ.isError ? (
             <PageError
               message={apiErrorMessage(tasksQ.error, '任务列表加载失败')}
               onRetry={() => void tasksQ.refetch()}
             />
           ) : tasks.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">暂无任务，添加第一个吧</p>
+            <PageEmpty label="暂无任务" />
           ) : (
             <ul className="space-y-2">
               {tasks.map((t) => (
@@ -219,10 +224,8 @@ export function Dashboard() {
                   ) : (
                     <span
                       className={`flex-1 truncate ${t.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}
-                      onDoubleClick={() => startEdit(t)}
-                      title="双击编辑标题"
                     >
-                      #{t.number} {t.title}
+                      {t.title}
                     </span>
                   )}
                   {editingId !== t.id && (
@@ -259,36 +262,37 @@ export function Dashboard() {
           <CardTitle>用量</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {usage.isError ? (
+          {usageError ? (
             <PageError
-              message={apiErrorMessage(usage.error, '用量加载失败')}
-              onRetry={() => void usage.refetch()}
+              message={apiErrorMessage(usageError, '用量加载失败')}
+              onRetry={() => void refetchUsage()}
             />
-          ) : usage.data && usage.data.items.length > 0 ? (
+          ) : usageLoading ? (
+            <PageLoading label="加载用量…" />
+          ) : usage && usage.items.length > 0 ? (
             <>
               <p className="text-sm text-muted-foreground">
-                套餐 <span className="font-medium text-foreground">{usage.data.plan_code}</span>
-                　·　周期 {usage.data.period}
+                套餐 <span className="font-medium text-foreground">{usage.plan_code}</span>
+                　·　计费周期 {usage.period}
               </p>
               <DataTable
                 columns={usageColumns}
-                rows={usage.data.items}
+                rows={usage.items}
                 rowKey={(it) => it.key}
-                loading={usage.isPending}
+                loading={usageLoading}
               />
-              {preview && preview.items.length > 0 && (
-                <p className="text-sm text-amber-700">
-                  超额预估（{preview.period}）：
-                  {preview.projected_total_cents > 0 ? (
-                    <>
-                      预计超额费用{' '}
-                      <span className="font-medium">
-                        {(preview.projected_total_cents / 100).toFixed(2)}
-                      </span>{' '}
-                      元（{preview.items.filter((it) => it.projected_overage_cents > 0).map((it) => it.dim).join('、')}）
-                    </>
-                  ) : '当前无超额'}
-                </p>
+              {preview && preview.items.length > 0 && preview.projected_total_cents > 0 && (
+                <Alert className="border-amber-500/40 bg-amber-50 text-amber-800">
+                  <TriangleAlert aria-hidden="true" />
+                  <AlertTitle>费用预估</AlertTitle>
+                  <AlertDescription>
+                    预计超额费用{' '}
+                    <span className="font-medium">
+                      {(preview.projected_total_cents / 100).toFixed(2)}
+                    </span>{' '}
+                    元（{preview.items.filter((it) => it.projected_overage_cents > 0).map((it) => dimLabel(it.dim)).join('、')}）
+                  </AlertDescription>
+                </Alert>
               )}
             </>
           ) : (
