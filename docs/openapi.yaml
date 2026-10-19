@@ -4354,12 +4354,16 @@ components:
       allOf:
         - $ref: '#/components/schemas/Workspace'
         - type: object
-          required: [role]
+          required: [role, role_perms]
           properties:
             role:
               type: string
               enum: [owner, admin, member]
               description: 我在该工作区的角色
+            role_perms:
+              type: array
+              items: { type: string }
+              description: Effective permission keys of the requesting user's role in this workspace (override row if present, otherwise built-in defaults; owner gets the full catalog)
     Member:
       type: object
       required: [user_id, email, display_name, role, created_at]

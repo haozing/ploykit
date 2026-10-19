@@ -5,9 +5,19 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/haozing/ploykit/authz"
 	"github.com/haozing/ploykit/platform/webx"
 	"github.com/haozing/ploykit/workspace/app"
 )
+
+// membershipWithPerms is listMine's response row: the workspace membership
+// plus the requester's effective permission set for their role in that
+// workspace (override row if present, otherwise built-in defaults; owner gets
+// the full catalog).
+type membershipWithPerms struct {
+	app.WorkspaceMembership
+	RolePerms []authz.Permission `json:"role_perms"`
+}
 
 func (d Deps) listMine(w http.ResponseWriter, r *http.Request) {
 	p := webx.PrincipalFromRequest(r)
@@ -20,7 +30,16 @@ func (d Deps) listMine(w http.ResponseWriter, r *http.Request) {
 		webx.WriteErr(w, err)
 		return
 	}
-	webx.WriteJSON(w, http.StatusOK, list)
+	out := make([]membershipWithPerms, 0, len(list))
+	for _, m := range list {
+		perms, err := d.Svc.EffectivePerms(r.Context(), m.ID, m.Role)
+		if err != nil {
+			webx.WriteErr(w, err)
+			return
+		}
+		out = append(out, membershipWithPerms{WorkspaceMembership: m, RolePerms: perms})
+	}
+	webx.WriteJSON(w, http.StatusOK, out)
 }
 
 func (d Deps) create(w http.ResponseWriter, r *http.Request) {

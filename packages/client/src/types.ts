@@ -2224,6 +2224,10 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "admin" | "member";
+            /**
+             * @description Effective permission keys of the requesting user's role in this workspace (override row if present, otherwise built-in defaults; owner gets the full catalog)
+             */
+            role_perms: string[];
         };
         Member: {
             user_id: string;

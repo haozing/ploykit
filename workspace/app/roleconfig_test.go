@@ -50,6 +50,52 @@ func memberIn(wsID string) *webx.Principal {
 	return &webx.Principal{UserID: "bob", WorkspaceID: wsID, Role: authz.RoleMember}
 }
 
+// 平台管理员即使不是工作区成员也可管理角色权限集（运营跨工作区运维；
+// owner 不可变与漂移守卫对平台管理员同样生效）。
+func TestRolePerms_PlatformAdminWithoutMembership(t *testing.T) {
+	f, ws := seedWS(t)
+	a := &fakeAuditor{}
+	svc := newRoleSvc(f, a)
+	pa := &webx.Principal{UserID: "ops", IsPlatformAdmin: true} // 非成员
+
+	t.Run("列出角色配置", func(t *testing.T) {
+		configs, catalog, err := svc.ListRoleConfigs(context.Background(), pa, ws.ID)
+		if err != nil {
+			t.Fatalf("platform admin should list role configs: %v", err)
+		}
+		if len(configs) == 0 || len(catalog) == 0 {
+			t.Fatal("expected configs and catalog")
+		}
+	})
+
+	t.Run("设置角色权限集", func(t *testing.T) {
+		cfg, err := svc.SetRolePerms(context.Background(), pa, ws.ID, "member",
+			[]authz.Permission{authz.Permission("workspace:read"), authz.Permission("usage:read")})
+		if err != nil {
+			t.Fatalf("platform admin should set role perms: %v", err)
+		}
+		if !cfg.Overridden {
+			t.Fatal("expected override row after platform admin set")
+		}
+	})
+
+	t.Run("owner 不可变对平台管理员同样生效", func(t *testing.T) {
+		if _, err := svc.SetRolePerms(context.Background(), pa, ws.ID, "owner",
+			[]authz.Permission{authz.Permission("workspace:read")}); err == nil {
+			t.Fatal("owner set must stay immutable even for platform admin")
+		}
+	})
+
+	t.Run("重置回内置默认", func(t *testing.T) {
+		if err := svc.ResetRolePerms(context.Background(), pa, ws.ID, "member"); err != nil {
+			t.Fatalf("platform admin should reset role perms: %v", err)
+		}
+		if _, overridden := f.roleOverrides[ws.ID+"\x00member"]; overridden {
+			t.Fatal("override row should be gone after reset")
+		}
+	})
+}
+
 func TestSetRolePerms_WriteBoundaryValidation(t *testing.T) {
 	f, ws := seedWS(t)
 	a := &fakeAuditor{}
@@ -142,6 +188,96 @@ func TestResetRolePerms(t *testing.T) {
 	t.Run("重置不存在的覆盖幂等成功", func(t *testing.T) {
 		if err := svc.ResetRolePerms(context.Background(), owner, ws.ID, "member"); err != nil {
 			t.Fatalf("idempotent reset: %v", err)
+		}
+	})
+}
+
+func TestEffectivePerms(t *testing.T) {
+	f, ws := seedWS(t)
+	a := &fakeAuditor{}
+	svc := newRoleSvc(f, a)
+	if _, err := svc.SetRolePerms(context.Background(), ownerP("alice"), ws.ID, "member",
+		[]authz.Permission{"workspace:read", "workspace:read"}); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	permHas := func(perms []authz.Permission, want authz.Permission) bool {
+		for _, p := range perms {
+			if p == want {
+				return true
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		name string
+		role string
+		want func(t *testing.T, got []authz.Permission)
+	}{
+		{"owner → 全量目录", authz.RoleOwner, func(t *testing.T, got []authz.Permission) {
+			catalog := svc.authz.Catalog().List()
+			if len(got) != len(catalog) {
+				t.Fatalf("owner perms len = %d, want catalog len %d", len(got), len(catalog))
+			}
+			for i := range catalog {
+				if got[i] != catalog[i] {
+					t.Fatalf("owner perms[%d] = %s, want %s（目录本身有序）", i, got[i], catalog[i])
+				}
+			}
+			if !permHas(got, "roles:manage") {
+				t.Fatalf("owner 目录必须含 roles:manage: %v", got)
+			}
+		}},
+		{"member 有覆盖 → 覆盖替换默认（normalize）", authz.RoleMember, func(t *testing.T, got []authz.Permission) {
+			if len(got) != 1 || got[0] != "workspace:read" {
+				t.Fatalf("member perms = %v, want [workspace:read]", got)
+			}
+		}},
+		{"admin 无覆盖 → 内置默认", authz.RoleAdmin, func(t *testing.T, got []authz.Permission) {
+			def := svc.authz.BuiltinPerms(authz.RoleAdmin)
+			if len(got) != len(def) {
+				t.Fatalf("admin perms len = %d, want builtin len %d", len(got), len(def))
+			}
+			for i := range def {
+				if got[i] != def[i] {
+					t.Fatalf("admin perms[%d] = %s, want %s", i, got[i], def[i])
+				}
+			}
+			if permHas(got, "roles:manage") || permHas(got, "workspace:delete") {
+				t.Fatalf("admin 默认集不应含 owner 专属权限: %v", got)
+			}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := svc.EffectivePerms(context.Background(), ws.ID, tc.role)
+			if err != nil {
+				t.Fatalf("EffectivePerms(%s): %v", tc.role, err)
+			}
+			tc.want(t, got)
+		})
+	}
+
+	t.Run("重置覆盖后 member 回退内置默认", func(t *testing.T) {
+		if err := svc.ResetRolePerms(context.Background(), ownerP("alice"), ws.ID, "member"); err != nil {
+			t.Fatalf("reset: %v", err)
+		}
+		got, err := svc.EffectivePerms(context.Background(), ws.ID, authz.RoleMember)
+		if err != nil {
+			t.Fatalf("EffectivePerms: %v", err)
+		}
+		def := svc.authz.BuiltinPerms(authz.RoleMember)
+		if len(got) != len(def) {
+			t.Fatalf("member perms = %v, want builtin %v", got, def)
+		}
+		for i := range def {
+			if got[i] != def[i] {
+				t.Fatalf("member perms[%d] = %s, want %s", i, got[i], def[i])
+			}
+		}
+		if permHas(got, "billing:manage") {
+			t.Fatalf("member 默认集不应含 billing:manage: %v", got)
 		}
 	})
 }

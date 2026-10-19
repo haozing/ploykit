@@ -53,6 +53,16 @@ func (f *fakeRepo) GetMember(_ context.Context, wsID, userID string) (wsapp.Memb
 	return m, ok, nil
 }
 
+func (f *fakeRepo) ListWorkspacesByUser(_ context.Context, userID string) ([]wsapp.WorkspaceMembership, error) {
+	var out []wsapp.WorkspaceMembership
+	for id, ws := range f.workspaces {
+		if m, ok := f.members[id+"|"+userID]; ok {
+			out = append(out, wsapp.WorkspaceMembership{Workspace: ws, Role: m.Role})
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) GetWorkspace(_ context.Context, id string) (wsapp.Workspace, bool, error) {
 	ws, ok := f.workspaces[id]
 	return ws, ok, nil
@@ -92,6 +102,7 @@ func setupMux(t *testing.T, hooks workspace.WorkspaceHooks) (*http.ServeMux, *fa
 			"ws-1|carol": {UserID: "carol", Role: "admin"},
 			"ws-1|bob":   {UserID: "bob", Role: "member"},
 		},
+		roleOverrides: map[string][]authz.Permission{},
 	}
 	svc := wsapp.NewWorkspaceService(f, authz.New(nil, nil), nil, nil, wsapp.WorkspaceConfig{MaxPerUser: -1},
 		func() time.Time { return time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC) }).
@@ -127,6 +138,88 @@ func errCode(t *testing.T, w *httptest.ResponseRecorder) string {
 		t.Fatalf("decode error body: %v (%s)", err, w.Body.String())
 	}
 	return body.Code
+}
+
+// GET /api/workspaces attaches each membership's effective permission set
+// (role_perms): owner = full catalog; an override row replaces the built-in
+// defaults; absent an override the defaults stand.
+func TestListMineRolePerms(t *testing.T) {
+	type row struct {
+		ID        string   `json:"id"`
+		Role      string   `json:"role"`
+		RolePerms []string `json:"role_perms"`
+	}
+	decode := func(t *testing.T, w *httptest.ResponseRecorder) []row {
+		t.Helper()
+		var rows []row
+		if err := json.NewDecoder(w.Body).Decode(&rows); err != nil {
+			t.Fatalf("decode: %v (%s)", err, w.Body.String())
+		}
+		return rows
+	}
+	has := func(perms []string, want string) bool {
+		for _, p := range perms {
+			if p == want {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("owner → 全量目录（含 roles:manage / workspace:delete）", func(t *testing.T) {
+		mux, _ := setupMux(t, workspace.WorkspaceHooks{})
+		w := do(t, mux, "GET", "/api/workspaces", "", &webx.Principal{UserID: "alice"})
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		rows := decode(t, w)
+		if len(rows) != 1 || rows[0].ID != "ws-1" || rows[0].Role != "owner" {
+			t.Fatalf("rows = %+v", rows)
+		}
+		if !has(rows[0].RolePerms, "roles:manage") || !has(rows[0].RolePerms, "workspace:delete") {
+			t.Fatalf("owner role_perms 应为全量目录: %v", rows[0].RolePerms)
+		}
+	})
+
+	t.Run("member 无覆盖 → 内置默认", func(t *testing.T) {
+		mux, _ := setupMux(t, workspace.WorkspaceHooks{})
+		w := do(t, mux, "GET", "/api/workspaces", "", &webx.Principal{UserID: "bob"})
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		rows := decode(t, w)
+		if len(rows) != 1 || rows[0].Role != "member" {
+			t.Fatalf("rows = %+v", rows)
+		}
+		perms := rows[0].RolePerms
+		if !has(perms, "workspace:read") {
+			t.Fatalf("member 默认集应含 workspace:read: %v", perms)
+		}
+		if has(perms, "billing:manage") || has(perms, "members:write") || has(perms, "roles:manage") {
+			t.Fatalf("member 默认集不应含管理权限: %v", perms)
+		}
+	})
+
+	t.Run("覆盖行存在 → 替换默认", func(t *testing.T) {
+		mux, f := setupMux(t, workspace.WorkspaceHooks{})
+		f.roleOverrides["ws-1|member"] = []authz.Permission{"workspace:read"}
+		w := do(t, mux, "GET", "/api/workspaces", "", &webx.Principal{UserID: "bob"})
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+		}
+		perms := decode(t, w)[0].RolePerms
+		if len(perms) != 1 || perms[0] != "workspace:read" {
+			t.Fatalf("role_perms = %v, want [workspace:read]（覆盖是替换不是合并）", perms)
+		}
+	})
+
+	t.Run("未认证 401", func(t *testing.T) {
+		mux, _ := setupMux(t, workspace.WorkspaceHooks{})
+		w := do(t, mux, "GET", "/api/workspaces", "", nil)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d", w.Code)
+		}
+	})
 }
 
 func TestRenameRoute(t *testing.T) {
