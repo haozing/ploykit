@@ -67,7 +67,7 @@ describe('TokensPage', () => {
     await waitFor(() => expect(mocks.create).toHaveBeenCalledWith('ci-deploy', 72))
     
     expect(await screen.findByText('个人访问令牌 创建成功')).toBeInTheDocument()
-    expect(screen.getByText('tk_plainvalue123')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('tk_plainvalue123')).toBeInTheDocument()
   })
 
   it('吊销令牌：确认后 revoke(id)', async () => {

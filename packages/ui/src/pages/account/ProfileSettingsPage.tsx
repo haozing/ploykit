@@ -4,9 +4,12 @@ import { z } from 'zod'
 import { PageHeader, PageLoading, PageError } from '../../components/Page'
 import { SettingsCard } from '../../components/SettingsCard'
 import { FormField } from '../../components/FormField'
+import { Alert, AlertDescription, AlertAction } from '../../components/ui/alert'
+import { Item, ItemContent, ItemTitle, ItemDescription, ItemActions } from '../../components/ui/item'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Badge } from '../../components/ui/badge'
+import { Spinner } from '../../components/ui/spinner'
 import { ImpactConfirmation } from '../../components/SecretModal'
 import { toast } from '../../components/toast'
 import { apiErrorMessage } from '../../lib/api-error'
@@ -37,7 +40,6 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [confirmEmail, setConfirmEmail] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const form = useZodForm<ProfileForm>({
@@ -92,21 +94,19 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
         window.location.href = '/login'
       }
     } catch (e) {
-      toast.error(apiErrorMessage(e, '注销失败'))
+      toast.error(apiErrorMessage(e, '删除失败'))
     } finally {
       setDeleting(false)
     }
   }
 
-  const emailReadyToDelete = confirmEmail.trim().toLowerCase() === user.email.toLowerCase()
-
   return (
     <div>
-      <PageHeader title="个人资料" description="管理昵称、头像等账号资料" />
+      <PageHeader title="个人资料" />
 
       <SettingsCard
-        title="资料" description="对外展示的昵称与头像"
-        cta={<Button type="submit" form="profile-form" disabled={saving}>{saving ? '保存中…' : '保存'}</Button>}
+        title="基本资料"
+        cta={<Button type="submit" form="profile-form" disabled={saving}>{saving ? (<><Spinner aria-hidden="true" />保存中…</>) : '保存'}</Button>}
       >
         <form id="profile-form" onSubmit={handleSave} className="max-w-xl space-y-4">
           <FormField
@@ -116,59 +116,56 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
             <Input id="profile-name" maxLength={100} placeholder="怎么称呼你" {...form.register('display_name')} />
           </FormField>
           <FormField
-            label="头像链接"
+            label="头像链接（可选）"
             error={form.formState.errors.avatar_url?.message} htmlFor="profile-avatar"
-            description="可选；需 http(s):// 开头、最多 2048 字符。外部图片可能被内容安全策略拦截，无法加载时显示默认头像"
+            description="填写以 https:// 开头的图片地址；部分网站限制外链，图片无法加载时将显示默认头像"
           >
-            <Input id="profile-avatar" maxLength={2048} placeholder="https://…（可选）" {...form.register('avatar_url')} />
+            <Input id="profile-avatar" maxLength={2048} placeholder="https://…" {...form.register('avatar_url')} />
           </FormField>
         </form>
 
-        <div className="mt-6 flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">登录邮箱</p>
-            <p className="mt-0.5 truncate text-sm text-muted-foreground" data-testid="profile-email">
+        <Item variant="outline" className="mt-6">
+          <ItemContent className="min-w-0">
+            <ItemTitle>登录邮箱</ItemTitle>
+            <ItemDescription className="truncate" data-testid="profile-email">
               {user.email}
-            </p>
+            </ItemDescription>
             {/* B3：只读现实如实说明——此前页头承诺"管理登录邮箱"却无修改入口 */}
-            <p className="mt-1 text-xs text-muted-foreground">用于登录与接收通知，暂不支持自助修改</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {user.email_verified ? (
+            <ItemDescription className="text-xs">用于登录与接收通知，暂无法在此修改</ItemDescription>
+          </ItemContent>
+          {user.email_verified && (
+            <ItemActions>
               <Badge variant="secondary" className="bg-(--success)/10 text-(--success) border-(--success)/30">
                 已验证
               </Badge>
-            ) : (
-              <>
-                <Badge variant="outline" className="text-(--warning) border-(--warning)/40 bg-(--warning)/15">未验证</Badge>
-                <Button variant="outline" size="sm" onClick={handleResend} disabled={sending}>
-                  {sending ? '发送中…' : '重新发送验证邮件'}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+            </ItemActions>
+          )}
+        </Item>
+
+        {!user.email_verified && (
+          <Alert className="mt-2 border-(--warning)/40 bg-(--warning)/15">
+            <AlertDescription className="text-(--warning)/90">登录邮箱尚未验证</AlertDescription>
+            <AlertAction>
+              <Button variant="outline" size="sm" onClick={handleResend} disabled={sending}>
+                {sending ? (<><Spinner aria-hidden="true" />发送中…</>) : '重新发送验证邮件'}
+              </Button>
+            </AlertAction>
+          </Alert>
+        )}
       </SettingsCard>
 
       <SettingsCard
-        danger title="删除账号" description="注销后账号进入删除状态，无法恢复"
+        danger title="删除账号" description="删除后账号将被停用，所有数据无法恢复"
         cta={
           <Button
-            variant="destructive" disabled={!emailReadyToDelete || deleting}
+            variant="destructive" disabled={deleting}
             onClick={() => setConfirmOpen(true)}
           >
             删除账号
           </Button>
         }
       >
-        <div className="max-w-xl space-y-4">
-          <FormField label="输入登录邮箱以确认" htmlFor="profile-delete-email">
-            <Input
-              id="profile-delete-email" placeholder={user.email} value={confirmEmail}
-              onChange={(e) => setConfirmEmail(e.target.value)}
-            />
-          </FormField>
-        </div>
+        {null}
       </SettingsCard>
 
       <ImpactConfirmation
@@ -179,9 +176,9 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
         confirmText="永久删除"
         danger
         impacts={[
-          '账号进入 deleted 状态，邮箱被释放（可用同邮箱重新注册）',
-          '所有会话立即失效并吊销全部个人访问令牌（PAT）',
-          '昵称、头像等资料被清空，操作不可恢复',
+          '账号将被删除，该邮箱之后可用于重新注册',
+          '所有登录会话立即失效，全部个人访问令牌（PAT）被吊销',
+          '昵称、头像等账号资料将被清空',
         ]}
       />
     </div>

@@ -7,12 +7,11 @@ import type { components } from '@ploykit/client';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { DataTable, type Column } from '../../components/DataTable';
 import { FormField } from '../../components/FormField';
-import { PageEmpty, PageError, PageHeader } from '../../components/Page';
+import { PageEmpty, PageError, PageHeader, PageLoading } from '../../components/Page';
 import { ImpactConfirmation } from '../../components/SecretModal';
 import { SettingsCard } from '../../components/SettingsCard';
 import { toast } from '../../components/toast';
 import { Badge } from '../../components/ui/badge'
-import { StatusBadge } from '../../components/StatusBadge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import {
@@ -22,6 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
@@ -281,15 +285,23 @@ export function WorkspaceDetailPage() {
         return (
           <div className="flex items-center justify-end gap-1.5">
             {canTransfer && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={transferM.isPending}
-                title="目标升为 owner，当前 owner 降为 member（单事务原子）"
-                onClick={() => setTransferTarget(m)}
-              >
-                转让所有权
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={transferM.isPending}
+                      onClick={() => setTransferTarget(m)}
+                    />
+                  }
+                >
+                  转让所有权
+                </TooltipTrigger>
+                <TooltipContent>
+                  目标将成为所有者，你将降为普通成员
+                </TooltipContent>
+              </Tooltip>
             )}
             <Button
               variant="outline"
@@ -315,25 +327,24 @@ export function WorkspaceDetailPage() {
             : '基础信息 + 成员表 + 配额调整'
         }
         actions={
-          <Link
-            to="/admin/workspaces"
-            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          <Button
+            variant="ghost"
+            size="sm"
+            render={<Link to="/admin/workspaces" />}
           >
-            <ArrowLeft size={15} className="mr-1 inline" aria-hidden="true" />
+            <ArrowLeft aria-hidden="true" />
             返回工作区列表
-          </Link>
+          </Button>
         }
       />
 
-      {detailQ.isPending && (
-        <p className="text-sm text-muted-foreground">加载工作区详情中…</p>
-      )}
+      {detailQ.isPending && <PageLoading label="加载工作区详情中…" />}
 
       {ws && (
         <>
           <SettingsCard
             title="基础信息"
-            description="工作区档案（行内套餐变更在工作区列表页）"
+            description="工作区档案"
           >
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <p>
@@ -357,20 +368,28 @@ export function WorkspaceDetailPage() {
 
           <SettingsCard
             title="订阅"
-            description="计费区：当前套餐与订阅取消（渠道侧先取消，成功后立即降级 free；不发退款——退款属后续批次）"
+            description="当前套餐与订阅取消；取消后立即降级为免费，不发退款。"
             cta={
-              <Button
-                variant="destructive"
-                disabled={ws.plan_code === 'free' || cancelSubM.isPending}
-                title={
-                  ws.plan_code === 'free'
-                    ? '当前已是 free，无可取消订阅'
-                    : undefined
-                }
-                onClick={() => setCancelSubOpen(true)}
-              >
-                {cancelSubM.isPending ? '取消中…' : '取消订阅'}
-              </Button>
+              ws.plan_code === 'free' ? (
+                <Tooltip>
+                  {/* disabled 按钮不响应指针事件（pointer-events-none），
+                      Trigger 包 span 承接 hover/聚焦展示 Tooltip */}
+                  <TooltipTrigger render={<span tabIndex={0} className="inline-flex" />}>
+                    <Button variant="destructive" disabled>
+                      {cancelSubM.isPending ? '取消中…' : '取消订阅'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>当前已是 free，无可取消订阅</TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="destructive"
+                  disabled={cancelSubM.isPending}
+                  onClick={() => setCancelSubOpen(true)}
+                >
+                  {cancelSubM.isPending ? '取消中…' : '取消订阅'}
+                </Button>
+              )
             }
           >
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
@@ -393,7 +412,6 @@ export function WorkspaceDetailPage() {
 
           <SettingsCard
             title={`成员（${ws.members.length}）`}
-            description="行内改角色、转让所有权或移除；last-owner 保护由服务端兜底（409）"
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -409,7 +427,6 @@ export function WorkspaceDetailPage() {
 
           <SettingsCard
             title="配额调整"
-            description="手动授予加成额度（quota.Grant：同 键+原因+引用 幂等一次，正数加成）"
             cta={
               <Button onClick={onGrant} disabled={grantM.isPending}>
                 {grantM.isPending ? '授予中…' : '授予配额'}
@@ -463,7 +480,7 @@ export function WorkspaceDetailPage() {
           <SettingsCard
             danger
             title="删除工作区"
-            description="不可逆级联删除（成员/资源随工作区销毁，走 BeforeDelete 钩子）"
+            description="不可逆级联删除：成员与资源随工作区一并销毁，无法恢复"
             cta={
               <Button
                 variant="destructive"
@@ -497,8 +514,7 @@ export function WorkspaceDetailPage() {
             danger
             impacts={[
               '工作区及其全部业务数据被级联删除，不可恢复',
-              '全部成员关系解除，成员不再能访问该工作区',
-              'BeforeDelete 钩子可阻断删除（409），操作记入平台审计日志',
+              '全部成员关系解除，成员不再能访问该工作区'
             ]}
           />
 
@@ -526,7 +542,7 @@ export function WorkspaceDetailPage() {
                 if (!o) setTransferTarget(null);
               }}
               onConfirm={() => transferM.mutate(transferTarget)}
-              title={`转让 ${ws.name} 的所有权给 ${transferTarget.email}`}
+              title={`将 ${ws.name} 的所有权转让给 ${transferTarget.email}`}
               confirmText="确认转让"
               impacts={[
                 ws.members.filter((m) => m.role === 'owner').length > 1
@@ -535,12 +551,11 @@ export function WorkspaceDetailPage() {
                       .map((m) => m.email)
                       .join(
                         '、',
-                      )}）中最早加入者将降为 member，不再保有工作区最高权`
+                      )}）中最早加入者将降为普通成员，不再保有工作区最高权限`
                   : `当前 owner ${
                       ws.members.find((m) => m.role === 'owner')?.email ?? '—'
-                    } 将降为 member，不再保有工作区最高权`,
-                `${transferTarget.email} 将成为新 owner（单事务原子完成，工作区始终保有 owner）`,
-                '目标须是本工作区活跃成员；BeforeOwnerChange 钩子可阻断（409），操作记入平台审计日志',
+                    } 将降为普通成员，不再保有工作区最高权限`,
+                `${transferTarget.email} 将成为新所有者，工作区始终保有所有者`
               ]}
             />
           )}

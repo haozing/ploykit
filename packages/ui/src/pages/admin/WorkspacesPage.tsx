@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { formatDate } from '../../lib/utils';
 import {
@@ -129,8 +130,6 @@ export function WorkspacesPage() {
 
   const raw = wsQ.data?.items ?? [];
   const total = wsQ.data?.total ?? 0;
-  
-  const pastEnd = !wsQ.isPending && raw.length === 0 && page > 1;
 
   const columns: Column<AdminWorkspace>[] = [
     {
@@ -161,11 +160,24 @@ export function WorkspacesPage() {
       
       
       className: 'w-48',
-      render: (ws) => (
-        <span className="truncate text-muted-foreground" title={ws.owner_email ?? undefined}>
-          {ws.owner_email ?? '—'}
-        </span>
-      ),
+      render: (ws) =>
+        ws.owner_email ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  tabIndex={0}
+                  className="block max-w-full cursor-help truncate text-muted-foreground"
+                />
+              }
+            >
+              {ws.owner_email}
+            </TooltipTrigger>
+            <TooltipContent>{ws.owner_email}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: 'plan_code',
@@ -229,10 +241,7 @@ export function WorkspacesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="工作区"
-        description="平台全部工作区；支持名称/slug 搜索，行内可直接变更套餐（审计留痕）"
-      />
+      <PageHeader title="工作区" />
 
       {/* B-workspaces-4：跨页找工作区不再只能逐页手翻（服务端 ilike 检索）。 */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -278,15 +287,7 @@ export function WorkspacesPage() {
             onPageChange: setPage,
           }}
           empty={
-            
-            pastEnd ? (
-              <div className="flex flex-col items-center gap-2">
-                <PageEmpty label="没有更多工作区了" hint="当前页数据可能已被删除" />
-                <Button variant="outline" size="sm" onClick={() => setPage(1)}>
-                  返回第一页
-                </Button>
-              </div>
-            ) : q ? (
+            q ? (
               <PageEmpty label="没有匹配的工作区" hint="换个关键词或清除搜索" />
             ) : (
               <PageEmpty label="暂无工作区" />

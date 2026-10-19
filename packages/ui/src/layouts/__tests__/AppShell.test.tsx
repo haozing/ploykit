@@ -6,7 +6,15 @@ import { AppShell } from '../AppShell'
 
 
 
-const mocks = vi.hoisted(() => ({ impersonatedBy: undefined as string | undefined }))
+const mocks = vi.hoisted(() => ({
+  impersonatedBy: undefined as string | undefined,
+  // permKey 过滤用例的当前工作区：null 模拟无 Provider（真实 useWorkspace 无
+  // PloykitProvider 时同步抛错，走 AppShell 的 try/catch 回退）；非 null 即已挂
+  // Provider 的 current（role / role_perms 按需给）。
+  wsCurrent: null as
+    | { id: string; name: string; slug: string; role?: string; role_perms?: string[] }
+    | null,
+}))
 vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({
     user: {
@@ -19,6 +27,18 @@ vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
     refresh: vi.fn(),
     logout: vi.fn(async () => {}),
   }),
+}))
+
+// 与 SettingsShell.test.tsx 同款路径 mock（经 @ploykit/hooks index re-export 生效）。
+// wsCurrent === null 时与真实 useWorkspaceCtx 一样同步抛错——存量用例的无 Provider
+// 回退路径逐字节不变（role/rolePerms 均为 undefined）。
+vi.mock('../../../../hooks/src/hooks/useWorkspace', () => ({
+  useWorkspace: () => {
+    if (mocks.wsCurrent === null) {
+      throw new Error('must be used within PloykitProvider')
+    }
+    return { current: mocks.wsCurrent, switchTo: vi.fn(), clear: vi.fn() }
+  },
 }))
 
 const nav = [
@@ -159,5 +179,55 @@ describe('AppShell 侧栏增强（自 stock 镜像化后上提至组合层）', 
     const input = screen.getByRole('textbox', { name: '输入框' })
     fireEvent.keyDown(input, { key: 'b', ctrlKey: true })
     expect(sidebarState()).toBe('expanded')
+  })
+})
+
+describe('AppShell permKey 细粒度权限过滤（role_perms 集合门控）', () => {
+  const permNav = [
+    { path: '/app', label: '概览' },
+    { path: '/workspace', label: '工作区', permKey: 'workspace:read' },
+    { path: '/billing', label: '计费', permKey: 'billing:read' },
+  ]
+
+  function renderPermNav() {
+    return render(
+      <MemoryRouter initialEntries={['/app']}>
+        <AppShell brand="MyProduct" nav={permNav}>
+          <div>page-body</div>
+        </AppShell>
+      </MemoryRouter>,
+    )
+  }
+
+  beforeEach(() => {
+    mocks.wsCurrent = null
+  })
+
+  it('role_perms 已知：集合含该键的项渲染，不含的隐藏（owner 不特判，纯集合包含）', () => {
+    mocks.wsCurrent = {
+      id: 'ws-1',
+      name: 'Acme',
+      slug: 'acme',
+      role: 'member',
+      role_perms: ['workspace:read', 'members:read'],
+    }
+    renderPermNav()
+    expect(screen.getAllByText('概览').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('工作区').length).toBeGreaterThan(0)
+    expect(screen.queryByText('计费')).not.toBeInTheDocument()
+  })
+
+  it('role_perms 缺失（旧载荷）：permKey 项默认显示（向后兼容）', () => {
+    mocks.wsCurrent = { id: 'ws-1', name: 'Acme', slug: 'acme', role: 'member' }
+    renderPermNav()
+    expect(screen.getAllByText('工作区').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('计费').length).toBeGreaterThan(0)
+  })
+
+  it('无 Provider 回退路径：rolePerms 未知，permKey 项同样默认显示', () => {
+    // wsCurrent=null → mock 同步抛错，走 AppShell try/catch（与真实无 Provider 等价）
+    renderPermNav()
+    expect(screen.getAllByText('计费').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('工作区').length).toBeGreaterThan(0)
   })
 })

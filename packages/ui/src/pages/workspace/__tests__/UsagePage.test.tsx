@@ -73,7 +73,7 @@ describe('UsagePage', () => {
     expect(screen.getByText(/2026-10/)).toBeInTheDocument()
   })
 
-  it('B2：卡内正文不出现原始 API 键，中文标签进卡题与进度行，原始键留 title 悬停', () => {
+  it('B2：卡内正文不出现原始 API 键，中文标签进卡题与进度行，原始键经 Tooltip 悬停查看', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1', usage, loading: false, error: null, refetch: vi.fn(),
     })
@@ -83,17 +83,21 @@ describe('UsagePage', () => {
       </MemoryRouter>,
     )
 
-    
+
     expect(screen.queryByText('tasks_monthly')).not.toBeInTheDocument()
     expect(screen.queryByText('seats')).not.toBeInTheDocument()
 
-    
-    expect(screen.getByTitle('tasks_monthly')).toBeInTheDocument()
 
-    
-    const card = screen.getByTitle('tasks_monthly').closest('div[data-slot="card"]')
+    // 卡题文本由 Tooltip 触发器 span 包住（收起时 portal 不挂载，原始键不进正文）
+    const titleTrigger = screen.getAllByText('任务数（本月）')[0]
+    expect(titleTrigger).toHaveAttribute('data-slot', 'tooltip-trigger')
+    const card = titleTrigger.closest('div[data-slot="card"]')
     expect(card).toBeTruthy()
     expect(within(card as HTMLElement).getAllByText('任务数（本月）').length).toBeGreaterThanOrEqual(2)
+
+    // 聚焦触发器（键盘可达）→ Tooltip 经 portal 显示原始 API 键
+    fireEvent.focus(titleTrigger)
+    expect(await screen.findByText('tasks_monthly')).toBeInTheDocument()
   })
 
   it('B6：大数字千分位（12,500 / 50,000）', () => {
@@ -170,7 +174,7 @@ describe('UsagePage', () => {
     )
 
     
-    const card = screen.getByTitle('tasks_monthly').closest('div[data-slot="card"]')
+    const card = screen.getAllByText('任务数（本月）')[0].closest('div[data-slot="card"]')
     expect(card).toBeTruthy()
     const scope = within(card as HTMLElement)
 
@@ -186,7 +190,7 @@ describe('UsagePage', () => {
     expect(scope.getByTestId('progress-indicator-reserved')).toBeInTheDocument()
 
     
-    const seats = screen.getByTitle('seats').closest('div[data-slot="card"]')
+    const seats = screen.getAllByText('成员席位')[0].closest('div[data-slot="card"]')
     expect(within(seats as HTMLElement).queryByTestId('progress-indicator-reserved')).not.toBeInTheDocument()
   })
 

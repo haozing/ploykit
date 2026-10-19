@@ -3,9 +3,11 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { AuthShell } from '../../layouts/AuthShell';
 import { FormField } from '../../components/FormField';
+import { PasswordField } from '../../components/PasswordField';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { FieldDescription, FieldSeparator } from '../../components/ui/field';
+import { Spinner } from '../../components/ui/spinner';
 import { useApi } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
 import { useSiteConfig } from '@ploykit/hooks';
@@ -60,7 +62,7 @@ export function RegisterPage({
   onSuccess,
   loginPath = '/login',
   title = '创建账号',
-  description = '填写以下信息开始使用',
+  description,
 }: RegisterPageProps) {
   const api = useApi();
   const { refresh } = useAuth();
@@ -121,9 +123,11 @@ export function RegisterPage({
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-1 text-center">
             <h1 className="text-2xl font-bold">{title}</h1>
-            <p className="text-sm text-balance text-muted-foreground">
-              {description}
-            </p>
+            {description && (
+              <p className="text-sm text-balance text-muted-foreground">
+                {description}
+              </p>
+            )}
           </div>
 
           <FormField
@@ -145,9 +149,8 @@ export function RegisterPage({
             error={form.formState.errors.password?.message}
             htmlFor="reg-password"
           >
-            <Input
+            <PasswordField
               id="reg-password"
-              type="password"
               placeholder="至少 10 位，含三类字符"
               autoComplete="new-password"
               {...form.register('password')}
@@ -184,7 +187,14 @@ export function RegisterPage({
           )}
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? '注册中…' : '创建账号'}
+            {submitting ? (
+              <>
+                <Spinner aria-hidden="true" />
+                注册中…
+              </>
+            ) : (
+              '创建账号'
+            )}
           </Button>
 
           <FieldSeparator>已有账号？</FieldSeparator>

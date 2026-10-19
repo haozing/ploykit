@@ -3,13 +3,11 @@ import { useNavigate } from 'react-router'
 import { Check, X } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
-import { PageLoading, PageEmpty } from '../../components/Page'
+import { PageLoading, PageEmpty, PageError } from '../../components/Page'
 import { toast } from '../../components/toast'
 import { useMyInvitations } from '@ploykit/hooks'
-import { formatDateTime } from '../../lib/utils'
+import { formatDateTime, ROLE_LABEL } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
-
-const ROLE_LABEL: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员' }
 
 export interface InviteAcceptPageProps {
   
@@ -56,12 +54,10 @@ export function InviteAcceptPage({ onAccepted, onDeclined }: InviteAcceptPagePro
           {loading ? (
             <PageLoading label="加载邀请…" />
           ) : error ? (
-            <div className="py-6 text-center text-sm text-destructive">
-              {apiErrorMessage(error, '邀请加载失败')}
-              <div className="mt-3">
-                <Button size="sm" variant="outline" onClick={() => refetch()}>重试</Button>
-              </div>
-            </div>
+            <PageError
+              message={apiErrorMessage(error, '邀请加载失败')}
+              onRetry={() => refetch()}
+            />
           ) : pending.length === 0 ? (
             <PageEmpty label="暂无待处理的邀请" hint="收到新邀请时会出现在这里" />
           ) : (
@@ -84,14 +80,14 @@ export function InviteAcceptPage({ onAccepted, onDeclined }: InviteAcceptPagePro
                       disabled={decline.isPending}
                       onClick={() => onDecline(inv.id, inv.workspace_name)}
                     >
-                      <X /> 拒绝
+                      <X aria-hidden="true" /> 拒绝
                     </Button>
                     <Button
                       size="sm"
                       disabled={accept.isPending}
                       onClick={() => onAccept(inv.id, inv.workspace_name)}
                     >
-                      <Check /> 接受
+                      <Check aria-hidden="true" /> 接受
                     </Button>
                   </div>
                 </li>

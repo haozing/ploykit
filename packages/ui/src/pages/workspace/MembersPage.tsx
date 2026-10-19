@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { z } from 'zod'
-import { UserPlus, Link2 } from 'lucide-react'
+import { UserPlus, Link2, MoreHorizontal } from 'lucide-react'
 import {
   PageHeader, PageLoading, PageError, PageEmpty,
 } from '../../components/Page'
@@ -14,6 +14,9 @@ import { toast } from '../../components/toast'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Badge } from '../../components/ui/badge'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import {
@@ -27,7 +30,7 @@ import {
   useMembers, useMemberMutations, ASSIGNABLE_ROLES, LIST_PAGE_SIZE,
   type PKMember, type PKInvitation, type PKShareLink,
 } from '@ploykit/hooks'
-import { formatDateTime } from '../../lib/utils'
+import { formatDateTime, ROLE_LABEL } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
 import { roleSatisfies } from '@ploykit/hooks'
 
@@ -45,8 +48,6 @@ const shareLinkSchema = z.object({
   ttl_hours: z.number().int('须为整数').min(1, '至少 1 小时').max(24 * 30),
 })
 type ShareLinkForm = z.infer<typeof shareLinkSchema>
-
-const ROLE_LABEL: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员' }
 
 
 
@@ -122,12 +123,12 @@ export function MembersPage(_props: MembersPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="成员" description="管理当前工作区的成员、邀请与分享链接" />
+        <PageHeader title="成员" />
         <PageEmpty label="请先创建并选择一个工作区" />
       </div>
     )
   }
-  if (loading) return <PageLoading label="加载成员数据…" />
+  if (loading) return <PageLoading label="加载工作区数据…" />
   if (membersError) {
     return (
       <PageError
@@ -159,12 +160,12 @@ export function MembersPage(_props: MembersPageProps = {}) {
   const onRemove = async (m: PKMember) => {
     if (!(await confirm({
       title: '移除成员',
-      description: `确定将 ${m.email} 移出本工作区？其将立即失去访问权限。`,
+      description: `确定将 ${m.email} 移出本工作区？对方将立即失去访问权限。`,
       confirmText: '移除', danger: true,
     }))) return
     try {
       await mut.removeMember.mutateAsync(m.user_id)
-      toast.success('成员已移除')
+      toast.success(`已移除 ${m.email}`)
     } catch (e) {
       
       toast.error(apiErrorMessage(e, '移除失败') + (isConflict(e) ? '（请先转移或删除工作区）' : ''))
@@ -187,13 +188,13 @@ export function MembersPage(_props: MembersPageProps = {}) {
 
   const onRevokeLink = async (link: PKShareLink) => {
     if (!(await confirm({
-      title: '撤销分享链接',
-      description: `撤销前缀为 ${link.code_prefix}… 的分享链接？已兑换的成员不受影响。`,
+      title: '撤销加入码',
+      description: `撤销前缀为 ${link.code_prefix}… 的加入码？撤销后该加入码立即失效，持有者无法再加入，已兑换的成员不受影响。`,
       confirmText: '撤销', danger: true,
     }))) return
     try {
       await mut.revokeShareLink.mutateAsync(link.id)
-      toast.success('分享链接已撤销')
+      toast.success('加入码已撤销')
     } catch (e) {
       toast.error(apiErrorMessage(e, '撤销失败'))
     }
@@ -219,23 +220,22 @@ export function MembersPage(_props: MembersPageProps = {}) {
   const submitInvite = inviteForm.handleSubmit(async (values) => {
     try {
       await mut.invite.mutateAsync(values)
-      toast.success(`邀请已发送至 ${values.email}`)
+      toast.success(`已向 ${values.email} 发出邀请，待对方接受`)
       inviteForm.reset()
       setInviteOpen(false)
     } catch (e) {
-      toast.error(apiErrorMessage(e, '邀请发送失败'))
+      toast.error(apiErrorMessage(e, '邀请失败'))
     }
   })
 
   const submitLink = linkForm.handleSubmit(async (values) => {
     try {
       const res = await mut.createShareLink.mutateAsync(values)
-      toast.success('分享链接已创建')
-      setSecret(res.code) 
+      setSecret(res.code)
       linkForm.reset()
       setShareOpen(false)
     } catch (e) {
-      toast.error(apiErrorMessage(e, '创建分享链接失败'))
+      toast.error(apiErrorMessage(e, '创建加入码失败'))
     }
   })
 
@@ -285,31 +285,35 @@ export function MembersPage(_props: MembersPageProps = {}) {
       key: 'actions',
       header: '操作',
       className: 'w-[22%] text-right',
-      render: (m) => (
-        <div className="flex items-center justify-end gap-1.5">
-          {canTransfer && m.role !== 'owner' && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={mut.transferOwnership.isPending}
-              title="目标升为 owner，你降为 member（单事务原子）"
-              onClick={() => setTransferTarget(m)}
+      render: (m) =>
+        m.role !== 'owner' && (canManage || canTransfer) ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon" aria-label={`更多操作：${m.email}`} />}
             >
-              转让所有权
-            </Button>
-          )}
-          {m.role !== 'owner' && canManage ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={mut.removeMember.isPending}
-              onClick={() => onRemove(m)}
-            >
-              移除
-            </Button>
-          ) : null}
-        </div>
-      ),
+              <MoreHorizontal className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {canTransfer && (
+                <DropdownMenuItem
+                  disabled={mut.transferOwnership.isPending}
+                  onClick={() => setTransferTarget(m)}
+                >
+                  转让所有权
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={mut.removeMember.isPending}
+                  onClick={() => onRemove(m)}
+                >
+                  移除成员
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null,
     },
   ]
 
@@ -334,7 +338,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
 
   const shareLinkColumns: Column<PKShareLink>[] = [
     {
-      key: 'code_prefix', header: '兑换码前缀',
+      key: 'code_prefix', header: '加入码',
       render: (l) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{l.code_prefix}…</code>,
     },
     { key: 'role', header: '授予角色', render: (l) => <Badge variant="secondary">{ROLE_LABEL[l.role] ?? l.role}</Badge> },
@@ -365,12 +369,11 @@ export function MembersPage(_props: MembersPageProps = {}) {
     <div>
       <PageHeader
         title="成员"
-        description="管理当前工作区的成员、邀请与分享链接"
         actions={
           canManage ? (
             <>
               <Button variant="outline" onClick={() => setShareOpen(true)}>
-                <Link2 /> 创建分享链接
+                <Link2 /> 创建加入码
               </Button>
               <Button onClick={() => setInviteOpen(true)}>
                 <UserPlus /> 邀请成员
@@ -384,7 +387,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
         <TabsList>
           <TabsTrigger value="members">成员（{membersTotal}）</TabsTrigger>
           <TabsTrigger value="invitations">邀请（{invitationsTotal}）</TabsTrigger>
-          <TabsTrigger value="share-links">分享链接（{shareLinksTotal}）</TabsTrigger>
+          <TabsTrigger value="share-links">加入码（{shareLinksTotal}）</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members" className="mt-4">
@@ -414,7 +417,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
               columns={invitationColumns}
               rows={invitations}
               rowKey={(i) => i.id}
-              empty={<PageEmpty label="暂无邀请" hint="点击右上角“邀请成员”发送新邀请" />}
+              empty={<PageEmpty label="暂无邀请" hint="尚未发出邀请。定向邀请按邮箱一对一送达，公开加入请用加入码" />}
               pagination={{
                 page: invitePage,
                 pageSize: LIST_PAGE_SIZE,
@@ -429,7 +432,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
           {shareLinksError ? (
             
             <PageError
-              message={apiErrorMessage(shareLinksError, '分享链接加载失败')}
+              message={apiErrorMessage(shareLinksError, '加入码加载失败')}
               onRetry={() => refetchAll()}
             />
           ) : (
@@ -439,7 +442,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
               rowKey={(l) => l.id}
               empty={
                 
-                <PageEmpty label="暂无分享链接" hint="分享链接可让用户自助加入工作区；点击右上角“创建分享链接”生成兑换码" />
+                <PageEmpty label="暂无加入码" hint="加入码可让多人凭码自助加入工作区。创建后把码发给需加入的人" />
               }
               pagination={{
                 page: linkPage,
@@ -457,7 +460,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>邀请成员</DialogTitle>
-            <DialogDescription>向对方邮箱发送加入本工作区的邀请。</DialogDescription>
+            <DialogDescription>邀请将送达对方邮箱；对方也可在「我的邀请」中直接接受</DialogDescription>
           </DialogHeader>
           {/* B7：noValidate 关掉浏览器原生校验气泡——错误文案唯一出口仍是下方
               zod（inviteSchema 兜底保留：字段级中文文案 + aria 关联不随浏览器
@@ -469,7 +472,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
                   输入域名段不受影响；校验仍由 zod 统一裁决（见上 noValidate）。 */}
               <Input id="invite-email" type="email" autoComplete="email" placeholder="name@example.com" {...inviteForm.register('email')} />
             </FormField>
-            <FormField label="角色" error={inviteForm.formState.errors.role?.message}>
+            <FormField label="授予角色" error={inviteForm.formState.errors.role?.message}>
               <Select
                 value={inviteForm.watch('role')}
                 onValueChange={(v) => typeof v === 'string' && inviteForm.setValue('role', v as 'admin' | 'member')}
@@ -494,11 +497,11 @@ export function MembersPage(_props: MembersPageProps = {}) {
         </DialogContent>
       </Dialog>
 
-      {/* 创建分享链接对话框 */}
+      {/* 创建加入码对话框 */}
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>创建分享链接</DialogTitle>
+            <DialogTitle>创建加入码</DialogTitle>
             <DialogDescription>
               生成可分享的兑换码；持有者可按所选角色自助加入工作区。完整兑换码仅创建时展示一次。
             </DialogDescription>
@@ -509,7 +512,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
                 value={linkForm.watch('role')}
                 onValueChange={(v) => typeof v === 'string' && linkForm.setValue('role', v as 'admin' | 'member')}
               >
-                <SelectTrigger className="w-full" aria-label="分享链接角色">
+                <SelectTrigger className="w-full" aria-label="加入码角色">
                   <SelectValue>{ROLE_LABEL[linkForm.watch('role')]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -539,7 +542,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
       <SecretModal
         open={secret !== null}
         onOpenChange={(o) => !o && setSecret(null)}
-        secretName="分享链接兑换码"
+        secretName="加入码"
         secretValue={secret ?? ''}
       />
       {transferTarget && (
@@ -549,13 +552,12 @@ export function MembersPage(_props: MembersPageProps = {}) {
             if (!o) setTransferTarget(null)
           }}
           onConfirm={() => void onTransfer()}
-          title={`转让所有权给 ${transferTarget.email}`}
+          title={`将所有权转让给 ${transferTarget.email}`}
           confirmText="确认转让"
           danger
           impacts={[
-            `${transferTarget.email} 将成为新 owner（获得工作区最高权与计费控制权）`,
-            '你将降为 member（普通成员权限；转让单事务原子，失败不产生中间态）',
-            '目标须是本工作区活跃成员且账号未禁用；钩子拦截/非法目标返回 409',
+            `${transferTarget.email} 将成为新所有者（获得最高权限与计费控制权）`,
+            '你将降为普通成员',
           ]}
         />
       )}

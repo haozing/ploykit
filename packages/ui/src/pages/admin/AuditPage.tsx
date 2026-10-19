@@ -8,8 +8,11 @@ import type { components } from '@ploykit/client';
 import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { toast } from '../../components/toast';
+import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { Field, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { shortID, formatDateTime } from '../../lib/utils';
@@ -148,8 +151,6 @@ export function AuditPage() {
 
   const items = auditQ.data?.items ?? [];
   const total = auditQ.data?.total ?? 0;
-  
-  const pastEnd = !auditQ.isPending && items.length === 0 && page > 1;
 
   const columns: Column<AuditEvent>[] = [
     {
@@ -168,9 +169,14 @@ export function AuditPage() {
       className: 'w-28',
       render: (e) =>
         e.workspace_id ? (
-          <span className="font-mono text-xs" title={e.workspace_id}>
-            {shortID(e.workspace_id)}
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={<span tabIndex={0} className="cursor-help font-mono text-xs" />}
+            >
+              {shortID(e.workspace_id)}
+            </TooltipTrigger>
+            <TooltipContent>{e.workspace_id}</TooltipContent>
+          </Tooltip>
         ) : (
           <span className="text-xs text-muted-foreground">平台级</span>
         ),
@@ -195,9 +201,9 @@ export function AuditPage() {
       header: '动作',
       className: 'w-[20%]',
       render: (e) => (
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+        <Badge variant="outline" className="font-mono">
           {e.action}
-        </code>
+        </Badge>
       ),
     },
     {
@@ -218,66 +224,65 @@ export function AuditPage() {
 
   return (
     <div>
-      <PageHeader
-        title="审计"
-        description="平台级审计日志（跨工作区；按时间倒序，保留最近事件）"
-      />
+      <PageHeader title="审计" />
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">工作区 ID</span>
+        <Field className="w-56 gap-1">
+          <FieldLabel htmlFor="admin-audit-filter-workspace">工作区 ID</FieldLabel>
           <Input
-            className="w-56 font-mono"
+            id="admin-audit-filter-workspace"
+            className="font-mono"
             placeholder="workspace uuid"
             value={draft.workspace}
             onChange={(e) => setDraft({ ...draft, workspace: e.target.value })}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">动作</span>
+        </Field>
+        <Field className="w-44 gap-1">
+          <FieldLabel htmlFor="admin-audit-filter-action">动作</FieldLabel>
           <Input
-            className="w-44"
+            id="admin-audit-filter-action"
             placeholder="如 workspace.rename"
             value={draft.action}
             onChange={(e) => setDraft({ ...draft, action: e.target.value })}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">操作者邮箱</span>
+        </Field>
+        <Field className="w-48 gap-1">
+          <FieldLabel htmlFor="admin-audit-filter-actor">操作者邮箱</FieldLabel>
           <Input
-            className="w-48"
+            id="admin-audit-filter-actor"
             placeholder="邮箱前缀，如 alice@"
             value={draft.actor}
             onChange={(e) => setDraft({ ...draft, actor: e.target.value })}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">操作者 ID</span>
+        </Field>
+        <Field className="w-52 gap-1">
+          <FieldLabel htmlFor="admin-audit-filter-actor-id">操作者 ID</FieldLabel>
           <Input
-            className="w-52 font-mono"
+            id="admin-audit-filter-actor-id"
+            className="font-mono"
             placeholder="actor uuid"
             value={draft.actorId}
             onChange={(e) => setDraft({ ...draft, actorId: e.target.value })}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">起始日期</span>
+        </Field>
+        <Field className="w-40 gap-1">
+          <FieldLabel htmlFor="admin-audit-filter-from">起始日期</FieldLabel>
           <Input
-            className="w-40"
+            id="admin-audit-filter-from"
             type="date"
             value={draft.from}
             onChange={(e) => setDraft({ ...draft, from: e.target.value })}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">结束日期</span>
+        </Field>
+        <Field className="w-40 gap-1">
+          <FieldLabel htmlFor="admin-audit-filter-to">结束日期</FieldLabel>
           <Input
-            className="w-40"
+            id="admin-audit-filter-to"
             type="date"
             value={draft.to}
             onChange={(e) => setDraft({ ...draft, to: e.target.value })}
           />
-        </label>
+        </Field>
         <Button onClick={apply}>
           <Search /> 查询
         </Button>
@@ -313,23 +318,10 @@ export function AuditPage() {
             onPageChange: (p) => setSearchParams(paramsFromDraft(applied, p)),
           }}
           empty={
-            pastEnd ? (
-              <div className="flex flex-col items-center gap-2">
-                <PageEmpty label="没有更多审计记录了" hint="当前页数据可能已被轮转删除" />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSearchParams(paramsFromDraft(applied, 1))}
-                >
-                  返回第一页
-                </Button>
-              </div>
-            ) : (
-              <PageEmpty
-                label="暂无审计记录"
-                hint="调整过滤条件或触发一些操作后再来"
-              />
-            )
+            <PageEmpty
+              label="暂无审计记录"
+              hint="调整过滤条件或触发一些操作后再来"
+            />
           }
         />
       )}

@@ -66,12 +66,12 @@ var Defaults = map[string]string{
 }
 
 var Descriptions = map[string]string{
-	KeyBannerText:             "站点公告文本（空 = 无公告）；保存后全站顶条即时生效",
+	KeyBannerText:             "站点公告文本，空 = 不展示公告",
 	KeyBannerKind:             "公告样式：info = 蓝系 / warn = 橙红系",
 	KeyMaintenanceMode:        "维护模式：开启后全站顶栏显示「维护中」条（仅提示，不阻断请求）",
-	KeyAllowSignup:            "注册开关：关闭 = 邀请制（仅白名单邮箱可注册）；保存后即时生效（SignupGate 热读）",
+	KeyAllowSignup:            "注册开关：关闭 = 邀请制，仅白名单内邮箱可注册",
 	KeyAllowedDomains:         "注册邮箱域名白名单，逗号分隔（空 = 不限域名）",
-	KeyRateLimitPerUserPerMin: "API 每用户限流（请求/分钟）：0 = 关闭；修改后重启生效（启动期静态注入，不热重载）",
+	KeyRateLimitPerUserPerMin: "API 每用户限流（请求/分钟）：0 = 关闭；修改后需重启生效",
 	KeyRateLimitPerIPPerMin:   "认证路径每客户端 IP 限流（请求/分钟）：0 = 关闭；修改后重启生效",
 	KeyRateLimitAllowlist:     "限流豁免名单：逗号分隔 IP 或 CIDR（如 10.0.0.5, 192.168.0.0/16）；修改后重启生效",
 

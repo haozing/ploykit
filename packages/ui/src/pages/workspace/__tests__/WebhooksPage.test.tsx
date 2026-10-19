@@ -130,7 +130,7 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
       }),
     )
     
-    await waitFor(() => expect(screen.getByText('whsec_abc123')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByDisplayValue('whsec_abc123')).toBeInTheDocument())
   })
 
   it('投递记录页签：状态 Badge + 重投 POST deliveries/{id}/redeliver', async () => {
@@ -170,7 +170,7 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
     )
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('密钥已轮换'))
     
-    expect(await screen.findByText('whk_rotated_new')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('whk_rotated_new')).toBeInTheDocument()
     expect(screen.getByText('Webhook 签名密钥轮换成功')).toBeInTheDocument()
   })
 
@@ -196,7 +196,7 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '轮换密钥' }))
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
-    expect(screen.queryByText(/whk_/)).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue(/whk_/)).not.toBeInTheDocument()
   })
 
   

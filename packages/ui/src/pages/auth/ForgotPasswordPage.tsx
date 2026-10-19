@@ -4,6 +4,8 @@ import { AuthShell } from '../../layouts/AuthShell'
 import { FormField } from '../../components/FormField'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Alert, AlertDescription } from '../../components/ui/alert'
+import { Spinner } from '../../components/ui/spinner'
 import { usePasswordReset } from '@ploykit/hooks'
 
 export interface ForgotPasswordPageProps {
@@ -49,9 +51,9 @@ export function ForgotPasswordPage({
         </div>
 
         {sent ? (
-          <p className="text-sm text-muted-foreground" data-testid="sent-hint">
-            {sentHint}
-          </p>
+          <Alert data-testid="sent-hint">
+            <AlertDescription>{sentHint}</AlertDescription>
+          </Alert>
         ) : (
           <>
             <FormField label="邮箱" error={error ?? undefined} htmlFor="forgot-email">
@@ -66,7 +68,14 @@ export function ForgotPasswordPage({
             </FormField>
 
             <Button type="submit" className="w-full" disabled={loading || !email}>
-              {loading ? '发送中…' : '发送重置链接'}
+              {loading ? (
+                <>
+                  <Spinner aria-hidden="true" />
+                  发送中…
+                </>
+              ) : (
+                '发送重置链接'
+              )}
             </Button>
           </>
         )}

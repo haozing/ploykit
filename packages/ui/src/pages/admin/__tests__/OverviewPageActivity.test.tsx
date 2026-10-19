@@ -103,7 +103,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
     await screen.findByText('最近事件');
 
     const trigger = screen.getByRole('combobox', {
-      name: '按事件类型过滤活动流',
+      name: '按事件类型筛选最近事件',
     });
     fireEvent.click(trigger);
     const option = await screen.findByRole('option', {
@@ -128,7 +128,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
 
     
     const typeTrigger = screen.getByRole('combobox', {
-      name: '按事件类型过滤活动流',
+      name: '按事件类型筛选最近事件',
     });
     fireEvent.click(typeTrigger);
     const option = await screen.findByRole('option', {
@@ -164,7 +164,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
     expect(recentCalls.length).toBe(2); 
     expect(recentCalls[1]).toContain('type=checkout_started');
     expect(
-      screen.getByRole('combobox', { name: '按事件类型过滤活动流' }),
+      screen.getByRole('combobox', { name: '按事件类型筛选最近事件' }),
     ).toHaveTextContent('checkout_started');
   });
 
@@ -194,7 +194,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
       ).toBeTruthy(),
     );
     
-    expect(await screen.findByText('暂无埋点事件')).toBeInTheDocument();
+    expect(await screen.findByText('暂无事件')).toBeInTheDocument();
   });
 
   it('加载失败 → 错误行内展示 + 重试入口', async () => {
@@ -207,7 +207,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
       throw new Error('unexpected GET ' + path);
     });
     renderPage();
-    expect(await screen.findByText(/活动流加载失败/)).toBeInTheDocument();
+    expect(await screen.findByText(/最近事件加载失败/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
   });
 });

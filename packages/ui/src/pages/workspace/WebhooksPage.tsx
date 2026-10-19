@@ -14,6 +14,9 @@ import { useConfirm } from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
+import { Spinner } from '../../components/ui/spinner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Switch } from '../../components/ui/switch'
@@ -244,7 +247,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       render: (s) => (
         <div className="flex max-w-xs flex-wrap gap-1">
           {s.event_types.map((t) => (
-            <code key={t} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{t}</code>
+            <Badge key={t} variant="secondary" className="font-mono">{t}</Badge>
           ))}
         </div>
       ),
@@ -291,11 +294,9 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
         canManage ? (
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent"
-              aria-label={`订阅 ${s.url} 的操作`}
+              render={<Button variant="ghost" size="icon" aria-label={`订阅 ${s.url} 的操作`} />}
             >
               <MoreHorizontal className="size-4" />
-              <span className="sr-only">打开菜单</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem onClick={() => ping.mutate(s.id)}>发送 Ping</DropdownMenuItem>
@@ -325,15 +326,16 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
         const sub = subById.get(d.subscription_id)
         if (sub) {
           return (
-            <span className="block max-w-xs truncate font-mono text-xs" title={sub.url}>
-              {sub.url}
-            </span>
+            <Tooltip>
+              <TooltipTrigger className="block max-w-xs truncate text-left font-mono text-xs">
+                {sub.url}
+              </TooltipTrigger>
+              <TooltipContent>{sub.url}</TooltipContent>
+            </Tooltip>
           )
         }
         return subsQ.isSuccess ? (
-          <span className="inline-flex items-center whitespace-nowrap rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground">
-            已删除订阅
-          </span>
+          <Badge variant="outline" className="text-muted-foreground">已删除订阅</Badge>
         ) : <span className="text-muted-foreground">—</span>
       },
     },
@@ -351,9 +353,12 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       key: 'last_error', header: '最后错误',
       render: (d) =>
         d.last_error ? (
-          <span className="block max-w-xs truncate text-xs text-destructive" title={d.last_error}>
-            {d.last_error}
-          </span>
+          <Tooltip>
+            <TooltipTrigger className="block max-w-xs truncate text-left text-xs text-destructive">
+              {d.last_error}
+            </TooltipTrigger>
+            <TooltipContent className="break-all">{d.last_error}</TooltipContent>
+          </Tooltip>
         ) : <span className="text-muted-foreground">—</span>,
     },
     {
@@ -377,7 +382,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="Webhooks" description="出站事件订阅与投递管理" />
+        <PageHeader title="Webhooks" />
         <PageEmpty label="请先创建并选择一个工作区" />
       </div>
     )
@@ -387,8 +392,6 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
     <div>
       <PageHeader
         title="Webhooks"
-        description={`出站事件订阅与投递管理（工作区：${current?.name ?? wsId}）`}
-        
         actions={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus /> 创建订阅</Button> : undefined}
       />
 
@@ -408,7 +411,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
               columns={subColumns}
               rows={subsQ.data?.items ?? []}
               rowKey={(s) => s.id}
-              empty={<PageEmpty label="暂无订阅" hint="点击右上角“创建订阅”接收第一个事件" />}
+              empty={<PageEmpty label="暂无订阅" hint="创建订阅后，工作区事件会推送到你配置的地址" />}
             />
           )}
         </TabsContent>
@@ -423,7 +426,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
               columns={deliveryColumns}
               rows={deliveriesQ.data?.items ?? []}
               rowKey={(d) => d.id}
-              empty={<PageEmpty label="暂无投递" hint="触发事件或发送 Ping 后，投递会出现在这里" />}
+              empty={<PageEmpty label="暂无投递" hint="触发事件或发送 Ping 后生成" />}
             />
           )}
         </TabsContent>
@@ -474,19 +477,24 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
                         onCheckedChange={(c) => toggleEvent(ev.type, c === true)}
                       />
                       <span className="min-w-0">
-                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{ev.type}</code>
+                        <Badge variant="secondary" className="font-mono">{ev.type}</Badge>
                         {ev.description && <span className="ml-2 text-xs text-muted-foreground">{ev.description}</span>}
                       </span>
                     </label>
                   )
                 })}
-                {eventsQ.isPending && <p className="text-xs text-muted-foreground">加载事件目录…</p>}
+                {eventsQ.isPending && (
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Spinner className="size-3" />
+                    加载事件目录…
+                  </p>
+                )}
               </div>
             </FormField>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
               <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? '创建中…' : '创建订阅'}
+                {create.isPending ? (<><Spinner aria-hidden="true" />创建中…</>) : '创建订阅'}
               </Button>
             </DialogFooter>
           </form>

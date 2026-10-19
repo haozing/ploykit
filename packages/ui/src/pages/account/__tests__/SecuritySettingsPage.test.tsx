@@ -167,7 +167,7 @@ describe('SecuritySettingsPage', () => {
     expect(await screen.findByText('吊销全部会话？')).toBeInTheDocument()
     expect(screen.getByText(/个人访问令牌（PAT）不受影响/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByLabelText(/我理解并接受以上影响/))
+    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }))
     fireEvent.click(screen.getByRole('button', { name: '全部吊销', hidden: false }))
     await waitFor(() => expect(mocks.revokeAll).toHaveBeenCalledTimes(1))
   })
@@ -177,7 +177,7 @@ describe('SecuritySettingsPage', () => {
     render(<SecuritySettingsPage />)
 
     fireEvent.click(screen.getByRole('button', { name: '全部吊销' }))
-    fireEvent.click(await screen.findByLabelText(/我理解并接受以上影响/))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /我理解并接受以上影响/ }))
     fireEvent.click(screen.getByRole('button', { name: '全部吊销', hidden: false }))
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('网络连接失败'))

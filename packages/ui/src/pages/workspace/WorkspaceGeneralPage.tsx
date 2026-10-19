@@ -11,6 +11,7 @@ import { useConfirm } from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Item, ItemContent, ItemDescription, ItemActions, ItemTitle } from '../../components/ui/item'
 import { useApi } from '@ploykit/hooks'
 import { useWorkspace } from '@ploykit/hooks'
 import { useZodForm } from '@ploykit/hooks'
@@ -116,12 +117,9 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
 
   return (
     <div>
-      <PageHeader title="工作区概况" description={`工作区 ${ws.name}（${ws.slug}）的基础设置`} />
+      <PageHeader title="工作区概况" />
 
-      <SettingsCard
-        title="基础信息"
-        description="工作区名称对成员可见；slug 是 URL 标识，创建后不可修改。"
-      >
+      <SettingsCard title="基础信息">
         <form className="max-w-md space-y-4" onSubmit={handleRename}>
           <FormField label="工作区名称" error={form.formState.errors.name?.message} htmlFor="ws-name">
             <Input id="ws-name" disabled={!canRename} {...form.register('name')} />
@@ -137,26 +135,30 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
 
       <SettingsCard danger title="危险区" description="以下操作影响全部成员，请谨慎执行。">
         <div className="space-y-4">
-          <div className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
-            <div>
-              <p className="text-sm font-medium">退出工作区</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+          <Item variant="outline" className="justify-between gap-4 p-4">
+            <ItemContent>
+              <ItemTitle>退出工作区</ItemTitle>
+              <ItemDescription>
                 退出后你将不再是「{ws.name}」的成员。最后一位 owner 无法退出。
-              </p>
-            </div>
-            <Button variant="outline" onClick={handleLeave}>退出工作区</Button>
-          </div>
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Button variant="outline" onClick={handleLeave}>退出工作区</Button>
+            </ItemActions>
+          </Item>
 
           {canDelete && (
-            <div className="flex flex-row items-center justify-between gap-4 rounded-lg border border-destructive/40 p-4">
-              <div>
-                <p className="text-sm font-medium text-destructive">删除工作区</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
+            <Item variant="outline" className="justify-between gap-4 border-destructive/40 p-4">
+              <ItemContent>
+                <ItemTitle className="text-destructive">删除工作区</ItemTitle>
+                <ItemDescription>
                   硬删除工作区及其全部数据，操作不可恢复。
-                </p>
-              </div>
-              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>删除工作区</Button>
-            </div>
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>删除工作区</Button>
+              </ItemActions>
+            </Item>
           )}
         </div>
       </SettingsCard>
@@ -169,7 +171,7 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
         impacts={[
           '工作区全部数据将被永久删除，且不可恢复',
           '所有成员立即失去访问权限',
-          '未撤销的邀请与分享链接同时失效',
+          '未撤销的邀请与加入码同时失效',
           '历史审计记录将保留（合规要求），但不再关联可访问的工作区',
         ]}
         confirmText="永久删除"

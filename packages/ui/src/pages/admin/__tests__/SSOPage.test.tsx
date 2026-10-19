@@ -73,13 +73,22 @@ describe('SSOPage', () => {
 
     expect(await screen.findByText('Acme')).toBeInTheDocument();
     expect(screen.getByText('https://idp.acme.corp')).toBeInTheDocument();
-    expect(screen.getByText('client_id: acme-client')).toBeInTheDocument();
-    
+    // issuer/client_id 原生 title 换 Tooltip（截断 mono 值 span+tabIndex=0 挂法）：
+    // 值文本落在触发器 span 上且保持键盘可达；前缀与值分属两个节点
+    expect(screen.getByText('https://idp.acme.corp')).toHaveAttribute(
+      'tabindex',
+      '0',
+    );
+    // fixture 多行 provider，每行都有 client_id: 前缀 → getAllByText
+    expect(screen.getAllByText('client_id:').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('acme-client')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('acme-client')[0]).toHaveAttribute('tabindex', '0');
+
     expect(screen.getByText('已加密')).toBeInTheDocument();
     expect(screen.getByText('明文')).toBeInTheDocument();
     
     expect(
-      screen.getByText(/配置的增删改在各工作区\s+自助面完成/),
+      screen.getByText(/配置由各工作区自助管理，此处只读/),
     ).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledWith('/api/admin/sso');
   });

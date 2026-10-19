@@ -2,6 +2,7 @@
 import { Link } from 'react-router'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
 import { Badge } from '../../components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip'
 import { Card, CardHeader, CardTitle, CardAction, CardContent } from '../../components/ui/card'
 import {
   Progress, ProgressLabel, ProgressValue,
@@ -9,21 +10,10 @@ import {
 import { DataTable, type Column } from '../../components/DataTable'
 import { useUsage, type PKUsageItem } from '@ploykit/hooks'
 import { apiErrorMessage } from '../../lib/api-error'
+import { DIM_LABEL, dimLabel } from '../../lib/utils'
 
 
 const NEAR_FULL_PCT = 80
-
-
-const DIM_LABEL: Record<string, string> = {
-  tasks_monthly: '任务数（本月）',
-  workspaces: '工作区数',
-  seats: '成员席位',
-  webhooks: 'Webhook 订阅数',
-}
-
-function dimLabel(key: string): string {
-  return DIM_LABEL[key] ?? key
-}
 
 
 function fmtNum(n: number): string {
@@ -112,8 +102,21 @@ function UsageCard({ item }: { item: UsageItem }) {
   return (
     <Card size="sm">
       <CardHeader>
-        {/* B2：卡题中文标签，原始 API 键（tasks_monthly 等）仅留 title 悬停辅助，不再入正文。 */}
-        <CardTitle title={DIM_LABEL[item.key] ? item.key : undefined}>{dimLabel(item.key)}</CardTitle>
+        {/* B2：卡题中文标签，原始 API 键（tasks_monthly 等）经 Tooltip 悬停/聚焦查看，
+            收起时 portal 不挂载、不进正文。CardTitle 是普通 div（无 render 通道），
+            故 Tooltip 套在外层、Trigger render 成 span 包住标题文本；tabIndex 保键盘可达。 */}
+        <CardTitle>
+          {DIM_LABEL[item.key] ? (
+            <Tooltip>
+              <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                {dimLabel(item.key)}
+              </TooltipTrigger>
+              <TooltipContent>{item.key}</TooltipContent>
+            </Tooltip>
+          ) : (
+            dimLabel(item.key)
+          )}
+        </CardTitle>
         {unlimited && <CardAction><Badge variant="secondary">不限量</Badge></CardAction>}
         {!unlimited && full && <CardAction><Badge variant="destructive">已用尽</Badge></CardAction>}
       </CardHeader>
@@ -189,7 +192,7 @@ export function UsagePage(_props: UsagePageProps = {}) {
         title="用量"
         description={
           usage
-            ? `当前套餐 ${usage.plan_code} · 计费周期 ${usage.period}（周期内累计，超限将按套餐规则限制或计费）`
+            ? `当前套餐 ${usage.plan_code} · 计费周期 ${usage.period}`
             : undefined
         }
       />

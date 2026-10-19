@@ -7,7 +7,7 @@ import { apiFetch } from '@ploykit/client';
 import type { components } from '@ploykit/client';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { DataTable, type Column } from '../../components/DataTable';
-import { PageEmpty, PageError, PageHeader } from '../../components/Page';
+import { PageEmpty, PageError, PageHeader, PageLoading } from '../../components/Page';
 import { ImpactConfirmation } from '../../components/SecretModal';
 import { SettingsCard } from '../../components/SettingsCard';
 import { toast } from '../../components/toast';
@@ -15,6 +15,7 @@ import { Badge } from '../../components/ui/badge'
 import { StatusBadge } from '../../components/StatusBadge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import { useApi, ApiError } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
@@ -230,11 +231,17 @@ export function UserDetailPage() {
       render: (s) => (
         <div className="min-w-0">
           <p className="truncate">{s.device || '未知设备'}</p>
-          <p
-            className="truncate font-mono text-xs text-muted-foreground"
-            title={s.ip_hash}
-          >
-            {s.ip_hash ? shortID(s.ip_hash) : '—'}
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            {s.ip_hash ? (
+              <Tooltip>
+                <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                  {shortID(s.ip_hash)}
+                </TooltipTrigger>
+                <TooltipContent>{s.ip_hash}</TooltipContent>
+              </Tooltip>
+            ) : (
+              '—'
+            )}
           </p>
         </div>
       ),
@@ -388,15 +395,23 @@ export function UserDetailPage() {
         }
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={exporting || !u}
-              onClick={() => void onExportData()}
-              title="GDPR 用户数据导出（资料 / 成员关系 / 在途会话元数据 / PAT 元数据 / 最近审计事件）"
-            >
-              <Download /> {exporting ? '导出中…' : '导出数据'}
-            </Button>
+            <Tooltip>
+              {/* disabled 按钮不派发指针事件，Tooltip 的 Trigger 需包一层 span */}
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting || !u}
+                  onClick={() => void onExportData()}
+                >
+                  <Download /> {exporting ? '导出中…' : '导出数据'}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                GDPR 用户数据导出（资料 / 成员关系 / 在途会话元数据 / PAT 元数据 /
+                最近审计事件）
+              </TooltipContent>
+            </Tooltip>
             <Link
               to="/admin/users"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -408,15 +423,12 @@ export function UserDetailPage() {
         }
       />
 
-      {detailQ.isPending && (
-        <p className="text-sm text-muted-foreground">加载用户详情中…</p>
-      )}
+      {detailQ.isPending && <PageLoading label="加载用户详情中…" />}
 
       {u && (
         <>
           <SettingsCard
             title="账号资料与安全操作"
-            description="状态、验证与登录会话的全局操作（全部记入平台审计）"
             cta={
               <Button
                 variant="destructive"
@@ -511,7 +523,6 @@ export function UserDetailPage() {
 
           <SettingsCard
             title={`在途会话（${d?.sessions.length ?? 0}）`}
-            description="该用户当前有效的登录会话；可单设备吊销"
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -532,7 +543,6 @@ export function UserDetailPage() {
 
           <SettingsCard
             title={`访问令牌 PAT（${d?.pats.length ?? 0}）`}
-            description="目标用户个人访问令牌的只读元数据（不含凭据材料）"
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -548,7 +558,6 @@ export function UserDetailPage() {
 
           <SettingsCard
             title={`所属工作区（${d?.workspaces.length ?? 0}）`}
-            description="该用户作为成员加入的工作区与角色"
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -570,7 +579,7 @@ export function UserDetailPage() {
           <SettingsCard
             danger
             title="删除账号"
-            description="软删：status=deleted、邮箱改写、PAT 全吊销，不可恢复"
+            description="删除后不可恢复，该邮箱将被改写以供重新注册"
             cta={
               <Button
                 variant="destructive"
@@ -614,7 +623,7 @@ export function UserDetailPage() {
             confirmText="永久删除"
             danger
             impacts={[
-              '账号进入 deleted 状态，邮箱被改写释放，无法恢复',
+              '账号将被删除，邮箱将被改写以供重新注册，操作不可恢复',
               '该用户全部在途会话与个人访问令牌（PAT）立即吊销',
               '名下工作区与业务数据保留，操作记入平台审计日志',
             ]}

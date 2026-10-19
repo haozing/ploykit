@@ -25,7 +25,7 @@ export interface UserMenuProps {
   logoutRedirect?: string
 }
 
-function initialsOf(name: string, email: string): string {
+export function initialsOf(name: string, email: string): string {
   const src = name.trim() || email.trim()
   if (!src) return '?'
   const parts = src.split(/[\s@._-]+/).filter(Boolean)

@@ -1,6 +1,7 @@
 
 import { useId } from 'react'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
+import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Switch } from '../../components/ui/switch'
 import { toast } from '../../components/toast'
 import { useSEO } from '@ploykit/hooks'
@@ -28,7 +29,7 @@ export interface NotificationPreferencesPageProps {
 export function NotificationPreferencesPage({
   types,
   title = '通知偏好',
-  description = '选择每种通知的接收渠道；未显示的类型默认全部开启',
+  description = '未显示的类型默认全部开启',
   siteName,
   emailChannelNote,
 }: NotificationPreferencesPageProps) {
@@ -63,7 +64,7 @@ export function NotificationPreferencesPage({
         <PageHeader title={title} description={description} />
         <PageEmpty
           label="暂无可配置的通知类型"
-          hint="通知类型目录由服务端下发：首次产生通知设置（或后端接入类型目录接口）后，会出现在这里；默认所有通知双渠道开启。"
+          hint="产生通知设置后，可配置的类型会显示在列表中"
         />
       </div>
     )
@@ -81,11 +82,13 @@ export function NotificationPreferencesPage({
     <div>
       <PageHeader title={title} description={description} />
 
-      <div className="w-full max-w-4xl space-y-4">
+      <div className="w-full space-y-4">
         {/* B2 诚实化：邮件未接线时产品传入的能力说明（单行渲染一次，不随行重复——
             390 窄屏行内追加会挤压开关组造成溢出） */}
         {emailChannelNote && (
-          <p className="text-sm text-muted-foreground">邮件渠道：{emailChannelNote}</p>
+          <Alert>
+            <AlertDescription>邮件渠道：{emailChannelNote}</AlertDescription>
+          </Alert>
         )}
         {list.map(({ type, label, description: desc }) => {
           const row = byType.get(type)

@@ -199,14 +199,14 @@ describe('SchedulesPage（调度页：列表/启停/新建）', () => {
 
   
 
-  it('下次触发正文带 (GMT±X) 口径，title 提示计划时区与显示口径', async () => {
+  it('下次触发正文带 (GMT±X) 口径，悬停/聚焦提示计划时区与显示口径', async () => {
     renderPage()
     
-    expect(await screen.findByText(formatDateTimeTz(plan.next_fire_at))).toBeInTheDocument()
+    const trigger = await screen.findByText(formatDateTimeTz(plan.next_fire_at))
+    expect(trigger).toBeInTheDocument()
     
-    
-    const labeled = screen.getByTitle(`计划时区 Asia/Shanghai；此处按浏览器本地时区（${browserTzLabel()}）显示`)
-    expect(labeled).toHaveTextContent(formatDateTimeTz(plan.next_fire_at))
+    fireEvent.focus(trigger)
+    expect(await screen.findByText(`计划时区 Asia/Shanghai；此处按浏览器本地时区（${browserTzLabel()}）显示`)).toBeInTheDocument()
   })
 
   it('最近触发同样带口径标注（有值行）', async () => {

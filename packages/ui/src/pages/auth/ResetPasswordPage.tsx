@@ -2,8 +2,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { AuthShell } from '../../layouts/AuthShell'
 import { FormField } from '../../components/FormField'
+import { PasswordField } from '../../components/PasswordField'
 import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
+import { Alert, AlertDescription } from '../../components/ui/alert'
+import { Spinner } from '../../components/ui/spinner'
 import { usePasswordReset } from '@ploykit/hooks'
 import { passwordSchema } from './RegisterPage'
 
@@ -107,17 +109,18 @@ export function ResetPasswordPage({
           
           <p className="text-center text-sm text-muted-foreground">正在打开链接…</p>
         ) : !email || !token ? (
-          <p className="text-center text-sm text-destructive" data-testid="reset-invalid">
-            链接无效：缺少邮箱或令牌参数，请从邮件中的链接进入。
-          </p>
+          <Alert variant="destructive" data-testid="reset-invalid">
+            <AlertDescription>
+              链接无效：缺少邮箱或令牌参数，请从邮件中的链接进入。
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">正在为 {email} 设置新密码</p>
 
             <FormField label="新密码" htmlFor="reset-new">
-              <Input
+              <PasswordField
                 id="reset-new"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="至少 10 位，含三类字符"
@@ -131,14 +134,12 @@ export function ResetPasswordPage({
               error={confirmError ?? undefined}
               htmlFor="reset-confirm"
             >
-              <Input
+              <PasswordField
                 id="reset-confirm"
-                type="password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="再输入一次"
                 autoComplete="new-password"
-                aria-invalid={confirmError ? true : undefined}
                 required
               />
             </FormField>
@@ -150,7 +151,14 @@ export function ResetPasswordPage({
             )}
 
             <Button type="submit" className="w-full" disabled={loading || !password || !confirm}>
-              {loading ? '提交中…' : '重置密码'}
+              {loading ? (
+                <>
+                  <Spinner aria-hidden="true" />
+                  提交中…
+                </>
+              ) : (
+                '重置密码'
+              )}
             </Button>
           </>
         )}

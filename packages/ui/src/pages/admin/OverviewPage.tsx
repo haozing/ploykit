@@ -6,9 +6,13 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import type { components } from '@ploykit/client';
 import { DataTable, type Column } from '../../components/DataTable';
 import { FormField } from '../../components/FormField';
-import { PageEmpty, PageError, PageHeader } from '../../components/Page';
+import {
+  PageEmpty,
+  PageError,
+  PageHeader,
+  PageLoading,
+} from '../../components/Page';
 import { toast } from '../../components/toast';
-import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
   Card,
@@ -33,6 +37,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import { Spinner } from '../../components/ui/spinner';
+import { Textarea } from '../../components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { formatDateTime } from '../../lib/utils';
@@ -60,21 +71,26 @@ const RECENT_LIMIT = 20;
 const STATS_CALIBER: Record<string, string> = {
   总用户: '全部注册用户（含已封禁）',
   活跃用户: '状态为「生效中」的用户数（非登录活跃度）',
-  工作区: '全部工作区总数',
   付费工作区: '当前套餐不是免费套餐的工作区数',
-  '近 7 天新增用户': '最近 7 天内注册的用户数',
-  '近 30 天新增用户': '最近 30 天内注册的用户数',
+  // 近 30 天新增用户的口径含动态数值（近 7 天人数），随 stats 元组逐卡下发
 };
 
 
 function EventTypeCode({ type }: { type: string }) {
   return (
-    <code
-      className="block max-w-[16rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-      title={type}
-    >
-      {type}
-    </code>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <code
+            tabIndex={0}
+            className="block max-w-[16rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
+          />
+        }
+      >
+        {type}
+      </TooltipTrigger>
+      <TooltipContent>{type}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -164,7 +180,7 @@ export function OverviewPage() {
         toast.success('公告已发送给指定用户');
       } else {
         
-        toast.success('公告已全员发送，逐人明细可在「审计」页查看');
+        toast.success('公告已发送给全部活跃用户，发送明细可在「审计」页查看');
       }
       setAnnounceOpen(false);
       setTitle('');
@@ -216,12 +232,21 @@ export function OverviewPage() {
       header: '对象',
       render: (r) =>
         r.entity_type || r.entity_id ? (
-          <span
-            className="block max-w-[16rem] truncate font-mono text-xs text-muted-foreground"
-            title={`${r.entity_type ?? ''} ${r.entity_id ?? ''}`}
-          >
-            {[r.entity_type, r.entity_id].filter(Boolean).join(' ')}
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  tabIndex={0}
+                  className="block max-w-[16rem] truncate font-mono text-xs text-muted-foreground"
+                />
+              }
+            >
+              {[r.entity_type, r.entity_id].filter(Boolean).join(' ')}
+            </TooltipTrigger>
+            <TooltipContent>
+              {`${r.entity_type ?? ''} ${r.entity_id ?? ''}`}
+            </TooltipContent>
+          </Tooltip>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         ),
@@ -233,35 +258,48 @@ export function OverviewPage() {
       render: (r) =>
         r.workspace_id ? (
           <span className="flex items-center gap-1">
-            <span
-              className="font-mono text-xs text-muted-foreground"
-              title={r.workspace_id}
-            >
-              {r.workspace_id.slice(0, 8)}
-            </span>
-            {/* B7：短期补偿——ID 无名称解析，给一键复制完整 ID */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="size-6 p-0 text-muted-foreground"
-              aria-label={`复制工作区 ID ${r.workspace_id}`}
-              title={`复制完整 ID：${r.workspace_id}`}
-              onClick={() => {
-                const full = r.workspace_id ?? '';
-                if (typeof navigator.clipboard?.writeText === 'function') {
-                  void navigator.clipboard
-                    .writeText(full)
-                    .then(() => toast.success('工作区 ID 已复制'))
-                    .catch(() =>
-                      toast.error(`复制失败，完整 ID：${full}`),
-                    );
-                } else {
-                  toast.info(`当前环境不支持自动复制，完整 ID：${full}`);
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    tabIndex={0}
+                    className="font-mono text-xs text-muted-foreground"
+                  />
                 }
-              }}
-            >
-              <Copy size={12} aria-hidden="true" />
-            </Button>
+              >
+                {r.workspace_id.slice(0, 8)}
+              </TooltipTrigger>
+              <TooltipContent>{r.workspace_id}</TooltipContent>
+            </Tooltip>
+            {/* B7：短期补偿——ID 无名称解析，给一键复制完整 ID */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-6 p-0 text-muted-foreground"
+                    aria-label={`复制工作区 ID ${r.workspace_id}`}
+                    onClick={() => {
+                      const full = r.workspace_id ?? '';
+                      if (typeof navigator.clipboard?.writeText === 'function') {
+                        void navigator.clipboard
+                          .writeText(full)
+                          .then(() => toast.success('工作区 ID 已复制'))
+                          .catch(() =>
+                            toast.error(`复制失败，完整 ID：${full}`),
+                          );
+                      } else {
+                        toast.info(`当前环境不支持自动复制，完整 ID：${full}`);
+                      }
+                    }}
+                  />
+                }
+              >
+                <Copy size={12} aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>复制完整 ID：{r.workspace_id}</TooltipContent>
+            </Tooltip>
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">平台</span>
@@ -288,14 +326,19 @@ export function OverviewPage() {
     }
   }, [hash]);
 
-  const stats: [string, number][] = statsQ.data
+  // 统计卡收敛（方案 A）：近 7 天 ⊂ 近 30 天，删除 7 天卡，
+  // 7 天数值并入 30 天卡的口径 tooltip（第三元为逐卡口径，缺省回退 STATS_CALIBER）
+  const stats: [string, number, string?][] = statsQ.data
     ? [
         ['总用户', statsQ.data.total_users],
         ['活跃用户', statsQ.data.active_users],
         ['工作区', statsQ.data.total_workspaces],
         ['付费工作区', statsQ.data.paid_workspaces],
-        ['近 7 天新增用户', statsQ.data.new_users_7d],
-        ['近 30 天新增用户', statsQ.data.new_users_30d],
+        [
+          '近 30 天新增用户',
+          statsQ.data.new_users_30d,
+          `最近 30 天内注册的用户数；其中近 7 天 ${statsQ.data.new_users_7d.toLocaleString()} 人`,
+        ],
       ]
     : [];
 
@@ -303,7 +346,6 @@ export function OverviewPage() {
     <div className="space-y-6">
       <PageHeader
         title="概览"
-        description="平台全局指标与事件埋点汇总"
         actions={
           <Button onClick={() => setAnnounceOpen(true)}>
             <Megaphone /> 发布公告
@@ -311,9 +353,7 @@ export function OverviewPage() {
         }
       />
 
-      {statsQ.isPending && (
-        <p className="text-sm text-muted-foreground">加载指标中…</p>
-      )}
+      {statsQ.isPending && <PageLoading label="加载指标中…" />}
       {statsQ.isError && (
         <PageError
           message={adminError(statsQ.error, '指标加载失败')}
@@ -321,17 +361,34 @@ export function OverviewPage() {
         />
       )}
       {statsQ.isSuccess && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {stats.map(([label, value]) => (
-            <Card key={label} size="sm" title={STATS_CALIBER[label]}>
-              <CardHeader>
-                <CardDescription>{label}</CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums">
-                  {value.toLocaleString()}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-          ))}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {stats.map(([label, value, caliber]) => {
+            const tip = caliber ?? STATS_CALIBER[label];
+            return (
+              <Card key={label} size="sm">
+                <CardHeader>
+                  <CardDescription>{label}</CardDescription>
+                  {/* 口径说明经 Tooltip 悬停/聚焦查看（UsagePage 先例：CardTitle 无
+                      render 通道，Tooltip 套外层、Trigger render 成 span 包标题文本；
+                      tabIndex 保键盘可达） */}
+                  <CardTitle className="text-2xl font-semibold tabular-nums">
+                    {tip ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={<span tabIndex={0} className="cursor-help" />}
+                        >
+                          {value.toLocaleString()}
+                        </TooltipTrigger>
+                        <TooltipContent>{tip}</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      value.toLocaleString()
+                    )}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -343,7 +400,6 @@ export function OverviewPage() {
           <CardTitle>
             <h2 className="font-medium">最近事件</h2>
           </CardTitle>
-          <CardDescription>活动流：近端埋点事件，按时间倒序</CardDescription>
           <CardAction>
             <Select
               value={recentType || 'all'}
@@ -353,7 +409,7 @@ export function OverviewPage() {
                 updateParams({ type: next });
               }}
             >
-              <SelectTrigger size="sm" aria-label="按事件类型过滤活动流">
+              <SelectTrigger size="sm" aria-label="按事件类型筛选最近事件">
                 <SelectValue>{recentType || '全部类型'}</SelectValue>
               </SelectTrigger>
               <SelectContent align="end">
@@ -370,13 +426,14 @@ export function OverviewPage() {
         <div className="px-6">
           {recentQ.isError ? (
             <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              活动流加载失败（{apiErrorMessage(recentQ.error, '未知错误')}）
-              <button
-                className="underline"
+              最近事件加载失败（{apiErrorMessage(recentQ.error, '未知错误')}）
+              <Button
+                variant="link"
+                size="sm"
                 onClick={() => void recentQ.refetch()}
               >
                 重试
-              </button>
+              </Button>
             </p>
           ) : (
             <DataTable
@@ -387,13 +444,13 @@ export function OverviewPage() {
               empty={
                 recentType ? (
                   <PageEmpty
-                    label={`近端无 ${recentType} 事件`}
-                    hint="换个类型或清除过滤"
+                    label={`最近没有「${recentType}」事件`}
+                    hint="清除类型过滤可查看全部事件"
                   />
                 ) : (
                   <PageEmpty
-                    label="暂无埋点事件"
-                    hint="业务流量到达后在此实时可见（analytics 管线产物）"
+                    label="暂无事件"
+                    hint="工作区内产生业务事件后会出现在这里"
                   />
                 )
               }
@@ -406,9 +463,8 @@ export function OverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <h2 className="font-medium">事件埋点汇总</h2>
+              <h2 className="font-medium">事件汇总</h2>
             </CardTitle>
-            <CardDescription>按事件类型聚合的出现次数与最近发生时间</CardDescription>
             <CardAction>
               <Select
                 value={days}
@@ -435,14 +491,15 @@ export function OverviewPage() {
           <div className="px-6">
             {analyticsQ.isError ? (
               <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-                埋点汇总加载失败（
+                事件汇总加载失败（
                 {apiErrorMessage(analyticsQ.error, '未知错误')}）
-                <button
-                  className="underline"
+                <Button
+                  variant="link"
+                  size="sm"
                   onClick={() => void analyticsQ.refetch()}
                 >
                   重试
-                </button>
+                </Button>
               </p>
             ) : (
               <DataTable
@@ -452,8 +509,8 @@ export function OverviewPage() {
                 loading={analyticsQ.isPending}
                 empty={
                   <PageEmpty
-                    label="暂无埋点事件"
-                    hint="近期没有事件写入，或埋点管线未接线"
+                    label="暂无事件"
+                    hint="用户开始使用产品后，事件会出现在这里；若产品已运行仍为空，通常是事件上报未接入"
                   />
                 }
               />
@@ -462,13 +519,6 @@ export function OverviewPage() {
         </Card>
       </section>
 
-      <p className="text-xs text-muted-foreground">
-        <Badge variant="outline" className="mr-1">
-          提示
-        </Badge>
-        管理台数据为平台级视图；用户/工作区的具体操作见左侧导航。
-      </p>
-
       {/* 发布公告：target user/all；title/body 必填，link 可选；同题同日去重。
           B6：文案去 API 词汇（type=/user_id/uuid/审计事件名）。 */}
       <Dialog open={announceOpen} onOpenChange={setAnnounceOpen}>
@@ -476,8 +526,8 @@ export function OverviewPage() {
           <DialogHeader>
             <DialogTitle>发布公告</DialogTitle>
             <DialogDescription>
-              以站内通知发送。全员模式单次上限 1000 人；同标题同日只发一次（重复
-              发送自动跳过）。
+              以站内通知发送。「全部活跃用户」单次上限 1000
+              人；同标题同日只发一次（重复发送自动跳过）。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -504,7 +554,7 @@ export function OverviewPage() {
                 <Input
                   id="announce-user"
                   className="font-mono"
-                  placeholder="输入目标用户的用户 ID"
+                  placeholder="粘贴完整用户 ID（可从用户详情页获取）"
                   value={targetUser}
                   onChange={(e) => setTargetUser(e.target.value)}
                 />
@@ -519,10 +569,10 @@ export function OverviewPage() {
               />
             </FormField>
             <FormField label="正文（必填）" htmlFor="announce-body">
-              <textarea
+              <Textarea
                 id="announce-body"
-                className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="公告内容（支持多行）"
+                className="min-h-24"
+                placeholder="如：维护期间系统将短暂不可用，请提前保存工作"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
               />
@@ -549,7 +599,14 @@ export function OverviewPage() {
               }
               onClick={() => notifyM.mutate()}
             >
-              {notifyM.isPending ? '发送中…' : '发送'}
+              {notifyM.isPending ? (
+                <>
+                  <Spinner aria-hidden="true" />
+                  发送
+                </>
+              ) : (
+                '发送'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

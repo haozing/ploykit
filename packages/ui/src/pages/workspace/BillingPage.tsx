@@ -8,6 +8,8 @@ import { SettingsCard } from '../../components/SettingsCard'
 import { useConfirm } from '../../components/ConfirmDialog'
 import { toast } from '../../components/toast'
 import { Button } from '../../components/ui/button'
+import { Alert, AlertDescription } from '../../components/ui/alert'
+import { Spinner } from '../../components/ui/spinner'
 import { Badge } from '../../components/ui/badge'
 import { StatusBadge } from '../../components/StatusBadge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
@@ -228,12 +230,11 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
 
   return (
     <div>
-      <PageHeader title="计费" description="当前套餐、升级与订单管理（按周期购买，到期后需再次购买或续期）" />
+      <PageHeader title="计费" />
 
       {/* 当前套餐 */}
       <SettingsCard
         title="当前套餐"
-        description="工作区当前生效的套餐与历史订单。"
         cta={<Badge variant="outline">{currentPlanCode ?? '未知'}</Badge>}
       >
         <p className="text-sm text-muted-foreground">
@@ -281,12 +282,9 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
 
         {/* B1/G4：manual 空 InfoURL 的线下支付指引（下单成功但无收银台时持续可见） */}
         {manualNote && (
-          <p
-            role="note"
-            className="mb-4 rounded-lg border-(--warning)/40 bg-(--warning)/15 px-3 py-2 text-sm text-(--warning)"
-          >
-            {manualNote}
-          </p>
+          <Alert className="mb-4 border-(--warning)/40 bg-(--warning)/15">
+            <AlertDescription className="text-(--warning)/90">{manualNote}</AlertDescription>
+          </Alert>
         )}
 
         {sortedPlans.length === 0 && (
@@ -329,7 +327,12 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
                   {isCurrent
                     ? '当前计划'
                     : checkoutPlan === plan.code
-                      ? '跳转收银台…'
+                      ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Spinner className="size-3.5" aria-hidden="true" />
+                          跳转收银台…
+                        </span>
+                      )
                       : '升级'}
                 </Button>
                 {/* F8：升级不可用原因可见化（不只 title 悬停）。B1/G4：动态渠道表下
@@ -355,12 +358,12 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
       </SettingsCard>
 
       {/* 订单 */}
-      <SettingsCard title="订单" description="全部购买记录；待处理订单可取消。" bodyClassName="px-4 pt-4 pb-4">
+      <SettingsCard title="订单" bodyClassName="px-4 pt-4 pb-4">
         <DataTable
           columns={orderColumns}
           rows={orders}
           rowKey={(o) => o.id}
-          empty={<PageEmpty label="暂无订单" hint="选择套餐完成首次购买后，订单会出现在这里" />}
+          empty={<PageEmpty label="暂无订单" hint="选择套餐完成首次购买后生成" />}
         />
       </SettingsCard>
     </div>

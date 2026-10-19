@@ -43,10 +43,10 @@ describe('SecretModal', () => {
     )
 
     
-    expect(await screen.findByText('tk_second')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('tk_second')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).not.toBeChecked()
     expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
-    expect(screen.queryByText('tk_first')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('tk_first')).not.toBeInTheDocument()
   })
 
   it('关闭再打开同一组件：confirmed 同样重置', async () => {
@@ -73,7 +73,7 @@ describe('SecretModal', () => {
       />,
     )
 
-    expect(await screen.findByText('tk_first')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('tk_first')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).not.toBeChecked()
     expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
   })

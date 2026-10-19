@@ -112,7 +112,7 @@ describe('UsersPage 危险操作（P2-25）', () => {
     const confirmBtn = await screen.findByRole('button', { name: '封禁' })
     expect(confirmBtn).toBeDisabled()
     expect(screen.getByText(/其名下工作区与数据保留/)).toBeInTheDocument()
-    fireEvent.click(screen.getByLabelText(/我理解并接受以上影响/))
+    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }))
     fireEvent.click(screen.getByRole('button', { name: '封禁' }))
 
     await waitFor(() =>
@@ -155,7 +155,7 @@ describe('UsersPage 危险操作（P2-25）', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '模拟登录' }))
 
     const confirmBtn = await screen.findByRole('button', { name: '以该用户进入产品' })
-    fireEvent.click(screen.getByLabelText(/我理解并接受以上影响/))
+    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }))
     fireEvent.click(confirmBtn)
 
     await waitFor(() =>

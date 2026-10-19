@@ -10,12 +10,17 @@ import { DataTable, type Column } from '../../components/DataTable'
 import { FormField } from '../../components/FormField'
 import { CronInput, describeCron } from '../../components/CronInput'
 import { toast } from '../../components/toast'
+import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Switch } from '../../components/ui/switch'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../../components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip'
 import { useApi } from '@ploykit/hooks'
 import { useWorkspace } from '@ploykit/hooks'
 import { useZodForm } from '@ploykit/hooks'
@@ -213,34 +218,41 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
     {
       key: 'misfire', header: '错过策略',
       render: (p) => (
-        <span className="rounded border bg-muted px-1.5 py-0.5 text-xs">
+        <Badge variant="outline">
           {MISFIRE_LABEL[p.misfire] ?? p.misfire}
-        </span>
+        </Badge>
       ),
     },
     {
       key: 'next_fire_at', header: '下次触发',
       render: (p) => (
         
-        
-        <span
-          className="whitespace-nowrap text-muted-foreground"
-          title={`计划时区 ${p.timezone}；此处按浏览器本地时区（${tzLabel}）显示`}
-        >
-          {formatDateTimeTz(p.next_fire_at)}
-        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={<span className="whitespace-nowrap text-muted-foreground" tabIndex={0} />}
+          >
+            {formatDateTimeTz(p.next_fire_at)}
+          </TooltipTrigger>
+          <TooltipContent>
+            计划时区 {p.timezone}；此处按浏览器本地时区（{tzLabel}）显示
+          </TooltipContent>
+        </Tooltip>
       ),
     },
     {
       key: 'last_fired_at', header: '最近触发',
       render: (p) => p.last_fired_at
         ? (
-          <span
-            className="whitespace-nowrap text-muted-foreground"
-            title={`计划时区 ${p.timezone}；此处按浏览器本地时区（${tzLabel}）显示`}
-          >
-            {formatDateTimeTz(p.last_fired_at)}
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={<span className="whitespace-nowrap text-muted-foreground" tabIndex={0} />}
+            >
+              {formatDateTimeTz(p.last_fired_at)}
+            </TooltipTrigger>
+            <TooltipContent>
+              计划时区 {p.timezone}；此处按浏览器本地时区（{tzLabel}）显示
+            </TooltipContent>
+          </Tooltip>
           )
         : <span className="text-muted-foreground">—</span>,
     },
@@ -283,7 +295,7 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="调度" description="用户自定义定时触发（cron + 时区）" />
+        <PageHeader title="调度" />
         <PageEmpty label="请先创建并选择一个工作区" />
       </div>
     )
@@ -293,7 +305,6 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
     <div>
       <PageHeader
         title="调度"
-        description={`用户自定义定时触发（工作区：${current?.name ?? wsId}）`}
         actions={<Button onClick={() => setCreateOpen(true)}><Plus /> 创建计划</Button>}
       />
 
@@ -306,7 +317,7 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
           columns={columns}
           rows={plansQ.data?.items ?? []}
           rowKey={(p) => p.id}
-          empty={<PageEmpty label="暂无调度计划" hint="点击右上角“创建计划”设置第一个定时触发" />}
+          empty={<PageEmpty label="暂无调度计划" hint="创建计划后，任务将按设定的 cron 规则定时触发" />}
         />
       )}
 
@@ -316,8 +327,8 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
           <DialogHeader>
             <DialogTitle>创建调度计划</DialogTitle>
             <DialogDescription>
-              五字段 cron 表达式 + IANA 时区；错过策略"跳过"等下一个周期，
-              "补发"会先补最近一次。预览由后端计算，与实际触发一致。
+              五字段 cron 表达式 + IANA 时区；错过策略“跳过”等下一个周期，
+              “补发”会先补最近一次。预览与实际触发一致。
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitCreate}>
@@ -328,14 +339,18 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
               <CronInput idPrefix="sched" value={cronValue} onChange={setCron} />
             </FormField>
             <FormField label="错过策略" error={form.formState.errors.misfire?.message} htmlFor="sched-misfire">
-              <select
-                id="sched-misfire"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                {...form.register('misfire')}
+              <Select
+                value={form.watch('misfire')}
+                onValueChange={(v) => form.setValue('misfire', v === 'once' ? 'once' : 'skip', { shouldValidate: true })}
               >
-                <option value="skip">错过跳过（默认）</option>
-                <option value="once">错过补发一次</option>
-              </select>
+                <SelectTrigger id="sched-misfire" className="w-full">
+                  <SelectValue>{form.watch('misfire') === 'once' ? '错过补发一次' : '错过跳过（默认）'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">错过跳过（默认）</SelectItem>
+                  <SelectItem value="once">错过补发一次</SelectItem>
+                </SelectContent>
+              </Select>
             </FormField>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
@@ -353,7 +368,7 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
           <DialogHeader>
             <DialogTitle>编辑调度计划</DialogTitle>
             <DialogDescription>
-              修改 {editing?.kind} 的调度规则；只提交改动的字段，下次触发时间按新规则重新计算。
+              修改 {editing?.kind} 的调度规则；下次触发时间按新规则重新计算。
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitEdit}>
@@ -364,14 +379,18 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
               <CronInput idPrefix="sched-edit" value={editCronValue} onChange={setEditCron} />
             </FormField>
             <FormField label="错过策略" error={editForm.formState.errors.misfire?.message} htmlFor="sched-edit-misfire">
-              <select
-                id="sched-edit-misfire"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                {...editForm.register('misfire')}
+              <Select
+                value={editForm.watch('misfire')}
+                onValueChange={(v) => editForm.setValue('misfire', v === 'once' ? 'once' : 'skip', { shouldValidate: true })}
               >
-                <option value="skip">错过跳过（默认）</option>
-                <option value="once">错过补发一次</option>
-              </select>
+                <SelectTrigger id="sched-edit-misfire" className="w-full">
+                  <SelectValue>{editForm.watch('misfire') === 'once' ? '错过补发一次' : '错过跳过（默认）'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">错过跳过（默认）</SelectItem>
+                  <SelectItem value="once">错过补发一次</SelectItem>
+                </SelectContent>
+              </Select>
             </FormField>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>取消</Button>

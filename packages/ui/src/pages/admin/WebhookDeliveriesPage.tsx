@@ -9,6 +9,8 @@ import { toast } from '../../components/toast';
 import { Badge } from '../../components/ui/badge'
 import { StatusBadge } from '../../components/StatusBadge';
 import { Button } from '../../components/ui/button';
+import { Spinner } from '../../components/ui/spinner';
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import {
   Select,
   SelectContent,
@@ -115,7 +117,6 @@ export function WebhookDeliveriesPage() {
 
   const items = listQ.data?.items ?? [];
   const total = listQ.data?.total ?? 0;
-  const pastEnd = !listQ.isPending && items.length === 0 && page > 1;
 
   const columns: Column<AdminWebhookDeliveryRow>[] = [
     {
@@ -124,9 +125,14 @@ export function WebhookDeliveriesPage() {
       className: 'w-24',
       render: (d) =>
         d.workspace_id ? (
-          <span className="font-mono text-xs" title={d.workspace_id}>
-            {shortID(d.workspace_id)}
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={<span tabIndex={0} className="cursor-help font-mono text-xs" />}
+            >
+              {shortID(d.workspace_id)}
+            </TooltipTrigger>
+            <TooltipContent>{d.workspace_id}</TooltipContent>
+          </Tooltip>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
             孤儿
@@ -138,9 +144,19 @@ export function WebhookDeliveriesPage() {
       header: '目标 URL',
       render: (d) =>
         d.url ? (
-          <p className="max-w-[22rem] truncate font-mono text-xs" title={d.url}>
-            {d.url}
-          </p>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <p
+                  tabIndex={0}
+                  className="max-w-[22rem] cursor-help truncate font-mono text-xs"
+                />
+              }
+            >
+              {d.url}
+            </TooltipTrigger>
+            <TooltipContent>{d.url}</TooltipContent>
+          </Tooltip>
         ) : (
           <span className="text-xs text-muted-foreground">（订阅已删除）</span>
         ),
@@ -151,12 +167,19 @@ export function WebhookDeliveriesPage() {
       header: '事件 ID',
       className: 'w-32',
       render: (d) => (
-        <code
-          className="block max-w-[8rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-          title={d.event_id}
-        >
-          {d.event_id}
-        </code>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Badge
+                variant="outline"
+                className="block max-w-[8rem] cursor-help truncate font-mono"
+              />
+            }
+          >
+            {d.event_id}
+          </TooltipTrigger>
+          <TooltipContent>{d.event_id}</TooltipContent>
+        </Tooltip>
       ),
     },
     {
@@ -164,12 +187,19 @@ export function WebhookDeliveriesPage() {
       header: '事件',
       className: 'w-40',
       render: (d) => (
-        <code
-          className="block max-w-[10rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-          title={d.event_type}
-        >
-          {d.event_type}
-        </code>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Badge
+                variant="outline"
+                className="block max-w-[10rem] cursor-help truncate font-mono"
+              />
+            }
+          >
+            {d.event_type}
+          </TooltipTrigger>
+          <TooltipContent>{d.event_type}</TooltipContent>
+        </Tooltip>
       ),
     },
     {
@@ -190,18 +220,32 @@ export function WebhookDeliveriesPage() {
       className: 'w-32',
       render: (d) =>
         d.last_status_code ? (
-          <span className="font-mono text-xs" title={d.last_error ?? undefined}>
-            {d.last_status_code}
-          </span>
+          d.last_error ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={<span tabIndex={0} className="cursor-help font-mono text-xs" />}
+              >
+                {d.last_status_code}
+              </TooltipTrigger>
+              <TooltipContent>{d.last_error}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="font-mono text-xs">{d.last_status_code}</span>
+          )
         ) : d.last_error ? (
-          
-          
-          <span
-            className="block max-w-[12rem] truncate text-xs text-destructive"
-            title={d.last_error}
-          >
-            {d.last_error}
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  tabIndex={0}
+                  className="block max-w-[12rem] cursor-help truncate text-xs text-destructive"
+                />
+              }
+            >
+              {d.last_error}
+            </TooltipTrigger>
+            <TooltipContent>{d.last_error}</TooltipContent>
+          </Tooltip>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         ),
@@ -220,26 +264,27 @@ export function WebhookDeliveriesPage() {
       key: 'actions',
       header: '操作',
       className: 'w-20',
-      render: (d) => (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={redeliverM.isPending}
-          onClick={() => redeliverM.mutate(d)}
-        >
-          重投
-        </Button>
-      ),
+      render: (d) => {
+        // 行级 pending：仅禁用正在重投的行（react-query variables 记录当前 mutate 入参）
+        const redeploying = redeliverM.isPending && redeliverM.variables?.id === d.id;
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={redeploying}
+            onClick={() => redeliverM.mutate(d)}
+          >
+            {redeploying && <Spinner className="size-3" aria-hidden="true" />}
+            重投
+          </Button>
+        );
+      },
     },
   ];
 
   return (
     <div>
-      <PageHeader
-        title="Webhooks"
-        
-        description="所有工作区的 Webhook 投递与重试记录，按时间倒序"
-      />
+      <PageHeader title="Webhooks" />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Select
@@ -295,14 +340,7 @@ export function WebhookDeliveriesPage() {
             onPageChange: (p) => setFilter(status, p),
           }}
           empty={
-            pastEnd ? (
-              <div className="flex flex-col items-center gap-2">
-                <PageEmpty label="没有更多投递了" hint="当前页数据可能已被删除" />
-                <Button variant="outline" size="sm" onClick={() => setFilter(status, 1)}>
-                  返回第一页
-                </Button>
-              </div>
-            ) : status ? (
+            status ? (
               <PageEmpty label="没有该状态的投递" hint="换个状态或清除过滤" />
             ) : (
               <PageEmpty

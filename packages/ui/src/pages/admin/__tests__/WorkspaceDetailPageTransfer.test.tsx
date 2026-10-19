@@ -137,12 +137,12 @@ describe('WorkspaceDetailPage · 转让所有权', () => {
 
     
     expect(
-      await screen.findByText('转让 Acme 的所有权给 bob@t.co'),
+      await screen.findByText('将 Acme 的所有权转让给 bob@t.co'),
     ).toBeInTheDocument();
-    expect(screen.getByText(/alice@t\.co 将降为 member/)).toBeInTheDocument();
-    expect(screen.getByText(/始终保有 owner/)).toBeInTheDocument();
+    expect(screen.getByText(/alice@t\.co 将降为普通成员/)).toBeInTheDocument();
+    expect(screen.getByText(/工作区始终保有所有者/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/我理解并接受以上影响/));
+    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }));
     fireEvent.click(screen.getByRole('button', { name: '确认转让' }));
 
     await waitFor(() =>

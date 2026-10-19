@@ -255,9 +255,16 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
         }
         return (
           <DropdownMenu>
+            {/* 触发器走 Button（WebhooksPage 先例 render 挂法）：获得 Button
+                语义与一致的可视态，aria-label 保留行级语义（操作 {email}） */}
             <DropdownMenuTrigger
-              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground max-md:size-10"
-              aria-label={`操作 ${u.email}`}
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`操作 ${u.email}`}
+                />
+              }
             >
               <MoreHorizontal size={16} aria-hidden="true" />
             </DropdownMenuTrigger>
@@ -311,10 +318,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
 
   return (
     <div>
-      <PageHeader
-        title="用户"
-        description="平台全部注册用户；支持邮箱/昵称搜索与状态过滤（服务端检索）"
-      />
+      <PageHeader title="用户" />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
@@ -447,7 +451,8 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
         title={
           action?.kind === 'impersonate' ? `模拟登录 ${action.user.email}` : ''
         }
-        confirmText={impersonateM.isPending ? '切换中…' : '以该用户进入产品'}
+        confirmText="以该用户进入产品"
+        pending={impersonateM.isPending}
         impacts={[
           '浏览器将以该用户身份进入产品（/app）',
           '当前管理员会话被替换，退出登录后需重新登录管理员账号',

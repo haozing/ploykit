@@ -6,6 +6,11 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { formatDateTime } from '../../lib/utils';
 import { ADMIN_PAGE_SIZE, adminError } from './shared';
@@ -45,13 +50,21 @@ export function SSOPage() {
         
         <div className="min-w-0 max-w-[16rem]">
           <p className="truncate font-medium">
-            <Link
-              to={`/admin/workspaces/${s.workspace_id}`}
-              className="transition-colors hover:text-primary hover:underline"
-              title="前往该工作区的管理详情页"
-            >
-              {s.workspace_name || '—'}
-            </Link>
+            {/* 原生 title → Tooltip：Trigger render 成 Link（MembersPage Button 挂法，
+                render 通道合并悬停/焦点属性，导航行为不变） */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    to={`/admin/workspaces/${s.workspace_id}`}
+                    className="transition-colors hover:text-primary hover:underline"
+                  />
+                }
+              >
+                {s.workspace_name || '—'}
+              </TooltipTrigger>
+              <TooltipContent>前往该工作区的管理详情页</TooltipContent>
+            </Tooltip>
           </p>
           <p className="truncate font-mono text-xs text-muted-foreground">
             {s.workspace_slug}
@@ -64,14 +77,24 @@ export function SSOPage() {
       header: 'Issuer',
       render: (s) => (
         <div className="min-w-0 max-w-[24rem]">
-          <p className="truncate font-mono text-xs" title={s.issuer_url}>
-            {s.issuer_url}
+          {/* 截断 mono 值：原生 title → Tooltip，触发器 span+tabIndex=0 保键盘可达
+              （UsagePage 先例） */}
+          <p className="truncate font-mono text-xs">
+            <Tooltip>
+              <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                {s.issuer_url}
+              </TooltipTrigger>
+              <TooltipContent>{s.issuer_url}</TooltipContent>
+            </Tooltip>
           </p>
-          <p
-            className="truncate font-mono text-xs text-muted-foreground"
-            title={s.client_id}
-          >
-            client_id: {s.client_id}
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            client_id:{' '}
+            <Tooltip>
+              <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                {s.client_id}
+              </TooltipTrigger>
+              <TooltipContent>{s.client_id}</TooltipContent>
+            </Tooltip>
           </p>
         </div>
       ),
@@ -89,11 +112,17 @@ export function SSOPage() {
           
           <div className="min-w-0">
             <Badge variant="destructive">明文</Badge>
-            <p
-              className="mt-1 max-w-[12rem] truncate text-xs text-destructive"
-              title="存量明文（迁移 016 时代写入）：部署配置 PLOYKIT_SEAL_KEY 后，到该工作区自助面重新保存一次即可加密"
-            >
-              需重新保存以加密
+            {/* 长说明换 Tooltip：常显指引「需重新保存以加密」保持不动（B-sso-2） */}
+            <p className="mt-1 max-w-[12rem] truncate text-xs text-destructive">
+              <Tooltip>
+                <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                  需重新保存以加密
+                </TooltipTrigger>
+                <TooltipContent>
+                  存量明文（迁移 016 时代写入）：部署配置 PLOYKIT_SEAL_KEY
+                  后，到该工作区自助面重新保存一次即可加密
+                </TooltipContent>
+              </Tooltip>
             </p>
           </div>
         ),
@@ -118,13 +147,10 @@ export function SSOPage() {
     <div>
       <PageHeader
         title="SSO"
-        description="跨工作区联邦 SSO（OIDC）概览——只读；密钥密封状态与配置归属一览"
+        description="各工作区的联邦 SSO（OIDC）配置一览（只读）"
       />
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        每工作区至多一条联邦 IdP 配置（企业 SSO
-        登录入口）。配置的增删改在各工作区 自助面完成（工作区设置 → 联邦
-        SSO），管理台不代为操作（点工作区名可直达其管理详情页）；client_secret
-        永不回传，此处只展示其密封状态（sealed:v1 加密 / 存量明文警告）。
+        配置由各工作区自助管理，此处只读；client_secret 已加密存储。
       </p>
 
       {listQ.isError ? (

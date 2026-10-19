@@ -4,6 +4,9 @@ import { api } from '@ploykit/client'
 import { apiErrorMessage } from '../lib/api-error'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
+import { FieldError } from './ui/field'
+import { Label } from './ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 
 export interface CronValue {
   cron: string
@@ -137,9 +140,9 @@ export function CronInput({
     <div className="space-y-2">
       <div className="flex gap-2">
         <div className="min-w-0 flex-1 space-y-1">
-          <label htmlFor={`${idPrefix}-expr`} className="text-sm font-medium">
+          <Label htmlFor={`${idPrefix}-expr`}>
             Cron 表达式
-          </label>
+          </Label>
           <Input
             id={`${idPrefix}-expr`}
             placeholder="0 9 * * *"
@@ -153,20 +156,23 @@ export function CronInput({
           </p>
         </div>
         <div className="w-48 shrink-0 space-y-1">
-          <label htmlFor={`${idPrefix}-tz`} className="text-sm font-medium">
+          <Label htmlFor={`${idPrefix}-tz`}>
             时区
-          </label>
-          <select
-            id={`${idPrefix}-tz`}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          </Label>
+          <Select
             value={value.timezone}
+            onValueChange={(tz) => onChange({ ...value, timezone: tz })}
             disabled={disabled}
-            onChange={(e) => onChange({ ...value, timezone: e.target.value })}
           >
-            {zones.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </select>
+            <SelectTrigger id={`${idPrefix}-tz`} className="w-full">
+              <SelectValue>{value.timezone}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {zones.map((tz) => (
+                <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="space-y-1">
@@ -180,7 +186,7 @@ export function CronInput({
           {loading ? '预览中…' : `预览下次 ${previewCount} 次`}
         </Button>
         {error && (
-          <p role="alert" className="text-xs text-destructive">{error}</p>
+          <FieldError className="text-xs">{error}</FieldError>
         )}
         {preview && preview.length > 0 && (
           <ul data-testid="cron-preview" className="list-inside list-disc text-xs text-muted-foreground">

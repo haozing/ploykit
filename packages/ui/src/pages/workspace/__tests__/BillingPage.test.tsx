@@ -310,7 +310,8 @@ describe('BillingPage B1/G4：manual 渠道接线（渠道表动态生成）', (
     
     await screen.findByText('升级立即生效；下单后请联系管理员完成线下转账，订单在管理员核销后生效。')
     fireEvent.click(screen.getByRole('button', { name: '升级' }))
-    const note = await screen.findByRole('note')
+    // 线下支付指引由 stock Alert 渲染（role="alert"，非原手写 role="note"）
+    const note = await screen.findByRole('alert')
     expect(note).toHaveTextContent('已创建 Pro 订单（待处理）：下单后请联系管理员完成支付，订单在管理员核销后生效。')
     expect(toastMocks.success).toHaveBeenCalledWith('订单已创建，请联系管理员完成支付')
     expect(toastMocks.error).not.toHaveBeenCalled()

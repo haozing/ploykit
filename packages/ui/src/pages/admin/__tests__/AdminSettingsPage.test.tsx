@@ -51,7 +51,7 @@ const ENVELOPE = {
     allowed_domains: '',
   },
   descriptions: {
-    banner_text: '站点公告文本（空 = 无公告）',
+    banner_text: '空 = 不展示公告',
     banner_kind: '公告样式',
     maintenance_mode: '维护模式说明',
     allow_signup: '注册开关说明',
@@ -427,7 +427,7 @@ describe('AdminSettingsPage', () => {
         screen.getByRole('button', { name: '复制 google 回调地址' }),
       ).toBeInTheDocument();
       expect(
-        screen.getByText(/按站点 base URL 推算的期望值/),
+        screen.getByText(/回调地址按请求 Host 实时生成/),
       ).toBeInTheDocument();
       expect(screen.getByText(/X-Forwarded-Proto/)).toBeInTheDocument();
     });

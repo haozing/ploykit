@@ -76,13 +76,13 @@ export function WorkspaceSwitcher() {
               </span>
               <span className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{current?.name ?? '选择工作区'}</span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-xs">
                   {current?.plan_code ?? '—'}
                 </span>
               </span>
-              <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
+              <ChevronsUpDown className="ml-auto" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-(--anchor-width) min-w-56" align="start" side="bottom" sideOffset={4}>
+            <DropdownMenuContent className="w-(--anchor-width) min-w-56 rounded-lg" align="start" side="bottom" sideOffset={4}>
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="text-xs text-muted-foreground">工作区</DropdownMenuLabel>
                 {list.map((ws) => (

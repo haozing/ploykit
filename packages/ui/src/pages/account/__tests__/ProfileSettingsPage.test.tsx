@@ -54,11 +54,11 @@ describe('ProfileSettingsPage', () => {
     expect(screen.getByText('加载账号信息…')).toBeInTheDocument()
   })
 
-  it('渲染资料表单与邮箱行；未验证邮箱展示徽标 + 重发按钮', () => {
+  it('渲染资料表单与邮箱行；未验证邮箱展示 Alert 提示 + 重发按钮', () => {
     render(<ProfileSettingsPage />)
     expect((screen.getByLabelText(/昵称/) as HTMLInputElement).value).toBe('小明')
     expect(screen.getByTestId('profile-email')).toHaveTextContent('user@example.com')
-    expect(screen.getByText('未验证')).toBeInTheDocument()
+    expect(screen.getByText('登录邮箱尚未验证')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重新发送验证邮件' })).toBeInTheDocument()
   })
 
@@ -88,21 +88,18 @@ describe('ProfileSettingsPage', () => {
     expect(mocks.post).toHaveBeenCalledWith('/auth/send-verification')
   })
 
-  it('删除账号：输入邮箱匹配后按钮可用，Impact 确认后 DELETE /auth/me', async () => {
+  it('删除账号：无邮箱输入层，Impact 勾选确认后 DELETE /auth/me', async () => {
     render(<ProfileSettingsPage />)
+    // 确认强度由 ImpactConfirmation（勾选 + 确认弹窗）单层承担，不再有邮箱匹配门控
+    expect(screen.queryByLabelText('输入登录邮箱以确认')).toBeNull()
     const deleteBtn = screen.getByRole('button', { name: '删除账号' })
-    expect(deleteBtn).toBeDisabled()
-
-    fireEvent.change(screen.getByLabelText('输入登录邮箱以确认'), {
-      target: { value: 'USER@example.com' }, // 大小写不敏感匹配
-    })
     expect(deleteBtn).toBeEnabled()
     fireEvent.click(deleteBtn)
 
     
     const confirm = await screen.findByRole('button', { name: '永久删除' })
     expect(confirm).toBeDisabled()
-    fireEvent.click(screen.getByLabelText('我理解并接受以上影响'))
+    fireEvent.click(screen.getByRole('checkbox', { name: '我理解并接受以上影响' }))
     fireEvent.click(confirm)
 
     await waitFor(() => expect(mocks.del).toHaveBeenCalledWith('/auth/me'))
@@ -147,15 +144,16 @@ describe('ProfileSettingsPage', () => {
   })
 
   
-  it('B2：头像字段呈现"外部图片可能被拦截"的如实说明', () => {
+  it('B2：头像字段呈现"部分网站限制外链"的如实说明', () => {
     render(<ProfileSettingsPage />)
-    expect(screen.getByText(/外部图片可能被内容安全策略拦截/)).toBeInTheDocument()
+    expect(screen.getByText(/部分网站限制外链/)).toBeInTheDocument()
+    expect(screen.getByText(/将显示默认头像/)).toBeInTheDocument()
   })
 
   
-  it('B3：邮箱行说明"暂不支持自助修改"，页头不含登录邮箱承诺', () => {
+  it('B3：邮箱行说明"暂无法在此修改"，页头不含登录邮箱承诺', () => {
     render(<ProfileSettingsPage />)
-    expect(screen.getByText(/暂不支持自助修改/)).toBeInTheDocument()
+    expect(screen.getByText(/暂无法在此修改/)).toBeInTheDocument()
     expect(screen.getByText('个人资料').textContent).toBe('个人资料')
   })
 

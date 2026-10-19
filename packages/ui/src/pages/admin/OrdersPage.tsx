@@ -4,12 +4,14 @@ import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { DataTable, type Column } from '../../components/DataTable';
-import { PageEmpty, PageError, PageHeader } from '../../components/Page';
+import { PageEmpty, PageError, PageHeader, PageLoading } from '../../components/Page';
 import { SettingsCard } from '../../components/SettingsCard';
 import { toast } from '../../components/toast';
 import { Badge } from '../../components/ui/badge'
+import { Item, ItemActions, ItemContent, ItemTitle } from '../../components/ui/item';
 import { StatusBadge } from '../../components/StatusBadge';
 import { Button } from '../../components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import {
   Select,
   SelectContent,
@@ -239,8 +241,6 @@ export function OrdersPage() {
 
   const orders = ordersQ.data?.items ?? [];
   const ordersTotal = ordersQ.data?.total ?? 0;
-  const pastEndOrders =
-    !ordersQ.isPending && orders.length === 0 && orderPage > 1;
 
   const orderColumns: Column<AdminOrderRow>[] = [
     {
@@ -250,11 +250,13 @@ export function OrdersPage() {
         
         <div className="min-w-0 max-w-[16rem]">
           <p className="truncate font-medium">{o.workspace_name || '—'}</p>
-          <p
-            className="truncate font-mono text-xs text-muted-foreground"
-            title={o.workspace_id}
-          >
-            {shortID(o.workspace_id)}
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            <Tooltip>
+              <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                {shortID(o.workspace_id)}
+              </TooltipTrigger>
+              <TooltipContent>{o.workspace_id}</TooltipContent>
+            </Tooltip>
           </p>
         </div>
       ),
@@ -311,25 +313,47 @@ export function OrdersPage() {
           {/* 批次 2.8：pending 且 channel=manual 的行可核销（标记已付）；
               stripe 等渠道订单不出现（核销 = 绕过渠道记账，服务端 400 兜底）。 */}
           {o.status === 'pending' && o.channel === 'manual' && (
+            <Tooltip>
+              {/* disabled 按钮不派发指针事件，Tooltip 的 Trigger 需包一层 span */}
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={markPaidM.isPending}
+                  onClick={() => void onMarkPaid(o)}
+                >
+                  标记已付
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                线下收款确认后核销：pending→paid，并发 billing.order_marked_paid 事件
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {o.status !== 'pending' ? (
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  onClick={() => void onCancelOrder(o)}
+                >
+                  取消
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>仅 pending 订单可取消</TooltipContent>
+            </Tooltip>
+          ) : (
             <Button
               variant="outline"
               size="sm"
-              disabled={markPaidM.isPending}
-              title="线下收款确认后核销：pending→paid，并发 billing.order_marked_paid 事件"
-              onClick={() => void onMarkPaid(o)}
+              disabled={cancelM.isPending}
+              onClick={() => void onCancelOrder(o)}
             >
-              标记已付
+              取消
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={o.status !== 'pending' || cancelM.isPending}
-            title={o.status !== 'pending' ? '仅 pending 订单可取消' : undefined}
-            onClick={() => void onCancelOrder(o)}
-          >
-            取消
-          </Button>
         </div>
       ),
     },
@@ -337,8 +361,6 @@ export function OrdersPage() {
 
   const events = eventsQ.data?.items ?? [];
   const eventsTotal = eventsQ.data?.total ?? 0;
-  const pastEndEvents =
-    !eventsQ.isPending && events.length === 0 && eventPage > 1;
 
   const eventColumns: Column<AdminPaymentEventRow>[] = [
     {
@@ -348,9 +370,9 @@ export function OrdersPage() {
         <div className="min-w-0 max-w-[16rem]">
           <p className="truncate">{e.channel}</p>
           <p className="truncate text-xs text-muted-foreground">
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            <Badge variant="secondary" className="font-mono">
               {e.event_type}
-            </code>
+            </Badge>
           </p>
         </div>
       ),
@@ -360,11 +382,13 @@ export function OrdersPage() {
       header: '渠道事件 ID',
       className: 'w-40',
       render: (e) => (
-        <span
-          className="truncate font-mono text-xs text-muted-foreground"
-          title={e.channel_event_id}
-        >
-          {shortID(e.channel_event_id)}
+        <span className="truncate font-mono text-xs text-muted-foreground">
+          <Tooltip>
+            <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+              {shortID(e.channel_event_id)}
+            </TooltipTrigger>
+            <TooltipContent>{e.channel_event_id}</TooltipContent>
+          </Tooltip>
         </span>
       ),
     },
@@ -374,8 +398,13 @@ export function OrdersPage() {
       className: 'w-28',
       render: (e) =>
         e.order_id ? (
-          <span className="font-mono text-xs" title={e.order_id}>
-            {shortID(e.order_id)}
+          <span className="font-mono text-xs">
+            <Tooltip>
+              <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+                {shortID(e.order_id)}
+              </TooltipTrigger>
+              <TooltipContent>{e.order_id}</TooltipContent>
+            </Tooltip>
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
@@ -385,26 +414,41 @@ export function OrdersPage() {
       key: 'processed',
       header: '处理状态',
       className: 'w-32',
-      render: (e) => (
-        <div className="flex min-w-0 items-center gap-1.5">
-          {e.processed ? (
-            <Badge variant="outline">已处理</Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              未处理
-            </Badge>
-          )}
-          {/* B-orders-12：处理状态走中文映射，不再与英文枚举原文双显 */}
-          {e.process_status !== 'processed' && (
-            <span
-              className="truncate text-xs text-muted-foreground"
-              title={e.process_error ?? ''}
-            >
-              {PROCESS_STATUS_LABEL[e.process_status] ?? e.process_status}
-            </span>
-          )}
-        </div>
-      ),
+      render: (e) => {
+        const label = PROCESS_STATUS_LABEL[e.process_status] ?? e.process_status;
+        return (
+          <div className="flex min-w-0 items-center gap-1.5">
+            {e.processed ? (
+              <Badge variant="outline">已处理</Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">
+                未处理
+              </Badge>
+            )}
+            {/* B-orders-12：处理状态走中文映射，不再与英文枚举原文双显 */}
+            {e.process_status !== 'processed' &&
+              (e.process_error ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        tabIndex={0}
+                        className="cursor-help truncate text-xs text-muted-foreground"
+                      />
+                    }
+                  >
+                    {label}
+                  </TooltipTrigger>
+                  <TooltipContent>{e.process_error}</TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="truncate text-xs text-muted-foreground">
+                  {label}
+                </span>
+              ))}
+          </div>
+        );
+      },
     },
     {
       key: 'created_at',
@@ -422,7 +466,6 @@ export function OrdersPage() {
     <div>
       <PageHeader
         title="订单"
-        description="跨工作区订单、支付事件幂等层与计费运维手动触发"
         actions={
           <div className="flex gap-2">
             <Button
@@ -445,10 +488,7 @@ export function OrdersPage() {
         }
       />
 
-      <SettingsCard
-        title="支付渠道"
-        description="渠道凭据配置状态与连通性（env 是密钥真源，此处只读可见性；密钥 DB 化待第二渠道出现再做）"
-      >
+      <SettingsCard title="支付渠道">
         {channelsQ.isError ? (
           <PageError
             message={adminError(channelsQ.error, '渠道配置加载失败')}
@@ -456,15 +496,12 @@ export function OrdersPage() {
           />
         ) : (
           <div className="space-y-2">
-            {channelsQ.isPending && (
-              <p className="text-sm text-muted-foreground">加载渠道配置中…</p>
-            )}
+            {channelsQ.isPending && <PageLoading label="加载渠道配置中…" />}
             {(channelsQ.data?.channels ?? []).map((ch) => (
-              <div
-                key={ch.name}
-                className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-3 text-sm"
-              >
-                <span className="min-w-20 font-medium">{ch.name}</span>
+              <Item key={ch.name} variant="outline">
+                <ItemContent>
+                  <ItemTitle>{ch.name}</ItemTitle>
+                </ItemContent>
                 {ch.configured ? (
                   <Badge>已配置</Badge>
                 ) : (
@@ -472,12 +509,16 @@ export function OrdersPage() {
                     未配置
                   </Badge>
                 )}
-                <code
-                  className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-                  title="密钥掩码（原始密钥不可见）"
-                >
-                  {ch.key_masked}
-                </code>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={<span tabIndex={0} className="inline-flex cursor-help" />}
+                  >
+                    <Badge variant="secondary" className="font-mono">
+                      {ch.key_masked}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>密钥掩码（原始密钥不可见）</TooltipContent>
+                </Tooltip>
                 {ch.webhook_configured ? (
                   <Badge variant="outline">webhook 已配置</Badge>
                 ) : (
@@ -485,31 +526,37 @@ export function OrdersPage() {
                     webhook 未配置
                   </Badge>
                 )}
-                <span className="flex-1" />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={
-                    !ch.configured ||
-                    ch.name === 'manual' ||
-                    testConnM.isPending
-                  }
-                  title={
-                    !ch.configured
-                      ? '渠道未配置密钥，无法测试'
-                      : ch.name === 'manual'
-                        ? 'manual 为线下收款渠道，无外部服务可测试连接'
-                        : '向渠道发起一次只读连通性请求'
-                  }
-                  onClick={() => testConnM.mutate(ch.name)}
-                >
-                  {testingChannel === ch.name ? '测试中…' : '测试连接'}
-                </Button>
-              </div>
+                <ItemActions>
+                  <Tooltip>
+                    {/* disabled 按钮不派发指针事件，Tooltip 的 Trigger 需包一层 span */}
+                    <TooltipTrigger render={<span className="inline-flex" />}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          !ch.configured ||
+                          ch.name === 'manual' ||
+                          testConnM.isPending
+                        }
+                        onClick={() => testConnM.mutate(ch.name)}
+                      >
+                        {testingChannel === ch.name ? '测试中…' : '测试连接'}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {!ch.configured
+                        ? '渠道未配置密钥，无法测试'
+                        : ch.name === 'manual'
+                          ? 'manual 为线下收款渠道，无外部服务可测试连接'
+                          : '向渠道发起一次只读连通性请求'}
+                    </TooltipContent>
+                  </Tooltip>
+                </ItemActions>
+              </Item>
             ))}
             {!channelsQ.isPending &&
               (channelsQ.data?.channels ?? []).length === 0 && (
-                <p className="text-sm text-muted-foreground">暂无渠道</p>
+                <PageEmpty label="暂无渠道" />
               )}
           </div>
         )}
@@ -569,18 +616,7 @@ export function OrdersPage() {
                 onPageChange: (p) => setOrderFilter(status, p),
               }}
               empty={
-                pastEndOrders ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <PageEmpty label="没有更多订单了" hint="当前页数据可能已被删除" />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setOrderFilter(status, 1)}
-                    >
-                      返回第一页
-                    </Button>
-                  </div>
-                ) : status ? (
+                status ? (
                   <PageEmpty
                     label="没有该状态的订单"
                     hint="换个状态或清除过滤"
@@ -588,7 +624,7 @@ export function OrdersPage() {
                 ) : (
                   <PageEmpty
                     label="暂无订单"
-                    hint="工作区完成购买后订单会出现在这里（含线下 manual 单）"
+                    hint="工作区完成购买后订单会出现在这里"
                   />
                 )
               }
@@ -615,23 +651,10 @@ export function OrdersPage() {
                 onPageChange: setEventPage,
               }}
               empty={
-                pastEndEvents ? (
-                  <div className="flex flex-col items-center gap-3 py-10 text-sm text-muted-foreground">
-                    <p>没有更多支付事件了</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEventPage(1)}
-                    >
-                      返回第一页
-                    </Button>
-                  </div>
-                ) : (
-                  <PageEmpty
-                    label="暂无支付事件"
-                    hint="渠道回调到达后在此可见（含未消费事件）"
-                  />
-                )
+                <PageEmpty
+                  label="暂无支付事件"
+                  hint="渠道回调到达后在此可见（含未消费事件）"
+                />
               }
             />
           )}

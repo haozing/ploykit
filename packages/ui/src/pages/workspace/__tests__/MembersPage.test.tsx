@@ -128,7 +128,8 @@ describe('MembersPage', () => {
     renderPage()
     await screen.findByText('admin@example.com')
 
-    fireEvent.click(screen.getByRole('button', { name: '移除' }))
+    fireEvent.click(screen.getByRole('button', { name: /更多操作/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '移除成员' }))
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
     expect(toastMocks.error.mock.calls[0][0]).toContain('请先转移或删除工作区')
   })
@@ -158,13 +159,14 @@ describe('MembersPage', () => {
     await screen.findByText('admin@example.com')
 
     
-    const transferBtn = screen.getByRole('button', { name: '转让所有权' })
-    expect(screen.getAllByRole('button', { name: '转让所有权' })).toHaveLength(1)
-    fireEvent.click(transferBtn)
+    fireEvent.click(screen.getByRole('button', { name: /更多操作/ }))
+    const transferItem = screen.getByRole('menuitem', { name: '转让所有权' })
+    expect(screen.getAllByRole('menuitem', { name: '转让所有权' })).toHaveLength(1)
+    fireEvent.click(transferItem)
 
     
-    expect(await screen.findByText('转让所有权给 admin@example.com')).toBeInTheDocument()
-    fireEvent.click(screen.getByLabelText('我理解并接受以上影响'))
+    expect(await screen.findByText('将所有权转让给 admin@example.com')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: '我理解并接受以上影响' }))
     fireEvent.click(screen.getByRole('button', { name: '确认转让' }))
 
     await waitFor(() =>
@@ -183,8 +185,9 @@ describe('MembersPage', () => {
     renderPage()
     await screen.findByText('admin@example.com')
 
-    fireEvent.click(screen.getByRole('button', { name: '转让所有权' }))
-    fireEvent.click(await screen.findByLabelText('我理解并接受以上影响'))
+    fireEvent.click(screen.getByRole('button', { name: /更多操作/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '转让所有权' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: '我理解并接受以上影响' }))
     fireEvent.click(screen.getByRole('button', { name: '确认转让' }))
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
@@ -199,28 +202,28 @@ describe('MembersPage 角色门控（member 只读）', () => {
     wsMocks.role = 'member'
   })
 
-  it('member：无邀请/分享链接/移除/撤销/角色变更控件，列表只读展示', async () => {
+  it('member：无邀请/加入码/更多操作菜单/撤销/角色变更控件，列表只读展示', async () => {
     renderPage()
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument()
 
     expect(screen.queryByRole('button', { name: /邀请成员/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /创建分享链接/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '移除' })).not.toBeInTheDocument()
-    
-    expect(screen.queryByRole('button', { name: '转让所有权' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /创建加入码/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /更多操作/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '移除成员' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
     
     expect(screen.queryByRole('combobox', { name: /admin@example.com 的角色/ })).not.toBeInTheDocument()
     expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
   })
 
-  it('member：邀请/分享链接两个 tab 无撤销按钮（只读）', async () => {
+  it('member：邀请/加入码两个 tab 无撤销按钮（只读）', async () => {
     renderPage()
     await screen.findByText('owner@example.com')
     fireEvent.click(screen.getByRole('tab', { name: /邀请/ }))
     expect(await screen.findByText('new@example.com')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '撤销' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: /分享链接/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /加入码/ }))
     expect(await screen.findByText(/abcd/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '撤销' })).not.toBeInTheDocument()
   })
@@ -235,8 +238,9 @@ describe('MembersPage 角色门控（admin 可管理但不可转让所有权）'
     renderPage()
     await screen.findByText('admin@example.com')
 
-    expect(screen.getByRole('button', { name: '移除' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '转让所有权' })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /更多操作/ }))
+    expect(screen.getByRole('menuitem', { name: '移除成员' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
   })
 })
 
@@ -258,7 +262,7 @@ describe('MembersPage B7：邀请邮箱语义 type=email（zod 兜底保留）',
   })
 })
 
-describe('MembersPage B9：分享链接空态补 CTA（与邀请空态同构）', () => {
+describe('MembersPage B9：加入码/邀请空态 hint 说明自助路径（同构）', () => {
   beforeEach(() => {
     apiMocks.get.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/workspaces/ws-1/members')) {
@@ -274,19 +278,19 @@ describe('MembersPage B9：分享链接空态补 CTA（与邀请空态同构）'
     })
   })
 
-  it('分享链接空态 hint 指向页头主动作；邀请空态同构对照', async () => {
+  it('加入码空态 hint 说明凭码自助加入；邀请空态 hint 说明定向邀请与加入码', async () => {
     renderPage()
     await screen.findByText('owner@example.com')
 
-    fireEvent.click(screen.getByRole('tab', { name: /分享链接/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /加入码/ }))
     expect(
-      await screen.findByText(/点击右上角“创建分享链接”生成兑换码/),
+      await screen.findByText(/加入码可让多人凭码自助加入工作区/),
     ).toBeInTheDocument()
 
-    
+
     fireEvent.click(screen.getByRole('tab', { name: /邀请/ }))
     expect(
-      await screen.findByText(/点击右上角“邀请成员”发送新邀请/),
+      await screen.findByText(/定向邀请按邮箱一对一送达/),
     ).toBeInTheDocument()
   })
 })
@@ -298,7 +302,7 @@ describe('MembersPage K5：tab/分页状态进 URL（searchParams）', () => {
     expect(locationLog.at(-1)).toBe('/')
   })
 
-  it('URL ?tab=share-links 直达分享链接 Tab（刷新不回默认）', async () => {
+  it('URL ?tab=share-links 直达加入码 Tab（刷新不回默认）', async () => {
     renderPage(['/?tab=share-links'])
     expect(await screen.findByText(/abcd/)).toBeInTheDocument()
   })

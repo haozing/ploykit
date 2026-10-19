@@ -21,7 +21,7 @@ export function SettingsCard({
   title, description, cta, danger, bodyClassName, children,
 }: SettingsCardProps) {
   return (
-    <Card className="my-4 w-full max-w-4xl text-left" size="sm">
+    <Card className="my-4 w-full text-left" size="sm">
       <CardHeader>
         {/* G7.1：分块卡标题升 h2（PageHeader h1 之下的文档大纲层级），
             经 card.tsx CardTitle 的 as 多态，样式/props 不变。 */}

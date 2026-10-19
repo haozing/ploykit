@@ -10,11 +10,11 @@ import { toast } from '../../components/toast'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
 import { Checkbox } from '../../components/ui/checkbox'
+import { Label } from '../../components/ui/label'
 import { useRoleConfig, type PKRoleConfig } from '@ploykit/hooks'
 import { isApiError } from '@ploykit/client'
 import { apiErrorMessage } from '../../lib/api-error'
-
-const ROLE_LABEL: Record<string, string> = { owner: '所有者', admin: '管理员', member: '成员' }
+import { ROLE_LABEL } from '../../lib/utils'
 
 const DOMAIN_LABEL: Record<string, string> = {
   workspace: '工作区',
@@ -126,11 +126,8 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
   if (error) return <PageError message={apiErrorMessage(error)} />
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-6">
-      <PageHeader
-        title="角色权限"
-        description="自定义各角色能做什么。所有者始终拥有全部权限；自定义集为整体替换（非累加），未知权限会被服务端拒绝。"
-      />
+    <div className="space-y-4">
+      <PageHeader title="角色权限" />
 
       {roles.map((r: PKRoleConfig) => {
         const draft = drafts[r.role]
@@ -143,9 +140,6 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
                 {r.overridden && <Badge variant="secondary">已自定义</Badge>}
               </>
             }
-            description={r.overridden
-              ? '当前为自定义权限集（覆盖默认）'
-              : '当前为内置默认权限集'}
             cta={
               <div className="flex gap-2">
                 {r.overridden && (
@@ -156,7 +150,7 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
                 )}
                 <Button
                   size="sm"
-                  disabled={!draft?.dirty}
+                  disabled={!draft?.dirty || setPerms.isPending}
                   onClick={() => void save(r.role)}
                 >
                   <Save className="size-4" />
@@ -173,16 +167,13 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
                   </p>
                   <div className="space-y-1.5">
                     {perms.map((perm) => (
-                      <label
-                        key={perm}
-                        className="flex items-center gap-2 text-sm"
-                      >
+                      <Label key={perm}>
                         <Checkbox
                           checked={draft?.perms.includes(perm) ?? false}
                           onCheckedChange={(v) => toggle(r.role, perm, v === true)}
                         />
                         <span className="font-mono text-xs">{perm}</span>
-                      </label>
+                      </Label>
                     ))}
                   </div>
                 </div>

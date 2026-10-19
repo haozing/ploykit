@@ -1,11 +1,12 @@
 
 import { useState } from 'react'
 import { z } from 'zod'
-import { PageHeader, PageError } from '../../components/Page'
+import { PageHeader, PageError, PageEmpty } from '../../components/Page'
 import { SettingsCard } from '../../components/SettingsCard'
 import { FormField } from '../../components/FormField'
+import { PasswordField } from '../../components/PasswordField'
 import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
+import { Spinner } from '../../components/ui/spinner'
 import { Badge } from '../../components/ui/badge'
 import { DataTable, type Column } from '../../components/DataTable'
 import { ImpactConfirmation } from '../../components/SecretModal'
@@ -17,7 +18,7 @@ import { useZodForm } from '@ploykit/hooks'
 import { useSessions, useRevokeSession, useRevokeAllSessions, type SessionInfo } from '@ploykit/hooks'
 import { passwordSchema } from '../auth/RegisterPage'
 import { apiErrorMessage } from '../../lib/api-error'
-import { formatDateTime, shortID } from '../../lib/utils'
+import { formatDateTime, shortID, STATUS_TONE_CLASS } from '../../lib/utils'
 
 const changePwSchema = z
   .object({
@@ -140,7 +141,7 @@ export function SecuritySettingsPage() {
         s.current === undefined ? (
           <span className="text-muted-foreground">—</span>
         ) : s.current ? (
-          <Badge variant="secondary" className="bg-(--success)/10 text-(--success) border-(--success)/30">当前设备</Badge>
+          <Badge variant="secondary" className={STATUS_TONE_CLASS.positive}>当前设备</Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -157,26 +158,40 @@ export function SecuritySettingsPage() {
 
   return (
     <div>
-      <PageHeader title="账户安全" description="修改密码并管理已登录设备" />
+      <PageHeader title="账户安全" />
 
       <SettingsCard
-        title="修改密码" description="修改后其他会话将失效，需要重新登录"
-        cta={<Button type="submit" form="security-pw-form" disabled={saving}>{saving ? '提交中…' : '修改密码'}</Button>}
+        title="修改密码"
+        cta={
+          <Button type="submit" form="security-pw-form" disabled={saving}>
+            {saving ? (
+              <>
+                <Spinner aria-hidden="true" />
+                提交中…
+              </>
+            ) : (
+              '修改密码'
+            )}
+          </Button>
+        }
       >
         <form id="security-pw-form" onSubmit={handleChangePw} className="max-w-xl space-y-4">
           <FormField label="当前密码" error={form.formState.errors.old_password?.message} htmlFor="sec-old">
-            <Input id="sec-old" type="password" autoComplete="current-password" {...form.register('old_password')} />
+            <PasswordField id="sec-old" autoComplete="current-password" {...form.register('old_password')} />
           </FormField>
-          <FormField label="新密码" error={form.formState.errors.new_password?.message} htmlFor="sec-new">
-            <Input id="sec-new" type="password" placeholder="至少 10 位，含三类字符"
-              autoComplete="new-password" {...form.register('new_password')} />
+          <FormField
+            label="新密码"
+            error={form.formState.errors.new_password?.message}
+            htmlFor="sec-new"
+            description="至少 10 位，需包含字母、数字、符号中的三类字符"
+          >
+            <PasswordField id="sec-new" autoComplete="new-password" {...form.register('new_password')} />
           </FormField>
         </form>
       </SettingsCard>
 
       <SettingsCard
         title="活跃会话"
-        description="最近登录过你账号的设备；可疑会话请立即吊销"
         cta={
           <Button variant="destructive" size="sm" disabled={revokingAll} onClick={() => setConfirmAllOpen(true)}>
             全部吊销
@@ -191,7 +206,7 @@ export function SecuritySettingsPage() {
             rows={sessions}
             rowKey={(s) => s.id}
             loading={loading}
-            empty={<div className="py-8 text-center text-sm text-muted-foreground">暂无活跃会话</div>}
+            empty={<PageEmpty label="暂无活跃会话" />}
           />
         )}
       </SettingsCard>

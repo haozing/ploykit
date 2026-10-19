@@ -3,6 +3,7 @@ import { type ReactNode } from 'react'
 import { Inbox, TriangleAlert } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { Button } from './ui/button'
+import { Spinner } from './ui/spinner'
 import {
   Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent,
 } from './ui/empty'
@@ -24,11 +25,9 @@ export function PageHeader({ title, description, actions }: {
 }
 
 export function PageLoading({ label = '加载中…' }: { label?: string }) {
-  
-  
   return (
     <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary" />
+      <Spinner className="size-6 text-primary" />
       <span className="ml-3 text-sm text-muted-foreground">{label}</span>
     </div>
   )

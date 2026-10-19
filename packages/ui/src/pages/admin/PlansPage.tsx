@@ -3,8 +3,14 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { FormField } from '../../components/FormField';
-import { PageEmpty, PageError, PageHeader } from '../../components/Page';
+import {
+  PageEmpty,
+  PageError,
+  PageHeader,
+  PageLoading,
+} from '../../components/Page';
 import { toast } from '../../components/toast';
+import { Alert, AlertDescription } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -15,6 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
+import { Spinner } from '../../components/ui/spinner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { adminError } from './shared';
 
@@ -180,12 +192,16 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
           <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-muted-foreground" />
         )}
         <span className="font-medium">{plan.name}</span>
-        <code
-          className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground"
-          title="套餐代码不可修改"
-        >
-          {plan.code}
-        </code>
+        {/* 原生 title → Tooltip：触发器 render 成 span（code 处于 toggle button
+            内部，Base UI Trigger 默认渲染 button，嵌套按钮非法——UsagePage 挂法） */}
+        <Tooltip>
+          <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+              {plan.code}
+            </code>
+          </TooltipTrigger>
+          <TooltipContent>套餐代码不可修改</TooltipContent>
+        </Tooltip>
         <Badge variant="outline">{plan.currency}</Badge>
         <span className="text-xs text-muted-foreground">排序 {plan.sort_no}</span>
         {plan.trial_days > 0 && (
@@ -209,9 +225,6 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
             submit();
           }}
         >
-          <p className="mb-4 text-xs text-muted-foreground">
-            保存后立即生效（直读库无缓存）；已创建订单的金额不受影响。
-          </p>
           <div className="grid gap-4 sm:grid-cols-3">
             <FormField label="名称" htmlFor={`plans-name-${plan.code}`}>
               <Input
@@ -331,13 +344,20 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
                       </span>
                     )}
                     {unknownKey && (
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground"
-                        title="billing 不认识的高级键：原样保存，服务端放行"
-                      >
-                        高级键
-                      </Badge>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span tabIndex={0} className="inline-flex cursor-help" />
+                          }
+                        >
+                          <Badge variant="outline" className="text-muted-foreground">
+                            高级键
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          billing 不认识的高级键：原样保存，服务端放行
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                     {unlimited && (
                       <span className="text-xs font-medium text-muted-foreground">
@@ -366,13 +386,15 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
+            {/* 保存中文案恒定（ProfileSettingsPage 先例：aria-hidden Spinner 不进可及名，
+                按钮可访问名保持「保存」，测试与读屏稳定） */}
             <Button type="submit" size="sm" disabled={saving}>
-              {saving ? '保存中…' : '保存'}
+              {saving && <Spinner aria-hidden="true" />}保存
             </Button>
             {shownError && (
-              <p role="alert" className="text-sm text-destructive">
-                {shownError}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{shownError}</AlertDescription>
+              </Alert>
             )}
           </div>
         </form>
@@ -434,7 +456,7 @@ export function PlansPage() {
     <div>
       <PageHeader
         title="套餐"
-        description="套餐目录编辑：名称 / 币种 / 排序与 limits，保存即生效（直读库无缓存）；已创建订单金额不受影响"
+        description="编辑套餐与配额。已创建订单不受影响。"
       />
 
       {plansQ.isError ? (
@@ -443,7 +465,7 @@ export function PlansPage() {
           onRetry={() => void plansQ.refetch()}
         />
       ) : plansQ.isPending ? (
-        <p className="text-sm text-muted-foreground">加载套餐中…</p>
+        <PageLoading label="加载套餐中…" />
       ) : plans.length === 0 ? (
         <PageEmpty
           label="暂无套餐"

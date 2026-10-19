@@ -69,6 +69,29 @@ export function statusLabel(status: string): string {
 
 
 
+/** 角色 → 中文标签（owner/admin/member 的唯一权威映射，页面不得各自抄副本）。 */
+export const ROLE_LABEL: Record<string, string> = {
+  owner: '所有者',
+  admin: '管理员',
+  member: '成员',
+}
+
+
+/** 计量维度键 → 中文标签（未知键由调用方兜底显示原始键）。 */
+export const DIM_LABEL: Record<string, string> = {
+  tasks_monthly: '任务数（本月）',
+  workspaces: '工作区数',
+  seats: '成员席位',
+  webhooks: 'Webhook 订阅数',
+}
+
+
+export function dimLabel(key: string): string {
+  return DIM_LABEL[key] ?? key
+}
+
+
+
 
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })

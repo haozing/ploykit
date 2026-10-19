@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Skeleton } from '../../components/ui/skeleton'
+import { Spinner } from '../../components/ui/spinner'
+import { Button } from '../../components/ui/button'
+import { PageEmpty } from '../../components/Page'
 import { toast } from '../../components/toast'
 import { useApi } from '@ploykit/hooks'
 import { useWorkspace } from '@ploykit/hooks'
@@ -85,24 +88,18 @@ export function BillingSuccessPage({ redirectTo = '/settings/workspace/billing' 
   
   if (!wsId) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="text-sm font-medium">暂无法确认支付结果</p>
-        <p className="text-xs text-muted-foreground">
-          当前没有选中的工作区，无法查询订阅状态。
-        </p>
-        <a
-          href={redirectTo}
-          className="text-sm text-primary underline-offset-4 hover:underline"
-        >
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6">
+        <PageEmpty label="暂无法确认支付结果" hint="当前没有选中的工作区，无法查询订阅状态。" />
+        <Button variant="link" render={<a href={redirectTo} />}>
           前往计费页查看当前套餐
-        </a>
+        </Button>
       </div>
     )
   }
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-6">
-      <div className="size-8 animate-spin rounded-full border-2 border-muted border-t-primary" aria-hidden="true" />
+      <Spinner className="size-8 text-primary" />
       <p className="text-sm font-medium">正在确认支付结果…</p>
       <p className="text-xs text-muted-foreground">确认完成后将自动返回计费页，请勿关闭页面。</p>
       <div className="mt-4 w-full max-w-md space-y-2" aria-hidden="true">

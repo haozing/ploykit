@@ -6,6 +6,9 @@ import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/
 import { DataTable, type Column } from '../../components/DataTable'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { Field, FieldLabel } from '../../components/ui/field'
+import { Alert, AlertDescription } from '../../components/ui/alert'
+import { Badge } from '../../components/ui/badge'
 import { toast } from '../../components/toast'
 import {
   useAudit, exportAuditCsv,
@@ -117,7 +120,7 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
     },
     {
       key: 'action', header: '动作', className: 'w-[22%]',
-      render: (e) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{e.action}</code>,
+      render: (e) => <Badge variant="outline" className="font-mono">{e.action}</Badge>,
     },
     {
       key: 'resource', header: '资源', className: 'w-[42%]',
@@ -133,7 +136,7 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="审计日志" description="工作区内的关键操作记录" />
+        <PageHeader title="审计日志" />
         <PageEmpty label="请先创建并选择一个工作区" />
       </div>
     )
@@ -141,54 +144,54 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
 
   return (
     <div>
-      <PageHeader title="审计日志" description="工作区内的关键操作记录（保留最近事件，按时间倒序）" />
+      <PageHeader title="审计日志" />
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">动作</span>
+        <Field className="w-44 gap-1">
+          <FieldLabel htmlFor="audit-filter-action">动作</FieldLabel>
           <Input
-            className="w-44"
+            id="audit-filter-action"
             placeholder="如 workspace.rename"
             value={draft.action}
             onChange={(e) => setDraft((d) => ({ ...d, action: e.target.value }))}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">操作者 ID</span>
+        </Field>
+        <Field className="w-52 gap-1">
+          <FieldLabel htmlFor="audit-filter-actor-id">操作者 ID</FieldLabel>
           <Input
-            className="w-52"
+            id="audit-filter-actor-id"
             placeholder="actor uuid"
             value={draft.actorId}
             onChange={(e) => setDraft((d) => ({ ...d, actorId: e.target.value }))}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">资源类型</span>
+        </Field>
+        <Field className="w-40 gap-1">
+          <FieldLabel htmlFor="audit-filter-resource-type">资源类型</FieldLabel>
           <Input
-            className="w-40"
+            id="audit-filter-resource-type"
             placeholder="如 workspace"
             value={draft.resourceType}
             onChange={(e) => setDraft((d) => ({ ...d, resourceType: e.target.value }))}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">开始日期</span>
+        </Field>
+        <Field className="w-40 gap-1">
+          <FieldLabel htmlFor="audit-filter-from">开始日期</FieldLabel>
           <Input
-            className="w-40"
+            id="audit-filter-from"
             type="date"
             value={draft.from}
             onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">结束日期</span>
+        </Field>
+        <Field className="w-40 gap-1">
+          <FieldLabel htmlFor="audit-filter-to">结束日期</FieldLabel>
           <Input
-            className="w-40"
+            id="audit-filter-to"
             type="date"
             value={draft.to}
             onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
           />
-        </label>
+        </Field>
         <Button onClick={apply}>
           <Search /> 查询
         </Button>
@@ -199,9 +202,9 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
 
       {/* P3-40：日期区间错误就地可见（不静默发起恒空查询） */}
       {rangeError && (
-        <p role="alert" className="mb-4 text-sm text-destructive">
-          {rangeError}
-        </p>
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{rangeError}</AlertDescription>
+        </Alert>
       )}
 
       {loading ? (

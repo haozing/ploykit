@@ -138,7 +138,6 @@ export function TokensPage() {
     <div>
       <PageHeader
         title="个人访问令牌"
-        description="用于脚本与 API 集成；明文只在创建时显示一次"
         actions={<Button onClick={() => setCreateOpen(true)}>新建令牌</Button>}
       />
 

@@ -1,9 +1,13 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { CheckIcon, CopyIcon } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog'
 import { Button } from './ui/button'
+import { Checkbox } from './ui/checkbox'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
+import { Spinner } from './ui/spinner'
 
 export function SecretModal({ open, onOpenChange, secretName, secretValue, title }: {
   open: boolean
@@ -67,21 +71,24 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
             此密钥只显示一次，关闭后无法再次查看。请立即保存到安全的地方。
           </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 px-3 py-2 bg-foreground/5 rounded font-mono text-sm break-all">
-            {secretValue}
-          </code>
-          <Button variant="outline" size="sm" onClick={copy}>
-            {copied ? '已复制' : copyFailed ? '复制失败，请手动复制' : '复制'}
-          </Button>
-        </div>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
-            className="rounded border-input"
+        {/* 密文经 InputGroupInput 只读展示（mono 字体，可框内滚动/选中复制）；
+            复制按钮沿用原 copied / copyFailed 双状态机文案，成功态图标 Copy→Check。 */}
+        <InputGroup>
+          <InputGroupInput
+            readOnly
+            value={secretValue}
+            aria-label="密钥（只显示一次）"
+            className="font-mono text-sm"
           />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton onClick={copy}>
+              {copied ? <CheckIcon /> : <CopyIcon />}
+              {copied ? '已复制' : copyFailed ? '复制失败，请手动复制' : '复制'}
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox checked={confirmed} onCheckedChange={setConfirmed} />
           我已将密钥保存到安全的地方
         </label>
         <DialogFooter>
@@ -94,7 +101,7 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
   )
 }
 
-export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impacts, confirmText, danger }: {
+export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impacts, confirmText, danger, pending }: {
   open: boolean
   /** 点击确认按钮后回调；回调返回后组件会立即请求关闭。 */
   onConfirm: () => void
@@ -104,6 +111,8 @@ export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impac
   impacts: ReactNode[]
   confirmText?: string
   danger?: boolean
+  /** 请求进行中：确认按钮 disabled 且文案前加 Spinner（confirmText 原样保留）；不传/false 时行为完全不变。 */
+  pending?: boolean
 }) {
   const [checked, setChecked] = useState(false)
 
@@ -123,21 +132,17 @@ export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impac
           ))}
         </ul>
         <label className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-            className="rounded border-input"
-          />
+          <Checkbox checked={checked} onCheckedChange={setChecked} />
           我理解并接受以上影响
         </label>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
           <Button
             variant={danger ? 'destructive' : 'default'}
-            disabled={!checked}
+            disabled={!checked || pending}
             onClick={() => { onConfirm(); onOpenChange(false) }}
           >
+            {pending && <Spinner aria-hidden="true" />}
             {confirmText ?? '确认执行'}
           </Button>
         </DialogFooter>

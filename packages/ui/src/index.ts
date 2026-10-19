@@ -1,7 +1,7 @@
 
 
 export { AppShell } from './layouts/AppShell'
-export type { NavItem } from './layouts/AppShell'
+export type { NavItem, AppShellNavGroup } from './layouts/AppShell'
 export {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton,
@@ -19,6 +19,7 @@ export { LandingPage } from './pages/LandingPage'
 export type { Feature as LandingFeature, Plan as LandingPlan } from './pages/LandingPage'
 
 export { Button, buttonVariants } from './components/ui/button'
+export { Badge, badgeVariants } from './components/ui/badge'
 export { Input } from './components/ui/input'
 export { Textarea } from './components/ui/textarea'
 export { StatusBadge } from './components/StatusBadge'
@@ -37,7 +38,7 @@ export { WorkspaceSwitcher } from './components/WorkspaceSwitcher'
 
 export { SecretModal, ImpactConfirmation } from './components/SecretModal'
 
-export { cn, statusTone, statusLabel, STATUS_TONE_CLASS, STATUS_LABEL, formatDate, formatDateTime, shortID } from './lib/utils'
+export { cn, statusTone, statusLabel, STATUS_TONE_CLASS, STATUS_LABEL, ROLE_LABEL, DIM_LABEL, dimLabel, formatDate, formatDateTime, shortID } from './lib/utils'
 export type { StatusTone } from './lib/utils'
 export { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
 export type { ForgotPasswordPageProps } from './pages/auth/ForgotPasswordPage'
@@ -50,6 +51,7 @@ export type { ErrorBoundaryProps } from './components/ErrorBoundary'
 export { toast, Toaster } from './components/toast'
 export { FormField } from './components/FormField'
 export type { FormFieldProps } from './components/FormField'
+export { PasswordField } from './components/PasswordField'
 export { DataTable } from './components/DataTable'
 export type { Column, DataTableProps } from './components/DataTable'
 
@@ -95,6 +97,18 @@ export {
 export {
   Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia,
 } from './components/ui/empty'
+export { Spinner } from './components/ui/spinner'
+export {
+  Alert, AlertTitle, AlertDescription, AlertAction,
+} from './components/ui/alert'
+export {
+  Item, ItemMedia, ItemContent, ItemActions, ItemGroup, ItemSeparator,
+  ItemTitle, ItemDescription, ItemHeader, ItemFooter,
+} from './components/ui/item'
+export {
+  InputGroup, InputGroupAddon, InputGroupButton, InputGroupText,
+  InputGroupInput, InputGroupTextarea,
+} from './components/ui/input-group'
 
 export { SettingsShell } from './layouts/SettingsShell'
 export type { SettingsNavItem, SettingsNavGroup, SettingsShellProps } from './layouts/SettingsShell'
@@ -103,6 +117,9 @@ export type { AuthShellProps } from './layouts/AuthShell'
 export { SettingsCard } from './components/SettingsCard'
 export type { SettingsCardProps } from './components/SettingsCard'
 export { UserMenu } from './components/UserMenu'
+export type { UserMenuExtraItem } from './components/UserMenu'
+export { SidebarUserMenu } from './components/SidebarUserMenu'
+export type { SidebarUserMenuProps } from './components/SidebarUserMenu'
 export { OnboardingChecklist } from './components/OnboardingChecklist'
 
 export { RegisterPage } from './pages/auth/RegisterPage'

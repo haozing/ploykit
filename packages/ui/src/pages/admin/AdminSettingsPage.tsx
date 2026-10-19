@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormField } from '../../components/FormField';
-import { PageError, PageHeader } from '../../components/Page';
+import { PageError, PageHeader, PageLoading } from '../../components/Page';
 import { toast } from '../../components/toast';
+import { Alert, AlertDescription } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import {
@@ -17,6 +18,12 @@ import {
 } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '../../components/ui/input-group';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,6 +31,12 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import { Switch } from '../../components/ui/switch';
+import { Textarea } from '../../components/ui/textarea';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { SiteBanner } from '../../components/SiteBanner';
 import { SITE_CONFIG_QUERY_KEY } from '@ploykit/hooks';
@@ -242,7 +255,7 @@ export function AdminSettingsPage() {
         { key: 'banner_kind', label: '公告样式', value: bannerKind },
       ]),
     onSuccess: (results) =>
-      reportKeySaves(results, '公告已保存，全站顶条即时生效', '公告'),
+      reportKeySaves(results, '公告已保存', '公告'),
   });
 
   
@@ -308,7 +321,7 @@ export function AdminSettingsPage() {
       return putKeys(api, entries);
     },
     onSuccess: (results) =>
-      reportKeySaves(results, 'SMTP 配置已保存（发信热读，即时生效）', 'SMTP 配置'),
+      reportKeySaves(results, 'SMTP 配置已保存', 'SMTP 配置'),
     onError: (e) => {
       const msg = e instanceof Error ? e.message : 'SMTP 配置保存失败';
       setSmtpError(msg);
@@ -353,7 +366,7 @@ export function AdminSettingsPage() {
   });
 
   if (settingsQ.isPending) {
-    return <p className="text-sm text-muted-foreground">加载设置中…</p>;
+    return <PageLoading label="加载设置中…" />;
   }
   if (settingsQ.isError) {
     return (
@@ -363,17 +376,12 @@ export function AdminSettingsPage() {
       />
     );
   }
-  const desc = settingsQ.data?.descriptions ?? {};
   const mailMode = settingsQ.data?.mail_mode ?? '';
   const oauth = settingsQ.data?.oauth;
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="系统"
-        
-        description="站点公告、维护模式、注册管控、API 限流、邮件通道、站长验证与登录方式——保存后全站即时生效（API 限流除外：重启后生效）"
-      />
+      <PageHeader title="系统" />
 
       {/* ① 站点公告 */}
       <Card>
@@ -387,20 +395,15 @@ export function AdminSettingsPage() {
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{desc.banner_text}</p>
           {/* 即时预览：与产品壳顶条同一组件/同一 props */}
           <div className="rounded-lg border border-dashed">
             <SiteBanner text={bannerText} kind={bannerKind} />
-            {!bannerText.trim() && (
-              <p className="px-4 py-2 text-xs text-muted-foreground">
-                预览：公告为空时不渲染横条
-              </p>
-            )}
           </div>
           <FormField label="公告文本" htmlFor="banner-text">
-            <textarea
+            {/* stock Textarea：min-h-16/w-full 由组件 token 自带，
+                FormField 注入的 aria-invalid 变体从此生效 */}
+            <Textarea
               id="banner-text"
-              className="flex min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="如：今晚 22:00–23:00 例行维护，期间可能短暂不可用"
               maxLength={500}
               value={bannerText}
@@ -470,9 +473,7 @@ export function AdminSettingsPage() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            {desc.maintenance_mode}
-          </p>
+          <p className="text-sm text-muted-foreground">仅提示，不阻断请求。</p>
         </CardContent>
       </Card>
 
@@ -499,16 +500,13 @@ export function AdminSettingsPage() {
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{desc.allow_signup}</p>
+          <p className="text-sm text-muted-foreground">
+            关闭 = 邀请制，仅白名单内邮箱可注册。
+          </p>
           <div className="flex items-center gap-2 text-sm">
             <Badge variant={allowSignup ? 'secondary' : 'destructive'}>
               {allowSignup ? '开放注册' : '邀请制'}
             </Badge>
-            {!allowSignup && (
-              <span className="text-muted-foreground">
-                注册页会显示"当前为邀请制注册"提示（不阻断提交，服务端才是边界）
-              </span>
-            )}
           </div>
           <FormField
             label="域名白名单（逗号分隔，空 = 不限）"
@@ -550,8 +548,7 @@ export function AdminSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {desc.rate_limit_per_user_per_min}{' '}
-            修改后需重启生效（启动期静态注入，不做热重载）。
+            0 = 关闭；修改后需重启生效。
           </p>
           <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
             {/* B-settings-10：text + inputMode（type=number 对垃圾字符静默置空，
@@ -637,9 +634,7 @@ export function AdminSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {desc.smtp_host} 配置后出站邮件走 SMTP 直发，保存即时生效（发信热读，
-            无需重启）。出于安全，密码不回显——输入框恒为空、占位符显示掩码，
-            留空保存表示不修改当前密码。
+            配置后即时生效；密码不回显，留空表示不修改。
           </p>
           <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
             <FormField label="SMTP 服务器" htmlFor="smtp-host">
@@ -721,37 +716,38 @@ export function AdminSettingsPage() {
           <CardTitle>发送测试邮件</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            验证出站邮件通道连通性。实际行为取决于部署时的邮件通道：开发通道只打日志、
-            不真发信；接入 SMTP 后此按钮发送真实邮件。
-          </p>
-          <div className="flex max-w-md gap-2">
-            <Input
-              type="email"
-              placeholder="收件邮箱，如 ops@example.com"
-              value={testTo}
-              onChange={(e) => setTestTo(e.target.value)}
-              aria-label="测试邮件收件邮箱"
-            />
-            <Button
-              size="sm"
-              className="shrink-0"
-              disabled={testEmailM.isPending || !testTo.trim()}
-              onClick={() => {
-                setTestMsg(null);
-                testEmailM.mutate();
-              }}
-            >
-              {testEmailM.isPending ? '发送中…' : '发送'}
-            </Button>
-          </div>
+          {/* SecuritySettingsPage PasswordField 同款结构：FormField 提供可见
+              label，id 手动落到 InputGroupInput 上——label htmlFor 关联不因
+              包裹层而断；本处无 error/description/required，FormField 不触发
+              cloneElement 注入，aria 属性不受包裹层影响 */}
+          <FormField label="测试邮件收件邮箱" htmlFor="test-email-to">
+            <InputGroup className="max-w-md">
+              <InputGroupInput
+                id="test-email-to"
+                type="email"
+                placeholder="收件邮箱，如 ops@example.com"
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  disabled={testEmailM.isPending || !testTo.trim()}
+                  onClick={() => {
+                    setTestMsg(null);
+                    testEmailM.mutate();
+                  }}
+                >
+                  {testEmailM.isPending ? '发送中…' : '发送'}
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+          </FormField>
           {testMsg && (
-            <p
-              role="status"
-              className="rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
-            >
-              {testMsg}
-            </p>
+            // role="status" 覆盖 Alert 默认的 role="alert"（alert.tsx {...props}
+            // 后展开生效）：发送结果是状态回执而非告警
+            <Alert role="status" className="bg-muted">
+              <AlertDescription>{testMsg}</AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
@@ -770,18 +766,14 @@ export function AdminSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {desc.site_verification_meta} 粘贴搜索平台（Google Search
-            Console / Bing 等）提供的完整 meta 标签，或 name|content
-            对；保存后归一为 name|content 存储，页面注入时由服务端重组标签，
-            输入的原文不回显。
+            完整 meta 标签或 name|content 对；清空即移除，原文不回显。
           </p>
           <FormField
             label="验证标记（完整 meta 标签或 name|content 对）"
             htmlFor="site-verification-meta"
           >
-            <textarea
+            <Textarea
               id="site-verification-meta"
-              className="flex min-h-16 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               placeholder={
                 '<meta name="google-site-verification" content="abc123XYZ" /> 或 google-site-verification|abc123XYZ'
               }
@@ -816,15 +808,13 @@ export function AdminSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              下方回调地址为按站点 base URL 推算的期望值，实际以请求 Host
-              现算——反向代理必须转发 Host 与 X-Forwarded-Proto，
-              否则登录会报 redirect_uri_mismatch。
+              回调地址按请求 Host 实时生成；反向代理需转发 Host 与
+              X-Forwarded-Proto，否则登录报 redirect_uri_mismatch。
             </p>
             {oauth.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                尚未配置任何 OAuth 登录方式——设置 GOOGLE_CLIENT_ID /
-                GOOGLE_SECRET、GITHUB_CLIENT_ID / GITHUB_SECRET
-                环境变量并重启后在此显示。
+                设置 GOOGLE_CLIENT_ID / GOOGLE_SECRET、GITHUB_CLIENT_ID /
+                GITHUB_SECRET 环境变量并重启后在此显示。
               </p>
             ) : (
               <ul className="space-y-2">
@@ -837,16 +827,26 @@ export function AdminSettingsPage() {
                     <code className="font-mono text-xs break-all text-muted-foreground">
                       {p.callback_url}
                     </code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="size-6 shrink-0 p-0 text-muted-foreground"
-                      aria-label={`复制 ${p.name} 回调地址`}
-                      title={`复制 ${p.name} 回调地址`}
-                      onClick={() => copyCallbackUrl(p.name, p.callback_url)}
-                    >
-                      <Copy size={12} aria-hidden="true" />
-                    </Button>
+                    {/* MembersPage 转让按钮同款 TooltipTrigger render 配方：
+                        原生 title 换 Tooltip，aria-label 保留供读屏 */}
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="size-6 shrink-0 p-0 text-muted-foreground"
+                            aria-label={`复制 ${p.name} 回调地址`}
+                            onClick={() =>
+                              copyCallbackUrl(p.name, p.callback_url)
+                            }
+                          />
+                        }
+                      >
+                        <Copy size={12} aria-hidden="true" />
+                      </TooltipTrigger>
+                      <TooltipContent>复制 {p.name} 回调地址</TooltipContent>
+                    </Tooltip>
                   </li>
                 ))}
               </ul>

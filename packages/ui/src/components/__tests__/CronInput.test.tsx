@@ -36,6 +36,15 @@ function renderInput(initial: CronValue = { cron: '', timezone: 'UTC' }) {
   return render(<Harness initial={initial} />)
 }
 
+// 时区选择已是 Base UI Select（非原生 select）：点开触发器 → 按下/抬起/点击选项
+async function pickTimezone(label: string) {
+  fireEvent.click(screen.getByLabelText('时区'))
+  const option = await screen.findByRole('option', { name: label })
+  fireEvent.pointerDown(option, { button: 0, pointerType: 'mouse' })
+  fireEvent.pointerUp(option, { button: 0, pointerType: 'mouse' })
+  fireEvent.click(option)
+}
+
 beforeEach(() => {
   mockedPost.mockReset()
 })
@@ -64,17 +73,16 @@ describe('CronInput（批次 11 前端件：预览走后端 cronx 单一事实�
     expect(describeCron('not cron')).toBe('not cron')
   })
 
-  it('时区下拉：内置常用列表兜底可用，切换更新所选时区', () => {
+  it('时区下拉：内置常用列表兜底可用，切换更新所选时区', async () => {
     const zones = timezoneOptions()
     expect(zones.length).toBeGreaterThan(0)
     expect(zones).toContain('UTC')
     expect(zones).toContain('Asia/Shanghai')
 
     renderInput()
-    const select = screen.getByLabelText('时区')
-    expect((select as HTMLSelectElement).value).toBe('UTC')
-    fireEvent.change(select, { target: { value: 'Asia/Shanghai' } })
-    expect((select as HTMLSelectElement).value).toBe('Asia/Shanghai')
+    expect(screen.getByLabelText('时区')).toHaveTextContent('UTC')
+    await pickTimezone('Asia/Shanghai')
+    await waitFor(() => expect(screen.getByLabelText('时区')).toHaveTextContent('Asia/Shanghai'))
   })
 
   it('预览：POST /api/schedules/preview {cron_expr, timezone, count} 并渲染 3 项', async () => {
@@ -157,13 +165,11 @@ describe('P3-8：过期响应守卫与输入变化失效', () => {
     renderInput({ cron: '0 9 * * *', timezone: 'UTC' })
     fireEvent.click(screen.getByRole('button', { name: /预览下次/ }))
 
-    
-    
-    fireEvent.change(screen.getByLabelText('时区'), { target: { value: 'Asia/Shanghai' } })
+    await pickTimezone('Asia/Shanghai')
     resolveFirst({ items: ['2026-10-09T09:00:00Z'] })
     await Promise.resolve()
     expect(screen.queryByTestId('cron-preview')).not.toBeInTheDocument()
-    
+
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /预览下次/ })).toBeEnabled())
   })
@@ -174,7 +180,7 @@ describe('P3-8：过期响应守卫与输入变化失效', () => {
     fireEvent.click(screen.getByRole('button', { name: /预览下次/ }))
     expect(await screen.findByTestId('cron-preview')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('时区'), { target: { value: 'Asia/Shanghai' } })
+    await pickTimezone('Asia/Shanghai')
     expect(screen.queryByTestId('cron-preview')).not.toBeInTheDocument()
   })
 })
