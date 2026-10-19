@@ -16,7 +16,6 @@ import (
 
 	"github.com/haozing/ploykit/platform/renderx"
 	"myproduct/internal/blog"
-	"myproduct/internal/webrender"
 )
 
 func main() {
@@ -51,8 +50,9 @@ func main() {
 
 	nodeModules := filepath.Join(web, "node_modules")
 	// TanStack SSR（router-tanstack 迁移）：isServer 别名 + 沙箱 prelude 补编。
-	// 见 internal/webrender 包注释（PoC 2026-10-19）。
-	aliases := webrender.AppendTanstackAliases(
+	// 两者由 renderx 提供（TS 常量 PRELUDE_SHIMS / ESBUILD_ALIASES 的 Go 副本，
+	// 漂移由 platform/renderx 的测试守门）。
+	aliases := renderx.AppendTanstackAliases(
 		renderx.DefaultSSRAliases(web, filepath.Join(wd, "..", "packages")), web)
 	bundle, err := renderx.BuildSSRBundle(renderx.BuildOptions{
 		EntryPoints:   []string{filepath.Join("src", "entry-server.tsx")},
@@ -81,7 +81,7 @@ func main() {
 
 	pool, err := renderx.NewEnginePool(bundle, renderx.PoolOptions{
 		RenderTimeout: 10 * time.Second,
-		Prelude:       webrender.TanstackPrelude(),
+		Prelude:       renderx.TanstackPrelude(),
 	})
 	if err != nil {
 		log.Error("引擎池", "err", err)

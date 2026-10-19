@@ -9,6 +9,59 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.10.2] — 2026-10-19
+
+Field-report batch from the migration consumer (five findings, all verified
+against source): a dependency-range split that produced two runtime copies,
+an unreachable adapter, a product-side Go mirror, a release-pipeline gap and
+a silent hydration fallback. npm: `@ploykit/ui` 2.0.2, `@ploykit/hooks`
+0.8.1, `@ploykit/runtime` 0.8.2 (client unchanged). Patch bumps by design:
+raising any of them across a minor would re-fragment the `^0.8.x` ranges this
+release exists to repair.
+
+### Fixed
+- **hooks**: published 0.8.0 declared `@ploykit/runtime ^0.7.4`, which does not
+  intersect runtime 0.8.x — a normal upgrade installed a second, older runtime
+  under hooks (field report #25: `npm ls` showed two copies; only the global
+  directive channel made it harmless). 0.8.1 declares `^0.8.1`; the workspace
+  now resolves a single runtime copy (verified with `npm ls @ploykit/runtime`).
+- **runtime**: hydration props matching now works with NO matcher wiring —
+  `matchPageByPath` (new, exported, dependency-free) matches the pathname
+  against the client route table's own patterns (static, `:param`, `*`
+  catch-all, most-specific wins). Previously a product without a `matchPage`
+  fell back to the embedded pageId, which production minification breaks, and
+  then mounted with NO props — a loader-driven page rendered empty data with
+  only a devtools warning (field report #29). A genuine residual mismatch now
+  logs `console.error` AND dispatches a `ploykit:hydration-miss` window event
+  (detail: pathname, embeddedPageId) so monitoring can capture it.
+  `ClientEntryOptions.matchPage` remains as an optional override.
+- **renderx**: `TanstackPrelude()` / `AppendTanstackAliases()` moved into the
+  framework (field report #27). Products previously hand-mirrored the JS shim
+  strings into Go raw strings — v0.10.1 changed `PRELUDE_SHIMS` and every
+  existing mirror silently kept running the old text, undetectable. The
+  framework now owns the Go copy; a drift-guard test parses
+  `PRELUDE_SHIMS`/`ESBUILD_ALIASES` from the TS source and fails when the Go
+  constants diverge (verified by negative probe). The example's
+  `internal/webrender` copy is deleted (reverse clause).
+
+### Added
+- **ui**: `@ploykit/ui/router` subpath exports the adapter (`Link`,
+  `useNavigate`, `useParams`, `useLocation`, `useSearchParamsCompat`,
+  `RouterTestHarness`, `rawStringifySearch`, `rawParseSearch`). It was
+  internal-only, so products had to re-discover five semantic traps each —
+  the README now carries the react-router ↔ raw TanStack ↔ adapter comparison
+  table (field report #26).
+
+### Release pipeline
+- **release.yml**: a production-fidelity prerender smoke
+  (`go test ./internal/fidelity/ -run TestPrerenderProductionFidelity`) now
+  runs BEFORE publishing. v0.10.0 shipped a shim-unsafe call that broke every
+  product's prerender in the QuickJS sandbox while all conventional gates
+  stayed green; this seconds-long step renders a real page through the real
+  engine, so an SSR-broken package can no longer be published (field report
+  #28).
+
+
 ## [0.10.1] — 2026-10-19
 
 Patch release fixing a **sandbox-only** regression shipped in 0.10.0: the

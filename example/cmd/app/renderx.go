@@ -16,7 +16,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"myproduct/internal/blog"
-	"myproduct/internal/webrender"
 )
 
 // renderxHandler assembles the render pipeline and registers the SEO
@@ -100,8 +99,9 @@ func renderxHandler(ctx context.Context, mux *webx.Mux, pool *pgxpool.Pool, cach
 	buildID := renderx.ViteBuildID(manifestData)
 
 	// TanStack SSR（router-tanstack 迁移）：SSR bundle 需要 prelude 补编
-	// （URLSearchParams / AbortController shim），见 internal/webrender。
-	eng, err = renderx.NewEnginePool(bundle, renderx.PoolOptions{Prelude: webrender.TanstackPrelude()})
+	// （URLSearchParams / AbortController shim），由 renderx 提供（TS 常量
+	// PRELUDE_SHIMS 的 Go 副本，platform/renderx 的测试守漂移）。
+	eng, err = renderx.NewEnginePool(bundle, renderx.PoolOptions{Prelude: renderx.TanstackPrelude()})
 	if err != nil {
 		return nil, eng, false, fmt.Errorf("SSR bundle 求值: %w", err)
 	}

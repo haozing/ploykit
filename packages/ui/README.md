@@ -49,6 +49,55 @@ import { ConfirmProvider, Toaster } from '@ploykit/ui'
 
 要复用全局 QueryClient 实例时，自行 `new QueryClient()` 后经 `queryClient` 传给 `PloykitProvider`。默认 QueryClient 的行为：`staleTime` 30s、4xx 不重试、窗口聚焦不重取。
 
+## 路由适配层 `@ploykit/ui/router`
+
+`@ploykit/ui` 内部的路由原语统一从适配层导入（不直接依赖 `@tanstack/react-router`）。产品侧同样可以走公开子路径复用，免去每个项目重新踩一遍 TanStack 的语义差异：
+
+```tsx
+import { Link, useNavigate, useParams, useLocation, useSearchParamsCompat } from '@ploykit/ui/router'
+```
+
+| react-router | 原生 TanStack | `@ploykit/ui/router` |
+|---|---|---|
+| `useParams()` | `useParams({ strict: false })`（无参调用 TS2554） | `useParams()` → `Record<string, string \| undefined>` |
+| `<Navigate state={x} />` | `state` 类型为 `ParsedHistoryState`（常需 `as never` 断言） | 无 `Navigate` 组件，改用 `useNavigate({ to, state })`；`state: unknown`，直接传普通对象 |
+| `useLocation().search` 是 `'?a=1'` 字符串 | `location.search` 是对象（直接拼接得到 `[object Object]`） | `useLocation()` 归一化：`search` 为带 `?` 的字符串，`hash` 不带 `#` |
+| `navigate('/x')` 同步返回 | 返回 `Promise` | 适配层包裹后仍返回 `Promise`（不需要结果时写 `void navigate('/x')`） |
+| `useSearchParams()` | 无此 API（搜索状态模型不同） | `useSearchParamsCompat()`：完整 `[URLSearchParams, setSearchParams]` 元组，含函数式更新与 `{ replace }` |
+
+### 序列化契约
+
+宿主应用自己调用 `createRouter` 时，**必须**同时传入 `rawStringifySearch` / `rawParseSearch`（`@ploykit/ui/router` 与 `@ploykit/runtime/router-tanstack` 都导出）：
+
+```tsx
+import { createRouter } from '@tanstack/react-router'
+import { rawStringifySearch, rawParseSearch } from '@ploykit/ui/router'
+
+const router = createRouter({
+  routeTree,
+  stringifySearch: rawStringifySearch,
+  parseSearch: rawParseSearch,
+})
+```
+
+TanStack 默认会把纯数字字符串再 JSON 编码一次（`?page=2` → `?page=%222%22`）；只有接入这组纯字符串序列化器，`useSearchParamsCompat` 才能读写 react-router 形状的 URL。`RouterTestHarness` 已内置这一对。
+
+### 测试挂载
+
+`RouterTestHarness` 用内存 history 挂载真实路由上下文（任意路径都渲染 `children`）：
+
+```tsx
+import { RouterTestHarness } from '@ploykit/ui/router'
+
+render(
+  <RouterTestHarness initialEntries={['/app?page=2']}>
+    <ComponentUnderTest />
+  </RouterTestHarness>,
+)
+await act(async () => {}) // 首次渲染是异步的：先 act / waitFor 冲刷，再断言
+await waitFor(() => expect(screen.getByText('...')).toBeInTheDocument())
+```
+
 ## 全局 Provider 清单
 
 | Provider | 导入自 | 职责 |

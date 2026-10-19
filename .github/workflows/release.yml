@@ -64,6 +64,19 @@ jobs:
       - run: npm ci
       - name: Build packages (topological order — ui needs client + runtime dist)
         run: npm run build
+      # Sandbox fidelity gate BEFORE publishing (field report #28): v0.10.0
+      # shipped a shim-unsafe call that killed every product's prerender inside
+      # the QuickJS sandbox while build/unit/CI stayed green; this step renders
+      # one real page through the real engine in seconds, so a release can
+      # never again publish an SSR-broken package. Needs no database — the
+      # home page is loader-free.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: example/go.mod
+          cache-dependency-path: example/go.sum
+      - name: Prerender smoke (production-fidelity sandbox gate)
+        working-directory: example
+        run: go test ./internal/fidelity/ -run TestPrerenderProductionFidelity -count=1 -v
       # Publish in dependency order (ui needs client + runtime + hooks).
       # Skip packages whose current version is already on the registry —
       # a tag only republishes what actually bumped.

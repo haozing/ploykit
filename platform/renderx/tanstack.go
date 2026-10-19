@@ -1,46 +1,47 @@
-// Package webrender wires the example's renderx pipeline to the TanStack
-// Router SSR adapter (@ploykit/runtime/router-tanstack).
+// Package renderx implements the SSR render pipeline (QuickJS engine pool,
+// bundle build, prerender, cache, SEO companions).
 //
-// The TanStack PoC (D:\code\_tmp\tanstack-poc, VERDICT.md 2026-10-19 — verdict
-// GO with conditions) identified two engine-side affordances the QuickJS
-// sandbox needs before a TanStack SSR bundle evaluates:
+// This file owns the pipeline's TanStack Router SSR affordances. The
+// JavaScript source of truth for both values below is
+// packages/runtime/src/router-tanstack.tsx:
 //
-//  1. A prelude addendum: URLSearchParams (router-core qss.js constructs one
-//     during every router construction) and a construct-only AbortController
-//     (matchRoutesInternal builds one per match; only the never-running async
-//     load pipeline touches .signal/.abort). The canonical source of the shim
-//     text is the TS constant PRELUDE_SHIMS in packages/runtime — this Go
-//     mirror must be kept textually identical. The split/join ('+'-as-space)
-//     form is deliberate: it contains no backslash, so a Go raw-string literal
-//     and a JS template literal can carry byte-identical text (a /\\+/g regex
-//     literal would need different escaping per language).
+//   - PRELUDE_SHIMS — the QuickJS prelude addendum (URLSearchParams +
+//     AbortController) every TanStack SSR bundle needs before it evaluates.
+//   - ESBUILD_ALIASES — the esbuild alias pinning
+//     @tanstack/router-core/isServer to the server variant. The default
+//     (client) variant evaluates `window?.origin` inside the sandbox, where
+//     window is deliberately never defined, and crashes the render.
 //
-//  2. An esbuild alias pinning @tanstack/router-core/isServer to the server
-//     variant (statically isServer=true). With the default client variant,
-//     `isServer ?? this.isServer` short-circuits on non-nullish false and
-//     evaluates `window?.origin` → ReferenceError in the sandbox (window is
-//     deliberately never defined). The server variant also makes Matches skip
-//     the Transitioner (which would call the forbidden async load()).
+// The Go render pipeline must carry an executable copy of both: it builds the
+// prelude string and the esbuild alias map natively, so a TS-only constant
+// cannot reach it. Keeping that copy here (rather than in every product)
+// exists because the alternative is a hand-maintained mirror per TanStack
+// consumer: the TS runtime moves, the product copy does not, and the product
+// silently runs an outdated shim with zero detection (exactly what happened
+// in v0.10.1). Products import renderx.TanstackPrelude and
+// renderx.AppendTanstackAliases instead of mirroring the constants.
 //
-// FRAMEWORK NOTE: today these live consumer-side because platform/renderx has
-// no first-class TanStack affordance (PoolOptions.Prelude accepts an override;
-// BuildOptions.Alias accepts extra aliases — both composition points exist).
-// If a second product adopts TanStack SSR, promote both into renderx
-// (e.g. renderx.TanstackPreludeAddendum + append-TanstackAliases helper) and
-// have packages/runtime reference that copy instead of mirroring.
-package webrender
+// tanstack_test.go is the drift guard: it parses router-tanstack.tsx and fails
+// when this file diverges from the TS source. The framework repo is where
+// drift can happen, so the guard runs there; from a module cache (no
+// packages/ checkout) it skips.
+package renderx
 
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/haozing/ploykit/platform/renderx"
 )
 
-// TanstackPreludeAddendum is the Go raw-string mirror of PRELUDE_SHIMS
-// (@ploykit/runtime/router-tanstack). Textually identical modulo the leading
-// newline; keep the two in lockstep (see package comment).
-const TanstackPreludeAddendum = `
+// tanstackPreludeAddendum is the Go raw-string mirror of PRELUDE_SHIMS
+// (@ploykit/runtime/router-tanstack). It is byte-identical to the TS template
+// literal body, including the leading and trailing newline; keep the two in
+// lockstep (the drift guard in tanstack_test.go enforces this).
+//
+// The split/join ('+'-as-space) form in the shim is deliberate: the text
+// contains no backslash, so a Go raw-string literal and a JS template literal
+// can carry byte-identical content (a /\+/g regex literal would need different
+// escaping per language).
+const tanstackPreludeAddendum = `
 // ---- tanstack-router addendum (@ploykit/runtime/router-tanstack, PoC 2026-10-19) ----
 // URLSearchParams: router-core qss.js decode/encode runs at every router
 // construction (parseLocation). QuickJS has no Web Encoding API.
@@ -105,18 +106,22 @@ if (typeof globalThis.AbortController === 'undefined') {
 // ---- end tanstack-router addendum ----
 `
 
-// TanstackPrelude returns the engine prelude for TanStack SSR bundles:
-// the renderx default prelude plus the TanStack shims.
+// TanstackPrelude returns the engine prelude for TanStack SSR bundles: the
+// renderx default prelude plus the TanStack shims (the Go side of
+// PRELUDE_SHIMS). Pass it as PoolOptions.Prelude:
+//
+//	renderx.NewEnginePool(bundle, renderx.PoolOptions{Prelude: renderx.TanstackPrelude()})
 func TanstackPrelude() string {
-	return renderx.DefaultPrelude + TanstackPreludeAddendum
+	return DefaultPrelude + tanstackPreludeAddendum
 }
 
-// AppendTanstackAliases adds the isServer alias (the TS-side ESBUILD_ALIASES
-// mirror) on top of base, resolving the target against the same node_modules
-// tree the rest of the SSR build reads: the web app's own node_modules first,
-// then the npm-workspaces hoist root (example/web is a workspace member, so
-// @tanstack/router-core typically lands at <repo>/node_modules). TanStack-
-// agnostic callers can ignore the extra entry.
+// AppendTanstackAliases adds the isServer alias (the Go side of the TS-side
+// ESBUILD_ALIASES) on top of base, resolving the target against the same
+// node_modules tree the rest of the SSR build reads: the web app's own
+// node_modules first, then the npm-workspaces hoist root
+// (webDir/../../node_modules — a web app that is a workspace member usually
+// resolves @tanstack/router-core at the repo root). TanStack-agnostic callers
+// can ignore the extra entry; the returned map is base.
 func AppendTanstackAliases(base map[string]string, webDir string) map[string]string {
 	rel := filepath.Join("@tanstack", "router-core", "dist", "esm", "isServer", "server.js")
 	candidates := []string{

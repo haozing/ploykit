@@ -1,6 +1,7 @@
 
 import type { ReactElement } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
+import { matchPageByPath } from './match'
 import type { PageSpec, RouteTable } from './routes'
 
 
@@ -50,45 +51,66 @@ export interface ClientEntryOptions {
 
   container?: HTMLElement | null
 
-  // pathname → 拥页 pageId 的匹配器（router 语义是消费方的知识）。RR 消费
-  // 方从 @ploykit/runtime/router-react-router 取 matchRoutePage 传入；
-  // TanStack Router 消费方用自家 router 一行实现（如
-  // (p, pages) => router.matchLocation(p)?.route.id ?? null）。缺省时走回
-  // 退梯子（见 propsForHydration）：组件名未压缩的部署仍能靠嵌入 pageId
-  // 键入 props；压缩部署在无匹配器时失去 props 注入并告警一次。
+  // OPTIONAL override for pathname → owning pageId resolution. The built-in
+  // default (matchPageByPath) already understands the standard routeTable /
+  // PageSpec pattern syntax (`:param` and a trailing `*`), so products do not
+  // need to wire a matcher at all. Pass an override only when the router's
+  // route semantics differ from that syntax or when the URL does not spell
+  // the bare route path (e.g. an app base path): the consumer implementation
+  // (react-router's matchRoutePage, TanStack's matchTanstackPage, or a custom
+  // one) runs FIRST and its non-null result wins. A null result falls through
+  // to the default matcher, then to the embedded-pageId fallback.
   matchPage?: (pathname: string, pages: PageSpec[]) => string | null
 }
 
-// pageId is derived from component display names (routeTable), and production
-// minification mangles those names in the client bundle while the SSR bundle
-// keeps them (the Go esbuild build sets no minify flags) — so the pageId
-// embedded in the props script cannot be trusted as a key into the client's
-// own route table. Passing a matchPage (the react-router one lives in
-// @ploykit/runtime/router-react-router) resolves the owning page by matching
-// the current URL against the client table itself — route path patterns are
-// string literals: they survive minification and are identical in both
-// bundles. The last match is the leaf of the matched branch, i.e. the page
-// that owns the payload.
+// Resolve the page that owns the SSR payload. The ladder, in order:
+//
+// 1. Consumer `matchPage` override (non-null result wins).
+// 2. Default `matchPageByPath`: route path patterns are string literals, so
+//    they survive client-bundle minification and are identical in the SSR and
+//    client bundles — unlike pageIds derived from component display names,
+//    which production minification mangles in the client bundle only (pageId
+//    is derived from component display names via routeTable). Matching the
+//    current URL against the client table itself therefore works by default,
+//    with no router library and no consumer wiring.
+// 3. Legacy embedded-pageId keying: for non-minified bundles (or setups where
+//    the URL does not spell the bare route path) the client pageId still
+//    agrees with the SSR-embedded one.
+// 4. Genuine mismatch: emit a structured `ploykit:hydration-miss` browser
+//    event (for server-side/monitoring capture) plus one console.error, then
+//    mount WITHOUT props. Loader-driven pages — pages that render only their
+//    loader props and never fetch client-side — render EMPTY in this case;
+//    that is exactly why the event exists (a console-only signal is invisible
+//    outside the browser).
 function propsForHydration(
   table: RouteTable,
   hydrated: HydratePayload,
   matchPage?: (pathname: string, pages: PageSpec[]) => string | null,
 ): Record<string, unknown> | undefined {
+  const pathname = window.location.pathname
   if (matchPage) {
-    const pageId = matchPage(window.location.pathname, table.pages)
+    const pageId = matchPage(pathname, table.pages)
     if (pageId) return { [pageId]: hydrated.props }
   }
-  // Fallback for setups where the URL does not spell the bare route path
-  // (e.g. an app base path): a non-minified client bundle still agrees with
-  // the embedded pageId, so keep the legacy keying there.
+  const defaultPageId = matchPageByPath(pathname, table.pages)
+  if (defaultPageId) return { [defaultPageId]: hydrated.props }
   if (table.pages.some((p) => p.pageId === hydrated.pageId)) {
     return { [hydrated.pageId]: hydrated.props }
   }
-  console.warn(
-    '[ploykit/runtime] props script present but no route matched "%s" (embedded pageId "%s" not in the client route table); mounting without props (page will fetch its own data)',
-    window.location.pathname,
+  console.error(
+    '[ploykit/runtime] props script present but no route matched "%s" (embedded pageId "%s" not in the client route table); mounting without props — loader-driven pages will render empty; dispatched "ploykit:hydration-miss" for monitoring',
+    pathname,
     hydrated.pageId,
   )
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    if (typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('ploykit:hydration-miss', {
+          detail: { pathname: window.location.pathname, embeddedPageId: hydrated.pageId },
+        }),
+      )
+    }
+  }
   return undefined
 }
 

@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/haozing/ploykit/platform/renderx"
-	"myproduct/internal/webrender"
 )
 
 func TestPrerenderProductionFidelity(t *testing.T) {
@@ -44,7 +43,7 @@ func TestPrerenderProductionFidelity(t *testing.T) {
 		t.Skip("web/node_modules missing — run npm install at the repo root first")
 	}
 
-	aliases := webrender.AppendTanstackAliases(
+	aliases := renderx.AppendTanstackAliases(
 		renderx.DefaultSSRAliases(web, filepath.Join(exampleDir, "..", "packages")), web)
 	bundle, err := renderx.BuildSSRBundle(renderx.BuildOptions{
 		EntryPoints:   []string{filepath.Join("src", "entry-server.tsx")},
@@ -58,7 +57,7 @@ func TestPrerenderProductionFidelity(t *testing.T) {
 	t.Logf("ssr bundle %d bytes", len(bundle))
 
 	pool, err := renderx.NewEnginePool(bundle, renderx.PoolOptions{
-		Prelude:       webrender.TanstackPrelude(),
+		Prelude:       renderx.TanstackPrelude(),
 		RenderTimeout: 30 * time.Second,
 	})
 	if err != nil {
