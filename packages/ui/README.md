@@ -258,6 +258,20 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 
 令牌定义（`--card` / `--popover` 等 CSS 变量与 `@theme` 映射）仍由消费方按 shadcn 惯例在自己的 CSS 里提供（参见 `example/web/src/index.css`）。
 
+**必须映射语义色才生成工具类**：Tailwind v4 只有在 `@theme inline` 里出现 `--color-*` 映射时才产出对应 utility。本包用到的语义色除 shadcn 标准集外还有三个**扩展令牌**——`--success`、`--warning`、`--destructive`（后者的 `--color-destructive` 映射属标准集，前两者需自行补）：
+
+```css
+@theme inline {
+  /* …标准 shadcn 映射… */
+  --color-success: var(--success);   /* 需要 success 语义时 */
+  --color-warning: var(--warning);   /* Alert variant="warning" 必需 */
+}
+```
+
+漏了 `--color-warning` 时 `<Alert variant="warning">` 会渲染成无颜色的卡片（类名在 DOM、规则不生成），这正是 2026-10-19 下游采纳时发现的问题。
+
+> **vite8 / rolldown 注意**：有消费方报告 `@import "@ploykit/ui/tailwind.css"` 在 vite8 的 CSS 管线里被解析成 `dist/index.js/tailwind.css`（ENOENT）。本仓在 vite 8.1.6 / 8.3.4 × npm/pnpm 布局下未能复现；若你撞到，等价 workaround 是绕开该 subpath、直接写 `@source "<node_modules 相对路径>/@ploykit/ui/src";`（两者内容等价）。
+
 ## 自定义三个层级
 
 1. **换皮**：CSS/Tailwind 覆盖样式（组件全部走 design token：`bg-popover`、`text-muted-foreground` 等）。

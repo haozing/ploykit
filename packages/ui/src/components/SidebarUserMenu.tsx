@@ -1,4 +1,3 @@
-
 import { useNavigate } from '../router'
 import { ChevronsUpDown, LogOut, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
@@ -9,21 +8,30 @@ import {
 import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
 } from './ui/sidebar'
-import { useAuth } from '@ploykit/hooks'
+import { useAuthSafe } from '../lib/useAuthSafe'
 import { toast } from './toast'
-import { initialsOf, type UserMenuExtraItem } from './UserMenu'
+import {
+  DEFAULT_USER_MENU_LABELS, initialsOf,
+  type UserMenuExtraItem, type UserMenuLabels,
+} from './UserMenu'
 
 export interface SidebarUserMenuProps {
   items?: UserMenuExtraItem[]
   logoutRedirect?: string
+  /** 文案覆盖（可选）：缺省沿用内置中文，行为对存量消费方零变化。 */
+  labels?: UserMenuLabels
 }
 
 // 侧栏底部用户卡（sidebar-07 NavUser 模式）：折叠态收成头像，点开右侧面板。
 // 与头部 UserMenu 共用 items 协议（UserMenuExtraItem），产品传入各自的账户菜单项。
-export function SidebarUserMenu({ items = [], logoutRedirect = '/login' }: SidebarUserMenuProps) {
+export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels }: SidebarUserMenuProps) {
+  // Provider-safe：无 AuthContext 时渲染空（AppShell 不强制宿主包 PloykitProvider）。
+  // useSidebar/useNavigate 在条件返回前调用，保证 Provider 后挂载时 hooks 顺序不变。
   const { isMobile } = useSidebar()
-  const { user, logout } = useAuth()
+  const auth = useAuthSafe()
   const navigate = useNavigate()
+  if (!auth) return null
+  const { user, logout } = auth
 
   const name = user?.display_name || user?.email || ''
   const email = user?.email ?? ''
@@ -32,7 +40,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login' }: Sideb
     try {
       await logout()
     } catch {
-      toast.error('退出登录失败，请稍后在登录页重试')
+      toast.error(labels?.logoutFailedToast ?? DEFAULT_USER_MENU_LABELS.logoutFailedToast)
     }
     navigate(logoutRedirect)
   }
@@ -48,7 +56,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login' }: Sideb
                 className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
               />
             }
-            aria-label="用户菜单"
+            aria-label={labels?.userMenuAria ?? DEFAULT_USER_MENU_LABELS.userMenuAria}
           >
             <Avatar className="h-8 w-8 rounded-lg">
               {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={name} /> : null}
@@ -106,7 +114,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login' }: Sideb
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem variant="destructive" onClick={handleLogout}>
-                <LogOut /> 退出登录
+                <LogOut /> {labels?.logout ?? DEFAULT_USER_MENU_LABELS.logout}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>

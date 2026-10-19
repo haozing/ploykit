@@ -104,6 +104,11 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /* Semantic third state used by Alert variant="warning" (kit 0.10.3). The raw
+     --warning value lives in :root/.dark; Tailwind v4 only emits text-warning
+     once the consumer maps --color-warning here — every product theme needs
+     this line, and example is the reference wiring. */
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

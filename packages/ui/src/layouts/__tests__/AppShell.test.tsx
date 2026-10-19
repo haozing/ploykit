@@ -1,13 +1,16 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterTestHarness } from '../../router'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { AppShell } from '../AppShell'
 
 
 
 const mocks = vi.hoisted(() => ({
   impersonatedBy: undefined as string | undefined,
+  // #2：noAuthProvider=true 时与真实 useAuthCtx 一样同步抛错——证明整壳（含无条件
+  // 渲染的 UserMenu/ImpersonationBanner）在无 AuthContext 时仍可渲染。
+  noAuthProvider: false,
   // permKey 过滤用例的当前工作区：null 模拟无 Provider（真实 useWorkspace 无
   // PloykitProvider 时同步抛错，走 AppShell 的 try/catch 回退）；非 null 即已挂
   // Provider 的 current（role / role_perms 按需给）。
@@ -16,17 +19,20 @@ const mocks = vi.hoisted(() => ({
     | null,
 }))
 vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: {
-      email: 'alice@example.com',
-      display_name: 'Alice',
-      impersonated_by: mocks.impersonatedBy,
-    },
-    workspaces: [],
-    loading: false,
-    refresh: vi.fn(),
-    logout: vi.fn(async () => {}),
-  }),
+  useAuth: () => {
+    if (mocks.noAuthProvider) throw new Error('must be used within PloykitProvider')
+    return {
+      user: {
+        email: 'alice@example.com',
+        display_name: 'Alice',
+        impersonated_by: mocks.impersonatedBy,
+      },
+      workspaces: [],
+      loading: false,
+      refresh: vi.fn(),
+      logout: vi.fn(async () => {}),
+    }
+  },
 }))
 
 // 与 SettingsShell.test.tsx 同款路径 mock（经 @ploykit/hooks index re-export 生效）。
@@ -80,6 +86,7 @@ async function renderAt(path: string, withSettingsContent = true) {
 describe('AppShell 设置模式（IA v2）', () => {
   beforeEach(() => {
     mocks.impersonatedBy = undefined
+    mocks.noAuthProvider = false
   })
 
   it('产品路径：渲染产品 nav 项，不渲染 settingsContent', async () => {
@@ -115,6 +122,7 @@ describe('AppShell 设置模式（IA v2）', () => {
 describe('AppShell 模拟会话横幅（ADR 0008）', () => {
   beforeEach(() => {
     mocks.impersonatedBy = undefined
+    mocks.noAuthProvider = false
   })
 
   it('impersonated_by 非空：内容区顶部持久显示警示条（顶栏之上）', async () => {
@@ -133,6 +141,38 @@ describe('AppShell 模拟会话横幅（ADR 0008）', () => {
   it('普通会话（impersonated_by 缺省）：不渲染警示条', async () => {
     await renderAt('/app')
     expect(screen.queryByText('您正处于管理员模拟会话')).not.toBeInTheDocument()
+  })
+})
+
+describe('AppShell 无 AuthContext 渲染（不强制 PloykitProvider）', () => {
+  beforeEach(() => {
+    mocks.impersonatedBy = undefined
+    mocks.noAuthProvider = true
+    mocks.wsCurrent = null
+  })
+
+  afterEach(() => {
+    mocks.noAuthProvider = false
+  })
+
+  it('header 模式：useAuth 同步抛错时整壳仍渲染（UserMenu/ImpersonationBanner 不炸）', async () => {
+    const { container } = await renderAt('/app')
+    expect(screen.getAllByText('概览').length).toBeGreaterThan(0)
+    // 无 Provider → 用户菜单与模拟横幅均不渲染，但壳本体完好。
+    expect(screen.queryByRole('button', { name: '用户菜单' })).not.toBeInTheDocument()
+    expect(container.querySelector('[data-slot="impersonation-banner"]')).not.toBeInTheDocument()
+  })
+
+  it('sidebar-footer 模式：SidebarUserMenu 同样安全降级', async () => {
+    render(
+      <RouterTestHarness initialEntries={['/app']}>
+        <AppShell brand="MyProduct" nav={nav} userMenu="sidebar-footer">
+          <div>page-body</div>
+        </AppShell>
+      </RouterTestHarness>,
+    )
+    await waitFor(() => expect(screen.queryAllByText('page-body').length).toBeGreaterThan(0))
+    expect(screen.queryByRole('button', { name: '用户菜单' })).not.toBeInTheDocument()
   })
 })
 

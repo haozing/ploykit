@@ -26,6 +26,8 @@ function readSidebarCookieOpen(): boolean {
 // 防御式读取工作区角色与生效权限集：AppShell 不强制宿主包 PloykitProvider（存量测试/
 // 渐进接入场景直接渲染）；无 Provider 时两者视为 undefined——perm 专属项隐藏、普通项
 // 可见；rolePerms 未知（旧载荷无 role_perms / 无 Provider）时 permKey 项默认显示。
+// 壳无条件渲染的 UserMenu / SidebarUserMenu / ImpersonationBanner 同款防御（经
+// lib/useAuthSafe），保证「不强制 Provider」对整棵壳成立。
 function useWorkspaceRoleSafe(): { role: string | undefined; rolePerms: string[] | undefined } {
   try {
     const current = useWorkspace().current

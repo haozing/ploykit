@@ -9,6 +9,39 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.10.3] — 2026-10-19
+
+Product adaptation field report (five findings; four verified in our tree and
+fixed, one could not be reproduced and is documented + defensively hardened).
+npm: `@ploykit/ui` 2.0.3 only.
+
+### Fixed
+- **ui**: the shell's "no Provider required" promise was self-contradictory —
+  AppShell guards its own hooks with try/catch, but the always-rendered
+  `UserMenu`/`SidebarUserMenu`/`ImpersonationBanner` called `useAuth()`
+  unguarded, so a provider-less shell threw. All three now use a shared
+  `useAuthSafe` and render nothing without an AuthContext (a product had to
+  mount a bare `AuthContext.Provider` bridge to work around this).
+- **ui**: menu copy had no override seam (Chinese hardcoded in
+  `UserMenu`/`SidebarUserMenu`/`ImpersonationBanner`). `UserMenuLabels`
+  (`accountSettings`/`logout`/`userMenuAria`/`logoutFailedToast`) and
+  `ImpersonationBanner.label` are now optional props defaulting to the exact
+  current strings — zero change for existing consumers, one line for a
+  bilingual product.
+- **ui**: `Alert` gains a `warning` variant (its absence made the most common
+  alert flavour undeliverable). NOTE for consumers: Tailwind v4 only emits
+  `text-warning` when the theme maps `--color-warning` — the README documents
+  the required `@theme inline` line and the example theme now carries it.
+
+### Documented / hardened
+- **ui**: `@import "@ploykit/ui/tailwind.css"` was reported failing under
+  vite8/rolldown (resolved as `dist/index.js/tailwind.css`, ENOENT). Not
+  reproducible here across vite 8.1.6/8.3.4 × npm/pnpm layouts; the
+  `./tailwind.css` export was changed to a conditional-map shape
+  (`{"default": "./tailwind.css"}`) as defensive hardening and the README
+  documents the equivalent `@source` workaround for anyone who hits it.
+
+
 ## [0.10.2] — 2026-10-19
 
 Field-report batch from the migration consumer (five findings, all verified

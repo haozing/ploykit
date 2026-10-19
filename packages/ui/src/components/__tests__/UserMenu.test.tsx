@@ -8,20 +8,24 @@ import type { PKUser } from '../../provider/PloykitProvider'
 
 
 const logout = vi.fn(async () => {})
-const mocks = vi.hoisted(() => ({ isPlatformAdmin: false }))
+const mocks = vi.hoisted(() => ({ isPlatformAdmin: false, noProvider: false }))
 vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: {
-      email: 'alice@example.com',
-      display_name: 'Alice',
-      avatar_url: undefined,
-      is_platform_admin: mocks.isPlatformAdmin,
-    } as PKUser,
-    workspaces: [],
-    loading: false,
-    refresh: vi.fn(),
-    logout,
-  }),
+  useAuth: () => {
+    // noProvider 模拟无 PloykitProvider：真实 useAuthCtx 同步抛错。
+    if (mocks.noProvider) throw new Error('must be used within PloykitProvider')
+    return {
+      user: {
+        email: 'alice@example.com',
+        display_name: 'Alice',
+        avatar_url: undefined,
+        is_platform_admin: mocks.isPlatformAdmin,
+      } as PKUser,
+      workspaces: [],
+      loading: false,
+      refresh: vi.fn(),
+      logout,
+    }
+  },
 }))
 
 // 路径探针：替代 react-router 的 <Routes>/<Route> 标记页。Toaster 在路由
@@ -70,6 +74,7 @@ describe('UserMenu', () => {
   beforeEach(() => {
     logout.mockClear()
     mocks.isPlatformAdmin = false
+    mocks.noProvider = false
   })
 
   it('渲染头像 initials fallback', async () => {
@@ -119,5 +124,39 @@ describe('UserMenu', () => {
     
     expect(await screen.findByText('退出登录失败，请稍后在登录页重试')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('login-page')).toBeInTheDocument())
+  })
+
+  it('无 Provider（useAuth 抛错）：渲染空，不抛错（AppShell 不强制 Provider）', async () => {
+    mocks.noProvider = true
+    const { container } = await renderAt('/app')
+    expect(screen.queryByRole('button', { name: '用户菜单' })).not.toBeInTheDocument()
+    expect(container.querySelector('[data-slot="dropdown-menu-trigger"]')).not.toBeInTheDocument()
+  })
+
+  it('labels 覆盖：自定义文案替换默认中文（菜单项 / aria-label / 失败 toast）', async () => {
+    render(
+      <RouterTestHarness initialEntries={['/app']}>
+        <UserMenu
+          labels={{
+            accountSettings: 'Account settings',
+            logout: 'Sign out',
+            userMenuAria: 'User menu',
+            logoutFailedToast: 'Sign-out failed',
+          }}
+        />
+        <Toaster />
+      </RouterTestHarness>,
+    )
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Account settings' })).toBeVisible()
+    expect(screen.queryByRole('menuitem', { name: '账户设置' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '退出登录' })).not.toBeInTheDocument()
+
+    logout.mockRejectedValueOnce(new Error('network down'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    // sonner 的 toast store 是模块级全局、跨用例保留，故只断言覆盖文案上屏，
+    // 不断言默认文案缺席。
+    expect(await screen.findByText('Sign-out failed')).toBeInTheDocument()
   })
 })

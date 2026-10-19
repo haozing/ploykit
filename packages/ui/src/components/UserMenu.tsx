@@ -1,4 +1,3 @@
-
 import { useNavigate } from '../router'
 import type { ReactNode } from 'react'
 import { LogOut, Settings, ShieldCheck } from 'lucide-react'
@@ -7,7 +6,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from './ui/dropdown-menu'
-import { useAuth } from '@ploykit/hooks'
+import { useAuthSafe } from '../lib/useAuthSafe'
 import { toast } from './toast'
 
 export interface UserMenuExtraItem {
@@ -18,11 +17,30 @@ export interface UserMenuExtraItem {
   destructive?: boolean
 }
 
+/** Optional copy overrides — defaults are the built-in Chinese labels. No i18n
+ *  system is imposed; consumers wire their own translation function. */
+export interface UserMenuLabels {
+  accountSettings?: string
+  logout?: string
+  userMenuAria?: string
+  logoutFailedToast?: string
+}
+
+export const DEFAULT_USER_MENU_LABELS = {
+  accountSettings: '账户设置',
+  logout: '退出登录',
+  userMenuAria: '用户菜单',
+  logoutFailedToast: '退出登录失败，请稍后在登录页重试',
+} satisfies Required<UserMenuLabels>
+
 export interface UserMenuProps {
   
   items?: UserMenuExtraItem[]
   
   logoutRedirect?: string
+
+  /** 文案覆盖（可选）：缺省沿用内置中文，行为对存量消费方零变化。 */
+  labels?: UserMenuLabels
 }
 
 export function initialsOf(name: string, email: string): string {
@@ -32,9 +50,13 @@ export function initialsOf(name: string, email: string): string {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || src.slice(0, 2).toUpperCase()
 }
 
-export function UserMenu({ items = [], logoutRedirect = '/login' }: UserMenuProps) {
-  const { user, logout } = useAuth()
+export function UserMenu({ items = [], logoutRedirect = '/login', labels }: UserMenuProps) {
+  // Provider-safe:无 AuthContext 时渲染空（AppShell 不强制宿主包 PloykitProvider）。
+  // useNavigate 在条件返回前调用，保证 Provider 后挂载时 hooks 顺序不变。
+  const auth = useAuthSafe()
   const navigate = useNavigate()
+  if (!auth) return null
+  const { user, logout } = auth
 
   const name = user?.display_name || user?.email || ''
   const email = user?.email ?? ''
@@ -45,7 +67,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login' }: UserMenuProp
     } catch {
       
       
-      toast.error('退出登录失败，请稍后在登录页重试')
+      toast.error(labels?.logoutFailedToast ?? DEFAULT_USER_MENU_LABELS.logoutFailedToast)
     }
     navigate(logoutRedirect)
   }
@@ -56,7 +78,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login' }: UserMenuProp
         className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground
                    transition-colors hover:bg-accent hover:text-accent-foreground
                    aria-expanded:bg-accent"
-        aria-label="用户菜单"
+        aria-label={labels?.userMenuAria ?? DEFAULT_USER_MENU_LABELS.userMenuAria}
       >
         <Avatar size="sm">
           {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={name} /> : null}
@@ -75,7 +97,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login' }: UserMenuProp
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate('/account/profile')}>
-          <Settings /> 账户设置
+          <Settings /> {labels?.accountSettings ?? DEFAULT_USER_MENU_LABELS.accountSettings}
         </DropdownMenuItem>
         {user?.is_platform_admin && (
           <DropdownMenuItem onClick={() => navigate('/admin')}>
@@ -95,7 +117,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login' }: UserMenuProp
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={handleLogout}>
-          <LogOut /> 退出登录
+          <LogOut /> {labels?.logout ?? DEFAULT_USER_MENU_LABELS.logout}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

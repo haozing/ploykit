@@ -1,11 +1,13 @@
-
 import { TriangleAlert } from 'lucide-react'
-import { useAuth } from '@ploykit/hooks'
+import { useAuthSafe } from '../lib/useAuthSafe'
 import { cn } from '../lib/utils'
 
-export function ImpersonationBanner({ className }: { className?: string }) {
-  const { user } = useAuth()
-  if (!user?.impersonated_by) return null
+const DEFAULT_IMPERSONATION_BANNER_LABEL = '您正处于管理员模拟会话'
+
+export function ImpersonationBanner({ className, label = DEFAULT_IMPERSONATION_BANNER_LABEL }: { className?: string; label?: string }) {
+  // Provider-safe：无 AuthContext 时渲染空（AppShell 不强制宿主包 PloykitProvider）。
+  const auth = useAuthSafe()
+  if (!auth || !auth.user?.impersonated_by) return null
   return (
     <div
       role="status"
@@ -17,7 +19,7 @@ export function ImpersonationBanner({ className }: { className?: string }) {
       )}
     >
       <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-      <span>您正处于管理员模拟会话</span>
+      <span>{label}</span>
     </div>
   )
 }
