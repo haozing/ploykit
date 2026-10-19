@@ -1,9 +1,8 @@
 
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Radio,
   UserCircle,
   ShieldCheck as ShieldIcon,
   KeyRound,
@@ -14,11 +13,10 @@ import {
   Gauge,
   CreditCard,
   Webhook,
-  ArrowLeft,
   CalendarClock,
 } from 'lucide-react';
 import { routeTable } from '@ploykit/runtime/routes';
-import { PloykitProvider, useAuth, useWorkspace, useSEO, roleSatisfies, useSiteConfig } from '@ploykit/hooks';
+import { PloykitProvider, useAuth, useWorkspace, useSEO, useSiteConfig } from '@ploykit/hooks';
 import {
   LoginPage,
   LandingPage,
@@ -31,7 +29,6 @@ import {
   VerifyEmailPage,
   RegisterPage,
   InviteAcceptPage,
-  SettingsShell,
   ProfileSettingsPage,
   SecuritySettingsPage,
   TokensPage,
@@ -60,14 +57,11 @@ import {
   SSOPage,
   AdminSettingsPage,
 } from '@ploykit/ui';
-import type { SettingsNavGroup, NotificationTypeMeta } from '@ploykit/ui';
-import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+import type {
+  AppShellNavGroup,
+  SettingsNavGroup,
+  NotificationTypeMeta,
+  UserMenuExtraItem,
 } from '@ploykit/ui';
 import type { OAuthProviderOption } from '@ploykit/ui';
 import { api } from '@ploykit/client';
@@ -178,7 +172,7 @@ const PAGE_TITLES: Array<[RegExp, string]> = [
   [/^\/settings/, '工作区设置'],
   [/^\/billing\/success/, '支付确认'],
   [/^\/app/, '概览 · MyProduct'],
-  [/^\/realtime/, '实时 · MyProduct'],
+  [/^\/dev\/realtime/, '实时连接（调试） · MyProduct'],
   [/^\/invitations/, '我的邀请 · MyProduct'],
   [/^\/login$/, '登录 · MyProduct'],
   [/^\/register$/, '创建账号 · MyProduct'],
@@ -237,7 +231,7 @@ export function Product() {
         {
           icon: '👥',
           title: '团队协作',
-          desc: '邀请成员加入工作区，通过邮箱或分享链接',
+          desc: '邀请成员加入工作区，支持邮箱邀请或加入码',
         },
         {
           icon: '📊',
@@ -278,11 +272,7 @@ const shellNav = [
     label: '概览',
     icon: <LayoutDashboard size={17} aria-hidden="true" />,
   },
-  {
-    path: '/realtime',
-    label: '实时',
-    icon: <Radio size={17} aria-hidden="true" />,
-  },
+  // /dev/realtime（调试页）不进一级导航，仅经 URL 访问（routes 表 + PAGE_TITLES）。
 ];
 
 const icon = (I: React.ComponentType<{ size?: number }>) => (
@@ -303,7 +293,11 @@ const accountNav: SettingsNavGroup[] = [
 ];
 
 
-const workspaceNav: SettingsNavGroup[] = [
+// 细粒度权限键（permKey）对齐 authz 权限目录：工作区上下文带 role_perms 时，
+// 仅当生效权限集包含该键才显示；未带 role_perms 的旧上下文行为不变。
+// SettingsNavItem 无 permKey 字段（类型定义在框架侧），此处就地放宽为
+// AppShellNavGroup（AppShell 的 NavItem 承载 permKey；结构兼容 crumbOf 等用法）。
+const workspaceNav: AppShellNavGroup[] = [
   {
     group: '工作区',
     items: [
@@ -311,9 +305,16 @@ const workspaceNav: SettingsNavGroup[] = [
         path: '/settings/workspace/general',
         label: '概况',
         icon: icon(Building2),
+        permKey: 'workspace:read',
       },
-      { path: '/settings/workspace/members', label: '成员', icon: icon(Users) },
       {
+        path: '/settings/workspace/members',
+        label: '成员',
+        icon: icon(Users),
+        permKey: 'members:read',
+      },
+      {
+        // owner 专属管理页：走粗粒度 perm，不走细粒度 permKey。
         path: '/settings/workspace/roles',
         label: '角色权限',
         icon: icon(ShieldIcon),
@@ -323,84 +324,45 @@ const workspaceNav: SettingsNavGroup[] = [
         path: '/settings/workspace/audit',
         label: '审计',
         icon: icon(ScrollText),
-        perm: 'admin',
+        permKey: 'audit:read',
       },
-      { path: '/settings/workspace/usage', label: '用量', icon: icon(Gauge) },
+      {
+        path: '/settings/workspace/usage',
+        label: '用量',
+        icon: icon(Gauge),
+        permKey: 'usage:read',
+      },
       {
         path: '/settings/workspace/billing',
         label: '计费',
         icon: icon(CreditCard),
+        permKey: 'billing:read',
       },
       {
         path: '/settings/workspace/webhooks',
         label: 'Webhooks',
         icon: icon(Webhook),
+        permKey: 'webhooks:read',
       },
       {
         path: '/settings/workspace/schedules',
         label: '调度',
         icon: icon(CalendarClock),
+        permKey: 'schedules:manage',
       },
     ],
   },
 ];
 
 
-function SettingsSidebar({ nav }: { nav: SettingsNavGroup[] }) {
-  const { pathname } = useLocation();
-  const role = useWorkspace().current?.role;
-  const visible = nav
-    .map((g) => ({
-      ...g,
-      items: g.items.filter((i) => roleSatisfies(role, i.perm)),
-    }))
-    .filter((g) => g.items.length > 0);
-  const isActive = (path: string) =>
-    pathname === path || pathname.startsWith(path + '/');
-
-  return (
-    <>
-      <SidebarGroup>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton render={<Link to="/app" />} tooltip="返回产品">
-                <ArrowLeft size={17} aria-hidden="true" />
-                <span className="truncate">返回产品</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-      {visible.map((group) => (
-        <SidebarGroup key={group.group}>
-          <SidebarGroupLabel>{group.group}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    render={
-                      <Link
-                        to={item.path}
-                        aria-current={isActive(item.path) ? 'page' : undefined}
-                      />
-                    }
-                    tooltip={item.label}
-                    isActive={isActive(item.path)}
-                  >
-                    {item.icon}
-                    <span className="truncate">{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      ))}
-    </>
-  );
-}
+// 用户面板条目（侧栏底部用户卡弹出）：账户五件套 + 计费入口。
+const userPanelItems: UserMenuExtraItem[] = [
+  { label: '个人资料', to: '/account/profile', icon: icon(UserCircle) },
+  { label: '安全', to: '/account/security', icon: icon(ShieldIcon) },
+  { label: '访问令牌', to: '/account/tokens', icon: icon(KeyRound) },
+  { label: '通知偏好', to: '/account/notifications', icon: icon(Bell) },
+  { label: '计费账单', to: '/settings/workspace/billing', icon: icon(CreditCard) },
+];
 
 
 function crumbOf(
@@ -416,32 +378,19 @@ function crumbOf(
 
 function AccountLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  return (
-    <Shell breadcrumbTail={crumbOf(accountNav, pathname)}>
-      <SettingsShell title="账户设置">{children}</SettingsShell>
-    </Shell>
-  );
+  return <Shell breadcrumbTail={crumbOf(accountNav, pathname)}>{children}</Shell>;
 }
 
 
 function SettingsLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  return (
-    <Shell breadcrumbTail={crumbOf(workspaceNav, pathname)}>
-      <SettingsShell title="工作区设置">{children}</SettingsShell>
-    </Shell>
-  );
+  return <Shell breadcrumbTail={crumbOf(workspaceNav, pathname)}>{children}</Shell>;
 }
 
 
 function HeaderRight() {
   const navigate = useNavigate();
-  return (
-    <>
-      <WorkspaceSwitcher />
-      <NotificationBell onNavigate={(link) => navigate(link)} />
-    </>
-  );
+  return <NotificationBell onNavigate={(link) => navigate(link)} />;
 }
 
 function Shell({
@@ -464,14 +413,13 @@ function Shell({
         <SiteBannerLayer />
         <div className="min-h-0 flex-1 [&_[data-slot=sidebar-wrapper]]:min-h-0 [&_[data-slot=sidebar-wrapper]]:h-full">
           <AppShell
-            brand="MyProduct"
-            logo="/brand/mark.png"
             nav={shellNav}
+            sidebarHeader={<WorkspaceSwitcher />}
+            navGroups={workspaceNav}
+            userMenu="sidebar-footer"
+            userMenuItems={userPanelItems}
             headerRight={<HeaderRight />}
             breadcrumbTail={breadcrumbTail ?? null}
-            settingsContent={
-              <SettingsSidebar nav={[...accountNav, ...workspaceNav]} />
-            }
           >
             {children}
           </AppShell>
@@ -519,7 +467,7 @@ function Notifications() {
 
 function AppPage() {
   return (
-    <Shell>
+    <Shell breadcrumbTail="概览">
       <Dashboard />
     </Shell>
   );
@@ -533,7 +481,7 @@ function InvitationsPage() {
 }
 function RealtimeRoute() {
   return (
-    <Shell>
+    <Shell breadcrumbTail="实时连接（调试）">
       <RealtimePage />
     </Shell>
   );
@@ -557,7 +505,7 @@ function AdminIndex() {
 function AdminOverview() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <OverviewPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -566,7 +514,7 @@ function AdminOverview() {
 function AdminUsers() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <UsersPage impersonatePath="/app" />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -575,7 +523,7 @@ function AdminUsers() {
 function AdminUserDetail() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <UserDetailPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -584,7 +532,7 @@ function AdminUserDetail() {
 function AdminWorkspaces() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <WorkspacesPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -593,7 +541,7 @@ function AdminWorkspaces() {
 function AdminWorkspaceDetail() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <WorkspaceDetailPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -602,7 +550,7 @@ function AdminWorkspaceDetail() {
 function AdminOrders() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <OrdersPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -611,7 +559,7 @@ function AdminOrders() {
 function AdminWebhookDeliveries() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <WebhookDeliveriesPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -620,7 +568,7 @@ function AdminWebhookDeliveries() {
 function AdminAudit() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <AuditPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -629,7 +577,7 @@ function AdminAudit() {
 function AdminPlans() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <PlansPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -638,7 +586,7 @@ function AdminPlans() {
 function AdminSSO() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <SSOPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -647,7 +595,7 @@ function AdminSSO() {
 function AdminSettings() {
   return (
     <RequirePlatformAdmin>
-      <AdminShell productPath="/app" loginPath="/login">
+      <AdminShell productPath="/app" loginPath="/login" userMenuItems={userPanelItems}>
         <AdminSettingsPage />
       </AdminShell>
     </RequirePlatformAdmin>
@@ -781,7 +729,7 @@ const routes = routeTable({
   '/verify-email': { component: VerifyEmailPage },
   '/app': { component: AppPage },
   '/invitations': { component: InvitationsPage },
-  '/realtime': { component: RealtimeRoute },
+  '/dev/realtime': { component: RealtimeRoute },
   '/admin': { component: AdminIndex },
   '/admin/overview': { component: AdminOverview },
   '/admin/users': { component: AdminUsers },
