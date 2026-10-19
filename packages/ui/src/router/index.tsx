@@ -253,8 +253,18 @@ export function rawStringifySearch(search: Record<string, unknown>): string {
 /** Pair of {@link rawStringifySearch} — parses a query string to a record. */
 export function rawParseSearch(searchStr: string): Record<string, string> {
   const out: Record<string, string> = {}
-  const params = new URLSearchParams(searchStr.startsWith('?') ? searchStr.slice(1) : searchStr)
-  params.forEach((v, k) => { out[k] = v })
+  const s = searchStr.startsWith('?') ? searchStr.slice(1) : searchStr
+  if (!s) return out
+  // Not URLSearchParams.forEach/for..of: the renderx QuickJS prelude shim
+  // implements a subset (this split-based form matches its '+' semantics and
+  // runs in the SSR sandbox, where forEach is absent).
+  for (const pair of s.split('&')) {
+    if (!pair) continue
+    const eq = pair.indexOf('=')
+    const rawK = eq < 0 ? pair : pair.slice(0, eq)
+    const rawV = eq < 0 ? '' : pair.slice(eq + 1)
+    out[decodeURIComponent(rawK.split('+').join(' '))] = decodeURIComponent(rawV.split('+').join(' '))
+  }
   return out
 }
 

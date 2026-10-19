@@ -61,9 +61,10 @@ jobs:
           }
         env:
           TEST_DATABASE_URL: postgres://pk:pk@localhost:5437/pk?sslmode=disable
-      # Production-fidelity cold-boot lane (testing-strategy.md L3; lands with this batch): boots the real app
-      # binary against a fresh database it creates itself (fidelity_e2e) on the same postgres service. The example
-      # module is separate — step-level working-directory + TEST_DATABASE_URL; skips without the env (DB-gated).
+      # Production-fidelity lanes (testing-strategy.md L3): cold-boot e2e (real app binary against a database it
+      # creates itself on the same postgres service) AND the SSR prerender gate (real renderx engine + real bundle
+      # — the 2026-10-19 escape where a sandbox-unsafe shim call passed every other gate and killed prerender).
+      # The example module is separate — step-level working-directory + TEST_DATABASE_URL.
       - run: go test ./internal/fidelity/ -count=1 -v
         working-directory: example
         env:

@@ -9,6 +9,31 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.10.1] — 2026-10-19
+
+Patch release fixing a **sandbox-only** regression shipped in 0.10.0: the
+TanStack search serializer used `URLSearchParams.forEach`, which browsers and
+Node provide but the renderx QuickJS prelude shim does not — every SSR
+prerender died with `not a function` inside the sandbox while all other gates
+(build, unit tests, CI, `go build`) stayed green. Discovered by running the
+example's prerender after the 0.10.0 release.
+
+npm: `@ploykit/ui` 2.0.1 + `@ploykit/runtime` 0.8.1 (client/hooks unchanged).
+
+### Fixed
+- **runtime + ui**: `rawParseSearch` no longer depends on
+  `URLSearchParams.forEach` / iteration — it splits the query string directly
+  (matching the shim's `+`-as-space semantics), so it runs inside the
+  renderx QuickJS sandbox. Both adapters carry the identical implementation.
+- **example**: the SSR prerender gate is now part of the fidelity lane
+  (`example/internal/fidelity` TestPrerenderProductionFidelity) — it builds
+  the real bundle, boots the real engine with the product prelude and renders
+  the home page, failing with the sandbox error when a shim-unsafe call
+  sneaks in. Verified by negative probe (reverting the fix turns it red).
+  CI already runs the whole `internal/fidelity` package, so the gate is
+  active without a workflow change.
+
+
 ## [0.10.0] — 2026-10-19
 
 Router stack migration (orkome proposal, two steps landed): `@ploykit/runtime`

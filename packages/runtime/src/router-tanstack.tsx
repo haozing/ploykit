@@ -236,10 +236,19 @@ export function rawStringifySearch(search: Record<string, unknown>): string {
 
 export function rawParseSearch(searchStr: string): Record<string, string> {
   const out: Record<string, string> = {}
-  const params = new URLSearchParams(searchStr.startsWith('?') ? searchStr.slice(1) : searchStr)
-  params.forEach((v, k) => {
-    out[k] = v
-  })
+  const s = searchStr.startsWith('?') ? searchStr.slice(1) : searchStr
+  if (!s) return out
+  // Deliberately NOT URLSearchParams.forEach / for..of: the renderx QuickJS
+  // prelude shim implements only a subset (split-based decoding here matches
+  // the shim's own semantics, '+' as space included) — the SSR bundle runs
+  // this function inside the sandbox, where forEach does not exist.
+  for (const pair of s.split('&')) {
+    if (!pair) continue
+    const eq = pair.indexOf('=')
+    const rawK = eq < 0 ? pair : pair.slice(0, eq)
+    const rawV = eq < 0 ? '' : pair.slice(eq + 1)
+    out[decodeURIComponent(rawK.split('+').join(' '))] = decodeURIComponent(rawV.split('+').join(' '))
+  }
   return out
 }
 
