@@ -109,3 +109,21 @@ describe('@ploykit/runtime/router-tanstack（版本钉死哨兵）', () => {
     expect((globalThis as Record<string, unknown>)[SSR_LOCATION_KEY]).toBe('/x')
   })
 })
+
+// TanStack's default search serializer JSON-quotes digit-only values
+// (?mpage=%222%22) — pagination silently breaks on the first interaction.
+// The assembler wires the plain-string pair into every router it creates;
+// these helpers are exported so host applications can wire the same contract.
+describe('plain-string search serialization', () => {
+  it('numeric values serialize without JSON quotes', async () => {
+    const { rawStringifySearch, rawParseSearch } = await import('../router-tanstack')
+    expect(rawStringifySearch({ mpage: 2, q: 'x' })).toBe('?mpage=2&q=x')
+    expect(rawStringifySearch({ page: '3' })).toBe('?page=3')
+    expect(rawStringifySearch({})).toBe('')
+    expect(rawParseSearch('?mpage=2')).toEqual({ mpage: '2' })
+    // round-trip
+    expect(rawParseSearch(rawStringifySearch({ page: 7 }))).toEqual({ page: '7' })
+    // the old default would have produced %22-quoted digits
+    expect(rawStringifySearch({ mpage: 2 })).not.toContain('%22')
+  })
+})

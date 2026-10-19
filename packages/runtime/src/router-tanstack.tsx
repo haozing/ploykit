@@ -198,6 +198,8 @@ function TanstackRouterMount({ pages, propsByPageId, wrapInRouter }: TanstackRou
     history: ssrLocation
       ? createMemoryHistory({ initialEntries: [location] })
       : createBrowserHistory(),
+    stringifySearch: rawStringifySearch,
+    parseSearch: rawParseSearch,
     // Product providers that need the router context (useLocation/useNavigate
     // inside them) mount here — inside RouterProvider's context, around the
     // rendered match tree.
@@ -216,6 +218,31 @@ function TanstackRouterMount({ pages, propsByPageId, wrapInRouter }: TanstackRou
 // ---------------------------------------------------------------------------
 
 /** Options of {@link tanstackAssembler}. */
+
+// TanStack's default search serializer JSON-quotes digit-only strings
+// (?mpage=%222%22); every react-router-era URL and every pagination surface
+// expects ?mpage=2. The assembler wires the plain-string pair so ALL routers
+// it creates round-trip query strings verbatim (the ui adapter's
+// useSearchParamsCompat promises the same shape; keep both in sync).
+export function rawStringifySearch(search: Record<string, unknown>): string {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(search)) {
+    if (v === undefined || v === null) continue
+    params.set(k, String(v))
+  }
+  const s = params.toString()
+  return s ? `?${s}` : ''
+}
+
+export function rawParseSearch(searchStr: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const params = new URLSearchParams(searchStr.startsWith('?') ? searchStr.slice(1) : searchStr)
+  params.forEach((v, k) => {
+    out[k] = v
+  })
+  return out
+}
+
 export interface TanstackAssemblerOptions {
   /**
    * Wraps the rendered match tree inside the router context — where product
@@ -276,6 +303,8 @@ export function matchTanstackPage(pathname: string, pages: ReadonlyArray<PageSpe
   const router = createRouter({
     routeTree: rootRoute.addChildren(pageRoutes),
     history: createMemoryHistory({ initialEntries: [pathname] }),
+    stringifySearch: rawStringifySearch,
+    parseSearch: rawParseSearch,
   })
 
   // route ids are assigned during processRouteTree (inside createRouter), so
