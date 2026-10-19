@@ -9,6 +9,58 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.10.0] — 2026-10-19
+
+Router stack migration (orkome proposal, two steps landed): `@ploykit/runtime`
+is router-free, and `@ploykit/ui` 2.0 runs on @tanstack/react-router.
+npm: ui → **2.0.0** (major), runtime → **0.8.0** (new subpaths); client/hooks
+unchanged (skip).
+
+### Breaking
+- **runtime 0.8.0**: `routeTable(input, assembler)` requires a `RouteAssembler`
+  — the react-router assembly lives in the `@ploykit/runtime/router-react-router`
+  subpath (`reactRouterAssembler`, `matchRoutePage`); `react-router` is a
+  dependency of that subpath only. `ClientEntryOptions.matchPage` replaces the
+  built-in pathname matching. RR products: pass the assembler + matcher (two
+  lines). The package barrel is now router-free by construction (pinned by a
+  static-graph sentinel test).
+- **ui 2.0.0**: react-router is gone; the stack is @tanstack/react-router
+  (peer `^1.170.0`). A thin internal adapter keeps the familiar surface —
+  `Link`/`useNavigate`(bare path)/`useParams`/`useLocation` (RR shape: search
+  with `?`, hash without `#`)/`useSearchParamsCompat` (tuple with functional
+  updates and `{replace}`); tests use `RouterTestHarness`. **Host routers must
+  wire the adapter's serialization contract** (`rawStringifySearch` /
+  `rawParseSearch`) — TanStack's default JSON-quotes digit-only search values
+  (`?mpage=%222%22`), which silently breaks pagination; the test harness wires
+  it automatically, production routers must do the same. 46 files converted;
+  suite 67 files / 665 tests green.
+
+### Added
+- **runtime**: `@ploykit/runtime/router-tanstack` — `tanstackAssembler`
+  (RouteAssembler for TanStack trees; synchronous SSR populate — `await
+  router.load()` is renderx-unsafe, a QuickJS-gate PoC established the
+  synchronous path), `matchTanstackPage`, exported `PRELUDE_SHIMS` /
+  `ESBUILD_ALIASES` (URLSearchParams + AbortController shims; the
+  `@tanstack/router-core/isServer` alias) and `rawStringifySearch` /
+  `rawParseSearch`. `@tanstack/react-router` is pinned exactly (1.170.45) —
+  the SSR populate uses router internals by design.
+- **example**: full TanStack migration (routes/entry-server/entry-client/blog
+  + `internal/webrender` Go mirror of the shims/alias), prerender and SEO
+  audit green through the QuickJS sandbox.
+
+### Fixed
+- **tools**: `fix-esm-extensions` resolves directory-index modules
+  (`../router` → `../router/index.js`) instead of emitting a nonexistent
+  `../router.js`.
+- **tools**: the tarball fidelity lane packs **all** workspaces before any
+  install, so cross-package `@ploykit/*` ranges resolve from the local
+  tarballs during a release window (it previously failed with ETARGET
+  before publish — the lane's own pre-publish gap).
+- **example/web**: declares `@tanstack/react-router` (it imports it directly)
+  and `@ploykit/ui ^2.0.0`; lockfile resynced — the v0.9.2-era declaration
+  drift broke CI's `npm ci` (addressed in the audit commit).
+
+
 ## [0.9.1] — 2026-10-18
 
 Field-verified follow-ups to the v0.9.0 provisioning capability (the product

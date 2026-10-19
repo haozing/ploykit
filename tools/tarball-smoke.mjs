@@ -222,17 +222,13 @@ async function liveLoad(pkg, targetAbs, consumer, srcPkg, label) {
   }
 }
 
-async function smoke(name, scratch) {
+async function smoke(name, scratch, packedByName) {
   const note = (m) => console.error(`tarball-smoke: ${name}: ${m}`)
   const srcDir = resolve(repoRoot, 'packages', name)
   const srcPkg = JSON.parse(readFileSync(join(srcDir, 'package.json'), 'utf-8'))
 
-  note('npm pack')
-  const packDir = join(scratch, 'pack')
-  mkdirSync(packDir, { recursive: true })
-  const packed = npm(['pack', '--json', `./packages/${name}`, '--pack-destination', packDir], repoRoot, `npm pack @ploykit/${name}`)
-  const tgz = join(packDir, JSON.parse(packed)[0].filename)
-  if (!existsSync(tgz)) fail(name, `npm pack reported success but ${tgz} does not exist`)
+  const tgz = packedByName.get(name)
+  if (!tgz) fail(name, 'no packed tarball for this package (pack phase skipped it)')
 
   note('npm install tarball into scratch consumer (standalone, no workspace, no saved manifest)')
   const consumer = join(scratch, `consumer-${name}`)
@@ -241,11 +237,15 @@ async function smoke(name, scratch) {
     join(consumer, 'package.json'),
     JSON.stringify({ name: 'tarball-consumer', type: 'module', private: true }, null, 2) + '\n',
   )
-  npm(
-    ['install', tgz, '--no-save', '--ignore-scripts', '--loglevel=error', '--no-package-lock', '--no-audit', '--no-fund'],
-    consumer,
-    `npm install @ploykit/${name} tarball`,
-  )
+  // Install every sibling tarball together: cross-package @ploykit/* ranges
+  // (hooks -> runtime ^0.8.0, ui -> client/hooks) must resolve against the
+  // LOCAL tarballs during a release window — the new versions are not on the
+  // registry yet, and resolving them there is exactly the pre-publish ETARGET
+  // this lane hit (2026-10-19). Registry dependencies (react-router, tanstack)
+  // still resolve normally and are never masked.
+  const installArgs = ['install', ...[...packedByName.values()], '--no-save', '--ignore-scripts', '--loglevel=error', '--no-package-lock', '--no-audit', '--no-fund']
+  note(`installing ${packedByName.size} sibling tarballs (cross-package @ploykit ranges resolve locally)`)
+  npm(installArgs, consumer, `npm install @ploykit sibling tarballs`)
   const installed = join(consumer, 'node_modules', '@ploykit', name)
   if (!existsSync(installed)) fail(name, 'tarball installed but node_modules/@ploykit/<pkg> not found on disk')
 
@@ -316,9 +316,25 @@ async function smoke(name, scratch) {
 const scratch = mkdtempSync(join(tmpdir(), 'tarball-smoke-'))
 let exitCode = 0
 try {
+  // Pack every requested package BEFORE any install: the installs then see the
+  // complete local tarball set (release-window requirement, see smoke()).
+  const packDir = join(scratch, 'pack')
+  mkdirSync(packDir, { recursive: true })
+  const packedByName = new Map()
+  for (const name of pkgs) {
+    const packed = npm(['pack', '--json', `./packages/${name}`, '--pack-destination', packDir], repoRoot, `npm pack @ploykit/${name}`)
+    const tgz = join(packDir, JSON.parse(packed)[0].filename)
+    if (!existsSync(tgz)) {
+      console.error(`tarball-smoke: @ploykit/${name}: npm pack reported success but ${tgz} does not exist`)
+      exitCode = 1
+      throw new Fail(`pack @ploykit/${name}`)
+    }
+    packedByName.set(name, tgz)
+    console.error(`tarball-smoke: ${name}: npm pack -> ${JSON.parse(packed)[0].filename}`)
+  }
   for (const name of pkgs) {
     try {
-      await smoke(name, scratch)
+      await smoke(name, scratch, packedByName)
     } catch (e) {
       if (!(e instanceof Fail)) throw e
       console.error(e.message)
