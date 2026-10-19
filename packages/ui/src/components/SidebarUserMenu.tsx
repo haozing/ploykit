@@ -1,5 +1,5 @@
 
-import { useNavigate } from 'react-router'
+import { useNavigate } from '../router'
 import { ChevronsUpDown, LogOut, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
 import {

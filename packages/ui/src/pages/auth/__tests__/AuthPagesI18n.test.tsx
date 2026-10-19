@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { render, screen, waitFor } from '@testing-library/react'
+import { RouterTestHarness } from '../../../router'
 import { describe, expect, it, vi } from 'vitest'
 
 // renderx-walk #5: every auth page exposes i18n override props — titles at
@@ -26,8 +26,10 @@ describe('auth 页 i18n 覆盖面（走查 #5）', () => {
     expect(screen.getByText('Set a new password')).toBeInTheDocument()
   })
 
-  it('VerifyEmailPage：三态标题可覆盖（无参渲染即 failed 态）', () => {
-    render(<MemoryRouter><VerifyEmailPage titles={{ failed: 'Verification failed' }} /></MemoryRouter>)
+  it('VerifyEmailPage：三态标题可覆盖（无参渲染即 failed 态）', async () => {
+    render(<RouterTestHarness><VerifyEmailPage titles={{ failed: 'Verification failed' }} /></RouterTestHarness>)
+    // RouterTestHarness 底下的 tanstack RouterProvider 首帧为 pending，等标题上屏
+    await waitFor(() => expect(screen.queryByText('Verification failed')).not.toBeNull())
     expect(screen.getByText('Verification failed')).toBeInTheDocument()
   })
 })

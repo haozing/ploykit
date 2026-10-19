@@ -72,7 +72,7 @@ Landed with platform capabilities: river (transactional events/scheduled deliver
 
 | Category | Choice | Rationale | Notes |
 |---|---|---|---|
-| Routing | **react-router v7** | de facto standard; file-convention routing is a thin layer on top of it | |
+| Routing | **@tanstack/react-router** (ui 2.0) | 100% typed path/search params; search params first-class; TanStack Query same-family; library-only value fits the Go-single-binary + pure-SPA shape (RR v7's framework-mode value is unreachable here — no Node runtime; see delivery-audit-proposal-orkome-tanstack-router-2026-10-19.md) | react-router v7 (was "de facto standard" — that rationale belongs to the full-stack-framework era; its framework mode requires Node SSR, which renderx G6 forbids; the library-only surface is fully covered by tanstack) |
 | Data fetching | **TanStack Query v5** | caching/retry/optimistic updates/invalidation management; replaces hand-written useEffect+fetch | used inside framework hooks; product code uses it too |
 | Forms | **react-hook-form** | best performance (uncontrolled), largest ecosystem | used for login/registration forms |
 | Validation | **zod** | TypeScript-first schemas; integrates with react-hook-form (@hookform/resolvers) | also usable for API response validation |

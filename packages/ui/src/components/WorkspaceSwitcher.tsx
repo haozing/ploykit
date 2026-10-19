@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../router'
 import { Check, ChevronsUpDown, Plus } from 'lucide-react'
 import { isApiError } from '@ploykit/client'
 import { cn } from '../lib/utils'

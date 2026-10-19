@@ -24,11 +24,11 @@ vi.mock('@ploykit/client', () => ({
     }
   },
 }));
-vi.mock('react-router', () => ({
+vi.mock('../../../router', () => ({
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => (
     <a href={to}>{children}</a>
   ),
-  useSearchParams: () => [
+  useSearchParamsCompat: () => [
     new URLSearchParams(),
     (_p: URLSearchParams) => {},
   ],

@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useSearchParamsCompat } from '../../router'
 import { Download, Search } from 'lucide-react'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -64,7 +64,7 @@ function toFilters(d: FilterDraft): AuditFilters {
 export interface WorkspaceAuditPageProps {}
 
 export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsCompat()
   
   const [draft, setDraft] = useState<FilterDraft>(() => draftFromParams(searchParams))
   

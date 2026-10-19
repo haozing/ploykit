@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParamsCompat } from '../../router';
 import { Download, Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@ploykit/client';
@@ -93,7 +93,7 @@ function auditQueryString(
 
 export function AuditPage() {
   const api = useApi();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsCompat();
   
   const [draft, setDraft] = useState<FilterDraft>(() =>
     draftFromParams(searchParams),

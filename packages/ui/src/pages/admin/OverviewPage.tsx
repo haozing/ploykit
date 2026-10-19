@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { useLocation, useSearchParams } from 'react-router';
+import { useLocation, useSearchParamsCompat } from '../../router';
 import { Copy, Megaphone } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { components } from '@ploykit/client';
@@ -126,7 +126,7 @@ export function OverviewPage() {
   const api = useApi();
   const { hash } = useLocation();
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsCompat();
   const daysParam = Number(searchParams.get('days'));
   const [days, setDays] = useState(
     DAY_OPTIONS.includes(daysParam) ? daysParam : 7,
@@ -319,7 +319,8 @@ export function OverviewPage() {
 
   
   useEffect(() => {
-    if (hash === '#analytics') {
+    // 适配层 useLocation().hash 不带前导 '#'（RR 语义同 tanstack）
+    if (hash === 'analytics') {
       document
         .getElementById('admin-analytics')
         ?.scrollIntoView({ block: 'start' });

@@ -1,6 +1,5 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { WorkspaceAuditPage } from '../WorkspaceAuditPage'
 
@@ -12,6 +11,19 @@ vi.mock('../../../../../hooks/src/hooks/useAudit', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../../../hooks/useAudit')>()
   return { ...orig, useAudit: auditMocks.useAudit, exportAuditCsv: auditMocks.exportAuditCsv }
 })
+
+// 本文件用 rerender 驱动 loading/error 三态（RouterTestHarness 的 children 经
+// ref 槽传递，rerender 不会触发子树重渲染），故不包 harness，直接 mock 掉
+// 适配层 router 模块的 useSearchParamsCompat。
+const searchState = vi.hoisted(() => ({ params: new URLSearchParams() }))
+vi.mock('../../../router', () => ({
+  useSearchParamsCompat: () => [
+    searchState.params,
+    (p: URLSearchParams) => {
+      searchState.params = p
+    },
+  ],
+}))
 
 const toastMocks = vi.hoisted(() => ({
   success: vi.fn(), error: vi.fn(), info: vi.fn(),
@@ -39,9 +51,8 @@ function stubAudit(overrides: Record<string, unknown> = {}) {
   })
 }
 
-
 function renderPage() {
-  return render(<MemoryRouter><WorkspaceAuditPage /></MemoryRouter>)
+  return render(<WorkspaceAuditPage />)
 }
 
 beforeEach(() => {
@@ -50,7 +61,7 @@ beforeEach(() => {
 })
 
 describe('WorkspaceAuditPage', () => {
-  it('渲染过滤行与审计表（时间/操作者/动作/资源）', () => {
+  it('渲染过滤行与审计表（时间/操作者/动作/资源）', async () => {
     stubAudit()
     renderPage()
     expect(screen.getByText('审计日志')).toBeInTheDocument()
@@ -58,7 +69,7 @@ describe('WorkspaceAuditPage', () => {
     expect(screen.getByRole('button', { name: /导出 CSV/ })).toBeInTheDocument()
     expect(screen.getByText('alice@example.com')).toBeInTheDocument()
     expect(screen.getByText('workspace.rename')).toBeInTheDocument()
-    
+
     expect(
       screen.getByText((_, el) =>
         el?.getAttribute('data-slot') === 'data-table-pagination' &&
@@ -90,14 +101,14 @@ describe('WorkspaceAuditPage', () => {
     expect(lastCall?.[2]).toBe(0)
   })
 
-  it('加载中显示 PageLoading；错误显示重试', () => {
-    const { rerender } = renderPage()
+  it('加载中显示 PageLoading；错误显示重试', async () => {
+    const { rerender } = await renderPage()
     stubAudit({ loading: true, items: [] })
-    rerender(<MemoryRouter><WorkspaceAuditPage /></MemoryRouter>)
+    rerender(<WorkspaceAuditPage />)
     expect(screen.getByText('加载审计日志…')).toBeInTheDocument()
 
     stubAudit({ loading: false, items: [], error: new Error('boom') })
-    rerender(<MemoryRouter><WorkspaceAuditPage /></MemoryRouter>)
+    rerender(<WorkspaceAuditPage />)
     expect(screen.getByText('boom')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
   })

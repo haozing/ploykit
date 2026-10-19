@@ -3,7 +3,7 @@
 // package.json "type": "module" requires them for Node's native ESM loader
 // (orkome upgrade report, Issue 2). Idempotent; skips bare specifiers,
 // URLs, and already-suffixed paths.
-import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = process.argv[2]
@@ -28,8 +28,15 @@ for (const f of files) {
     /(from\s+|import\s*\(\s*)(["'])(\.\.?\/[^"']+?)\2/g,
     (whole, head, q, spec) => {
       if (/\.(js|mjs|cjs|json|css)$/.test(spec)) return whole
+      // Directory-index modules (src/router/index.tsx -> dist/router/index.js):
+      // tsc emits "../router" for them, so the suffix must go to
+      // "../router/index.js", not the nonexistent "../router.js" (ui 2.0
+      // router-adapter build break, 2026-10-19). Anything that does not exist
+      // on disk (CSS imports stripped by tsc, etc.) keeps plain ".js".
+      const abs = join(f, '..', spec)
+      const dirIndex = existsSync(abs) && statSync(abs).isDirectory()
       rewritten++
-      return `${head}${q}${spec}.js${q}`
+      return `${head}${q}${spec}${dirIndex ? '/index' : ''}.js${q}`
     },
   )
   if (out !== src) writeFileSync(f, out)

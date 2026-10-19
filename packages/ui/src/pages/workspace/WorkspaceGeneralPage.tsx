@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate } from '../../router'
 import { useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { PageHeader, PageError } from '../../components/Page'

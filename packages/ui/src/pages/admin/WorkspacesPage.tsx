@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useSearchParamsCompat } from '../../router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { components } from '@ploykit/client';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -44,7 +44,7 @@ export function WorkspacesPage() {
   const api = useApi();
   const qc = useQueryClient();
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsCompat();
   const q = searchParams.get('q') ?? '';
   const page = Math.max(
     1,

@@ -1,5 +1,6 @@
 
-import { Link, Navigate, useLocation } from 'react-router';
+import { useEffect } from 'react';
+import { Link, useLocation, useNavigate } from '../../router';
 import type { ReactNode } from 'react';
 import {
   Building2,
@@ -107,6 +108,17 @@ export function AdminShell({
 }: AdminShellProps) {
   const { user, loading } = useAuth();
   const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+
+  // 未登录重定向：旧实现用 react-router 的 <Navigate replace state>；
+  // 适配层未导出 <Navigate>，改用 useNavigate 副作用等价表达
+  // （replace 语义与 state.from 透传均保留）。
+  const shouldRedirect = !loading && !user;
+  useEffect(() => {
+    if (!shouldRedirect) return;
+    if (pathname === loginPath) return; // 已在登录页：防重复导航循环
+    navigate({ to: loginPath, replace: true, state: { from: `${pathname}${search}` } });
+  }, [shouldRedirect, loginPath, pathname, search, navigate]);
 
   if (loading) {
     return (
@@ -117,9 +129,7 @@ export function AdminShell({
   }
 
   if (!user) {
-    return (
-      <Navigate to={loginPath} state={{ from: `${pathname}${search}` }} replace />
-    );
+    return null;
   }
 
   const activeItem = NAV.find((item) => isActive(pathname, item));

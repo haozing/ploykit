@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useSearchParamsCompat } from '../../router'
 import { z } from 'zod'
 import { UserPlus, Link2, MoreHorizontal } from 'lucide-react'
 import {
@@ -69,7 +69,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
   
   
   
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsCompat()
   const tabParam = searchParams.get('tab')
   const tab: MembersTab =
     tabParam !== null && (MEMBER_TABS as readonly string[]).includes(tabParam)

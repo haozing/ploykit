@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from '@tanstack/react-router';
 import {
   LayoutDashboard,
   UserCircle,
@@ -16,7 +16,7 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import { routeTable } from '@ploykit/runtime/routes';
-import { reactRouterAssembler } from '@ploykit/runtime/router-react-router';
+import { tanstackAssembler } from '@ploykit/runtime/router-tanstack';
 import { PloykitProvider, useAuth, useWorkspace, useSEO, useSiteConfig } from '@ploykit/hooks';
 import {
   LoginPage,
@@ -122,7 +122,9 @@ function RequirePlatformAdmin({ children }: { children: React.ReactNode }) {
     );
   if (!user)
     return (
-      <Navigate to="/login" state={{ from: location.pathname }} replace />
+      // TanStack 的 history state 不接受任意对象键（ParsedHistoryState 是
+      // 受Record 约束的更新器），产品里只用 from 记来源页。
+      <Navigate to="/login" state={{ from: location.pathname } as never} replace />
     );
   if (!user.is_platform_admin) {
     return (
@@ -390,8 +392,10 @@ function SettingsLayout({ children }: { children: React.ReactNode }) {
 
 
 function HeaderRight() {
+  // TanStack 的 navigate 返回 promise；NotificationBell 只要“跳过去”这一副作用，
+  // void 掉即可（导航失败会走 router 自身的错误通道）。
   const navigate = useNavigate();
-  return <NotificationBell onNavigate={(link) => navigate(link)} />;
+  return <NotificationBell onNavigate={(link) => void navigate({ to: link })} />;
 }
 
 function Shell({
@@ -709,7 +713,8 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <PloykitAppProviders>
       <WsSync />
-      {/* B-orders-7：路由级标题（须在 Router 内——entry 双端把本组件挂在 Router 之下） */}
+      {/* B-orders-7：路由级标题（TanStack 迁移后经 assembler 的 wrapInRouter
+          挂在 Router 上下文之内——useLocation 依赖 router context） */}
       <DocumentTitle />
       {children}
     </PloykitAppProviders>
@@ -759,6 +764,13 @@ const routes = routeTable({
   '/settings/workspace/schedules': { component: WorkspaceSchedules },
   '/billing/success': { component: BillingSuccessRoute },
   '/*': { component: CatchAll }, // 兜底回首页（与旧 App 的 path="*" 等价；'/*' 过 Go 投影校验）
-}, reactRouterAssembler());
+}, tanstackAssembler({
+  // Product 全局 Provider 组合（含 useLocation 的 DocumentTitle）必须活在
+  // router context 之内：TanStack 的 RouterProvider 由 assembler 在渲染期
+  // 挂载，产品侧拿不到它的外层，所以经 InnerWrap 从内侧包。SSR 沙箱与水合
+  // 首帧都走这条路径（PloykitProvider 的 auth 拉取在 useEffect 里，同步渲染
+  // 不触发网络；Toaster 渲染空壳 section）。
+  wrapInRouter: (children) => <AppProviders>{children}</AppProviders>,
+}));
 
 export default routes;

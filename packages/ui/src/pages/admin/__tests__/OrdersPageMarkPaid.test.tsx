@@ -36,7 +36,7 @@ vi.mock('../../../components/ConfirmDialog', () => ({
 }));
 vi.mock('../../../components/toast', () => ({ toast: toastMocks }));
 
-import { MemoryRouter } from 'react-router';
+import { RouterTestHarness } from '../../../router';
 import { OrdersPage } from '../OrdersPage';
 
 const ORDERS = [
@@ -87,11 +87,11 @@ const ORDERS = [
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/admin/orders']}>
+    <RouterTestHarness initialEntries={['/admin/orders']}>
       <QueryClientProvider client={qc}>
         <OrdersPage />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </RouterTestHarness>,
   );
 }
 

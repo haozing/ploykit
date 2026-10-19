@@ -31,9 +31,9 @@ vi.mock('@ploykit/client', () => ({
 
 
 const paramsState = vi.hoisted(() => ({ params: new URLSearchParams() }));
-vi.mock('react-router', () => ({
+vi.mock('../../../router', () => ({
   useLocation: () => ({ hash: '' }),
-  useSearchParams: () => [
+  useSearchParamsCompat: () => [
     paramsState.params,
     (p: URLSearchParams) => {
       paramsState.params = p;

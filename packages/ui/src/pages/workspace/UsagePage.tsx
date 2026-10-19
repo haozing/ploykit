@@ -1,5 +1,5 @@
 
-import { Link } from 'react-router'
+import { Link } from '../../router'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
 import { Badge } from '../../components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip'

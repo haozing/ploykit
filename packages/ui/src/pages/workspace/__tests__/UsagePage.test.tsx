@@ -1,8 +1,12 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MemoryRouter } from 'react-router'
+import { RouterTestHarness } from '../../../router'
 import { UsagePage } from '../UsagePage'
+
+// RouterTestHarness 底下的 tanstack RouterProvider 首帧为 pending（初始 load 异步完成）——
+// 渲染后统一 flush 一次再断言。
+const flush = () => waitFor(() => expect(screen.queryAllByText('任务数（本月）').length).toBeGreaterThan(0))
 
 const usageMocks = vi.hoisted(() => ({ useUsage: vi.fn() }))
 vi.mock('../../../../../hooks/src/hooks/useUsage', () => ({ useUsage: usageMocks.useUsage }))
@@ -40,7 +44,7 @@ beforeEach(() => {
 })
 
 describe('UsagePage', () => {
-  it('加载中显示 PageLoading', () => {
+  it('加载中显示 PageLoading', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1', usage: null, loading: true, error: null, refetch: vi.fn(),
     })
@@ -48,15 +52,16 @@ describe('UsagePage', () => {
     expect(screen.getByText('加载用量数据…')).toBeInTheDocument()
   })
 
-  it('按维度渲染卡片：used/limit 进度，limit=-1 显示“不限量”', () => {
+  it('按维度渲染卡片：used/limit 进度，limit=-1 显示“不限量”', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1', usage, loading: false, error: null, refetch: vi.fn(),
     })
     render(
-      <MemoryRouter>
+      <RouterTestHarness>
         <UsagePage />
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    await flush()
 
     
     expect(screen.getAllByText('任务数（本月）').length).toBeGreaterThanOrEqual(1)
@@ -78,10 +83,11 @@ describe('UsagePage', () => {
       wsId: 'ws-1', usage, loading: false, error: null, refetch: vi.fn(),
     })
     render(
-      <MemoryRouter>
+      <RouterTestHarness>
         <UsagePage />
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    await flush()
 
 
     expect(screen.queryByText('tasks_monthly')).not.toBeInTheDocument()
@@ -100,7 +106,7 @@ describe('UsagePage', () => {
     expect(await screen.findByText('tasks_monthly')).toBeInTheDocument()
   })
 
-  it('B6：大数字千分位（12,500 / 50,000）', () => {
+  it('B6：大数字千分位（12,500 / 50,000）', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1',
       usage: {
@@ -114,14 +120,15 @@ describe('UsagePage', () => {
       loading: false, error: null, refetch: vi.fn(),
     })
     render(
-      <MemoryRouter>
+      <RouterTestHarness>
         <UsagePage />
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    await flush()
     expect(screen.getByText(/12,500 \/ 50,000/)).toBeInTheDocument()
   })
 
-  it('已满卡片：已用尽徽标 + 升级 CTA（文案不承诺“将被拒绝”）+ 命中区 ≥24px 补偿', () => {
+  it('已满卡片：已用尽徽标 + 升级 CTA（文案不承诺“将被拒绝”）+ 命中区 ≥24px 补偿', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1',
       usage: {
@@ -136,10 +143,13 @@ describe('UsagePage', () => {
       loading: false, error: null, refetch: vi.fn(),
     })
     render(
-      <MemoryRouter>
+      <RouterTestHarness>
         <UsagePage />
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    // flush 谓词盯的是“任务数（本月）”卡片，本用例只有 workspaces 维度——
+    // 改盯页面标题等首帧上屏。
+    await waitFor(() => expect(screen.getByText('用量')).toBeInTheDocument())
 
     expect(screen.getByText('已用尽')).toBeInTheDocument()
     expect(screen.getByText(/已用尽，可升级套餐提高上限/)).toBeInTheDocument()
@@ -152,7 +162,7 @@ describe('UsagePage', () => {
     expect(link.className).toContain('-my-1.5')
   })
 
-  it('reserved 缺省（老后端/未重生成类型）→ 回退两段展示，无“预留中”段落', () => {
+  it('reserved 缺省（老后端/未重生成类型）→ 回退两段展示，无“预留中”段落', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1', usage, loading: false, error: null, refetch: vi.fn(),
     })
@@ -163,15 +173,16 @@ describe('UsagePage', () => {
     expect(screen.getByText(/250 \/ 1,000/)).toBeInTheDocument()
   })
 
-  it('三段展示：已用 / 预留中 / 上限（reserved>0 的维度渲染分段条与第三段数值）', () => {
+  it('三段展示：已用 / 预留中 / 上限（reserved>0 的维度渲染分段条与第三段数值）', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1', usage: usageWithReserved, loading: false, error: null, refetch: vi.fn(),
     })
     render(
-      <MemoryRouter>
+      <RouterTestHarness>
         <UsagePage />
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    await flush()
 
     
     const card = screen.getAllByText('任务数（本月）')[0].closest('div[data-slot="card"]')
@@ -194,7 +205,7 @@ describe('UsagePage', () => {
     expect(within(seats as HTMLElement).queryByTestId('progress-indicator-reserved')).not.toBeInTheDocument()
   })
 
-  it('预留明细可展开：数量/状态/到期时间（DataTable 复用）', () => {
+  it('预留明细可展开：数量/状态/到期时间（DataTable 复用）', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: 'ws-1', usage: usageWithReserved, loading: false, error: null, refetch: vi.fn(),
     })
@@ -217,7 +228,7 @@ describe('UsagePage', () => {
     expect(details.open).toBe(true)
   })
 
-  it('无工作区上下文 → 引导空态', () => {
+  it('无工作区上下文 → 引导空态', async () => {
     usageMocks.useUsage.mockReturnValue({
       wsId: '', usage: null, loading: false, error: null, refetch: vi.fn(),
     })

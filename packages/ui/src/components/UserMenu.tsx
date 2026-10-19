@@ -1,5 +1,5 @@
 
-import { useNavigate } from 'react-router'
+import { useNavigate } from '../router'
 import type { ReactNode } from 'react'
 import { LogOut, Settings, ShieldCheck } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'

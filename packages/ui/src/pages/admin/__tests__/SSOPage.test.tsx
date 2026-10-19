@@ -1,7 +1,7 @@
 
 import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { RouterTestHarness } from '../../../router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SSOPage } from '../SSOPage';
@@ -29,11 +29,11 @@ vi.mock('@ploykit/client', () => ({
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/admin/sso']}>
+    <RouterTestHarness initialEntries={['/admin/sso']}>
       <QueryClientProvider client={qc}>
         <SSOPage />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </RouterTestHarness>,
   );
 }
 

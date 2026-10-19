@@ -1,7 +1,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { RouterTestHarness } from '../../../router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -73,11 +73,11 @@ const OTHER = {
 function renderPage(props: Parameters<typeof UsersPage>[0] = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter initialEntries={['/admin/users']}>
+    <RouterTestHarness initialEntries={['/admin/users']}>
       <QueryClientProvider client={qc}>
         <UsersPage {...props} />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </RouterTestHarness>,
   )
 }
 

@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useSearchParamsCompat } from '../../router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/Page'
 import { DataTable, type Column } from '../../components/DataTable'
@@ -72,7 +72,7 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
   const qc = useQueryClient()
 
   
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParamsCompat()
   const [interval, setInterval] = useState<Interval>(
     searchParams.get('interval') === 'yearly' ? 'yearly' : 'monthly',
   )

@@ -39,7 +39,7 @@ vi.mock('../../../../../hooks/src/hooks/useAuth', () => ({
   }),
 }));
 
-vi.mock('react-router', () => ({
+vi.mock('../../../router', () => ({
   useParams: () => ({ id: 'ws-1' }),
   useNavigate: () => () => {},
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => (

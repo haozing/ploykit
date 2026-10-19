@@ -24,7 +24,7 @@ vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
 }))
 
 const locState = vi.hoisted(() => ({ state: null as unknown }))
-vi.mock('react-router', () => ({
+vi.mock('../../router', () => ({
   useLocation: () => ({ state: locState.state }),
 }))
 

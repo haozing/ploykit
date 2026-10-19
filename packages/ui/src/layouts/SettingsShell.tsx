@@ -1,5 +1,5 @@
 
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from '../router'
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { roleSatisfies, type Perm } from '@ploykit/hooks'

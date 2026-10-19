@@ -1,7 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import type { ReactNode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BillingSuccessPage } from '../BillingSuccessPage'
 
@@ -24,6 +22,11 @@ vi.mock('../../../../../hooks/src/hooks/useWorkspace', () => ({
   }),
 }))
 
+const navMocks = vi.hoisted(() => ({ navigate: vi.fn(async () => {}) }))
+vi.mock('../../../router', () => ({
+  useNavigate: () => navMocks.navigate,
+}))
+
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn(),
 }))
@@ -42,25 +45,11 @@ const PAID_SUB = {
 }
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={['/billing/success']}>
-      <Routes>
-        <Route path="/billing/success" element={<BillingSuccessPage />} />
-        <Route path="/settings/workspace/billing" element={<div>billing-page</div>} />
-      </Routes>
-    </MemoryRouter>,
-  )
+  return render(<BillingSuccessPage />)
 }
 
-function rerenderPage(rerender: (node: ReactNode) => void) {
-  rerender(
-    <MemoryRouter initialEntries={['/billing/success']}>
-      <Routes>
-        <Route path="/billing/success" element={<BillingSuccessPage />} />
-        <Route path="/settings/workspace/billing" element={<div>billing-page</div>} />
-      </Routes>
-    </MemoryRouter>,
-  )
+function rerenderPage(rerender: (node: React.ReactNode) => void) {
+  rerender(<BillingSuccessPage />)
 }
 
 beforeEach(() => {
@@ -71,7 +60,7 @@ beforeEach(() => {
 })
 
 describe('BillingSuccessPage', () => {
-  it('轮询期间渲染骨架与提示', () => {
+  it('轮询期间渲染骨架与提示', async () => {
     queryData = { plan_code: 'free', orders: [] }
     queryStamp = 1
     renderPage()
@@ -90,7 +79,7 @@ describe('BillingSuccessPage', () => {
     rerenderPage(rerender)
 
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('支付成功，套餐已生效'))
-    await waitFor(() => expect(screen.getByText('billing-page')).toBeInTheDocument())
+    await waitFor(() => expect(navMocks.navigate).toHaveBeenCalledWith('/settings/workspace/billing'))
   })
 
   it('套餐变化（无新订单）同样判定成功', async () => {
@@ -116,7 +105,7 @@ describe('BillingSuccessPage', () => {
       rerenderPage(rerender)
     }
     await waitFor(() => expect(toastMocks.info).toHaveBeenCalledWith('支付结果确认超时，可稍后在计费页查看'))
-    await waitFor(() => expect(screen.getByText('billing-page')).toBeInTheDocument())
+    await waitFor(() => expect(navMocks.navigate).toHaveBeenCalledWith('/settings/workspace/billing'))
     expect(toastMocks.success).not.toHaveBeenCalled()
   })
 
@@ -129,6 +118,6 @@ describe('BillingSuccessPage', () => {
     renderPage()
 
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('支付成功，套餐已生效'))
-    await waitFor(() => expect(screen.getByText('billing-page')).toBeInTheDocument())
+    await waitFor(() => expect(navMocks.navigate).toHaveBeenCalledWith('/settings/workspace/billing'))
   })
 })

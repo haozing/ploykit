@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, useLocation } from 'react-router'
+import { RouterTestHarness, useLocation } from '../../../router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@ploykit/client'
 import { MembersPage } from '../MembersPage'
@@ -47,10 +47,10 @@ function renderPage(initialEntries?: string[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={initialEntries}>
+      <RouterTestHarness initialEntries={initialEntries}>
         <LocationProbe />
         <MembersPage />
-      </MemoryRouter>
+      </RouterTestHarness>
     </QueryClientProvider>,
   )
 }
@@ -332,10 +332,12 @@ describe('MembersPage K5：tab/分页状态进 URL（searchParams）', () => {
       }
       throw new Error('unexpected GET ' + path)
     })
-    renderPage()
+    await renderPage()
     await screen.findByText('owner@example.com')
 
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+    // 序列化器契约已由适配层修复（rawStringifySearch/rawParseSearch，
+    // 数字参数不再被 JSON 引号包裹——RR 语义 ?mpage=2）。
     await waitFor(() => expect(locationLog.at(-1)).toBe('/?mpage=2'))
   })
 

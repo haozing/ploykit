@@ -1,6 +1,6 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
-import { useLocation } from 'react-router'
+import { useLocation } from '../router'
 import { useLogin } from '@ploykit/hooks'
 import { useApi } from '@ploykit/hooks'
 import { useAuth } from '@ploykit/hooks'

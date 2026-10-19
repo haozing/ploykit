@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Routes, Route } from 'react-router'
+import { RouterTestHarness } from '../../../router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@ploykit/client'
 import { RolePermissionsPage } from '../RolePermissionsPage'
@@ -32,11 +32,9 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/settings/workspace/roles']}>
-        <Routes>
-          <Route path="/settings/workspace/roles" element={<RolePermissionsPage />} />
-        </Routes>
-      </MemoryRouter>
+      <RouterTestHarness initialEntries={['/settings/workspace/roles']}>
+        <RolePermissionsPage />
+      </RouterTestHarness>
     </QueryClientProvider>,
   )
 }

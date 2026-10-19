@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParamsCompat } from '../../router';
 import { RefreshCw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -56,7 +56,7 @@ export function WebhookDeliveriesPage() {
   const api = useApi();
   const qc = useQueryClient();
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsCompat();
   const statusParam = searchParams.get('status') ?? '';
   const status = DELIVERY_STATUSES.includes(statusParam) ? statusParam : '';
   const page = Math.max(

@@ -1,11 +1,34 @@
 
 import { renderToString } from 'react-dom/server'
-import { MemoryRouter } from 'react-router'
+import * as React from 'react'
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { OnboardingChecklist } from '../../components/OnboardingChecklist'
 import { PloykitProvider } from '@ploykit/hooks'
 import { LandingPage } from '../LandingPage'
 import { LoginPage } from '../LoginPage'
+
+// SSR 冒烟不走 RouterTestHarness：RouterProvider 在同步 renderToString 里处于
+// pending（初始 load 未完成），只会吐出 <!--$--><!--/$-->。按 tanstack 官方 SSR
+// 流程先 await router.load() 再渲染——这正是消费方 entry-server 的接线形态。
+async function ssrRenderAt(path: string, children: React.ReactNode): Promise<string> {
+  const childrenSlot = { current: children }
+  const rootRoute = createRootRoute({ component: () => childrenSlot.current })
+  const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => childrenSlot.current })
+  const catchAllRoute = createRoute({ getParentRoute: () => rootRoute, path: '$', component: () => childrenSlot.current })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([indexRoute, catchAllRoute]),
+    history: createMemoryHistory({ initialEntries: [path] }),
+  })
+  await router.load()
+  return withPoisonedStorage(() => renderToString(React.createElement(RouterProvider, { router })))
+}
 
 
 
@@ -57,28 +80,17 @@ const landingProps = {
 }
 
 describe('ui 包 SSR 渲染冒烟（R2：渲染期禁摸浏览器 API）', () => {
-  it('LandingPage（MemoryRouter 内）：输出非空且不摸存储 API', () => {
-    const html = withPoisonedStorage(() =>
-      renderToString(
-        <MemoryRouter>
-          <LandingPage {...landingProps} />
-        </MemoryRouter>,
-      ),
-    )
+  it('LandingPage（tanstack memory router 内）：输出非空且不摸存储 API', async () => {
+    const html = await ssrRenderAt('/', <LandingPage {...landingProps} />)
     expect(html.length).toBeGreaterThan(0)
     expect(html).toContain('PloykitSmoke')
     expect(touched).toEqual([])
   })
 
-  it('LoginPage（PloykitProvider + MemoryRouter 内）：输出非空且不摸存储 API', () => {
-    const html = withPoisonedStorage(() =>
-      renderToString(
-        <PloykitProvider>
-          <MemoryRouter>
-            <LoginPage />
-          </MemoryRouter>
-        </PloykitProvider>,
-      ),
+  it('LoginPage（PloykitProvider + tanstack memory router 内）：输出非空且不摸存储 API', async () => {
+    const html = await ssrRenderAt(
+      '/login',
+      React.createElement(PloykitProvider, null, <LoginPage />),
     )
     expect(html.length).toBeGreaterThan(0)
     expect(html).toContain('登录')

@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate } from '../../router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Skeleton } from '../../components/ui/skeleton'
 import { Spinner } from '../../components/ui/spinner'

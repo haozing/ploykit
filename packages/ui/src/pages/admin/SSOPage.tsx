@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link } from '../../router';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageHeader } from '../../components/Page';

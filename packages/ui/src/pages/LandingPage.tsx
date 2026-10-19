@@ -1,5 +1,5 @@
 
-import { Link } from 'react-router'
+import { Link } from '../router'
 
 export interface Feature { icon: string; title: string; desc: string }
 export interface Plan {

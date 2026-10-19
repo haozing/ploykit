@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router'
+import { RouterTestHarness, useLocation } from '../../../router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { InviteAcceptPage } from '../InviteAcceptPage'
 
@@ -35,15 +35,30 @@ const toastMocks = vi.hoisted(() => ({
 }))
 vi.mock('../../../components/toast', () => ({ toast: toastMocks }))
 
-function renderPage(props: Parameters<typeof InviteAcceptPage>[0] = {}) {
-  return render(
-    <MemoryRouter initialEntries={['/invitations']}>
-      <Routes>
-        <Route path="/invitations" element={<InviteAcceptPage {...props} />} />
-        <Route path="/app" element={<div>app-page</div>} />
-      </Routes>
-    </MemoryRouter>,
+// 旧 <Route path="/app" element={<div>app-page</div>}> 的等价探针：
+// RouterTestHarness 是 catch-all，不做路由分发；用 useLocation 按路径渲染目标内容。
+// props 经 ref 槽透传给当前路径对应的页面。
+function RouteContentProbe(props: Parameters<typeof InviteAcceptPage>[0]) {
+  const { pathname } = useLocation()
+  if (pathname === '/app') return <div>app-page</div>
+  if (pathname === '/invitations') return <InviteAcceptPage {...props} />
+  return null
+}
+
+// RouterTestHarness 底下的 tanstack RouterProvider 首帧为 pending（初始 load 异步
+// 完成）——渲染后等邀请数据上屏再返回。
+async function renderPage(props: Parameters<typeof InviteAcceptPage>[0] = {}) {
+  const result = render(
+    <RouterTestHarness initialEntries={['/invitations']}>
+      <RouteContentProbe {...props} />
+    </RouterTestHarness>,
   )
+  await waitFor(() =>
+    expect(
+      screen.queryByText('Beta Team') ?? screen.queryByText('app-page'),
+    ).not.toBeNull(),
+  )
+  return result
 }
 
 beforeEach(() => {
@@ -53,8 +68,8 @@ beforeEach(() => {
 })
 
 describe('InviteAcceptPage', () => {
-  it('只列 pending 邀请（工作区名 / 角色徽标 / 过期时间）', () => {
-    renderPage()
+  it('只列 pending 邀请（工作区名 / 角色徽标 / 过期时间）', async () => {
+    await renderPage()
     expect(screen.getByText('Beta Team')).toBeInTheDocument()
     expect(screen.getByText('管理员')).toBeInTheDocument()
     expect(screen.queryByText('Old Team')).not.toBeInTheDocument()
@@ -64,7 +79,7 @@ describe('InviteAcceptPage', () => {
 
   it('接受 → POST accept（hook 内部失效 workspaceList）+ onAccepted 回调', async () => {
     const onAccepted = vi.fn()
-    renderPage({ onAccepted })
+    await renderPage({ onAccepted })
     fireEvent.click(screen.getByRole('button', { name: /接受/ }))
     await waitFor(() => expect(invMocks.accept.mutateAsync).toHaveBeenCalledWith('inv-1'))
     await waitFor(() => expect(onAccepted).toHaveBeenCalledWith('ws-9'))
@@ -72,13 +87,13 @@ describe('InviteAcceptPage', () => {
   })
 
   it('无 onAccepted 时默认跳 /app', async () => {
-    renderPage()
+    await renderPage()
     fireEvent.click(screen.getByRole('button', { name: /接受/ }))
     await waitFor(() => expect(screen.getByText('app-page')).toBeInTheDocument())
   })
 
   it('拒绝 → decline.mutateAsync(id)，不跳转', async () => {
-    renderPage()
+    await renderPage()
     fireEvent.click(screen.getByRole('button', { name: /拒绝/ }))
     await waitFor(() => expect(invMocks.decline.mutateAsync).toHaveBeenCalledWith('inv-1'))
     expect(toastMocks.success).toHaveBeenCalledWith('已拒绝「Beta Team」的邀请')

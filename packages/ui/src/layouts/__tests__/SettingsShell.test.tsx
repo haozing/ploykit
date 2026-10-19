@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { RouterTestHarness, useLocation } from '../../router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SettingsShell, type SettingsNavGroup } from '../SettingsShell'
 
@@ -39,23 +39,33 @@ function Page({ title }: { title: string }) {
   )
 }
 
-function renderAt(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/settings/profile" element={<Page title="profile-content" />} />
-        <Route path="/settings/notifications" element={<Page title="notifications-content" />} />
-        <Route path="/settings/workspace/members" element={<Page title="members-content" />} />
-      </Routes>
-    </MemoryRouter>,
+// 旧 <Route path> 分发的等价探针：RouterTestHarness 是 catch-all，不做路由分发；
+// 用 useLocation 按路径渲染对应设置页（点击导航后内容切换的断言依据）。
+function RouteContentProbe({ path }: { path: string }) {
+  const { pathname } = useLocation()
+  if (pathname === '/settings/profile') return <Page title="profile-content" />
+  if (pathname === '/settings/notifications') return <Page title="notifications-content" />
+  if (pathname === '/settings/workspace/members') return <Page title="members-content" />
+  return <Page title={`untitled:${path}`} />
+}
+
+// RouterTestHarness 底下的 tanstack RouterProvider 首帧为 pending（初始 load 异步
+// 完成）——渲染后等壳标题上屏再返回，断言/交互可同步写。
+async function renderAt(path: string) {
+  const result = render(
+    <RouterTestHarness initialEntries={[path]}>
+      <RouteContentProbe path={path} />
+    </RouterTestHarness>,
   )
+  await waitFor(() => expect(screen.queryAllByText('设置').length).toBeGreaterThan(0))
+  return result
 }
 
 describe('SettingsShell', () => {
   beforeEach(() => { mocks.role = undefined })
 
-  it('渲染标题/描述/全部分组与条目（URL 驱动激活态）', () => {
-    renderAt('/settings/profile')
+  it('渲染标题/描述/全部分组与条目（URL 驱动激活态）', async () => {
+    await renderAt('/settings/profile')
     
     expect(screen.getByText('设置')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '设置' })).not.toBeInTheDocument()
@@ -69,8 +79,8 @@ describe('SettingsShell', () => {
     expect(screen.getByText('profile-content')).toBeInTheDocument()
   })
 
-  it('点击导航项切换激活与内容（无内部 tab state）', () => {
-    renderAt('/settings/profile')
+  it('点击导航项切换激活与内容（无内部 tab state）', async () => {
+    await renderAt('/settings/profile')
     fireEvent.click(screen.getByRole('link', { name: '成员' }))
     expect(screen.getByText('members-content')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '成员' })).toHaveAttribute('aria-current', 'page')
@@ -91,56 +101,60 @@ describe('SettingsShell 角色门控（IA v2 hidden 语义）', () => {
     },
   ]
 
-  function renderGated() {
-    return render(
-      <MemoryRouter initialEntries={['/settings/workspace/general']}>
+  // 首帧 flush 同 renderAt：等 page-body 上屏（gatedNav 壳无标题差异，盯内容槽）。
+  async function renderGated() {
+    const result = render(
+      <RouterTestHarness initialEntries={['/settings/workspace/general']}>
         <SettingsShell nav={gatedNav}>
           <div>page-body</div>
         </SettingsShell>
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    await waitFor(() => expect(screen.queryAllByText('page-body').length).toBeGreaterThan(0))
+    return result
   }
 
   beforeEach(() => { mocks.role = 'member' })
 
-  it('member：无 perm 项可见，perm=admin（审计）隐藏', () => {
-    renderGated()
+  it('member：无 perm 项可见，perm=admin（审计）隐藏', async () => {
+    await renderGated()
     expect(screen.getByRole('link', { name: '概况' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '成员' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '审计' })).not.toBeInTheDocument()
   })
 
-  it('admin：可见 admin 项（审计），仍隐藏 owner 项（计费）', () => {
+  it('admin：可见 admin 项（审计），仍隐藏 owner 项（计费）', async () => {
     mocks.role = 'admin'
-    renderGated()
+    await renderGated()
     expect(screen.getByRole('link', { name: '审计' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '计费' })).not.toBeInTheDocument()
   })
 
-  it('owner：全部可见', () => {
+  it('owner：全部可见', async () => {
     mocks.role = 'owner'
-    renderGated()
+    await renderGated()
     expect(screen.getByRole('link', { name: '审计' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '计费' })).toBeInTheDocument()
   })
 
-  it('角色未加载（无工作区）：管理项按最小权限隐藏', () => {
+  it('角色未加载（无工作区）：管理项按最小权限隐藏', async () => {
     mocks.role = undefined
-    renderGated()
+    await renderGated()
     expect(screen.getByRole('link', { name: '概况' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '审计' })).not.toBeInTheDocument()
   })
 
-  it('整组过滤后为空则不渲染分组标题', () => {
+  it('整组过滤后为空则不渲染分组标题', async () => {
     render(
-      <MemoryRouter initialEntries={['/account/profile']}>
+      <RouterTestHarness initialEntries={['/account/profile']}>
         <SettingsShell
           nav={[{ group: '仅管理', items: [{ path: '/settings/workspace/audit', label: '审计', perm: 'admin' }] }]}
         >
           <div>page-body</div>
         </SettingsShell>
-      </MemoryRouter>,
+      </RouterTestHarness>,
     )
+    await waitFor(() => expect(screen.queryAllByText('page-body').length).toBeGreaterThan(0))
     expect(screen.queryByText('仅管理')).not.toBeInTheDocument()
   })
 })

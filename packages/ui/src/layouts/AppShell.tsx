@@ -1,5 +1,5 @@
 
-import { useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from '../router'
 import { useEffect, type ReactNode } from 'react'
 import { FolderKanban } from 'lucide-react'
 import { roleSatisfies, useAuth, useWorkspace, type Perm } from '@ploykit/hooks'

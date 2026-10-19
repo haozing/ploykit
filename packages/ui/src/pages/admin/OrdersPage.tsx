@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParamsCompat } from '../../router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { DataTable, type Column } from '../../components/DataTable';
@@ -103,7 +103,7 @@ export function OrdersPage() {
   const confirm = useConfirm();
   
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsCompat();
   const statusParam = searchParams.get('status') ?? '';
   const status = ORDER_STATUSES.includes(statusParam) ? statusParam : '';
   const orderPage = Math.max(

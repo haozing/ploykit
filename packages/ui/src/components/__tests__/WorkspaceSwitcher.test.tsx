@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { ApiError } from '@ploykit/client'
+import { RouterTestHarness } from '../../router'
 import { WorkspaceSwitcher } from '../WorkspaceSwitcher'
 import { SidebarProvider } from '../ui/sidebar'
 
@@ -25,14 +25,17 @@ vi.mock('../../../../hooks/src/hooks/useWorkspace', () => ({
   }),
 }))
 
-function renderSwitcher() {
-  return render(
-    <MemoryRouter>
+// TanStack Router 的首次挂载是异步的：render 后需一次 act flush。
+async function renderSwitcher() {
+  const result = render(
+    <RouterTestHarness initialEntries={['/app']}>
       <SidebarProvider>
         <WorkspaceSwitcher />
       </SidebarProvider>
-    </MemoryRouter>,
+    </RouterTestHarness>,
   )
+  await act(async () => {})
+  return result
 }
 
 
@@ -59,7 +62,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   })
 
   it('渲染当前工作区，打开菜单列出工作区与新建入口', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const trigger = screen.getByRole('button', { name: '切换工作区' })
     expect(trigger).toHaveTextContent('Acme')
 
@@ -72,7 +75,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   })
 
   it('点击工作区项调用 switchTo', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const trigger = screen.getByRole('button', { name: '切换工作区' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /Beta/ }))
@@ -80,7 +83,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   })
 
   it('新建工作区：打开内联创建，提交调用 create(name, slug)', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const trigger = screen.getByRole('button', { name: '切换工作区' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
@@ -94,7 +97,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
 
   it('RE2-1：创建失败（配额满 402/E_QUOTA_EXCEEDED）显示中文错误与"升级套餐"指引，不再静默', async () => {
     mockError = new ApiError(402, 'E_QUOTA_EXCEEDED', 'quota exceeded for workspaces')
-    renderSwitcher()
+    await renderSwitcher()
     const trigger = screen.getByRole('button', { name: '切换工作区' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
@@ -109,7 +112,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
 
   it('RE2-1：slug 冲突等其他失败显示中文文案，且不出现升级指引', async () => {
     mockError = new ApiError(409, 'E_CONFLICT', 'slug already taken')
-    renderSwitcher()
+    await renderSwitcher()
     const trigger = screen.getByRole('button', { name: '切换工作区' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
@@ -119,7 +122,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   })
 
   it('RE2-1：创建成功（无 error）时面板内无错误提示', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const trigger = screen.getByRole('button', { name: '切换工作区' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
@@ -141,7 +144,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   }
 
   it('G2：纯中文名生成合法 slug（ws-随机后缀兜底，不以 - 开头/结尾、≥4 字符）', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const [name, slug] = (await submitName('审计账单')) as [string, string]
     expect(name).toBe('审计账单')
     
@@ -149,13 +152,13 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   })
 
   it('G2：中文-英文混合名剥离首尾横线（审计-Webhooks- → webhooks）', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const [, slug] = (await submitName('审计-Webhooks-')) as [string, string]
     expect(slug).toBe('webhooks')
   })
 
   it('G2：过短名补随机后缀达服务端 4 字符下限（ab → ab-xxxx）', async () => {
-    renderSwitcher()
+    await renderSwitcher()
     const [, slug] = (await submitName('ab')) as [string, string]
     expect(slug).toMatch(/^ab-[a-z0-9]{4}$/)
   })

@@ -1,7 +1,7 @@
 
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { render, screen, waitFor } from '@testing-library/react'
+import { RouterTestHarness } from '../../router'
 import { describe, it, expect } from 'vitest'
 import { LandingPage } from '../LandingPage'
 
@@ -15,9 +15,11 @@ const PLANS = [
   { name: 'Free', price: '¥99', recommended: true, features: ['全部功能'], cta: '升级' },
 ]
 
-function renderPage() {
-  return render(
-    <MemoryRouter>
+// RouterTestHarness 底下的 tanstack RouterProvider 首帧为 pending（初始 load 在
+// effect 里异步完成），渲染结果要等一个微任务才上屏——统一在此 flush。
+async function renderPage() {
+  const result = render(
+    <RouterTestHarness>
       <LandingPage
         brand="Ploykit"
         tagline="多租户 SaaS 脚手架"
@@ -27,20 +29,22 @@ function renderPage() {
         registerPath="/register"
         loginPath="/login"
       />
-    </MemoryRouter>,
+    </RouterTestHarness>,
   )
+  await waitFor(() => expect(screen.queryByText('Ploykit')).not.toBeNull())
+  return result
 }
 
 describe('LandingPage', () => {
-  it('渲染品牌/标语/功能/定价', () => {
-    renderPage()
+  it('渲染品牌/标语/功能/定价', async () => {
+    await renderPage()
     expect(screen.getByText('Ploykit')).toBeInTheDocument()
     expect(screen.getByText('多租户 SaaS 脚手架')).toBeInTheDocument()
-    expect(screen.getAllByText('快速').length).toBe(2) 
+    expect(screen.getAllByText('快速').length).toBe(2)
   })
 
-  it('登录/注册 CTA 指向可配路径', () => {
-    renderPage()
+  it('登录/注册 CTA 指向可配路径', async () => {
+    await renderPage()
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute(
       'href',
       '/login',
@@ -51,8 +55,8 @@ describe('LandingPage', () => {
     }
   })
 
-  it('推荐档位带"推荐"标记', () => {
-    renderPage()
+  it('推荐档位带"推荐"标记', async () => {
+    await renderPage()
     expect(screen.getByText('推荐')).toBeInTheDocument()
   })
 })

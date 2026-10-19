@@ -38,6 +38,11 @@
       "types": "./dist/router-react-router.d.ts",
       "default": "./dist/router-react-router.js"
     },
+    "./router-tanstack": {
+      "development": "./src/router-tanstack.tsx",
+      "types": "./dist/router-tanstack.d.ts",
+      "default": "./dist/router-tanstack.js"
+    },
     "./browser": {
       "development": "./src/browser.ts",
       "types": "./dist/browser.d.ts",
@@ -79,6 +84,7 @@
     "directory": "packages/runtime"
   },
   "dependencies": {
+    "@tanstack/react-router": "1.170.45",
     "react-router": "^7.0.0"
   }
 }

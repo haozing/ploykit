@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Routes, Route } from 'react-router'
+import { RouterTestHarness, useLocation } from '../../../router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ApiError } from '@ploykit/client'
 import { WorkspaceGeneralPage } from '../WorkspaceGeneralPage'
@@ -29,16 +29,21 @@ vi.mock('../../../components/ConfirmDialog', () => ({
   useConfirm: () => async () => true,
 }))
 
+// 旧 <Route path> 分发的等价探针：RouterTestHarness 是 catch-all，不做路由分发；
+// 用 useLocation 按路径渲染目标内容（/app 占位供「退出工作区」跳转断言）。
+function RouteContentProbe() {
+  const { pathname } = useLocation()
+  if (pathname === '/app') return <div>app-page</div>
+  return <WorkspaceGeneralPage />
+}
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/settings/workspace/general']}>
-        <Routes>
-          <Route path="/settings/workspace/general" element={<WorkspaceGeneralPage />} />
-          <Route path="/app" element={<div>app-page</div>} />
-        </Routes>
-      </MemoryRouter>
+      <RouterTestHarness initialEntries={['/settings/workspace/general']}>
+        <RouteContentProbe />
+      </RouterTestHarness>
     </QueryClientProvider>,
   )
 }

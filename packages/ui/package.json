@@ -1,6 +1,6 @@
 {
   "name": "@ploykit/ui",
-  "version": "0.9.0",
+  "version": "2.0.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,9 +25,9 @@
   ],
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-router": "^1.170.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router": "^7.0.0",
     "tailwindcss": "^4.0.0"
   },
   "dependencies": {
@@ -53,11 +53,11 @@
   "license": "ISC",
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-router": "^1.170.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "jsdom": "^29.1.1",
-    "react-router": "7.18.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"

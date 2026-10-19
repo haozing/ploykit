@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParamsCompat } from '../../router';
 import {
   MoreHorizontal,
   LogIn,
@@ -72,7 +72,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
   const me = useAuth().user;
   
   
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParamsCompat();
   const q = searchParams.get('q') ?? '';
   const statusParam = searchParams.get('status') ?? '';
   const status = STATUS_OPTIONS.some((s) => s.value === statusParam)
