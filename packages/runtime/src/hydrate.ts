@@ -1,8 +1,7 @@
 
 import type { ReactElement } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
-import { matchRoutes } from 'react-router'
-import type { RouteTable } from './routes'
+import type { PageSpec, RouteTable } from './routes'
 
 
 export const PROPS_SCRIPT_ID = '__PLOYKIT_PROPS__'
@@ -44,33 +43,41 @@ export function readPropsScript(doc: Document = document): HydratePayload | null
 }
 
 export interface ClientEntryOptions {
-  
+
   routes: RouteTable
-  
+
   mount: (children: ReactElement) => ReactElement
-  
+
   container?: HTMLElement | null
+
+  // pathname → 拥页 pageId 的匹配器（router 语义是消费方的知识）。RR 消费
+  // 方从 @ploykit/runtime/router-react-router 取 matchRoutePage 传入；
+  // TanStack Router 消费方用自家 router 一行实现（如
+  // (p, pages) => router.matchLocation(p)?.route.id ?? null）。缺省时走回
+  // 退梯子（见 propsForHydration）：组件名未压缩的部署仍能靠嵌入 pageId
+  // 键入 props；压缩部署在无匹配器时失去 props 注入并告警一次。
+  matchPage?: (pathname: string, pages: PageSpec[]) => string | null
 }
 
 // pageId is derived from component display names (routeTable), and production
 // minification mangles those names in the client bundle while the SSR bundle
 // keeps them (the Go esbuild build sets no minify flags) — so the pageId
 // embedded in the props script cannot be trusted as a key into the client's
-// own route table. Route path patterns are string literals: they survive
-// minification and are identical in both bundles, so the props' owning page is
-// resolved by matching the current URL against the client table itself. The
-// last match is the leaf of the matched branch, i.e. the page that owns the
-// payload.
+// own route table. Passing a matchPage (the react-router one lives in
+// @ploykit/runtime/router-react-router) resolves the owning page by matching
+// the current URL against the client table itself — route path patterns are
+// string literals: they survive minification and are identical in both
+// bundles. The last match is the leaf of the matched branch, i.e. the page
+// that owns the payload.
 function propsForHydration(
   table: RouteTable,
   hydrated: HydratePayload,
+  matchPage?: (pathname: string, pages: PageSpec[]) => string | null,
 ): Record<string, unknown> | undefined {
-  const matches = matchRoutes(
-    table.pages.map((p) => ({ path: p.path, id: p.pageId })),
-    window.location.pathname,
-  )
-  const leaf = matches && matches[matches.length - 1]
-  if (leaf && leaf.route.id) return { [leaf.route.id]: hydrated.props }
+  if (matchPage) {
+    const pageId = matchPage(window.location.pathname, table.pages)
+    if (pageId) return { [pageId]: hydrated.props }
+  }
   // Fallback for setups where the URL does not spell the bare route path
   // (e.g. an app base path): a non-minified client bundle still agrees with
   // the embedded pageId, so keep the legacy keying there.
@@ -85,15 +92,20 @@ function propsForHydration(
   return undefined
 }
 
-export function createClientEntry({ routes: table, mount, container }: ClientEntryOptions): void {
+export function createClientEntry({
+  routes: table,
+  mount,
+  container,
+  matchPage,
+}: ClientEntryOptions): void {
   const rootEl = container ?? document.getElementById('root')
   if (!rootEl) throw new Error('[ploykit/runtime] 未找到挂载点 #root')
   const hydrated = readPropsScript()
   if (hydrated) {
-    
-    hydrateRoot(rootEl, mount(table.routes(propsForHydration(table, hydrated))))
+
+    hydrateRoot(rootEl, mount(table.routes(propsForHydration(table, hydrated, matchPage))))
     return
   }
-  
+
   createRoot(rootEl).render(mount(table.routes()))
 }

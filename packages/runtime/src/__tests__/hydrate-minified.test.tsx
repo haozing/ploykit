@@ -19,6 +19,7 @@ import { MemoryRouter, StaticRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { createClientEntry, PROPS_SCRIPT_ID, serializeProps } from '../hydrate'
 import { routeTable } from '../routes'
+import { matchRoutePage, reactRouterAssembler } from '../router-react-router'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -114,7 +115,7 @@ function mountAt(pathname: string, basename?: string) {
 describe('hydration props resolution under a minified client bundle', () => {
   it('client pageId derives from the mangled name while the props script embeds the SSR pageId -> props delivered via pathname match', async () => {
     const comp = await minifiedWorkPage()
-    const table = routeTable({ '/works/:slug': { component: comp, render: 'static' } })
+    const table = routeTable({ '/works/:slug': { component: comp, render: 'static' } }, reactRouterAssembler())
     // Pin the precondition: the client table's own pageId (derived from the
     // mangled name) disagrees with the SSR-embedded 'work-page' — exactly the
     // production setup that lost all props.
@@ -135,7 +136,7 @@ describe('hydration props resolution under a minified client bundle', () => {
     let warns: unknown[][] = []
     try {
       await act(async () => {
-        createClientEntry({ routes: table, mount: mountAt('/works/hello') })
+        createClientEntry({ routes: table, mount: mountAt('/works/hello'), matchPage: matchRoutePage })
       })
       // Snapshot BEFORE mockRestore: in vitest mockRestore() also resets the
       // call history, so calls must be captured while the spy is installed.
@@ -156,7 +157,7 @@ describe('hydration props resolution under a minified client bundle', () => {
 
   it('pathname matches no route and the embedded pageId is absent from the client table -> exactly one warn, mounted without props', async () => {
     const comp = await minifiedWorkPage()
-    const table = routeTable({ '/works/:slug': { component: comp, render: 'static' } })
+    const table = routeTable({ '/works/:slug': { component: comp, render: 'static' } }, reactRouterAssembler())
 
     // Basename-style URL (/app prefix). The SSR HTML is rendered WITHOUT props
     // — the shape the client will receive — so hydration itself stays clean
@@ -172,7 +173,7 @@ describe('hydration props resolution under a minified client bundle', () => {
     let warns: unknown[][] = []
     try {
       await act(async () => {
-        createClientEntry({ routes: table, mount: mountAt('/app/works/hello', '/app') })
+        createClientEntry({ routes: table, mount: mountAt('/app/works/hello', '/app'), matchPage: matchRoutePage })
       })
       // Snapshot before mockRestore (see the first test).
       warns = warnSpy.mock.calls.map((c) => [...c])
@@ -190,7 +191,7 @@ describe('hydration props resolution under a minified client bundle', () => {
   })
 
   it('non-minified client table (pageId survives) + basename URL -> legacy embedded-pageId keying keeps props, no warn', async () => {
-    const table = routeTable({ '/legacy': { component: LegacyPage, render: 'static' } })
+    const table = routeTable({ '/legacy': { component: LegacyPage, render: 'static' } }, reactRouterAssembler())
     expect(table.pages[0]?.pageId).toBe('legacy-page')
 
     const ssrHtml = renderToString(
@@ -203,7 +204,7 @@ describe('hydration props resolution under a minified client bundle', () => {
     let warns: unknown[][] = []
     try {
       await act(async () => {
-        createClientEntry({ routes: table, mount: mountAt('/app/legacy', '/app') })
+        createClientEntry({ routes: table, mount: mountAt('/app/legacy', '/app'), matchPage: matchRoutePage })
       })
       // Snapshot before mockRestore (see the first test).
       warns = warnSpy.mock.calls.map((c) => [...c])

@@ -8,6 +8,7 @@ import { emitDirective } from '../browser'
 import { routeTable } from '../routes'
 import { createSsrEntry } from '../server'
 import type { PloykitHost } from '../types'
+import { reactRouterAssembler } from '../router-react-router'
 
 function Landing() {
   return <div>landing-body</div>
@@ -21,11 +22,14 @@ function SeoPage(props: { title?: string }) {
   return <main>seo-body</main>
 }
 
-const table = routeTable({
-  '/': { component: Landing, render: 'static' },
-  '/blog/:slug': { component: BlogPost, render: 'static' },
-  '/seo': { component: SeoPage, render: 'static' },
-})
+const table = routeTable(
+  {
+    '/': { component: Landing, render: 'static' },
+    '/blog/:slug': { component: BlogPost, render: 'static' },
+    '/seo': { component: SeoPage, render: 'static' },
+  },
+  reactRouterAssembler(),
+)
 
 afterEach(() => {
   delete globalThis.__ploykit_render__
@@ -100,7 +104,7 @@ describe('P3-63 补测：非法 props / 多指令 seq', () => {
       emitDirective('status', { code: 404 })
       return <main>multi-body</main>
     }
-    const t = routeTable({ '/multi': { component: MultiDirective, render: 'static' } })
+    const t = routeTable({ '/multi': { component: MultiDirective, render: 'static' } }, reactRouterAssembler())
     const entry = createSsrEntry({
       routes: t,
       render: (el) => renderToString(el),

@@ -5,6 +5,7 @@ import { MemoryRouter, StaticRouter } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createClientEntry, PROPS_SCRIPT_ID, serializeProps } from '../hydrate'
 import { routeTable } from '../routes'
+import { matchRoutePage, reactRouterAssembler } from '../router-react-router'
 
 function StaticPage(props: { title?: string; items?: string[] }) {
   
@@ -17,7 +18,7 @@ function StaticPage(props: { title?: string; items?: string[] }) {
   )
 }
 
-const table = routeTable({ '/page': { component: StaticPage, render: 'static' } })
+const table = routeTable({ '/page': { component: StaticPage, render: 'static' } }, reactRouterAssembler())
 
 
 function serverRender(propsByPageId?: Record<string, unknown>): string {
@@ -44,7 +45,7 @@ describe('createClientEntry 水合组合链（真 hydrateRoot）', () => {
     const orig = console.error
     console.error = (...args: unknown[]) => errors.push(args)
     try {
-      createClientEntry({ routes: table, mount: (c) => createElement(MemoryRouter, { initialEntries: ['/page'] }, c) })
+      createClientEntry({ routes: table, mount: (c) => createElement(MemoryRouter, { initialEntries: ['/page'] }, c), matchPage: matchRoutePage })
     } finally {
       console.error = orig
     }
@@ -62,7 +63,7 @@ describe('createClientEntry 水合组合链（真 hydrateRoot）', () => {
     const orig = console.error
     console.error = (...args: unknown[]) => errors.push(args)
     try {
-      createClientEntry({ routes: table, mount: (c) => createElement(MemoryRouter, { initialEntries: ['/page'] }, c) })
+      createClientEntry({ routes: table, mount: (c) => createElement(MemoryRouter, { initialEntries: ['/page'] }, c), matchPage: matchRoutePage })
     } finally {
       console.error = orig
     }

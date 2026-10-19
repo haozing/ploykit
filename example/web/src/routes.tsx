@@ -16,6 +16,7 @@ import {
   CalendarClock,
 } from 'lucide-react';
 import { routeTable } from '@ploykit/runtime/routes';
+import { reactRouterAssembler } from '@ploykit/runtime/router-react-router';
 import { PloykitProvider, useAuth, useWorkspace, useSEO, useSiteConfig } from '@ploykit/hooks';
 import {
   LoginPage,
@@ -758,6 +759,6 @@ const routes = routeTable({
   '/settings/workspace/schedules': { component: WorkspaceSchedules },
   '/billing/success': { component: BillingSuccessRoute },
   '/*': { component: CatchAll }, // 兜底回首页（与旧 App 的 path="*" 等价；'/*' 过 Go 投影校验）
-});
+}, reactRouterAssembler());
 
 export default routes;

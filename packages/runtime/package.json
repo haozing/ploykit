@@ -33,6 +33,11 @@
       "types": "./dist/routes.d.ts",
       "default": "./dist/routes.js"
     },
+    "./router-react-router": {
+      "development": "./src/router-react-router.ts",
+      "types": "./dist/router-react-router.d.ts",
+      "default": "./dist/router-react-router.js"
+    },
     "./browser": {
       "development": "./src/browser.ts",
       "types": "./dist/browser.d.ts",
@@ -56,8 +61,7 @@
   ],
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router": "^7.0.0"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/react": "19.3.0",
@@ -73,5 +77,8 @@
     "type": "git",
     "url": "git+https://github.com/haozing/ploykit.git",
     "directory": "packages/runtime"
+  },
+  "dependencies": {
+    "react-router": "^7.0.0"
   }
 }

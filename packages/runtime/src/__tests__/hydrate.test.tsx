@@ -9,11 +9,12 @@ vi.mock('react-dom/client', () => ({
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { createClientEntry, readPropsScript, serializeProps } from '../hydrate'
 import { routeTable } from '../routes'
+import { matchRoutePage, reactRouterAssembler } from '../router-react-router'
 
 function Home() {
   return <div>home</div>
 }
-const table = routeTable({ '/': { component: Home } })
+const table = routeTable({ '/': { component: Home } }, reactRouterAssembler())
 
 
 function mountPage(propsScript?: string) {
@@ -35,14 +36,14 @@ beforeEach(() => {
 describe('createClientEntry', () => {
   it('带 __PLOYKIT_PROPS__ script → hydrateRoot 同树水合（不走 createRoot）', () => {
     mountPage(serializeProps({ any: 'props' }))
-    createClientEntry({ routes: table, mount: (c) => c })
+    createClientEntry({ routes: table, mount: (c) => c, matchPage: matchRoutePage })
     expect(hydrateRoot).toHaveBeenCalledTimes(1)
     expect(createRoot).not.toHaveBeenCalled()
   })
 
   it('无 props script → createRoot 挂 SPA（不走水合）', () => {
     mountPage()
-    createClientEntry({ routes: table, mount: (c) => c })
+    createClientEntry({ routes: table, mount: (c) => c, matchPage: matchRoutePage })
     expect(createRoot).toHaveBeenCalledTimes(1)
     expect(hydrateRoot).not.toHaveBeenCalled()
   })
@@ -69,7 +70,7 @@ describe('P2-27/P3-59：null 归一化与畸形 JSON 定策', () => {
   it('P3-59：畸形 JSON → console.error 且按无标记处理（SPA 回落，不白屏）', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mountPage('{"broken":')
-    createClientEntry({ routes: table, mount: (c) => c })
+    createClientEntry({ routes: table, mount: (c) => c, matchPage: matchRoutePage })
     expect(createRoot).toHaveBeenCalledTimes(1)
     expect(hydrateRoot).not.toHaveBeenCalled()
     expect(errSpy).toHaveBeenCalled()

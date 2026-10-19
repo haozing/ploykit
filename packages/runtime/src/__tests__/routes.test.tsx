@@ -1,8 +1,11 @@
 
+import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { routeTable } from '../routes'
+import type { PageSpec } from '../routes'
+import { reactRouterAssembler } from '../router-react-router'
 
 function Landing() {
   return <div>landing-body</div>
@@ -15,11 +18,14 @@ function Dashboard() {
 }
 
 function buildTable() {
-  return routeTable({
-    '/': { component: Landing, render: 'static' },
-    '/blog/:slug': { component: BlogPost, render: 'static' },
-    '/app': { component: Dashboard },
-  })
+  return routeTable(
+    {
+      '/': { component: Landing, render: 'static' },
+      '/blog/:slug': { component: BlogPost, render: 'static' },
+      '/app': { component: Dashboard },
+    },
+    reactRouterAssembler(),
+  )
 }
 
 const projection = (t: ReturnType<typeof buildTable>) =>
@@ -49,11 +55,14 @@ describe('routeTable pageId 稳定性', () => {
     Object.defineProperty(dup1, 'name', { value: 'Same' })
     Object.defineProperty(dup2, 'name', { value: 'Same' })
 
-    const t = routeTable({
-      '/x/anon': { component: anon },
-      '/a': { component: dup1 },
-      '/b': { component: dup2 },
-    })
+    const t = routeTable(
+      {
+        '/x/anon': { component: anon },
+        '/a': { component: dup1 },
+        '/b': { component: dup2 },
+      },
+      reactRouterAssembler(),
+    )
     expect(projection(t)).toEqual([
       { path: '/x/anon', pageId: 'x-anon', render: 'csr' },
       { path: '/a', pageId: 'same', render: 'csr' },
@@ -71,7 +80,7 @@ describe('routeTable pageId 稳定性', () => {
 })
 
 describe('routeTable routes() 树', () => {
-  it('props 按 pageId 注入对应组件（SSR 同款：路由命中 BlogPost 并吃到 Loader 数据）', () => {
+  it('routes() 委托注入的组装器：RR 组装器下 props 按 pageId 注入对应组件（SSR 同款）', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/blog/hello']}>
         {buildTable().routes({ 'blog-post': { title: 'Hello-SSR' } })}
@@ -86,5 +95,22 @@ describe('routeTable routes() 树', () => {
       <MemoryRouter initialEntries={['/blog/hello']}>{buildTable().routes()}</MemoryRouter>,
     )
     expect(html).toContain('post-body')
+  })
+
+  it('自定义组装器生效：routes() 输出由注入方决定（router 无关性的直接证明）', () => {
+    let seen: PageSpec[] = []
+    const fake = routeTable(
+      { '/f': { component: Landing } },
+      {
+        assemble(pages) {
+          seen = pages
+          return createElement('ul', null, pages.map((p) => createElement('li', { key: p.pageId }, p.pageId)))
+        },
+      },
+    )
+    expect(seen).toHaveLength(0)
+    const el = fake.routes({ f: { any: 'props' } })
+    expect(seen.map((p) => p.pageId)).toEqual(['landing'])
+    expect(renderToString(el)).toContain('<li>landing</li>')
   })
 })

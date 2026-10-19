@@ -2,12 +2,14 @@
 import { StrictMode } from 'react'
 import { BrowserRouter } from 'react-router'
 import { createClientEntry } from '@ploykit/runtime/hydrate'
+import { matchRoutePage } from '@ploykit/runtime/router-react-router'
 import { ErrorBoundary, PageError } from '@ploykit/ui'
 import routes, { AppProviders } from './routes'
 import './index.css'
 
 createClientEntry({
   routes,
+  matchPage: matchRoutePage,
   mount: (children) => (
     <StrictMode>
       <BrowserRouter>
