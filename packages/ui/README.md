@@ -133,6 +133,30 @@ await waitFor(() => expect(screen.getByText('...')).toBeInTheDocument())
 
 ## 组件
 
+### 用户面板条目权限过滤
+
+`AppShell` 的 `userMenuItems`（以及直接使用的 `UserMenu` / `SidebarUserMenu` 的 `items`）支持与侧栏 `NavItem` 相同的两个可选权限字段，过滤结果对头部头像菜单与侧栏底部用户卡一致：
+
+| 字段 | 判定依据 | 规则 |
+|---|---|---|
+| `perm?: 'admin' | 'owner'` | `useWorkspace().current.role` | 最低工作区角色；当前角色不满足则隐藏（平台管理员绕过角色级过滤） |
+| `permKey?: string` | `useWorkspace().current.role_perms` | 生效权限集已知且不含该键 → 隐藏；未知（旧载荷无 `role_perms` / 无 `PloykitProvider`）→ **显示**（向后兼容） |
+
+两者都未声明的条目恒显示；同时声明时需两者都满足。
+
+```tsx
+<AppShell
+  userMenuItems={[
+    // 无 billing:read 权限的成员看不到该入口（不再跳转到 403 页面）
+    { label: '计费账单', to: '/settings/workspace/billing', permKey: 'billing:read' },
+    { label: '成员管理', to: '/settings/workspace/members', perm: 'owner' },
+    { label: '通知偏好', to: '/account/notifications' }, // 无门控：恒显示
+  ]}
+/>
+```
+
+侧栏导航与用户面板共用 `lib/useWorkspaceRoleSafe` 的同一套判定（`roleSatisfies` / `permKeyVisible` / `permissionVisible`），两处语义不会漂移。
+
 ### DataTable
 
 ```tsx

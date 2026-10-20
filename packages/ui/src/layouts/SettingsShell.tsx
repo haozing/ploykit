@@ -2,8 +2,8 @@
 import { Link, useLocation, useNavigate } from '../router'
 import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
-import { roleSatisfies, type Perm } from '@ploykit/hooks'
-import { useWorkspace } from '@ploykit/hooks'
+import type { Perm } from '@ploykit/hooks'
+import { permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe } from '../lib/useWorkspaceRoleSafe'
 import { buttonVariants } from '../components/ui/button'
 import { Separator } from '../components/ui/separator'
 import {
@@ -13,10 +13,16 @@ import {
 export interface SettingsNavItem {
   path: string
   label: string
-  
+
   icon?: ReactNode
-  
+
+  /** Minimum workspace role (owner/admin); hidden when the current role does not satisfy it. */
   perm?: Perm
+
+  /** Fine-grained permission key (e.g. 'billing:read') resolved against the workspace's
+   *  effective role_perms. Unknown permission set (legacy payload / no Provider) → visible,
+   *  the same backward-compatible rule AppShell's NavItem uses. */
+  permKey?: string
 }
 
 export interface SettingsNavGroup {
@@ -36,14 +42,15 @@ export interface SettingsShellProps {
 export function SettingsShell({ nav, children, title = '设置', description }: SettingsShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const role = useWorkspace().current?.role
+  const { role, rolePerms } = useWorkspaceRoleSafe()
+  const isPlatformAdmin = useIsPlatformAdminSafe()
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
   
   const visibleNav = (nav ?? [])
-    .map((g) => ({ ...g, items: g.items.filter((i) => roleSatisfies(role, i.perm)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => permissionVisible(i, role, rolePerms, isPlatformAdmin)) }))
     .filter((g) => g.items.length > 0)
 
   const flatItems = visibleNav.flatMap((g) => g.items)

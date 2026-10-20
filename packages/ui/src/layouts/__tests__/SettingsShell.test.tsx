@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SettingsShell, type SettingsNavGroup } from '../SettingsShell'
 
 
-const mocks = vi.hoisted(() => ({ role: undefined as string | undefined }))
+const mocks = vi.hoisted(() => ({ role: undefined as string | undefined, rolePerms: undefined as string[] | undefined }))
 vi.mock('../../../../hooks/src/hooks/useWorkspace', () => ({
   useWorkspace: () => ({
-    current: mocks.role ? { id: 'ws-1', name: 'Acme', slug: 'acme', role: mocks.role } : null,
+    current: mocks.role ? { id: 'ws-1', name: 'Acme', slug: 'acme', role: mocks.role, role_perms: mocks.rolePerms } : null,
     switchTo: vi.fn(),
     clear: vi.fn(),
   }),
@@ -156,5 +156,60 @@ describe('SettingsShell 角色门控（IA v2 hidden 语义）', () => {
     )
     await waitFor(() => expect(screen.queryAllByText('page-body').length).toBeGreaterThan(0))
     expect(screen.queryByText('仅管理')).not.toBeInTheDocument()
+  })
+})
+
+// SettingsShell 原先只按 perm（角色）过滤，permKey（细粒度权限集）被静默忽略——
+// 与 AppShell 侧栏/用户面板的门控语义不一致。本组测试钉住三者共用同一判据。
+describe('SettingsShell permKey 门控（与 AppShell/UserMenu 同判据）', () => {
+  const gatedNav: SettingsNavGroup[] = [
+    {
+      group: '工作区',
+      items: [
+        { path: '/settings/workspace/general', label: '概况' },
+        { path: '/settings/workspace/billing', label: '计费', permKey: 'billing:read' },
+        { path: '/settings/workspace/roles', label: '角色权限', perm: 'owner' },
+      ],
+    },
+  ]
+
+  async function renderGated() {
+    render(
+      <RouterTestHarness initialEntries={['/settings/workspace/general']}>
+        <SettingsShell nav={gatedNav} title="设置">
+          <div>content</div>
+        </SettingsShell>
+      </RouterTestHarness>,
+    )
+    await waitFor(() => expect(screen.queryAllByText('设置').length).toBeGreaterThan(0))
+  }
+
+  it('role_perms 已知且不含 billing:read → 计费项隐藏，其余显示', async () => {
+    mocks.role = 'member'
+    mocks.rolePerms = ['usage:read']
+    await renderGated()
+    expect(screen.queryByText('计费')).toBeNull()
+    expect(screen.queryAllByText('概况').length).toBeGreaterThan(0)
+  })
+
+  it('role_perms 已知且含 billing:read → 计费项显示', async () => {
+    mocks.role = 'member'
+    mocks.rolePerms = ['billing:read']
+    await renderGated()
+    expect(screen.queryByText('计费')).not.toBeNull()
+  })
+
+  it('role_perms 缺失（旧载荷）→ permKey 项默认显示（向后兼容）', async () => {
+    mocks.role = 'member'
+    mocks.rolePerms = undefined
+    await renderGated()
+    expect(screen.queryByText('计费')).not.toBeNull()
+  })
+
+  it('perm: owner 对 member 隐藏（角色级门控仍然生效）', async () => {
+    mocks.role = 'member'
+    mocks.rolePerms = ['billing:read']
+    await renderGated()
+    expect(screen.queryByText('角色权限')).toBeNull()
   })
 })

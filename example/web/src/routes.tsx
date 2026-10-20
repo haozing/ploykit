@@ -160,11 +160,11 @@ const PAGE_TITLES: Array<[RegExp, string]> = [
   [/^\/admin\/settings/, '系统 · 管理控制台'],
   [/^\/admin\/overview/, '概览 · 管理控制台'],
   [/^\/admin/, '管理控制台'],
-  [/^\/account\/profile/, '个人资料 · 账户设置'],
-  [/^\/account\/security/, '安全 · 账户设置'],
-  [/^\/account\/tokens/, '访问令牌 · 账户设置'],
-  [/^\/account\/notifications/, '通知偏好 · 账户设置'],
-  [/^\/account/, '账户设置'],
+  [/^\/account\/profile/, '个人资料 · 设置'],
+  [/^\/account\/security/, '安全 · 设置'],
+  [/^\/account\/tokens/, '访问令牌 · 设置'],
+  [/^\/account\/notifications/, '通知偏好 · 设置'],
+  [/^\/account/, '设置'],
   [/^\/settings\/workspace\/general/, '概况 · 工作区设置'],
   [/^\/settings\/workspace\/members/, '成员 · 工作区设置'],
   [/^\/settings\/workspace\/audit/, '审计 · 工作区设置'],
@@ -358,13 +358,21 @@ const workspaceNav: AppShellNavGroup[] = [
 ];
 
 
-// 用户面板条目（侧栏底部用户卡弹出）：账户五件套 + 计费入口。
+// 统一设置导航（IA 收敛）：账户组（个人级）+ 工作区组（团队级）同处一个侧栏。
+// 类型取 AppShellNavGroup[] 而非 SettingsNavGroup[]：workspaceNav 的 NavItem 带
+// permKey，而框架的 SettingsNavItem 没有该字段（SettingsShell 也只认 perm）。本产品壳
+// 走 AppShell.navGroups，其 isNavVisible 同时执行 perm 与 permKey 门控；spread 不裁剪
+// 字段，accountNav 的普通项与 workspaceNav 的 permKey 项语义都原样保留。
+const settingsNav: AppShellNavGroup[] = [...accountNav, ...workspaceNav];
+
+
+// 用户面板条目（侧栏底部用户卡弹出）：仅账户四件套；工作区计费入口统一收敛到
+// 设置侧栏的「工作区」组，不再做跨作用域跳转（也避免绕过该组的权限过滤）。
 const userPanelItems: UserMenuExtraItem[] = [
   { label: '个人资料', to: '/account/profile', icon: icon(UserCircle) },
   { label: '安全', to: '/account/security', icon: icon(ShieldIcon) },
   { label: '访问令牌', to: '/account/tokens', icon: icon(KeyRound) },
   { label: '通知偏好', to: '/account/notifications', icon: icon(Bell) },
-  { label: '计费账单', to: '/settings/workspace/billing', icon: icon(CreditCard) },
 ];
 
 
@@ -381,13 +389,21 @@ function crumbOf(
 
 function AccountLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  return <Shell breadcrumbTail={crumbOf(accountNav, pathname)}>{children}</Shell>;
+  return (
+    <Shell breadcrumbTail={crumbOf(settingsNav, pathname)} navGroups={settingsNav}>
+      {children}
+    </Shell>
+  );
 }
 
 
 function SettingsLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  return <Shell breadcrumbTail={crumbOf(workspaceNav, pathname)}>{children}</Shell>;
+  return (
+    <Shell breadcrumbTail={crumbOf(settingsNav, pathname)} navGroups={settingsNav}>
+      {children}
+    </Shell>
+  );
 }
 
 
@@ -401,9 +417,12 @@ function HeaderRight() {
 function Shell({
   children,
   breadcrumbTail,
+  navGroups = workspaceNav,
 }: {
   children: React.ReactNode;
   breadcrumbTail?: string;
+  /** 设置区（/account、/settings）传统一导航 settingsNav；产品页默认只保留工作区组。 */
+  navGroups?: AppShellNavGroup[];
 }) {
   return (
     <Protected>
@@ -420,7 +439,7 @@ function Shell({
           <AppShell
             nav={shellNav}
             sidebarHeader={<WorkspaceSwitcher />}
-            navGroups={workspaceNav}
+            navGroups={navGroups}
             userMenu="sidebar-footer"
             userMenuItems={userPanelItems}
             headerRight={<HeaderRight />}

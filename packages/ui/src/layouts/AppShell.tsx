@@ -2,7 +2,9 @@
 import { useLocation, useNavigate } from '../router'
 import { useEffect, type ReactNode } from 'react'
 import { FolderKanban } from 'lucide-react'
-import { roleSatisfies, useAuth, useWorkspace, type Perm } from '@ploykit/hooks'
+import {
+  permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe, type Perm,
+} from '../lib/useWorkspaceRoleSafe'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -23,29 +25,11 @@ function readSidebarCookieOpen(): boolean {
   return !document.cookie.split('; ').includes('sidebar_state=false')
 }
 
-// 防御式读取工作区角色与生效权限集：AppShell 不强制宿主包 PloykitProvider（存量测试/
-// 渐进接入场景直接渲染）；无 Provider 时两者视为 undefined——perm 专属项隐藏、普通项
-// 可见；rolePerms 未知（旧载荷无 role_perms / 无 Provider）时 permKey 项默认显示。
-// 壳无条件渲染的 UserMenu / SidebarUserMenu / ImpersonationBanner 同款防御（经
-// lib/useAuthSafe），保证「不强制 Provider」对整棵壳成立。
-function useWorkspaceRoleSafe(): { role: string | undefined; rolePerms: string[] | undefined } {
-  try {
-    const current = useWorkspace().current
-    return { role: current?.role, rolePerms: current?.role_perms ?? undefined }
-  } catch {
-    return { role: undefined, rolePerms: undefined }
-  }
-}
-
-// 平台管理员视为全部角色级入口可见（服务端是真正的边界：角色权限接口已对
-// 平台管理员放行，其余工作区权限键仍按其生效权限集鉴权）。无 Provider 回退同前。
-function useIsPlatformAdminSafe(): boolean {
-  try {
-    return useAuth().user?.is_platform_admin === true
-  } catch {
-    return false
-  }
-}
+// 防御式读取工作区角色与生效权限集（Provider-safe）：定义已上提到
+// lib/useWorkspaceRoleSafe，侧栏与用户面板菜单（UserMenu / SidebarUserMenu）共用
+// 同一实现与同一可见性判定，避免两处语义漂移。规则摘要：无 Provider 时 role /
+// rolePerms 均 undefined——perm 专属项隐藏、普通项可见；rolePerms 未知（旧载荷无
+// role_perms / 无 Provider）时 permKey 项默认显示（向后兼容）。
 
 export interface NavItem {
   path: string
@@ -134,17 +118,11 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, 
     settingsContent !== undefined &&
     (location.pathname.startsWith('/settings') || location.pathname.startsWith('/account'))
 
-  // 平铺 nav 与 navGroups 共用的可见性规则：perm 九宫格角色门控（不变）+ permKey
-  // 集合门控——rolePerms 已知（非 undefined）且不含该键 → 隐藏；未知（旧载荷/无
-  // Provider）→ 默认显示，向后兼容。owner 不特判（owner 的 role_perms 即全量目录）。
-  const isNavVisible = (item: NavItem): boolean => {
-    // 平台管理员绕过角色级过滤（permKey 细粒度仍按其生效权限集执行）
-    if (item.perm !== undefined && !isPlatformAdmin && !roleSatisfies(role, item.perm)) return false
-    if (item.permKey !== undefined && rolePerms !== undefined && !rolePerms.includes(item.permKey)) {
-      return false
-    }
-    return true
-  }
+  // 平铺 nav 与 navGroups 共用 lib/useWorkspaceRoleSafe.permissionVisible 的可见性
+  // 规则（与用户面板菜单完全一致）：perm 角色门控 + permKey 集合门控——rolePerms
+  // 已知且不含该键 → 隐藏；未知（旧载荷/无 Provider）→ 默认显示，向后兼容。
+  const isNavVisible = (item: NavItem): boolean =>
+    permissionVisible(item, role, rolePerms, isPlatformAdmin)
 
   const renderNavItem = (item: NavItem) => {
     const active = selected?.path === item.path

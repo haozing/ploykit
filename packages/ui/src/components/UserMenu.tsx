@@ -7,6 +7,9 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { useAuthSafe } from '../lib/useAuthSafe'
+import {
+  permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe, type Perm,
+} from '../lib/useWorkspaceRoleSafe'
 import { toast } from './toast'
 
 export interface UserMenuExtraItem {
@@ -15,6 +18,12 @@ export interface UserMenuExtraItem {
   to?: string
   icon?: ReactNode
   destructive?: boolean
+  /** Minimum workspace role (owner/admin); hidden when the current role does not satisfy it. */
+  perm?: Perm
+  /** Fine-grained permission key (e.g. 'billing:read') resolved against the workspace's
+   *  effective role_perms. Unknown permission set (legacy payload / no Provider) → visible
+   *  (backward compatible, same rule as AppShell's NavItem). */
+  permKey?: string
 }
 
 /** Optional copy overrides — defaults are the built-in Chinese labels. No i18n
@@ -52,11 +61,19 @@ export function initialsOf(name: string, email: string): string {
 
 export function UserMenu({ items = [], logoutRedirect = '/login', labels }: UserMenuProps) {
   // Provider-safe:无 AuthContext 时渲染空（AppShell 不强制宿主包 PloykitProvider）。
-  // useNavigate 在条件返回前调用，保证 Provider 后挂载时 hooks 顺序不变。
+  // useNavigate / 权限读取在条件返回前调用，保证 Provider 后挂载时 hooks 顺序不变。
   const auth = useAuthSafe()
   const navigate = useNavigate()
+  const { role, rolePerms } = useWorkspaceRoleSafe()
+  const isPlatformAdmin = useIsPlatformAdminSafe()
   if (!auth) return null
   const { user, logout } = auth
+
+  // 与 AppShell 侧栏同一可见性规则（lib/useWorkspaceRoleSafe.permissionVisible）：
+  // 无 perm/permKey 恒可见；perm 角色门控；permKey 在已知 role_perms 中做集合包含；
+  // role_perms 未知（旧载荷/无 Provider）时 permKey 项默认显示。
+  const visibleItems = items.filter((item) =>
+    permissionVisible(item, role, rolePerms, isPlatformAdmin))
 
   const name = user?.display_name || user?.email || ''
   const email = user?.email ?? ''
@@ -104,8 +121,8 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
             <ShieldCheck /> 管理控制台
           </DropdownMenuItem>
         )}
-        {items.length > 0 && <DropdownMenuSeparator />}
-        {items.map((item) => (
+        {visibleItems.length > 0 && <DropdownMenuSeparator />}
+        {visibleItems.map((item) => (
           <DropdownMenuItem
             key={item.label}
             variant={item.destructive ? 'destructive' : 'default'}

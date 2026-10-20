@@ -9,6 +9,36 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.10.4] — 2026-10-19
+
+Settings IA + permission-gating batch (raised while reviewing the account vs
+workspace menu split). npm: `@ploykit/ui` 2.0.4.
+
+### Fixed
+- **ui**: `SettingsShell` ignored `permKey` — it filtered only on `perm`
+  (role), so a page gated on a fine-grained permission (e.g. `billing:read`)
+  stayed visible to members without it, and clicking through 403'd. It now
+  uses the same `permissionVisible` predicate as the AppShell sidebar and the
+  user panel (one shared implementation, no drift), and `SettingsNavItem`
+  gains the documented `permKey` field.
+- **ui**: `UserMenuExtraItem` gains `perm` / `permKey` — user-panel entries can
+  finally be permission-gated (a panel carried a `计费账单` shortcut that
+  bypassed `billing:read`). Backward compatible: unknown `role_perms`
+  (legacy payload / no Provider) keeps entries visible.
+- **ui**: the provider-safe workspace/auth probes moved to
+  `lib/useWorkspaceRoleSafe` so AppShell, SettingsShell and both user menus
+  share one implementation (previously AppShell had a private copy).
+
+### Changed (example)
+- **example**: account and workspace settings now render through ONE shell
+  with both nav groups side by side (`settingsNav = [...accountNav,
+  ...workspaceNav]`), so users on `/account/*` see the workspace group and
+  vice versa; the cross-scope `计费账单` entry was removed from the user panel
+  (billing is reachable in the workspace group, with its real gate). Billing
+  stays under the workspace group by design — `plan_code`/orders/
+  subscriptions are workspace-scoped, so it cannot be an account-level page.
+
+
 ## [0.10.3] — 2026-10-19
 
 Product adaptation field report (five findings; four verified in our tree and
