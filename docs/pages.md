@@ -32,7 +32,7 @@
   exist (migrations 018/019); impersonation exists (`POST /api/admin/users/{id}/impersonate`, migration 034).
 - **Frontend pages are at full complement**: in `packages/ui/src/pages/`, auth (register/forgot password/reset/verify email/invite accept, 5 pages),
   account (profile/security/PAT/notification preferences, 4 pages), workspace (general/members/audit/usage/billing/success redirect/scheduling/webhooks, 8 pages),
-  admin (11 pages, see the §2.1 placement note) are all in place; example routes are wired (/account/*, /settings/workspace/*,
+  admin (12 pages including the dedicated admin sign-in door, see the §2.1 placement note) are all in place; example routes are wired (/account/*, /settings/workspace/*,
   /admin, including /settings/workspace/schedules); the source of truth is `example/web/src/routes.tsx`.
 - **No known rough edges**: `queryKeys.notifications` is a tuple, `LoginPage` success navigation is an `onSuccess` prop, the full admin suite
   runs on react-query inside the ui package, and `WorkspaceSwitcher` runs on Base UI Menu.
@@ -52,6 +52,9 @@ AuthShell (centered card, no navigation)
 ├── /reset-password       ResetPasswordPage
 ├── /verify-email         VerifyEmailPage
 └── /invitations          InviteAcceptPage (my invitations list with accept/decline)
+
+Admin door (optional; own minimal centered shell — no AuthShell, no marketing chrome)
+└── /admin/login          AdminSignInPage  (product wires AdminShell's loginPath here; recipe below)
 
 AppShell (the sidebar app shell)
 ├── /app                  Dashboard (product page; OnboardingChecklist is available as a ui component to embed)
@@ -114,10 +117,31 @@ Admin console /admin (standalone layout, not inside the AppShell product shell)
 ```
 
 > Placement note: all admin console pages (shell + overview/users/user detail/workspaces/workspace detail/orders/
-> webhook deliveries/audit/SSO/system settings, 11 pages) and the site-config consumption surface
+> webhook deliveries/audit/SSO/system settings/sign-in door, 12 components) and the site-config consumption surface
 > (useSiteConfig + SiteBannerLayer + the RegisterPage invitation-mode hint) live in `@ploykit/ui`
 > (pages/admin + hooks + components); the product side only mounts them in routes.tsx
 > and passes brand copy. Framework-domain pages belong to the ui package (same convention as SchedulesPage).
+
+**Admin sign-in separation (the recipe)**: the identity system is NOT split — same user table, same session,
+`is_platform_admin` stays the privilege mechanism. What is separated is the door (route + face). Four moves,
+all supported by existing props (packaged as `<AdminSignInPage>`; hand-assembling them on `LoginPage`/`SignInForm`
+gives the identical shape):
+
+1. `passwordOnly` — no code Tab; the admin door is a plain email + password form (no consumer verification codes).
+2. No `registerPath` — the create-account link (zh-CN label "create account") is conditionally rendered;
+   omitting it (pass an empty string to override the `/register` default) hides self-service registration
+   entirely. Admin accounts are privilege-granted
+   (`is_platform_admin`), never self-registered, so a consumer-style register entry on the admin door is a
+   semantic conflict — and a same-face phishing aid.
+3. `resetPath` as needed (omit for out-of-band admin reset flows) + sober copy (AdminSignInPage's
+   `title`/`description` defaults are the zh-CN "Admin Console / Authorized personnel only") —
+   no marketing chrome, no OAuth slots.
+4. A dedicated route (e.g. `/admin/login`, AdminSignInPage defaults its post-sign-in landing to `/admin`) with
+   the product pointing `AdminShell`'s `loginPath` at it — `AdminShell` already forwards the deep link as
+   `state.from`, and the admin door bounces back to it after sign-in (open-redirect-guarded).
+
+Login-integrated 2FA / short-session enforcement for this door is trigger-registered in docs/ROADMAP.md
+(TOTP MFA itself already exists as opt-in AAL2 step-up; see identity MFA service).
 
 **Role × settings-item matrix** (consistent with authz's built-in three-tier explicit sets: owner⊇admin⊃member; the frontend `perm`
 field is judged from `PKWorkspace.role`, while server-side authz.Require already enforces per endpoint — visibility is UX, not security):
@@ -162,7 +186,8 @@ Legend: `=existing` reuses a ready-made endpoint.
 | 14 | Notification preferences | /account/notifications | `GET /api/notification-types` (catalog), `GET/PUT /api/notification-preferences` `=existing` | Switch, DataTable |
 | 15 | Webhooks | /settings/workspace/webhooks | webhooks full set `=existing` | Switch, DataTable, SecretModal |
 | 16 | Operations console | /admin | `/api/admin/*` `=existing` (incl. impersonate) | DataTable+pagination, Select, AlertDialog |
-| 17 | Scheduling management | /settings/workspace/schedules | `/api/schedules` CRUD + preview `=existing` (schedule domain, migration 037) | Switch, DataTable, Dialog |
+| 17 | Admin sign-in door (optional) | /admin/login | `=existing` (`POST /auth/login` — same identity, separate door; see the §2.1 recipe) | Field, Button |
+| 18 | Scheduling management | /settings/workspace/schedules | `/api/schedules` CRUD + preview `=existing` (schedule domain, migration 037) | Switch, DataTable, Dialog |
 
 The inbox (NotificationBell) already exists and gets no standalone page; "recent notifications" reuses the same query as an optional tab on the notification preferences page.
 For per-page **content-area structure and reference-file mapping**, see §4.5.
@@ -195,9 +220,9 @@ packages/ui/src/
 │   ├── workspace/           # MembersPage / WorkspaceGeneralPage / WorkspaceAuditPage /
 │   │                        # UsagePage / BillingPage / BillingSuccessPage / WebhooksPage /
 │   │                        # SchedulesPage
-│   ├── admin/               # AdminShell + shared.ts + overview/users/user detail/workspaces/
-│   │                        # workspace detail/orders/webhook deliveries/audit/SSO/system settings
-│   │                        # (shell + 10 pages)
+│   ├── admin/               # AdminShell + shared.ts + AdminSignInPage + overview/users/user detail/
+│   │                        # workspaces/workspace detail/orders/webhook deliveries/audit/SSO/
+│   │                        # system settings (shell + door + 10 pages)
 │   └── billing/             # empty placeholder directory (the billing page lives in pages/workspace/)
 ├── layouts/                 # AppShell.tsx / AuthShell.tsx / SettingsShell.tsx
 ├── hooks/ provider/ lib/    # data hooks, PloykitProvider (queryKeys), ws-query-bridge, utils

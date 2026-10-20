@@ -9,6 +9,45 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.11.0] — 2026-10-20
+
+Sign-in extraction batch (field reports #30/#31): the login flow becomes a
+reusable surface. npm: `@ploykit/ui` 2.1.0 (new exports; LoginPage semantics
+unchanged — the existing LoginPage test suite passes untouched, which is the
+regression floor).
+
+### Added
+- **ui**: `<SignInForm>` — the entire sign-in flow extracted from LoginPage
+  (code + 60s cooldown, password path, OAuth buttons, open-redirect guard,
+  error mapping), shell-free and embeddable in product pages. New surface:
+  `legalNote?: ReactNode` or `termsUrl?` + `privacyUrl?: string` (auto-renders
+  the "signing in constitutes agreement" line with links — a compliance
+  requirement for paid/UGC products that had no slot), `flow?: 'tabs' |
+  'email-first'` (email-first shows only email + send on the first screen;
+  the code field appears after the code is sent — progressive disclosure for
+  mobile), and `loginRedirectTarget?: string` (overrides the default '/app'
+  fallback). Labels: 12 auth keys join `KitLabels` (resolution order:
+  explicit prop → provider → byte-identical defaults).
+- **ui**: `<SignInModal>` — Dialog wrapper around SignInForm (X/focus/Esc/
+  overlay close). **On success it hard-navigates the full page by default**
+  (the #24 lesson is built in: the client's CSRF self-heal is insurance, not
+  a license for in-page login; a full reload is the bulletproof floor) — pass
+  `onSuccess` to opt into soft handling.
+- **ui**: `<AdminSignInPage>` — the admin-door recipe in one component
+  (#31): password-only, no registration link, sober defaults ("管理控制台 ·
+  仅限授权人员"), lands on `adminPath` (default '/admin'), deep links via
+  AdminShell's `state.from` honored through the open-redirect guard. Identity
+  is NOT split — same user table, session and `is_platform_admin` privilege;
+  only the door and route are separate. The recipe (passwordOnly + no
+  registerPath + sober copy + dedicated route for AdminShell's loginPath) is
+  documented in docs/pages.md; admin 2FA enforcement is on the ROADMAP (the
+  real substance is 2FA + short sessions; the door is the policy landing
+  point).
+- **example**: in-flow sign-in wired on the blog post page — an unauthenticated
+  comment attempt opens `SignInModal` in place instead of a full-page
+  navigation (the wiring discipline for the new surface).
+
+
 ## [0.10.5] — 2026-10-20
 
 Shell/slots enhancement batch from the migration consumer's shell-deepening

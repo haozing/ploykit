@@ -14,6 +14,8 @@ export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 export { AppProviders } from './AppProviders'
 
 export { LoginPage } from './pages/LoginPage'
+export { SignInForm } from './auth/SignInForm'
+export { SignInModal } from './auth/SignInModal'
 export type { OAuthProviderOption, LoginPageProps } from './pages/LoginPage'
 export { LandingPage } from './pages/LandingPage'
 export type { Feature as LandingFeature, Plan as LandingPlan } from './pages/LandingPage'
@@ -157,6 +159,8 @@ export type { SiteBannerLayerProps } from './components/SiteBannerLayer'
 export { ImpersonationBanner } from './components/ImpersonationBanner'
 
 export { AdminShell } from './pages/admin/AdminShell'
+export { AdminSignInPage } from './pages/admin/AdminSignInPage'
+export type { AdminSignInPageProps } from './pages/admin/AdminSignInPage'
 export { OverviewPage } from './pages/admin/OverviewPage'
 export { UsersPage } from './pages/admin/UsersPage'
 export { UserDetailPage } from './pages/admin/UserDetailPage'

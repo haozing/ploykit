@@ -72,6 +72,33 @@ export interface KitLabels {
   userMenuAria?: string
   /** logout 抛错时的 toast（默认「退出登录失败，请稍后在登录页重试」）。 */
   logoutFailedToast?: string
+
+  // ---- SignInForm / SignInModal（登录表单 / 登录弹层）----
+  /** 邮箱字段 label（默认「邮箱」）。 */
+  signInEmailLabel?: string
+  /** 验证码字段 label（默认「验证码」）。 */
+  signInCodeLabel?: string
+  /** 密码字段 label（默认「密码」）。 */
+  signInPasswordLabel?: string
+  /** 发送验证码按钮初始文案（默认「发送」；「发送中…」「重新发送」两态为组件内置文案）。 */
+  sendCode?: string
+  /** 冷却期按钮文案；函数值键（默认 `重发（${seconds}s）`）。 */
+  resendWithCooldown?: (seconds: number) => string
+  /** 验证码登录 Tab（默认「验证码登录」）。 */
+  signInCodeTab?: string
+  /** 密码登录 Tab（默认「密码登录」）。 */
+  signInPasswordTab?: string
+  /** 验证码模式提交按钮（默认「登录」）。 */
+  signInSubmitCode?: string
+  /** 密码模式提交按钮（默认「登录」）。 */
+  signInSubmitPassword?: string
+  /** 忘记密码链接（默认「忘记密码？」）。 */
+  signInForgotPassword?: string
+  /** 创建账号链接（默认「创建账号」）。 */
+  signInCreateAccount?: string
+  /** termsUrl+privacyUrl 齐备时自动渲染的法律行；函数值键，返回 ReactNode
+   *  （默认「登录即同意 服务条款 与 隐私政策」链接行）。SignInForm 的 legalNote prop 优先于本键。 */
+  signInLegalNote?: (termsUrl: string, privacyUrl: string) => ReactNode
 }
 
 /** 内置默认文案：与历史硬编码逐字一致——不挂 Provider 的消费方零变化。 */
@@ -105,6 +132,26 @@ export const DEFAULT_KIT_LABELS = {
   logout: '退出登录',
   userMenuAria: '用户菜单',
   logoutFailedToast: '退出登录失败，请稍后在登录页重试',
+
+  signInEmailLabel: '邮箱',
+  signInCodeLabel: '验证码',
+  signInPasswordLabel: '密码',
+  sendCode: '发送',
+  resendWithCooldown: (seconds: number) => `重发（${seconds}s）`,
+  signInCodeTab: '验证码登录',
+  signInPasswordTab: '密码登录',
+  signInSubmitCode: '登录',
+  signInSubmitPassword: '登录',
+  signInForgotPassword: '忘记密码？',
+  signInCreateAccount: '创建账号',
+  signInLegalNote: (termsUrl: string, privacyUrl: string) => (
+    <>
+      登录即同意{' '}
+      <a href={termsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">服务条款</a>
+      {' '}与{' '}
+      <a href={privacyUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">隐私政策</a>
+    </>
+  ),
 } satisfies Required<KitLabels>
 
 const KitLabelsContext = createContext<Required<KitLabels> | null>(null)
