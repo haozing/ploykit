@@ -9,6 +9,43 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.10.5] — 2026-10-20
+
+Shell/slots enhancement batch from the migration consumer's shell-deepening
+proposal (delivery-audit-orkome-shell-slots-proposal-2026-10-20 — five
+findings, all verified in source, all addressed). npm: `@ploykit/ui` 2.0.5.
+
+### Added
+- **ui**: `AppShell` gains `sidebarMiddle?: ReactNode` — a content slot
+  rendered between the flat nav and the nav groups, for interaction-dense
+  custom lists (project navigations with row actions) that the pure
+  path/label/icon nav protocol cannot host. Filters/highlights untouched;
+  collapsible semantics stay the consumer's (same contract as
+  `sidebarFooter`).
+- **ui**: `WorkspaceSwitcher` gains a progressive-adoption data seam —
+  `data?: Partial<WorkspaceSwitcherData>` (field-level merge over
+  `useWorkspaceSwitch`; consumers that do not mount WorkspaceContext feed
+  their own `current`/`list`/`switchTo`/`create`), `menuFooter?: ReactNode`
+  (rendered after the built-in create block), and `billingHref?: string`
+  (the quota-guidance link was hardcoded). Pure-injection consumers must
+  supply `switchTo`/`create` themselves; the hook path is unchanged when no
+  props are passed. Row-level trailing action buttons remain deliberately
+  unsupported (ARIA menu anti-pattern — documented in the proposal).
+- **ui**: `KitLabelsProvider` — the kit-level label override seam (26 keys
+  across WorkspaceSwitcher / DataTable / SecretModal / UserMenu &
+  SidebarUserMenu, including function keys for interpolated strings like the
+  "workspace created" toast). Resolution order: component `labels` prop →
+  provider → built-in defaults (existing per-component props keep winning;
+  defaults are the exact legacy strings, so provider-less consumers see zero
+  change). The DataTable pagination line is now a single overridable text
+  node (consequence of the function key).
+- **ui**: `SecretModal` accepts `secretValue: string | string[]` — an array
+  renders N masked entries with one copy-all action (joined with `
+`); the
+  "我已保存" gate semantics are unchanged. `PageHeader` gains
+  `leading?: ReactNode` (back-arrow/badge slot before the title).
+
+
 ## [0.10.4] — 2026-10-19
 
 Settings IA + permission-gating batch (raised while reviewing the account vs

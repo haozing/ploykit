@@ -7,6 +7,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { useAuthSafe } from '../lib/useAuthSafe'
+import { applyKitLabelOverrides, useKitLabels } from '../labels/kit-labels'
 import {
   permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe, type Perm,
 } from '../lib/useWorkspaceRoleSafe'
@@ -43,12 +44,14 @@ export const DEFAULT_USER_MENU_LABELS = {
 } satisfies Required<UserMenuLabels>
 
 export interface UserMenuProps {
-  
+
   items?: UserMenuExtraItem[]
-  
+
   logoutRedirect?: string
 
-  /** 文案覆盖（可选）：缺省沿用内置中文，行为对存量消费方零变化。 */
+  /** 文案覆盖（可选）：最高优先级（prop → KitLabelsProvider → 内置中文）。
+   *  缺省时从 KitLabelsProvider 取值（未挂 Provider 则内置中文），
+   *  行为对存量消费方零变化。 */
   labels?: UserMenuLabels
 }
 
@@ -66,6 +69,11 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
   const navigate = useNavigate()
   const { role, rolePerms } = useWorkspaceRoleSafe()
   const isPlatformAdmin = useIsPlatformAdminSafe()
+  // 文案解析顺序：prop > KitLabelsProvider > 内置默认。useKitLabels 未挂
+  // Provider 时返回默认值，故逐键覆盖（跳过 undefined，与 Provider 合并语义
+  // 一致）即三层回退；向后兼容：既有 labels prop 消费方行为不变。
+  const kit = useKitLabels()
+  const L = applyKitLabelOverrides(kit, labels)
   if (!auth) return null
   const { user, logout } = auth
 
@@ -84,7 +92,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
     } catch {
       
       
-      toast.error(labels?.logoutFailedToast ?? DEFAULT_USER_MENU_LABELS.logoutFailedToast)
+      toast.error(L.logoutFailedToast)
     }
     navigate(logoutRedirect)
   }
@@ -95,7 +103,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
         className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground
                    transition-colors hover:bg-accent hover:text-accent-foreground
                    aria-expanded:bg-accent"
-        aria-label={labels?.userMenuAria ?? DEFAULT_USER_MENU_LABELS.userMenuAria}
+        aria-label={L.userMenuAria}
       >
         <Avatar size="sm">
           {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={name} /> : null}
@@ -114,7 +122,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate('/account/profile')}>
-          <Settings /> {labels?.accountSettings ?? DEFAULT_USER_MENU_LABELS.accountSettings}
+          <Settings /> {L.accountSettings}
         </DropdownMenuItem>
         {user?.is_platform_admin && (
           <DropdownMenuItem onClick={() => navigate('/admin')}>
@@ -134,7 +142,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={handleLogout}>
-          <LogOut /> {labels?.logout ?? DEFAULT_USER_MENU_LABELS.logout}
+          <LogOut /> {L.logout}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

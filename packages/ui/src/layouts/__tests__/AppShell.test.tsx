@@ -221,6 +221,53 @@ describe('AppShell 侧栏增强（自 stock 镜像化后上提至组合层）', 
   })
 })
 
+describe('AppShell sidebarMiddle 插槽', () => {
+  // 断言 DOM 顺序：平铺 nav 组 < sidebarMiddle 组 < navGroups 组
+  // （SidebarContent 内三组同级，各含自己的 data-slot="sidebar-group"）。
+  async function renderWithMiddle() {
+    const result = render(
+      <RouterTestHarness initialEntries={['/app']}>
+        <AppShell
+          brand="MyProduct"
+          nav={nav}
+          navGroups={[{ group: '工作区', items: [{ path: '/ws', label: '工作区列表' }] }]}
+          sidebarMiddle={<div data-testid="sidebar-middle">项目导航</div>}
+        >
+          <div>page-body</div>
+        </AppShell>
+      </RouterTestHarness>,
+    )
+    await waitFor(() => expect(screen.queryAllByText('page-body').length).toBeGreaterThan(0))
+    return result
+  }
+
+  it('提供时在平铺 nav 之后、navGroups 之前渲染自定义内容（DOM 顺序）', async () => {
+    const { container } = await renderWithMiddle()
+    const content = container.querySelector('[data-slot="sidebar-content"]')
+    expect(content).not.toBeNull()
+    expect(screen.getByTestId('sidebar-middle')).toBeInTheDocument()
+    expect(screen.getByText('项目导航')).toBeInTheDocument()
+
+    const groups = Array.from(content!.querySelectorAll(':scope > [data-slot="sidebar-group"]'))
+    const navGroup = groups.find((g) => g.textContent?.includes('概览'))
+    const middleGroup = groups.find((g) => g.querySelector('[data-testid="sidebar-middle"]'))
+    const tailGroup = groups.find((g) => g.textContent?.includes('工作区列表'))
+    expect(navGroup).toBeDefined()
+    expect(middleGroup).toBeDefined()
+    expect(tailGroup).toBeDefined()
+    expect(navGroup!.compareDocumentPosition(middleGroup!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(middleGroup!.compareDocumentPosition(tailGroup!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+
+  it('未提供时不渲染多余的空 SidebarGroup', async () => {
+    await renderAt('/app', false)
+    const content = document.querySelector('[data-slot="sidebar-content"]')
+    expect(content).not.toBeNull()
+    // 只有平铺 nav 一个组
+    expect(content!.querySelectorAll(':scope > [data-slot="sidebar-group"]')).toHaveLength(1)
+  })
+})
+
 describe('AppShell permKey 细粒度权限过滤（role_perms 集合门控）', () => {
   const permNav = [
     { path: '/app', label: '概览' },

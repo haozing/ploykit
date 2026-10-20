@@ -114,6 +114,63 @@ await waitFor(() => expect(screen.getByText('...')).toBeInTheDocument())
 
 三个 Provider 都不相互依赖，`AppProviders` 的嵌套顺序只是惯例；推荐统一挂最外层，保证登录前页面也能用 `useConfirm` / `toast`。
 
+## kit 文案覆盖（KitLabelsProvider）
+
+kit 组件内置中文文案。产品要面向非中文用户时，不必逐个组件传 props——在应用根部（或已登录子树）挂一层 `KitLabelsProvider`，一个 labels 对象覆盖全部接入组件（`WorkspaceSwitcher` / `DataTable` / `SecretModal` / `UserMenu` / `SidebarUserMenu`）：
+
+```tsx
+import { KitLabelsProvider } from '@ploykit/ui'
+
+<KitLabelsProvider
+  labels={{
+    logout: 'Sign out',
+    accountSettings: 'Account settings',
+    previousPage: 'Previous',
+    nextPage: 'Next',
+    // 函数值键用于带插值的文案，整体替换：
+    workspaceCreatedToast: (name) => `Workspace "${name}" created`,
+    paginationTotal: (total, page, pages) => `${total} rows · page ${page}/${pages}`,
+  }}
+>
+  <App />
+</KitLabelsProvider>
+```
+
+**解析顺序（高 → 低）**：组件级 `labels` prop（如 `UserMenu` 的 `UserMenuLabels`，向后兼容保留）→ 最近的 `KitLabelsProvider` 值 → 内置中文默认。嵌套 Provider 时内层基于外层的已解析值做覆盖，未覆盖的键继承外层。
+
+合并语义：接口扁平（string / 函数叶子），逐键浅覆盖即完整合并；传 `undefined` 等于不覆盖（不清掉下层值）；函数值键（`workspaceCreatedToast` / `paginationTotal`）整体替换、不做拼接。部分覆盖即可——未涉及的键自动落回默认值；不挂 Provider 时行为与历史版本逐字一致（零变化）。
+
+### 全部键（`KitLabels`）
+
+| 键 | 类型 | 默认值 | 用在 |
+|---|---|---|---|
+| `workspaceSwitcherAria` | string | `切换工作区` | WorkspaceSwitcher 触发按钮 aria-label |
+| `workspacePickerPlaceholder` | string | `选择工作区` | 无当前工作区时的占位 |
+| `workspaceGroupLabel` | string | `工作区` | 下拉菜单分组标题 |
+| `createWorkspace` | string | `新建工作区` | 「新建工作区」菜单项 |
+| `workspaceNamePlaceholder` | string | `工作区名称` | 创建面板输入 placeholder |
+| `newWorkspaceNameAria` | string | `新工作区名称` | 创建面板输入 aria-label |
+| `creating` | string | `创建中…` | 创建按钮进行中 |
+| `create` | string | `创建` | 创建按钮 |
+| `cancel` | string | `取消` | 取消按钮 |
+| `createErrorFallback` | string | `创建工作区失败，请稍后重试` | 创建失败兜底错误 |
+| `workspaceCreatedToast` | `(name) => string` | `` name => `工作区「${name}」已创建` `` | 创建成功 toast |
+| `quotaGuidancePrefix` | string | `已达当前工作区数上限，可在` | 配额指引 · 链接前段 |
+| `quotaGuidanceLinkText` | string | `设置→计费` | 配额指引 · 链接文字 |
+| `quotaGuidanceSuffix` | string | `查看套餐与配额` | 配额指引 · 链接后段 |
+| `quotaBillingHref` | string | `/settings/workspace/billing` | 配额指引链接目标（组件 `billingHref` prop 优先级更高） |
+| `paginationTotal` | `(total, page, pages) => string` | `` (t,p,pg) => `共 ${t} 条 · 第 ${p}/${pg} 页` `` | DataTable 分页统计行 |
+| `paginationLoading` | string | `加载中…` | 分页栏加载中 |
+| `previousPage` | string | `上一页` | DataTable 上一页按钮 |
+| `nextPage` | string | `下一页` | DataTable 下一页按钮 |
+| `emptyState` | string | `本页没有数据，可返回上一页` | DataTable 翻页后空页提示 |
+| `confirmSaved` | string | `我已保存` | SecretModal 确认后关闭按钮 |
+| `confirmPending` | string | `请先确认已保存` | SecretModal 未确认时按钮（禁用） |
+| `accountSettings` | string | `账户设置` | UserMenu / SidebarUserMenu 菜单项 |
+| `logout` | string | `退出登录` | UserMenu / SidebarUserMenu 菜单项 |
+| `userMenuAria` | string | `用户菜单` | 触发按钮 aria-label |
+| `logoutFailedToast` | string | `退出登录失败，请稍后在登录页重试` | logout 抛错 toast |
+
 ## Headless hooks（`@ploykit/hooks`）
 
 | 导出 | 契约 |
@@ -156,6 +213,45 @@ await waitFor(() => expect(screen.getByText('...')).toBeInTheDocument())
 ```
 
 侧栏导航与用户面板共用 `lib/useWorkspaceRoleSafe` 的同一套判定（`roleSatisfies` / `permKeyVisible` / `permissionVisible`），两处语义不会漂移。
+
+### AppShell 的 sidebarMiddle 插槽
+
+`nav`（平铺项）与 `navGroups`（分组）之间的自定义内容插槽：
+
+```tsx
+<AppShell
+  nav={nav}
+  navGroups={navGroups}
+  sidebarMiddle={<ProjectNav />}  // 仅传了才渲染，外包自己的 SidebarGroup
+/>
+```
+
+- 定位：平铺 nav 之后、navGroups 之前——适合放**交互密集的自定义列表**（如带行内操作的项目导航），纯 path/label/icon 的 nav 协议承载不了的内容。
+- 折叠语义由消费方自理（与 `sidebarFooter` 同规）：侧栏折叠到 icon 档时插槽内容不会自动收成图标，需要自己响应 `group-data-[collapsible=icon]`。
+- 不影响设置模式：`/settings/*` 下侧栏仍整体切换为 `settingsContent`，插槽只在产品导航分支渲染。
+
+### WorkspaceSwitcher 数据注入缝
+
+`WorkspaceSwitcher` 默认（无 props）走 `useWorkspaceSwitch()`（要求 `PloykitProvider`），行为与历史版本完全一致。未挂 Provider 的产品可经 `data` prop 喂自己的状态：
+
+```tsx
+<WorkspaceSwitcher
+  data={{
+    current: myCurrent,                       // { id, name, slug?, plan_code? } | null
+    list: myList,                             // 同形状数组
+    switchTo: (id) => router.push(`?ws=${id}`),
+    create: async (name) => { /* 单参；slug 决策归消费方 */ },
+    // creating?: boolean; error?: string | null  — 均可选
+  }}
+  menuFooter={<MyMenuExtras />}               // 渲染在「新建工作区」块之后的菜单页脚
+  billingHref="/acme/billing"                 // 配额指引链接目标（默认 /settings/workspace/billing）
+/>
+```
+
+- **字段级合并**：`data` 的每个字段独立覆盖钩子对应字段，未给的字段落回钩子（或安全空值）。已挂 Provider 的产品可以只注入 `current`/`list` 而保留内置创建流程。
+- **纯注入消费方**（不挂 Provider）必须自带 `switchTo` / `create`——钩子在这类应用里拿不到上下文，组件对其做了 Provider-safe 降级（不抛错、按空值渲染）。
+- `error` 双轨：注入的 `error` 是 `string | null`（**原样显示**，消费方负责文案本地化）；钩子的 `error` 是 `unknown`（走 `apiErrorMessage` 翻译，402/E_QUOTA_EXCEEDED 自动带计费指引）。
+- `billingHref` 优先级：组件 prop → `KitLabelsProvider` 的 `quotaBillingHref` → 内置默认 `/settings/workspace/billing`。
 
 ### DataTable
 

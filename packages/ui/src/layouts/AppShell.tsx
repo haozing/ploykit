@@ -53,7 +53,7 @@ export interface AppShellNavGroup {
   items: NavItem[]
 }
 
-export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, navGroups, sidebarFooter, headerRight, userMenu = 'header', userMenuItems, breadcrumbTail = null, settingsContent }: {
+export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, navGroups, sidebarMiddle, sidebarFooter, headerRight, userMenu = 'header', userMenuItems, breadcrumbTail = null, settingsContent }: {
   children: ReactNode
   nav?: NavItem[]
   brand?: string
@@ -71,6 +71,13 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, 
   /** 分组导航（带 SidebarGroupLabel，在 nav 平铺项之后渲染；perm/permKey 过滤按当前
    *  工作区角色与 role_perms，与平铺 nav 共用同一可见性规则）。 */
   navGroups?: AppShellNavGroup[]
+
+  /** Content slot rendered between the flat nav and the nav groups — for
+   *  interaction-dense custom lists (e.g. project navigations with row
+   *  actions) that the pure path/label/icon nav protocol cannot host.
+   *  Collapsible semantics are the consumer's responsibility, same as
+   *  sidebarFooter. */
+  sidebarMiddle?: ReactNode
 
   sidebarFooter?: ReactNode
 
@@ -173,6 +180,11 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, 
                   <SidebarMenu>{items.filter(isNavVisible).map(renderNavItem)}</SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
+              {sidebarMiddle !== undefined && (
+                <SidebarGroup>
+                  <SidebarGroupContent>{sidebarMiddle}</SidebarGroupContent>
+                </SidebarGroup>
+              )}
               {navGroups?.map((group) => {
                 // 可见性统一走 isNavVisible（perm 角色门控 + permKey 集合门控，与平铺 nav 同规则）
                 const visible = group.items.filter(isNavVisible)

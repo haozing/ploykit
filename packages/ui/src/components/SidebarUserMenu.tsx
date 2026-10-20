@@ -13,15 +13,18 @@ import {
   permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe,
 } from '../lib/useWorkspaceRoleSafe'
 import { toast } from './toast'
+import { applyKitLabelOverrides, useKitLabels } from '../labels/kit-labels'
 import {
-  DEFAULT_USER_MENU_LABELS, initialsOf,
+  initialsOf,
   type UserMenuExtraItem, type UserMenuLabels,
 } from './UserMenu'
 
 export interface SidebarUserMenuProps {
   items?: UserMenuExtraItem[]
   logoutRedirect?: string
-  /** 文案覆盖（可选）：缺省沿用内置中文，行为对存量消费方零变化。 */
+  /** 文案覆盖（可选）：最高优先级（prop → KitLabelsProvider → 内置中文）。
+   *  缺省时从 KitLabelsProvider 取值（未挂 Provider 则内置中文），
+   *  行为对存量消费方零变化。 */
   labels?: UserMenuLabels
 }
 
@@ -35,6 +38,9 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
   const navigate = useNavigate()
   const { role, rolePerms } = useWorkspaceRoleSafe()
   const isPlatformAdmin = useIsPlatformAdminSafe()
+  // 文案解析顺序：prop > KitLabelsProvider > 内置默认（与 UserMenu 同款合并）。
+  const kit = useKitLabels()
+  const L = applyKitLabelOverrides(kit, labels)
   if (!auth) return null
   const { user, logout } = auth
 
@@ -50,7 +56,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
     try {
       await logout()
     } catch {
-      toast.error(labels?.logoutFailedToast ?? DEFAULT_USER_MENU_LABELS.logoutFailedToast)
+      toast.error(L.logoutFailedToast)
     }
     navigate(logoutRedirect)
   }
@@ -66,7 +72,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
                 className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
               />
             }
-            aria-label={labels?.userMenuAria ?? DEFAULT_USER_MENU_LABELS.userMenuAria}
+            aria-label={L.userMenuAria}
           >
             <Avatar className="h-8 w-8 rounded-lg">
               {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={name} /> : null}
@@ -124,7 +130,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem variant="destructive" onClick={handleLogout}>
-                <LogOut /> {labels?.logout ?? DEFAULT_USER_MENU_LABELS.logout}
+                <LogOut /> {L.logout}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>

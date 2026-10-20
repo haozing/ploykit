@@ -101,7 +101,9 @@ describe('MembersPage', () => {
     expect(screen.getByText('admin@example.com')).toBeInTheDocument()
     expect(screen.getByText('所有者')).toBeInTheDocument()
     
-    expect(await screen.findByText('2')).toBeInTheDocument()
+    // 分页底栏整行由 paginationTotal 渲染为单个文本节点（kit 文案可整体覆盖），
+    // 信封 total=2 体现在行文案里。
+    expect(await screen.findByText('共 2 条 · 第 1/1 页')).toBeInTheDocument()
   })
 
   it('邀请成员：提交正确的 path 与 payload', async () => {

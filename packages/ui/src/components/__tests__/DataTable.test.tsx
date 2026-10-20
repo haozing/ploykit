@@ -53,9 +53,9 @@ describe('DataTable', () => {
         pagination={{ page: 2, pageSize: 20, total: 42, onPageChange }}
       />,
     )
-    
-    expect(screen.getByText('42')).toBeInTheDocument()
-    expect(screen.getByText('2/3')).toBeInTheDocument()
+    // 分页行经 paginationTotal 函数键渲染为单个文本节点（文案可整体覆盖，
+    // 见 labels/kit-labels）——整行匹配而非拆散的 span 断言。
+    expect(screen.getByText('共 42 条 · 第 2/3 页')).toBeInTheDocument()
     const prev = screen.getByRole('button', { name: '上一页' })
     const next = screen.getByRole('button', { name: '下一页' })
     expect(prev).toBeEnabled()
@@ -77,7 +77,7 @@ describe('DataTable', () => {
     )
     expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '下一页' })).toBeEnabled()
-    expect(screen.getByText('1/3')).toBeInTheDocument()
+    expect(screen.getByText('共 42 条 · 第 1/3 页')).toBeInTheDocument()
     first.unmount()
 
     render(
@@ -90,7 +90,7 @@ describe('DataTable', () => {
     )
     expect(screen.getByRole('button', { name: '上一页' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled()
-    expect(screen.getByText('3/3')).toBeInTheDocument()
+    expect(screen.getByText('共 42 条 · 第 3/3 页')).toBeInTheDocument()
   })
 
   it('空 rows 时不渲染分页底栏（空态行为不受 pagination 影响）', () => {

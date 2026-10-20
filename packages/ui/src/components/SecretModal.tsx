@@ -8,6 +8,7 @@ import { Button } from './ui/button'
 import { Checkbox } from './ui/checkbox'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
 import { Spinner } from './ui/spinner'
+import { useKitLabels } from '../labels/kit-labels'
 
 export function SecretModal({ open, onOpenChange, secretName, secretValue, title }: {
   open: boolean
@@ -15,11 +16,17 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
   onOpenChange: (open: boolean) => void
   /** 密钥名称，用于默认标题「{secretName} 创建成功」。 */
   secretName: string
-  /** 仅显示一次的密钥明文。 */
-  secretValue: string
+  /** 仅显示一次的密钥明文。传数组时逐项展示（沿用单值的只读 mono 样式），复制动作为单个「复制全部」按钮——写入剪贴板的是各项按顺序以 '\n' 连接的纯文本；「我已保存」门控语义不变。 */
+  secretValue: string | string[]
   /** 可选标题，覆盖默认的「{secretName} 创建成功」——用于"重置/查看"等非创建成功场景。 */
   title?: string
 }) {
+  const L = useKitLabels()
+  // 数组归一化：单值与 [单值] 走同一条渲染/复制路径；join('\n') 把复制目标统一成纯文本（单值 join 后仍是原字符串，行为不变）。
+  const values = Array.isArray(secretValue) ? secretValue : [secretValue]
+  // 状态重置的依赖取内容签名而非引用——父组件内联字面量数组每次渲染都是新引用，
+  // 按引用比较会在用户勾选「我已保存」后被无谓重置 confirmed。
+  const valueKey = values.join('\n')
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
@@ -35,7 +42,7 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
       clearTimeout(copyTimer.current)
       copyTimer.current = null
     }
-  }, [open, secretValue])
+  }, [open, valueKey])
 
   
   useEffect(() => () => {
@@ -43,10 +50,9 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
   }, [])
 
   const copy = async () => {
-    
-    
+    // 数组场景：以 '\n' 连接后一次性写入（纯文本回退口径）；单值 join 结果即原字符串。
     try {
-      await navigator.clipboard.writeText(secretValue)
+      await navigator.clipboard.writeText(values.join('\n'))
       setCopied(true)
       setCopyFailed(false)
     } catch {
@@ -72,28 +78,49 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
           </DialogDescription>
         </DialogHeader>
         {/* 密文经 InputGroupInput 只读展示（mono 字体，可框内滚动/选中复制）；
-            复制按钮沿用原 copied / copyFailed 双状态机文案，成功态图标 Copy→Check。 */}
-        <InputGroup>
-          <InputGroupInput
-            readOnly
-            value={secretValue}
-            aria-label="密钥（只显示一次）"
-            className="font-mono text-sm"
-          />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton onClick={copy}>
+            复制按钮沿用原 copied / copyFailed 双状态机文案，成功态图标 Copy→Check。
+            数组值：逐项一行只读框（复用同一套样式），复制动作只保留一个「复制全部」——
+            相比为每项配 reveal/copy，单按钮复用现有双状态机最简单、口径一致（'\n' 连接纯文本）。 */}
+        {values.length === 1 ? (
+          <InputGroup>
+            <InputGroupInput
+              readOnly
+              value={values[0]}
+              aria-label="密钥（只显示一次）"
+              className="font-mono text-sm"
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton onClick={copy}>
+                {copied ? <CheckIcon /> : <CopyIcon />}
+                {copied ? '已复制' : copyFailed ? '复制失败，请手动复制' : '复制'}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {values.map((value, index) => (
+              <InputGroup key={index}>
+                <InputGroupInput
+                  readOnly
+                  value={value}
+                  aria-label={`密钥 ${index + 1}（共 ${values.length} 项，只显示一次）`}
+                  className="font-mono text-sm"
+                />
+              </InputGroup>
+            ))}
+            <InputGroupButton onClick={copy} className="self-start">
               {copied ? <CheckIcon /> : <CopyIcon />}
-              {copied ? '已复制' : copyFailed ? '复制失败，请手动复制' : '复制'}
+              {copied ? '已复制全部' : copyFailed ? '复制失败，请手动复制' : '复制全部'}
             </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={confirmed} onCheckedChange={setConfirmed} />
           我已将密钥保存到安全的地方
         </label>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} disabled={!confirmed}>
-            {confirmed ? '我已保存' : '请先确认已保存'}
+            {confirmed ? L.confirmSaved : L.confirmPending}
           </Button>
         </DialogFooter>
       </DialogContent>

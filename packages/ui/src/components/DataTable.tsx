@@ -4,6 +4,7 @@ import { cn } from '../lib/utils'
 import { PageEmpty } from './Page'
 import { Skeleton } from './ui/skeleton'
 import { Button } from './ui/button'
+import { useKitLabels } from '../labels/kit-labels'
 
 export interface Column<T> {
   key: string
@@ -40,8 +41,7 @@ export interface DataTableProps<T> {
 }
 
 export function DataTable<T>({ columns, rows, rowKey, loading = false, empty, onRowClick, renderExpanded, pagination }: DataTableProps<T>) {
-  
-  
+  const L = useKitLabels()
   
   const stalePage =
     !!pagination && !loading && rows.length === 0 && (pagination.total > 0 || pagination.page > 1)
@@ -77,7 +77,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading = false, empty, on
             ) : stalePage ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  本页没有数据，可返回上一页
+                  {L.emptyState}
                 </td>
               </tr>
             ) : (
@@ -117,14 +117,10 @@ export function DataTable<T>({ columns, rows, rowKey, loading = false, empty, on
         >
           {/* B-users-8：加载中不显示"共 0 条 · 第 1/1 页"假总数——置灰为加载文案 */}
           {loading ? (
-            <span>加载中…</span>
+            <span>{L.paginationLoading}</span>
           ) : (
             <span>
-              共 <span className="font-medium text-foreground">{pagination.total}</span> 条 · 第{' '}
-              <span className="font-medium text-foreground">
-                {pagination.page}/{lastPage}
-              </span>{' '}
-              页
+              {L.paginationTotal(pagination.total, pagination.page, lastPage)}
             </span>
           )}
           <div className="flex gap-2">
@@ -134,7 +130,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading = false, empty, on
               disabled={loading || pagination.page <= 1}
               onClick={() => pagination.onPageChange(pagination.page - 1)}
             >
-              上一页
+              {L.previousPage}
             </Button>
             <Button
               size="sm"
@@ -142,7 +138,7 @@ export function DataTable<T>({ columns, rows, rowKey, loading = false, empty, on
               disabled={loading || pagination.page >= lastPage}
               onClick={() => pagination.onPageChange(pagination.page + 1)}
             >
-              下一页
+              {L.nextPage}
             </Button>
           </div>
         </div>

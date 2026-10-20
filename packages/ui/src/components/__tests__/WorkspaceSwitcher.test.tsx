@@ -162,4 +162,26 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
     const [, slug] = (await submitName('ab')) as [string, string]
     expect(slug).toMatch(/^ab-[a-z0-9]{4}$/)
   })
+
+  it('billingHref：覆盖配额指引链接的默认 /settings/workspace/billing', async () => {
+    mockError = new ApiError(402, 'E_QUOTA_EXCEEDED', 'quota exceeded for workspaces')
+    render(
+      <RouterTestHarness initialEntries={['/app']}>
+        <SidebarProvider>
+          <WorkspaceSwitcher billingHref="/acme/billing" />
+        </SidebarProvider>
+      </RouterTestHarness>,
+    )
+    await act(async () => {})
+
+    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '设置→计费' })).toHaveAttribute('href', '/acme/billing')
+  })
 })
+
+// 数据注入缝（data / menuFooter）与无 WorkspaceContext 的纯注入用例见
+// WorkspaceSwitcher.injection.test.tsx——该文件不 mock useWorkspaceSwitch，
+// 真实钩子在无 Provider 时同步抛错，才能覆盖 Provider-safe 降级路径本身。

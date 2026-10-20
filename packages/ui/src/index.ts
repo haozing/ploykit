@@ -120,6 +120,8 @@ export { UserMenu } from './components/UserMenu'
 export type { UserMenuExtraItem, UserMenuLabels } from './components/UserMenu'
 export { SidebarUserMenu } from './components/SidebarUserMenu'
 export type { SidebarUserMenuProps } from './components/SidebarUserMenu'
+export { KitLabelsProvider, useKitLabels, DEFAULT_KIT_LABELS } from './labels/kit-labels'
+export type { KitLabels } from './labels/kit-labels'
 export { OnboardingChecklist } from './components/OnboardingChecklist'
 
 export { RegisterPage } from './pages/auth/RegisterPage'

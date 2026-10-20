@@ -10,13 +10,19 @@ import {
 
 
 
-export function PageHeader({ title, description, actions }: {
+export function PageHeader({ title, description, actions, leading }: {
   title: string; description?: string; actions?: ReactNode
+  /** 标题行起始处的插槽（如返回箭头/徽标），渲染在 h1 之前并与标题水平居中对齐。 */
+  leading?: ReactNode
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      {/* leading 与 h1 同处标题行（items-center 对齐）；不传 leading 时结构退化为原有的单列布局。 */}
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        <div className="flex items-center gap-3">
+          {leading}
+          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+        </div>
         {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
