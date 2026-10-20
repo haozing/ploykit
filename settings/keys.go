@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -29,6 +30,8 @@ const (
 
 	KeySiteVerificationMeta = "site_verification_meta"
 
+	KeyShellNavHidden = "shell_nav_hidden"
+
 	KindInfo, KindWarn = "info", "warn"
 	FlagOff, FlagOn    = "0", "1"
 )
@@ -45,6 +48,7 @@ var KeyOrder = []string{
 	KeyRateLimitPerUserPerMin, KeyRateLimitPerIPPerMin, KeyRateLimitAllowlist,
 	KeySMTPHost, KeySMTPPort, KeySMTPUser, KeySMTPPass, KeySMTPFrom,
 	KeySiteVerificationMeta,
+	KeyShellNavHidden,
 }
 
 var Defaults = map[string]string{
@@ -63,6 +67,7 @@ var Defaults = map[string]string{
 	KeySMTPPass:             "",
 	KeySMTPFrom:             "",
 	KeySiteVerificationMeta: "",
+	KeyShellNavHidden:       "",
 }
 
 var Descriptions = map[string]string{
@@ -81,6 +86,7 @@ var Descriptions = map[string]string{
 	KeySMTPPass:             "SMTP 认证密码：保存后仅以掩码回显；落库前经 PLOYKIT_SEAL_KEY 加密，未配置该环境变量时拒绝保存",
 	KeySMTPFrom:             "发件人邮箱（如 no-reply@example.com；空 = 未配置发件人）",
 	KeySiteVerificationMeta: "站长验证：粘贴搜索引擎给的完整 <meta> 标签或 name|content 对（如 google-site-verification|abc123）；清空即移除",
+	KeyShellNavHidden:       "产品壳侧边栏隐藏菜单：JSON 字符串数组，元素为菜单路径（如 [\"/realtime\",\"/settings/workspace/schedules\"]）；空 = 全部显示",
 }
 
 // IsSensitive reports whether the key holds a credential that must never be
@@ -112,7 +118,8 @@ func IsSensitive(key string) bool { return key == KeySMTPPass }
 // the env-freeze trap. Hence the documented fork instead of one rule.
 func seedable(key string) bool {
 	switch key {
-	case KeySMTPHost, KeySMTPPort, KeySMTPUser, KeySMTPPass, KeySMTPFrom, KeySiteVerificationMeta:
+	case KeySMTPHost, KeySMTPPort, KeySMTPUser, KeySMTPPass, KeySMTPFrom, KeySiteVerificationMeta,
+		KeyShellNavHidden:
 		return false
 	}
 	return true
@@ -471,6 +478,23 @@ func Validate(key, value string) error {
 		return nil
 	case KeySiteVerificationMeta:
 		return validateVerificationMeta(value)
+	case KeyShellNavHidden:
+		if value == "" {
+			return nil // 空 = 全部显示
+		}
+		var paths []string
+		if err := json.Unmarshal([]byte(value), &paths); err != nil {
+			return fmt.Errorf("shell_nav_hidden 必须是 JSON 字符串数组（如 [\"/realtime\"]）")
+		}
+		if len(paths) > 64 {
+			return fmt.Errorf("shell_nav_hidden 最多 64 项（当前 %d）", len(paths))
+		}
+		for _, p := range paths {
+			if p == "" || len(p) > 120 || !strings.HasPrefix(p, "/") {
+				return fmt.Errorf("shell_nav_hidden 元素必须是 以 / 开头、≤120 字符的菜单路径（当前 %q）", p)
+			}
+		}
+		return nil
 	default:
 		return fmt.Errorf("未知设置键 %q（白名单：%s）", key, strings.Join(KeyOrder, ", "))
 	}
