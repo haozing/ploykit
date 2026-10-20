@@ -78,12 +78,12 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     expect(switchTo).toHaveBeenCalledTimes(1)
     expect(switchTo).toHaveBeenCalledWith('ws-y')
 
-    // 重新打开菜单 → 新建工作区 → 注入的单参 create('Delta')（slug 决策归消费方）
+    // 重新打开菜单 → 新建工作区 → 注入的 create('Delta', { slug: 'delta' })（第二参携带 kit 生成的 slug，消费方可忽略）
     fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
     fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Delta' } })
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
-    await waitFor(() => expect(create).toHaveBeenCalledWith('Delta'))
+    await waitFor(() => expect(create).toHaveBeenCalledWith('Delta', { slug: 'delta' }))
 
     // resolve 后面板收起（注入流程成功即关闭）
     await waitFor(() => expect(screen.queryByLabelText('新工作区名称')).not.toBeInTheDocument())
@@ -99,7 +99,7 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Epsilon' } })
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
 
-    await waitFor(() => expect(failingCreate).toHaveBeenCalledWith('Epsilon'))
+    await waitFor(() => expect(failingCreate).toHaveBeenCalledWith('Epsilon', { slug: 'epsilon' }))
     expect(screen.getByLabelText('新工作区名称')).toBeInTheDocument()
   })
 
@@ -110,6 +110,30 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent('工作区数量已达套餐上限')
+  })
+
+  it('注入 error（ApiError E_QUOTA_EXCEEDED）：apiErrorMessage 翻译并点亮计费指引分支（orkome 报告 #2）', async () => {
+    const { ApiError } = await import('@ploykit/client')
+    const { props } = injectedProps({ error: new ApiError(402, 'E_QUOTA_EXCEEDED', 'quota exceeded for workspaces') })
+    await renderSwitcher(<WorkspaceSwitcher {...props} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('配额已用尽')
+    // 死分支修复的核心断言：注入模式下配额引导可达
+    expect(screen.getByText(/已达当前工作区数上限/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '设置→计费' })).toBeInTheDocument()
+  })
+
+  it('注入 create 二参携带 kit 生成的 slug（slugifyWorkspaceName 同源，orkome 报告 #5）', async () => {
+    const { props, create } = injectedProps()
+    await renderSwitcher(<WorkspaceSwitcher {...props} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Delta' } })
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    await waitFor(() => expect(create).toHaveBeenCalledWith('Delta', { slug: 'delta' }))
   })
 
   it('menuFooter：渲染在下拉菜单内、新建工作区块之后', async () => {

@@ -240,8 +240,8 @@ import { KitLabelsProvider } from '@ploykit/ui'
     current: myCurrent,                       // { id, name, slug?, plan_code? } | null
     list: myList,                             // 同形状数组
     switchTo: (id) => router.push(`?ws=${id}`),
-    create: async (name) => { /* 单参；slug 决策归消费方 */ },
-    // creating?: boolean; error?: string | null  — 均可选
+    create: async (name, { slug }) => { /* slug 为 kit 生成的 slugifyWorkspaceName(name)，可直接采用；亦可忽略自行生成 */ },
+    // creating?: boolean; error?: unknown  — 均可选
   }}
   menuFooter={<MyMenuExtras />}               // 渲染在「新建工作区」块之后的菜单页脚
   billingHref="/acme/billing"                 // 配额指引链接目标（默认 /settings/workspace/billing）
@@ -250,7 +250,8 @@ import { KitLabelsProvider } from '@ploykit/ui'
 
 - **字段级合并**：`data` 的每个字段独立覆盖钩子对应字段，未给的字段落回钩子（或安全空值）。已挂 Provider 的产品可以只注入 `current`/`list` 而保留内置创建流程。
 - **纯注入消费方**（不挂 Provider）必须自带 `switchTo` / `create`——钩子在这类应用里拿不到上下文，组件对其做了 Provider-safe 降级（不抛错、按空值渲染）。
-- `error` 双轨：注入的 `error` 是 `string | null`（**原样显示**，消费方负责文案本地化）；钩子的 `error` 是 `unknown`（走 `apiErrorMessage` 翻译，402/E_QUOTA_EXCEEDED 自动带计费指引）。
+- `error` 双轨：注入的 `error` 是 `unknown`——**推荐直接传原始 ApiError**（走 `apiErrorMessage` 翻译，402/E_QUOTA_EXCEEDED 自动点亮计费指引分支）；`string` 兼容保留（视为已本地化文案原样显示，但**无法**参与配额判定——注入配额错误请传 ApiError）。钩子的 `error` 同走这条管线。
+- **slug 生成**：`create` 第二参携带 kit 生成的 slug；消费方自建 slug 时请改用导出的 `slugifyWorkspaceName(name)` 对齐语义，避免各抄一份随版本漂移。
 - `billingHref` 优先级：组件 prop → `KitLabelsProvider` 的 `quotaBillingHref` → 内置默认 `/settings/workspace/billing`。
 
 ### DataTable
@@ -391,6 +392,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 漏了 `--color-warning` 时 `<Alert variant="warning">` 会渲染成无颜色的卡片（类名在 DOM、规则不生成），这正是 2026-10-19 下游采纳时发现的问题。
 
 > **vite8 / rolldown 注意**：有消费方报告 `@import "@ploykit/ui/tailwind.css"` 在 vite8 的 CSS 管线里被解析成 `dist/index.js/tailwind.css`（ENOENT）。本仓在 vite 8.1.6 / 8.3.4 × npm/pnpm 布局下未能复现；若你撞到，等价 workaround 是绕开该 subpath、直接写 `@source "<node_modules 相对路径>/@ploykit/ui/src";`（两者内容等价）。
+>
+> **构建别名注意**（orkome 2026-10-20 补充）：若你为包管理器/vitest 解析把 `@ploykit/ui` **前缀别名到了入口文件**（如 alias 到 `dist/index.js`），`@import "@ploykit/ui/tailwind.css"` 会被跟着解析成 `dist/index.js/tailwind.css`（ENOENT）——alias 在 exports 之前生效，与 exports 形状无关。正确姿势是**别名到包目录而非入口文件**（`@ploykit/ui` → `<path>/@ploykit/ui`），或等价地绕开 subpath 直接写 `@source`。
 
 ## 自定义三个层级
 

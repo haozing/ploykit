@@ -27,7 +27,10 @@ const slugSuffix = (n = 4): string => {
 }
 
 
-const slugify = (s: string): string => {
+/** 工作区名 → slug：小写、非法字符转 -、≤40 字符、<4 补随机后缀（orkome
+ *  采纳报告 #5 导出——注入 create 的消费方调用它即可与 kit 内置流程对齐，
+ *  避免各抄一份随版本漂移）。 */
+export function slugifyWorkspaceName(s: string): string {
   let slug = s
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
@@ -38,14 +41,24 @@ const slugify = (s: string): string => {
   return slug
 }
 
+/** slugify 内部别名（保持调用点简洁）。 */
+const slugify = slugifyWorkspaceName
+
 /** 注入数据的行形状（镜像 useWorkspaceSwitch 返回的 PKWorkspace 的消费子集）。 */
 export interface WorkspaceSwitcherData {
   current?: { id: string; name: string; slug?: string; plan_code?: string } | null
   list?: Array<{ id: string; name: string; slug?: string; plan_code?: string }>
   switchTo: (id: string) => void | Promise<void>
-  create: (name: string) => void | Promise<void>
+  /** 单参 `(name)` 为既有契约（slug 决策归消费方，可用导出的
+   *  slugifyWorkspaceName 对齐）；声明为二参可选 `(name, kit)` 时 kit 会在
+   *  调用时带上 kit 生成的 slug，消费方可直接采用。 */
+  create: (name: string, kit?: { slug: string }) => void | Promise<void>
   creating?: boolean
-  error?: string | null
+  /** 创建失败对象（orkome 采纳报告 #2）：推荐直接传原始 ApiError——kit 用
+   *  apiErrorMessage 统一翻译，且 E_QUOTA_EXCEEDED / 402 会点亮计费引导分支。
+   *  string 兼容保留（历史契约：消费方已本地化的文案，原样显示），但 string
+   *  无法参与配额判定，注入配额错误请传 ApiError。 */
+  error?: unknown
 }
 
 export interface WorkspaceSwitcherProps {
@@ -91,8 +104,9 @@ export function WorkspaceSwitcher({ data, menuFooter, billingHref }: WorkspaceSw
 
 
 
-  // 注入的 error 契约为 string | null（消费方已本地化的文案，原样显示）；hook 的
-  // error 是 unknown（ApiError 等），走 apiErrorMessage 翻译——两轨互不影响。
+  // 注入的 error 契约为 unknown：string 视为已本地化文案原样显示；其余
+  // （推荐 ApiError）走 apiErrorMessage 翻译，isApiError 判定点亮配额引导
+  // 分支——与 hook 轨同一条错误管线，两轨互不影响。
   const createError = typeof error === 'string'
     ? error
     : error === null ? null : apiErrorMessage(error, L.createErrorFallback)
@@ -102,10 +116,11 @@ export function WorkspaceSwitcher({ data, menuFooter, billingHref }: WorkspaceSw
     const trimmed = name.trim()
     if (!trimmed) return
     if (injectedCreate !== undefined) {
-      // 注入流程：单参契约（slug 决策归消费方）。resolve 即收起面板；reject 时
-      // 面板保持打开——错误提示由消费方在 menuFooter 等处自行展示。
+      // 注入流程：name + kit 生成的 slug（slugifyWorkspaceName 同源，消费方可
+      // 采用亦可忽略）。resolve 即收起面板；reject 时面板保持打开——错误提示
+      // 由消费方在 menuFooter 等处自行展示。
       try {
-        await injectedCreate(trimmed)
+        await injectedCreate(trimmed, { slug: slugify(trimmed) })
         setName('')
         setShowCreate(false)
       } catch {

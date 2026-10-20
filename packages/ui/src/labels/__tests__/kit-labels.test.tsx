@@ -86,6 +86,9 @@ describe('KitLabelsProvider', () => {
     expect(DEFAULT_KIT_LABELS.confirmSaved).toBe('我已保存')
     expect(DEFAULT_KIT_LABELS.confirmPending).toBe('请先确认已保存')
     expect(DEFAULT_KIT_LABELS.logout).toBe('退出登录')
+    expect(DEFAULT_KIT_LABELS.pageLoading).toBe('加载中…')
+    expect(DEFAULT_KIT_LABELS.pageEmpty).toBe('暂无数据')
+    expect(DEFAULT_KIT_LABELS.pageRetry).toBe('重试')
   })
 
   it('useKitLabels 未挂 Provider 时返回内置默认（Provider-safe）', () => {

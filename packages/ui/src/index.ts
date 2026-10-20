@@ -36,7 +36,8 @@ export { ConfirmProvider, useConfirm } from './components/ConfirmDialog'
 
 export { NotificationBell } from './components/NotificationBell'
 
-export { WorkspaceSwitcher } from './components/WorkspaceSwitcher'
+export { WorkspaceSwitcher, slugifyWorkspaceName } from './components/WorkspaceSwitcher'
+export type { WorkspaceSwitcherData } from './components/WorkspaceSwitcher'
 
 export { SecretModal, ImpactConfirmation } from './components/SecretModal'
 

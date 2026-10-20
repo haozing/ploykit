@@ -9,7 +9,57 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [0.11.0] — 2026-10-20
+## [0.11.1] — 2026-10-20
+
+Adoption-seam batch from the migration consumer's v0.10.5 follow-up report
+(delivery-audit-orkome-v105-adoption-addendum-2026-10-20 — seven findings,
+all verified in source). npm only: `@ploykit/hooks` 0.8.2, `@ploykit/ui`
+2.1.1. No Go changes.
+
+### Added
+- **hooks**: `PloykitProvider` gains `workspaceHeaderSource?: 'kit' |
+  'consumer'`. Default `'kit'` (unchanged behavior); `'consumer'` means the
+  provider never registers the global `X-Workspace-Id` header source —
+  consumers that run their own workspace-switching state register their own
+  getter via `@ploykit/client`'s `setWorkspaceIdProvider` and are no longer
+  overwritten (the data-crossing risk in the report). In `'kit'` mode the
+  registration is also now id-diff-gated (a layout effect writing only when
+  the current workspace id actually changes, instead of every render) and is
+  revoked on unmount — the same-commit timing child layers rely on is
+  preserved and locked by tests.
+- **ui**: `slugifyWorkspaceName` is now exported (same rules the built-in
+  create flow uses: lowercase, ≤40 chars, random suffix below 4). The
+  injected `data.create` seam receives `(name, { slug })` — the kit-generated
+  slug rides along; single-arg consumers are unaffected (extra argument
+  ignored). Stop copying the slug rules per consumer.
+- **ui**: `PageHeader` gains `titleClassName?: string`, and the `h1` now
+  carries built-in `min-w-0 truncate` plus a `title` attribute — long names
+  truncate instead of wrapping, and archived-state de-emphasis migrates via
+  the class seam (consumers adopting PageHeader had lost both behaviors).
+- **ui**: `KitLabels` gains `pageLoading` / `pageEmpty` / `pageRetry` — the
+  `PageLoading` / `PageEmpty` / `PageError` triad defaults are no longer
+  hardcoded Chinese (bilingual consumers rendering the kit states directly
+  leaked Chinese in `en`; explicit props keep winning over the provider;
+  defaults are the exact legacy strings).
+
+### Changed
+- **ui**: `WorkspaceSwitcherData.error` widens from `string | null` to
+  `unknown`. Strings keep rendering verbatim (legacy localized-copy
+  contract), but pass the original `ApiError` to get unified translation
+  AND the quota-guidance branch — under the old type, injected errors could
+  never light up the `E_QUOTA_EXCEEDED` billing guidance (dead branch). The
+  runtime pipeline was already dual-track; only the declared contract and
+  docs catch up.
+
+### Docs
+- **ui**: README Tailwind integration gains a "build-alias" note — a
+  prefix alias pointing at the package *entry file* (e.g.
+  `dist/index.js`) hijacks `@import "@ploykit/ui/tailwind.css"` into an
+  ENOENT (alias resolution precedes exports); alias the package *directory*
+  instead. The data-seam README section now documents the `unknown` error
+  contract and the `(name, { slug })` create signature.
+
+
 
 Sign-in extraction batch (field reports #30/#31): the login flow becomes a
 reusable surface. npm: `@ploykit/ui` 2.1.0 (new exports; LoginPage semantics

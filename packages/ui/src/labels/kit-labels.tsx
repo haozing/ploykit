@@ -73,6 +73,15 @@ export interface KitLabels {
   /** logout 抛错时的 toast（默认「退出登录失败，请稍后在登录页重试」）。 */
   logoutFailedToast?: string
 
+  // ---- Page（三态件：PageLoading / PageEmpty / PageError）----
+  /** PageLoading 默认文案（默认「加载中…」；orkome 采纳报告 #3——双语产品
+   *  直接用 kit 三态件时曾露中文）。 */
+  pageLoading?: string
+  /** PageEmpty 默认文案（默认「暂无数据」）。 */
+  pageEmpty?: string
+  /** PageError 重试按钮文案（默认「重试」）。 */
+  pageRetry?: string
+
   // ---- SignInForm / SignInModal（登录表单 / 登录弹层）----
   /** 邮箱字段 label（默认「邮箱」）。 */
   signInEmailLabel?: string
@@ -133,6 +142,10 @@ export const DEFAULT_KIT_LABELS = {
   userMenuAria: '用户菜单',
   logoutFailedToast: '退出登录失败，请稍后在登录页重试',
 
+  pageLoading: '加载中…',
+  pageEmpty: '暂无数据',
+  pageRetry: '重试',
+
   signInEmailLabel: '邮箱',
   signInCodeLabel: '验证码',
   signInPasswordLabel: '密码',
@@ -171,8 +184,9 @@ export function applyKitLabelOverrides(base: Required<KitLabels>, labels: KitLab
 
 /**
  * kit 级文案 Provider：一个 labels 对象覆盖全部接入组件
- * （WorkspaceSwitcher / DataTable / SecretModal / UserMenu / SidebarUserMenu）。
- * 组件级 `labels` prop（如 UserMenu 的 UserMenuLabels）优先级仍高于本 Provider。
+ * （WorkspaceSwitcher / DataTable / SecretModal / UserMenu / SidebarUserMenu /
+ * Page 三态件）。组件级 `labels` prop（如 UserMenu 的 UserMenuLabels）优先级
+ * 仍高于本 Provider。
  *
  * `labels` 传部分键即可，其余键落回默认值；嵌套 Provider 时内层基于外层的
  * 已解析值做覆盖（未覆盖键继承外层，而非重置回默认）。

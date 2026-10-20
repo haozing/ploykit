@@ -1,5 +1,5 @@
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, setWorkspaceIdProvider } from '@ploykit/client'
 import type {
@@ -172,22 +172,29 @@ export function useWorkspaceCtx(): WorkspaceContextValue {
 
 
 
-export function PloykitProvider({ children, queryClient }: {
+export function PloykitProvider({ children, queryClient, workspaceHeaderSource }: {
   children: ReactNode
-  
+
   queryClient?: QueryClient
+  /** X-Workspace-Id 请求头的真相归属（orkome 采纳报告 #1）：
+   *  'kit'（默认）——Provider 把自身 current 工作区注册进 @ploykit/client 的
+   *  全局 workspaceIdProvider；消费方必须用 kit 的 switchTo 切换工作区，自行
+   *  维护切换状态会让 kit 的陈旧 current 覆盖消费方的真相（串数据）。
+   *  'consumer'——Provider 完全不注册，消费方自行调
+   *  setWorkspaceIdProvider(自己的 getter)，切换语义归消费方。 */
+  workspaceHeaderSource?: 'kit' | 'consumer'
 }) {
   const [qc] = useState(() => queryClient ?? createDefaultQueryClient())
-  
-  
-  
+
+
+
   useEffect(() => {
     qc.setQueryDefaults(queryKeys.admin, { staleTime: 0 })
   }, [qc])
   return (
     <QueryClientProvider client={qc}>
       <AuthLayer>
-        <WorkspaceLayer>{children}</WorkspaceLayer>
+        <WorkspaceLayer workspaceHeaderSource={workspaceHeaderSource ?? 'kit'}>{children}</WorkspaceLayer>
       </AuthLayer>
     </QueryClientProvider>
   )
@@ -264,7 +271,10 @@ function AuthLayer({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-function WorkspaceLayer({ children }: { children: ReactNode }) {
+function WorkspaceLayer({ children, workspaceHeaderSource }: {
+  children: ReactNode
+  workspaceHeaderSource: 'kit' | 'consumer'
+}) {
   const { user, workspaces } = useAuthCtx()
   const [currentId, setCurrentId] = useState<string | null>(null)
   const userId = user?.id
@@ -331,7 +341,38 @@ function WorkspaceLayer({ children }: { children: ReactNode }) {
   
   
   const current = workspaces.find((ws) => ws.id === currentId) ?? null
-  setWorkspaceIdProvider(() => current?.id ?? null)
+
+  // 全局 workspace 头注册（orkome 采纳报告 #1）：仅 workspaceHeaderSource==='kit'
+  // 时注册，且仅在 current.id 变化时写入（含首次与清空）——渲染期不再无条件
+  // last-write-wins 覆盖。useLayoutEffect 保证同一提交内子层的 effect / 请求
+  // 发起时读到的已是新 id（时序语义与旧实现一致，由 WorkspaceLayer.test.tsx
+  // 锁死）。'consumer' 模式完全不注册：消费方自行 setWorkspaceIdProvider，
+  // 切换真相归消费方，kit 的 current 不再覆盖消费方注册。
+  const headerId = workspaceHeaderSource === 'kit' ? current?.id ?? null : null
+  const registeredHeaderId = useRef<string | null | undefined>(undefined)
+  useLayoutEffect(() => {
+    if (workspaceHeaderSource !== 'kit') {
+      // 中途切到 consumer 模式：撤回自己的注册，把全局缝让给消费方。
+      if (registeredHeaderId.current !== undefined) {
+        registeredHeaderId.current = undefined
+        setWorkspaceIdProvider(() => null)
+      }
+      return
+    }
+    if (registeredHeaderId.current === headerId) return
+    registeredHeaderId.current = headerId
+    setWorkspaceIdProvider(() => headerId)
+  }, [headerId, workspaceHeaderSource])
+
+  // 卸载时清掉自己的注册，避免留下指向已卸载树状态的陈旧 getter。
+  useEffect(() => {
+    return () => {
+      if (registeredHeaderId.current !== undefined) {
+        setWorkspaceIdProvider(() => null)
+        registeredHeaderId.current = undefined
+      }
+    }
+  }, [])
 
   
   
