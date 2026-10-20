@@ -15,6 +15,10 @@ Settings IA + permission-gating batch (raised while reviewing the account vs
 workspace menu split). npm: `@ploykit/ui` 2.0.4.
 
 ### Fixed
+- **settings**: `TestEffectiveAndGateIntegration` was missing `shell_nav_hidden`
+  in its expected key set (the key landed without updating this assertion —
+  CI's DB job went red on the next push). Expectation completed; the clean-DB
+  serial suite is green.
 - **ui**: `SettingsShell` ignored `permKey` — it filtered only on `perm`
   (role), so a page gated on a fine-grained permission (e.g. `billing:read`)
   stayed visible to members without it, and clicking through 403'd. It now

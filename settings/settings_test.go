@@ -356,6 +356,7 @@ func TestEffectiveAndGateIntegration(t *testing.T) {
 		KeySMTPPass:               "",
 		KeySMTPFrom:               "",
 		KeySiteVerificationMeta:   "",
+		KeyShellNavHidden:         "",
 	}, eff)
 	allow, domains, err := envOnly.RegistrationGate(ctx)
 	require.NoError(t, err)
