@@ -6,8 +6,9 @@ export interface Plan {
   name: string; price: string; period?: string; recommended?: boolean
   features: string[]; cta: string
 }
+export interface LandingNavLink { to: string; label: string }
 
-export function LandingPage({ brand, tagline, description, features, plans, registerPath = '/register', loginPath = '/login' }: {
+export function LandingPage({ brand, tagline, description, features, plans, registerPath = '/register', loginPath = '/login', navLinks = [] }: {
   brand: string
   tagline: string
   description: string
@@ -17,6 +18,15 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
   registerPath?: string
   
   loginPath?: string
+
+  /**
+   * 顶栏与页脚的站内导航（定价/文档/关于一类静态页）。
+   *
+   * 放在这里而不是让产品手写 header：这些页面通常是 `hydrate: 'none'` 的
+   * 纯静态页，导航必须渲染成真 `<a href>`（服务端渲染出来的就是），否则
+   * 零 JS 的页面点不动。传空数组即不渲染导航区。
+   */
+  navLinks?: LandingNavLink[]
 }) {
   return (
     <div className="min-h-screen bg-card">
@@ -24,6 +34,15 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <span className="text-xl font-bold text-foreground">{brand}</span>
           <div className="flex items-center gap-3">
+            {navLinks.map((l) => (
+              <a
+                key={l.to}
+                href={l.to}
+                className="hidden px-3 py-2 text-sm font-medium text-muted-foreground rounded-lg hover:bg-muted hover:text-foreground sm:block"
+              >
+                {l.label}
+              </a>
+            ))}
             <Link to={loginPath} className="px-4 py-2 text-sm font-medium text-foreground rounded-lg hover:bg-muted">
               登录
             </Link>
@@ -81,6 +100,15 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
       </section>
 
       <footer className="border-t border-border py-8 text-center text-sm text-muted-foreground">
+        {navLinks.length > 0 && (
+          <nav className="mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            {navLinks.map((l) => (
+              <a key={l.to} href={l.to} className="hover:text-foreground hover:underline">
+                {l.label}
+              </a>
+            ))}
+          </nav>
+        )}
         © 2026 {brand}. All rights reserved.
       </footer>
     </div>

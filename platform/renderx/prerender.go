@@ -22,7 +22,21 @@ var (
 	ErrEmptyRenderOutput = errors.New("renderx: empty render output")
 
 	ErrMissingTitle = errors.New("renderx: head directives emitted but no <title>")
+
+	// ErrServerSuspense marks output that contains React's client-rendering
+	// fallback marker. renderToString does NOT wait for Suspense: a page that
+	// lazily imports anything on its render path produces
+	// `<!--$!--><template ...><!--/$-->` instead of the component's markup, and
+	// the document is non-empty — so the empty-output assertion (A2) cannot see
+	// it. Without this check the failure ships as "page renders blank in
+	// production" (the marker is invisible in a browser, and the template
+	// content is the only clue).
+	ErrServerSuspense = errors.New("renderx: page suspended during server render (lazy import inside a static route?)")
 )
+
+// serverSuspenseMarker is React's SSR placeholder for a boundary that could not
+// be resolved synchronously.
+var serverSuspenseMarker = []byte("<!--$!-->")
 
 const defaultPrerenderConcurrency = 4
 
@@ -46,7 +60,11 @@ func (v ViteAssets) hydrateScript() string {
 // 一次性渲染入口，预渲染 / handler 未命中 / 缓存回填共用此组装。
 // 预览（草稿渲染）、邮件合成、调试等场景直接调用即可，语义与预渲染管线
 // 完全一致（props 规范化、空输出校验、head 指令与 <title> 校验）。
-func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets) (CacheEntry, error) {
+//
+// hydrate=none 的页面不注入 props 脚本与水合入口：两者唯一的消费者都是
+// 客户端入口，没有它就没有意义——留在 HTML 里只会把 props 白发给所有人，
+// 还会让缓存条目随 props 变化而失效。
+func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props json.RawMessage, lang string, assets ViteAssets, hydrate Hydrate) (CacheEntry, error) {
 	propsJSON, err := normalizeProps(props)
 	if err != nil {
 		return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）props 非法: %w", location, pageID, err)
@@ -57,6 +75,13 @@ func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props 
 	}
 	if strings.TrimSpace(res.HTML) == "" {
 		return CacheEntry{}, fmt.Errorf("%w: 页面 %s（pageId=%s）", ErrEmptyRenderOutput, location, pageID)
+	}
+	// A non-empty body can still be nothing but React's client-rendering
+	// placeholder (see ErrServerSuspense): renderToString never waits for a
+	// dynamic import, so a suspended boundary degrades to a marker plus the
+	// fallback. Catch it here rather than shipping a blank page.
+	if strings.Contains(res.HTML, string(serverSuspenseMarker)) {
+		return CacheEntry{}, fmt.Errorf("%w: 页面 %s（pageId=%s）", ErrServerSuspense, location, pageID)
 	}
 	var head []HeadEntry
 	hasHeadDirective := false
@@ -72,7 +97,7 @@ func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props 
 			return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）指令解析失败: %w", location, pageID, err)
 		}
 	}
-	doc, err := RenderDocument(Document{
+	docIn := Document{
 		Lang:          lang,
 		Head:          head,
 		CSS:           assets.CSS,
@@ -80,7 +105,9 @@ func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props 
 		PropsJSON:     []byte(propsJSON),
 		PageID:        pageID,
 		HydrateScript: assets.hydrateScript(),
-	})
+		NoHydration:   hydrate == HydrateNone,
+	}
+	doc, err := RenderDocument(docIn)
 	if err != nil {
 		return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）文档合成失败: %w", location, pageID, err)
 	}
@@ -309,7 +336,7 @@ func renderPrerenderTask(ctx context.Context, deps PrerenderDeps, reg *Registry,
 	if err != nil {
 		return PrerenderManifestEntry{}, fmt.Errorf("页面 %s（pageId=%s）取数失败: %w", location, t.route.PageID, err)
 	}
-	ent, err := RenderOnce(ctx, deps.Renderer, t.route.PageID, location, props, deps.Lang, deps.ViteAssets)
+	ent, err := RenderOnce(ctx, deps.Renderer, t.route.PageID, location, props, deps.Lang, deps.ViteAssets, t.route.Hydrate)
 	if err != nil {
 		return PrerenderManifestEntry{}, err
 	}

@@ -127,3 +127,58 @@ func TestViteBuildID(t *testing.T) {
 		t.Fatal("OutputVersion 不能为空")
 	}
 }
+
+// ViteManifestFiles 是 AssetCacheManifest 的数据来源：它必须列出构建产出的
+// **全部**资源，且只列这些。少一个 → 那个资源失去长缓存；多一个（或宽松匹配）
+// → 把不可替换的路径钉成 immutable。
+func TestViteManifestFiles(t *testing.T) {
+	data := []byte(`{
+	  "index.html": {"file": "assets/index-abc12345.js", "css": ["assets/index-abc12345.css"]},
+	  "src/app.tsx": {"file": "assets/app-def67890.js", "css": []},
+	  "node_modules/x/f.woff2": {"file": "assets/f-ghi13579.woff2"}
+	}`)
+	files, err := ViteManifestFiles(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"/assets/app-def67890.js",
+		"/assets/f-ghi13579.woff2",
+		"/assets/index-abc12345.css",
+		"/assets/index-abc12345.js",
+	}
+	if len(files) != len(want) {
+		t.Fatalf("got %v, want %v", files, want)
+	}
+	for i := range want {
+		if files[i] != want[i] {
+			t.Errorf("[%d] got %q, want %q", i, files[i], want[i])
+		}
+	}
+}
+
+func TestViteManifestFilesDedupesAndToleratesSlash(t *testing.T) {
+	// 同一个 CSS 既可能出现在入口的 css 里，也可能被多个 chunk 引用。
+	data := []byte(`{
+	  "a": {"file": "assets/x-abc12345.js", "css": ["assets/shared-def67890.css"]},
+	  "b": {"file": "/assets/y-ghi13579.js", "css": ["/assets/shared-def67890.css"]}
+	}`)
+	files, err := ViteManifestFiles(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 3 {
+		t.Fatalf("重复条目应去重且斜杠归一, got %v", files)
+	}
+	for _, f := range files {
+		if !strings.HasPrefix(f, "/") || strings.HasPrefix(f, "//") {
+			t.Errorf("路径应恰好一个前导斜杠: %q", f)
+		}
+	}
+}
+
+func TestViteManifestFilesRejectsBadJSON(t *testing.T) {
+	if _, err := ViteManifestFiles([]byte("not json")); err == nil {
+		t.Fatal("非法 JSON 应报错")
+	}
+}

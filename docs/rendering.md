@@ -42,6 +42,107 @@ Mechanical criterion: **presence of a Loader**.
 
 Both types share one render pipeline (same bundle, same directive channel); only data fetching and the cache layer differ. The Handler makes no external distinction — both are "serve from cache when present, render on the spot when not". (If the pricing page needed plan data from billing, it would have a Loader and land in the runtime layer — typing is decided by the mechanical criterion, not semantic guesswork.)
 
+### 2.1 `hydrate`: the second axis — does this HTML need JavaScript at all?
+
+`render` says *where the HTML comes from*; `hydrate` says *whether the browser needs any JavaScript afterwards*. They are orthogonal, and the default keeps every existing route unchanged:
+
+| `hydrate` | Default | What is injected | When to use |
+|---|---|---|---|
+| `load` | ✅ | props script + client entry → `hydrateRoot` | Anything with state, effects, event handlers, or client-side routing needs |
+| `none` | | Nothing. The HTML is final; the page ships **zero JS** | Purely declarative pages: marketing/landing, static content whose only "interaction" is `<a href>` navigation |
+
+```tsx
+'/': { component: Product, render: 'static', hydrate: 'none' }  // 0 KB of JS
+```
+
+Rules that the pipeline enforces (they fail loudly, not silently):
+
+- `hydrate: 'none'` on a `csr` route is a construction-time error — a CSR page that is never mounted renders nothing.
+- A `hydrate: 'none'` document carries **neither** the props script nor the entry script. The props script's only consumer is the client entry, so leaving it behind would broadcast page data to every visitor for nothing and tie cache entries to props they no longer render. CSS is still emitted: styling is part of the final HTML.
+- The choice is **per route, not per page tree**. Deciding "this page needs zero JS" is a claim about what the page does; if a page later grows a button with an `onClick`, it must switch back to `load` (or move that button into its own island — see §2.2).
+
+The mechanical test used when auditing a route: open the page with JavaScript disabled. If everything the user is meant to do is still reachable, `none` is correct.
+
+### 2.2 Client bundles: route groups, not one big entry
+
+`hydrate: 'load'` does not mean "download the whole product". The example splits the client graph along the same lines as the product surface (§4.1's route table), and the splits are load-bearing:
+
+- **`render: 'static'` pages must stay synchronous imports.** renderx renders them inside the QuickJS sandbox with a synchronous `renderToString`; a dynamic import resolves in a promise continuation that the sandbox never pumps. A lazy static page renders React's client-rendering placeholder (`<!--$!--><template …><!--/$-->`), which is **non-empty** — assertion A2 (empty output) does not catch it; assertion A2′ does, at build time and on runtime misses.
+- **CSR areas are loaded per product surface** (`@ploykit/runtime`'s `lazyPage`): one chunk each for the app area, the settings area, the admin console, and the low-frequency public pages. Splitting per *page* instead of per *area* hurts — sidebar navigation between settings pages is the common case, so each click would pay another round trip.
+- **Interactive islands inside a static page are lazy too.** The example's blog post loads its sign-in dialog + toast stack only when the reader clicks "collect". Those components only mount after a click (`signInOpen` starts `false` on both ends), so nothing appears in the SSR HTML and hydration cannot mismatch.
+- **`lazyPage` names the component.** `routeTable()` derives `pageId` from the component name, and `React.lazy()` returns an anonymous object — without `displayName` every lazy page would degrade to a path-derived id with `-2` suffixes, decoupling `pageId` from component identity.
+- **A shared rule must not live inside a page.** The password-strength schema started in `RegisterPage.tsx` and was imported by the settings area's change-password page — which dragged the entire registration page (form, shell, buttons) into the settings chunk. It now lives in `ui/src/lib/password-schema.ts`, so the three consumers share the rule and nothing else. This generalizes: importing a *value* from a page module imports the page.
+
+#### The two entries may disagree about a route's shape
+
+`render: 'static'` requires a synchronous import (§2.2's first bullet), and a synchronous import means the page's code enters that bundle. For an acquisition-funnel page — login, register — those two facts pull in opposite directions:
+
+- **Server bundle**: must import synchronously, or the prerendered document is a Suspense placeholder (`<!--$!-->`) and the page ships empty. Verified: a lazy `render: 'static'` page prerenders to `<!--$!--><template></template><!--/$-->`.
+- **Client bundle**: must *not* import synchronously, or every unrelated route pays for the page's dependencies (zod + react-hook-form ≈ 34 KB gzip for the example's pair).
+
+This used to be framed in this document as a hard trade-off ("prerender ⇄ synchronous import ⇄ entry bundle"). It is not, because **the two entries are separate bundles** — Vite builds the client, esbuild builds the SSR bundle, and they never share a module graph at runtime. The example now expresses that:
+
+- `routes-table.tsx` — a factory holding all ~38 route declarations **once**, taking the two auth routes as parameters (`AuthRouteSpecs`).
+- `routes.tsx` — client default: `lazyPage(...)` for login/register (entry stays at the framework floor).
+- `routes.server.tsx` — server default: synchronous imports with `render: 'static'` (prerender produces complete HTML).
+
+Why a factory rather than two route tables: two tables drift, and the drift is silent — a path added to one side simply serves the SPA shell on that entry. With the factory the two shapes are a *parameter*, so 36 of the 38 routes have exactly one declaration and the divergence cannot spread.
+
+Hydration across the split was verified end-to-end (React container present, tab switching live, zod messages on empty submit, and the low-frequency lazy auth pages still render). Measured: entry 206 KB → **173 KB** gzip while `/login` and `/register` keep their complete 11-13 KB documents; the second navigation and a hard reload still transfer ~0.
+
+Caveat that keeps this honest: the client's lazy `login` component resolves through the router's Suspense boundary on first paint, so the page shows its prerendered HTML immediately but stays non-interactive until that chunk arrives (measured **162.5 KB gzip over 10 files** for `/login`: the entry closure plus the route's own ~11.8 KB, measured from the Vite manifest's import graph). For pages where every interaction must survive a cold cache, sync-import them on both sides and accept the entry cost.
+
+Measured on the example (gzip, production build; "marginal" is the cost above the always-loaded entry, derived from the Vite manifest's import graph):
+
+| Route | Initial | Marginal |
+|---|---|---|
+| `/`, `/pricing`, `/docs`, `/about` (prerendered, `hydrate: 'none'`) | **0 KB** | 0 |
+| `/blog/:slug` (static) | 152 KB | +31 KB (only when the reader opens the sign-in island) |
+| `/login` (prerendered, client-lazy) | 162 KB | +11 KB |
+| `/register` (prerendered, client-lazy) | 181 KB | +29 KB |
+| `/app` | 231 KB | +79 KB |
+| `/admin/overview` | 275 KB | +123 KB |
+| `/settings/workspace/general` | 295 KB | +143 KB |
+
+One consequence worth stating: the blog post's sign-in island costs **+31 KB** when a reader clicks "collect" (dialog + `SignInForm` + its shared form primitives), where it used to be nearly free because `SignInForm` rode along in the entry. That is the correct direction — the reader who never clicks pays nothing, and the entry no longer carries an auth form for a content page.
+
+The 152 KB entry is the floor: react-dom + TanStack Router + `AppProviders` (which owns the `Toaster`). Everything else — forms, zod, base-ui dialogs, the product shell, each area's pages — is behind a dynamic import. Before the split every route paid 337 KB.
+
+Two further reductions worth recording, because both apply the same principle (a root-level provider is paid by *every* page, so nothing heavy belongs there):
+
+- **`ConfirmProvider` lost its dialog.** The provider (context + promise queue, a few lines) stays in the entry because `useConfirm()` must resolve synchronously; the AlertDialog primitive behind it moved to `ConfirmDialogBody.tsx` and is imported on the first `confirm()` call. Measured 23.0 KB gzip for that primitive — the entry went 169 → 152 KB.
+- **Content pages are free.** `/pricing`, `/docs`, `/about` join `/` as `render: 'static'` + `hydrate: 'none'`: no props script, no entry script, no JS requests at all in the browser (verified). `LandingPage` gained a `navLinks` prop for exactly this case — its links render as real `<a href>`s, because a zero-JS page has no client router to intercept `Link`.
+
+### 2.3 Serving the bundles: caching is part of the payload budget
+
+Splitting the graph only pays off if the browser keeps the pieces. `http.FileServer` emits **no** `Cache-Control`, `ETag` or `Last-Modified`, and the first version of this split shipped that way — measured consequence: the same 178 KB (gzip) entry chunk downloaded twice inside a single `/login` → `/register` navigation, and every subsequent click re-fetched whatever chunks that route needed. The bytes saved on first load were paid back on every navigation.
+
+Two middlewares close it, and the choice between them matters:
+
+- **`webx.AssetCacheManifest(next, files)` — preferred.** `files` is the build's own asset list, extracted with `renderx.ViteManifestFiles(manifest.json)` and wired once at startup (see `example/cmd/app/frontend.go`). A path is immutable **iff the build listed it**, so there is no inference and no false positive. The example uses this.
+- **`webx.AssetCache(next)` — the fallback**, for a hand-assembled dist with no manifest. It infers content addressing from the filename: a ≥8-character base64url hash at the end of the stem, carrying a digit or an uppercase letter. That inference cannot be made exact. It has a **false-positive class** — `Some-Page-Banner.png`, `Hero-Image-Large.jpg`, `DOWNLOAD.png` all look exactly like hashes — and a false positive pins a file the product expects to replace *in place* for a year. Tightening the rule to reject those also rejects real Vite hashes (`CYhS-pAS`, `B-WCCgPC`, `C-pQOpeV` are valid hashes with a separator and no digit), so the two error classes cannot both be removed by tuning. This is why the manifest variant exists.
+
+Both attach `Cache-Control: public, max-age=31536000, immutable` plus a URL-derived `ETag` and 304 handling, to 2xx responses only (a 404 on an asset path must not be cached for a year). Everything else passes through untouched:
+
+- **HTML must revalidate.** A strongly cached document survives a deploy and pins the user to a build whose asset URLs no longer exist. `renderx` already handles this with its own ETag/304 path.
+- **Unhashed files can be replaced in place** (`/favicon.png`, `/brand/logo.png`), so they get no header — that policy belongs to the product. With the manifest variant this is automatic: they are simply not in the list.
+
+Measured after wiring: second navigation 204 KB → 15 KB (entry and all shared chunks hit cache, `transferSize === 0`), and a hard reload of an already-visited page downloads **0 KB** of JS.
+
+Corollary for the route-table surface: because the asset names carry the build's content hash, an old build's files are never overwritten, so the cache needs no purge on deploy — the new document simply references new URLs. `renderx`'s `ViteBuildID` does the same job for server-side HTML caches.
+
+**The trap this creates (cost a real debugging session).** `immutable` means the browser will not revalidate for a year, and the URL only changes when the *content hash* changes. Serving a bad response for a fingerprinted URL therefore pins that build in every visitor's cache with no recovery path short of a rebuild. The concrete failure: `webx.Precompressed` answers before the file server runs, so on its first version it forgot to set `Content-Type`; combined with `X-Content-Type-Options: nosniff` the browser refused to execute the module — the `<script>` was in the DOM, the request returned 200, nothing ran, and no useful console error appeared. After fixing the handler, the *same URL* kept serving the poisoned bytes from cache, which looks exactly like "the fix did not work". Debugging protocol for this class of bug:
+
+- `fetch(url, { cache: 'no-store' })` in the page, then read `res.headers.get('content-type')`. If the response is correct with `no-store` but the page still misbehaves, the cache is the culprit, not the server.
+- Verify the payload decodes to the right bytes (`brotliDecompressSync(downloaded).equals(onDisk)`), separating transport corruption from an execution problem.
+- Use a fresh origin (different port) to get an uncontaminated cache while iterating.
+
+Two rules follow: (1) any new middleware that short-circuits before the file server must set `Content-Type` itself; (2) never test asset-serving changes against a browser profile that already loaded the previous build.
+
+**Compression.** `webx.Precompressed` serves `.br` sidecars generated at build time (`node tools/precompress.mjs <dist>`; wired into `example/Makefile`'s `build`). Build-time because Go's standard library has a brotli decoder but no encoder — runtime would mean a third-party dependency plus per-request CPU, while at build time `-q 11` is affordable. Measured on the entry chunk: gzip -9 171 KB → brotli 144 KB. Lazy route chunks are a few KB where the difference is noise, so the win concentrates on the entry bundle and CSS. Middleware order is `FileServer → AssetCache(Manifest) → Precompressed → gzip`, and the outermost gzip layer skips bodies that already carry `Content-Encoding`.
+
+Form validation uses **`zod/mini`** in `@ploykit/ui` rather than full `zod`: the classic API surface is ~39 KB gzip for the same rules expressed as explicit `check()` compositions (~8 KB), and the error objects are structurally identical (`_zod.traits` carries `$ZodError`), so `zodResolver` and `useZodForm` need no changes. `useZodForm`'s schema type is deliberately structural (`{ parse(...) }`) so products may pass either flavour. The failure mode this migration introduces is a *silently dropped rule* — a `.check()` list missing one entry type-checks fine — so `ui/src/pages/__tests__/settings-schemas.test.ts` and `ui/src/pages/auth/__tests__/RegisterPageSchema.test.ts` pin every rule by its user-visible message, and `RegisterPageValidation.test.tsx` asserts the form actually stops before the network.
+
 ---
 
 ## 3. Overall Architecture: Three Layers of Responsibility
@@ -85,20 +186,27 @@ Dependency direction: `example → @ploykit/ui → @ploykit/runtime`; `renderx` 
 ```tsx
 // example/web/src/routes.tsx (excerpt; the landing-page component lives in the same file)
 import { routeTable } from '@ploykit/runtime/routes'
+import { lazyPage } from '@ploykit/runtime'
 import { BlogPost } from './pages/BlogPost'
-import { Dashboard } from './pages/Dashboard'
+import { Landing } from './pages/Landing'
+
+// Login-area pages live in their own module and load on demand (§2.2).
+const Admin = lazyPage('AdminOverview', () =>
+  import('./routes-admin').then((m) => ({ default: m.AdminOverview })))
 
 export default routeTable({
-  '/':            { component: Landing,   render: 'static' },  // no Loader → prerendered into embed
-  '/blog/:slug':  { component: BlogPost,  render: 'static' },  // Loader → runtime cache rendering
+  '/':            { component: Landing,  render: 'static', hydrate: 'none' }, // 0 KB of JS
+  '/blog/:slug':  { component: BlogPost, render: 'static' },  // Loader → runtime cache; needs hydration
   '/app':         { component: Dashboard },                    // defaults to csr; render may be omitted
+  '/admin/overview': { component: Admin },                     // csr, own chunk
 })
 ```
 
 - This is a plain TS module imported **simultaneously** by entry-client and entry-server — one source of truth, no generated artifacts, no separate config file, no evaluation pipeline.
 - At build time and runtime, Go asks the sandbox for `__ploykit_routes__()` to get the JSON projection of the route table (§5.2).
 - `render: 'static'` + a parameterized path ⇒ must be paired with a Go-side `Paths` enumerator (§5.7); missing it fails startup reconciliation and the prerender build, with sample code attached to the error.
-- Config surface = capability surface: exactly `'static' | 'csr'`.
+- `render: 'static'` pages must be **synchronous imports**; lazy-loading one produces an empty body (§2.2).
+- Config surface = capability surface: `render` is exactly `'static' | 'csr'`, and the orthogonal `hydrate` is exactly `'none' | 'load'` (see §2.1).
 
 ### 4.2 Page components: indistinguishable from plain React
 
@@ -303,9 +411,11 @@ platform/renderx/
 routes.tsx is bundled into the SSR bundle; the framework registers global functions inside the bundle:
 
 ```
-__ploykit_routes__() → '[{"path":"/blog/:slug","pageId":"blog-post","render":"static"}, ...]'
+__ploykit_routes__() → '[{"path":"/blog/:slug","pageId":"blog-post","render":"static","hydrate":"load"}, ...]'
 __ploykit_render__(pageId, location, propsJson) → '{"html":"...","directives":[...]}'
 ```
+
+`hydrate` is part of the projection (`"none" | "load"`); a legacy route table that omits it is read as `"load"`, so a product and the framework can be upgraded in either order. Go validates both fields in `validateRouteSpec` (§5.2) and rejects `hydrate:"none"` on a `csr` route at startup.
 
 At startup (and at build time) Go loads the bundle and calls `__ploykit_routes__()` once to obtain the route table — **no separate config file, no evaluation pipeline, no generated artifacts**. `pageId` is mechanically derived by `routeTable()`: the component name kebab-cased (`BlogPost`→`blog-post`); anonymous components fall back to the path's static segments; name collisions are deduplicated with a `-2` suffix in declaration order.
 
@@ -513,6 +623,7 @@ og prefixes, twitter cards, and the layout-overrides-page merge policy — all a
 |---|---|---|---|
 | A1 | Engine eval/render raises no exception | syntax errors, missing shims, async-scheduling violations | build + runtime miss |
 | A2 | html non-empty with a root element | component renders null | same |
+| A2′ | No React server-suspense marker (`<!--$!-->`) in the output | a lazy import on a `render: 'static'` route's render path — `renderToString` never waits for Suspense, so the document is non-empty and A2 alone cannot see it | build (prerender) + runtime miss |
 | A3 | If a head directive was emitted, `<title>` must be present | useSEO used but title missing | same |
 | A4 | propsSha256 + buildId into cache/manifest | reconciliation, ETag, cross-deployment invalidation | at cache write |
 | A5 | Hydration/SSR smoke cases on packages' existing vitest+DOM infrastructure | tree mismatch between ends, props-escape regressions | packages vitest (hydration + props-escape cases in `packages/runtime/src/__tests__`, ui SSR render smoke in `packages/ui`) |

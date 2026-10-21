@@ -159,9 +159,46 @@ func (bodyTitleRenderer) Render(_ context.Context, _, _ string, _ json.RawMessag
 }
 
 func TestMissingTitleNotSatisfiedByBodyTitle(t *testing.T) {
-	_, err := RenderOnce(context.Background(), bodyTitleRenderer{}, "p1", "/x", nil, "", ViteAssets{})
+	_, err := RenderOnce(context.Background(), bodyTitleRenderer{}, "p1", "/x", nil, "", ViteAssets{}, HydrateLoad)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrMissingTitle)
+}
+
+type titledRenderer struct{}
+
+func (titledRenderer) Routes(context.Context) ([]RouteSpec, error) { return nil, nil }
+func (titledRenderer) Render(_ context.Context, _, _ string, _ json.RawMessage) (RenderResult, error) {
+	sink := NewSink()
+	sink.Append("head", json.RawMessage(`[{"tag":"title","children":"T"}]`))
+	return RenderResult{HTML: "<main>body</main>", Sink: sink}, nil
+}
+
+func TestRenderOnceHydrateLoadInjectsPropsAndEntry(t *testing.T) {
+	ent, err := RenderOnce(context.Background(), titledRenderer{}, "p1", "/x",
+		json.RawMessage(`{"a":1}`), "zh-CN",
+		ViteAssets{JS: []string{"/assets/app.js"}, CSS: []string{"/assets/app.css"}}, HydrateLoad)
+	require.NoError(t, err)
+	html := string(ent.HTML)
+	assert.Contains(t, html, `id="__PLOYKIT_PROPS__"`)
+	assert.Contains(t, html, `data-page-id="p1"`)
+	assert.Contains(t, html, `src="/assets/app.js"`)
+	// props 参与指纹：水合页的缓存条目要随数据变化失效。
+	assert.NotEmpty(t, ent.PropsSHA256)
+}
+
+func TestRenderOnceHydrateNoneOmitsPropsAndEntry(t *testing.T) {
+	ent, err := RenderOnce(context.Background(), titledRenderer{}, "p1", "/x",
+		json.RawMessage(`{"a":1}`), "zh-CN",
+		ViteAssets{JS: []string{"/assets/app.js"}, CSS: []string{"/assets/app.css"}}, HydrateNone)
+	require.NoError(t, err)
+	html := string(ent.HTML)
+	assert.NotContains(t, html, "__PLOYKIT_PROPS__", "零 JS 页不该把 props 发给浏览器")
+	assert.NotContains(t, html, "/assets/app.js", "零 JS 页不该注入水合入口")
+	assert.NotContains(t, html, "data-page-id", "没有水合就没有 pageId 的消费者")
+	// CSS 仍要发：样式是终态 HTML 的一部分，与水合无关。
+	assert.Contains(t, html, "/assets/app.css")
+	// 没有 props 参与渲染指纹，但条目仍要有稳定指纹供 ETag 使用。
+	assert.NotEmpty(t, ent.PropsSHA256)
 }
 
 func TestReplaceInstanceFailureShrinks(t *testing.T) {

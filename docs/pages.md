@@ -118,9 +118,22 @@ Admin console /admin (standalone layout, not inside the AppShell product shell)
 
 > Placement note: all admin console pages (shell + overview/users/user detail/workspaces/workspace detail/orders/
 > webhook deliveries/audit/SSO/system settings/sign-in door, 12 components) and the site-config consumption surface
-> (useSiteConfig + SiteBannerLayer + the RegisterPage invitation-mode hint) live in `@ploykit/ui`
-> (pages/admin + hooks + components); the product side only mounts them in routes.tsx
+> (useSiteConfig + SiteBannerLayer + the RegisterPage invitation-mode hint) live in `@ploykit/ui` (pages/admin + hooks + components); the product side only mounts them in routes.tsx
 > and passes brand copy. Framework-domain pages belong to the ui package (same convention as SchedulesPage).
+
+**Sign-in shapes (three, one default)**: `SignInForm` ships three layouts, selected by `flow` + `passwordOnly`:
+
+| Shape | How | When |
+|---|---|---|
+| **`email-first`** (default) | Email + one primary button; the code field appears only after a code is sent; password reachable via a "sign in with password" link | Consumer-facing doors. One input on the first screen; no code-vs-password choice pushed onto a first-time visitor |
+| `passwordOnly` | Email + password, no code | Internal tools / the admin door (no consumer codes) |
+| `flow: 'tabs'` | Code / password as equal-weight tabs | Legacy shape for products whose users are established and know they have a password. **Loads an extra chunk** (the Tabs-based implementation, ≈4.9 KB gzip in the example build) |
+
+Two constraints that are not stylistic:
+
+- **OAuth providers render *above* the form**, not below. One-click sign-in is the preferred path (fewer keystrokes, no code round trip); the email form is the fallback after an "or" separator. This matches the common consumer pattern (Google/Linear/Vercel).
+- **`flow: 'tabs'` cannot be prerendered.** Its implementation is a dynamic import (that is how products that do not use tabs avoid paying for them), and renderx renders inside the QuickJS sandbox synchronously without pumping promises — a lazy branch collapses to a Suspense placeholder. A `render: 'static'` sign-in page must use the default `email-first` or `passwordOnly`.
+- **Do not default a product door to `passwordOnly` unless every user has a password.** OAuth-created users have no `password_hash` (`UpsertUserByEmail` does not write that column), so a password-only door locks them out. The blog post's in-flow sign-in used to pass `passwordOnly`; it now uses the default.
 
 **Admin sign-in separation (the recipe)**: the identity system is NOT split — same user table, same session,
 `is_platform_admin` stays the privilege mechanism. What is separated is the door (route + face). Four moves,

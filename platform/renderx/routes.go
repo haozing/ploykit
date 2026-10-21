@@ -46,8 +46,21 @@ func validateRouteSpec(s RouteSpec) error {
 	if s.Render != ModeStatic && s.Render != ModeCSR {
 		return fmt.Errorf("renderx: 路由 %q 的 render=%q 非法（只接受 static / csr）", s.Path, s.Render)
 	}
+	switch s.Hydrate {
+	case "", HydrateLoad, HydrateNone:
+	default:
+		return fmt.Errorf("renderx: 路由 %q 的 hydrate=%q 非法（只接受 none / load）", s.Path, s.Hydrate)
+	}
+	if s.Hydrate == HydrateNone && s.Render != ModeStatic {
+		return fmt.Errorf("renderx: 路由 %q 声明 hydrate=none 但 render=%s（CSR 页必须挂载才有内容）", s.Path, s.Render)
+	}
 	return nil
 }
+
+// 投影里的空串（旧路由表未声明 hydrate）在与 HydrateNone 比较时天然归一为
+// "要水合"：RenderOnce 的判据是 `hydrate == HydrateNone`，任何其它取值（含 ""）
+// 都走注入路径。刻意不提供 wantsHydration 之类的归一 helper ——那只会多出一处
+// 需要与 RenderOnce 保持同步的判断。
 
 func ReconcileEngine(ctx context.Context, r Renderer) error {
 	routes, err := r.Routes(ctx)

@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/button'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Spinner } from '../../components/ui/spinner'
 import { usePasswordReset } from '@ploykit/hooks'
-import { passwordSchema } from './RegisterPage'
+import { passwordSchema } from '../../lib/password-schema'
 
 export interface ResetPasswordPageProps {
   

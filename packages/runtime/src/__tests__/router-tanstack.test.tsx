@@ -91,6 +91,22 @@ describe('@ploykit/runtime/router-tanstack（版本钉死哨兵）', () => {
     expect(ssrRender(table.routes(), '/works/two')).toContain('work-page-content')
   })
 
+  // 回归：lazyPage 的 preload 钩子必须转发（否则 defaultPreload 静默失效），
+  // 但转发行为本身会让 router-core 的 routeNeedsLoad 认定该路由"需要加载"，
+  // match 状态变 pending → Match 渲染 pending 分支（无 pendingComponent 即空白）
+  // → 整页白屏、路由 chunk 从不被请求。两件事必须同时成立：
+  // 钩子可达 + 首帧照常渲染。这条锁住后者。
+  it('带 preload 钩子的懒组件仍能同步渲染出内容（不得落入 pending 分支）', () => {
+    const LazyLike = () => <p>lazy-like-content</p>
+    ;(LazyLike as typeof LazyLike & { preload?: () => void }).preload = () => {}
+
+    const preloadTable = routeTable(
+      { '/lazy': { component: LazyLike, render: 'static' } },
+      tanstackAssembler(),
+    )
+    expect(ssrRender(preloadTable.routes(), '/lazy')).toContain('lazy-like-content')
+  })
+
   it('ESBUILD_ALIASES 把 router-core 的 isServer 重定向到 server 变体（沙箱 window 探针消除）', () => {
     expect(ESBUILD_ALIASES['@tanstack/router-core/isServer']).toContain('/isServer/server')
   })

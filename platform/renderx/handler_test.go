@@ -640,3 +640,42 @@ func TestHandlerAssertA2A3(t *testing.T) {
 		t.Error("/blog/ok 应已写缓存")
 	}
 }
+
+// hydrate=none 必须在**服务链路上**成立，而不只是 RenderOnce 的单测结论：
+// 路由投影里的 hydrate 要一路传到 handler 的渲染调用，产物不带 props 脚本与
+// 客户端入口，但 CSS 照发（样式属于终态 HTML）。这条同时守住"投影字段没人
+// 消费"这类静默断线——字段加了却没接进 handler，单测全绿、线上照发 JS。
+func TestHandlerRespectsHydrateNone(t *testing.T) {
+	routes := []RouteSpec{
+		{Path: "/pricing", PageID: "pricing", Render: ModeStatic, Hydrate: HydrateNone},
+		{Path: "/blog/:slug", PageID: "blog-post", Render: ModeStatic, Hydrate: HydrateLoad},
+	}
+	fr := newStubRenderer(routes, func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "<main>" + location + "</main>", titleSink("t"), nil
+	})
+	h := Handler(HandlerDeps{
+		SPA:      &spaStub{},
+		Cache:    newMemOnlyCache(t, "b1", 16, 0),
+		Renderer: fr,
+		Routes:   routes,
+		BuildID:  "b1",
+		Registry: newHandlerTestReg(),
+		Assets:   ViteAssets{JS: []string{"/assets/app.js"}, CSS: []string{"/assets/app.css"}},
+	})
+
+	zeroJS := body(t, get(t, h, "/pricing"))
+	if strings.Contains(zeroJS, "__PLOYKIT_PROPS__") {
+		t.Errorf("hydrate=none 页不该带 props 脚本:\n%s", zeroJS)
+	}
+	if strings.Contains(zeroJS, "/assets/app.js") {
+		t.Errorf("hydrate=none 页不该注入客户端入口:\n%s", zeroJS)
+	}
+	if !strings.Contains(zeroJS, "/assets/app.css") {
+		t.Errorf("hydrate=none 页仍应带 CSS:\n%s", zeroJS)
+	}
+
+	hydrated := body(t, get(t, h, "/blog/hello"))
+	if !strings.Contains(hydrated, "__PLOYKIT_PROPS__") || !strings.Contains(hydrated, "/assets/app.js") {
+		t.Errorf("hydrate=load 页应带 props 脚本与入口:\n%s", hydrated)
+	}
+}

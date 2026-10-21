@@ -72,10 +72,33 @@ describe('routeTable pageId 稳定性', () => {
 
   it('toJSON 投影不含组件引用（Go 侧消费 {path, pageId, render}）', () => {
     expect(JSON.parse(buildTable().toJSON())).toEqual([
-      { path: '/', pageId: 'landing', render: 'static' },
-      { path: '/blog/:slug', pageId: 'blog-post', render: 'static' },
-      { path: '/app', pageId: 'dashboard', render: 'csr' },
+      { path: '/', pageId: 'landing', render: 'static', hydrate: 'load' },
+      { path: '/blog/:slug', pageId: 'blog-post', render: 'static', hydrate: 'load' },
+      { path: '/app', pageId: 'dashboard', render: 'csr', hydrate: 'load' },
     ])
+  })
+})
+
+describe('routeTable hydrate 轴', () => {
+  it("hydrate 'none' 透传进 PageSpec 与 Go 投影", () => {
+    const t = routeTable(
+      { '/': { component: Landing, render: 'static', hydrate: 'none' } },
+      reactRouterAssembler(),
+    )
+    expect(t.pages[0].hydrate).toBe('none')
+    expect(JSON.parse(t.toJSON())).toEqual([
+      { path: '/', pageId: 'landing', render: 'static', hydrate: 'none' },
+    ])
+  })
+
+  it('缺省为 load（旧调用点行为不变）', () => {
+    for (const p of buildTable().pages) expect(p.hydrate).toBe('load')
+  })
+
+  it("CSR + hydrate 'none' 在构表时爆炸（否则页面永不挂载）", () => {
+    expect(() =>
+      routeTable({ '/app': { component: Dashboard, hydrate: 'none' } }, reactRouterAssembler()),
+    ).toThrow(/hydrate: 'none'/)
   })
 })
 

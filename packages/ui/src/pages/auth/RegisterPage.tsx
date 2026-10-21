@@ -1,6 +1,10 @@
 
 import { useState } from 'react';
-import { z } from 'zod';
+// zod/mini：注册页是整站唯一带校验 schema 的公开页，全量 zod 会把整个
+// classic API 面（约 39KB gzip）拖进每个访客的首包。mini 只带核心校验器 +
+// 显式 check 组合，同样的规则体积约为其十分之一；错误对象结构一致
+// （`_zod.traits` 带 `$ZodError`），useZodForm 的 resolver 无需改动。
+import * as z from 'zod/mini';
 import { AuthShell } from '../../layouts/AuthShell';
 import { FormField } from '../../components/FormField';
 import { PasswordField } from '../../components/PasswordField';
@@ -13,38 +17,24 @@ import { useAuth } from '@ploykit/hooks';
 import { useSiteConfig } from '@ploykit/hooks';
 import { useZodForm } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
+import { passwordKinds, passwordSchema } from '../../lib/password-schema';
 import { toast } from '../../components/toast';
 import type { PKUser } from '@ploykit/hooks';
 
-
-function passwordKinds(pw: string): number {
-  let kinds = 0;
-  if (/[0-9]/.test(pw)) kinds++;
-  if (/[a-z]/.test(pw)) kinds++;
-  if (/[A-Z]/.test(pw)) kinds++;
-  if (/[^0-9a-zA-Z]/.test(pw)) kinds++;
-  return kinds;
-}
-
-
-export const passwordSchema = z
-  .string()
-  .min(10, '密码至少 10 位')
-  .refine(
-    (pw) => new TextEncoder().encode(pw).length <= 128,
-    '密码过长（按字节计最多 128，一个汉字占 3 字节）',
-  )
-  .refine(
-    (pw) => passwordKinds(pw) >= 3,
-    '需包含大写/小写/数字/符号中的至少三类',
-  );
+// 密码强度规则住在 lib/password-schema：它同时被重置密码页与设置区的
+// 改密页复用，留在本文件会把整个注册页组件连带拖进设置区的 chunk。
+export { passwordSchema };
 
 export const registerSchema = z.object({
   
-  email: z.string().min(1, '请输入邮箱').max(254, '邮箱过长').email('邮箱格式不正确'),
+  email: z.string().check(
+    z.minLength(1, '请输入邮箱'),
+    z.maxLength(254, '邮箱过长'),
+    z.email('邮箱格式不正确'),
+  ),
   password: passwordSchema,
   
-  display_name: z.string().max(100, '昵称最多 100 字符').optional(),
+  display_name: z.optional(z.string().check(z.maxLength(100, '昵称最多 100 字符'))),
 });
 
 export type RegisterForm = z.infer<typeof registerSchema>;

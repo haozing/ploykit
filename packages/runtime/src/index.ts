@@ -17,6 +17,7 @@ export { emitDirective } from './browser'
 // 因此可以安全地从本桶导出。
 export type {
   RenderMode,
+  HydrateMode,
   RouteSpec,
   RouteTableInput,
   PageSpec,
@@ -24,5 +25,6 @@ export type {
   RouteTable,
 } from './routes'
 export { matchPageByPath } from './match'
+export { lazyPage } from './lazy'
 export type { SsrEntryOptions, SsrEntry } from './server'
 export type { ClientEntryOptions, HydratePayload } from './hydrate'

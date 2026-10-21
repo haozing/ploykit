@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { z } from 'zod'
+import * as z from 'zod/mini'
 import {
   PageHeader, PageLoading, PageError, PageEmpty,
 } from '../../components/Page'
@@ -57,10 +57,16 @@ function localTimezone(): string {
   }
 }
 
-const createSchema = z.object({
-  kind: z.string().trim().min(1, '请填写触发标识（kind），如 task.cleanup'),
-  cron_expr: z.string().trim().regex(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/, '表达式须为五字段：分 时 日 月 周'),
-  timezone: z.string().min(1, '请选择时区'),
+export const createSchema = z.object({
+  kind: z.string().check(
+    z.trim(),
+    z.minLength(1, '请填写触发标识（kind），如 task.cleanup'),
+  ),
+  cron_expr: z.string().check(
+    z.trim(),
+    z.regex(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/, '表达式须为五字段：分 时 日 月 周'),
+  ),
+  timezone: z.string().check(z.minLength(1, '请选择时区')),
   misfire: z.enum(['skip', 'once']),
 })
 type CreateForm = z.infer<typeof createSchema>

@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod/mini'
 import { PageHeader, PageLoading, PageError } from '../../components/Page'
 import { SettingsCard } from '../../components/SettingsCard'
 import { FormField } from '../../components/FormField'
@@ -20,12 +20,17 @@ import type { PKUser } from '@ploykit/hooks'
 
 
 
-const profileSchema = z.object({
-  display_name: z.string().trim().min(1, '请输入昵称').max(100, '昵称最多 100 字符'),
+export const profileSchema = z.object({
+  display_name: z.string().check(
+    z.trim(),
+    z.minLength(1, '请输入昵称'),
+    z.maxLength(100, '昵称最多 100 字符'),
+  ),
   
-  avatar_url: z.string()
-    .refine((v) => v === '' || /^https?:\/\//.test(v), '头像链接需以 http(s):// 开头')
-    .refine((v) => v === '' || v.length <= 2048, '头像链接最多 2048 字符'),
+  avatar_url: z.string().check(
+    z.refine((v) => v === '' || /^https?:\/\//.test(v), '头像链接需以 http(s):// 开头'),
+    z.refine((v) => v === '' || v.length <= 2048, '头像链接最多 2048 字符'),
+  ),
 })
 type ProfileForm = z.infer<typeof profileSchema>
 

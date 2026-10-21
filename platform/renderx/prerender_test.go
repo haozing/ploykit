@@ -183,6 +183,12 @@ func TestPrerenderAssertions(t *testing.T) {
 		{"A3 缺 title", "/pricing", func(string) (string, *DirectiveSink, error) {
 			return "<main>x</main>", noTitleSink(), nil
 		}, ErrMissingTitle},
+		// renderToString never waits for Suspense: a lazy component on a static
+		// route yields a NON-empty marker document, so A2 (empty output) cannot
+		// see it. This is the assertion that catches the blank-page class.
+		{"A2' 服务端挂起", "/pricing", func(string) (string, *DirectiveSink, error) {
+			return `<main><!--$!--><template data-msg="x"></template><!--/$--></main>`, titleSink("x"), nil
+		}, ErrServerSuspense},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

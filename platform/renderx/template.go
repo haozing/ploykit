@@ -22,6 +22,10 @@ type Document struct {
 	PropsJSON     []byte
 	PageID        string
 	HydrateScript string
+	// NoHydration 为真时不写 props 脚本。props 脚本唯一的消费者是客户端
+	// 入口；没有入口的文档里它只是把页面数据白发给每个访客（hydrate=none
+	// 的零 JS 页），所以两者必须同进同退。
+	NoHydration bool
 }
 
 var htmlReplacer = strings.NewReplacer(
@@ -83,14 +87,16 @@ func RenderDocument(doc Document) ([]byte, error) {
 	buf.WriteString("</head>\n")
 	buf.WriteString("<body>\n")
 	buf.WriteString(`  <div id="root">` + doc.BodyHTML + `</div>` + "\n")
-	propsScript := `<script type="application/json" id="__PLOYKIT_PROPS__"`
-	if doc.PageID != "" {
-		propsScript += ` data-page-id="` + escapeHTML(doc.PageID) + `"`
-	}
-	propsScript += `>` + string(escapePropsJSON(props)) + `</script>`
-	buf.WriteString("  " + propsScript + "\n")
-	if doc.HydrateScript != "" {
-		buf.WriteString("  " + doc.HydrateScript + "\n")
+	if !doc.NoHydration {
+		propsScript := `<script type="application/json" id="__PLOYKIT_PROPS__"`
+		if doc.PageID != "" {
+			propsScript += ` data-page-id="` + escapeHTML(doc.PageID) + `"`
+		}
+		propsScript += `>` + string(escapePropsJSON(props)) + `</script>`
+		buf.WriteString("  " + propsScript + "\n")
+		if doc.HydrateScript != "" {
+			buf.WriteString("  " + doc.HydrateScript + "\n")
+		}
 	}
 	buf.WriteString("</body>\n")
 	buf.WriteString("</html>\n")

@@ -54,9 +54,9 @@ describe('createSsrEntry', () => {
 
   it('__ploykit_routes__() 返回路由表 JSON 投影（pageId 声明序）', () => {
     expect(JSON.parse(setup().routes())).toEqual([
-      { path: '/', pageId: 'landing', render: 'static' },
-      { path: '/blog/:slug', pageId: 'blog-post', render: 'static' },
-      { path: '/seo', pageId: 'seo-page', render: 'static' },
+      { path: '/', pageId: 'landing', render: 'static', hydrate: 'load' },
+      { path: '/blog/:slug', pageId: 'blog-post', render: 'static', hydrate: 'load' },
+      { path: '/seo', pageId: 'seo-page', render: 'static', hydrate: 'load' },
     ])
   })
 

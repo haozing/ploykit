@@ -1,72 +1,61 @@
 /**
- * SignInForm —— 从 LoginPage 提取的无壳登录表单（#30）。
+ * SignInForm —— 无壳登录表单（#30）。三种形态：
  *
- * 承载全部登录流逻辑（与原 LoginPage 逐行为一致）：
- *   - 验证码发送 + 60s 冷却倒计时
- *   - 验证码提交（useLogin().submit）
- *   - 密码提交（POST /auth/login + refresh()）
- *   - OAuth 按钮渲染 /auth/oauth/{id}/start
- *   - loginRedirectTarget 开放重定向守卫（默认回跳 /app，兜底可经
- *     loginRedirectTarget prop 覆盖——AdminSignInPage 传 '/admin'）
+ * - `email-first`（默认，前台推荐）：首屏只有邮箱 + 一个主按钮，发送成功后
+ *   验证码框才出现（渐进披露）。密码通过下方「使用密码登录」切换，不占首屏
+ *   权重。业界主流形态（Google/Linear/Vercel 一类），因为它把首屏的选择
+ *   从「验证码还是密码」降成一个输入框。
+ * - `passwordOnly`（企业内部工具）：直接给邮箱 + 密码，无验证码。
+ * - `tabs`（老形态，验证码/密码平分权重）：**按需加载**——Base UI 的 Tabs
+ *   原语整块约 4.9KB gzip（实测产物），不用它的形态不付这笔字节。
  *
- * 壳（AuthShell / Dialog）由消费方决定：LoginPage 套 AuthShell，
- * SignInModal 套 Dialog。成功后的跳转语义也由消费方经 onSuccess 决定——
- * 未传 onSuccess 时表单默认 `window.location.href = from`（软导航，历史行为）；
- * 弹层场景请用 SignInModal（默认整页硬跳转，见其组件注释）。
+ * 逻辑全部在 useSignInFlow（状态/发送冷却/两种提交/回跳守卫），本文件只做
+ * 布局。壳（AuthShell / Dialog）由消费方决定：LoginPage 套 AuthShell，
+ * SignInModal 套 Dialog。成功后的跳转语义由 onSuccess 决定——未传时默认
+ * `window.location.href = from`；弹层场景用 SignInModal（默认整页硬跳）。
+ *
+ * **约束**：`flow='tabs'` 与 `render: 'static'` 不兼容。tabs 子模块是动态
+ * import，renderx 在 QuickJS 沙箱里同步渲染、从不 pump promise，懒加载的
+ * 分支会渲染成 Suspense 占位符 `<!--$!-->`（非空文档，靠断言 A2′ 构建期拦下）。需要预渲染
+ * 的登录页用 email-first（默认值）或 passwordOnly。
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { useLocation } from '../router'
-import { useLogin } from '@ploykit/hooks'
-import { useApi } from '@ploykit/hooks'
-import { useAuth } from '@ploykit/hooks'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
-import { Button, buttonVariants } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { FormField } from '../components/FormField'
-import { PasswordField } from '../components/PasswordField'
-import { FieldSeparator } from '../components/ui/field'
+import { Suspense, lazy, useState, type ReactNode } from 'react'
+import { Button } from '../components/ui/button'
 import { Spinner } from '../components/ui/spinner'
-import { apiErrorMessage } from '../lib/api-error'
-import { useKitLabels } from '../labels/kit-labels'
+import {
+  SignInCodeErrors,
+  SignInCodeField,
+  SignInEmailField,
+  SignInFedLogin,
+  SignInFooterLinks,
+  SignInLegal,
+  SignInOAuthBlock,
+  SignInOr,
+  SignInPasswordForm,
+  type OAuthProviderOption,
+} from './sign-in-parts'
+import { useSignInFlow, type SignInFlow } from './useSignInFlow'
 
+// 只在 flow === 'tabs' 时下载。不用 tabs 的产品，chunk 里不含它的实现。
+const SignInFormTabs = lazy(() => import('./SignInFormTabs'))
 
-export interface OAuthProviderOption {
-  id: string
-  label: string
-}
-
-
-const SEND_COOLDOWN_S = 60
-
-
-export function loginRedirectTarget(from: unknown, fallback = '/app'): string {
-  if (typeof from !== 'string') return fallback
-  if (!from.startsWith('/') || from.startsWith('//')) return fallback
-  return from
-}
+export type { OAuthProviderOption } from './sign-in-parts'
+export { loginRedirectTarget, SEND_COOLDOWN_S } from './useSignInFlow'
 
 export interface SignInFormProps {
-
   resetPath?: string
-
   registerPath?: string
-
   oauthProviders?: OAuthProviderOption[]
-
   enableFedLogin?: boolean
 
-  /**
-   * 纯密码形态（企业内部工具）：隐藏验证码 Tab，页面直接是密码登录——
-   * 不渲染 Tabs 结构，OAuth 槽位照常由 oauthProviders 控制（不传即无）。
-   */
+  /** 纯密码形态（企业内部工具）：直接给邮箱 + 密码，不渲染验证码与 Tab。 */
   passwordOnly?: boolean
 
   onSuccess?: () => void
 
   /**
-   * 回跳兜底目标（守卫 loginRedirectTarget 的 fallback，默认 '/app'）：
-   * location.state.from 缺失或非法时落这里。管理端专用门传 '/admin'，
-   * 消费方整页壳（LoginPage）一般不需要动它。
+   * 回跳兜底目标（location.state.from 缺失或非法时使用）。管理端专用门传
+   * '/admin'；消费方整页壳（LoginPage）一般不需要动它。
    */
   loginRedirectTarget?: string
 
@@ -86,8 +75,8 @@ export interface SignInFormProps {
   privacyUrl?: string
 
   /**
-   * 表单形态：'tabs'（默认，验证码/密码双 Tab）| 'email-first'（邮箱先行：
-   * 首屏只有邮箱 + 发送按钮，验证码输入框在发送成功后才出现——渐进披露）。
+   * 表单形态。默认 `'email-first'`（见文件头说明）。
+   * `'tabs'` 会额外加载一个子 chunk，且不能用于 `render: 'static'` 页面。
    */
   flow?: 'tabs' | 'email-first'
 
@@ -108,100 +97,24 @@ export function SignInForm({
   legalNote,
   termsUrl,
   privacyUrl,
-  flow = 'tabs',
+  flow = 'email-first',
   showHeading = true,
 }: SignInFormProps) {
-  const kit = useKitLabels()
-  const { submit, loading, error: codeError } = useLogin()
-  const api = useApi()
-  const { refresh } = useAuth()
-
-  const from = loginRedirectTarget(
-    (useLocation().state as { from?: unknown } | null)?.from,
-    redirectFallback,
-  )
-
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [codeSent, setCodeSent] = useState(false)
-
-
-  const [sending, setSending] = useState(false)
-  const [sendError, setSendError] = useState<string | null>(null)
-  const [cooldown, setCooldown] = useState(0)
-
-  useEffect(() => {
-    if (cooldown <= 0) return
-    const t = setInterval(() => setCooldown((c) => c - 1), 1_000)
-    return () => clearInterval(t)
-  }, [cooldown])
-
-  const [password, setPassword] = useState('')
-  const [pwLoading, setPwLoading] = useState(false)
-  const [pwError, setPwError] = useState<string | null>(null)
-
-  const succeed = onSuccess ?? (() => { window.location.href = from })
-
-  const handleSendCode = async () => {
-    if (!email || sending || cooldown > 0) return
-    setSending(true)
-    setSendError(null)
-    try {
-      await api.post('/auth/send-code', { email })
-      setCodeSent(true)
-      setCooldown(SEND_COOLDOWN_S)
-    } catch (e) {
-
-      setSendError(apiErrorMessage(e, '验证码发送失败，请稍后重试'))
-    } finally {
-      setSending(false)
-    }
-  }
-
-  const handleCodeSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    const result = await submit(email, code)
-    if (result.ok) succeed()
-  }
-
-  const handlePasswordSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    setPwError(null)
-    setPwLoading(true)
-    try {
-      await api.post('/auth/login', { email, password })
-      await refresh()
-      succeed()
-    } catch (err) {
-
-      setPwError(apiErrorMessage(err, '登录失败'))
-    } finally {
-      setPwLoading(false)
-    }
-  }
-
-  // 发送按钮四态文案：冷却 > 已发送 > 发送中 > 初始。
-  // 三处共用（tabs 验证码行内、email-first 首屏主按钮、email-first 行内重发），
-  // 默认值与历史硬编码逐字一致。
-  const sendButtonLabel =
-    cooldown > 0
-      ? kit.resendWithCooldown(cooldown)
-      : codeSent
-        ? '重新发送'
-        : sending
-          ? '发送中…'
-          : kit.sendCode
-
-  // 邮箱先行形态：发送前整个表单的提交动作就是发码（主按钮即发送按钮）。
-  const handleEmailFirstPreSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    void handleSendCode()
-  }
+  const signIn = useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback })
+  const kit = signIn.kit
+  // email-first 里「使用密码登录」把它切到密码表单（可逆，不占首屏权重）。
+  const [passwordMode, setPasswordMode] = useState(false)
 
   // 法律声明行：legalNote 传入即胜出；否则 termsUrl+privacyUrl 齐备时渲染自动行。
   const legal =
     legalNote ??
     (termsUrl && privacyUrl ? kit.signInLegalNote(termsUrl, privacyUrl) : null)
+
+  // 邮箱先行：发送前整个表单的提交动作就是发码（主按钮即发送按钮）。
+  const handleEmailFirstPreSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void signIn.handleSendCode()
+  }
 
   return (
     <div className="space-y-4">
@@ -214,224 +127,93 @@ export function SignInForm({
         </div>
       )}
 
-      {passwordOnly ? (
-        <form onSubmit={handlePasswordSubmit} className="space-y-4 pt-2">
-          <FormField label={kit.signInEmailLabel} htmlFor="login-pw-email">
-            <Input
-              id="login-pw-email" type="email" value={email} required
-              onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
-              autoComplete="email"
-            />
-          </FormField>
-          <FormField label={kit.signInPasswordLabel} htmlFor="login-pw-password">
-            <PasswordField
-              id="login-pw-password" value={password} required
-              onChange={(e) => setPassword(e.target.value)} placeholder="输入密码"
-              autoComplete="current-password"
-            />
-          </FormField>
-          {pwError && <p role="alert" className="text-destructive text-sm">{pwError}</p>}
-          <Button type="submit" className="w-full" disabled={pwLoading || !email || !password}>
-            {pwLoading ? (
-              <>
-                <Spinner aria-hidden="true" />
-                {kit.signInSubmitPassword}
-              </>
-            ) : (
-              kit.signInSubmitPassword
-            )}
-          </Button>
-        </form>
-      ) : flow === 'email-first' ? (
-        /* 邮箱先行（渐进披露）：验证码输入框仅在发送成功后出现 */
-        <form
-          onSubmit={codeSent ? handleCodeSubmit : handleEmailFirstPreSubmit}
-          className="space-y-4 pt-2"
-        >
-          <FormField label={kit.signInEmailLabel} htmlFor="login-email">
-            <Input
-              id="login-email"
-              type="email" value={email} required
-              onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
-              autoComplete="email"
-            />
-          </FormField>
-          {codeSent && (
-            <FormField label={kit.signInCodeLabel} htmlFor="login-code">
-              <div className="flex gap-2">
-                <Input
-                  id="login-code"
-                  type="text" value={code} required
-                  onChange={(e) => setCode(e.target.value)} placeholder="6位数字"
-                  maxLength={6} autoComplete="one-time-code" className="flex-1"
-                />
-                <Button
-                  type="button" variant="outline" size="sm" onClick={handleSendCode}
-                  disabled={sending || cooldown > 0 || !email}
-                >
-                  {sendButtonLabel}
-                </Button>
-              </div>
-            </FormField>
-          )}
-          {/* P3-29：错误 p 补 role="alert"（读屏即时播报） */}
-          {sendError && <p role="alert" className="text-destructive text-sm">{sendError}</p>}
-          {codeError && <p role="alert" className="text-destructive text-sm">{codeError}</p>}
-          <Button
-            type="submit" className="w-full"
-            disabled={codeSent ? loading || !email || !code : sending || cooldown > 0 || !email}
-          >
-            {codeSent ? (
-              loading ? (
-                <>
-                  <Spinner aria-hidden="true" />
-                  {kit.signInSubmitCode}
-                </>
-              ) : (
-                kit.signInSubmitCode
-              )
-            ) : (
-              sending ? (
-                <>
-                  <Spinner aria-hidden="true" />
-                  {sendButtonLabel}
-                </>
-              ) : (
-                sendButtonLabel
-              )
-            )}
-          </Button>
-        </form>
-      ) : (
-        <Tabs defaultValue="code">
-          <TabsList className="w-full">
-            <TabsTrigger value="code">{kit.signInCodeTab}</TabsTrigger>
-            <TabsTrigger value="password">{kit.signInPasswordTab}</TabsTrigger>
-          </TabsList>
+      {/* 第三方登录在表单之上：一键登录是首选路径，邮箱表单是备选。 */}
+      <SignInOAuthBlock providers={oauthProviders} />
+      {oauthProviders.length > 0 && !passwordOnly && !passwordMode && (
+        <SignInOr>或使用邮箱</SignInOr>
+      )}
 
-          {/* 验证码模式（默认） */}
-          <TabsContent value="code">
-            <form onSubmit={handleCodeSubmit} className="space-y-4 pt-2">
-              <FormField label={kit.signInEmailLabel} htmlFor="login-email">
-                <Input
-                  id="login-email"
-                  type="email" value={email} required
-                  onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
-                  autoComplete="email"
-                />
-              </FormField>
-              <FormField label={kit.signInCodeLabel} htmlFor="login-code">
-                <div className="flex gap-2">
-                  <Input
-                    id="login-code"
-                    type="text" value={code} required
-                    onChange={(e) => setCode(e.target.value)} placeholder="6位数字"
-                    maxLength={6} autoComplete="one-time-code" className="flex-1"
-                  />
-                  <Button
-                    type="button" variant="outline" size="sm" onClick={handleSendCode}
-                    disabled={sending || cooldown > 0 || !email}
-                  >
-                    {sendButtonLabel}
-                  </Button>
-                </div>
-              </FormField>
-              {/* P3-29：错误 p 补 role="alert"（读屏即时播报） */}
-              {sendError && <p role="alert" className="text-destructive text-sm">{sendError}</p>}
-              {codeError && <p role="alert" className="text-destructive text-sm">{codeError}</p>}
-              <Button type="submit" className="w-full" disabled={loading || !email || !code}>
-                {loading ? (
+      {passwordOnly ? (
+        <SignInPasswordForm flow={signIn} />
+      ) : flow === 'tabs' ? (
+        <Suspense fallback={<SignInTabsFallback flow={signIn} />}>
+          <SignInFormTabs flow={signIn} />
+        </Suspense>
+      ) : passwordMode ? (
+        <>
+          <SignInPasswordForm flow={signIn} />
+          <button
+            type="button"
+            className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => setPasswordMode(false)}
+          >
+            改用验证码登录
+          </button>
+        </>
+      ) : (
+        <>
+          <form
+            onSubmit={signIn.codeSent ? signIn.handleCodeSubmit : handleEmailFirstPreSubmit}
+            className="space-y-4"
+          >
+            <SignInEmailField flow={signIn} />
+            {signIn.codeSent && <SignInCodeField flow={signIn} />}
+            <SignInCodeErrors flow={signIn} />
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                signIn.codeSent
+                  ? signIn.loading || !signIn.email || !signIn.code
+                  : signIn.sending || signIn.cooldown > 0 || !signIn.email
+              }
+            >
+              {signIn.codeSent ? (
+                signIn.loading ? (
                   <>
                     <Spinner aria-hidden="true" />
                     {kit.signInSubmitCode}
                   </>
                 ) : (
                   kit.signInSubmitCode
-                )}
-              </Button>
-            </form>
-          </TabsContent>
-
-          {/* 密码模式 */}
-          <TabsContent value="password">
-            <form onSubmit={handlePasswordSubmit} className="space-y-4 pt-2">
-              <FormField label={kit.signInEmailLabel} htmlFor="login-pw-email">
-                <Input
-                  id="login-pw-email" type="email" value={email} required
-                  onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
-                  autoComplete="email"
-                />
-              </FormField>
-              <FormField label={kit.signInPasswordLabel} htmlFor="login-pw-password">
-                <PasswordField
-                  id="login-pw-password" value={password} required
-                  onChange={(e) => setPassword(e.target.value)} placeholder="输入密码"
-                  autoComplete="current-password"
-                />
-              </FormField>
-              {pwError && <p role="alert" className="text-destructive text-sm">{pwError}</p>}
-              <Button type="submit" className="w-full" disabled={pwLoading || !email || !password}>
-                {pwLoading ? (
-                  <>
-                    <Spinner aria-hidden="true" />
-                    {kit.signInSubmitPassword}
-                  </>
-                ) : (
-                  kit.signInSubmitPassword
-                )}
-              </Button>
-            </form>
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {oauthProviders.length > 0 && (
-        <div className="space-y-2 pt-1" data-testid="oauth-providers">
-          <FieldSeparator>或使用以下方式登录</FieldSeparator>
-          {oauthProviders.map((p) => (
-            <a
-              key={p.id}
-              href={'/auth/oauth/' + p.id + '/start'}
-              className={buttonVariants({ variant: 'outline', className: 'w-full' })}
-            >
-              使用 {p.label} 登录
-            </a>
-          ))}
-        </div>
-      )}
-
-      {enableFedLogin && (
-        <details className="pt-1" data-testid="fed-login">
-          <summary className="text-sm text-muted-foreground cursor-pointer select-none">企业登录</summary>
-          <form method="get" action="/auth/fed/start" className="mt-2 space-y-2">
-            <Input
-              type="text" name="workspace" placeholder="工作区标识（slug）" required
-            />
-            <Button type="submit" className="w-full">
-              通过企业 IdP 登录
+                )
+              ) : signIn.sending ? (
+                <>
+                  <Spinner aria-hidden="true" />
+                  {signIn.sendButtonLabel}
+                </>
+              ) : (
+                signIn.sendButtonLabel
+              )}
             </Button>
           </form>
-        </details>
+          <button
+            type="button"
+            className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => setPasswordMode(true)}
+          >
+            使用密码登录
+          </button>
+        </>
       )}
 
-      {legal && (
-        <p className="pt-1 text-center text-xs text-muted-foreground">{legal}</p>
-      )}
+      {enableFedLogin && <SignInFedLogin />}
+      <SignInLegal legal={legal} />
+      <SignInFooterLinks flow={signIn} resetPath={resetPath} registerPath={registerPath} />
+    </div>
+  )
+}
 
-      {(resetPath || registerPath) && (
-        <div className="flex items-center justify-between text-sm">
-          {resetPath && (
-            <a href={resetPath} className="text-primary hover:underline">
-              {kit.signInForgotPassword}
-            </a>
-          )}
-          {registerPath && (
-            <a href={registerPath} data-testid="register-link" className="text-primary hover:underline">
-              {kit.signInCreateAccount}
-            </a>
-          )}
-        </div>
-      )}
+/**
+ * tabs 子 chunk 下载期间的占位。只在 flow='tabs' 的客户端首帧出现；预渲染
+ * 页面不会走到这里（tabs 与 render:'static' 不兼容，见文件头）。
+ */
+function SignInTabsFallback({ flow }: { flow: SignInFlow }) {
+  return (
+    <div className="space-y-4 pt-2" aria-busy="true">
+      <div className="h-9 w-full rounded-lg bg-muted" />
+      <SignInEmailField flow={flow} />
+      <div className="h-9 w-full rounded-lg bg-muted" />
     </div>
   )
 }

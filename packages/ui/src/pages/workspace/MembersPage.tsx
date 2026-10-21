@@ -1,7 +1,7 @@
 
 import { useState } from 'react'
 import { useSearchParamsCompat } from '../../router'
-import { z } from 'zod'
+import * as z from 'zod/mini'
 import { UserPlus, Link2, MoreHorizontal } from 'lucide-react'
 import {
   PageHeader, PageLoading, PageError, PageEmpty,
@@ -36,16 +36,27 @@ import { roleSatisfies } from '@ploykit/hooks'
 
 
 
-const inviteSchema = z.object({
-  email: z.string().min(1, '请输入邮箱').email('邮箱格式不正确'),
+export const inviteSchema = z.object({
+  email: z.string().check(
+    z.minLength(1, '请输入邮箱'),
+    z.email('邮箱格式不正确'),
+  ),
   role: z.enum(['admin', 'member']),
 })
 type InviteForm = z.infer<typeof inviteSchema>
 
-const shareLinkSchema = z.object({
+export const shareLinkSchema = z.object({
   role: z.enum(['admin', 'member']),
-  max_uses: z.number().int('须为整数').min(1, '至少 1 次').max(10000),
-  ttl_hours: z.number().int('须为整数').min(1, '至少 1 小时').max(24 * 30),
+  max_uses: z.number().check(
+    z.int('须为整数'),
+    z.minimum(1, '至少 1 次'),
+    z.maximum(10000),
+  ),
+  ttl_hours: z.number().check(
+    z.int('须为整数'),
+    z.minimum(1, '至少 1 小时'),
+    z.maximum(24 * 30),
+  ),
 })
 type ShareLinkForm = z.infer<typeof shareLinkSchema>
 

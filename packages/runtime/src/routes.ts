@@ -5,11 +5,27 @@ import { type ComponentType, type ReactElement } from 'react'
 export type RenderMode = 'static' | 'csr'
 
 
+/**
+ * 「这张服务端渲染出来的 HTML 之后还要不要 JS」——与 render 正交的第二根轴。
+ *
+ * - `load`（缺省）：注入 props 脚本 + 客户端入口，浏览器水合（现状）。
+ * - `none`：两者都不注入，HTML 即终态，页面零 JS。只对 `render: 'static'`
+ *   合法（CSR 页没有水合概念，声明 none 等于让它永不挂载，是配置错误）。
+ *
+ * 判定标准是「水合能换来什么」：纯展示、无状态、导航只靠 <a href> 的页面
+ * （落地页/声明式内容页）水合只换来路由拦截，代价是整个客户端入口的体积；
+ * 一旦页面有 useState/useEffect/onClick，就必须是 `load`。
+ */
+export type HydrateMode = 'none' | 'load'
+
+
 export interface RouteSpec {
 
   component: ComponentType<any>
 
   render?: RenderMode
+
+  hydrate?: HydrateMode
 }
 
 
@@ -21,6 +37,7 @@ export interface PageSpec {
 
   pageId: string
   render: RenderMode
+  hydrate: HydrateMode
   component: ComponentType<any>
 }
 
@@ -82,11 +99,21 @@ export function routeTable(input: RouteTableInput, assembler: RouteAssembler): R
   const pages: PageSpec[] = []
   const used = new Set<string>()
   for (const [path, spec] of Object.entries(input)) {
+    const render = spec.render ?? 'csr'
+    const hydrate = spec.hydrate ?? 'load'
+    // 配置错误在构表时爆炸（构建 / 启动失败），不留到渲染期：CSR 页本来
+    // 就没水合这回事，声明 none 只会得到一个永不挂载的页面。
+    if (hydrate === 'none' && render !== 'static') {
+      throw new Error(
+        `[ploykit/runtime] 路由 ${path} 声明了 hydrate: 'none' 但 render=${render}；` +
+          `只有 render: 'static' 的页面可以跳过水合（CSR 页必须挂载才有内容）`,
+      )
+    }
     const base = kebab(componentName(spec.component)) || pathSlug(path) || 'page'
     let pageId = base
     for (let n = 2; used.has(pageId); n++) pageId = `${base}-${n}`
     used.add(pageId)
-    pages.push({ path, pageId, render: spec.render ?? 'csr', component: spec.component })
+    pages.push({ path, pageId, render, hydrate, component: spec.component })
   }
 
   return {
@@ -95,7 +122,7 @@ export function routeTable(input: RouteTableInput, assembler: RouteAssembler): R
       return assembler.assemble(pages, propsByPageId)
     },
     toJSON() {
-      return JSON.stringify(pages.map(({ path, pageId, render }) => ({ path, pageId, render })))
+      return JSON.stringify(pages.map(({ path, pageId, render, hydrate }) => ({ path, pageId, render, hydrate })))
     },
   }
 }

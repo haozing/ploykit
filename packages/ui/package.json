@@ -1,9 +1,12 @@
 {
   "name": "@ploykit/ui",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "development": "./src/index.ts",
@@ -40,7 +43,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@ploykit/client": "^0.7.4",
-    "@ploykit/hooks": "^0.8.0",
+    "@ploykit/hooks": "^0.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.4.0",

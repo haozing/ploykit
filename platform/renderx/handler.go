@@ -159,7 +159,7 @@ func (h *handler) serveStatic(w http.ResponseWriter, r *http.Request, path strin
 		if perr != nil {
 			return CacheEntry{}, fmt.Errorf("页面 %s（pageId=%s）取数失败: %w", path, rt.PageID, perr)
 		}
-		return RenderOnce(ctx, h.deps.Renderer, rt.PageID, path, props, h.deps.Lang, h.deps.Assets)
+		return RenderOnce(ctx, h.deps.Renderer, rt.PageID, path, props, h.deps.Lang, h.deps.Assets, rt.Hydrate)
 	})
 	if err == nil {
 		tier := TierRender

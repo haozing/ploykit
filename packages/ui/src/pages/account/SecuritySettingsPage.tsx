@@ -1,6 +1,6 @@
 
 import { useState } from 'react'
-import { z } from 'zod'
+import { z } from 'zod/mini'
 import { PageHeader, PageError, PageEmpty } from '../../components/Page'
 import { SettingsCard } from '../../components/SettingsCard'
 import { FormField } from '../../components/FormField'
@@ -16,28 +16,26 @@ import { useApi } from '@ploykit/hooks'
 import { useAuth } from '@ploykit/hooks'
 import { useZodForm } from '@ploykit/hooks'
 import { useSessions, useRevokeSession, useRevokeAllSessions, type SessionInfo } from '@ploykit/hooks'
-import { passwordSchema } from '../auth/RegisterPage'
+import { passwordSchema } from '../../lib/password-schema'
 import { apiErrorMessage } from '../../lib/api-error'
 import { formatDateTime, shortID, STATUS_TONE_CLASS } from '../../lib/utils'
 
-const changePwSchema = z
+export const changePwSchema = z
   .object({
-    old_password: z.string().min(1, '请输入当前密码'),
+    old_password: z.string().check(z.minLength(1, '请输入当前密码')),
     new_password: passwordSchema,
   })
   // B4（ui-audit-10pages §4.2，S3）：new==old 客户端拦截——相同值提交后端会
   // 判定通过并"成功"改密，顺带静默吊销全部会话（服务端无 new==old 校验，
-  // 半边 ➡️U1 identity 归属）。跨字段校验须挂对象级 refine（字段级拿不到 old）；
-  // zod 语义：字段规则全过才跑 refine，old 为空时不会叠加误导性报错。
-  .superRefine((v, ctx) => {
-    if (v.old_password !== '' && v.new_password === v.old_password) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['new_password'],
-        message: '新密码不能与当前密码相同',
-      })
-    }
-  })
+  // 半边 ➡️U1 identity 归属）。跨字段校验须挂对象级 check（字段级拿不到 old）；
+  // 与 classic 的 superRefine 同语义：对象形状先过，check 才跑，old 为空时
+  // 不会叠加误导性报错。
+  .check(
+    z.refine((v) => v.old_password === '' || v.new_password !== v.old_password, {
+      message: '新密码不能与当前密码相同',
+      path: ['new_password'],
+    }),
+  )
 type ChangePwForm = z.infer<typeof changePwSchema>
 
 function truncate(s: string, max = 32): string {

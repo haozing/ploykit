@@ -1,10 +1,16 @@
 
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useSEO } from '@ploykit/hooks'
 import { isApiError } from '@ploykit/client'
-import { SignInModal, Button, toast, apiErrorMessage } from '@ploykit/ui'
+import { Button, apiErrorMessage } from '@ploykit/ui'
 import { apiFetch } from '@ploykit/client'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
+
+// 交互岛按需加载：弹层 + toast 框架（Base UI Dialog / sonner，约 88KB gzip）
+// 只在用户点「收藏」时才需要，不该压在每个读者的首屏上。它们只在点击后
+// 挂载（signInOpen 初值 false，两端一致），所以不影响水合。
+const island = () => import('../blog-island')
+const SignInDialog = lazy(() => island().then((m) => ({ default: m.SignInDialog })))
 
 
 export interface BlogPostData {
@@ -39,7 +45,7 @@ export function BlogPost({ post }: { post: BlogPostData }) {
         body: { title: `阅读文章：${post.title}` },
       })
       setSaved(true)
-      toast.success('已收藏到任务列表')
+      void island().then((m) => m.toast.success('已收藏到任务列表'))
     } catch (err: unknown) {
       if (isApiError(err, 'E_UNAUTHENTICATED')) {
         // SignInModal 成功后整页硬跳转 location.state.from（loginRedirectTarget
@@ -53,7 +59,8 @@ export function BlogPost({ post }: { post: BlogPostData }) {
         setSignInOpen(true)
         return
       }
-      toast.error(apiErrorMessage(err, '收藏失败，请稍后重试'))
+      const msg = apiErrorMessage(err, '收藏失败，请稍后重试')
+      void island().then((m) => m.toast.error(msg))
     } finally {
       setSaving(false)
     }
@@ -74,13 +81,11 @@ export function BlogPost({ post }: { post: BlogPostData }) {
           </Button>
         </div>
       </article>
-      <SignInModal
-        open={signInOpen}
-        onOpenChange={setSignInOpen}
-        passwordOnly
-        title="登录后继续"
-        description="登录以收藏文章到你的任务列表"
-      />
+      {signInOpen && (
+        <Suspense fallback={null}>
+          <SignInDialog open={signInOpen} onOpenChange={setSignInOpen} />
+        </Suspense>
+      )}
     </main>
   )
 }

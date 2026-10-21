@@ -19,6 +19,7 @@ frontend:
 build:
 	cd web && npm run build
 	go run ./cmd/render prerender
+	node ../tools/precompress.mjs web/dist
 	rm -rf cmd/app/frontend
 	cp -r web/dist cmd/app/frontend
 	touch cmd/app/frontend/.placeholder

@@ -131,3 +131,45 @@ describe('FormField aria 回连（G7.3 / B5）', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('不能为空')
   })
 })
+
+/**
+ * useZodForm 的结构化 schema 契约：**同一份表单代码必须同时接受 zod 全量与
+ * zod/mini**。
+ *
+ * 类型上 `ZodFormSchema<T> = { parse(...) }` 放开了两套类，但类型放宽本身不
+ * 构成保证——真正决定 resolver 是否工作的是 `@hookform/resolvers/zod` 的运行时
+ * 判定（`"_zod" in schema`）与错误对象结构。这里跑一遍 mini schema 的真实提交
+ * 链路，证明放宽的同时没有把校验弄丢。
+ */
+describe('useZodForm 接受 zod/mini（结构化 schema 契约）', () => {
+  it('mini schema 仍能拦截非法值、放行合法值', async () => {
+    const mini = await import('zod/mini')
+    const miniSchema = mini.object({
+      email: mini.string().check(mini.email('mini：邮箱格式无效')),
+    })
+    type MiniValues = { email: string }
+    const seen: string[] = []
+
+    function MiniForm() {
+      // 若 resolver 不接受 mini schema，这里会在提交时抛错或直接放行空值。
+      const { register, handleSubmit, formState } = useZodForm<MiniValues>({ schema: miniSchema })
+      return (
+        <form onSubmit={handleSubmit((v) => seen.push(v.email))} noValidate>
+          <FormField label="mini 邮箱" error={formState.errors.email?.message} htmlFor="mini-email">
+            <input id="mini-email" {...register('email')} />
+          </FormField>
+          <button type="submit">提交 mini</button>
+        </form>
+      )
+    }
+
+    render(<MiniForm />)
+    fireEvent.click(screen.getByRole('button', { name: '提交 mini' }))
+    expect(await screen.findByText('mini：邮箱格式无效')).toBeInTheDocument()
+    expect(seen).toEqual([])
+
+    fireEvent.change(screen.getByLabelText('mini 邮箱'), { target: { value: 'a@b.com' } })
+    fireEvent.click(screen.getByRole('button', { name: '提交 mini' }))
+    await waitFor(() => expect(seen).toEqual(['a@b.com']))
+  })
+})

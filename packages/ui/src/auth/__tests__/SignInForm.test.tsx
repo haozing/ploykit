@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import type { ReactNode } from 'react'
 import { SignInForm } from '../SignInForm'
 import { KitLabelsProvider } from '../../labels/kit-labels'
@@ -32,6 +32,13 @@ vi.mock('../../router', () => ({
   useLocation: () => ({ state: locState.state }),
 }))
 
+// 被测组件的动态 import（tabs / 确认弹窗）在全量并行下可能被调度挤到 10s 之外，
+// 而失败信息是"找不到元素"——看起来像功能坏了。这里先预热同一个模块缓存，
+// 组件的 import() 随后立即命中；测试因此只验证行为，不验证打包器的调度速度。
+beforeAll(async () => {
+  await import('../SignInFormTabs')
+})
+
 beforeEach(() => {
   loginMock.submit.mockReset().mockResolvedValue({ ok: true })
   mockedPost.mockReset().mockResolvedValue({ user: { id: 'u1' }, expires_at: '2026-01-01T00:00:00Z' })
@@ -43,10 +50,11 @@ function renderForm(props: Parameters<typeof SignInForm>[0], wrapper?: (n: React
   return render(wrapper ? wrapper(<SignInForm {...props} />) : <SignInForm {...props} />)
 }
 
-describe('SignInForm tabs 形态（默认）', () => {
-  it('默认展示验证码登录 Tab，可切到密码登录并提交 /auth/login', async () => {
-    renderForm({})
-    expect(screen.getByRole('tab', { name: '验证码登录' })).toHaveAttribute('aria-selected', 'true')
+describe('SignInForm flow="tabs"（老形态，显式启用）', () => {
+  it('展示验证码登录 Tab，可切到密码登录并提交 /auth/login', async () => {
+    renderForm({ flow: 'tabs' })
+    // tabs 子模块是动态 import（不为不用它的形态付 Base UI 的字节）
+    expect(await screen.findByRole('tab', { name: '验证码登录' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
@@ -122,6 +130,67 @@ describe('SignInForm email-first（渐进披露）', () => {
   })
 })
 
+describe('SignInForm 默认形态 = email-first（前台推荐）', () => {
+  it('不传 flow 时首屏无 Tab、只有邮箱 + 主按钮', () => {
+    renderForm({})
+    expect(screen.queryByRole('tab')).toBeNull()
+    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
+  })
+
+  it('「使用密码登录」切到密码表单，可切回验证码（不占首屏权重）', async () => {
+    renderForm({})
+    expect(screen.queryByLabelText('密码')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
+    expect(await screen.findByLabelText('密码')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '改用验证码登录' }))
+    expect(await screen.findByRole('button', { name: '发送' })).toBeInTheDocument()
+  })
+
+  it('密码登录经切换后仍走 POST /auth/login', async () => {
+    mockedPost.mockClear()
+    renderForm({})
+    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
+    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'a@b.co' } })
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'pw-123456' } })
+    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith('/auth/login', { email: 'a@b.co', password: 'pw-123456' }),
+    )
+  })
+})
+
+describe('SignInForm OAuth 置于表单之上（业界惯例）', () => {
+  it('providers 存在时，OAuth 块在表单之前，并有"或使用邮箱"分隔', () => {
+    renderForm({ oauthProviders: [{ id: 'google', label: 'Google' }] })
+    const oauth = screen.getByTestId('oauth-providers')
+    const emailInput = screen.getByLabelText('邮箱')
+    // compareDocumentPosition: 4 = oauth 在 emailInput 之后?
+    // 用 DOCUMENT_POSITION_FOLLOWING (4) 判断 emailInput 是否在 oauth 之后
+    const rel = oauth.compareDocumentPosition(emailInput)
+    expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('或使用邮箱')).toBeInTheDocument()
+  })
+
+  // email-first 没有 Tab 概念，"或使用邮箱"是给邮箱表单做分隔；切到密码表单后
+  // 分隔行必须让位（否则同一句话在两个表单上方重复出现）。
+  it('切到密码表单后不再显示"或使用邮箱"分隔', async () => {
+    renderForm({ oauthProviders: [{ id: 'google', label: 'Google' }] })
+    expect(screen.getByText('或使用邮箱')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
+    await screen.findByLabelText('密码')
+    expect(screen.queryByText('或使用邮箱')).toBeNull()
+  })
+
+  // passwordOnly 是整页唯一形态，没有"邮箱表单是备选"这层语义，
+  // 因此不应出现"或使用邮箱"分隔；但第三方按钮本身仍要在。
+  it('passwordOnly 下不渲染"或使用邮箱"分隔，OAuth 按钮仍在', () => {
+    renderForm({ passwordOnly: true, oauthProviders: [{ id: 'github', label: 'GitHub' }] })
+    expect(screen.queryByText('或使用邮箱')).toBeNull()
+    expect(screen.getByRole('link', { name: /GitHub/ })).toBeInTheDocument()
+  })
+})
+
 describe('SignInForm 法律声明槽位', () => {
   it('termsUrl+privacyUrl 齐备 → 自动渲染「登录即同意 服务条款 与 隐私政策」', () => {
     renderForm({ termsUrl: 'https://e.com/terms', privacyUrl: 'https://e.com/privacy' })
@@ -165,9 +234,9 @@ describe('SignInForm OAuth 槽位', () => {
 })
 
 describe('SignInForm 文案覆盖（KitLabelsProvider）', () => {
-  it('Provider 覆盖 Tab 文案与链接文案', () => {
+  it('Provider 覆盖 Tab 文案与链接文案', async () => {
     renderForm(
-      {},
+      { flow: 'tabs' },
       (node) => (
         <KitLabelsProvider
           labels={{
@@ -180,7 +249,7 @@ describe('SignInForm 文案覆盖（KitLabelsProvider）', () => {
         </KitLabelsProvider>
       ),
     )
-    expect(screen.getByRole('tab', { name: '密码方式' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: '密码方式' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '注册新号' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '发验证码' })).toBeInTheDocument()
     // 未覆盖键落回默认值

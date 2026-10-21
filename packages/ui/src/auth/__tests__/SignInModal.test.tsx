@@ -48,11 +48,12 @@ function setup(open: boolean, props: Partial<Parameters<typeof SignInModal>[0]> 
 }
 
 describe('SignInModal 开合', () => {
-  it('open 时渲染表单（Dialog + 邮箱/密码 Tab）', () => {
+  it('open 时渲染表单（Dialog + 默认邮箱先行形态）', async () => {
     const { container } = setup(true)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '验证码登录' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
+    // 默认 flow='email-first'：首屏只有邮箱 + 主按钮，无 Tab
+    expect(await screen.findByLabelText('邮箱')).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).toBeNull()
     // 表单自带 h1 被关闭（showHeading=false），标题由 DialogTitle 承担
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     // Dialog 走 portal，内容挂在 document.body
@@ -79,7 +80,7 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
     locState.state = { from: '/admin/settings' }
     const { onOpenChange } = setup(true)
 
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
+    fireEvent.click(await screen.findByRole('button', { name: '使用密码登录' }))
     fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
     fireEvent.click(screen.getByRole('button', { name: '登录' }))
@@ -91,7 +92,7 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
 
   it('未传 onSuccess 且无深链：硬跳转默认目标 /app', async () => {
     setup(true)
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
+    fireEvent.click(await screen.findByRole('button', { name: '使用密码登录' }))
     fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
     fireEvent.click(screen.getByRole('button', { name: '登录' }))
@@ -102,7 +103,7 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
   it('传入 onSuccess：不做任何导航，仅回调 onSuccess', async () => {
     const onSuccess = vi.fn()
     setup(true, { onSuccess })
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
+    fireEvent.click(await screen.findByRole('button', { name: '使用密码登录' }))
     fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
     fireEvent.click(screen.getByRole('button', { name: '登录' }))

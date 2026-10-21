@@ -2,7 +2,7 @@
 import { renderToString } from 'react-dom/server.browser'
 import { createSsrEntry } from '@ploykit/runtime/server'
 import { setTanstackSsrLocation } from '@ploykit/runtime/router-tanstack'
-import routes from './routes'
+import routes from './routes.server'
 
 export default createSsrEntry({
   routes,

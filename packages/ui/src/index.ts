@@ -18,7 +18,7 @@ export { SignInForm } from './auth/SignInForm'
 export { SignInModal } from './auth/SignInModal'
 export type { OAuthProviderOption, LoginPageProps } from './pages/LoginPage'
 export { LandingPage } from './pages/LandingPage'
-export type { Feature as LandingFeature, Plan as LandingPlan } from './pages/LandingPage'
+export type { Feature as LandingFeature, Plan as LandingPlan, LandingNavLink } from './pages/LandingPage'
 
 export { Button, buttonVariants } from './components/ui/button'
 export { Badge, badgeVariants } from './components/ui/badge'

@@ -67,14 +67,29 @@ interface TanstackRouterInternals {
 
 /**
  * Synchronous match-commit (PoC entry-server.tsx populateSync, verbatim
- * shape). Returns the matched chain; every entry has status "success" when
- * routes carry no loader / beforeLoad / lazy component — the renderx contract
- * for SSR pages (data comes from Go Loaders, never JS loaders).
+ * shape, plus the status coercion described below).
+ *
+ * The renderx contract: data comes from Go Loaders, never from JS route
+ * loaders, so there is nothing to fetch before the first render and every match
+ * must commit as "success".
+ *
+ * That contract needs AN ACTIVE COERCION once lazy components carry a
+ * `preload` hook: router-core computes `status = routeNeedsLoad(route) ?
+ * "pending" : "success"`, and `routeNeedsLoad` counts
+ * `options.component.preload` as a reason to load. A lazyPage therefore flips
+ * every one of its matches to "pending", Match renders the pending branch
+ * (no pendingComponent → nothing), and the page is blank with the route's chunk
+ * never even requested. Forcing "success" restores the pre-split behaviour:
+ * the component renders, React sees the lazy() thunk, the Suspense boundary in
+ * Matches catches it, and the chunk loads through the normal path.
  */
 function populateSync(router: object): Array<{ routeId: string; status: string }> {
   const r = router as TanstackRouterInternals
   const next = r.latestLocation
   const matches = r.matchRoutes(next)
+  // See the doc comment: prefetchable lazy components otherwise poison the
+  // status. Assigning in place keeps the same match objects the store commits.
+  for (const m of matches) m.status = 'success'
   r.batch(() => {
     r.stores.location.set(next)
     r.stores.status.set('idle')
@@ -183,13 +198,26 @@ function TanstackRouterMount({ pages, propsByPageId, wrapInRouter }: TanstackRou
     component: () => createElement(Outlet),
   })
 
-  const pageRoutes = pages.map((p) =>
-    createRoute({
+  const pageRoutes = pages.map((p) => {
+    // The route component must be a lambda (it closes over propsByPageId), and a
+    // lambda has no `preload`. TanStack's prefetch path looks for exactly
+    // `route.options.component.preload` (router-core's routeNeedsLoad +
+    // load-client's preloadComponent), so without forwarding it a lazyPage's
+    // chunk can never be warmed — `defaultPreload: 'intent'` would silently do
+    // nothing. Forward the hook and keep the reference so hovering a link
+    // downloads the target route's chunk before the click.
+    const page = p.component as typeof p.component & { preload?: () => void }
+    const RouteComponent = () =>
+      createElement(page, propsByPageId?.[p.pageId] as object | undefined)
+    if (page.preload) {
+      ;(RouteComponent as typeof RouteComponent & { preload?: () => void }).preload = page.preload
+    }
+    return createRoute({
       getParentRoute: () => rootRoute,
       path: toTanstackPath(p.path),
-      component: () => createElement(p.component, propsByPageId?.[p.pageId] as object | undefined),
-    }),
-  )
+      component: RouteComponent,
+    })
+  })
 
   const routeTree = rootRoute.addChildren(pageRoutes)
 
@@ -200,6 +228,14 @@ function TanstackRouterMount({ pages, propsByPageId, wrapInRouter }: TanstackRou
       : createBrowserHistory(),
     stringifySearch: rawStringifySearch,
     parseSearch: rawParseSearch,
+    // Prefetch a route's JS on hover/focus of a link pointing at it. Without
+    // this the split graph costs a request chain per navigation: HTML → entry
+    // chunk → (only then) the route chunk, because the browser cannot know
+    // which dynamic import a URL maps to until the entry has executed
+    // (measured gap: ~137ms locally, one extra round trip on a real network).
+    // 'intent' rather than 'render' keeps it off the critical path: nothing is
+    // fetched for links the user never approaches.
+    defaultPreload: 'intent',
     // Product providers that need the router context (useLocation/useNavigate
     // inside them) mount here — inside RouterProvider's context, around the
     // rendered match tree.

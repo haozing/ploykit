@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MoreHorizontal, Plus } from 'lucide-react'
-import { z } from 'zod'
+import * as z from 'zod/mini'
 import type { components } from '@ploykit/client'
 import {
   PageHeader, PageLoading, PageError, PageEmpty,
@@ -42,14 +42,14 @@ type Delivery = components['schemas']['WebhookDelivery']
 type EventMeta = components['schemas']['WebhookEventItem']
 type RotateSecretResponse = components['schemas']['RotateWebhookSecretResponse']
 
-const createSchema = z.object({
+export const createSchema = z.object({
   
-  url: z
-    .string()
-    .url('请输入合法的回调 URL（如 https://example.com/webhook）')
-    .refine((v) => v.startsWith('https://'), '回调地址必须使用 https（明文 http 会被服务端拒绝）'),
+  url: z.string().check(
+    z.url('请输入合法的回调 URL（如 https://example.com/webhook）'),
+    z.refine((v) => v.startsWith('https://'), '回调地址必须使用 https（明文 http 会被服务端拒绝）'),
+  ),
   description: z.string(),
-  events: z.array(z.string()).min(1, '至少订阅一个事件类型'),
+  events: z.array(z.string()).check(z.minLength(1, '至少订阅一个事件类型')),
 })
 type CreateForm = z.infer<typeof createSchema>
 

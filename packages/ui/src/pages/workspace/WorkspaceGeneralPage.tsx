@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useNavigate } from '../../router'
 import { useQueryClient } from '@tanstack/react-query'
-import { z } from 'zod'
+import * as z from 'zod/mini'
 import { PageHeader, PageError } from '../../components/Page'
 import { SettingsCard } from '../../components/SettingsCard'
 import { FormField } from '../../components/FormField'
@@ -21,8 +21,12 @@ import { roleSatisfies } from '@ploykit/hooks'
 
 
 
-const renameSchema = z.object({
-  name: z.string().trim().min(1, '请输入工作区名称').max(64, '名称最多 64 字符'),
+export const renameSchema = z.object({
+  name: z.string().check(
+    z.trim(),
+    z.minLength(1, '请输入工作区名称'),
+    z.maxLength(64, '名称最多 64 字符'),
+  ),
 })
 type RenameForm = z.infer<typeof renameSchema>
 

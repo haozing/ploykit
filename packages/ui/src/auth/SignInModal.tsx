@@ -80,7 +80,7 @@ export function SignInModal({
   legalNote,
   termsUrl,
   privacyUrl,
-  flow = 'tabs',
+  flow = 'email-first',
   open,
   onOpenChange,
   size = 'sm',

@@ -442,6 +442,61 @@ func TestRoutesRejectsBadProjection(t *testing.T) {
 	}
 }
 
+// hydrate 是第二根轴：none 只对 static 有意义，CSR 页声明 none 等于让它
+// 永不挂载——必须在启动对账时爆炸，而不是上线后看到一个空白页。
+func TestRoutesRejectsHydrateNoneOnCSR(t *testing.T) {
+
+	bad := strings.Replace(testBundle, `{ path: '/', pageId: 'page', render: 'static' }`,
+		`{ path: '/', pageId: 'page', render: 'csr', hydrate: 'none' }`, 1)
+	p, err := NewEnginePool([]byte(bad), PoolOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	if _, err := p.Routes(context.Background()); err == nil || !strings.Contains(err.Error(), "hydrate=none") {
+		t.Errorf("CSR + hydrate:none 应被拒, got: %v", err)
+	}
+}
+
+// 旧路由表不带 hydrate 字段（空串）：必须继续按 load 处理，单/多产品升级
+// 顺序不该因为加字段而错位。
+func TestRoutesAcceptsLegacyProjectionWithoutHydrate(t *testing.T) {
+	p := newTestPool(t, PoolOptions{})
+	routes, err := p.Routes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) == 0 {
+		t.Fatal("bundle 应返回路由表")
+	}
+	for _, rt := range routes {
+		if rt.Hydrate != "" {
+			t.Fatalf("未声明的 hydrate 应保持空串, got %q", rt.Hydrate)
+		}
+	}
+	// 空串的实际语义要在产物上验证，而不是靠一个 helper 自证：RenderOnce 的
+	// 判据是 `hydrate == HydrateNone`，空串必须走"注入 props + 入口"这条路。
+	ent, err := RenderOnce(context.Background(), stubNamedRenderer{}, "page", "/",
+		json.RawMessage(`{}`), "", ViteAssets{JS: []string{"/assets/app.js"}}, routes[0].Hydrate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(ent.HTML)
+	if !strings.Contains(html, "__PLOYKIT_PROPS__") || !strings.Contains(html, "/assets/app.js") {
+		t.Fatalf("空 hydrate（旧投影）必须继续注入 props 与入口:\n%s", html)
+	}
+}
+
+// stubNamedRenderer 渲染一个最小可用的带 title 文档。
+type stubNamedRenderer struct{}
+
+func (stubNamedRenderer) Routes(context.Context) ([]RouteSpec, error) { return nil, nil }
+func (stubNamedRenderer) Render(context.Context, string, string, json.RawMessage) (RenderResult, error) {
+	s := NewSink()
+	s.Append("head", json.RawMessage(`[{"tag":"title","children":"T"}]`))
+	return RenderResult{HTML: "<main>x</main>", Sink: s}, nil
+}
+
 type fakeRenderer struct{ routes []RouteSpec }
 
 func (f fakeRenderer) Routes(context.Context) ([]RouteSpec, error) { return f.routes, nil }

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { LoginPage, loginRedirectTarget } from '../LoginPage'
 
 
@@ -27,6 +27,13 @@ const locState = vi.hoisted(() => ({ state: null as unknown }))
 vi.mock('../../router', () => ({
   useLocation: () => ({ state: locState.state }),
 }))
+
+// 被测组件的动态 import（tabs / 确认弹窗）在全量并行下可能被调度挤到 10s 之外，
+// 而失败信息是"找不到元素"——看起来像功能坏了。这里先预热同一个模块缓存，
+// 组件的 import() 随后立即命中；测试因此只验证行为，不验证打包器的调度速度。
+beforeAll(async () => {
+  await import('../../auth/SignInFormTabs')
+})
 
 beforeEach(() => {
   mockedPost.mockReset().mockResolvedValue({ user: { id: 'u1' }, expires_at: '2026-01-01T00:00:00Z' })
@@ -80,17 +87,18 @@ describe('LoginPage enableFedLogin', () => {
   })
 })
 
-describe('LoginPage 双模式 Tabs', () => {
-  it('默认展示验证码登录 Tab，可切到密码登录', () => {
-    renderLogin({})
-    expect(screen.getByRole('tab', { name: '验证码登录' })).toHaveAttribute('aria-selected', 'true')
+describe('LoginPage flow="tabs"（老形态，显式启用）', () => {
+  it('展示验证码登录 Tab，可切到密码登录', async () => {
+    renderLogin({ flow: 'tabs' })
+    // tabs 子模块动态 import（不用 tabs 的形态不付 Base UI 的字节）
+    expect(await screen.findByRole('tab', { name: '验证码登录' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
   })
 
   it('密码模式提交 → POST /auth/login 携带 email/password 并触发 onSuccess', async () => {
     const onSuccess = vi.fn()
-    renderLogin({ onSuccess })
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
+    renderLogin({ flow: 'tabs', onSuccess })
+    fireEvent.click(await screen.findByRole('tab', { name: '密码登录' }))
 
     fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
@@ -106,8 +114,8 @@ describe('LoginPage 双模式 Tabs', () => {
 
   it('密码模式登录失败展示后端错误文案', async () => {
     mockedPost.mockRejectedValueOnce(new Error('邮箱或密码错误'))
-    renderLogin({})
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
+    renderLogin({ flow: 'tabs' })
+    fireEvent.click(await screen.findByRole('tab', { name: '密码登录' }))
 
     fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'wrong' } })
@@ -172,8 +180,8 @@ describe('LoginPage 深链回跳（B-settings-8）', () => {
   it('location.state.from 为站内路径时，登录成功回跳该路径', async () => {
     locState.state = { from: '/admin/settings' }
     const onSuccess = vi.fn()
-    renderLogin({ onSuccess })
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
+    renderLogin({ flow: 'tabs', onSuccess })
+    fireEvent.click(await screen.findByRole('tab', { name: '密码登录' }))
 
     fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
@@ -221,10 +229,12 @@ describe('LoginPage passwordOnly（aifengkong #4：企业内部纯密码形态�
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
   })
 
-  it('默认形态不受影响（双 Tab 仍在）', () => {
+  it('passwordOnly 不影响其他形态：不传 passwordOnly 时走默认 email-first', () => {
     renderLogin({})
-    expect(screen.getByRole('tab', { name: '验证码登录' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
+    // 默认形态已改为 email-first：首屏无 Tab，只有邮箱 + 主按钮
+    expect(screen.queryByRole('tab')).toBeNull()
+    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
   })
 })
 

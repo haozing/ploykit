@@ -9,6 +9,225 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.12.0] — 2026-10-21
+
+Frontend payload batch: the second render axis (`hydrate`), route-level code
+splitting, and the delivery-layer work (cache headers, brotli, prefetch) needed
+to make the split actually pay off. Go (`platform/renderx`, `platform/webx`) +
+npm (`@ploykit/runtime` 0.9.0, `@ploykit/hooks` 0.9.0, `@ploykit/ui` 2.3.0).
+Motivated by the Astro comparison: the framework already had static rendering,
+cache invalidation and zero-Node deployment; what it lacked was the *default* of
+not shipping JavaScript when a page does not need it.
+
+Breaking surface (0.x minor): `renderx.RenderOnce` gained a `Hydrate` argument;
+`RouteSpec`/`PageSpec` gained a `hydrate` field (required on `PageSpec`);
+`useZodForm`'s `schema` type is now structural rather than `ZodSchema<T, T>`;
+`SignInForm`/`SignInModal` default to `flow: 'email-first'`.
+
+### Added
+- **webx**: `AssetCacheManifest` / `AssetCacheManifestWithTTL` — the exact form
+  of the asset cache: `files` is the list of paths the build emitted (from
+  `renderx.ViteManifestFiles(manifest.json)`), so a path is immutable **iff the
+  build listed it**. This exists because the filename heuristic cannot be made
+  correct: `Some-Page-Banner.png`, `Hero-Image-Large.jpg` and `DOWNLOAD.png` all
+  look exactly like hashes and were pinned `immutable, max-age=1y`, while
+  tightening the rule to reject them also rejects real Vite hashes (`CYhS-pAS`,
+  `B-WCCgPC`, `C-pQOpeV` — separator, no digit). The example now wires the
+  manifest variant and falls back to `AssetCache` only when the manifest is
+  absent. Verified 36/36 against the production build.
+- **renderx**: `ViteManifestFiles(data)` — every file path in a Vite
+  `manifest.json` (each entry's `file` plus its `css` list), slash-prefixed,
+  deduped and sorted; the data source for `webx.AssetCacheManifest`.
+- **webx**: `Precompressed` middleware — serves build-time `.br` sidecars when
+  the client accepts brotli, falling back to identity, and always stamps
+  `Vary: Accept-Encoding` (deduped against the outer gzip layer). Build-time
+  because Go ships a brotli decoder but no encoder; `-q 11` at build time beats
+  gzip -9 by ~14% on the entry chunk (171 KB → 144 KB). It sets `Content-Type`
+  itself — the layer answers before the file server, and with `nosniff` a missing
+  type silently blocks module execution.
+- **tools**: `tools/precompress.mjs <dir>` generates the sidecars, skipping
+  formats that are already compressed and sidecars larger than their source;
+  wired into `example/Makefile`'s `build`.
+- **webx**: `AssetCache` / `AssetCacheWithTTL` middleware — strong caching
+  (`public, max-age=31536000, immutable` + URL-derived `ETag` with 304) for
+  content-addressed asset paths only. The filename predicate is mechanical (a
+  ≥8-char hash segment), so it does not depend on Vite's default `/assets/`
+  directory. HTML and unhashed files pass through untouched. Found by
+  measurement, not review: `http.FileServer` sends no cache headers at all, so
+  after the code-splitting batch every in-site navigation re-downloaded the
+  entry chunk (the same 178 KB gzip fetched twice across one `/login` →
+  `/register` navigation). After wiring: second navigation 204 KB → 15 KB, hard
+  reload of a visited page 0 KB.
+- **ui**: `ConfirmProvider` no longer statically imports the AlertDialog primitive.
+  The provider (context + promise queue) stays in the entry because `useConfirm()`
+  must resolve synchronously; the dialog moved to `ConfirmDialogBody.tsx` and is
+  imported on the first `confirm()` call. Measured: that primitive is 23.0 KB
+  gzip, and it sat in the entry of *every* page while only firing for
+  destructive actions. Entry 169 KB → 152 KB.
+- **ui**: `LandingPage` accepts `navLinks` (rendered in both the header and the
+  footer as real `<a href>`s). Needed because content pages now ship zero JS —
+  a client-router `Link` has nothing to intercept there.
+- **example**: `/pricing`, `/docs`, `/about` added as `render: 'static'` +
+  `hydrate: 'none'`. Verified in a browser: **0 JS requests** on all four content
+  pages, and the prerender sitemap picks them up automatically.
+- **renderx**: `Hydrate` (`"none" | "load"`) joins `Mode` as the second axis of
+  the route projection. `hydrate: "none"` omits both the props script and the
+  client entry from the produced document — the HTML is final and the page ships
+  zero JS. Empty string normalizes to `load`, so a product upgraded ahead of the
+  framework keeps working. `hydrate: "none"` on a `csr` route is rejected at
+  startup reconciliation (a CSR page that never mounts renders nothing).
+  `RenderOnce` takes a `Hydrate` argument; `Document.NoHydration` skips the props
+  script at the template level. CSS is still emitted — styling belongs to the
+  final HTML, not to hydration. Docs: rendering.md §2.1.
+- **runtime**: `lazyPage(name, load)` wraps a dynamic import into a route-table
+  component. It exists for two reasons `React.lazy` does not cover: `displayName`
+  (so `routeTable()` still derives a stable `pageId` from the component name
+  instead of falling back to path-derived ids with `-2` suffixes) and a
+  `preload()` hook that TanStack Router's `defaultPreload` can call.
+- **runtime/ui**: `sideEffects: ["**/*.css"]` in `@ploykit/ui`. Without it a
+  barrel import of one component pulled in zod + sonner + the whole form stack
+  (measured: importing only `Button` cost 119 KB gzip; now 16 KB).
+- **ui**: password-strength rule moved out of `RegisterPage.tsx` into
+  `ui/src/lib/password-schema.ts`. Three pages consume it (register, reset,
+  change-password), and the settings-area one was importing the *page module* —
+  dragging the entire registration form into the settings chunk.
+- **hooks**: `useZodForm`'s `schema` is now structurally typed (`{ parse(...) }`)
+  instead of `ZodSchema<T, T>`, so callers may pass either full `zod` or
+  `zod/mini`. `@hookform/resolvers/zod` keys off `"_zod" in schema` at runtime
+  and both flavours satisfy it.
+
+### Fixed (audit pass over this batch)
+- **webx**: `AssetCache`'s content-addressed test was wrong in both directions.
+  Splitting on separators and reading the last token missed 7 of 36 assets in the
+  example build (`DialogTitle-7-VtvLIt`, `routes-settings-CQZQEAZD`, …) because
+  Vite's hash is base64url — `-` is part of the alphabet, not always a separator;
+  and a length-only rule classified `hero-image-large.jpg` as immutable, pinning a
+  file products expect to replace in place. The rule is now a 8-16 char sliding
+  suffix requiring a fingerprint signature (a digit or an uppercase letter):
+  36/36 correct on the real build. Also: headers are attached only to 2xx (a 404
+  on a fingerprinted path must not be cached for a year), non-GET/HEAD pass
+  through, and 304 keeps `Vary`.
+- **webx**: `Precompressed` answered `Range` and non-GET requests with a 200 +
+  whole encoded body (wrong semantics for partial content), looked up sidecars for
+  backslash paths, and served a sidecar whose identity file was gone (turning a
+  404 into a 200 with bytes nothing references). All three now fall through to the
+  file server, which owns existence and ranges.
+- **tools**: `precompress.mjs` now deletes a stale sidecar when the fresh output
+  would be larger than its source — leaving it in place kept the server sending
+  brotli bytes that no longer matched.
+- **renderx**: added `ErrServerSuspense` / assertion A2′. Documented as A2's job
+  ("a lazy static page fails A2 at build time"), it could not be: `renderToString`
+  emits `<!--$!-->` plus a template, which is non-empty. Verified against React 19
+  directly; both the prerender pipeline and runtime misses now reject it.
+- **ui**: `ConfirmProvider`'s on-demand dialog could hang its caller forever. A
+  failed chunk import left the promise unresolved (the caller's `await confirm()`
+  never continued, so the triggering button stayed busy), and a second `confirm()`
+  while a dialog was open overwrote the pending request without settling it. The
+  dialog module is now fetched per invocation (a failed import is retryable rather
+  than permanently poisoned the way `React.lazy`'s rejected thunk is), a load
+  failure settles as "cancelled", and a superseded request settles as "cancelled"
+  too.
+- **runtime**: `lazyPage` cached its rejected import promise, so one network blip
+  made a route permanently unloadable for the session. Failures now clear the
+  memo, and `preload()` returns its promise so TanStack's prefetch path can await
+  it.
+- **ui**: the login redirect guard was open to a backslash bypass.
+  `loginRedirectTarget` rejected `//host` but allowed `/\evil.com` and
+  `/\t/evil.com` — WHATWG URL parsing treats `\` as `/` for special schemes and
+  strips control characters, so both resolve to `https://evil.com/`. The guard now
+  rejects control characters and backslashes and confirms same-origin against the
+  parsed URL.
+- **example**: login/register pageIds now come from a shared `displayName` anchor
+  in the route factory. Relying on the function name produced `register-page2` on
+  the server (esbuild renamed one of two same-named functions) while the client
+  lazy page derived `register-page`, silently disabling the embedded-pageId rung
+  of the hydration ladder.
+- **ui (test infra)**: the suite was flaky under parallel load — assertions that
+  await a dynamic import failed with "unable to find element" against
+  testing-library's 1s `asyncUtilTimeout`. Raised to 5s with a 15s test timeout,
+  and the affected files warm the module cache in `beforeAll`. Three consecutive
+  full runs are green.
+
+### Changed
+- **ui**: `SignInForm` now defaults to **`flow: 'email-first'`** and renders OAuth
+  providers *above* the form. Rationale: the consumer-facing door should show one
+  input, not a code-vs-password choice; one-click OAuth is the preferred path and
+  the email form is the fallback after an "or" separator. The two-tab layout is
+  still available as `flow: 'tabs'` but is no longer the default, and its
+  implementation moved to `SignInFormTabs.tsx` behind a dynamic import — products
+  that never use tabs no longer download Base UI's Tabs primitive (measured 4.9 KB gzip for
+the whole tabs chunk in the example build).
+  Password login stays reachable from the default shape via a "sign in with
+  password" link (it cannot be removed: register-created users have a password,
+  OAuth-created users do not, and both must be able to sign in). `SignInModal`'s
+  default follows. Behavior/state moved verbatim into `useSignInFlow.ts`.
+  **Constraint**: `flow: 'tabs'` cannot be used on a `render: 'static'` page —
+  its dynamic import cannot resolve inside the synchronous QuickJS sandbox, so it
+  collapses to a Suspense placeholder. `email-first` and `passwordOnly` prerender
+  fine. Prerendered `/login` shrank 11.9 KB → 4.4 KB of HTML.
+- **example**: the blog post's in-flow sign-in no longer passes `passwordOnly`.
+  That flag locked out OAuth-created users, who have no `password_hash`.
+- **runtime**: `tanstackAssembler` sets `defaultPreload: 'intent'` and forwards
+  each page component's `preload()` onto the route component it builds. Both
+  halves are required: TanStack's prefetch path reads
+  `route.options.component.preload`, and the assembler wraps every page in a
+  lambda (to close over `propsByPageId`), which has no such property — without
+  the forward, `defaultPreload` silently loads nothing. Together they remove the
+  request chain that splitting introduced (HTML → entry chunk → route chunk;
+  measured ~137 ms of pure serialization locally, one extra round trip on a real
+  network).
+- **example**: login and register are now prerendered **without** paying for it in
+  the client bundle. They previously returned 469 bytes of
+  `<div id="root"></div>` — a blank screen until the whole entry chunk had
+  downloaded and executed; the HTML now arrives complete (11.9 KB / 12.8 KB) with
+  the form visible at first paint.
+  The first version of this change sync-imported both pages on *both* entries,
+  which pushed the client entry from 172 KB to 206 KB and made every unrelated
+  route (the blog post notably) carry zod + react-hook-form. That coupling was
+  unnecessary: Vite builds the client and esbuild builds the SSR bundle, so the
+  two module graphs are independent. `routes-table.tsx` is now a **factory**
+  holding all ~38 route declarations once and taking the two auth routes as
+  parameters; `routes.tsx` (client) passes `lazyPage(...)`, `routes.server.tsx`
+  (server) passes synchronous imports with `render: 'static'`. A factory rather
+  than two tables because two tables drift silently — a path added to one side
+  just serves the SPA shell on that entry.
+  Result: entry back to **173 KB gzip** with login/register still prerendered.
+  Hydration across the split verified end-to-end (React container present, tab
+  switching live, zod messages on empty submit, lazy auth pages unaffected).
+  Boundary: a client-lazy prerendered page shows its HTML immediately but stays
+  non-interactive until its chunk lands (measured 162.5 KB gzip on `/login` —
+  entry closure plus ~11.8 KB of route chunks); pages that must
+  be interactive on a cold cache should import synchronously on both sides and
+  accept the entry cost.
+- **example**: the other low-frequency auth pages live in `routes-auth-misc.tsx`
+  so a static import of login cannot drag them into the entry (Rollup keeps a
+  module in the entry when it is both statically and dynamically imported).
+- **ui**: form validation migrated from `zod` to `zod/mini` across all six
+  schema-bearing pages (register, profile, security, members, workspace-general,
+  schedules, webhooks). Same rules expressed as explicit `check()` compositions;
+  measured 39 KB → 8 KB gzip for the same validation. Because a `.check()` list
+  missing an entry type-checks silently, every rule is pinned by its
+  user-visible message in `settings-schemas.test.ts` / `RegisterPageSchema.test.ts`,
+  plus an end-to-end `RegisterPageValidation.test.tsx` asserting illegal input
+  never reaches the network.
+- **example**: the client graph is split along product-surface lines. Public
+  pages (login/register/forgot/reset/verify) load on demand; the app area,
+  settings area and admin console are one chunk each; the blog post's sign-in
+  dialog + toast stack is an island loaded only when the reader clicks "collect".
+  `render: 'static'` pages stay synchronous imports — the QuickJS sandbox renders
+  them synchronously and never pumps a promise, so a lazy static page renders
+  React's client-rendering placeholder. That placeholder is **non-empty**, so
+  assertion A2 (empty output) does not see it; assertion A2′ does
+  (`renderx: page suspended during server render`), at build time and on runtime
+  misses.
+- Measured on the example (gzip, production; marginal measured from the Vite
+  manifest's import graph): entry **152 KB** (was 337 KB before the split),
+  content pages (`/`, `/pricing`, `/docs`, `/about`) **0 KB**, blog post 152 KB
+  initial (+31 KB only if the reader opens the sign-in island), login 162 KB /
+  +11, register 181 KB / +29, `/app` 231 KB / +79, `/admin` 275 KB / +123,
+  `/settings` 295 KB / +143. The entry is react-dom + TanStack Router + the root
+  `Toaster`; brotli brings it to ~130 KB on the wire.
+
 ## [0.11.3] — 2026-10-21
 
 Consumer-hardening batch from the risk-engine test sweep (28 parallel test

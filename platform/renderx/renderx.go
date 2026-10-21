@@ -13,12 +13,25 @@ const (
 	ModeCSR Mode = "csr"
 )
 
+// Hydrate 是路由表投影里的第二根轴（与 Mode 正交）：服务端产出的 HTML
+// 之后还要不要 JS。空串按 HydrateLoad 处理，旧路由表不声明该字段时行为
+// 不变。
+type Hydrate string
+
+const (
+	// HydrateLoad 注入 props 脚本 + 客户端入口，浏览器水合。
+	HydrateLoad Hydrate = "load"
+	// HydrateNone 两者都不注入：HTML 即终态，页面零 JS。
+	HydrateNone Hydrate = "none"
+)
+
 const MaxPropsBytes = 512 << 10
 
 type RouteSpec struct {
-	Path   string `json:"path"`
-	PageID string `json:"pageId"`
-	Render Mode   `json:"render"`
+	Path    string  `json:"path"`
+	PageID  string  `json:"pageId"`
+	Render  Mode    `json:"render"`
+	Hydrate Hydrate `json:"hydrate"`
 }
 
 type PagePath struct {
