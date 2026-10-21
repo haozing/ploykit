@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -232,14 +233,28 @@ func dialWithRetry(ctx context.Context, dsn string, opt Options) (*pgxpool.Pool,
 	for attempt := 1; ; attempt++ {
 		pool, err = dialOnce(ctx, dsn, opt)
 		if err == nil {
+			if attempt > 1 {
+				slog.Info("pg: connected after retries", "attempt", attempt)
+			}
 			return pool, nil
 		}
 		if !isConnectTransient(err) {
+			// Permanent fault (bad catalog, bad credentials, bad DSN): fail now and
+			// say why. Retrying cannot fix it, and the silent-retry window read as a
+			// hang (risk-engine field report: 3 minutes of no output on a missing
+			// database — process alive, port never bound).
+			slog.Error("pg: connect failed permanently, not retrying",
+				"attempt", attempt, "err", err)
 			return nil, fmt.Errorf("pg: attempt %d: %w", attempt, err)
 		}
 		if time.Now().After(deadline) {
+			slog.Error("pg: startup budget exhausted", "attempts", attempt, "err", err)
 			return nil, fmt.Errorf("pg: startup budget exhausted after %d attempts: %w", attempt, err)
 		}
+		// One line per retry: the first attempt's cause is usually the whole story,
+		// and without it operators see a live process that prints nothing.
+		slog.Warn("pg: connect attempt failed, retrying",
+			"attempt", attempt, "backoff", delay, "err", err)
 		sleep := jitter(delay)
 		select {
 		case <-ctx.Done():
@@ -252,13 +267,28 @@ func dialWithRetry(ctx context.Context, dsn string, opt Options) (*pgxpool.Pool,
 	}
 }
 
+// isCallerCtxErr reports whether the error came from the caller's context rather than
+// from the connection target.
 func isCallerCtxErr(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
+// isConnectTransient reports whether retrying could plausibly succeed.
+//
+// Precedence matters and is locked by tests:
+//  1. A PgError means the server answered — judge by SQLSTATE. Auth failures and
+//     missing databases are permanent even though pgx wraps them in ConnectError.
+//  2. A ConnectError without a PgError is transport-level (refused, DNS, dial
+//     timeout) and is retryable — including a dial timeout that surfaces as
+//     context.DeadlineExceeded from our own connect_timeout (PG2).
+//  3. Only then does a bare caller-context error mean "stop".
 func isConnectTransient(err error) bool {
 	if err == nil {
 		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return isTransientSQLState(pgErr.Code)
 	}
 	var connectErr *pgconn.ConnectError
 	if errors.As(err, &connectErr) {
@@ -269,6 +299,26 @@ func isConnectTransient(err error) bool {
 	}
 	var netErr net.Error
 	return errors.As(err, &netErr)
+}
+
+// isTransientSQLState lists the server-side SQLSTATEs worth retrying. Everything else
+// the server rejects (invalid_catalog_name 3D000, invalid_password 28P01,
+// insufficient_privilege 42501) is a deployment/configuration mistake: retrying turns a
+// 50 ms failure into a startup-timeout one with no extra information.
+func isTransientSQLState(code string) bool {
+	// Class 08 — connection exception (08P01 protocol violation aside, all are
+	// transport-level and retryable).
+	if strings.HasPrefix(code, "08") && code != "08P01" {
+		return true
+	}
+	switch code {
+	case "53300", // too_many_connections
+		"57P03", // cannot_connect_now (server starting up / shutting down)
+		"40001", // serialization_failure
+		"40P01": // deadlock_detected
+		return true
+	}
+	return false
 }
 
 func jitter(d time.Duration) time.Duration {

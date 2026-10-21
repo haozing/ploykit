@@ -205,4 +205,58 @@ describe('DataTable', () => {
     )
     expect(seenIndexes).toEqual([0, 1, 2])
   })
+
+  it('pageSizeOptions + onPageSizeChange：渲染条数选择器，切换回调新条数', () => {
+    const onPageSizeChange = vi.fn()
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        pagination={{
+          page: 1,
+          pageSize: 20,
+          total: 42,
+          onPageChange: () => {},
+          onPageSizeChange,
+          pageSizeOptions: [10, 20, 50],
+        }}
+      />,
+    )
+    const select = screen.getByRole('combobox', { name: '每页条数' })
+    expect(select).toHaveValue('20')
+    fireEvent.change(select, { target: { value: '50' } })
+    expect(onPageSizeChange).toHaveBeenCalledWith(50)
+  })
+
+  it('未传 onPageSizeChange 时不渲染条数选择器（向后兼容）', () => {
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        pagination={{ page: 1, pageSize: 20, total: 42, onPageChange: () => {} }}
+      />,
+    )
+    expect(screen.queryByRole('combobox', { name: '每页条数' })).not.toBeInTheDocument()
+  })
+
+  it('pageSizeOptions 缺省时回退默认候选 [10,20,50,100]', () => {
+    render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        pagination={{
+          page: 1,
+          pageSize: 20,
+          total: 42,
+          onPageChange: () => {},
+          onPageSizeChange: () => {},
+        }}
+      />,
+    )
+    const select = screen.getByRole('combobox', { name: '每页条数' })
+    expect(select.querySelectorAll('option')).toHaveLength(4)
+  })
 })

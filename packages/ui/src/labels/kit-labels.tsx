@@ -56,6 +56,26 @@ export interface KitLabels {
   nextPage?: string
   /** 翻页后空页（stale page）的提示文案（默认「本页没有数据，可返回上一页」）。 */
   emptyState?: string
+  /** 每页条数选择器的 aria-label（默认「每页条数」）。 */
+  pageSizeAria?: string
+  /** 每页条数选项；函数值键（默认 `${n} 条/页`）。 */
+  pageSizeOption?: (n: number) => string
+
+  // ---- SearchSelect（可搜索单选下拉）----
+  /** 触发按钮无值占位（默认「请选择」）。 */
+  searchSelectPlaceholder?: string
+  /** 弹层内搜索框占位（默认「搜索…」）。 */
+  searchSelectSearchPlaceholder?: string
+  /** 无匹配项文案（默认「无匹配项」）。 */
+  searchSelectEmpty?: string
+  /** 清除已选按钮 aria-label（默认「清除选择」）。 */
+  searchSelectClear?: string
+
+  // ---- DatePicker ----
+  /** 空值占位（默认「选择日期」）。 */
+  datePickerPlaceholder?: string
+  /** 清除按钮 aria-label（默认「清除日期」）。 */
+  datePickerClear?: string
 
   // ---- SecretModal ----
   /** 勾选确认后的关闭按钮（默认「我已保存」）。 */
@@ -133,6 +153,16 @@ export const DEFAULT_KIT_LABELS = {
   previousPage: '上一页',
   nextPage: '下一页',
   emptyState: '本页没有数据，可返回上一页',
+  pageSizeAria: '每页条数',
+  pageSizeOption: (n: number) => `${n} 条/页`,
+
+  searchSelectPlaceholder: '请选择',
+  searchSelectSearchPlaceholder: '搜索…',
+  searchSelectEmpty: '无匹配项',
+  searchSelectClear: '清除选择',
+
+  datePickerPlaceholder: '选择日期',
+  datePickerClear: '清除日期',
 
   confirmSaved: '我已保存',
   confirmPending: '请先确认已保存',

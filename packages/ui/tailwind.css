@@ -1,7 +1,21 @@
-/* Tailwind v4 source registration for @ploykit/ui.
-   Tailwind v4 skips node_modules in automatic content detection, so standalone
-   (npm) consumers must register this package's source explicitly. @source
-   resolves relative to THIS stylesheet, so it points at the package's own src/
-   whether the package is consumed from a monorepo workspace or from node_modules.
-   Standalone consumers: add `@import "@ploykit/ui/tailwind.css";` to their CSS entry. */
+/* Tailwind v4 entry for @ploykit/ui — standalone consumers add exactly ONE line
+   to their CSS: `@import "@ploykit/ui/tailwind.css";`
+
+   It carries the two things the framework cannot leave to the consumer:
+
+   1. Transition utilities. The overlay primitives (Select / Popover / Sheet /
+      Dialog / Combobox / Tooltip) close with `data-closed:animate-out`; Base UI
+      unmounts a popup only after its exit animation ends. Without
+      tw-animate-css there is no animation to finish, `animationend` never
+      fires, and every closed popup stays mounted with `data-closed` — looking
+      gone but still covering the page and swallowing clicks. It is silent: no
+      console error, no failing test, only a dead UI (risk-engine field report
+      2026-10-21). Importing it here makes the contract impossible to get wrong.
+
+   2. Source registration. Tailwind v4 skips node_modules in automatic content
+      detection, so the package's own sources must be declared explicitly.
+      @source resolves relative to THIS stylesheet, so it points at the
+      package's own src/ whether the package is consumed from a monorepo
+      workspace or from node_modules. */
+@import "tw-animate-css";
 @source "./src";

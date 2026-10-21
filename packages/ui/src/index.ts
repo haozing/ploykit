@@ -56,7 +56,11 @@ export { FormField } from './components/FormField'
 export type { FormFieldProps } from './components/FormField'
 export { PasswordField } from './components/PasswordField'
 export { DataTable } from './components/DataTable'
-export type { Column, DataTableProps } from './components/DataTable'
+export type { Column, DataTableProps, DataTablePagination } from './components/DataTable'
+export { SearchSelect } from './components/SearchSelect'
+export type { SearchSelectOption, SearchSelectProps } from './components/SearchSelect'
+export { DatePicker } from './components/DatePicker'
+export type { DatePickerProps } from './components/DatePicker'
 
 export {
   Field, FieldLabel, FieldDescription, FieldError, FieldGroup, FieldLegend,

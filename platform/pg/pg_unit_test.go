@@ -187,11 +187,37 @@ func TestIsConnectTransientCtxExclusion_UTPG08(t *testing.T) {
 
 	require.True(t, isConnectTransient(&pgconn.ConnectError{}))
 	require.True(t, isConnectTransient(fakeNetErr{}))
-
 	require.True(t, isConnectTransient(os.ErrDeadlineExceeded))
 
 	require.False(t, isConnectTransient(nil))
 	require.False(t, isConnectTransient(errors.New("forced")))
+}
+
+// 永久性服务端错误必须 fail-fast：重试不会自愈，只会把 50ms 的失败拖成
+// startup-timeout（risk-engine 实测：库不存在时进程静默挂 3 分钟）。
+func TestIsConnectTransientPermanentSQLState_UTPG09(t *testing.T) {
+	// 3D000 invalid_catalog_name（库不存在）
+	require.False(t, isConnectTransient(&pgconn.PgError{Code: "3D000", Message: "database \"x\" does not exist"}))
+	// 28P01 invalid_password（认证失败）
+	require.False(t, isConnectTransient(&pgconn.PgError{Code: "28P01", Message: "password authentication failed"}))
+	// 42501 insufficient_privilege
+	require.False(t, isConnectTransient(&pgconn.PgError{Code: "42501", Message: "permission denied"}))
+	// 纯运输层 ConnectError（无 PgError）仍按瞬时处理
+	require.True(t, isConnectTransient(fmt.Errorf("failed to connect: %w", &pgconn.ConnectError{})))
+
+	// 服务端启动中 / 连接数满 → 值得重试
+	require.True(t, isConnectTransient(&pgconn.PgError{Code: "57P03", Message: "the database system is starting up"}))
+	require.True(t, isConnectTransient(&pgconn.PgError{Code: "53300", Message: "too many connections"}))
+}
+
+func TestIsTransientSQLState_UTPG10(t *testing.T) {
+	for _, code := range []string{"53300", "57P03", "40001", "40P01", "08006", "08003", "08000"} {
+		require.True(t, isTransientSQLState(code), code)
+	}
+	// 08P01 protocol_violation 是编程错误，重试无意义
+	for _, code := range []string{"3D000", "28P01", "42501", "08P01", ""} {
+		require.False(t, isTransientSQLState(code), code)
+	}
 }
 
 func TestBreakerHalfOpenConcurrentSingleProbe_UTPG09(t *testing.T) {

@@ -35,6 +35,7 @@ import {
   useLocation as useTanStackLocation,
   useNavigate as useTanStackNavigate,
   useParams as useTanStackParams,
+  useRouter as useTanStackRouter,
   useSearch as useTanStackSearch,
 } from '@tanstack/react-router'
 
@@ -116,15 +117,54 @@ export function useParams(): Record<string, string | undefined> {
  * - `hash`: hash WITHOUT the leading `#` (empty string when absent)
  * - `state`: the in-memory history state (or null)
  *
+ * Host detection uses `useRouter({ warn: false })`, which returns `undefined`
+ * outside a `RouterProvider` instead of throwing. A host that runs another
+ * router (react-router) or a plain SPA therefore gets a `window.history`-backed
+ * fallback rather than a render crash — before 2026-10-21 this hook threw
+ * `Cannot read properties of null (reading 'isServer')`, which killed the whole
+ * LoginPage for any non-TanStack consumer (risk-engine field report).
+ *
+ * The branch is stable per environment: a router provider wraps consumers at
+ * mount time and is never inserted around an already-mounted subtree.
+ *
  * @returns the normalized current location object.
  */
 export function useLocation(): LocationCompat {
+  const router = useTanStackRouter({ warn: false })
+  if (!router) return useHistoryFallbackLocation()
+  return useTanStackLocationCompat()
+}
+
+function useTanStackLocationCompat(): LocationCompat {
   const location = useTanStackLocation()
   return {
     pathname: location.pathname,
     search: location.searchStr,
     hash: location.hash,
     state: (location.state ?? null) as LocationCompat['state'],
+  }
+}
+
+/** Reads `window.history` directly — deliberately non-reactive: this path serves
+ *  one-shot consumers (e.g. SignInForm's redirect target) in hosts without a
+ *  TanStack router; reactive consumers run a router and take the branch above. */
+function useHistoryFallbackLocation(): LocationCompat {
+  if (typeof window === 'undefined') {
+    return { pathname: '', search: '', hash: '', state: null }
+  }
+  const { pathname, search, hash } = window.location
+  const state = window.history.state
+  // react-router stores location state under `usr` (the rest of the object is
+  // its own bookkeeping: key/idx). Unwrap it so `location.state.from` reads the
+  // same value it does under TanStack.
+  const usr = state && typeof state === 'object' && 'usr' in state
+    ? (state as { usr?: unknown }).usr
+    : state
+  return {
+    pathname: pathname ?? '',
+    search: search ?? '',
+    hash: (hash ?? '').replace(/^#/, ''),
+    state: usr ?? null,
   }
 }
 

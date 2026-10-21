@@ -8,7 +8,23 @@ React 前端壳：默认页面 + 组件。逻辑与状态在 [hooks](../hooks) �
 | `@ploykit/hooks` | `PloykitProvider` + headless hooks（认证/工作区/计费） |
 | `@ploykit/client` | typed API client + CSRF（hooks 的底层） |
 
-依赖方向：ui → hooks → client。Peer deps：`react` 19 / `react-dom` 19 / `@tanstack/react-query` 5 / `react-router` 7 / `tailwindcss` 4。产物为 ESM（相对导入无扩展名，需经 vite/esbuild 等打包器解析）。
+依赖方向：ui → hooks → client。Peer deps：`react` 19 / `react-dom` 19 / `@tanstack/react-query` 5 / `@tanstack/react-router` 1.x / `tailwindcss` 4（`tw-animate-css` 已随本包 dependencies 安装，消费方无需另装）。产物为 ESM（相对导入无扩展名，需经 vite/esbuild 等打包器解析）。
+
+## 样式接入（standalone 消费方必读）
+
+CSS 入口加**一行**即可：
+
+```css
+@import "tailwindcss";
+@import "@ploykit/ui/tailwind.css";
+```
+
+`@ploykit/ui/tailwind.css` 已包含两件事，不要自己重复配：
+
+1. **`tw-animate-css`** —— 全部弹层（Select / Popover / Sheet / Dialog / Combobox / Tooltip）的开关场动画。缺了它，Base UI 等不到 `animationend`，**关闭后的弹层会永久滞留在 DOM 里吞掉点击**，且不报任何错（risk-engine field report 2026-10-21）。
+2. **`@source` 源码注册** —— Tailwind v4 自动扫描会跳过 node_modules，本行让框架组件的类名进入产物。
+
+此外仍需在消费方 CSS 提供完整 shadcn 语义 token（`--background`/`--primary`/… 与 `@theme inline` 映射）及 ploykit 扩展的 `--success` / `--warning`，详见 `docs/dev-environment.md` 的 Token contract 节。
 
 ## 快速使用
 

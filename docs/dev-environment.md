@@ -373,5 +373,21 @@ guard test enforces this. Product CSS therefore needs exactly:
 3. An `@source` directive pointing at the `@ploykit/ui` sources (workspace links live under
    node_modules, which Tailwind's automatic detection skips).
 
+The simplest way to satisfy (3) — and to get overlay transitions for free — is one line:
+
+```css
+@import "@ploykit/ui/tailwind.css";
+```
+
+**Overlay transitions are part of the contract too** (added 2026-10-21, risk-engine field
+report): every overlay primitive closes with `data-closed:animate-out`, and Base UI unmounts
+a popup only after its exit animation ends. Without `tw-animate-css` there is no animation,
+`animationend` never fires, and **every closed Select / Popover / Sheet / Dialog / Combobox
+stays mounted with `data-closed`** — appearing gone while still covering the page and
+swallowing clicks (silent: no console error, no failing test). `@ploykit/ui` now imports it
+inside its own `tailwind.css` entry and lists it in `dependencies`, so the single import
+line above covers it; do not strip that import and do not ask the consumer to add the
+package separately.
+
 Product pages may freely use classic palette classes (the Tailwind default palette is
 always generated); framework components never do.

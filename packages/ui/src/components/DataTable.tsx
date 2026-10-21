@@ -19,6 +19,13 @@ export interface DataTablePagination {
   pageSize: number
   total: number
   onPageChange: (page: number) => void
+  /**
+   * 每页条数切换回调。提供后分页栏右侧出现条数选择器
+   * （选项来自 pageSizeOptions，默认 [10, 20, 50, 100]）。
+   */
+  onPageSizeChange?: (pageSize: number) => void
+  /** 每页条数候选值；仅 onPageSizeChange 存在时渲染。 */
+  pageSizeOptions?: number[]
 }
 
 export interface DataTableProps<T> {
@@ -124,6 +131,22 @@ export function DataTable<T>({ columns, rows, rowKey, loading = false, empty, on
             </span>
           )}
           <div className="flex gap-2">
+            {pagination.onPageSizeChange && (
+              <select
+                data-slot="data-table-page-size"
+                aria-label={L.pageSizeAria}
+                value={pagination.pageSize}
+                disabled={loading}
+                onChange={(e) => pagination.onPageSizeChange?.(Number(e.target.value))}
+                className="h-7 rounded-md border border-input bg-transparent px-1.5 text-sm text-foreground outline-none focus-visible:border-ring disabled:opacity-50 dark:bg-input/30"
+              >
+                {(pagination.pageSizeOptions ?? [10, 20, 50, 100]).map((n) => (
+                  <option key={n} value={n}>
+                    {L.pageSizeOption(n)}
+                  </option>
+                ))}
+              </select>
+            )}
             <Button
               size="sm"
               variant="outline"

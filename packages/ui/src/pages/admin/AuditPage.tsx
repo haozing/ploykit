@@ -12,6 +12,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Field, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { DatePicker } from '../../components/DatePicker';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
@@ -49,6 +50,22 @@ function draftFromParams(p: URLSearchParams): FilterDraft {
     from: p.get('from') ?? '',
     to: p.get('to') ?? '',
   };
+}
+
+/** 草稿里的 Y-M-D 串 → DatePicker 的本地 Date（空串 → null）。 */
+function parseYMD(v: string): Date | null {
+  if (!v) return null;
+  const d = new Date(`${v}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** DatePicker 的本地 Date → 草稿的 Y-M-D 串（null → 空串）。 */
+function formatYMD(d: Date | null): string {
+  if (!d) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 
@@ -267,20 +284,18 @@ export function AuditPage() {
         </Field>
         <Field className="w-40 gap-1">
           <FieldLabel htmlFor="admin-audit-filter-from">起始日期</FieldLabel>
-          <Input
+          <DatePicker
             id="admin-audit-filter-from"
-            type="date"
-            value={draft.from}
-            onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+            value={parseYMD(draft.from)}
+            onChange={(d) => setDraft({ ...draft, from: formatYMD(d) })}
           />
         </Field>
         <Field className="w-40 gap-1">
           <FieldLabel htmlFor="admin-audit-filter-to">结束日期</FieldLabel>
-          <Input
+          <DatePicker
             id="admin-audit-filter-to"
-            type="date"
-            value={draft.to}
-            onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+            value={parseYMD(draft.to)}
+            onChange={(d) => setDraft({ ...draft, to: formatYMD(d) })}
           />
         </Field>
         <Button onClick={apply}>

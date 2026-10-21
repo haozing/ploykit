@@ -9,6 +9,80 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.11.2] — 2026-10-21
+
+Consumer-integration batch: the component-completeness work from the
+risk-engine 补件三件套 report (collaboration issue #5) plus the four integration
+defects the same consumer hit while adopting the package standalone. Touches
+both tracks: Go (`platform/pg` fail-fast + logging) and npm (`@ploykit/ui`
+2.2.0). This is the framework's first npm consumer that does not run TanStack
+Router, which is what surfaced the host-coupling bugs below.
+
+### Added
+- **ui**: `SearchSelect` — searchable single-select built on Base UI Combobox
+  (keyboard navigation, ARIA combobox semantics, built-in filtering). Contract:
+  `options: { value, label, disabled? }[]`, controlled `value` may be `null` /
+  `undefined`, `onChange` emits the raw value or `null` on clear; `clearable`,
+  `searchable`, `size`, `triggerAriaLabel`, `emptyText`, `searchPlaceholder`,
+  `triggerClassName` seams. Value type is preserved (numbers do not become
+  strings).
+- **ui**: `DatePicker` — single-date input. `value` is a local-calendar `Date`,
+  `onChange` emits local `00:00:00` or `null`; formatting is local Y-M-D (never
+  `toISOString().slice(0,10)`, which shifts a day in UTC+8). Supports `min` /
+  `max`, `clearable`, `size`, and native `id` / `name` / aria passthrough.
+  Built on the native date input per component-selection's "no third-party when
+  the standard library suffices" principle.
+- **ui**: `KitLabels` gains `pageSizeAria` / `pageSizeOption` (DataTable page-size
+  selector), `searchSelectPlaceholder` / `searchSelectSearchPlaceholder` /
+  `searchSelectEmpty` / `searchSelectClear`, and `datePickerPlaceholder` /
+  `datePickerClear`. All have built-in defaults — consumers not mounting a
+  provider see no change.
+
+### Changed
+- **ui**: `DataTable` pagination gains optional `onPageSizeChange` and
+  `pageSizeOptions` (default candidates `[10, 20, 50, 100]`). The selector only
+  renders when `onPageSizeChange` is supplied, so every existing call site keeps
+  its current layout and behavior (additive, non-breaking).
+- **ui**: `admin/AuditPage` and `workspace/WorkspaceAuditPage` filter bars now use
+  `DatePicker` instead of hand-wired `<Input type="date">` (reverse clause: the
+  framework consumes its own new capability).
+- **ui**: `useLocation()` no longer requires a TanStack `RouterProvider`. Host
+  detection goes through `useRouter({ warn: false })`; outside a router the hook
+  returns a `window.location` / `window.history`-backed location instead of
+  throwing `Cannot read properties of null (reading 'isServer')`. The fallback
+  unwraps react-router's `history.state.usr` envelope, so `location.state.from`
+  reads the same value. This unblocked `LoginPage` / `SignInForm` in react-router
+  and plain-SPA products (risk-engine field report; regression tests in
+  `router/__tests__/no-router-host.test.tsx`).
+
+### Fixed
+- **ui (packaging, silent-failure class)**: `@ploykit/ui/tailwind.css` now
+  `@import "tw-animate-css"` and the package lists it in `dependencies`. Every
+  overlay primitive closes with `data-closed:animate-out`, and Base UI unmounts
+  a popup only after `animationend`; with no transition utilities the event never
+  fired, so **closed Select / Popover / Sheet / Dialog / Combobox stayed mounted
+  with `data-closed`** — visually gone but still covering the page and swallowing
+  clicks, with no console error and no failing test. The example had wired the
+  import by hand, which hid the gap from the framework's own suites. Consumers
+  that followed the documented one-line `@import "@ploykit/ui/tailwind.css"`
+  were dead-ended (risk-engine field report 2026-10-21).
+- **ui (docs)**: `packages/ui/README.md` peer deps corrected — the routing peer
+  is `@tanstack/react-router` 1.x, not `react-router` 7 (the 2.0 migration left
+  this line stale and it actively misleads consumers into assuming stack
+  compatibility). README gained a "样式接入" section stating the one-line CSS
+  contract.
+- **platform/pg (observability + fail-fast)**: `dialWithRetry` now logs every
+  failed attempt (`slog.Warn` with attempt, backoff, err) and logs the terminal
+  reasons; a permanently-failing target no longer spends the whole
+  `StartupTimeout` silently. `isConnectTransient` now classifies server errors by
+  SQLSTATE first — `3D000` (missing database), `28P01` (bad password) and
+  `42501` (insufficient privilege) fail fast instead of being retried as
+  transport faults, while class `08` connection exceptions, `53300`
+  (too_many_connections), `57P03` (starting up), `40001` / `40P01` remain
+  retryable. Symptom before the fix: a missing database produced a live process
+  with zero output and an unbound port for three full minutes (risk-engine
+  deployment field report).
+
 ## [0.11.1] — 2026-10-20
 
 Adoption-seam batch from the migration consumer's v0.10.5 follow-up report

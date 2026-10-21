@@ -6,6 +6,7 @@ import { PageHeader, PageLoading, PageError, PageEmpty } from '../../components/
 import { DataTable, type Column } from '../../components/DataTable'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import { DatePicker } from '../../components/DatePicker'
 import { Field, FieldLabel } from '../../components/ui/field'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Badge } from '../../components/ui/badge'
@@ -49,6 +50,22 @@ function paramsFromDraft(d: FilterDraft, offset: number): URLSearchParams {
   if (d.to) p.set('to', d.to)
   if (offset > 0) p.set('offset', String(offset))
   return p
+}
+
+/** 草稿里的 Y-M-D 串 → DatePicker 的本地 Date（空串 → null）。 */
+function parseYMD(v: string): Date | null {
+  if (!v) return null
+  const d = new Date(`${v}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** DatePicker 的本地 Date → 草稿的 Y-M-D 串（null → 空串）。 */
+function formatYMD(d: Date | null): string {
+  if (!d) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function toFilters(d: FilterDraft): AuditFilters {
@@ -176,20 +193,18 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
         </Field>
         <Field className="w-40 gap-1">
           <FieldLabel htmlFor="audit-filter-from">开始日期</FieldLabel>
-          <Input
+          <DatePicker
             id="audit-filter-from"
-            type="date"
-            value={draft.from}
-            onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
+            value={parseYMD(draft.from)}
+            onChange={(d) => setDraft((s) => ({ ...s, from: formatYMD(d) }))}
           />
         </Field>
         <Field className="w-40 gap-1">
           <FieldLabel htmlFor="audit-filter-to">结束日期</FieldLabel>
-          <Input
+          <DatePicker
             id="audit-filter-to"
-            type="date"
-            value={draft.to}
-            onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
+            value={parseYMD(draft.to)}
+            onChange={(d) => setDraft((s) => ({ ...s, to: formatYMD(d) }))}
           />
         </Field>
         <Button onClick={apply}>
