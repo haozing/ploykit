@@ -143,6 +143,15 @@ func (f *fakeRepo) CountRecentAttempts(_ context.Context, _, _ string, _ time.Ti
 	return f.failedAttempts, nil
 }
 
+// EarliestRecentAttempt backs the 429 retry hint: the fake treats the (frozen)
+// attempt timestamp as the oldest failure inside the window.
+func (f *fakeRepo) EarliestRecentAttempt(_ context.Context, _, _ string, since time.Time) (time.Time, bool, error) {
+	if f.failedAttempts == 0 || frozen.Before(since) {
+		return time.Time{}, false, nil
+	}
+	return frozen, true, nil
+}
+
 func newSessionSvc(f *fakeRepo, m *fakeMail) *app.SessionService {
 	return app.NewSessionService(f, m, app.SessionConfig{AllowSignup: true, SecretPepper: "p"},
 		time.Hour, 0, func() time.Time { return frozen })

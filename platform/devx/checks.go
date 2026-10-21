@@ -205,8 +205,8 @@ func RLSCheck(conn *sql.DB) Check {
 			}
 			if len(visible) > 0 {
 				return Result{
-					Pass:   false,
-					Detail: fmt.Sprintf("FORCE-RLS table(s) %v return rows to a non-bypass role with no tenant context: the policy does not reference the tenant session variables or is permissive; the RLS layer is dead weight and a live 42501 mine on role changes", visible),
+					Pass:    false,
+					Detail:  fmt.Sprintf("FORCE-RLS table(s) %v return rows to a non-bypass role with no tenant context: the policy does not reference the tenant session variables or is permissive; the RLS layer is dead weight and a live 42501 mine on role changes", visible),
 					FixHint: "write each policy against current_setting('app.workspace_id', true) / 'app.user_id' and query these tables only through pg.WithTenant / pg.TenantExec / pg.TenantScan",
 				}
 			}
@@ -227,4 +227,97 @@ func quoteIdent(s string) string {
 		}
 	}
 	return `"` + s + `"`
+}
+
+// ---------- Production-posture checks (identity wiring) ----------
+//
+// The three below share one failure shape: a deployment that "works" in every
+// observable way while a security-relevant setting silently holds its
+// development value. CookieSecureCheck already covers that shape for the
+// cookie flag; these cover the rest of the auth configuration.
+//
+// All three take the resolved values (not env names) because the product may
+// read configuration from anywhere; the check's job is to judge the value, not
+// to re-implement env plumbing.
+
+// DevCodeCheck flags a universal login code outside production. The framework
+// hard-fails when Production=true AND DevCode is set (I15), so the dangerous
+// configuration is the inverse: a deployment that forgot PRODUCTION=true and
+// therefore silently accepts the dev code for any email. That state is
+// otherwise completely silent.
+func DevCodeCheck(devCode string, production bool) Check {
+	return Check{
+		Name:    "dev_code",
+		Summary: "universal dev login code is absent (or explicitly acknowledged outside production)",
+		Run: func(ctx context.Context) Result {
+			if production && devCode != "" {
+				// Unreachable in practice (session service panics at boot), but
+				// the check stays correct if that guard ever moves.
+				return Result{Pass: false, Detail: "Production=true with a dev code configured", FixHint: "remove DEV_CODE; production must never have a universal login code"}
+			}
+			if !production && devCode != "" {
+				return Result{
+					Pass:    true,
+					Detail:  "dev code is ENABLED (" + devCode + ") — any email can log in with it; fine for local development only",
+					FixHint: "if this is a shared/staging deployment, set PRODUCTION=true and drop DEV_CODE",
+				}
+			}
+			return Result{Pass: true, Detail: "not configured"}
+		},
+	}
+}
+
+// IPHashSaltCheck flags an empty AuthConfig.IPHashSecret in production. The
+// salt keys the IP fingerprint used by login throttling and step-up
+// re-authentication; without it the fingerprints are enumerable by rainbow
+// table, weakening both. Outside production an empty salt is expected.
+func IPHashSaltCheck(salt string, production bool) Check {
+	return Check{
+		Name:    "ip_hash_salt",
+		Summary: "IP fingerprint salt is configured for production",
+		Run: func(ctx context.Context) Result {
+			if production && salt == "" {
+				return Result{
+					Pass:    false,
+					Detail:  "production deployment with an empty AuthConfig.IPHashSecret: IP fingerprints are unkeyed and enumerable",
+					FixHint: "set authCfg.IPHashSecret (wire it to an env var generated with `openssl rand -base64 32`)",
+				}
+			}
+			return Result{Pass: true, Detail: "set"}
+		},
+	}
+}
+
+// AuthSecretCheck flags a session pepper that still holds its documented
+// development default in production. The pepper feeds both session
+// verification and the CSRF key derivation, so a public default means leaked
+// tokens can be forged offline and CSRF tokens are predictable.
+//
+// devDefault is the exact string the deployment falls back to (pass the same
+// literal the wiring uses); comparison is exact so a rotated secret that merely
+// looks similar does not trip the check.
+func AuthSecretCheck(secret, devDefault string, production bool) Check {
+	return Check{
+		Name:    "auth_secret",
+		Summary: "session pepper is not the development default in production",
+		Run: func(ctx context.Context) Result {
+			if !production {
+				if secret == "" || secret == devDefault {
+					return Result{Pass: true, Detail: "development default in use (expected outside production)"}
+				}
+				return Result{Pass: true, Detail: "set"}
+			}
+			if secret == "" {
+				return Result{Pass: false, Detail: "production deployment with an empty session pepper", FixHint: "set AUTH_SECRET to 32+ random bytes; sessions and the CSRF key both derive from it"}
+			}
+			if devDefault != "" && secret == devDefault {
+				return Result{
+					Pass:    false,
+					Detail:  "production deployment is running with the documented development pepper",
+					FixHint: "set AUTH_SECRET to a unique random value (e.g. `openssl rand -base64 32`); the public default lets leaked tokens be forged offline",
+				}
+			}
+			return Result{Pass: true, Detail: "set (non-default)"}
+		},
+	}
 }

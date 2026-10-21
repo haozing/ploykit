@@ -2,7 +2,10 @@ package pgrepo
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/haozing/ploykit/identity/app"
 )
@@ -55,6 +58,22 @@ func (r *Repo) CountRecentAttempts(ctx context.Context, ipHash, identity string,
 		WHERE ip_hash = $1 AND identity = $2 AND created_at >= $3 AND NOT success`,
 		ipHash, identity, since).Scan(&n)
 	return n, err
+}
+
+func (r *Repo) EarliestRecentAttempt(ctx context.Context, ipHash, identity string, since time.Time) (time.Time, bool, error) {
+	var at time.Time
+	err := r.pool.QueryRow(ctx, `
+		SELECT created_at FROM login_attempt
+		WHERE ip_hash = $1 AND identity = $2 AND created_at >= $3 AND NOT success
+		ORDER BY created_at ASC LIMIT 1`,
+		ipHash, identity, since).Scan(&at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	return at, true, nil
 }
 
 func (r *Repo) RecordAttempt(ctx context.Context, ipHash, identity string, success bool, at time.Time) error {

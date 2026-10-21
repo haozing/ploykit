@@ -9,6 +9,69 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.11.3] — 2026-10-21
+
+Consumer-hardening batch from the risk-engine test sweep (28 parallel test
+agents; findings audited line-by-line against source in
+`risk-engine/test-reports/AUDIT.md`). Go only: `platform/pg`, `platform/webx`,
+`platform/devx`, `identity/app` + `identity/adapters/pgrepo`. No npm changes.
+
+### Added
+- **pg**: the database-rejection classifier family that was missing next to
+  `IsUniqueViolation`/`AsNotFound`: `IsStringTooLong` (SQLSTATE 22001),
+  `IsInvalidTextRepresentation` (22P02), `IsNumericOutOfRange` (22003),
+  `IsForeignKeyViolation` (23503). Plus `AsValidation(err, msg)` — folds those
+  three into 400 E_VALIDATION and passes everything else through — and
+  `AsConflict(err, msg)` for the "still referenced, cannot delete" reading of
+  23503. Rationale: the same 500-instead-of-400 defect reproduced **seven
+  independent times** in the consuming product (over-length names on products /
+  policies / rulesets / scorecards / interfaces / list groups / list items, plus
+  malformed-UUID path parameters) — every consumer was re-deriving this mapping
+  by hand and the omission has no visible symptom until production traffic hits
+  it. Foreign keys are deliberately NOT folded into `AsValidation`: 23503 means
+  opposite things on insert and delete, so callers pick with
+  `IsForeignKeyViolation` / `AsNotFound` / `AsConflict`.
+- **webx**: `ParsePagination(r, defaultSize, maxSize) Pagination`
+  (`PageNum`/`PageSize`/`Offset()`). Clamps instead of rejecting: pageNum < 1 or
+  non-numeric → 1, pageSize < 1 or non-numeric → default, pageSize > max → max.
+  The product had three different behaviors for the same parameters (pageNum
+  clamped everywhere, pageSize=999 honored verbatim on one endpoint, pageSize=-1
+  falling to the default on another) because each handler invented its own rule.
+- **webx**: `NewRateLimitedRetry(msg, after time.Duration)`; `Error` gained a
+  `RetryAfter` field that `WriteErr` renders as the standard `Retry-After`
+  header (rounded up to whole seconds) and mirrors into
+  `details.retry_after_seconds` for clients that cannot read cross-origin
+  headers. Sub-second waits round up to 1 — `Retry-After: 0` reads as "retry
+  now". A plain `NewRateLimited` still emits no header.
+- **identity**: `Repo.EarliestRecentAttempt(...)` (port + pgrepo). The login and
+  MFA limiter now answer 429 with the actual remaining wait — the time until the
+  OLDEST failed attempt slides out of the window, the first moment the count can
+  drop below the threshold. Before this the response was a bare "too many
+  attempts, retry later" with no usable wait hint (the consuming product's login
+  page could only print the English sentence).
+- **devx**: auth-posture check trio, siblings of `CookieSecureCheck` — each
+  catches a security setting that silently holds its development value in an
+  otherwise-healthy deployment:
+  - `AuthSecretCheck(secret, devDefault, production)` — a session pepper still
+    at the documented default in production (sessions forgeable offline, CSRF
+    keys predictable);
+  - `IPHashSaltCheck(salt, production)` — an empty `AuthConfig.IPHashSecret`
+    (throttling/step-up fingerprints enumerable);
+  - `DevCodeCheck(devCode, production)` — a universal dev login code accepted
+    because `PRODUCTION` was never set (the framework hard-fails when
+    `Production=true` AND `DevCode` is set, so the dangerous state is the
+    inverse, and it was completely silent).
+  Wired into the example doctor.
+
+### Changed
+- **webx (docs)**: `DefaultAuthConfig`'s comment now states the
+  `IPHashSecret` production requirement and points at
+  `devx.IPHashSaltCheck`; previously only `Secure` was documented, so the empty
+  salt was a one-line boot warning nobody read.
+- **docs**: `platform-api-index.md` documents the new pg classifiers, the
+  pagination helper, `NewRateLimitedRetry` / `Retry-After` behavior, and the
+  auth-posture checks.
+
 ## [0.11.2] — 2026-10-21
 
 Consumer-integration batch: the component-completeness work from the

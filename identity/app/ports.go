@@ -96,6 +96,11 @@ type Repo interface {
 	RevokePAT(ctx context.Context, userID, patID string, now time.Time) error
 
 	CountRecentAttempts(ctx context.Context, ipHash, identity string, since time.Time) (int, error)
+	// EarliestRecentAttempt returns the oldest failed attempt inside the window
+	// (found=false when there is none). It is what turns a bare 429 into
+	// "429, retry in N seconds": the limiter releases only when that oldest
+	// row ages out of the sliding window.
+	EarliestRecentAttempt(ctx context.Context, ipHash, identity string, since time.Time) (at time.Time, found bool, err error)
 	RecordAttempt(ctx context.Context, ipHash, identity string, success bool, at time.Time) error
 	CleanupAttempts(ctx context.Context, before time.Time) error
 

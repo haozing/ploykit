@@ -144,6 +144,29 @@ func (s *SessionService) tooManyAttempts(ctx context.Context, ipHash, email stri
 	return n >= s.cfg.MaxAttemptsPerIP, nil
 }
 
+// rateLimitedError builds the 429 for a tripped login/MFA limiter, including
+// how long the caller should wait. The wait is the time until the OLDEST failed
+// attempt leaves the sliding window — the first moment the count can drop below
+// the threshold.
+//
+// Without this hint clients see only "too many attempts, retry later" and are
+// left guessing (risk-engine field report: the login page could do nothing but
+// print the English sentence). The fallback keeps the message honest if the
+// earliest row cannot be read.
+func (s *SessionService) rateLimitedError(ctx context.Context, ipHash, email string) error {
+	const msg = "too many attempts, retry later"
+	since := s.now().Add(-s.cfg.AttemptWindow)
+	earliest, found, err := s.repo.EarliestRecentAttempt(ctx, ipHash, email, since)
+	if err != nil || !found {
+		return webx.NewRateLimited(msg)
+	}
+	wait := earliest.Add(s.cfg.AttemptWindow).Sub(s.now())
+	if wait <= 0 {
+		return webx.NewRateLimited(msg)
+	}
+	return webx.NewRateLimitedRetry(msg, wait)
+}
+
 func (s *SessionService) SendCode(ctx context.Context, ipHash, rawEmail string) error {
 	email := domain.NormalizeEmail(rawEmail)
 	if !domain.EmailOK(email) {
@@ -154,7 +177,7 @@ func (s *SessionService) SendCode(ctx context.Context, ipHash, rawEmail string) 
 		return err
 	}
 	if limited {
-		return webx.NewRateLimited("too many attempts, retry later")
+		return s.rateLimitedError(ctx, ipHash, email)
 	}
 	if latest, err := s.repo.LatestPendingChallenge(ctx, email, "login_code"); err != nil {
 		return err
@@ -334,7 +357,7 @@ func (s *SessionService) LoginWithPassword(ctx context.Context, ipHash, userAgen
 	if limited, err := s.tooManyAttempts(ctx, ipHash, email); err != nil {
 		return nil, err
 	} else if limited {
-		return nil, webx.NewRateLimited("too many attempts, retry later")
+		return nil, s.rateLimitedError(ctx, ipHash, email)
 	}
 	user, exists, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -380,7 +403,7 @@ func (s *SessionService) ConfirmPassword(ctx context.Context, ipHash string, p *
 	if limited, err := s.tooManyAttempts(ctx, ipHash, user.Email); err != nil {
 		return time.Time{}, err
 	} else if limited {
-		return time.Time{}, webx.NewRateLimited("too many attempts, retry later")
+		return time.Time{}, s.rateLimitedError(ctx, ipHash, user.Email)
 	}
 	if password == "" || !VerifyPassword(password, user.PasswordHash) {
 		_ = s.repo.RecordAttempt(ctx, ipHash, user.Email, false, s.now())

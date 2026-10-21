@@ -539,6 +539,11 @@ func main() {
 	doctor.Register(devx.RLSCheck(stdlibDB(pool)))
 	doctor.Register(devx.SealKeyCheck(sealx.EnvKey))
 	doctor.Register(devx.CookieSecureCheck(authCfg.Secure, production))
+	// Auth-posture trio: each catches a security setting silently holding its
+	// development value in a deployment that otherwise looks healthy.
+	doctor.Register(devx.AuthSecretCheck(sessCfg.SecretPepper, "dev-pepper-change-me", production))
+	doctor.Register(devx.IPHashSaltCheck(authCfg.IPHashSecret, production))
+	doctor.Register(devx.DevCodeCheck(sessCfg.DevCode, production))
 	const eventsSoftStop = 30 * time.Second // platform/events SoftStopTimeout
 	drainWindow := 10 * time.Second
 	if devOn || mcpOn || env("DEV_DOCTOR_DRAIN", "") != "" {

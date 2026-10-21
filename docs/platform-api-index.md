@@ -109,9 +109,11 @@ Runtime contract-test pattern for products: build the production mux as `webx.Ne
 | WriteJSON / WriteError | `WriteJSON(w, status, v)` / `WriteError(w, status, code, message, details)` | Unified JSON egress |
 | ErrorBody | `{error, message, details?}` | The framework-wide error body contract (docs/openapi.yaml) |
 | DecodeJSON | `DecodeJSON(w, r, &dst) bool` | Strict decoding: unknown fields are errors; BodyLimit exceeded → 413 E_PAYLOAD_TOO_LARGE |
-| WriteErr | `WriteErr(w, err)` | Maps webx.Error by its status code; everything else becomes 500 and logs the original error |
+| WriteErr | `WriteErr(w, err)` | Maps webx.Error by its status code; everything else becomes 500 and logs the original error. When the error carries `Error.RetryAfter` it also sets the `Retry-After` header (whole seconds, rounded up) and mirrors the value into `details.retry_after_seconds` — the body copy exists because browser JS cannot read headers cross-origin without CORS exposure |
 | Error / NewError | `Error{Status, Code, Message}` | Structured business errors at the service layer |
 | NewValidation / NewUnauthenticated / NewForbidden / NewNotFound / NewConflict / NewRateLimited / NewQuotaExceeded | 400 / 401 / 403 / 404 / 409 / 429 / 402 + fixed codes | The apperr constructor family (returned by the service layer, materialized by handlers via WriteErr) |
+| NewRateLimitedRetry | `NewRateLimitedRetry(msg, after time.Duration) *Error` | NewRateLimited plus the wait hint: emits Retry-After + details.retry_after_seconds. Use it whenever the code can compute when the limit lifts (identity's sliding-window login limiter does: time until the oldest failed attempt ages out); a bare 429 leaves clients guessing |
+| ParsePagination | `ParsePagination(r, defaultSize, maxSize) Pagination` (`PageNum, PageSize`, `.Offset()`) | Reads `?pageNum=&pageSize=` and clamps: pageNum<1 or non-numeric → 1; pageSize<1 or non-numeric → defaultSize; pageSize>maxSize → maxSize. Clamping (not rejecting) is deliberate — pagination is never a reason a read should fail, and per-handler invented rules are how "pageSize=999 honored here, clamped there, ignored elsewhere" happens. Pass 0/0 for `DefaultPageSize`(20)/`MaxPageSize`(100) |
 | ErrUnauthenticated / ErrForbidden / ErrNotFound / ErrValidation / ErrConflict / ErrInternal / ErrTimeout / ErrPayloadTooLarge / ErrUnavailable | Common code + status pairings written straight to the response | Handler-side error shorthand family |
 | Code* constants | `E_UNAUTHENTICATED`…`E_UNAVAILABLE`, 12 in total | The cross-stack shared error-code vocabulary |
 
@@ -263,7 +265,8 @@ The WS wire protocol vocabulary is a public platform package so that products bu
 | Deps degradation | nil Logs/Jobs/Doctor → the endpoint answers 404 with an explicit "not enabled / not wired" body | Diagnosable degradation, never silent-empty |
 | LogService / JobService | `NewLogService(*logring.Ring)` / `NewJobService(emitter.Client())` (`.Available()` gates) | The service layer shared by the HTTP surface and the MCP tools — both surfaces stay behaviorally identical |
 | Doctor | `NewDoctor()` + `Register(Check{Name, Summary, Run})` (duplicate names panic) + `RunDoctor(ctx, perCheckTimeout)` | The check registry: concurrent execution, per-check timeout, panic containment, results sorted by name; failures carry Detail + FixHint — the agent-readable diagnostic format |
-| Built-in checks | `RiverSchemaCheck(*sql.DB)` / `SealKeyCheck(env)` / `CookieSecureCheck(secure, production)` / `DrainWindowCheck(drain, softStop)` / `HealthProbesCheck(n)` | Executable versions of the AGENTS.md operational gotchas (river migrate timing, seal key, cookie/shape consistency, drain ≥ soft-stop + margin, readiness probes); opt-in per product wiring; products register their own checks alongside |
+| Built-in checks | `RiverSchemaCheck(*sql.DB)` / `SealKeyCheck(env)` / `CookieSecureCheck(secure, production)` / `DrainWindowCheck(drain, softStop)` / `HealthProbesCheck(n)` / `RLSCheck(*sql.DB)` | Executable versions of the AGENTS.md operational gotchas (river migrate timing, seal key, cookie/shape consistency, drain ≥ soft-stop + margin, readiness probes, RLS actually rejecting tenant-less reads); opt-in per product wiring; products register their own checks alongside |
+| Auth-posture checks | `AuthSecretCheck(secret, devDefault, production)` / `IPHashSaltCheck(salt, production)` / `DevCodeCheck(devCode, production)` | The identity-wiring siblings of CookieSecureCheck: each flags a security setting that silently holds its development value in an otherwise-healthy deployment — a public session pepper (forges sessions, predicts CSRF keys), an empty IP fingerprint salt (enumerable throttling keys), a universal dev login code accepted because PRODUCTION was never set. Pass the resolved values, not env names |
 | RegisterTools | `RegisterTools(*mcp.Server, *Deps)` | The six built-in MCP tools (tail_request_logs / list_failed_jobs / get_job / retry_job / cancel_job / run_doctor) over the same service layer; each tool re-checks the PAT scope from ctx (stateless transport carries the Authenticate-installed Principal into tool handlers) |
 
 ## platform/mcpx (Mountable MCP control plane, ADR 0014)
@@ -288,6 +291,12 @@ The WS wire protocol vocabulary is a public platform package so that products bu
 | AsNotFound | `AsNotFound(err, msg) error` | Foreign key 23503 → a NotFound semantic error |
 | IsUniqueViolation | `IsUniqueViolation(err, constraint) bool` | Unique-violation 23505 detection (errors.As semantics, wrapped errors work); when constraint is non-empty it requires an exact constraint/index name match — distinguishing same-code different-origin cases (idempotency-key conflict vs number race). **Never hand-write "23505" checks** (guarded by arch tests) |
 | AsDuplicate | `AsDuplicate(err, dup) error` | 23505 → the caller's semantic error (e.g., each domain's ErrDuplicate, 409); everything else passes through — the 23505 sibling of AsNotFound |
+| IsStringTooLong | `IsStringTooLong(err) bool` | SQLSTATE 22001 (varchar/char overflow). The class behind "client sent a long name, server answered 500": service-layer maxLength validation is the primary fix, this is the backstop for columns nobody bounded |
+| IsInvalidTextRepresentation | `IsInvalidTextRepresentation(err) bool` | SQLSTATE 22P02 (malformed UUID / non-numeric text into a typed column) — typically a path parameter used verbatim |
+| IsNumericOutOfRange | `IsNumericOutOfRange(err) bool` | SQLSTATE 22003 (numeric overflow) |
+| IsForeignKeyViolation | `IsForeignKeyViolation(err) bool` | SQLSTATE 23503 without assuming a direction — insert (referenced row missing) vs delete (still referenced) read differently, so callers choose |
+| AsValidation | `AsValidation(err, msg) error` | 22001 / 22P02 / 22003 → 400 E_VALIDATION carrying msg; everything else passes through untouched. 23503 is deliberately NOT folded in (see AsConflict / AsNotFound) |
+| AsConflict | `AsConflict(err, msg) error` | 23503 → 409 with msg (the "still referenced, cannot delete" reading). Use AsNotFound for the opposite direction |
 
 ## platform/pgmigrate (fs.FS SQL migrations)
 

@@ -297,7 +297,7 @@ func (s *MFAService) limit(ctx context.Context, ipHash string, p *webx.Principal
 		return err
 	}
 	if limited {
-		return webx.NewRateLimited("too many attempts, retry later")
+		return s.sessions.rateLimitedError(ctx, ipHash, p.Email)
 	}
 	return nil
 }

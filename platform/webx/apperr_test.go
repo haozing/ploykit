@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestAppErrConstructors_UTWX01(t *testing.T) {
@@ -64,6 +65,50 @@ func TestWriteErr_UTWX02(t *testing.T) {
 	_ = json.Unmarshal(rec2.Body.Bytes(), &body2)
 	if body2.Code != CodeInternal || body2.Message == "secret db detail" {
 		t.Errorf("未知错误应返回 E_INTERNAL 且不泄露原始信息: %+v", body2)
+	}
+}
+
+func TestWriteErrRetryAfter_UTWX02b(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteErr(rec, NewRateLimitedRetry("too many attempts", 90*time.Second))
+	if rec.Code != 429 {
+		t.Fatalf("status=%d want 429", rec.Code)
+	}
+	if got := rec.Header().Get("Retry-After"); got != "90" {
+		t.Errorf("Retry-After=%q want 90", got)
+	}
+	var body struct {
+		Code    string         `json:"error"`
+		Details map[string]any `json:"details"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body not JSON: %v", err)
+	}
+	if body.Code != CodeRateLimited {
+		t.Errorf("code=%q", body.Code)
+	}
+	if got, ok := body.Details["retry_after_seconds"].(float64); !ok || got != 90 {
+		t.Errorf("details.retry_after_seconds=%v want 90", body.Details["retry_after_seconds"])
+	}
+
+	// Sub-second waits round up: Retry-After: 0 reads as "retry immediately".
+	rec2 := httptest.NewRecorder()
+	WriteErr(rec2, NewRateLimitedRetry("slow down", 200*time.Millisecond))
+	if got := rec2.Header().Get("Retry-After"); got != "1" {
+		t.Errorf("sub-second Retry-After=%q want 1", got)
+	}
+
+	// A plain NewRateLimited (no hint) must NOT invent a header.
+	rec3 := httptest.NewRecorder()
+	WriteErr(rec3, NewRateLimited("slow down"))
+	if got := rec3.Header().Get("Retry-After"); got != "" {
+		t.Errorf("no-hint 429 should not set Retry-After, got %q", got)
+	}
+	// Zero/negative durations are ignored rather than emitting garbage.
+	rec4 := httptest.NewRecorder()
+	WriteErr(rec4, NewRateLimitedRetry("slow down", 0))
+	if got := rec4.Header().Get("Retry-After"); got != "" {
+		t.Errorf("zero duration should not set Retry-After, got %q", got)
 	}
 }
 

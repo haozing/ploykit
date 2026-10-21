@@ -90,7 +90,15 @@ func (c *AuthConfig) patPrefix() string {
 //	cfg := webx.DefaultAuthConfig()
 //	cfg.Secure = env == "production"
 //
-// example wires it to SECURE_COOKIE the same way.
+// IPHashSecret is deliberately left empty here (local development needs no
+// salt) and MUST be set in production: it keys the IP fingerprint used by
+// login throttling and step-up re-authentication, and an empty salt makes
+// those fingerprints enumerable. HashIP logs a one-time warning when it sees
+// an empty salt, but a warning is easy to miss in a busy boot log — wire
+// devx.IPHashSaltCheck into the product's doctor so the gap shows up as a
+// failed startup diagnostic instead.
+//
+// example wires it to SECURE_COOKIE / AUTH_IP_HASH_SECRET the same way.
 func DefaultAuthConfig() AuthConfig {
 	return AuthConfig{
 		CookieName:  "tk_auth",
