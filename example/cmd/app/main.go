@@ -968,11 +968,11 @@ func main() {
 	}
 	if renderOK {
 		defer engPool.Close()
-		mux.Handle("/", trafficMW(spaCsp(gzipMW(renderH))))
+		mux.Handle("/", trafficMW(spaCsp(webx.Gzip(renderH))))
 		log.Info("renderx enabled", "cache_dir", env("RENDERX_CACHE_DIR", "renderx-cache"))
 	} else {
 		log.Warn("renderx 未启用：embed 缺 ssr-bundle.js（构建链：cd web && npx vite build && go run ./cmd/render prerender）")
-		mux.Handle("/", trafficMW(spaCsp(gzipMW(frontendHandler()))))
+		mux.Handle("/", trafficMW(spaCsp(webx.Gzip(frontendHandler()))))
 	}
 
 	var limiter webx.Limiter = webx.FailOpenLimiter{}

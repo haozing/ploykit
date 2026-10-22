@@ -9,6 +9,20 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+### Added
+- **webx**: `Gzip(next)` — the runtime compression lane, promoted from
+  example's hand-written middleware (reverse clause). Same behaviour as the
+  product-side version it replaces, plus three defects that this class of
+  hand-rolling reproduces: `Accept-Encoding: gzip;q=0` (an explicit refusal)
+  and `x-gzip` (not gzip) both satisfied a substring check and got
+  "compressed".
+  Parses the header for real, skips already-encoded bodies (`Precompressed`
+  answered those), stamps `Vary: Accept-Encoding` (deduped), and exposes
+  `Unwrap` for `http.ResponseController`. Guard registered in internal/arch:
+  example may not import `compress/gzip` directly
+
 ## [0.12.0] — 2026-10-21
 
 Frontend payload batch: the second render axis (`hydrate`), route-level code

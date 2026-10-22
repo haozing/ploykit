@@ -28,6 +28,12 @@ var exampleReinventionFeatures = []reinventionFeature{
 		pattern: `"23505"`,
 		why:     "已有 pg.IsUniqueViolation / pg.AsDuplicate（platform/pg/pg.go），禁止手写 23505 判定",
 	},
+	{
+		// compress/gzip 的 import 本身：框架已收编 webx.Gzip（q=0/x-gzip 解析、
+		// 已编码跳过、Vary 去重），再手写只会把同类边界 bug 各抄一遍。
+		pattern: `"compress/gzip"`,
+		why:     "已有 webx.Gzip（platform/webx/gzip.go），禁止手写 gzip 中间件",
+	},
 }
 
 func TestExampleNoReinvention(t *testing.T) {
