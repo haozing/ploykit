@@ -40,6 +40,7 @@ import (
 	authzpg "github.com/haozing/ploykit/authz/adapters/pgrepo"
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
+	paypal "github.com/haozing/ploykit/billing/adapters/paypal"
 	stripe "github.com/haozing/ploykit/billing/adapters/stripe"
 	waffo "github.com/haozing/ploykit/billing/adapters/waffo"
 	billingapp "github.com/haozing/ploykit/billing/app"
@@ -481,6 +482,16 @@ func main() {
 		},
 		"waffo": func(fields map[string]string) (billingapp.PaymentChannel, error) {
 			ch, err := waffo.NewFromFields(fields, os.Getenv, log, production)
+			if err != nil {
+				return nil, err
+			}
+			if ch == nil {
+				return nil, nil // 未配置：不注册
+			}
+			return ch, nil
+		},
+		"paypal": func(fields map[string]string) (billingapp.PaymentChannel, error) {
+			ch, err := paypal.NewFromFields(fields, os.Getenv, log, production)
 			if err != nil {
 				return nil, err
 			}

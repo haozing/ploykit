@@ -12,6 +12,22 @@ entry below says whether it is Go-only). Consumers pin each side independently.
 ## [Unreleased]
 
 ### Added
+- **billing**: `adapters/paypal` (P2, the touchstone of the channel-framework
+  plan) — the third built-in payment channel, landed with **zero kernel
+  changes**, validating the P0/P1 foundation. OAuth2 client with token cache;
+  subscription checkout (approval link + custom_id order echo, buyer email
+  and locale prefill, cancel URL honored); webhook verification via
+  `POST /v1/notifications/verify-webhook-signature` (five PAYPAL-* headers,
+  webhook_id required); event mapping per the five adapter laws
+  (ACTIVATED→checkout.completed, SALE.COMPLETED→renewed with
+  billing_agreement_id, CANCELLED→canceled, SALE.REFUNDED→refund with
+  v1/v2 amount-shape tolerance, everything else ignored);
+  `ProductRegistrar` (products→ACTIVE plans two-step, plural
+  `update-pricing-schemes` for SyncPrice — catalog price is the charged
+  price, so a DB price change without sync is rejected by amountMismatch,
+  surfaced in the ConfigSchema help); `ConnectionTester` (token fetch),
+  `SubscriptionCanceller`, ConfigSchema for the self-serve admin page.
+  19 hermetic test functions / 32 runs against httptest-faked PayPal.
 - **billing/admin/ui (P1 of the channel-framework plan)**: self-serve channel
   configuration — paste credentials in the admin Plans page, no env edits, no
   restart. `billing_channel.<name>.<field>` settings keys (prefix-sealed by
