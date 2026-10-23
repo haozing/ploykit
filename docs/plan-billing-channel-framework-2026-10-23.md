@@ -1,18 +1,21 @@
 # Plan: 支付渠道框架化 —— waffo 实战复盘 → stripe/waffo/paypal 三渠道 + 后台自助配置
 
-> Status: draft 2026-10-23。Source: shuijing 产品仓 2026-10-23 waffo（Waffo Pancake，MoR）
-> 真实接入全程（commit `31aa35d` 渠道接入 + 后续调价批；适配器现居 shuijing
-> `internal/billingwaffo`，三个文件 + hermetic 测试，真实 API 三点验证：签名/建品/
-> create-session）。本文把这次接入当成一次"框架压力测试"，复盘所有摩擦点，给出
-> ploykit 计费框架的分期改造方案。目标形态：**stripe / waffo / paypal 三渠道框架
-> 内建，后台一页自助配置（贴密钥即用），第四渠道按契约文档半天接入**。
+> Status: **audited 2026-10-23**（round 1 见 `audit-billing-channel-framework-plan-2026-10-23.md`：
+> F1–F20 中 18 属实/1 表述修正/1 外源，数字类修正 2 处，无动摇性发现，可进入执行）。
+> Source: shuijing 产品仓 2026-10-23 waffo（Waffo Pancake，MoR）真实接入全程
+> （commit `31aa35d` 渠道接入 / `1cdfed3` 调价 9.90-69 / `93b3fd9` webhook 公钥对账；
+> 适配器现居 shuijing `internal/billingwaffo`，3 源文件 708 行 + 2 测试文件（hermetic
+> 464 行 + live 门控 36 行），真实 API 三点验证：签名/建品/create-session）。本文把
+> 这次接入当成一次"框架压力测试"，复盘所有摩擦点，给出 ploykit 计费框架的分期改造
+> 方案。目标形态：**stripe / waffo / paypal 三渠道框架内建，后台一页自助配置（贴密钥
+> 即用），第四渠道按契约文档半天接入**。
 
 ## 0. 拆分规则（沿用 plan-upstream-shuijing-admin-billing.md §0）
 
 "换一个 ploykit 产品要不要？" → 框架；"只对本产品有意义" → 产品。
 
 本次判例：**waffo 适配器整体属框架**——shuijing 单机多站规划（同一台服务器跑多个
-ploykit 产品站）下，每个站都会重复 internal/billingwaffo 这 900 行。产品侧保留的只有：
+ploykit 产品站）下，每个站都会重复 internal/billingwaffo 这 708 行源码。产品侧保留的只有：
 渠道启用接线（一行）、计划定价、权益钩子（UpsertEntitlementTx）、前端渠道选择。
 
 ## 1. 实战复盘：接入 waffo 的每一步摩擦（证据表）
@@ -27,12 +30,12 @@ ploykit 产品站）下，每个站都会重复 internal/billingwaffo 这 900 �
 | F4 | 目录型渠道的商品注册靠一次性脚本（waffo-assets/create-products.mjs），改价还要再跑 update | 手工脚本 + 迁移 2004 改 DB 价 | BC-7 自动注册/同步 |
 | F5 | 渠道金额是展示字符串（"9.90"），JPY 零小数；cents↔字符串换算每个适配器都要写 | 适配器内 formatAmount/parseAmount 私有实现 | BC-3 money 工具 |
 | F6 | MoR 税内含约定（taxIncluded=true，买家实付=站内标价）决定 handlePaid 金额对账成败；错配=合法付款被拒发权益 | 适配器注释里写了，无框架文档 | BC-4 契约文档 |
-| F7 | `ChannelEventID` 单列幂等键；waffo 要求按 (eventType, eventId) 去重（不同事件类型共用顶层 id） | 拼串 `eventType + ":" + id` workaround | BC-4 契约文档 |
+| F7 | 幂等键 `(channel, channel_event_id)` 复合两列、无事件类型维度；waffo 要求按 (eventType, eventId) 去重（不同事件类型共用顶层 id） | 拼串 `eventType + ":" + id` workaround | BC-4 契约文档 |
 | F8 | waffo 续费双事件（subscription.renewed=周期滚动 / payment_succeeded=钱）；都处理会把到期日推进两个周期 | 只认钱事件，周期滚动事件 ignored | BC-4 契约文档 |
 | F9 | 首期双发（activated + payment_succeeded period=1）同到 | periodNumber=1 的 payment 事件 ignored | BC-4 契约文档 |
 | F10 | waffo 无 subscriptionId 字段；`data.orderId` 在激活/续费/取消全程不变，充当稳定订阅引用；checkout metadata.order_id 透传回每个事件反查订单 | 适配器映射注释 | BC-4 契约文档 |
 | F11 | 验签公钥按 test/prod 各一把，渠道配置天生带环境维度；env 里只有静态一份 | env 一份（test），文档提醒生产要换 | BC-5 凭据落库带 mode |
-| F12 | `ConnectionTester` waffo 没实现（当时未确认廉价探活端点；后确认可用 list-webhooks） | 缺失，后台"测试连接"对 waffo 报未配置 | BC-9 补齐 |
+| F12 | `ConnectionTester` waffo 没实现；候选探活 = webhooks overview 端点（BC-9 落地时实测） | 缺失，后台"测试连接"对 waffo 报未配置 | BC-9 补齐 |
 | F13 | `SubscriptionCanceller` waffo 没实现（REST 有 cancel-subscription 端点） | 缺失，后台取消订阅对 waffo 无效 | BC-9 补齐 |
 | F14 | `FromEnvStrict` 全有或全无纪律（缺一生产拒启/开发降级）在产品仓手写 | 产品仓复制了 bracelet provider 的模式 | BC-1 随适配器上游化 |
 | F15 | waffo 弃单**没有 webhook**（会话过期即 canceled，零回调）→ 订单永挂 pending | 无处理（接入当天发现） | BC-4 过期清扫工 |
@@ -49,7 +52,7 @@ ploykit 产品站）下，每个站都会重复 internal/billingwaffo 这 900 �
 - `billing/app.PaymentChannel` 最小接口（Name/CreateCheckout/ParseWebhook）+ `ChannelRegistry`。
 - 可选能力接口：`ChannelConfigViewer`、`ConnectionTester`、`SubscriptionCanceller`、`CheckoutCanceller`——类型断言发现即用，`CancelPendingOrder` 对未实现渠道自然跳过。
 - webhook 统一挂载 `POST /webhooks/billing/{channel}`，raw body 直读（验签正确性的前提），CSRF 豁免是产品侧接线项。
-- 事件幂等（InsertPaymentEvent 单列 ChannelEventID 唯一）、金额对账（amountMismatch）、状态机（pending→paid/failed/canceled/refunded）、权益钩子（OnPlanChangedTx/OnSubscriptionRenewed）全部渠道无关，本次 waffo 接入零改动——**这层设计经受住了第一个非 Stripe 渠道的考验，是本方案不动内核的依据**。
+- 事件幂等（`payment_event` 表 `(channel, channel_event_id)` 复合唯一键；冲突且 process_status='error' 的行复活重处理——BC-4 的重试/清扫有现成地基）、金额对账（amountMismatch）、状态机（pending→paid/failed/canceled/refunded）、权益钩子（OnPlanChangedTx/OnSubscriptionRenewed）全部渠道无关，本次 waffo 接入零改动——**这层设计经受住了第一个非 Stripe 渠道的考验，是本方案不动内核的依据**。
 - admin billingops 已有只读 `BillingConfig` 视图路由 + bridge；`OrdersPage`/`PlansPage` 在。
 - settings 体系：通用 KV 表（无 DDL）、`IsSensitive` + sealer 封存（现只有 smtp_pass）、`MaskedValue` 脱敏渲染、AdminSettingsPage 卡片模式——渠道凭据落库的全部地基都在。
 - Stripe 适配器（临时定价型范例）+ Manual 渠道（人工核销范例）。
@@ -66,10 +69,11 @@ ploykit 产品站）下，每个站都会重复 internal/billingwaffo 这 900 �
 
 ### BC-1 waffo 适配器上游化（P0）
 
-`shuijing/internal/billingwaffo` → `billing/adapters/waffo`（三文件 + hermetic 测试原样迁移）。
+`shuijing/internal/billingwaffo` → `billing/adapters/waffo`（3 源文件 + 2 测试文件原样迁移）。
 对外 `waffo.New(Config)` + `waffo.FromEnv(getenv, log, production)`（F14 纪律随包走）。
 私钥四形态归一（PEM/`\n` 转义/整段 b64/裸 b64 体）保留——waffo 后台复制密钥的四种姿势都收。
-shuijing 侧改 import、删 internal 目录、go.mod 去掉对 waffo 部分的本地依赖（replace 仍服务于其他包）。
+shuijing 侧改 import、删 internal 目录。上游化开发期在 go.mod replace 之下进行（replace
+本就服务于其他包）；发布收尾（去 replace、出 tag）见 §6。
 **验收**：shuijing 全量测试绿 + 真实 API create-session 冒烟仍绿。
 
 ### BC-2 PaymentChannel 接口演进（P0，破坏性）
@@ -111,7 +115,7 @@ BillingService.CreateCheckout 组装 CheckoutRequest（buyerEmail 从 identity �
 1. **钱事件唯一**：续费类生命周期每个计费周期只产生一个 `EventSubscriptionRenewed`，取"钱到账"事件（waffo=payment_succeeded、stripe=invoice.paid、paypal=PAYMENT.SALE.COMPLETED）；周期滚动通知（waffo renewed）必须 ignored。
 2. **首期去重**：首笔同时触发激活+付款双事件时，只映射激活事件为 `EventCheckoutCompleted`（waffo periodNumber=1 判定）。
 3. **稳定订阅引用**：`SubscriptionRef` = 渠道侧跨周期不变的标识（stripe=subscription id、waffo=orderId）；结账会话 metadata 必须带 `order_id` 并确认渠道会回传（waffo orderMetadata 全事件透传）。
-4. **ChannelEventID 全局唯一**：渠道幂等键为 (type, id) 二元组时必须拼进单列（`type:id`）。
+4. **ChannelEventID 全局唯一**：库表幂等键是 `(channel, channel_event_id)` 复合列、无事件类型维度；渠道侧幂等键为 (type, id) 二元组时（waffo），必须拼进 ChannelEventID 这一个字段（`type:id`）。
 5. **环境标记**：事件带 `mode: test|prod` 时记入 Payload 并审计；渠道配置了 mode 时跨环境事件直接拒收（test 回调永不落生产权益）。
 
 **弃单清扫**（F15）：订单表现在只有 channel_ref 落库（CheckoutSession.ExpiresAt 未持久化，ports.go 的 SetOrderChannelRef 只存 ref），随本包给 order 加 `expires_at` 列（CreateCheckout 成功后随 SetOrderChannelRef 一并写入）；`ExpireStaleOrders(now)`——pending 且过期置 canceled，挂进现有 workers 轮询（与 ExpireDueWorkspaces 同款接线）。waffo 弃单零回调、paypal 放弃同理，stripe 虽有 expire 事件但清扫兜底无副作用（状态机 ErrStatusConflict 幂等）。
@@ -128,7 +132,7 @@ settings 键命名 `billing_channel.<name>.<field>`（如 `billing_channel.waffo
 
 - **表单按描述符渲染**：适配器新增 `ConfigSchema() []FieldSpec{Key, Label, Type(text/secret/select), Options, Help, Required}`——框架 UI 不认识 waffo/paypal 的字段也能画表单（第四渠道零 UI 改动）。
 - **webhook URL 展示 + 复制按钮**：`/webhooks/billing/waffo` 直接抄走贴渠道后台（本次接入这是手工拼出来的）。
-- **测试连接**：现有 `TestChannelConnection` 路由接按钮；waffo 探活 = list-webhooks（F12）。
+- **测试连接**：现有 `TestChannelConnection` 路由接按钮；waffo 探活 = webhooks overview 端点（BC-9 落地时实测，F12）。
 - **模式徽标 + 测试卡提示**：mode=test 时显示 waffo 4110 卡号/paypal sandbox 指引；mode=prod 且 KYB 未过（waffo 403）显示"等待渠道审核"。
 - `knownChannelNames` 删除（F16）：未注册渠道 = 无配置无卡，注册即现。
 
