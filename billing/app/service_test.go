@@ -65,6 +65,11 @@ type fakeRepo struct {
 	metered      []MeteredWorkspace
 
 	meters map[string]Meter
+
+	// BC-7 catalog mapping: key = channel+"/"+planCode+"/"+interval.
+	chanProducts   map[string]domain.ChannelProduct
+	chanUpserts    []domain.ChannelProduct
+	chanProductErr error
 }
 
 func newFakeRepo() *fakeRepo {
@@ -600,7 +605,8 @@ func TestHandleWebhook_SubscriptionPaid(t *testing.T) {
 			}
 			auditor := &fakeAuditor{}
 			hooks := &hookTrace{}
-			svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+			reg := NewChannelRegistry()
+			svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 				OnPlanChanged: func(_ context.Context, ws, from, to string) error {
 					hooks.planChanged = append(hooks.planChanged, [3]string{ws, from, to})
 					return nil
@@ -610,7 +616,7 @@ func TestHandleWebhook_SubscriptionPaid(t *testing.T) {
 				Channel: "stripe", ChannelEventID: "evt_1", Type: domain.EventCheckoutCompleted,
 				OrderID: "ord_1", SubscriptionRef: tt.subRef,
 			}}
-			svc.channels.Register(ch)
+			reg.Register(ch)
 
 			require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
 
@@ -652,7 +658,8 @@ func TestHandleWebhook_SubscriptionRenewed(t *testing.T) {
 			}
 			auditor := &fakeAuditor{}
 			hooks := &hookTrace{}
-			svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+			reg := NewChannelRegistry()
+			svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 				OnSubscriptionRenewed: func(_ context.Context, ws string, expiresAt time.Time) error {
 					hooks.renewed = append(hooks.renewed, [2]any{ws, expiresAt})
 					return nil
@@ -662,7 +669,7 @@ func TestHandleWebhook_SubscriptionRenewed(t *testing.T) {
 				Channel: "stripe", ChannelEventID: "evt_r", Type: domain.EventSubscriptionRenewed,
 				SubscriptionRef: "sub_r",
 			}}
-			svc.channels.Register(ch)
+			reg.Register(ch)
 
 			require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
 
@@ -684,13 +691,14 @@ func TestHandleWebhook_SubscriptionRenewed(t *testing.T) {
 
 func TestHandleWebhook_SubscriptionRenewedUnknown(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
 	ch := &fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_x", Type: domain.EventSubscriptionRenewed,
 		SubscriptionRef: "sub_ghost",
 	}}
-	svc.channels.Register(ch)
+	reg.Register(ch)
 
 	require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
 	assert.Empty(t, repo.setSubs, "未知订阅号不得写任何状态")
@@ -704,7 +712,8 @@ func TestHandleWebhook_SubscriptionCanceled(t *testing.T) {
 	repo.wsSub["ws_1"] = subState{ref: "sub_1", expiresAt: testNow.AddDate(0, 1, 0)}
 	auditor := &fakeAuditor{}
 	hooks := &hookTrace{}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPlanChanged: func(_ context.Context, ws, from, to string) error {
 			hooks.planChanged = append(hooks.planChanged, [3]string{ws, from, to})
 			return nil
@@ -714,7 +723,7 @@ func TestHandleWebhook_SubscriptionCanceled(t *testing.T) {
 		Channel: "stripe", ChannelEventID: "evt_c", Type: domain.EventSubscriptionCanceled,
 		SubscriptionRef: "sub_1",
 	}}
-	svc.channels.Register(ch)
+	reg.Register(ch)
 
 	require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
 
@@ -739,13 +748,14 @@ func TestHandleWebhook_SubscriptionCanceled(t *testing.T) {
 
 func TestHandleWebhook_SubscriptionCanceledUnknown(t *testing.T) {
 	repo := newFakeRepo()
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
 	ch := &fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_y", Type: domain.EventSubscriptionCanceled,
 		SubscriptionRef: "sub_ghost",
 	}}
-	svc.channels.Register(ch)
+	reg.Register(ch)
 
 	require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
 	assert.Empty(t, repo.changePlans)
@@ -780,4 +790,42 @@ func (c *trialChannel) CreateCheckout(_ context.Context, req CheckoutRequest) (d
 }
 func (c *trialChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domain.PaymentEvent, error) {
 	return domain.PaymentEvent{}, nil
+}
+
+func chanProductKey(channel, planCode string, interval domain.BillingInterval) string {
+	return channel + "/" + planCode + "/" + string(interval)
+}
+
+func (f *fakeRepo) GetChannelProduct(_ context.Context, channel, planCode string, interval domain.BillingInterval) (domain.ChannelProduct, bool, error) {
+	if f.chanProductErr != nil {
+		return domain.ChannelProduct{}, false, f.chanProductErr
+	}
+	if f.chanProducts == nil {
+		return domain.ChannelProduct{}, false, nil
+	}
+	p, ok := f.chanProducts[chanProductKey(channel, planCode, interval)]
+	return p, ok, nil
+}
+
+func (f *fakeRepo) UpsertChannelProduct(_ context.Context, p domain.ChannelProduct) error {
+	if f.chanProductErr != nil {
+		return f.chanProductErr
+	}
+	if f.chanProducts == nil {
+		f.chanProducts = map[string]domain.ChannelProduct{}
+	}
+	f.chanProducts[chanProductKey(p.Channel, p.PlanCode, p.Interval)] = p
+	f.chanUpserts = append(f.chanUpserts, p)
+	return nil
+}
+
+func (f *fakeRepo) ListChannelProducts(context.Context) ([]domain.ChannelProduct, error) {
+	if f.chanProductErr != nil {
+		return nil, f.chanProductErr
+	}
+	out := make([]domain.ChannelProduct, 0, len(f.chanProducts))
+	for _, p := range f.chanProducts {
+		out = append(out, p)
+	}
+	return out, nil
 }

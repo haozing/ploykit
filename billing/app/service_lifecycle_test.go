@@ -29,13 +29,14 @@ func TestHandleWebhook_PaymentFailed_UTBA03(t *testing.T) {
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Status: domain.OrderPending}
 	aud := &fakeAuditor{}
 	failed := [][2]string{}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPaymentFailed: func(_ context.Context, ws, orderID, _ string) error {
 			failed = append(failed, [2]string{ws, orderID})
 			return nil
 		},
 	}, aud, func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_f", Type: domain.EventPaymentFailed, OrderID: "ord_1",
 	}})
 
@@ -49,10 +50,11 @@ func TestHandleWebhook_Refund_UTBA04(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Status: domain.OrderPaid}
 	repo.byRef["stripe:ch_1"] = "ord_1"
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPlanChanged: func(_ context.Context, _, _, _ string) error { return nil },
 	}, &fakeAuditor{}, func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_r", Type: domain.EventRefundCreated, ChannelRef: "ch_1",
 	}})
 
@@ -66,8 +68,9 @@ func TestResolveOrder_UTBA05(t *testing.T) {
 	repo.orders["ord_by_ref"] = &domain.Order{ID: "ord_by_ref", WorkspaceID: "ws_1", Status: domain.OrderPending}
 	repo.byRef["stripe:ch_9"] = "ord_by_ref"
 
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, nil, func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, nil, func() time.Time { return testNow }, nil)
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_x", Type: domain.EventPaymentFailed,
 		OrderID: "ord_missing", ChannelRef: "ch_9",
 	}})
@@ -75,7 +78,7 @@ func TestResolveOrder_UTBA05(t *testing.T) {
 	assert.Equal(t, domain.OrderPending, repo.orders["ord_by_ref"].Status, "OrderID 优先且不存在时不应回落 ChannelRef")
 	assert.True(t, repo.processed["stripe:evt_x"])
 
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_y", Type: domain.EventPaymentFailed,
 	}})
 	require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))

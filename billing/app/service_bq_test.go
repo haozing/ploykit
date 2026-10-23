@@ -23,9 +23,10 @@ func TestHandleWebhook_Paid_UpdateError_MarksEventError_BQ1(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Status: domain.OrderPending}
 	repo.updateStatusErr = errors.New("db connection reset")
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
-	svc.channels.Register(paidChannel("evt_e1", "ord_1"))
+	reg.Register(paidChannel("evt_e1", "ord_1"))
 
 	err := svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{})
 	require.Error(t, err, "非冲突错误必须上抛（渠道重试的信号）")
@@ -41,9 +42,10 @@ func TestHandleWebhook_Paid_UpdateError_MarksEventError_BQ1(t *testing.T) {
 func TestHandleWebhook_Paid_StatusConflict_Idempotent_BQ1(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Status: domain.OrderPaid}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
-	svc.channels.Register(paidChannel("evt_c1", "ord_1"))
+	reg.Register(paidChannel("evt_c1", "ord_1"))
 
 	require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
 	assert.True(t, repo.processed["stripe:evt_c1"], "重复 webhook 应幂等收敛 processed")
@@ -55,9 +57,10 @@ func TestHandleWebhook_Paid_ResolveError_MarksEventError_BQ1(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", Status: domain.OrderPending}
 	repo.getOrderErr = errors.New("get order: ctx deadline")
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
-	svc.channels.Register(paidChannel("evt_e2", "ord_1"))
+	reg.Register(paidChannel("evt_e2", "ord_1"))
 
 	err := svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{})
 	require.Error(t, err)
@@ -71,13 +74,14 @@ func TestHandleWebhook_Paid_ErrorEventReplayedAndRecovered_BQ1(t *testing.T) {
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro",
 		Interval: domain.IntervalMonthly, Status: domain.OrderPending}
 	hooks := &hookTrace{}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPlanChanged: func(_ context.Context, _, from, to string) error {
 			hooks.planChanged = append(hooks.planChanged, [3]string{"ws_1", from, to})
 			return nil
 		},
 	}, &fakeAuditor{}, func() time.Time { return testNow }, nil)
-	svc.channels.Register(paidChannel("evt_r1", "ord_1"))
+	reg.Register(paidChannel("evt_r1", "ord_1"))
 
 	repo.updateStatusErr = errors.New("transient db failure")
 	require.Error(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
@@ -97,9 +101,10 @@ func TestHandleWebhook_Failed_UpdateError_MarksEventError_BQ1(t *testing.T) {
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", Status: domain.OrderPending}
 
 	repo.updateStatusErr = errors.New("db down")
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_f1", Type: domain.EventPaymentFailed, OrderID: "ord_1",
 	}})
 	require.Error(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
@@ -108,7 +113,7 @@ func TestHandleWebhook_Failed_UpdateError_MarksEventError_BQ1(t *testing.T) {
 
 	repo.updateStatusErr = nil
 	repo.orders["ord_1"].Status = domain.OrderFailed
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_f2", Type: domain.EventPaymentFailed, OrderID: "ord_1",
 	}})
 	require.NoError(t, svc.HandleWebhook(context.Background(), "stripe", WebhookRequest{}))
@@ -122,13 +127,14 @@ func TestHandleWebhook_Refund_RecoversPlanAndSubscription_BQ3(t *testing.T) {
 	repo.wsSub["ws_1"] = subState{ref: "sub_1", expiresAt: testNow.AddDate(0, 1, 0)}
 	repo.bySub["sub_1"] = "ws_1"
 	hooks := &hookTrace{}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPlanChanged: func(_ context.Context, ws, from, to string) error {
 			hooks.planChanged = append(hooks.planChanged, [3]string{ws, from, to})
 			return nil
 		},
 	}, &fakeAuditor{}, func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_rf", Type: domain.EventRefundCreated,
 		OrderID: "ord_1", SubscriptionRef: "sub_1",
 	}})
@@ -156,9 +162,10 @@ func TestHandleWebhook_Refund_RecoversPlanAndSubscription_BQ3(t *testing.T) {
 func TestHandleWebhook_Refund_StatusConflict_NoDoubleDowngrade_BQ3(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Status: domain.OrderRefunded}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_rf2", Type: domain.EventRefundCreated, OrderID: "ord_1",
 	}})
 
@@ -172,9 +179,10 @@ func TestHandleWebhook_Refund_UpdateError_MarksEventError_BQ1(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Status: domain.OrderPaid}
 	repo.updateStatusErr = errors.New("db down")
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{}, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_rf3", Type: domain.EventRefundCreated, OrderID: "ord_1",
 	}})
 

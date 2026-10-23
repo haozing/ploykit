@@ -12,6 +12,28 @@ entry below says whether it is Go-only). Consumers pin each side independently.
 ## [Unreleased]
 
 ### Added
+- **billing/admin/ui (P1 of the channel-framework plan)**: self-serve channel
+  configuration — paste credentials in the admin Plans page, no env edits, no
+  restart. `billing_channel.<name>.<field>` settings keys (prefix-sealed by
+  the sealer, fail-closed unchanged; `settings.Set` whitelist accepts the
+  prefix), `AtomicRegistry` rebuilds channel instances from
+  settings-over-env on a 30s poll (and immediately after an admin save via
+  `RefreshNow`); adapters self-describe their config forms via
+  `ChannelSchemaViewer.ConfigSchema()` (text/secret/select FieldSpecs).
+  New admin API: `GET/PUT /api/admin/billing/channels[/{name}]`,
+  `GET /api/admin/billing/catalog`,
+  `POST .../register-product`, `POST .../sync-price` (OpenAPI 151→156).
+  Catalog channels (waffo/paypal-family) get a `billing_channel_products`
+  mapping table (migration 050, PK channel×plan×interval) +
+  `ProductRegistrar` (waffo implements create/update-product REST): admin
+  registers products per plan×interval and one-click syncs channel catalog
+  prices after a price change; `CreateCheckout` resolves the mapping into
+  `CheckoutRequest.ChannelProductID` (with optional auto-registration via
+  `Config.AutoRegisterCatalog`). Admin UI (`@ploykit/ui`): channel cards
+  inside PlansPage — schema-driven forms, masked secrets ("__SET__",
+  blank-keeps), webhook URL with copy button, test-connection, test-mode
+  badges with waffo test cards, and a catalog-mapping table with
+  pending-sync highlighting. No new sidebar entries.
 - **billing**: `adapters/waffo` — the Waffo Pancake (MoR) payment channel,
   upstreamed from the shuijing product repo where it was battle-tested against
   the real API (request signing, checkout sessions, webhook verification,

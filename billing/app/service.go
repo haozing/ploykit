@@ -24,6 +24,13 @@ type Config struct {
 	// Locale is passed through to channel checkout pages ("en"/"zh"…);
 	// empty = channel default (F19).
 	Locale string
+
+	// AutoRegisterCatalog lets CreateCheckout register a missing catalog
+	// product on the fly for catalog-based channels that implement
+	// ProductRegistrar (BC-7). Default false: an unmapped plan+interval fails
+	// checkout with a "register it in the admin billing page" validation so
+	// products never get silently created on the channel side.
+	AutoRegisterCatalog bool
 }
 
 // BuyerEmailResolver resolves a checkout buyer's email from the identity side
@@ -33,7 +40,7 @@ type BuyerEmailResolver func(ctx context.Context, userID string) (string, error)
 
 type BillingService struct {
 	repo     Repo
-	channels *ChannelRegistry
+	channels ChannelSet
 	hooks    BillingHooks
 	auditor  Auditor
 	cfg      Config
@@ -47,7 +54,7 @@ type BillingService struct {
 	buyerEmail BuyerEmailResolver
 }
 
-func NewBillingService(repo Repo, channels *ChannelRegistry, cfg Config, hooks BillingHooks, auditor Auditor, now Clock, log *slog.Logger) *BillingService {
+func NewBillingService(repo Repo, channels ChannelSet, cfg Config, hooks BillingHooks, auditor Auditor, now Clock, log *slog.Logger) *BillingService {
 	if cfg.Currency == "" {
 		cfg.Currency = "CNY"
 	}
@@ -110,6 +117,15 @@ func (s *BillingService) CreateCheckout(ctx context.Context, p *webx.Principal, 
 	if amount <= 0 {
 		return nil, webx.NewValidation("plan is not priced for this interval: " + planCode)
 	}
+
+	// BC-7: catalog-based channels need a channel-side product for the
+	// plan+interval before any session can be created; resolve it up front so
+	// an unmapped catalog fails BEFORE a pending order row exists.
+	channelProductID, err := s.resolveChannelProduct(ctx, channel, channelName, plan, interval, amount)
+	if err != nil {
+		return nil, err
+	}
+
 	order, err := s.repo.CreateOrder(ctx, domain.Order{
 		WorkspaceID: workspaceID,
 		UserID:      p.UserID,
@@ -131,6 +147,8 @@ func (s *BillingService) CreateCheckout(ctx context.Context, p *webx.Principal, 
 		CancelURL:  s.cfg.CancelURL,
 		BuyerEmail: s.resolveBuyerEmail(ctx, order.UserID),
 		Locale:     s.cfg.Locale,
+
+		ChannelProductID: channelProductID,
 	})
 	if err != nil {
 
@@ -781,6 +799,51 @@ func planAmountCents(plan domain.Plan, interval domain.BillingInterval) int {
 		return v
 	}
 	return 0
+}
+
+// PlanPriceCents is the exported planPriceCents lookup (BC-7): checkout, the
+// admin catalog view and channel ProductRegistrar implementations all price a
+// plan+interval from the same DB limits keys.
+func PlanPriceCents(plan domain.Plan, interval domain.BillingInterval) int {
+	return planAmountCents(plan, interval)
+}
+
+// resolveChannelProduct fills the CheckoutRequest.ChannelProductID for
+// catalog-based channels (BC-7): mapping hit → use it; miss + AutoRegister
+// + ProductRegistrar → register and persist; anything else → validation
+// error naming the channel and pointing at the admin registration page
+// (F4: the one-off create-products script becomes a button).
+func (s *BillingService) resolveChannelProduct(ctx context.Context, channel PaymentChannel, channelName string, plan domain.Plan, interval domain.BillingInterval, amount int) (string, error) {
+	viewer, ok := channel.(ChannelCapabilityViewer)
+	if !ok || !viewer.Capabilities().CatalogBased {
+		return "", nil // ad-hoc priced channel (stripe/manual): no catalog to resolve
+	}
+	if p, ok, err := s.repo.GetChannelProduct(ctx, channelName, plan.Code, interval); err != nil {
+		return "", err
+	} else if ok {
+		return p.ChannelProductID, nil
+	}
+	reg, ok := channel.(ProductRegistrar)
+	if ok && s.cfg.AutoRegisterCatalog {
+		id, err := reg.RegisterProduct(ctx, plan, interval)
+		if err != nil {
+			return "", fmt.Errorf("register channel product: %w", err)
+		}
+		now := s.now()
+		if err := s.repo.UpsertChannelProduct(ctx, domain.ChannelProduct{
+			Channel: channelName, PlanCode: plan.Code, Interval: interval,
+			ChannelProductID: id, SyncedPriceCents: amount, SyncedAt: &now,
+		}); err != nil {
+			return "", err
+		}
+		s.audit(ctx, nil, nil, "billing.channel_product_auto_registered", plan.Code, map[string]any{
+			"channel": channelName, "interval": string(interval), "channel_product_id": id,
+		})
+		return id, nil
+	}
+	return "", webx.NewValidation(fmt.Sprintf(
+		"渠道 %s 尚未注册套餐 %s（%s）的渠道商品，请管理员在后台计费 → 渠道页完成商品注册后再发起支付",
+		channelName, plan.Code, string(interval)))
 }
 
 func planCurrency(plan domain.Plan, fallback string) string {

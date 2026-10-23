@@ -65,6 +65,11 @@ type BillingAdminService struct {
 	usage     AdminUsageFunc
 	now       Clock
 	log       *slog.Logger
+
+	// BC-5/BC-6: settings store backing billing_channel.* keys and the
+	// hot-reload trigger wired after a field save. Both optional.
+	channelSettings ChannelSettingsStore
+	refresher       ChannelRefresher
 }
 
 func NewBillingAdminService(core *BillingService, adminRepo AdminRepo, now Clock, log *slog.Logger) *BillingAdminService {

@@ -73,6 +73,63 @@ type AdminBillingConfig struct {
 	Channels []AdminBillingChannel `json:"channels"`
 }
 
+// ---- BC-5/BC-6/BC-7 admin billing-channels surface ----
+
+type AdminFieldOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type AdminFieldSpec struct {
+	Key      string             `json:"key"`
+	Label    string             `json:"label"`
+	Type     string             `json:"type"`
+	Required bool               `json:"required"`
+	Help     string             `json:"help"`
+	Options  []AdminFieldOption `json:"options"`
+}
+
+type AdminChannelCaps struct {
+	CatalogBased      bool     `json:"catalog_based"`
+	SupportsCancelURL bool     `json:"supports_cancel_url"`
+	DisplayOrder      int      `json:"display_order"`
+	Currencies        []string `json:"currencies"`
+}
+
+type AdminChannelCard struct {
+	Name              string                 `json:"name"`
+	Configured        bool                   `json:"configured"`
+	KeyMasked         string                 `json:"key_masked"`
+	WebhookConfigured bool                   `json:"webhook_configured"`
+	Capabilities      AdminChannelCaps       `json:"capabilities"`
+	Schema            []AdminFieldSpec       `json:"schema"`
+	Values            map[string]string      `json:"values"`
+	ConfigSource      string                 `json:"config_source"`
+}
+
+type AdminChannelCatalogRow struct {
+	Channel          string     `json:"channel"`
+	PlanCode         string     `json:"plan_code"`
+	Interval         string     `json:"interval"`
+	ChannelProductID string     `json:"channel_product_id"`
+	SyncedPriceCents int        `json:"synced_price_cents"`
+	PlanPriceCents   int        `json:"plan_price_cents"`
+	SyncedAt         *time.Time `json:"synced_at"`
+}
+
+type AdminChannelCatalogPlan struct {
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	Currency     string `json:"currency"`
+	MonthlyCents int    `json:"monthly_cents"`
+	YearlyCents  int    `json:"yearly_cents"`
+}
+
+type AdminChannelCatalog struct {
+	Rows  []AdminChannelCatalogRow  `json:"rows"`
+	Plans []AdminChannelCatalogPlan `json:"plans"`
+}
+
 // AdminPlanUpdateInput is the full-replace payload for AdminUpdatePlan; the
 // plan code rides in the request path and is never editable.
 type AdminPlanUpdateInput struct {
@@ -106,6 +163,13 @@ type BillingAdminOps interface {
 	TestChannelConnection(ctx context.Context, channel string) error
 
 	AdminCancelSubscription(ctx context.Context, actor *webx.Principal, workspaceID string) error
+
+	// BC-5/BC-6/BC-7: channel credential cards, field save, catalog mapping.
+	ChannelCards(ctx context.Context) ([]AdminChannelCard, error)
+	UpdateChannelFields(ctx context.Context, actor *webx.Principal, channel string, fields map[string]string) (AdminChannelCard, error)
+	ChannelCatalog(ctx context.Context) (AdminChannelCatalog, error)
+	RegisterChannelProduct(ctx context.Context, actor *webx.Principal, channel, planCode, interval string) (string, error)
+	SyncChannelPrice(ctx context.Context, actor *webx.Principal, channel, planCode, interval string) (int, error)
 }
 
 type WebhookAdminOps interface {

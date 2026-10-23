@@ -83,6 +83,20 @@ const (
 	EventSubscriptionCanceled = "subscription.canceled"
 )
 
+// ChannelProduct is one row of the BC-7 catalog mapping: where plan
+// <plan_code> sold at <interval> lives inside a catalog-based channel
+// (waffo product, paypal product/plan). The DB plan limits stay the single
+// source of pricing truth; synced_price_cents records what the channel
+// catalog was last synced to, so the admin page can flag drift.
+type ChannelProduct struct {
+	Channel          string          `json:"channel"`
+	PlanCode         string          `json:"plan_code"`
+	Interval         BillingInterval `json:"interval"`
+	ChannelProductID string          `json:"channel_product_id"`
+	SyncedPriceCents int             `json:"synced_price_cents"`
+	SyncedAt         *time.Time      `json:"synced_at,omitempty"`
+}
+
 func IntervalMonths(i BillingInterval) int {
 	switch i {
 	case IntervalYearly:

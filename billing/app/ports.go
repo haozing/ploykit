@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,11 +18,17 @@ type Auditor interface {
 }
 
 type CheckoutRequest struct {
-	Order      domain.Order
+	Order domain.Order
 	SuccessURL string
-	CancelURL  string // 目录型渠道可忽略，但须在 Capabilities().SupportsCancelURL=false 声明，不许静默
+	CancelURL string // 目录型渠道可忽略，但须在 Capabilities().SupportsCancelURL=false 声明，不许静默
 	BuyerEmail string // 渠道预填买家邮箱；空=不预填
 	Locale     string // 站点语言透传收银台（如 "en"/"zh"）；空=渠道默认
+
+	// ChannelProductID is the catalog product the service resolved for this
+	// order from the billing_channel_products mapping (BC-7). Catalog-based
+	// channels must prefer it; empty = the channel falls back to whatever
+	// static product ids it was configured with (env-only legacy wiring).
+	ChannelProductID string
 }
 
 type PaymentChannel interface {
@@ -39,9 +44,20 @@ type WebhookRequest struct {
 	Body   []byte
 }
 
+// ChannelSet is the read-side channel registry BillingService depends on.
+// Two implementations: *ChannelRegistry (products wire channels once at boot,
+// zero-change for existing main.go wiring) and *AtomicRegistry (BC-5 hot
+// reload — DB credentials rebuilt on a poll, pointer swapped atomically).
+type ChannelSet interface {
+	Get(name string) (PaymentChannel, bool)
+	OrderedNames() []string
+}
+
 type ChannelRegistry struct {
 	channels map[string]PaymentChannel
 }
+
+var _ ChannelSet = (*ChannelRegistry)(nil)
 
 func NewChannelRegistry() *ChannelRegistry {
 	return &ChannelRegistry{channels: make(map[string]PaymentChannel)}
@@ -65,29 +81,7 @@ const DefaultChannelDisplayOrder = 500
 // so /config billing_channels is a priority list the frontend can take as-is
 // (F18): first entry = recommended channel, no product-side re-sorting.
 func (r *ChannelRegistry) OrderedNames() []string {
-	type entry struct {
-		name  string
-		order int
-	}
-	entries := make([]entry, 0, len(r.channels))
-	for name, ch := range r.channels {
-		order := DefaultChannelDisplayOrder
-		if viewer, ok := ch.(ChannelCapabilityViewer); ok {
-			order = viewer.Capabilities().DisplayOrder
-		}
-		entries = append(entries, entry{name: name, order: order})
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].order != entries[j].order {
-			return entries[i].order < entries[j].order
-		}
-		return entries[i].name < entries[j].name
-	})
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		names = append(names, e.name)
-	}
-	return names
+	return orderedNamesOf(r.channels)
 }
 
 // ChannelCaps is a channel's declared shape of difference. The registry and
@@ -95,10 +89,10 @@ func (r *ChannelRegistry) OrderedNames() []string {
 // document behavior the adapter absorbs (F1/F3): a channel that ignores
 // CancelURL must say so here instead of silently dropping the parameter.
 type ChannelCaps struct {
-	CatalogBased      bool // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
-	SupportsCancelURL bool
-	DisplayOrder      int      // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
-	Currencies        []string // 空=不声明限制
+	CatalogBased      bool     `json:"catalog_based"`        // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
+	SupportsCancelURL bool     `json:"supports_cancel_url"`
+	DisplayOrder      int      `json:"display_order"`       // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
+	Currencies        []string `json:"currencies"`          // 空=不声明限制
 }
 
 // ChannelCapabilityViewer is the optional capability interface channels
@@ -106,6 +100,16 @@ type ChannelCaps struct {
 // DefaultChannelDisplayOrder in OrderedNames.
 type ChannelCapabilityViewer interface {
 	Capabilities() ChannelCaps
+}
+
+// ProductRegistrar is the optional interface catalog-based channels (waffo,
+// paypal) implement so the framework can create/sync their product catalog
+// instead of per-product one-off scripts (BC-7, F4). RegisterProduct creates
+// the channel-side product for the plan+interval and returns its channel
+// product id; SyncPrice pushes a price change to an existing product.
+type ProductRegistrar interface {
+	RegisterProduct(ctx context.Context, plan domain.Plan, interval domain.BillingInterval) (channelProductID string, err error)
+	SyncPrice(ctx context.Context, channelProductID string, plan domain.Plan, interval domain.BillingInterval) error
 }
 
 type Repo interface {
@@ -151,6 +155,11 @@ type Repo interface {
 	InsertOverageOrder(ctx context.Context, o domain.Order) (order domain.Order, created bool, err error)
 
 	ListMeteredWorkspaces(ctx context.Context, limit int) ([]MeteredWorkspace, error)
+
+	// BC-7 catalog mapping: resolve/register/list billing_channel_products.
+	GetChannelProduct(ctx context.Context, channel, planCode string, interval domain.BillingInterval) (domain.ChannelProduct, bool, error)
+	UpsertChannelProduct(ctx context.Context, p domain.ChannelProduct) error
+	ListChannelProducts(ctx context.Context) ([]domain.ChannelProduct, error)
 }
 
 type MeteredWorkspace struct {

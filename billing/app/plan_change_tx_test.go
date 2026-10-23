@@ -22,7 +22,8 @@ func TestOnPlanChangedTx_ErrorRollsBackPlanChange(t *testing.T) {
 		Interval: domain.IntervalMonthly, Status: domain.OrderPending,
 	}
 	notified := [][3]string{}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPlanChangedTx: func(_ context.Context, _ pgx.Tx, _, _, _ string) error {
 			return errors.New("proration ledger write failed")
 		},
@@ -31,7 +32,7 @@ func TestOnPlanChangedTx_ErrorRollsBackPlanChange(t *testing.T) {
 			return nil
 		},
 	}, &fakeAuditor{}, func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_tx1", Type: domain.EventCheckoutCompleted, OrderID: "ord_1",
 	}})
 
@@ -52,7 +53,8 @@ func TestOnPlanChangedTx_SuccessPassesFromTo(t *testing.T) {
 	}
 	var txFrom, txTo string
 	notified := [][3]string{}
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, BillingHooks{
 		OnPlanChangedTx: func(_ context.Context, _ pgx.Tx, _, from, to string) error {
 			txFrom, txTo = from, to
 			return nil
@@ -62,7 +64,7 @@ func TestOnPlanChangedTx_SuccessPassesFromTo(t *testing.T) {
 			return nil
 		},
 	}, &fakeAuditor{}, func() time.Time { return testNow }, nil)
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_tx2", Type: domain.EventCheckoutCompleted, OrderID: "ord_1",
 	}})
 

@@ -32,8 +32,8 @@ func TestHandleRenewed_IntervalDerivation_P3_13(t *testing.T) {
 			if tt.hasPaidIv {
 				repo.paidIv["ws_iv"] = tt.paidIv
 			}
-			svc := webhookSvc(repo, BillingHooks{})
-			require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+			svc, reg := webhookSvc(repo, BillingHooks{})
+			require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 				Channel: "stripe", ChannelEventID: "evt_iv", Type: domain.EventSubscriptionRenewed,
 				SubscriptionRef: "sub_iv",
 			}))
@@ -51,13 +51,13 @@ func TestHandlePaid_LatePaymentForCanceledOrder_Ignored_P3_13(t *testing.T) {
 		AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderCanceled,
 	}
 	var hookFires [][3]string
-	svc := webhookSvc(repo, BillingHooks{
+	svc, reg := webhookSvc(repo, BillingHooks{
 		OnPlanChanged: func(_ context.Context, ws, from, to string) error {
 			hookFires = append(hookFires, [3]string{ws, from, to})
 			return nil
 		},
 	})
-	require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+	require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_late", Type: domain.EventCheckoutCompleted,
 		OrderID: "ord_c", ChannelRef: "cs_c", AmountCents: 9900,
 	}))
@@ -88,10 +88,11 @@ func TestCancelPendingOrder_ChannelCancel_P3_11(t *testing.T) {
 			ID: "ord_x", WorkspaceID: "ws_1", PlanCode: "pro", Channel: "stripe",
 			Status: domain.OrderPending, ChannelRef: "cs_cancel_me",
 		}
-		svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{},
+		reg := NewChannelRegistry()
+		svc := NewBillingService(repo, reg, Config{}, BillingHooks{},
 			&fakeAuditor{}, func() time.Time { return testNow }, nil)
 		fc := &fakeCancelChannel{}
-		svc.channels.Register(fc)
+		reg.Register(fc)
 		repo.byRef["stripe:cs_cancel_me"] = "ord_x"
 
 		require.NoError(t, svc.CancelPendingOrder(context.Background(), principal, "ord_x"))
@@ -105,9 +106,10 @@ func TestCancelPendingOrder_ChannelCancel_P3_11(t *testing.T) {
 			ID: "ord_y", WorkspaceID: "ws_1", PlanCode: "pro", Channel: "stripe",
 			Status: domain.OrderPending, ChannelRef: "cs_fail",
 		}
-		svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{},
+		reg := NewChannelRegistry()
+		svc := NewBillingService(repo, reg, Config{}, BillingHooks{},
 			&fakeAuditor{}, func() time.Time { return testNow }, nil)
-		svc.channels.Register(&fakeCancelChannel{cancelErr: errors.New("stripe down")})
+		reg.Register(&fakeCancelChannel{cancelErr: errors.New("stripe down")})
 
 		require.NoError(t, svc.CancelPendingOrder(context.Background(), principal, "ord_y"),
 			"撤销失败是 best-effort：本地取消必须成立")
@@ -120,9 +122,10 @@ func TestCancelPendingOrder_ChannelCancel_P3_11(t *testing.T) {
 			ID: "ord_z", WorkspaceID: "ws_1", PlanCode: "pro", Channel: "manual",
 			Status: domain.OrderPending, ChannelRef: "manual-ref",
 		}
-		svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{},
+		reg := NewChannelRegistry()
+		svc := NewBillingService(repo, reg, Config{}, BillingHooks{},
 			&fakeAuditor{}, func() time.Time { return testNow }, nil)
-		svc.channels.Register(&fakeChannel{})
+		reg.Register(&fakeChannel{})
 
 		require.NoError(t, svc.CancelPendingOrder(context.Background(), principal, "ord_z"))
 		assert.Equal(t, domain.OrderCanceled, repo.orders["ord_z"].Status)

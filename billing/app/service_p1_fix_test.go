@@ -23,15 +23,16 @@ func seedPaidOrder(repo *fakeRepo, id, pi string) {
 	}
 }
 
-func webhookSvc(repo *fakeRepo, hooks BillingHooks) *BillingService {
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{Currency: "CNY"}, hooks,
+func webhookSvc(repo *fakeRepo, hooks BillingHooks) (*BillingService, *ChannelRegistry) {
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{Currency: "CNY"}, hooks,
 		&fakeAuditor{}, func() time.Time { return testNow }, nil)
-	return svc
+	return svc, reg
 }
 
-func fireWebhook(t *testing.T, svc *BillingService, evt domain.PaymentEvent) error {
+func fireWebhook(t *testing.T, svc *BillingService, reg *ChannelRegistry, evt domain.PaymentEvent) error {
 	t.Helper()
-	svc.channels.Register(&fakeChannel{event: evt})
+	reg.Register(&fakeChannel{event: evt})
 	return svc.HandleWebhook(context.Background(), evt.Channel, WebhookRequest{})
 }
 
@@ -43,9 +44,9 @@ func TestRefundEvent_ResolvesViaPaymentIntentAnchor_P1_3(t *testing.T) {
 			ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
 			AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending,
 		}
-		svc := webhookSvc(repo, BillingHooks{})
+		svc, reg := webhookSvc(repo, BillingHooks{})
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_pay", Type: domain.EventCheckoutCompleted,
 			OrderID: "ord_1", ChannelRef: "cs_1", PaymentIntentRef: "pi_1", AmountCents: 9900,
 		}))
@@ -53,7 +54,7 @@ func TestRefundEvent_ResolvesViaPaymentIntentAnchor_P1_3(t *testing.T) {
 		require.Equal(t, "ord_1", repo.byPI["pi_1"], "PI 必须锚进订单（metadata）")
 		assert.Equal(t, "pro", repo.wsPlan["ws_1"])
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_rf", Type: domain.EventRefundCreated,
 			ChannelRef: "pi_1", PaymentIntentRef: "pi_1",
 		}))
@@ -70,9 +71,9 @@ func TestRefundEvent_ResolvesViaPaymentIntentAnchor_P1_3(t *testing.T) {
 			AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending,
 		}
 		repo.byPI["pi_2"] = "ord_2"
-		svc := webhookSvc(repo, BillingHooks{})
+		svc, reg := webhookSvc(repo, BillingHooks{})
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_pf", Type: domain.EventPaymentFailed,
 			ChannelRef: "pi_2", PaymentIntentRef: "pi_2",
 		}))
@@ -83,9 +84,9 @@ func TestRefundEvent_ResolvesViaPaymentIntentAnchor_P1_3(t *testing.T) {
 		repo := newFakeRepo()
 		seedPaidOrder(repo, "ord_3", "")
 		repo.byRef["stripe:cs_3"] = "ord_3"
-		svc := webhookSvc(repo, BillingHooks{})
+		svc, reg := webhookSvc(repo, BillingHooks{})
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_x", Type: domain.EventRefundCreated,
 			ChannelRef: "pi_unknown",
 		}))
@@ -101,7 +102,7 @@ func TestHandlePaid_SecondHalfFailure_FailsEventAndRecovers_P1_4(t *testing.T) {
 		AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending,
 	}
 	var hookFires [][3]string
-	svc := webhookSvc(repo, BillingHooks{
+	svc, reg := webhookSvc(repo, BillingHooks{
 		OnPlanChanged: func(_ context.Context, ws, from, to string) error {
 			hookFires = append(hookFires, [3]string{ws, from, to})
 			return nil
@@ -113,7 +114,7 @@ func TestHandlePaid_SecondHalfFailure_FailsEventAndRecovers_P1_4(t *testing.T) {
 		Channel: "stripe", ChannelEventID: "evt_p1", Type: domain.EventCheckoutCompleted,
 		OrderID: "ord_1", ChannelRef: "cs_1", AmountCents: 9900,
 	}
-	err := fireWebhook(t, svc, evt)
+	err := fireWebhook(t, svc, reg, evt)
 	require.Error(t, err, "failEvent 原样上抛（HTTP 5xx 触发渠道重试）")
 	assert.Equal(t, "error", repo.events["stripe:evt_p1"], "P1-4：事件标 error 可重放（修复前裸 return 停留 received）")
 	assert.Equal(t, domain.OrderPaid, repo.orders["ord_1"].Status, "状态迁移已成功")
@@ -121,7 +122,7 @@ func TestHandlePaid_SecondHalfFailure_FailsEventAndRecovers_P1_4(t *testing.T) {
 	assert.False(t, written, "套餐尚未写入")
 
 	repo.changePlanErr = nil
-	require.NoError(t, fireWebhook(t, svc, evt))
+	require.NoError(t, fireWebhook(t, svc, reg, evt))
 	assert.Equal(t, "pro", repo.wsPlan["ws_1"], "P1-4：重试补完套餐写入（不提前收敛）")
 	assert.True(t, repo.processed["stripe:evt_p1"])
 	assert.Equal(t, [][3]string{{"ws_1", "free", "pro"}}, hookFires, "补写场景钩子仍扇出一次")
@@ -132,8 +133,8 @@ func TestHandleRenewed_AllErrors_FailEvent_P1_4(t *testing.T) {
 		repo := newFakeRepo()
 		repo.bySub["sub_1"] = "ws_1"
 		repo.findSubErr = errors.New("db down")
-		svc := webhookSvc(repo, BillingHooks{})
-		err := fireWebhook(t, svc, domain.PaymentEvent{
+		svc, reg := webhookSvc(repo, BillingHooks{})
+		err := fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_r1", Type: domain.EventSubscriptionRenewed,
 			SubscriptionRef: "sub_1",
 		})
@@ -147,8 +148,8 @@ func TestHandleCanceled_AllErrors_FailEvent_P1_4(t *testing.T) {
 	repo.bySub["sub_2"] = "ws_1"
 	repo.wsPlan["ws_1"] = "pro"
 	repo.changePlanErr = errors.New("db down")
-	svc := webhookSvc(repo, BillingHooks{})
-	err := fireWebhook(t, svc, domain.PaymentEvent{
+	svc, reg := webhookSvc(repo, BillingHooks{})
+	err := fireWebhook(t, svc, reg, domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_c1", Type: domain.EventSubscriptionCanceled,
 		SubscriptionRef: "sub_2",
 	})
@@ -164,10 +165,11 @@ func TestHandlePaid_AmountMismatch_RefusesCredit_P2_1(t *testing.T) {
 			ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
 			AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending,
 		}
-		svc := NewBillingService(repo, NewChannelRegistry(), Config{Currency: "CNY"}, BillingHooks{},
+		reg := NewChannelRegistry()
+		svc := NewBillingService(repo, reg, Config{Currency: "CNY"}, BillingHooks{},
 			auditor, func() time.Time { return testNow }, nil)
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_m1", Type: domain.EventCheckoutCompleted,
 			OrderID: "ord_1", ChannelRef: "cs_1", AmountCents: 100, Currency: "cny",
 		}))
@@ -190,8 +192,8 @@ func TestHandlePaid_AmountMismatch_RefusesCredit_P2_1(t *testing.T) {
 			ID: "ord_2", WorkspaceID: "ws_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
 			AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending,
 		}
-		svc := webhookSvc(repo, BillingHooks{})
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		svc, reg := webhookSvc(repo, BillingHooks{})
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_m2", Type: domain.EventCheckoutCompleted,
 			OrderID: "ord_2", ChannelRef: "cs_2", AmountCents: 9900, Currency: "usd",
 		}))
@@ -205,8 +207,8 @@ func TestHandlePaid_AmountMismatch_RefusesCredit_P2_1(t *testing.T) {
 			ID: "ord_3", WorkspaceID: "ws_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
 			AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending,
 		}
-		svc := webhookSvc(repo, BillingHooks{})
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		svc, reg := webhookSvc(repo, BillingHooks{})
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_m3", Type: domain.EventCheckoutCompleted,
 			OrderID: "ord_3", ChannelRef: "cs_3", AmountCents: 9900, Currency: "cny",
 		}))
@@ -220,8 +222,8 @@ func TestHandlePaid_AmountMismatch_RefusesCredit_P2_1(t *testing.T) {
 			ID: "ord_4", WorkspaceID: "ws_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
 			AmountCents: 9900, Currency: "CNY", Channel: "stripe", Status: domain.OrderPending, TrialDays: 14,
 		}
-		svc := webhookSvc(repo, BillingHooks{})
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		svc, reg := webhookSvc(repo, BillingHooks{})
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_m4", Type: domain.EventCheckoutCompleted,
 			OrderID: "ord_4", ChannelRef: "cs_4", AmountCents: 0, SubscriptionRef: "sub_t",
 		}))
@@ -238,14 +240,14 @@ func TestHandleRenewed_LateRenewalAfterExpiry_SelfHeals_P2_3(t *testing.T) {
 			Interval: domain.IntervalMonthly, Status: domain.OrderPaid}
 		repo.paidIv["ws_1"] = domain.IntervalMonthly
 		var restored [][3]string
-		svc := webhookSvc(repo, BillingHooks{
+		svc, reg := webhookSvc(repo, BillingHooks{
 			OnPlanChanged: func(_ context.Context, ws, from, to string) error {
 				restored = append(restored, [3]string{ws, from, to})
 				return nil
 			},
 		})
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_l1", Type: domain.EventSubscriptionRenewed,
 			SubscriptionRef: "sub_1", OrderID: "ord_1",
 		}))
@@ -262,9 +264,9 @@ func TestHandleRenewed_LateRenewalAfterExpiry_SelfHeals_P2_3(t *testing.T) {
 		repo.bySub["sub_2"] = "ws_2"
 		repo.wsPlan["ws_2"] = "pro"
 		repo.orders["ord_2"] = &domain.Order{ID: "ord_2", WorkspaceID: "ws_2", PlanCode: "pro", Status: domain.OrderPaid}
-		svc := webhookSvc(repo, BillingHooks{})
+		svc, reg := webhookSvc(repo, BillingHooks{})
 
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_l2", Type: domain.EventSubscriptionRenewed,
 			SubscriptionRef: "sub_2", OrderID: "ord_2",
 		}))
@@ -275,8 +277,8 @@ func TestHandleRenewed_LateRenewalAfterExpiry_SelfHeals_P2_3(t *testing.T) {
 		repo := newFakeRepo()
 		repo.bySub["sub_3"] = "ws_3"
 		repo.wsPlan["ws_3"] = "free"
-		svc := webhookSvc(repo, BillingHooks{})
-		require.NoError(t, fireWebhook(t, svc, domain.PaymentEvent{
+		svc, reg := webhookSvc(repo, BillingHooks{})
+		require.NoError(t, fireWebhook(t, svc, reg, domain.PaymentEvent{
 			Channel: "stripe", ChannelEventID: "evt_l3", Type: domain.EventSubscriptionRenewed,
 			SubscriptionRef: "sub_3",
 		}))

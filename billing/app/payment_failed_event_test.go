@@ -29,14 +29,15 @@ func (c *emitCapture) emit(_ context.Context, _ pgx.Tx, ev events.Event) error {
 	return nil
 }
 
-func newFailedSvc(t *testing.T, repo *fakeRepo, cap *emitCapture, hooks BillingHooks) *BillingService {
+func newFailedSvc(t *testing.T, repo *fakeRepo, cap *emitCapture, hooks BillingHooks) (*BillingService, *ChannelRegistry) {
 	t.Helper()
-	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, hooks, &fakeAuditor{},
+	reg := NewChannelRegistry()
+	svc := NewBillingService(repo, reg, Config{}, hooks, &fakeAuditor{},
 		func() time.Time { return testNow }, nil)
 	if cap != nil {
 		svc = svc.WithEventEmitter(cap.emit)
 	}
-	return svc
+	return svc, reg
 }
 
 func TestHandleWebhook_PaymentFailed_EmitsEvent(t *testing.T) {
@@ -48,13 +49,13 @@ func TestHandleWebhook_PaymentFailed_EmitsEvent(t *testing.T) {
 	}
 	failedHook := [][2]string{}
 	cap := &emitCapture{}
-	svc := newFailedSvc(t, repo, cap, BillingHooks{
+	svc, reg := newFailedSvc(t, repo, cap, BillingHooks{
 		OnPaymentFailed: func(_ context.Context, w, orderID, _ string) error {
 			failedHook = append(failedHook, [2]string{w, orderID})
 			return nil
 		},
 	})
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_pf1", Type: domain.EventPaymentFailed, OrderID: "ord_1",
 	}})
 
@@ -82,10 +83,10 @@ func TestHandleWebhook_PaymentFailed_DuplicateNoReEmit(t *testing.T) {
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: ws, PlanCode: "pro", Status: domain.OrderFailed}
 	hookCalls := 0
 	cap := &emitCapture{}
-	svc := newFailedSvc(t, repo, cap, BillingHooks{
+	svc, reg := newFailedSvc(t, repo, cap, BillingHooks{
 		OnPaymentFailed: func(context.Context, string, string, string) error { hookCalls++; return nil },
 	})
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_pf2", Type: domain.EventPaymentFailed, OrderID: "ord_1",
 	}})
 
@@ -100,8 +101,8 @@ func TestHandleWebhook_PaymentFailed_EmitErrorFailsEvent(t *testing.T) {
 	repo := newFakeRepo()
 	repo.orders["ord_1"] = &domain.Order{ID: "ord_1", WorkspaceID: ws, PlanCode: "pro", Status: domain.OrderPending}
 	cap := &emitCapture{err: errors.New("river down")}
-	svc := newFailedSvc(t, repo, cap, BillingHooks{})
-	svc.channels.Register(&fakeChannel{event: domain.PaymentEvent{
+	svc, reg := newFailedSvc(t, repo, cap, BillingHooks{})
+	reg.Register(&fakeChannel{event: domain.PaymentEvent{
 		Channel: "stripe", ChannelEventID: "evt_pf3", Type: domain.EventPaymentFailed, OrderID: "ord_1",
 	}})
 

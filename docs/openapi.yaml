@@ -2742,6 +2742,154 @@ paths:
         '400': { $ref: '#/components/responses/DefaultError', description: "未配置密钥 E_CHANNEL_NOT_CONFIGURED / 不支持测试 E_CHANNEL_TEST_UNSUPPORTED" }
         '502': { $ref: '#/components/responses/DefaultError', description: 渠道侧连接失败 }
         default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/channels:
+    get:
+      operationId: adminListBillingChannels
+      tags: [admin]
+      summary: 支付渠道配置卡（适配器 ConfigSchema 自描述表单 + DB 值脱敏回显；BC-5/BC-6）
+      responses:
+        '200':
+          description: 渠道卡列表（DisplayOrder 升序；未注册渠道无卡）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items: { $ref: '#/components/schemas/BillingChannelCard' }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/channels/{name}:
+    put:
+      operationId: adminUpdateBillingChannel
+      tags: [admin]
+      summary: 保存渠道凭据字段（billing_channel.<name>.<field> 落库封存，保存后热重建渠道）
+      description: |
+        secret 字段空串=保持已存值；text/select 字段=覆写（空=清除）；
+        未知字段名 400、select 值必须在 Options 内。保存成功后同步触发渠道
+        重建，响应卡片即生效态（config_source=db）。
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fields]
+              properties:
+                fields:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        '200':
+          description: 更新后的渠道卡
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel: { $ref: '#/components/schemas/BillingChannelCard' }
+        '400': { $ref: '#/components/responses/DefaultError', description: 未知渠道字段/非法 select 值/渠道不可后台编辑 }
+        '404': { $ref: '#/components/responses/DefaultError', description: 渠道不存在 }
+        '503': { $ref: '#/components/responses/DefaultError', description: 渠道设置存储未接线（无 sealer 时敏感写同样拒绝） }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/catalog:
+    get:
+      operationId: adminBillingCatalog
+      tags: [admin]
+      summary: 目录型渠道商品映射总览（已注册行 join 当前 plan 价；BC-7）
+      responses:
+        '200':
+          description: 映射行 + plans 供前端拼未注册空位
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        channel: { type: string }
+                        plan_code: { type: string }
+                        interval: { type: string, enum: [monthly, yearly] }
+                        channel_product_id: { type: string }
+                        synced_price_cents: { type: integer }
+                        plan_price_cents: { type: integer, description: 当前 DB plan 价（与 synced 比对提示待同步） }
+                        synced_at: { type: string, format: date-time, nullable: true }
+                  plans:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        name: { type: string }
+                        currency: { type: string }
+                        monthly_cents: { type: integer }
+                        yearly_cents: { type: integer }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/channels/{name}/register-product:
+    post:
+      operationId: adminRegisterChannelProduct
+      tags: [admin]
+      summary: 在渠道侧注册套餐商品（幂等：已有映射直接返回现有 id；BC-7）
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_code, interval]
+              properties:
+                plan_code: { type: string }
+                interval: { type: string, enum: [monthly, yearly] }
+      responses:
+        '200':
+          description: 渠道商品 id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel_product_id: { type: string }
+        '400': { $ref: '#/components/responses/DefaultError', description: "非目录渠道 E_CHANNEL_PRODUCT_UNSUPPORTED / 套餐该档位未定价" }
+        '404': { $ref: '#/components/responses/DefaultError', description: 渠道或套餐不存在 }
+        '502': { $ref: '#/components/responses/DefaultError', description: 渠道侧建品失败 }
+        default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/channels/{name}/sync-price:
+    post:
+      operationId: adminSyncChannelPrice
+      tags: [admin]
+      summary: 把套餐当前 DB 价推送给已注册渠道商品（改价联动；BC-7）
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_code, interval]
+              properties:
+                plan_code: { type: string }
+                interval: { type: string, enum: [monthly, yearly] }
+      responses:
+        '200':
+          description: 已同步的价（分）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  synced_price_cents: { type: integer }
+        '400': { $ref: '#/components/responses/DefaultError', description: "非目录渠道 E_CHANNEL_PRODUCT_UNSUPPORTED / 套餐该档位未定价" }
+        '404': { $ref: '#/components/responses/DefaultError', description: 渠道/套餐/映射不存在 }
+        '502': { $ref: '#/components/responses/DefaultError', description: 渠道侧改价失败 }
+        default: { $ref: '#/components/responses/DefaultError' }
   /api/admin/workspaces/{id}/cancel-subscription:
     post:
       operationId: adminCancelSubscription
@@ -5300,3 +5448,49 @@ components:
               pass: { type: boolean }
               detail: { type: string }
               fix_hint: { type: string }
+    BillingChannelCard:
+      type: object
+      required: [name, configured, key_masked, webhook_configured, capabilities, schema, values, config_source]
+      description: 渠道配置卡（GET /api/admin/billing/channels 与 PUT 响应共用；BC-6 API 契约）
+      properties:
+        name: { type: string }
+        configured: { type: boolean, description: 渠道实例当前已构建且密钥齐 }
+        key_masked: { type: string, description: "如 MER_x1***x12；未配置为「未配置」" }
+        webhook_configured: { type: boolean }
+        capabilities:
+          type: object
+          properties:
+            catalog_based: { type: boolean, description: 目录型（需预注册商品）vs 临时定价型 }
+            supports_cancel_url: { type: boolean }
+            display_order: { type: integer }
+            currencies: { type: array, items: { type: string }, description: 空=不声明限制 }
+        schema:
+          type: array
+          description: 适配器自描述表单字段（后台一页自助配置，第四渠道零 UI 改动）
+          items:
+            type: object
+            required: [key, label, type, required]
+            properties:
+              key: { type: string, description: 同时是 billing_channel.<name>.<field> 设置键 }
+              label: { type: string }
+              type: { type: string, enum: [text, secret, select] }
+              required: { type: boolean }
+              help: { type: string }
+              options:
+                type: array
+                nullable: true
+                description: select 字段候选；非 select 为 null
+                items:
+                  type: object
+                  required: [value, label]
+                  properties:
+                    value: { type: string }
+                    label: { type: string }
+        values:
+          type: object
+          additionalProperties: { type: string }
+          description: text=实际值；secret=已设则 "__SET__" 否则 ""（绝不回传密钥本体）
+        config_source:
+          type: string
+          enum: [db, env, '']
+          description: 有 billing_channel.<name>.* 库键=db；无库键但渠道已建=env；未配置=空串

@@ -3,6 +3,8 @@ package settings
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/haozing/ploykit/platform/sealx"
 	"github.com/jackc/pgx/v5"
@@ -60,4 +62,40 @@ func (s *Store) All(ctx context.Context) (map[string]string, error) {
 		out[k] = v
 	}
 	return out, rows.Err()
+}
+
+// BillingChannelFields returns every billing_channel.<name>.<field> row with
+// values unsealed, grouped by channel name (BC-5 hot-read; same shape as
+// SMTPConfig). Rows outside the prefix and malformed keys are skipped; a row
+// that fails to unseal errors the whole read — fail-closed, no plaintext
+// fallback, no partial secret leakage. A channel with no rows is absent from
+// the map. This is the source the hot-reload channel registry polls.
+func (s *Store) BillingChannelFields(ctx context.Context) (map[string]map[string]string, error) {
+	all, err := s.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]string{}
+	for k, v := range all {
+		rest, ok := strings.CutPrefix(k, BillingChannelKeyPrefix)
+		if !ok {
+			continue
+		}
+		name, field, ok := strings.Cut(rest, ".")
+		if !ok || name == "" || field == "" || strings.Contains(field, ".") {
+			continue
+		}
+		if IsSensitive(k) {
+			plain, err := s.sealer.Unseal(v) // nil-receiver safe: errors when no sealer
+			if err != nil {
+				return nil, fmt.Errorf("settings: read billing channel key %s: %w", k, err)
+			}
+			v = plain
+		}
+		if out[name] == nil {
+			out[name] = map[string]string{}
+		}
+		out[name][field] = v
+	}
+	return out, nil
 }

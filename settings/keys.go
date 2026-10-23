@@ -89,10 +89,22 @@ var Descriptions = map[string]string{
 	KeyShellNavHidden:       "产品壳侧边栏隐藏菜单：JSON 字符串数组，元素为菜单路径（如 [\"/realtime\",\"/settings/workspace/schedules\"]）；空 = 全部显示",
 }
 
+// BillingChannelKeyPrefix namespaces the payment-channel credential keys
+// (BC-5): every `billing_channel.<name>.<field>` row (e.g.
+// billing_channel.waffo.merchant_id) lives in the generic site_settings KV
+// table, is sealed at rest like smtp_pass, and is deliberately NOT a KeyOrder
+// member — the generic settings page never renders channel cards; that
+// surface is the dedicated admin billing-channels API.
+const BillingChannelKeyPrefix = "billing_channel."
+
 // IsSensitive reports whether the key holds a credential that must never be
 // echoed in plaintext — every read-back surface masks it with MaskedValue.
-// v1 covers smtp_pass only.
-func IsSensitive(key string) bool { return key == KeySMTPPass }
+// smtp_pass plus the whole billing_channel.* namespace (BC-5): channel
+// merchant ids, product ids and modes are as sensitive as the secrets —
+// anything with the prefix seals at rest and unseals fail-closed.
+func IsSensitive(key string) bool {
+	return key == KeySMTPPass || strings.HasPrefix(key, BillingChannelKeyPrefix)
+}
 
 // Seeding semantics — decision D2 (docs/plan-upstream-shuijing-admin-billing.md):
 // the two generations of env-backed keys deliberately fork at first boot.
@@ -496,6 +508,21 @@ func Validate(key, value string) error {
 		}
 		return nil
 	default:
+		// BC-5: billing_channel.<name>.<field> rows are written by the admin
+		// billing-channels API (not the generic settings page). The key shape
+		// (three dot-separated segments) and a generous value cap is all the
+		// generic layer polices; field-name semantics belong to the channel's
+		// ConfigSchema, enforced by that API.
+		if rest, ok := strings.CutPrefix(key, BillingChannelKeyPrefix); ok {
+			name, field, ok := strings.Cut(rest, ".")
+			if !ok || name == "" || field == "" || strings.Contains(field, ".") {
+				return fmt.Errorf("%q 必须形如 billing_channel.<渠道名>.<字段名>", key)
+			}
+			if len(value) > 8192 {
+				return fmt.Errorf("%s 值过长（上限 8192 字符，当前 %d）", key, len(value))
+			}
+			return nil
+		}
 		return fmt.Errorf("未知设置键 %q（白名单：%s）", key, strings.Join(KeyOrder, ", "))
 	}
 }

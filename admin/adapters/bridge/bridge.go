@@ -247,6 +247,99 @@ func (b *BillingOps) AdminCancelSubscription(ctx context.Context, actor *webx.Pr
 	return b.Svc.AdminCancelSubscription(ctx, actor, workspaceID)
 }
 
+// ---- BC-5/BC-6/BC-7 channel credential/catalog surface ----
+
+func mapFieldSpecs(specs []billingapp.FieldSpec) []app.AdminFieldSpec {
+	out := make([]app.AdminFieldSpec, len(specs))
+	for i, sp := range specs {
+		opts := make([]app.AdminFieldOption, len(sp.Options))
+		for j, o := range sp.Options {
+			opts[j] = app.AdminFieldOption{Value: o.Value, Label: o.Label}
+		}
+		if opts == nil {
+			opts = []app.AdminFieldOption{}
+		}
+		out[i] = app.AdminFieldSpec{
+			Key: sp.Key, Label: sp.Label, Type: sp.Type, Required: sp.Required,
+			Help: sp.Help, Options: opts,
+		}
+	}
+	return out
+}
+
+func mapChannelCard(c billingapp.ChannelCard) app.AdminChannelCard {
+	values := c.Values
+	if values == nil {
+		values = map[string]string{}
+	}
+	return app.AdminChannelCard{
+		Name: c.Name, Configured: c.Configured, KeyMasked: c.KeyMasked,
+		WebhookConfigured: c.WebhookConfigured,
+		Capabilities: app.AdminChannelCaps{
+			CatalogBased:      c.Capabilities.CatalogBased,
+			SupportsCancelURL: c.Capabilities.SupportsCancelURL,
+			DisplayOrder:      c.Capabilities.DisplayOrder,
+			Currencies:        c.Capabilities.Currencies,
+		},
+		Schema:       mapFieldSpecs(c.Schema),
+		Values:       values,
+		ConfigSource: c.ConfigSource,
+	}
+}
+
+func (b *BillingOps) ChannelCards(ctx context.Context) ([]app.AdminChannelCard, error) {
+	cards, err := b.Svc.ChannelCards(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]app.AdminChannelCard, len(cards))
+	for i, c := range cards {
+		out[i] = mapChannelCard(c)
+	}
+	return out, nil
+}
+
+func (b *BillingOps) UpdateChannelFields(ctx context.Context, actor *webx.Principal, channel string, fields map[string]string) (app.AdminChannelCard, error) {
+	card, err := b.Svc.UpdateChannelFields(ctx, actor, channel, fields)
+	if err != nil {
+		return app.AdminChannelCard{}, err
+	}
+	return mapChannelCard(card), nil
+}
+
+func (b *BillingOps) ChannelCatalog(ctx context.Context) (app.AdminChannelCatalog, error) {
+	cat, err := b.Svc.ChannelCatalog(ctx)
+	if err != nil {
+		return app.AdminChannelCatalog{}, err
+	}
+	out := app.AdminChannelCatalog{
+		Rows:  make([]app.AdminChannelCatalogRow, len(cat.Rows)),
+		Plans: make([]app.AdminChannelCatalogPlan, len(cat.Plans)),
+	}
+	for i, r := range cat.Rows {
+		out.Rows[i] = app.AdminChannelCatalogRow{
+			Channel: r.Channel, PlanCode: r.PlanCode, Interval: r.Interval,
+			ChannelProductID: r.ChannelProductID, SyncedPriceCents: r.SyncedPriceCents,
+			PlanPriceCents: r.PlanPriceCents, SyncedAt: r.SyncedAt,
+		}
+	}
+	for i, p := range cat.Plans {
+		out.Plans[i] = app.AdminChannelCatalogPlan{
+			Code: p.Code, Name: p.Name, Currency: p.Currency,
+			MonthlyCents: p.MonthlyCents, YearlyCents: p.YearlyCents,
+		}
+	}
+	return out, nil
+}
+
+func (b *BillingOps) RegisterChannelProduct(ctx context.Context, actor *webx.Principal, channel, planCode, interval string) (string, error) {
+	return b.Svc.RegisterChannelProduct(ctx, actor, channel, planCode, interval)
+}
+
+func (b *BillingOps) SyncChannelPrice(ctx context.Context, actor *webx.Principal, channel, planCode, interval string) (int, error) {
+	return b.Svc.SyncChannelPrice(ctx, actor, channel, planCode, interval)
+}
+
 type WebhookOps struct{ Svc *webhooksapp.WebhookService }
 
 func mapDelivery(v webhooksapp.AdminDeliveryView) app.AdminWebhookDelivery {

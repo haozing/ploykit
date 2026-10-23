@@ -41,6 +41,7 @@ import (
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
 	stripe "github.com/haozing/ploykit/billing/adapters/stripe"
+	waffo "github.com/haozing/ploykit/billing/adapters/waffo"
 	billingapp "github.com/haozing/ploykit/billing/app"
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
 	oauthgh "github.com/haozing/ploykit/identity/adapters/oauth/github"
@@ -462,11 +463,42 @@ func main() {
 		},
 	})
 
-	channels := billingapp.NewChannelRegistry()
-	if k := env("STRIPE_SECRET_KEY", ""); k != "" {
-		channels.Register(stripe.New(k, env("STRIPE_WEBHOOK_SIGNING_KEY", "")))
+	// BC-5 热生效渠道注册表：billing_channel.<name>.* 设置行（DB 凭据）优
+	// 先、env 回退（fields 空时 FromEnv/构造走 env——未迁移产品零影响），
+	// 每 30s 轮询重建、原子换指针；后台保存渠道字段后同步 RefreshNow。
+	channelFactories := map[string]func(fields map[string]string) (billingapp.PaymentChannel, error){
+		"stripe": func(fields map[string]string) (billingapp.PaymentChannel, error) {
+			get := func(field, envName string) string {
+				if v := fields[field]; v != "" {
+					return v
+				}
+				return os.Getenv(envName)
+			}
+			if k := get("secret_key", "STRIPE_SECRET_KEY"); k != "" {
+				return stripe.New(k, get("webhook_signing_key", "STRIPE_WEBHOOK_SIGNING_KEY")), nil
+			}
+			return nil, nil // 未配置：不注册
+		},
+		"waffo": func(fields map[string]string) (billingapp.PaymentChannel, error) {
+			ch, err := waffo.NewFromFields(fields, os.Getenv, log, production)
+			if err != nil {
+				return nil, err
+			}
+			if ch == nil {
+				return nil, nil // 未配置：不注册
+			}
+			return ch, nil
+		},
+		"manual": func(fields map[string]string) (billingapp.PaymentChannel, error) {
+			infoURL := fields["info_url"]
+			if infoURL == "" {
+				infoURL = env("BILLING_MANUAL_INFO_URL", "")
+			}
+			return &billingapp.ManualChannel{InfoURL: infoURL}, nil
+		},
 	}
-	channels.Register(&billingapp.ManualChannel{InfoURL: env("BILLING_MANUAL_INFO_URL", "")})
+	channels := billingapp.NewAtomicRegistry(ctx, log, siteSettings.BillingChannelFields, channelFactories, 30*time.Second)
+
 	billingRepo := billingpg.New(pool)
 	billingSvc := billingapp.NewBillingService(
 		billingRepo,
@@ -808,7 +840,11 @@ func main() {
 	adminhttp.MountWsOps(mux, adminhttp.WsOpsDeps{Svc: wsOpsSvc})
 
 	billingAdminSvc := billingapp.NewBillingAdminService(billingSvc, billingpg.New(pool), now, log).
-		WithUsage(quotaSvc.Usage)
+		WithUsage(quotaSvc.Usage).
+		// BC-5/BC-6：渠道卡读写 billing_channel.* 设置行；保存后同步触发
+		// AtomicRegistry 重建，PUT 响应里的卡片即生效态（无需重启/等轮询）。
+		WithChannelSettings(siteSettings).
+		WithChannelRefresher(channels)
 	billingOpsSvc := adminapp.NewBillingOpsService(adminSvc).
 		WithBillingOps(&bridge.BillingOps{Svc: billingAdminSvc}).
 		WithWebhookOps(&bridge.WebhookOps{Svc: whkSvc})

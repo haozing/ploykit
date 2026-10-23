@@ -78,6 +78,16 @@ func TestValidate(t *testing.T) {
 		{"未知键", "not_a_key", "x", true},
 		{"settings 自身不可写整表", "settings", `{"banner_text":"x"}`, true},
 		{"空键", "", "x", true},
+
+		// BC-5：billing_channel.<name>.<field> 前缀键走专用白名单分支。
+		{"渠道键合法", BillingChannelKeyPrefix + "waffo.merchant_id", "MER_x", false},
+		{"渠道键空值=清除", BillingChannelKeyPrefix + "waffo.mode", "", false},
+		{"渠道键长值（PEM 量级）", BillingChannelKeyPrefix + "waffo.private_key", strings.Repeat("A", 8192), false},
+		{"渠道键超长拒绝", BillingChannelKeyPrefix + "waffo.private_key", strings.Repeat("A", 8193), true},
+		{"渠道键缺字段段", BillingChannelKeyPrefix + "waffo", "x", true},
+		{"渠道键字段含点", BillingChannelKeyPrefix + "waffo.a.b", "x", true},
+		{"前缀不完整的渠道键", "billing_channel", "x", true},
+		{"近前缀伪键拒绝", "billing_channels.waffo.merchant_id", "x", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -191,7 +201,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestSensitiveMasking(t *testing.T) {
-	assert.True(t, IsSensitive(KeySMTPPass), "v1 只有 smtp_pass 是敏感键")
+	assert.True(t, IsSensitive(KeySMTPPass), "v1 敏感键 smtp_pass 语义保持")
 	assert.False(t, IsSensitive(KeySMTPUser))
 	assert.False(t, IsSensitive(KeySMTPHost))
 	assert.False(t, IsSensitive(KeyBannerText))
@@ -200,6 +210,12 @@ func TestSensitiveMasking(t *testing.T) {
 			assert.False(t, IsSensitive(k), "键 %s 不应是敏感键", k)
 		}
 	}
+	// BC-5：整个 billing_channel.* 命名空间全封存（含非密钥字段——渠道
+	// 商户号/商品号/模式与密钥同级敏感），KeyOrder 不含动态键。
+	assert.True(t, IsSensitive(BillingChannelKeyPrefix+"waffo.merchant_id"))
+	assert.True(t, IsSensitive(BillingChannelKeyPrefix+"stripe.secret_key"))
+	assert.True(t, IsSensitive(BillingChannelKeyPrefix+"waffo.mode"))
+	assert.False(t, IsSensitive("billing_channels.waffo.merchant_id"), "仅精确前缀封存")
 	assert.Equal(t, "******", MaskedValue)
 }
 

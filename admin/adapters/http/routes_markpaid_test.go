@@ -74,6 +74,22 @@ func (f *httpFakeBillingOps) AdminCancelSubscription(context.Context, *webx.Prin
 	return nil
 }
 
+func (f *httpFakeBillingOps) ChannelCards(context.Context) ([]app.AdminChannelCard, error) {
+	return nil, nil
+}
+func (f *httpFakeBillingOps) UpdateChannelFields(context.Context, *webx.Principal, string, map[string]string) (app.AdminChannelCard, error) {
+	return app.AdminChannelCard{}, nil
+}
+func (f *httpFakeBillingOps) ChannelCatalog(context.Context) (app.AdminChannelCatalog, error) {
+	return app.AdminChannelCatalog{}, nil
+}
+func (f *httpFakeBillingOps) RegisterChannelProduct(context.Context, *webx.Principal, string, string, string) (string, error) {
+	return "", nil
+}
+func (f *httpFakeBillingOps) SyncChannelPrice(context.Context, *webx.Principal, string, string, string) (int, error) {
+	return 0, nil
+}
+
 func newBillingOpsMux(ops app.BillingAdminOps) *http.ServeMux {
 	svc := app.NewBillingOpsService(app.NewAdminService(&fakeRepo{}, time.Now)).WithBillingOps(ops)
 	mux := http.NewServeMux()

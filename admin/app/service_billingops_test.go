@@ -570,3 +570,19 @@ func TestBillingOpsAdminUpdatePlan(t *testing.T) {
 		assert.Equal(t, http.StatusServiceUnavailable, we.Status)
 	})
 }
+
+func (f *fakeBillingOps) ChannelCards(context.Context) ([]app.AdminChannelCard, error) {
+	return nil, nil
+}
+func (f *fakeBillingOps) UpdateChannelFields(context.Context, *webx.Principal, string, map[string]string) (app.AdminChannelCard, error) {
+	return app.AdminChannelCard{}, nil
+}
+func (f *fakeBillingOps) ChannelCatalog(context.Context) (app.AdminChannelCatalog, error) {
+	return app.AdminChannelCatalog{}, nil
+}
+func (f *fakeBillingOps) RegisterChannelProduct(context.Context, *webx.Principal, string, string, string) (string, error) {
+	return "", nil
+}
+func (f *fakeBillingOps) SyncChannelPrice(context.Context, *webx.Principal, string, string, string) (int, error) {
+	return 0, nil
+}

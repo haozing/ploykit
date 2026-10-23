@@ -227,6 +227,24 @@ func (c *Channel) ChannelConfig() app.ChannelConfigInfo {
 	}
 }
 
+// ConfigSchema implements app.ChannelSchemaViewer (BC-6): the admin channel
+// card renders its form from this descriptor. Field keys are the
+// billing_channel.stripe.* settings keys.
+func (c *Channel) ConfigSchema() []app.FieldSpec {
+	return []app.FieldSpec{
+		{Key: "secret_key", Label: "Secret key", Type: app.FieldTypeSecret, Required: true,
+			Help: "sk_test_…/sk_live_…;测试/生产各一把,分环境各自保存"},
+		{Key: "webhook_signing_key", Label: "Webhook 签名密钥", Type: app.FieldTypeSecret,
+			Help: "Stripe Dashboard → Developers → Webhooks → Signing secret(whsec_…)"},
+		{Key: "mode", Label: "环境模式", Type: app.FieldTypeSelect,
+			Help: "与密钥前缀保持一致(sk_test_ = test);展示用徽标",
+			Options: []app.FieldOption{
+				{Value: "test", Label: "test(测试)"},
+				{Value: "prod", Label: "prod(生产)"},
+			}},
+	}
+}
+
 func maskKey(k string) string {
 	if k == "" {
 		return ""

@@ -187,3 +187,61 @@ func TestBootstrapSeedableIntegration(t *testing.T) {
 	assert.Equal(t, 465, port)
 	assert.Equal(t, "envpass", pass)
 }
+
+// TestBillingChannelKeysIntegration covers the BC-5 namespace end to end:
+// prefix keys Set/Get round-trip sealed, the grouped hot-read unseals,
+// and the fail-closed posture (no sealer → write rejected; wrong key →
+// read errors) matches smtp_pass.
+func TestBillingChannelKeysIntegration(t *testing.T) {
+	pool, s := newStoreEnv(t)
+	ctx := context.Background()
+	bare := NewStore(pool) // 无 sealer 的读/写者（WithSealer 会原地改 s）
+	sealed := s.WithSealer(mustSecrets(t, 'k'))
+
+	// 无 sealer 写渠道键 → 拒绝且不留行（fail-closed 同 smtp_pass）。
+	err := bare.Set(ctx, BillingChannelKeyPrefix+"waffo.merchant_id", "MER_x", "ops@x.com")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sealer")
+
+	require.NoError(t, sealed.Set(ctx, BillingChannelKeyPrefix+"waffo.merchant_id", "MER_x", "ops@x.com"))
+	require.NoError(t, sealed.Set(ctx, BillingChannelKeyPrefix+"waffo.private_key", "k-1", "ops@x.com"))
+	require.NoError(t, sealed.Set(ctx, BillingChannelKeyPrefix+"stripe.secret_key", "sk_test_1", "ops@x.com"))
+
+	// Get 返回封存值（密文），BillingChannelFields 返回解封明文并按渠道分组。
+	raw, found, err := sealed.Get(ctx, BillingChannelKeyPrefix+"waffo.private_key")
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.True(t, strings.HasPrefix(raw, sealx.SealedPrefix), "DB 行必须是 sealed 串，实际 %q", raw)
+	assert.NotContains(t, raw, "k-1")
+
+	fields, err := sealed.BillingChannelFields(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]map[string]string{
+		"waffo":  {"merchant_id": "MER_x", "private_key": "k-1"},
+		"stripe": {"secret_key": "sk_test_1"},
+	}, fields)
+
+	// 覆盖 + 清除：空值覆写后字段仍在（presence = 已配置），值为空串。
+	require.NoError(t, sealed.Set(ctx, BillingChannelKeyPrefix+"waffo.private_key", "", "ops@x.com"))
+	fields, err = sealed.BillingChannelFields(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", fields["waffo"]["private_key"])
+
+	// 前缀外/畸形键不打进分组结果。
+	_, err = pool.Exec(ctx, `INSERT INTO site_settings (key, value) VALUES ($1, 'x')`,
+		BillingChannelKeyPrefix+"waffo")
+	require.NoError(t, err)
+	fields, err = sealed.BillingChannelFields(ctx)
+	require.NoError(t, err)
+	_, has := fields["waffo"][""]
+	assert.False(t, has, "缺字段段的畸形键不得产生空字段项")
+
+	// 错误密钥读 → Unseal 失败报错（不静默、不回退明文）。
+	wrongKey := NewStore(pool).WithSealer(mustSecrets(t, 'x'))
+	_, err = wrongKey.BillingChannelFields(ctx)
+	require.Error(t, err)
+
+	// 无 sealer 的 store 读含封存行的分组 → 报错（同 SMTPConfig 的姿态）。
+	_, err = bare.BillingChannelFields(ctx)
+	require.Error(t, err)
+}

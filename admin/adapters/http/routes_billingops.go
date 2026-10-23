@@ -40,6 +40,14 @@ func MountBillingOps(mux webx.Router, d BillingOpsDeps) {
 	mux.Handle("GET /api/admin/billing/config", admin(d.mounted(d.billingConfig)))
 	mux.Handle("POST /api/admin/billing/test-connection", admin(d.mounted(d.testChannelConnection)))
 	mux.Handle("POST /api/admin/workspaces/{id}/cancel-subscription", admin(d.mounted(d.cancelSubscription)))
+
+	// BC-5/BC-6/BC-7: channel credential cards (schema-driven form), field
+	// save with hot reload, catalog product registration/sync.
+	mux.Handle("GET /api/admin/billing/channels", admin(d.mounted(d.listBillingChannels)))
+	mux.Handle("PUT /api/admin/billing/channels/{name}", admin(d.mounted(d.updateBillingChannel)))
+	mux.Handle("GET /api/admin/billing/catalog", admin(d.mounted(d.billingCatalog)))
+	mux.Handle("POST /api/admin/billing/channels/{name}/register-product", admin(d.mounted(d.registerChannelProduct)))
+	mux.Handle("POST /api/admin/billing/channels/{name}/sync-price", admin(d.mounted(d.syncChannelPrice)))
 }
 
 func wsFilterQ(r *http.Request) (ws, msg string) {
@@ -214,4 +222,69 @@ func (d BillingOpsDeps) cancelSubscription(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	webx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (d BillingOpsDeps) listBillingChannels(w http.ResponseWriter, r *http.Request, _ *webx.Principal) {
+	cards, err := d.Svc.ChannelCards(r.Context())
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]any{"channels": cards})
+}
+
+func (d BillingOpsDeps) updateBillingChannel(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	var req struct {
+		Fields map[string]string `json:"fields"`
+	}
+	if !webx.DecodeJSON(w, r, &req) {
+		return
+	}
+	card, err := d.Svc.UpdateChannelFields(r.Context(), p, r.PathValue("name"), req.Fields)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]any{"channel": card})
+}
+
+func (d BillingOpsDeps) billingCatalog(w http.ResponseWriter, r *http.Request, _ *webx.Principal) {
+	catalog, err := d.Svc.ChannelCatalog(r.Context())
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, catalog)
+}
+
+func (d BillingOpsDeps) registerChannelProduct(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	var req struct {
+		PlanCode string `json:"plan_code"`
+		Interval string `json:"interval"`
+	}
+	if !webx.DecodeJSON(w, r, &req) {
+		return
+	}
+	id, err := d.Svc.RegisterChannelProduct(r.Context(), p, r.PathValue("name"), req.PlanCode, req.Interval)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]string{"channel_product_id": id})
+}
+
+func (d BillingOpsDeps) syncChannelPrice(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	var req struct {
+		PlanCode string `json:"plan_code"`
+		Interval string `json:"interval"`
+	}
+	if !webx.DecodeJSON(w, r, &req) {
+		return
+	}
+	cents, err := d.Svc.SyncChannelPrice(r.Context(), p, r.PathValue("name"), req.PlanCode, req.Interval)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]int{"synced_price_cents": cents})
 }

@@ -54,7 +54,7 @@ import (
 	"time"
 )
 
-// 环境变量名(生产部署清单见 docs;密钥一律走 env,绝不入库/入日志)。
+// 环境变量名(生产部署清单见 docs;密钥一律走 env 或 BC-5 后台落库,绝不入日志)。
 const (
 	EnvMerchantID     = "WAFFO_MERCHANT_ID"
 	EnvPrivateKey     = "WAFFO_PRIVATE_KEY"
@@ -64,18 +64,52 @@ const (
 	EnvTaxCategory    = "WAFFO_TAX_CATEGORY"
 	EnvTaxIncluded    = "WAFFO_TAX_INCLUDED"
 	EnvAPIBase        = "WAFFO_API_BASE"
+	EnvStoreID        = "WAFFO_STORE_ID"
+	EnvMode           = "WAFFO_MODE"
+)
+
+// ConfigSchema 字段键(BC-5/BC-6:后台渠道卡的表单字段名,同时是
+// billing_channel.waffo.<field> 设置键与 NewFromFields 的 fields 键)。
+const (
+	FieldMerchantID       = "merchant_id"
+	FieldPrivateKey       = "private_key"
+	FieldStoreID          = "store_id"
+	FieldProductMonthly   = "product_monthly"
+	FieldProductYearly    = "product_yearly"
+	FieldWebhookPublicKey = "webhook_public_key"
+	FieldMode             = "mode"
+)
+
+// envOfField 把 ConfigSchema 字段键映射到环境变量名(DB 值覆盖 env 值的
+// 装配只用同一张表,BC-5)。
+var envOfField = map[string]string{
+	FieldMerchantID:       EnvMerchantID,
+	FieldPrivateKey:       EnvPrivateKey,
+	FieldStoreID:          EnvStoreID,
+	FieldProductMonthly:   EnvProductMonthly,
+	FieldProductYearly:    EnvProductYearly,
+	FieldWebhookPublicKey: EnvWebhookPubKey,
+	FieldMode:             EnvMode,
+}
+
+// 渠道模式常量(BC-4 五律 5:test/prod 凭据与回调分环境)。
+const (
+	ModeTest = "test"
+	ModeProd = "prod"
 )
 
 // Config 组装渠道所需的全部外部输入。
 type Config struct {
 	MerchantID       string // MER_xxx
 	PrivateKey       string // PEM / 转义 \n PEM / 整段 PEM 的 base64 / 裸 base64 体,四种形态都收
-	ProductMonthly   string // PROD_xxx(waffo 后台的 Seller Plan (Monthly))
-	ProductYearly    string // PROD_xxx(Seller Plan (Yearly))
+	ProductMonthly   string // PROD_xxx(waffo 后台的 Seller Plan (Monthly));目录模式(BC-7)可空
+	ProductYearly    string // PROD_xxx(Seller Plan (Yearly));目录模式可空
 	WebhookPublicKey string // 可空;为空则 webhook 一律验签失败(先通收银台、后通回调的部署顺序)
 	TaxCategory      string // 空 = "saas"
 	TaxIncluded      *bool  // nil = true
 	APIBase          string // 空 = DefaultAPIBase
+	StoreID          string // 可空;BC-7 RegisterProduct 建品用(storeId),仅后台注册商品时需要
+	Mode             string // 可空;"test"/"prod";非空时跨环境 webhook 事件直接拒收(五律 5)
 }
 
 // DefaultAPIBase waffo 公有云 API;测试可指向 httptest server。
@@ -135,11 +169,95 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 		TaxCategory:      getenv(EnvTaxCategory),
 		TaxIncluded:      &taxIncluded,
 		APIBase:          getenv(EnvAPIBase),
+		StoreID:          getenv(EnvStoreID),
+		Mode:             normalizeMode(getenv(EnvMode)),
 	})
 }
 
+// NewFromFields 按 BC-5 装配:字段值(fields,键=ConfigSchema 字段名,来自
+// billing_channel.waffo.* 设置行)优先,缺失回退进程 env(env-only 老接法
+// 不断)。与 FromEnv 的纪律差异:静态商品 id 不再必填 —— 目录模式
+// (BC-7)下商品在后台注册、checkout 经 CheckoutRequest.ChannelProductID
+// 解析,merchant_id/private_key 仍全缺=(nil,nil) 未配置、缺一报错
+// (production 拒启/dev 降级),与 FromEnv 同哲学。
+func NewFromFields(fields map[string]string, getenv func(string) string, log *slog.Logger, production bool) (*Channel, error) {
+	if getenv == nil {
+		getenv = func(string) string { return "" }
+	}
+	lookup := func(field string) string {
+		if v, ok := fields[field]; ok && strings.TrimSpace(v) != "" {
+			return v
+		}
+		return getenv(envOfField[field])
+	}
+
+	merchant := lookup(FieldMerchantID)
+	privKey := lookup(FieldPrivateKey)
+	missing := make([]string, 0, 2)
+	for name, v := range map[string]string{EnvMerchantID: merchant, EnvPrivateKey: privKey} {
+		if strings.TrimSpace(v) == "" {
+			missing = append(missing, name)
+		}
+	}
+	switch len(missing) {
+	case 2:
+		return nil, nil // 未配置:waffo 不进渠道注册表
+	case 1:
+		if production {
+			return nil, fmt.Errorf("waffo: partial waffo config (missing %s) would ship a dead checkout",
+				missing[0])
+		}
+		log.Warn("waffo: partial waffo config, channel disabled", "missing", strings.Join(missing, ","))
+		return nil, nil
+	}
+
+	taxIncluded := true
+	if v := getenv(EnvTaxIncluded); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("waffo: %s: %w", EnvTaxIncluded, err)
+		}
+		taxIncluded = b
+	}
+	if v := fields["tax_included"]; strings.TrimSpace(v) != "" {
+		b, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return nil, fmt.Errorf("waffo: tax_included: %w", err)
+		}
+		taxIncluded = b
+	}
+
+	return New(Config{
+		MerchantID:       merchant,
+		PrivateKey:       privKey,
+		ProductMonthly:   lookup(FieldProductMonthly),
+		ProductYearly:    lookup(FieldProductYearly),
+		WebhookPublicKey: lookup(FieldWebhookPublicKey),
+		TaxCategory:      getenv(EnvTaxCategory),
+		TaxIncluded:      &taxIncluded,
+		APIBase:          getenv(EnvAPIBase),
+		StoreID:          lookup(FieldStoreID),
+		Mode:             normalizeMode(lookup(FieldMode)),
+	})
+}
+
+// normalizeMode 收敛 "test"/"prod"(大小写/production 别名);其余值视为未声明。
+func normalizeMode(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case ModeTest, "":
+		return strings.ToLower(strings.TrimSpace(v))
+	case ModeProd, "production", "live":
+		return ModeProd
+	default:
+		return ""
+	}
+}
+
 // New 校验并解析密钥,构造渠道。私钥/公钥解析失败立刻报错——半配置
-// 不能等到第一笔收款才发现。
+// 不能等到第一笔收款才发现。ProductMonthly/ProductYearly 可空:目录模式
+// (BC-7)下商品映射走 billing_channel_products + CheckoutRequest.
+// ChannelProductID,静态商品 id 只是 env-only 老接法的兜底(两者皆空时
+// CreateCheckout 报错;FromEnv 对 env 接法仍维持四必填纪律)。
 func New(cfg Config) (*Channel, error) {
 	if strings.TrimSpace(cfg.MerchantID) == "" {
 		return nil, errors.New("waffo: merchant id is required")
@@ -147,9 +265,6 @@ func New(cfg Config) (*Channel, error) {
 	key, err := parsePrivateKey(cfg.PrivateKey)
 	if err != nil {
 		return nil, err
-	}
-	if cfg.ProductMonthly == "" || cfg.ProductYearly == "" {
-		return nil, errors.New("waffo: monthly and yearly product ids are both required")
 	}
 	var pub *rsa.PublicKey
 	if s := strings.TrimSpace(cfg.WebhookPublicKey); s != "" {
@@ -178,6 +293,8 @@ func New(cfg Config) (*Channel, error) {
 		},
 		productMonthly: cfg.ProductMonthly,
 		productYearly:  cfg.ProductYearly,
+		storeID:        strings.TrimSpace(cfg.StoreID),
+		mode:           normalizeMode(cfg.Mode),
 		taxCategory:    taxCategory,
 		taxIncluded:    taxIncluded,
 		webhookPub:     pub,

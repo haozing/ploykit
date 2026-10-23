@@ -209,3 +209,57 @@ func (s *BillingOpsService) AdminCancelSubscription(ctx context.Context, p *webx
 	}
 	return nil
 }
+
+// validCatalogInterval guards the BC-7 endpoints' interval path/body param:
+// subscription catalogs are monthly/yearly (one_time packs are a BC-8 open
+// question, rejected here until a channel declares support).
+func validCatalogInterval(iv string) bool {
+	return iv == "monthly" || iv == "yearly"
+}
+
+func (s *BillingOpsService) ChannelCards(ctx context.Context) ([]AdminChannelCard, error) {
+	if s.billing == nil {
+		return nil, errNotWired("billing ops")
+	}
+	return s.billing.ChannelCards(ctx)
+}
+
+func (s *BillingOpsService) UpdateChannelFields(ctx context.Context, p *webx.Principal, channel string, fields map[string]string) (AdminChannelCard, error) {
+	if s.billing == nil {
+		return AdminChannelCard{}, errNotWired("billing ops")
+	}
+	if channel == "" {
+		return AdminChannelCard{}, webx.NewValidation("channel required")
+	}
+	if fields == nil {
+		fields = map[string]string{}
+	}
+	return s.billing.UpdateChannelFields(ctx, p, channel, fields)
+}
+
+func (s *BillingOpsService) ChannelCatalog(ctx context.Context) (AdminChannelCatalog, error) {
+	if s.billing == nil {
+		return AdminChannelCatalog{}, errNotWired("billing ops")
+	}
+	return s.billing.ChannelCatalog(ctx)
+}
+
+func (s *BillingOpsService) RegisterChannelProduct(ctx context.Context, p *webx.Principal, channel, planCode, interval string) (string, error) {
+	if s.billing == nil {
+		return "", errNotWired("billing ops")
+	}
+	if channel == "" || planCode == "" || !validCatalogInterval(interval) {
+		return "", webx.NewValidation("channel, plan_code and interval (monthly|yearly) required")
+	}
+	return s.billing.RegisterChannelProduct(ctx, p, channel, planCode, interval)
+}
+
+func (s *BillingOpsService) SyncChannelPrice(ctx context.Context, p *webx.Principal, channel, planCode, interval string) (int, error) {
+	if s.billing == nil {
+		return 0, errNotWired("billing ops")
+	}
+	if channel == "" || planCode == "" || !validCatalogInterval(interval) {
+		return 0, webx.NewValidation("channel, plan_code and interval (monthly|yearly) required")
+	}
+	return s.billing.SyncChannelPrice(ctx, p, channel, planCode, interval)
+}
