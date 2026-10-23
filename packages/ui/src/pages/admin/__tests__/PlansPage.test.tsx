@@ -73,6 +73,12 @@ function expandPro() {
 beforeEach(() => {
   mockedGet.mockReset().mockImplementation(async (path: string) => {
     if (path.startsWith('/api/admin/plans')) return PLANS;
+    // BC-6：PlansPage 下方新增的渠道区块（空数据=不渲染渠道卡/映射表，
+    // 不与本文件聚焦的套餐编辑断言互相干扰）
+    if (path.startsWith('/api/admin/billing/channels'))
+      return { channels: [] };
+    if (path.startsWith('/api/admin/billing/catalog'))
+      return { rows: [], plans: [] };
     throw new Error('unexpected GET ' + path);
   });
   mockedPatch.mockReset().mockResolvedValue(PLANS.plans[1]);

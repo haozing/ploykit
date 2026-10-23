@@ -29,6 +29,8 @@ import {
 } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { adminError } from './shared';
+import { BillingChannelsSection } from './BillingChannelsSection';
+import { CatalogMapping } from './CatalogMapping';
 
 // UP-5：套餐目录编辑。GET /api/admin/plans → {items, plans: PlanView[]}；
 // PATCH /api/admin/plans/{code} 全量语义（body 整卡提交，code 不可改走路径）。
@@ -486,6 +488,10 @@ export function PlansPage() {
           ))}
         </ul>
       )}
+
+      {/* BC-6：渠道自助配置挂在套餐页内（不新增侧边栏导航项） */}
+      <BillingChannelsSection />
+      <CatalogMapping />
     </div>
   );
 }
