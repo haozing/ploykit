@@ -205,7 +205,7 @@ func TestCreateCheckout_UnpricedPlanRejected_BQ7(t *testing.T) {
 type pricedProbeChannel struct{ allow *bool }
 
 func (c *pricedProbeChannel) Name() string { return "probe" }
-func (c *pricedProbeChannel) CreateCheckout(_ context.Context, _ domain.Order, _, _ string) (domain.CheckoutSession, error) {
+func (c *pricedProbeChannel) CreateCheckout(_ context.Context, _ CheckoutRequest) (domain.CheckoutSession, error) {
 	*c.allow = true
 	return domain.CheckoutSession{}, nil
 }

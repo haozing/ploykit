@@ -46,7 +46,7 @@ type cfgChannel struct {
 
 func (c *cfgChannel) Name() string { return c.name }
 
-func (c *cfgChannel) CreateCheckout(_ context.Context, _ domain.Order, _, _ string) (domain.CheckoutSession, error) {
+func (c *cfgChannel) CreateCheckout(_ context.Context, _ CheckoutRequest) (domain.CheckoutSession, error) {
 	return domain.CheckoutSession{}, nil
 }
 
@@ -72,7 +72,7 @@ type plainChannel struct{ name string }
 
 func (c *plainChannel) Name() string { return c.name }
 
-func (c *plainChannel) CreateCheckout(_ context.Context, _ domain.Order, _, _ string) (domain.CheckoutSession, error) {
+func (c *plainChannel) CreateCheckout(_ context.Context, _ CheckoutRequest) (domain.CheckoutSession, error) {
 	return domain.CheckoutSession{}, nil
 }
 

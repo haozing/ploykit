@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/haozing/ploykit/billing/domain"
@@ -17,8 +16,9 @@ const keyNotConfigured = "未配置"
 const keyMaskUnavailable = "—"
 
 func (s *BillingService) BillingConfig(_ context.Context) BillingConfigView {
-	names := s.channels.Names()
-	sort.Strings(names)
+	// F18: DisplayOrder-ordered (OrderedNames) — the frontend takes the
+	// first entry as the recommended channel instead of re-sorting per product.
+	names := s.channels.OrderedNames()
 	channels := make([]ChannelConfigView, 0, len(names)+len(knownChannelNames))
 	seen := make(map[string]bool, len(names))
 	for _, name := range names {

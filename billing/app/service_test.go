@@ -23,6 +23,12 @@ type changePlanCall struct {
 	ws, to, actor, reason string
 }
 
+type channelRefCall struct {
+	id        string
+	ref       string
+	expiresAt time.Time
+}
+
 type subState struct {
 	ref       string
 	expiresAt time.Time
@@ -45,6 +51,9 @@ type fakeRepo struct {
 	setSubs     []setSubCall
 	changePlans []changePlanCall
 	expired     []ExpiredWorkspace
+	staleOrders []ExpiredOrder
+
+	channelRefCalls []channelRefCall
 
 	updateStatusErr error
 	getOrderErr     error
@@ -114,7 +123,13 @@ func (f *fakeRepo) UpdateOrderStatus(_ context.Context, id string, from, to doma
 	return nil
 }
 
-func (f *fakeRepo) SetOrderChannelRef(_ context.Context, id, ref string) error { return nil }
+func (f *fakeRepo) SetOrderChannelRefAndExpiry(_ context.Context, id, ref string, expiresAt time.Time) error {
+	if o, ok := f.orders[id]; ok {
+		o.ChannelRef = ref
+	}
+	f.channelRefCalls = append(f.channelRefCalls, channelRefCall{id: id, ref: ref, expiresAt: expiresAt})
+	return nil
+}
 
 func (f *fakeRepo) FailOrder(_ context.Context, o domain.Order, e domain.PaymentEvent, emit func(pgx.Tx) error, now time.Time) error {
 	if f.updateStatusErr != nil {
@@ -293,6 +308,10 @@ func (f *fakeRepo) ExpireDueWorkspaces(_ context.Context, _ time.Time, _ int) ([
 	return f.expired, nil
 }
 
+func (f *fakeRepo) ExpireStaleOrders(_ context.Context, _ time.Time, _ int) ([]ExpiredOrder, error) {
+	return f.staleOrders, nil
+}
+
 func (f *fakeRepo) InsertOverageOrder(_ context.Context, o domain.Order) (domain.Order, bool, error) {
 	key := o.WorkspaceID + "|" + o.Metadata["overage_period"].(string)
 	if f.overageIndex[key] {
@@ -367,12 +386,139 @@ func TestServiceExpireDueWorkspaces_FansOutHooksAndAudit(t *testing.T) {
 	}
 }
 
+func TestServiceExpireStaleOrders_ReturnsIDsAndAudits(t *testing.T) {
+	repo := newFakeRepo()
+	repo.staleOrders = []ExpiredOrder{
+		{ID: "ord_1", WorkspaceID: "ws_1"},
+		{ID: "ord_2", WorkspaceID: "ws_2"},
+	}
+	auditor := &fakeAuditor{}
+	svc := NewBillingService(repo, NewChannelRegistry(), Config{}, BillingHooks{}, auditor,
+		func() time.Time { return testNow }, nil)
+
+	ids, err := svc.ExpireStaleOrders(context.Background(), testNow, 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ord_1", "ord_2"}, ids)
+
+	require.Len(t, auditor.calls, 2)
+	for i, c := range auditor.calls {
+		assert.Equal(t, "billing.order_expired", c.action)
+		assert.Equal(t, "order", c.resourceType)
+		assert.Equal(t, repo.staleOrders[i].ID, c.resourceID)
+		assert.Equal(t, repo.staleOrders[i].WorkspaceID, *c.ws)
+	}
+}
+
+type capsChannel struct {
+	name string
+	caps ChannelCaps
+}
+
+func (c *capsChannel) Name() string { return c.name }
+func (c *capsChannel) CreateCheckout(_ context.Context, _ CheckoutRequest) (domain.CheckoutSession, error) {
+	return domain.CheckoutSession{}, nil
+}
+func (c *capsChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domain.PaymentEvent, error) {
+	return domain.PaymentEvent{}, nil
+}
+func (c *capsChannel) Capabilities() ChannelCaps { return c.caps }
+
+func TestChannelRegistry_OrderedNames(t *testing.T) {
+	reg := NewChannelRegistry()
+	reg.Register(&ManualChannel{}) // 内建 caps：DisplayOrder 900
+	reg.Register(&capsChannel{name: "waffo", caps: ChannelCaps{DisplayOrder: 100, CatalogBased: true}})
+	reg.Register(&capsChannel{name: "stripe", caps: ChannelCaps{DisplayOrder: 200, SupportsCancelURL: true}})
+	reg.Register(&plainChannel{name: "beta"})  // 未声明 caps → 500
+	reg.Register(&plainChannel{name: "alpha"}) // 未声明 caps → 500，同序按 name 升序
+
+	assert.Equal(t,
+		[]string{"waffo", "stripe", "alpha", "beta", "manual"},
+		reg.OrderedNames(), "按 (DisplayOrder 升序, name 升序)；未声明能力者 500")
+}
+
+type reqCaptureChannel struct {
+	name string
+	req  *CheckoutRequest
+	sess domain.CheckoutSession
+}
+
+func (c *reqCaptureChannel) Name() string { return c.name }
+func (c *reqCaptureChannel) CreateCheckout(_ context.Context, req CheckoutRequest) (domain.CheckoutSession, error) {
+	*c.req = req
+	return c.sess, nil
+}
+func (c *reqCaptureChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domain.PaymentEvent, error) {
+	return domain.PaymentEvent{}, nil
+}
+
+func TestCreateCheckout_AssemblesRequest(t *testing.T) {
+	seedPro := func() *fakeRepo {
+		repo := newFakeRepo()
+		repo.plans["pro"] = domain.Plan{Code: "pro", Limits: map[string]int{"price_monthly_cents": 9900}}
+		return repo
+	}
+	newSvc := func(repo *fakeRepo, resolver BuyerEmailResolver) (*BillingService, *CheckoutRequest) {
+		var got CheckoutRequest
+		expiresAt := testNow.Add(24 * time.Hour)
+		reg := NewChannelRegistry()
+		reg.Register(&reqCaptureChannel{name: "cap", req: &got,
+			sess: domain.CheckoutSession{OrderID: "ord_pro", Channel: "cap", SessionRef: "cs_1", ExpiresAt: expiresAt}})
+		svc := NewBillingService(repo, reg, Config{
+			SuccessURL: "https://app.example.com/s",
+			CancelURL:  "https://app.example.com/c",
+			Locale:     "zh",
+		}, BillingHooks{}, nil, func() time.Time { return testNow }, nil).
+			WithBuyerEmailResolver(resolver)
+		return svc, &got
+	}
+
+	t.Run("resolver 与 Config 逐项透传 CheckoutRequest，会话引用+到期一并落库", func(t *testing.T) {
+		repo := seedPro()
+		svc, got := newSvc(repo, func(_ context.Context, _ string) (string, error) {
+			return "buyer@test.dev", nil
+		})
+
+		_, err := svc.CreateCheckout(context.Background(), principal(), "ws_1", "pro", domain.IntervalMonthly, "cap")
+		require.NoError(t, err)
+
+		assert.Equal(t, "pro", got.Order.PlanCode)
+		assert.Equal(t, "usr_1", got.Order.UserID)
+		assert.Equal(t, "https://app.example.com/s", got.SuccessURL)
+		assert.Equal(t, "https://app.example.com/c", got.CancelURL)
+		assert.Equal(t, "buyer@test.dev", got.BuyerEmail)
+		assert.Equal(t, "zh", got.Locale)
+
+		require.Len(t, repo.channelRefCalls, 1)
+		assert.Equal(t, channelRefCall{id: "ord_pro", ref: "cs_1", expiresAt: testNow.Add(24 * time.Hour)}, repo.channelRefCalls[0])
+	})
+
+	t.Run("resolver 出错 → 邮箱留空不失败", func(t *testing.T) {
+		repo := seedPro()
+		svc, got := newSvc(repo, func(_ context.Context, _ string) (string, error) {
+			return "", assert.AnError
+		})
+
+		_, err := svc.CreateCheckout(context.Background(), principal(), "ws_1", "pro", domain.IntervalMonthly, "cap")
+		require.NoError(t, err)
+		assert.Empty(t, got.BuyerEmail)
+	})
+
+	t.Run("未注入 resolver → 邮箱留空", func(t *testing.T) {
+		repo := seedPro()
+		svc, got := newSvc(repo, nil)
+
+		_, err := svc.CreateCheckout(context.Background(), principal(), "ws_1", "pro", domain.IntervalMonthly, "cap")
+		require.NoError(t, err)
+		assert.Empty(t, got.BuyerEmail)
+	})
+}
+
 type fakeChannel struct {
 	event domain.PaymentEvent
 }
 
 func (f *fakeChannel) Name() string { return "stripe" }
-func (f *fakeChannel) CreateCheckout(_ context.Context, _ domain.Order, _, _ string) (domain.CheckoutSession, error) {
+func (f *fakeChannel) CreateCheckout(_ context.Context, _ CheckoutRequest) (domain.CheckoutSession, error) {
 	return domain.CheckoutSession{}, nil
 }
 func (f *fakeChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domain.PaymentEvent, error) {
@@ -628,9 +774,9 @@ func TestCreateCheckout_PassesTrialDays(t *testing.T) {
 type trialChannel struct{ capture *domain.Order }
 
 func (c *trialChannel) Name() string { return "trialchan" }
-func (c *trialChannel) CreateCheckout(_ context.Context, order domain.Order, _, _ string) (domain.CheckoutSession, error) {
-	*c.capture = order
-	return domain.CheckoutSession{OrderID: order.ID, Channel: c.Name()}, nil
+func (c *trialChannel) CreateCheckout(_ context.Context, req CheckoutRequest) (domain.CheckoutSession, error) {
+	*c.capture = req.Order
+	return domain.CheckoutSession{OrderID: req.Order.ID, Channel: c.Name()}, nil
 }
 func (c *trialChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domain.PaymentEvent, error) {
 	return domain.PaymentEvent{}, nil

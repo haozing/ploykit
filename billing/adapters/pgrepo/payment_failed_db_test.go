@@ -63,7 +63,7 @@ func newBillingScratchPool(t *testing.T) *pgxpool.Pool {
 type stubChannel struct{ event domain.PaymentEvent }
 
 func (c *stubChannel) Name() string { return "stripe" }
-func (c *stubChannel) CreateCheckout(_ context.Context, _ domain.Order, _, _ string) (domain.CheckoutSession, error) {
+func (c *stubChannel) CreateCheckout(_ context.Context, _ app.CheckoutRequest) (domain.CheckoutSession, error) {
 	return domain.CheckoutSession{}, nil
 }
 func (c *stubChannel) ParseWebhook(_ context.Context, _ app.WebhookRequest) (domain.PaymentEvent, error) {

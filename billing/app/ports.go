@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,10 +18,18 @@ type Auditor interface {
 	Record(ctx context.Context, workspaceID *string, p *webx.Principal, action, resourceType, resourceID string, meta map[string]any)
 }
 
+type CheckoutRequest struct {
+	Order      domain.Order
+	SuccessURL string
+	CancelURL  string // 目录型渠道可忽略，但须在 Capabilities().SupportsCancelURL=false 声明，不许静默
+	BuyerEmail string // 渠道预填买家邮箱；空=不预填
+	Locale     string // 站点语言透传收银台（如 "en"/"zh"）；空=渠道默认
+}
+
 type PaymentChannel interface {
 	Name() string
 
-	CreateCheckout(ctx context.Context, order domain.Order, successURL, cancelURL string) (domain.CheckoutSession, error)
+	CreateCheckout(ctx context.Context, req CheckoutRequest) (domain.CheckoutSession, error)
 
 	ParseWebhook(ctx context.Context, req WebhookRequest) (domain.PaymentEvent, error)
 }
@@ -47,12 +56,56 @@ func (r *ChannelRegistry) Get(name string) (PaymentChannel, bool) {
 	return ch, ok
 }
 
-func (r *ChannelRegistry) Names() []string {
-	names := make([]string, 0, len(r.channels))
-	for name := range r.channels {
-		names = append(names, name)
+// DefaultChannelDisplayOrder is the DisplayOrder assumed for channels that do
+// not implement ChannelCapabilityViewer — unsorted channels sink below the
+// framework defaults (stripe 200) but stay above manual (900).
+const DefaultChannelDisplayOrder = 500
+
+// OrderedNames returns channel names sorted by (DisplayOrder asc, name asc)
+// so /config billing_channels is a priority list the frontend can take as-is
+// (F18): first entry = recommended channel, no product-side re-sorting.
+func (r *ChannelRegistry) OrderedNames() []string {
+	type entry struct {
+		name  string
+		order int
+	}
+	entries := make([]entry, 0, len(r.channels))
+	for name, ch := range r.channels {
+		order := DefaultChannelDisplayOrder
+		if viewer, ok := ch.(ChannelCapabilityViewer); ok {
+			order = viewer.Capabilities().DisplayOrder
+		}
+		entries = append(entries, entry{name: name, order: order})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].order != entries[j].order {
+			return entries[i].order < entries[j].order
+		}
+		return entries[i].name < entries[j].name
+	})
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.name)
 	}
 	return names
+}
+
+// ChannelCaps is a channel's declared shape of difference. The registry and
+// product frontends key ordering off DisplayOrder; CatalogBased/SupportsCancelURL
+// document behavior the adapter absorbs (F1/F3): a channel that ignores
+// CancelURL must say so here instead of silently dropping the parameter.
+type ChannelCaps struct {
+	CatalogBased      bool // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
+	SupportsCancelURL bool
+	DisplayOrder      int      // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
+	Currencies        []string // 空=不声明限制
+}
+
+// ChannelCapabilityViewer is the optional capability interface channels
+// implement to declare their caps. Channels that don't implement it get
+// DefaultChannelDisplayOrder in OrderedNames.
+type ChannelCapabilityViewer interface {
+	Capabilities() ChannelCaps
 }
 
 type Repo interface {
@@ -65,7 +118,7 @@ type Repo interface {
 	FailOrder(ctx context.Context, o domain.Order, e domain.PaymentEvent, emit func(tx pgx.Tx) error, now time.Time) error
 
 	PayOrder(ctx context.Context, id string, emit func(tx pgx.Tx) error, now time.Time) error
-	SetOrderChannelRef(ctx context.Context, id, channelRef string) error
+	SetOrderChannelRefAndExpiry(ctx context.Context, id, channelRef string, expiresAt time.Time) error
 	FindOrderByChannelRef(ctx context.Context, channel, channelRef string) (domain.Order, bool, error)
 
 	SetOrderPaymentIntentRef(ctx context.Context, orderID, paymentIntentRef string) error
@@ -93,6 +146,8 @@ type Repo interface {
 
 	ExpireDueWorkspaces(ctx context.Context, now time.Time, limit int) ([]ExpiredWorkspace, error)
 
+	ExpireStaleOrders(ctx context.Context, now time.Time, limit int) ([]ExpiredOrder, error)
+
 	InsertOverageOrder(ctx context.Context, o domain.Order) (order domain.Order, created bool, err error)
 
 	ListMeteredWorkspaces(ctx context.Context, limit int) ([]MeteredWorkspace, error)
@@ -108,6 +163,14 @@ type MeteredWorkspace struct {
 type ExpiredWorkspace struct {
 	WorkspaceID string
 	FromPlan    string
+}
+
+// ExpiredOrder is one pending order swept to canceled because its checkout
+// session expiry (order.expires_at) has passed (F15: channels like waffo
+// expire sessions with zero callbacks).
+type ExpiredOrder struct {
+	ID          string
+	WorkspaceID string
 }
 
 var ErrDuplicate = errors.New("duplicate")

@@ -104,8 +104,14 @@ func (r *Repo) UpdateOrderStatus(ctx context.Context, id string, from, to domain
 	return nil
 }
 
-func (r *Repo) SetOrderChannelRef(ctx context.Context, id, channelRef string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE "order" SET channel_ref = $2, updated_at = now() WHERE id = $1`, id, channelRef)
+func (r *Repo) SetOrderChannelRefAndExpiry(ctx context.Context, id, channelRef string, expiresAt time.Time) error {
+	var exp any
+	if !expiresAt.IsZero() {
+		exp = expiresAt
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE "order" SET channel_ref = $2, expires_at = $3, updated_at = now() WHERE id = $1`,
+		id, channelRef, exp)
 	return mapErr(err)
 }
 
@@ -429,6 +435,39 @@ func (r *Repo) ExpireDueWorkspaces(ctx context.Context, now time.Time, limit int
 		return nil, err
 	}
 	return out, nil
+}
+
+// ExpireStaleOrders flips pending orders whose checkout session expired to
+// canceled (F15 abandoned-checkout sweep). The status literals 'pending'/
+// 'canceled' are same-source with domain.OrderPending / domain.OrderCanceled
+// (an OrderStatus value cannot be interpolated into a SET clause without
+// losing the natural-expression scan style used below). Single UPDATE with a
+// locking subquery — atomic without an explicit tx; SKIP LOCKED keeps
+// concurrent sweepers from fighting over rows.
+func (r *Repo) ExpireStaleOrders(ctx context.Context, now time.Time, limit int) ([]app.ExpiredOrder, error) {
+	rows, err := r.pool.Query(ctx, `
+		UPDATE "order" SET status = 'canceled', canceled_at = $1, updated_at = now()
+		WHERE id IN (
+			SELECT id FROM "order"
+			WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= $1
+			ORDER BY expires_at
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING id, workspace_id`, now, limit)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+	out := []app.ExpiredOrder{}
+	for rows.Next() {
+		var e app.ExpiredOrder
+		if err := rows.Scan(&e.ID, &e.WorkspaceID); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 func (r *Repo) InsertOverageOrder(ctx context.Context, o domain.Order) (domain.Order, bool, error) {

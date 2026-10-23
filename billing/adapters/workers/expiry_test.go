@@ -109,6 +109,22 @@ func TestExpiryWorker_NameAndShutdown(t *testing.T) {
 	}
 }
 
+func TestOrderExpiryWorker_NameAndShutdown(t *testing.T) {
+	w := &OrderExpiryWorker{}
+	assert.Equal(t, "billing_order_expiry", w.Name())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctx) }()
+	cancel()
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run 未随 ctx 取消退出")
+	}
+}
+
 func TestExpiryWorker_DowngradesDueWorkspaces(t *testing.T) {
 	repo, pool := workerTestDB(t)
 	ctx := context.Background()

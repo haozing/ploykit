@@ -336,8 +336,13 @@ func TestCreateCheckout(t *testing.T) {
 		ID: "ord_1", WorkspaceID: "ws_1", PlanCode: "pro",
 		Interval: domain.IntervalOneTime, AmountCents: 9900, Currency: "usd",
 	}
-	sess, err := ch.CreateCheckout(context.Background(), order,
-		"https://app.example.com/billing/success", "https://app.example.com/billing/cancel")
+	sess, err := ch.CreateCheckout(context.Background(), app.CheckoutRequest{
+		Order:      order,
+		SuccessURL: "https://app.example.com/billing/success",
+		CancelURL:  "https://app.example.com/billing/cancel",
+		BuyerEmail: "buyer@example.com",
+		Locale:     "zh",
+	})
 	require.NoError(t, err)
 	require.True(t, called, "应请求假 Stripe API")
 
@@ -351,6 +356,8 @@ func TestCreateCheckout(t *testing.T) {
 	assert.Contains(t, gotBody, "line_items[0][price_data][product_data][name]=pro+%28one_time%29")
 	assert.Contains(t, gotBody, "success_url=https%3A%2F%2Fapp.example.com%2Fbilling%2Fsuccess")
 	assert.Contains(t, gotBody, "cancel_url=https%3A%2F%2Fapp.example.com%2Fbilling%2Fcancel")
+	assert.Contains(t, gotBody, "customer_email=buyer%40example.com", "F2：买家邮箱预填")
+	assert.Contains(t, gotBody, "locale=zh", "F19：站点语言透传收银台")
 
 	m := regexp.MustCompile(`expires_at=(\d+)`).FindStringSubmatch(gotBody)
 	require.NotNil(t, m, "请求体应含 expires_at")
@@ -436,9 +443,14 @@ func TestCreateCheckoutSubscription(t *testing.T) {
 			ch := New("sk_test_key", testSigningKey)
 			ch.setBackends(backends)
 
-			_, err := ch.CreateCheckout(context.Background(), tt.order,
-				"https://app.example.com/s", "https://app.example.com/c")
+			_, err := ch.CreateCheckout(context.Background(), app.CheckoutRequest{
+				Order:      tt.order,
+				SuccessURL: "https://app.example.com/s",
+				CancelURL:  "https://app.example.com/c",
+			})
 			require.NoError(t, err)
+			assert.NotContains(t, gotBody, "customer_email=", "空 BuyerEmail 不预填")
+			assert.NotContains(t, gotBody, "locale=", "空 Locale 用渠道默认")
 			for _, want := range tt.wantBody {
 				assert.Contains(t, gotBody, want)
 			}
@@ -466,12 +478,25 @@ func TestCreateCheckoutAPIError(t *testing.T) {
 	ch := New("sk_test_key", testSigningKey)
 	ch.setBackends(backends)
 
-	sess, err := ch.CreateCheckout(context.Background(), domain.Order{
-		ID: "ord_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
-		AmountCents: 9900, Currency: "usd",
-	}, "https://app.example.com/s", "https://app.example.com/c")
+	sess, err := ch.CreateCheckout(context.Background(), app.CheckoutRequest{
+		Order: domain.Order{
+			ID: "ord_1", PlanCode: "pro", Interval: domain.IntervalMonthly,
+			AmountCents: 9900, Currency: "usd",
+		},
+		SuccessURL: "https://app.example.com/s",
+		CancelURL:  "https://app.example.com/c",
+	})
 	require.Error(t, err)
 	assert.Equal(t, domain.CheckoutSession{}, sess)
+}
+
+func TestCapabilities(t *testing.T) {
+	var viewer app.ChannelCapabilityViewer = New("sk_test_key", testSigningKey)
+	caps := viewer.Capabilities()
+	assert.False(t, caps.CatalogBased, "stripe 走 price_data 临时定价，无需预注册商品")
+	assert.True(t, caps.SupportsCancelURL)
+	assert.Equal(t, 200, caps.DisplayOrder, "/config 排序：stripe 主渠道位")
+	assert.Empty(t, caps.Currencies)
 }
 
 func TestChannelConfig_Mask(t *testing.T) {

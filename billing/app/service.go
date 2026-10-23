@@ -20,7 +20,16 @@ type Config struct {
 	CancelURL  string
 
 	Currency string
+
+	// Locale is passed through to channel checkout pages ("en"/"zh"…);
+	// empty = channel default (F19).
+	Locale string
 }
+
+// BuyerEmailResolver resolves a checkout buyer's email from the identity side
+// (user table). Injected by the product's main.go — billing must not import
+// identity. Returning an error degrades to no email prefill, never fails checkout.
+type BuyerEmailResolver func(ctx context.Context, userID string) (string, error)
 
 type BillingService struct {
 	repo     Repo
@@ -34,6 +43,8 @@ type BillingService struct {
 	meters MeterRegistry
 
 	eventEmit EventEmit
+
+	buyerEmail BuyerEmailResolver
 }
 
 func NewBillingService(repo Repo, channels *ChannelRegistry, cfg Config, hooks BillingHooks, auditor Auditor, now Clock, log *slog.Logger) *BillingService {
@@ -50,6 +61,27 @@ func (s *BillingService) audit(ctx context.Context, wsID *string, p *webx.Princi
 	if s.auditor != nil {
 		s.auditor.Record(ctx, wsID, p, action, "order", resourceID, meta)
 	}
+}
+
+// WithBuyerEmailResolver injects the identity-side email lookup used to
+// prefill checkout (F2). nil = checkout without email prefill.
+func (s *BillingService) WithBuyerEmailResolver(fn BuyerEmailResolver) *BillingService {
+	s.buyerEmail = fn
+	return s
+}
+
+// resolveBuyerEmail never fails checkout: a missing resolver or lookup error
+// degrades to an empty prefill with a warn log.
+func (s *BillingService) resolveBuyerEmail(ctx context.Context, userID string) string {
+	if s.buyerEmail == nil {
+		return ""
+	}
+	email, err := s.buyerEmail(ctx, userID)
+	if err != nil {
+		s.log.Warn("resolve buyer email failed, checkout without email prefill", "user_id", userID, "err", err)
+		return ""
+	}
+	return email
 }
 
 func (s *BillingService) CreateCheckout(ctx context.Context, p *webx.Principal, workspaceID, planCode string, interval domain.BillingInterval, channelName string) (*domain.CheckoutSession, error) {
@@ -93,14 +125,20 @@ func (s *BillingService) CreateCheckout(ctx context.Context, p *webx.Principal, 
 		return nil, err
 	}
 
-	session, err := channel.CreateCheckout(ctx, order, s.cfg.SuccessURL, s.cfg.CancelURL)
+	session, err := channel.CreateCheckout(ctx, CheckoutRequest{
+		Order:      order,
+		SuccessURL: s.cfg.SuccessURL,
+		CancelURL:  s.cfg.CancelURL,
+		BuyerEmail: s.resolveBuyerEmail(ctx, order.UserID),
+		Locale:     s.cfg.Locale,
+	})
 	if err != nil {
 
 		_ = s.repo.UpdateOrderStatus(ctx, order.ID, domain.OrderPending, domain.OrderFailed, s.now())
 		return nil, fmt.Errorf("create checkout: %w", err)
 	}
 
-	_ = s.repo.SetOrderChannelRef(ctx, order.ID, session.SessionRef)
+	_ = s.repo.SetOrderChannelRefAndExpiry(ctx, order.ID, session.SessionRef, session.ExpiresAt)
 	s.audit(ctx, &workspaceID, p, "billing.checkout_created", order.ID, map[string]any{
 		"plan": planCode, "channel": channelName, "amount_cents": amount,
 	})
@@ -449,6 +487,24 @@ func (s *BillingService) ExpireDueWorkspaces(ctx context.Context, now time.Time,
 		s.auditWS(ctx, e.WorkspaceID, "billing.plan_expired", nil)
 	}
 	return expired, nil
+}
+
+// ExpireStaleOrders sweeps pending orders whose checkout session expired
+// (F15: waffo drops abandoned sessions with zero callbacks). No hooks fire —
+// a pending order never granted rights, so canceling it changes nothing but
+// the order row.
+func (s *BillingService) ExpireStaleOrders(ctx context.Context, now time.Time, limit int) ([]string, error) {
+	expired, err := s.repo.ExpireStaleOrders(ctx, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(expired))
+	for _, e := range expired {
+		ids = append(ids, e.ID)
+		s.log.Info("stale pending order expired", "order_id", e.ID, "workspace_id", e.WorkspaceID)
+		s.audit(ctx, &e.WorkspaceID, nil, "billing.order_expired", e.ID, nil)
+	}
+	return ids, nil
 }
 
 type meteredDim struct {

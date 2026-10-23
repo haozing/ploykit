@@ -43,7 +43,8 @@ func (c *Channel) setBackends(b *stripeapi.Backends) {
 
 func (c *Channel) Name() string { return "stripe" }
 
-func (c *Channel) CreateCheckout(ctx context.Context, order domain.Order, successURL, cancelURL string) (domain.CheckoutSession, error) {
+func (c *Channel) CreateCheckout(ctx context.Context, req app.CheckoutRequest) (domain.CheckoutSession, error) {
+	order := req.Order
 	params := &stripeapi.CheckoutSessionParams{
 		Params: stripeapi.Params{Context: ctx},
 		Mode:   stripeapi.String(string(stripeapi.CheckoutSessionModePayment)),
@@ -59,9 +60,16 @@ func (c *Channel) CreateCheckout(ctx context.Context, order domain.Order, succes
 			},
 		}},
 		Metadata:   map[string]string{"order_id": order.ID},
-		SuccessURL: stripeapi.String(successURL),
-		CancelURL:  stripeapi.String(cancelURL),
+		SuccessURL: stripeapi.String(req.SuccessURL),
+		CancelURL:  stripeapi.String(req.CancelURL),
 		ExpiresAt:  stripeapi.Int64(time.Now().Add(24 * time.Hour).Unix()),
+	}
+
+	if req.BuyerEmail != "" {
+		params.CustomerEmail = stripeapi.String(req.BuyerEmail)
+	}
+	if req.Locale != "" {
+		params.Locale = stripeapi.String(strings.ToLower(req.Locale))
 	}
 
 	if order.Interval == domain.IntervalOneTime {
@@ -205,6 +213,10 @@ func stripeRecurringInterval(i domain.BillingInterval) string {
 		return "year"
 	}
 	return "month"
+}
+
+func (c *Channel) Capabilities() app.ChannelCaps {
+	return app.ChannelCaps{CatalogBased: false, SupportsCancelURL: true, DisplayOrder: 200}
 }
 
 func (c *Channel) ChannelConfig() app.ChannelConfigInfo {

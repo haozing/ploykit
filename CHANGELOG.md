@@ -12,6 +12,43 @@ entry below says whether it is Go-only). Consumers pin each side independently.
 ## [Unreleased]
 
 ### Added
+- **billing**: `adapters/waffo` — the Waffo Pancake (MoR) payment channel,
+  upstreamed from the shuijing product repo where it was battle-tested against
+  the real API (request signing, checkout sessions, webhook verification,
+  event mapping per the five adapter laws). `waffo.FromEnv(getenv, log,
+  production)` with the all-or-nothing env discipline; implements
+  `ConnectionTester` (GraphQL stores probe), `SubscriptionCanceller`
+  (`POST /v1/actions/subscription-order/cancel-order`), and
+  `ChannelCapabilityViewer` (catalog-based, DisplayOrder 100, five
+  subscription currencies)
+- **billing/money**: shared minor-units ↔ display-string conversion
+  (`FormatCents`/`ParseAmount`/`ValidateCurrency`) with JPY zero-decimal
+  handling; `ParseAmount` returns 0 on unparseable input so unverifiable
+  amounts flow into the existing `amountMismatch` ignore path
+- **billing**: adapter contract "five laws" documented in `billing/doc.go` —
+  the acceptance checklist for any new channel, distilled from the waffo
+  integration (money-event-once, first-charge dedup, stable subscription
+  ref, globally-unique ChannelEventID, environment marking)
+- **billing**: stale-checkout sweeper — `"order".expires_at` column
+  (migration 049), `Repo.ExpireStaleOrders` (SKIP LOCKED, oldest-first),
+  `BillingService.ExpireStaleOrders` + `workers.OrderExpiryWorker`; channels
+  that expire abandoned sessions without a webhook (waffo) no longer leave
+  orders pending forever
+
+### Changed
+- **billing** (breaking, P0 of the channel-framework plan
+  `docs/plan-billing-channel-framework-2026-10-23.md`):
+  `PaymentChannel.CreateCheckout` now takes `CheckoutRequest{Order,
+  SuccessURL, CancelURL, BuyerEmail, Locale}` — buyer email prefills the
+  channel checkout, locale is passed through, and cancel-URL support is
+  declared via the new `ChannelCapabilityViewer.Capabilities() ChannelCaps`
+  instead of being silently ignored. `ChannelRegistry.Names()` replaced by
+  `OrderedNames()` (DisplayOrder asc) so `/config` `billing_channels` is a
+  priority-ordered array; stripe=200, manual=900, unset=500.
+  `Repo.SetOrderChannelRef` → `SetOrderChannelRefAndExpiry`.
+  `BillingService` gains `WithBuyerEmailResolver` (wired from identity at
+  assembly; billing does not import identity) and `Config.Locale`;
+  stripe/manual adapters and all fakes updated in the same batch
 - **webx**: `Gzip(next)` — the runtime compression lane, promoted from
   example's hand-written middleware (reverse clause). Same behaviour as the
   product-side version it replaces, plus three defects that this class of

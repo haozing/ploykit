@@ -24,7 +24,11 @@ func TestManualChannel_RegistryResolvable(t *testing.T) {
 
 func TestManualChannel_CheckoutAndWebhookShape(t *testing.T) {
 	ch := &ManualChannel{InfoURL: "https://example.com/pay-by-transfer"}
-	session, err := ch.CreateCheckout(context.Background(), domain.Order{ID: "ord_m", PlanCode: "pro"}, "https://s", "https://c")
+	session, err := ch.CreateCheckout(context.Background(), CheckoutRequest{
+		Order:      domain.Order{ID: "ord_m", PlanCode: "pro"},
+		SuccessURL: "https://s",
+		CancelURL:  "https://c",
+	})
 	require.NoError(t, err)
 	assert.Equal(t, "ord_m", session.OrderID)
 	assert.Equal(t, "manual", session.Channel)
@@ -36,6 +40,14 @@ func TestManualChannel_CheckoutAndWebhookShape(t *testing.T) {
 	var we *webx.Error
 	require.ErrorAs(t, err, &we)
 	assert.Equal(t, 400, we.Status, "manual 渠道不接受 webhook（无签名可验，防伪造核销）")
+}
+
+func TestManualChannel_Capabilities(t *testing.T) {
+	var viewer ChannelCapabilityViewer = &ManualChannel{}
+	caps := viewer.Capabilities()
+	assert.False(t, caps.CatalogBased)
+	assert.False(t, caps.SupportsCancelURL, "manual 无托管收银台，忽略 CancelURL 是声明过的行为而非静默")
+	assert.Equal(t, 900, caps.DisplayOrder, "manual 兜底排序（stripe 200 之后）")
 }
 
 func TestMarkOrderPaid_ManualPending(t *testing.T) {

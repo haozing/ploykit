@@ -471,7 +471,11 @@ func main() {
 	billingSvc := billingapp.NewBillingService(
 		billingRepo,
 		channels,
-		billingapp.Config{Currency: env("BILLING_CURRENCY", "CNY"), SuccessURL: env("BILLING_SUCCESS_URL", "http://localhost:5173/billing/success")},
+		billingapp.Config{
+			Currency:   env("BILLING_CURRENCY", "CNY"),
+			SuccessURL: env("BILLING_SUCCESS_URL", "http://localhost:5173/billing/success"),
+			Locale:     env("BILLING_LOCALE", ""),
+		},
 		billingapp.BillingHooks{
 
 			OnPaymentFailed: func(_ context.Context, workspaceID, orderID, reason string) error {
@@ -480,7 +484,16 @@ func main() {
 			},
 		}, auditor, now, log,
 	).
-		WithMeterRegistry(billingRepo)
+		WithMeterRegistry(billingRepo).
+		// F2: billing stays identity-free — the email lookup is injected here.
+		// A lookup failure only drops the checkout email prefill, never fails checkout.
+		WithBuyerEmailResolver(func(ctx context.Context, userID string) (string, error) {
+			u, err := idRepo.GetUser(ctx, userID)
+			if err != nil {
+				return "", err
+			}
+			return u.Email, nil
+		})
 
 	whkCatalog := webhooksapp.NewEventCatalog()
 	whkCatalog.Register("task.created", "任务创建")
@@ -881,7 +894,7 @@ func main() {
 
 	mux.HandleFunc("GET /config", webx.ConfigHandler(webx.ConfigDeps{
 		OAuthProviders:  func() []string { return oauthNames },
-		BillingChannels: channels.Names,
+		BillingChannels: channels.OrderedNames,
 		Extra: func() map[string]any {
 			eff, err := siteSettings.Effective(context.Background())
 			if err != nil {
@@ -1082,6 +1095,7 @@ func main() {
 	wk.Add(&webhookworkers.DeliveryWorker{Service: whkSvc})
 	wk.Add(&notifyworkers.RetentionWorker{Repo: notifyRepo})
 	wk.Add(&billingworkers.ExpiryWorker{Service: billingSvc})
+	wk.Add(&billingworkers.OrderExpiryWorker{Service: billingSvc})
 	wk.Add(&billingworkers.MeteredOverageWorker{Billing: billingSvc, Usage: quotaSvc.Usage, Every: time.Hour})
 	wk.Add(&quotaworkers.ExpiryWorker{Service: quotaSvc})
 
