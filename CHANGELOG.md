@@ -9,7 +9,16 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.13.0] — 2026-10-24
+
+Payment-channel framework batch (waffo upstream, credentials-in-DB hot
+reload, self-serve admin page, catalog product mapping, PayPal touchstone)
+plus the audit-fix pass over it: five parallel audit agents tested the batch
+against real data; every confirmed defect is fixed here and pinned by a new
+three-dialect channel simulator (`billing/adapters/sim`) driving ten
+real-database pipeline scenarios. Go (`billing`, `settings`, migration 051)
++ npm (`@ploykit/ui` 2.4.0; client 0.7.6 / runtime 0.9.0 / hooks 0.9.0
+unchanged).
 
 ### Added
 - **billing**: `adapters/paypal` (P2, the touchstone of the channel-framework
@@ -72,6 +81,15 @@ entry below says whether it is Go-only). Consumers pin each side independently.
   `BillingService.ExpireStaleOrders` + `workers.OrderExpiryWorker`; channels
   that expire abandoned sessions without a webhook (waffo) no longer leave
   orders pending forever
+- **billing**: `adapters/sim` — a three-dialect payment-channel simulator
+  (simwaffo / simpaypal / simstripe) mirroring the real adapters' event
+  envelopes, HMAC-SHA256 raw-body signatures and five-law mapping; a
+  `Harness` assembling a real `BillingService` behind the real webhook HTTP
+  route for pipeline tests, plus dev-only `simhttp` endpoints
+  (`POST /dev/billing-sim/{channel}/checkout|event`, gated by
+  `PLOYKIT_DEV_ENABLED=1`, panics if mounted in production) wired in
+  example — the "mock three payment channels" test interface, validated by
+  ten real-database pipeline scenarios
 
 ### Changed
 - **billing** (breaking, P0 of the channel-framework plan
@@ -97,6 +115,60 @@ entry below says whether it is Go-only). Consumers pin each side independently.
   answered those), stamps `Vary: Accept-Encoding` (deduped), and exposes
   `Unwrap` for `http.ResponseController`. Guard registered in internal/arch:
   example may not import `compress/gzip` directly
+
+### Fixed (audit pass over this batch — five parallel audit agents, every
+finding re-verified against the code before fixing)
+- **billing**: late-payment race with the stale-checkout sweeper — the
+  sweeper flipped expired pending orders to canceled with no grace period
+  and `handlePaid` then terminally ignored the money event while the
+  channel kept charging. Migration 051 adds `order.canceled_by`
+  ('expiry'/'user'/'admin'); the sweeper runs behind a 24h grace window,
+  and a late paid event revives an expiry-canceled order (canceled→paid,
+  audited as `billing.order_revived_after_expiry`); user/admin cancels and
+  pre-051 rows stay final
+- **billing**: manual-channel orders no longer auto-expire after 7 days —
+  offline transfers have no session TTL; `MarkOrderPaid` works at any age
+- **billing**: renewal-path reconciliation (the PayPal seam) —
+  `handleRenewed` now persists `payment_intent` when the event carries an
+  order id (the refund lookup no longer dead-ends) and reconciles the
+  charged amount against the *current* plan price, refusing to extend
+  (audited `billing.amount_mismatch`, phase=renewal) when a price change
+  was not synced — the defense the ConfigSchema help had promised; waffo/
+  stripe renewals (no order id) behave exactly as before
+- **billing/waffo**: idempotency key is now `eventType:eventId` (fallback
+  `eventType:id`) — two renewals of the same order no longer collide on the
+  entity-level id and silently drop the later period while the customer
+  keeps being charged; signature tolerance window 45min→24h (covers the
+  documented 8h retry chain); mapped events record their payload; and
+  `Configured` is credential-only, so catalog-mode channels no longer show
+  "unconfigured" with a disabled connection test
+- **billing/paypal**: SALE events carry the order id (custom_id) so the
+  renewal defenses engage; a 23-currency subscription whitelist rejects
+  unsupported currencies before any network call; `RegisterProduct` reuses
+  an existing catalog product by name, so a failed retry no longer
+  accumulates orphan products; JPY `"4500.00"` echo amounts parse correctly
+- **billing/money**: `ParseAmountForCurrency` (zero-decimal `"4500.00"`
+  echo normalization), `FormatCentsChecked` and `CheckMinorUnit` —
+  three-decimal currencies (KWD, BHD, …) are rejected at plan validation
+  instead of being silently priced 10x off (`ValidateCurrency` was dead
+  code; it is wired now)
+- **settings**: a single unsealable `billing_channel.*` row no longer takes
+  the whole channel registry down at boot (env-configured channels and the
+  credential-free manual channel included) — poison rows are skipped
+  per-channel with a named warning; submitting the `__SET__` marker keeps
+  the stored secret (server-side short-circuit, mirroring masked-value
+  handling in the generic settings API); `SetMany` writes one channel's
+  fields in a single transaction; a missing seal key returns 503 with the
+  PLOYKIT_SEAL_KEY hint instead of an opaque 500; clearing a required field
+  is rejected unless the environment provides it
+  (`ChannelEnvViewer.EnvProvidedKeys`, surfaced as `env_provided` on the
+  channel card)
+- **ui**: env-configured channels can save partial edits (the required
+  check exempts env-provided fields); saving a plan price invalidates the
+  channel-catalog table on the same page (it used to keep showing "synced"
+  with the old price); concurrent register/sync buttons track per-row
+  pending state; JPY prices display at true value (no ÷100); the channel
+  PUT response type matches the `{channel}` envelope
 
 ## [0.12.0] — 2026-10-21
 
