@@ -273,6 +273,88 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     expect(mockedPut).not.toHaveBeenCalled();
   });
 
+  // env 配置渠道（如 stripe 经 STRIPE_SECRET_KEY env）：env_provided 含必填键 →
+  // 空值合法（保存后回退 env 值），管理员只补贴 webhook 密钥不再被必填校验挡死
+  it('env_provided 含必填键 → 留空可提交（空串原样提交=回退 env）', async () => {
+    mockedGet.mockResolvedValue({
+      channels: [
+        makeChannel({
+          name: 'stripe',
+          config_source: 'env',
+          env_provided: ['secret_key'],
+          schema: [
+            {
+              key: 'secret_key',
+              label: 'Secret key',
+              type: 'secret',
+              required: true,
+              help: '',
+              options: null,
+            },
+            {
+              key: 'webhook_secret',
+              label: 'Webhook 密钥',
+              type: 'text',
+              required: true,
+              help: '',
+              options: null,
+            },
+          ],
+          values: { secret_key: '', webhook_secret: '' },
+        }),
+      ],
+    });
+    renderSection();
+    const card = within(await waitFor(() => cardOf('stripe')));
+
+    // 只补贴 webhook 密钥；Secret key 留空（env 提供）
+    fireEvent.change(card.getByRole('textbox', { name: 'Webhook 密钥' }), {
+      target: { value: 'whsec_123' },
+    });
+    fireEvent.click(card.getByRole('button', { name: '保存' }));
+
+    await waitFor(() =>
+      expect(mockedPut).toHaveBeenCalledWith(
+        '/api/admin/billing/channels/stripe',
+        {
+          fields: { secret_key: '', webhook_secret: 'whsec_123' },
+        },
+      ),
+    );
+    expect(toastMocks.success).toHaveBeenCalledWith('渠道 stripe 已保存');
+  });
+
+  it('env_provided 不含该键且非 secret __SET__ → 必填空值仍拦截', async () => {
+    mockedGet.mockResolvedValue({
+      channels: [
+        makeChannel({
+          name: 'stripe',
+          env_provided: ['mode'],
+          schema: [
+            {
+              key: 'secret_key',
+              label: 'Secret key',
+              type: 'secret',
+              required: true,
+              help: '',
+              options: null,
+            },
+          ],
+          values: { secret_key: '' },
+        }),
+      ],
+    });
+    renderSection();
+    const card = within(await waitFor(() => cardOf('stripe')));
+
+    fireEvent.click(card.getByRole('button', { name: '保存' }));
+
+    expect(await card.findByRole('alert')).toHaveTextContent(
+      '必填项未填写：Secret key',
+    );
+    expect(mockedPut).not.toHaveBeenCalled();
+  });
+
   it('保存失败（400）→ 就地展示后端校验消息', async () => {
     mockedPut.mockRejectedValueOnce(
       new ApiError(400, 'E_VALIDATION', 'validation failed', 'unknown field: foo'),
@@ -359,6 +441,40 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     expect(
       paypal.queryByText(/4576 7500 0000 0110/),
     ).not.toBeInTheDocument();
+  });
+
+  it('mode 由环境变量提供（values.mode 为空 + env_provided 含 mode）→ 「模式：环境变量提供」徽标，不猜值、不触发测试模式提示条', async () => {
+    mockedGet.mockResolvedValue({
+      channels: [
+        makeChannel({
+          name: 'stripe',
+          env_provided: ['secret_key', 'mode'],
+          values: { merchant_id: 'M_123', private_key: '', mode: '' },
+        }),
+      ],
+    });
+    renderSection();
+    const card = within(await waitFor(() => cardOf('stripe')));
+
+    expect(card.getByText('模式：环境变量提供')).toBeInTheDocument();
+    // DB 无值 → 不渲染测试模式提示条（不猜 env 提供的是 test 还是 prod）
+    expect(
+      card.queryByText(/当前为测试模式/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('mode DB 有值时维持现状：无「模式：环境变量提供」徽标（即便 env_provided 含 mode）', async () => {
+    // makeChannel 默认 values.mode='test'
+    mockedGet.mockResolvedValue({
+      channels: [makeChannel({ env_provided: ['mode'] })],
+    });
+    renderSection();
+    const card = within(await waitFor(() => cardOf('waffo')));
+
+    expect(
+      card.queryByText('模式：环境变量提供'),
+    ).not.toBeInTheDocument();
+    expect(card.getByText(/当前为测试模式/)).toBeInTheDocument();
   });
 
   it('按 display_order 排序展示', async () => {

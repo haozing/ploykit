@@ -30,7 +30,7 @@ import {
 import { useApi } from '@ploykit/hooks';
 import { adminError } from './shared';
 import { BillingChannelsSection } from './BillingChannelsSection';
-import { CatalogMapping } from './CatalogMapping';
+import { BILLING_CATALOG_QUERY_KEY, CatalogMapping } from './CatalogMapping';
 
 // UP-5：套餐目录编辑。GET /api/admin/plans → {items, plans: PlanView[]}；
 // PATCH /api/admin/plans/{code} 全量语义（body 整卡提交，code 不可改走路径）。
@@ -442,6 +442,9 @@ export function PlansPage() {
       });
       // 列表即时反映（WorkspacesPage 的套餐下拉同键，一并失效）
       void qc.invalidateQueries({ queryKey: ['admin', 'plans'] });
+      // 同页"渠道商品映射"的已同步/目标价比对全部 join catalog 的套餐价——
+      // 改价后一并失效，否则映射表仍按旧价比对（复用 CatalogMapping 导出的键）
+      void qc.invalidateQueries({ queryKey: BILLING_CATALOG_QUERY_KEY });
     },
     onError: (e, v) =>
       setCardErrors((prev) => ({

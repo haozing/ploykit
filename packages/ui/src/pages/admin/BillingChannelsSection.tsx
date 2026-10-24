@@ -77,6 +77,11 @@ export interface ChannelCard {
   /** text=实际值；secret=已设则 "__SET__" 否则 "" */
   values: Record<string, string>;
   config_source: 'db' | 'env' | '';
+  /**
+   * 该渠道当前由进程环境变量提供的配置字段键列表（后端可选下发；后端未合入时
+   * undefined 走旧行为）。required 空值豁免与 mode 徽标均以它为准。
+   */
+  env_provided?: string[];
 }
 
 export interface BillingChannelsEnvelope {
@@ -144,11 +149,15 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
     const missing: string[] = [];
     for (const spec of channel.schema) {
       const v = (draft[spec.key] ?? '').trim();
-      // required 校验：text/select 必填；secret 已设置（__SET__）时留空合法
+      // required 校验：text/select 必填；两类空值豁免——
+      // a) secret 已设置（__SET__）时留空合法（保持不变语义）；
+      // b) 该字段当前由环境变量提供（env_provided 含键）：留空=保存后回退 env 值
+      //    （stripe 经 STRIPE_SECRET_KEY 配置时，管理员只补贴 webhook 密钥不被挡死）
       if (
         spec.required &&
         v === '' &&
-        !(spec.type === 'secret' && channel.values[spec.key] === SECRET_SET)
+        !(spec.type === 'secret' && channel.values[spec.key] === SECRET_SET) &&
+        !(channel.env_provided ?? []).includes(spec.key)
       ) {
         missing.push(spec.label);
       }
@@ -162,7 +171,9 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
 
   const saveM = useMutation({
     mutationFn: (fields: Record<string, string>) =>
-      api.put<ChannelCard>(
+      // 响应体是 {channel: card} 信封（admin routes_billingops 同款写法），结果
+      // 未被使用——类型如实标注，勿写成裸 ChannelCard 误导后续消费方
+      api.put<{ channel: ChannelCard }>(
         `/api/admin/billing/channels/${encodeURIComponent(channel.name)}`,
         { fields },
       ),
@@ -201,6 +212,10 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
     channel.name,
   );
   const isTestMode = channel.values.mode === 'test';
+  // mode 由环境变量提供（DB 无值）：不猜 test/prod，只标注来源；
+  // values.mode 有值时维持现状（isTestMode 直读 DB 值）
+  const modeFromEnv =
+    !channel.values.mode && (channel.env_provided ?? []).includes('mode');
 
   return (
     <Card size="sm">
@@ -220,6 +235,11 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
             )}
             {channel.config_source === 'env' && (
               <Badge variant="outline">环境变量</Badge>
+            )}
+            {modeFromEnv && (
+              <Badge variant="outline" className="text-muted-foreground">
+                模式：环境变量提供
+              </Badge>
             )}
             {channel.webhook_configured ? (
               <StatusBadge label="回调验签已配" tone="positive" />

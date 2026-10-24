@@ -227,4 +227,101 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
     renderSection();
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');
   });
+
+  // 行级在途回归：react-query 单实例 isPending/variables 只反映最后一次 mutate，
+  // 且旧实现只查 registerM/syncM 之一——并发时其余行漏判。按行键跟踪后：
+  // 行 A 在途只锁行 A，行 B 独立，registerM/syncM 同时在途各自禁用。
+  it('行级在途跟踪：行 A 注册中不锁行 B；registerM/syncM 同时在途各自禁用；结算后恢复', async () => {
+    const resolvers: Array<(v: unknown) => void> = [];
+    mockedPost.mockReset().mockImplementation(
+      () => new Promise((resolve) => resolvers.push(resolve)),
+    );
+    renderSection();
+    await screen.findByText('渠道商品映射');
+
+    // 行 A：free/每月 注册（挂起）→ 该行按钮禁用
+    fireEvent.click(
+      within(rowWith(['Free', '每月'])).getByRole('button', { name: '注册' }),
+    );
+    expect(
+      await within(rowWith(['Free', '每月'])).findByRole('button', {
+        name: '注册中…',
+      }),
+    ).toBeDisabled();
+
+    // 行 B：free/每年 独立可点（单实例 variables 漏判回归）
+    const bBtn = within(rowWith(['Free', '每年'])).getByRole('button', {
+      name: '注册',
+    });
+    expect(bBtn).toBeEnabled();
+    fireEvent.click(bBtn);
+    expect(
+      await within(rowWith(['Free', '每年'])).findByRole('button', {
+        name: '注册中…',
+      }),
+    ).toBeDisabled();
+
+    // 行 C：registerM 两行在途时再点 syncM——旧实现只查一个 mutation，
+    // sync 行不被跟踪（漏判回归）
+    fireEvent.click(
+      within(rowWith(['PROD_Y'])).getByRole('button', { name: '同步价格' }),
+    );
+    expect(
+      await within(rowWith(['PROD_Y'])).findByRole('button', {
+        name: '同步中…',
+      }),
+    ).toBeDisabled();
+
+    // 行 A 结算 → 恢复可点；行 B/C 仍在途
+    resolvers[0]({});
+    expect(
+      await within(rowWith(['Free', '每月'])).findByRole('button', {
+        name: '注册',
+      }),
+    ).toBeEnabled();
+    expect(
+      within(rowWith(['Free', '每年'])).getByRole('button', {
+        name: '注册中…',
+      }),
+    ).toBeDisabled();
+    expect(
+      within(rowWith(['PROD_Y'])).getByRole('button', { name: '同步中…' }),
+    ).toBeDisabled();
+  });
+
+  it('JPY 套餐：plan.currency 流入 formatCents → 零小数币不除 100、无小数点', async () => {
+    mockedGet.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/admin/billing/channels')) return CHANNELS;
+      if (path.startsWith('/api/admin/billing/catalog'))
+        return {
+          rows: [
+            {
+              channel: 'waffo',
+              plan_code: 'biz',
+              interval: 'monthly',
+              channel_product_id: 'PROD_J',
+              synced_price_cents: 9000,
+              plan_price_cents: 9000,
+              synced_at: '2026-10-01T00:00:00Z',
+            },
+          ],
+          plans: [
+            {
+              code: 'biz',
+              name: 'Biz',
+              currency: 'JPY',
+              monthly_cents: 9800,
+              yearly_cents: 98000,
+            },
+          ],
+        };
+      throw new Error('unexpected GET ' + path);
+    });
+    renderSection();
+
+    // 同步价 9000 原样展示（JPY 金额即最小单位）；目标价 9800 不显示成 98.00
+    expect(await screen.findByText('JPY 9,000')).toBeInTheDocument();
+    expect(screen.getByText(/→ 目标 JPY 9,800/)).toBeInTheDocument();
+    expect(screen.getByText('价格待同步')).toBeInTheDocument();
+  });
 });

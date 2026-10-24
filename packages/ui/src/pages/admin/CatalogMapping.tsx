@@ -1,4 +1,5 @@
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable, type Column } from '../../components/DataTable';
 import { PageEmpty, PageError, PageLoading } from '../../components/Page';
@@ -140,16 +141,46 @@ export function CatalogMapping() {
     queryFn: () => api.get<BillingCatalogEnvelope>('/api/admin/billing/catalog'),
   });
 
+  // 行级在途跟踪：react-query v5 里同一 useMutation 实例并发 mutate 时
+  // isPending/variables 只反映最后一次调用，且 registerM/syncM 是两个实例、
+  // 原先只查一个——并发注册多行/注册+同步同时在途时其余行被漏判。改为按行键
+  // （channel:plan:interval，与 DataTable rowKey 同格式）自记集合：onMutate 记入、
+  // onSettled 移除，行 A 在途只禁用行 A，行 B 独立，两个 mutation 并查。
+  const [pendingRows, setPendingRows] = useState<Set<string>>(() => new Set());
+
+  interface MappingVars {
+    channel: string;
+    plan_code: string;
+    interval: string;
+  }
+
+  const mappingRowKey = (v: MappingVars) =>
+    `${v.channel}:${v.plan_code}:${v.interval}`;
+
+  const trackRow = (v: MappingVars) =>
+    setPendingRows((prev) => {
+      if (prev.has(mappingRowKey(v))) return prev;
+      const next = new Set(prev);
+      next.add(mappingRowKey(v));
+      return next;
+    });
+
+  const untrackRow = (v: MappingVars) =>
+    setPendingRows((prev) => {
+      if (!prev.has(mappingRowKey(v))) return prev;
+      const next = new Set(prev);
+      next.delete(mappingRowKey(v));
+      return next;
+    });
+
   const registerM = useMutation({
-    mutationFn: (v: {
-      channel: string;
-      plan_code: string;
-      interval: string;
-    }) =>
+    mutationFn: (v: MappingVars) =>
       api.post<{ channel_product_id: string }>(
         `/api/admin/billing/channels/${encodeURIComponent(v.channel)}/register-product`,
         { plan_code: v.plan_code, interval: v.interval },
       ),
+    onMutate: (v) => trackRow(v),
+    onSettled: (_d, _e, v) => untrackRow(v),
     onSuccess: (_d, v) => {
       toast.success(
         `已注册 ${v.channel} · ${v.plan_code}（${intervalLabel(v.interval)}）商品`,
@@ -160,15 +191,13 @@ export function CatalogMapping() {
   });
 
   const syncM = useMutation({
-    mutationFn: (v: {
-      channel: string;
-      plan_code: string;
-      interval: string;
-    }) =>
+    mutationFn: (v: MappingVars) =>
       api.post<{ synced_price_cents: number }>(
         `/api/admin/billing/channels/${encodeURIComponent(v.channel)}/sync-price`,
         { plan_code: v.plan_code, interval: v.interval },
       ),
+    onMutate: (v) => trackRow(v),
+    onSettled: (_d, _e, v) => untrackRow(v),
     onSuccess: (_d, v) => {
       toast.success(
         `已同步 ${v.channel} · ${v.plan_code}（${intervalLabel(v.interval)}）价格`,
@@ -191,16 +220,8 @@ export function CatalogMapping() {
     catalogQ.data?.plans ?? [],
   );
 
-  const pendingCombo = (row: MappingRow): boolean => {
-    const m = registerM.isPending ? registerM : syncM.isPending ? syncM : null;
-    const v = m?.variables;
-    return (
-      !!v &&
-      v.channel === row.channel &&
-      v.plan_code === row.planCode &&
-      v.interval === row.interval
-    );
-  };
+  const pendingCombo = (row: MappingRow): boolean =>
+    pendingRows.has(`${row.channel}:${row.planCode}:${row.interval}`);
 
   const columns: Column<MappingRow>[] = [
     {
@@ -246,6 +267,8 @@ export function CatalogMapping() {
       render: (r) => {
         if (!r.registered)
           return <span className="text-muted-foreground">—</span>;
+        // 币种感知 formatCents（JPY 等零小数币不除 100）；孤儿行 join 不到套餐、
+        // 币种未知，保守回退 CNY 两位小数（旧行为）
         const currency = r.currency || 'CNY';
         const synced = formatCents(r.registered.synced_price_cents, currency);
         if (r.registered.synced_price_cents === r.expectedCents)

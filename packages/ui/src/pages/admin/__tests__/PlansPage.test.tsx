@@ -34,6 +34,7 @@ vi.mock('@ploykit/client', () => ({
 
 import { ApiError } from '@ploykit/client';
 import { PlansPage } from '../PlansPage';
+import { BILLING_CATALOG_QUERY_KEY } from '../CatalogMapping';
 
 const PLANS = {
   items: ['free', 'pro'],
@@ -214,6 +215,33 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
         currency: 'USD',
         sort_no: 2,
         limits: { price_monthly_cents: 990 },
+      }),
+    );
+  });
+
+  // 同页改价后"渠道商品映射"的已同步/目标价比对全部 join catalog 的套餐价，
+  // 保存套餐必须把 billing-catalog 键一并失效（否则映射表仍按旧价比对）
+  it('保存成功 → 同时失效 plans 与 billing-catalog 两个查询键', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+    render(
+      <QueryClientProvider client={qc}>
+        <PlansPage />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Pro');
+    expandPro();
+    fireEvent.click(await screen.findByRole('button', { name: '保存' }));
+
+    await waitFor(() => expect(mockedPatch).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['admin', 'plans'],
+      }),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: BILLING_CATALOG_QUERY_KEY,
       }),
     );
   });

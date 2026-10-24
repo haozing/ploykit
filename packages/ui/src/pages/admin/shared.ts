@@ -35,8 +35,17 @@ export function adminListQuery(
 }
 
 
+// 零小数币（ISO 4217 minor unit exponent = 0）：金额本身就是最小单位，不除 100、
+// 无小数点。真源在 Go 侧 billing/money/money.go 的 zeroDecimal（按需扩展、不做
+// 投机性全集，当前仅 JPY）；此处硬编码同步集合，扩展时两边一起改。
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY']);
+
+
 export function formatCents(cents: number, currency = 'CNY'): string {
-  const symbol =
-    currency.toUpperCase() === 'CNY' ? '¥' : `${currency.toUpperCase()} `;
+  const code = currency.toUpperCase();
+  if (ZERO_DECIMAL_CURRENCIES.has(code)) {
+    return `${code} ${cents.toLocaleString('zh-CN')}`;
+  }
+  const symbol = code === 'CNY' ? '¥' : `${code} `;
   return `${symbol}${(cents / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
