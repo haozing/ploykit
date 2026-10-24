@@ -41,6 +41,8 @@ import (
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
 	paypal "github.com/haozing/ploykit/billing/adapters/paypal"
+	sim "github.com/haozing/ploykit/billing/adapters/sim"
+	simhttp "github.com/haozing/ploykit/billing/adapters/sim/simhttp"
 	stripe "github.com/haozing/ploykit/billing/adapters/stripe"
 	waffo "github.com/haozing/ploykit/billing/adapters/waffo"
 	billingapp "github.com/haozing/ploykit/billing/app"
@@ -508,6 +510,18 @@ func main() {
 			return &billingapp.ManualChannel{InfoURL: infoURL}, nil
 		},
 	}
+	// SIM 渠道（DEV-ONLY 测试接口）：simwaffo/simpaypal/simstripe 三个模拟
+	// 渠道方言，镜像真渠道的事件协议形状，用于驱动 billing 全管线验收
+	// （billing/adapters/sim）。**绝不能进生产**——双重门控：非 production 且
+	// PLOYKIT_DEV_ENABLED=1（与 devx.Mount 同一 dev 开关）。DisplayOrder
+	// 950+ 排在一切真渠道（含 manual 900）之后，不挤占 /config 推荐位。
+	simDev := !production && env("PLOYKIT_DEV_ENABLED", "") == "1"
+	if simDev {
+		for name, factory := range sim.Factories(os.Getenv) {
+			channelFactories[name] = factory
+		}
+		log.Info("sim payment channels registered (DEV-ONLY)", "channels", []string{sim.NameWaffo, sim.NamePaypal, sim.NameStripe})
+	}
 	channels := billingapp.NewAtomicRegistry(ctx, log, siteSettings.BillingChannelFields, channelFactories, 30*time.Second)
 
 	billingRepo := billingpg.New(pool)
@@ -622,6 +636,25 @@ func main() {
 	}
 	if devOn {
 		devx.Mount(mux, devDeps)
+	}
+
+	// SIM DEV HTTP 面（「模拟三个支付渠道的测试接口」）：POST /dev/billing-sim/
+	// {channel}/checkout 与 /event，给人工 curl / 外部脚本驱动全管线。
+	// **DEV-ONLY, 绝不能进生产（DEV-ONLY, 绝不能进生产）**——它伪造支付
+	// webhook。门控与 sim 渠道注册同一 simDev（!production 且
+	// PLOYKIT_DEV_ENABLED=1）；simhttp.Mount 内部还有 Production=true 即
+	// panic 的兜底。边界声明：本面是测试设施，不入 OpenAPI 契约（包置于
+	// billing/adapters/sim/simhttp，check_api 不扫描），生产构建不挂载。
+	if simDev {
+		simhttp.Mount(mux, simhttp.Deps{
+			Svc:        billingSvc,
+			Channels:   channels,
+			Repo:       billingRepo,
+			Pool:       pool,
+			Now:        now,
+			Log:        log,
+			Production: production,
+		})
 	}
 
 	var mcpMount *mcpx.Mount
