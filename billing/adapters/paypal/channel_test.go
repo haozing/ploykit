@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -642,7 +643,7 @@ func TestFlexMoneyShapes(t *testing.T) {
 	}
 }
 
-// ---- FromEnv 装配纪律(四必填全有或全无) ----
+// ---- FromEnv 装配纪律(未配置返回 DisabledChannel 桩,nil 不再出现) ----
 
 func TestFromEnv(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(&strings.Builder{}, nil))
@@ -656,19 +657,26 @@ func TestFromEnv(t *testing.T) {
 		return func(k string) string { return m[k] }
 	}
 
-	// 全缺 = 未配置。
+	// 全缺 = 未配置 → DisabledChannel 桩。
 	ch, err := FromEnv(getenv(map[string]string{}), log, true)
-	if ch != nil || err != nil {
-		t.Fatalf("empty env = (nil,nil), got (%v,%v)", ch, err)
+	if err != nil {
+		t.Fatalf("empty env: %v", err)
+	}
+	if stub, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("empty env must return *app.DisabledChannel, got %T", ch)
+	} else if stub.Name() != "paypal" || stub.ChannelConfig().Configured {
+		t.Fatalf("stub = %+v, want unconfigured paypal", stub)
 	}
 
-	// 部分缺(3/4):production 拒启,dev 降级跳过。
+	// 部分缺(3/4):production 拒启,dev 降级为桩。
 	partial := map[string]string{EnvClientID: "cid-1", EnvClientSecret: "sec-1", EnvWebhookID: "WHID-1"}
 	if _, err := FromEnv(getenv(partial), log, true); err == nil {
 		t.Fatal("partial config in production must fail")
 	}
-	if ch, err := FromEnv(getenv(partial), log, false); ch != nil || err != nil {
-		t.Fatalf("partial config in dev = disabled, got (%v,%v)", ch, err)
+	if ch, err := FromEnv(getenv(partial), log, false); err != nil {
+		t.Fatalf("partial config in dev = stub, got err %v", err)
+	} else if _, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("partial config in dev = stub, got %T", ch)
 	}
 
 	// 完整:构造成功,半残态可见。
@@ -676,25 +684,33 @@ func TestFromEnv(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("full config: (%v,%v)", ch, err)
 	}
-	if cc := ch.ChannelConfig(); !cc.Configured || !cc.WebhookConfigured || !strings.Contains(cc.KeyMasked, "cid") {
+	sandbox, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("full config must return live *Channel, got %T", ch)
+	}
+	if cc := sandbox.ChannelConfig(); !cc.Configured || !cc.WebhookConfigured || !strings.Contains(cc.KeyMasked, "cid") {
 		t.Fatalf("channel config = %+v", cc)
 	}
-	if ch.client.BaseURL != SandboxAPIBase {
-		t.Fatalf("mode=test must hit sandbox, got %s", ch.client.BaseURL)
+	if sandbox.client.BaseURL != SandboxAPIBase {
+		t.Fatalf("mode=test must hit sandbox, got %s", sandbox.client.BaseURL)
 	}
 
 	// live 别名归一到 prod → 生产主机。
-	live := map[string]string{}
+	liveEnv := map[string]string{}
 	for k, v := range full {
-		live[k] = v
+		liveEnv[k] = v
 	}
-	live[EnvMode] = "live"
-	ch, err = FromEnv(getenv(live), log, true)
+	liveEnv[EnvMode] = "live"
+	ch, err = FromEnv(getenv(liveEnv), log, true)
 	if err != nil || ch == nil {
 		t.Fatalf("live mode: (%v,%v)", ch, err)
 	}
-	if ch.client.BaseURL != LiveAPIBase {
-		t.Fatalf("mode=live must hit api-m.paypal.com, got %s", ch.client.BaseURL)
+	liveCh, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("live mode must return live *Channel, got %T", ch)
+	}
+	if liveCh.client.BaseURL != LiveAPIBase {
+		t.Fatalf("mode=live must hit api-m.paypal.com, got %s", liveCh.client.BaseURL)
 	}
 }
 
@@ -710,10 +726,15 @@ func TestNewFromFields(t *testing.T) {
 	}
 	getenv := func(k string) string { return env[k] }
 
-	// 全缺 = 未配置(nil,nil)。
+	// 全缺 = 未配置 → DisabledChannel 桩(nil 不再出现)。
 	ch, err := NewFromFields(nil, func(string) string { return "" }, log, true)
-	if ch != nil || err != nil {
-		t.Fatalf("empty = (nil,nil), got (%v,%v)", ch, err)
+	if err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	if stub, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("empty must return *app.DisabledChannel, got %T", ch)
+	} else if stub.Name() != "paypal" || stub.ChannelConfig().Configured {
+		t.Fatalf("stub = %+v, want unconfigured paypal", stub)
 	}
 
 	// fields 覆盖 env:client_id 来自 DB,其余回退 env。
@@ -721,7 +742,11 @@ func TestNewFromFields(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("fields overlay env: (%v,%v)", ch, err)
 	}
-	if got := ch.ChannelConfig().KeyMasked; !strings.HasPrefix(got, "cid") {
+	overlay, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("fields overlay env must return live *Channel, got %T", ch)
+	}
+	if got := overlay.ChannelConfig().KeyMasked; !strings.HasPrefix(got, "cid") {
 		t.Fatalf("client id from DB expected, masked = %q", got)
 	}
 
@@ -733,19 +758,25 @@ func TestNewFromFields(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("progressive config: (%v,%v)", ch, err)
 	}
-	if cc := ch.ChannelConfig(); !cc.Configured || cc.WebhookConfigured {
+	progressive, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("progressive config must return live *Channel, got %T", ch)
+	}
+	if cc := progressive.ChannelConfig(); !cc.Configured || cc.WebhookConfigured {
 		t.Fatalf("half-configured channel must show webhook-unconfigured, got %+v", cc)
 	}
-	if ch.client.BaseURL != SandboxAPIBase {
-		t.Fatalf("default mode must be sandbox-safe, got %s", ch.client.BaseURL)
+	if progressive.client.BaseURL != SandboxAPIBase {
+		t.Fatalf("default mode must be sandbox-safe, got %s", progressive.client.BaseURL)
 	}
 
-	// 半配置(client_id 无 secret):production 拒、dev 降级。
+	// 半配置(client_id 无 secret):production 拒、dev 降级为桩。
 	if _, err := NewFromFields(map[string]string{"client_id": "cid-db"}, func(string) string { return "" }, log, true); err == nil {
 		t.Fatal("partial pair in production must fail")
 	}
-	if ch, err := NewFromFields(map[string]string{"client_id": "cid-db"}, func(string) string { return "" }, log, false); ch != nil || err != nil {
-		t.Fatalf("partial pair in dev = disabled, got (%v,%v)", ch, err)
+	if ch, err := NewFromFields(map[string]string{"client_id": "cid-db"}, func(string) string { return "" }, log, false); err != nil {
+		t.Fatalf("partial pair in dev = stub, got err %v", err)
+	} else if _, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("partial pair in dev = stub, got %T", ch)
 	}
 
 	// API base 覆盖(测试通道):显式 PAYPAL_API_BASE 优先于 mode 推导。
@@ -760,7 +791,25 @@ func TestNewFromFields(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("api base override: (%v,%v)", ch, err)
 	}
-	if ch.client.BaseURL != "http://pp.test" {
-		t.Fatalf("explicit api base must win, got %s", ch.client.BaseURL)
+	baseCh, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("api base override must return live *Channel, got %T", ch)
+	}
+	if baseCh.client.BaseURL != "http://pp.test" {
+		t.Fatalf("explicit api base must win, got %s", baseCh.client.BaseURL)
+	}
+}
+
+// ---- Schema()/Caps() 单一真源(静态与实例方法不得漂移) ----
+
+func TestSchemaCapsSingleSource(t *testing.T) {
+	if !reflect.DeepEqual(Schema(), (&Channel{}).ConfigSchema()) {
+		t.Fatal("static Schema() must equal the instance ConfigSchema()")
+	}
+	if !reflect.DeepEqual(Caps(), (&Channel{}).Capabilities()) {
+		t.Fatal("static Caps() must equal the instance Capabilities()")
+	}
+	if Caps().DisplayOrder != 300 || !Caps().CatalogBased || !Caps().SupportsCancelURL {
+		t.Fatalf("Caps() = %+v, want catalog-based cancel-URL paypal at order 300", Caps())
 	}
 }

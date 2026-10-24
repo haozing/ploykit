@@ -216,8 +216,15 @@ func stripeRecurringInterval(i domain.BillingInterval) string {
 	return "month"
 }
 
-func (c *Channel) Capabilities() app.ChannelCaps {
+// Caps is the package-level capability single source: the instance method and
+// the DisabledChannel stub (Disabled) share it, so an unconfigured stripe's
+// admin card keeps its priority slot (200, between waffo 100 and paypal 300).
+func Caps() app.ChannelCaps {
 	return app.ChannelCaps{CatalogBased: false, SupportsCancelURL: true, DisplayOrder: 200}
+}
+
+func (c *Channel) Capabilities() app.ChannelCaps {
+	return Caps()
 }
 
 func (c *Channel) ChannelConfig() app.ChannelConfigInfo {
@@ -228,10 +235,12 @@ func (c *Channel) ChannelConfig() app.ChannelConfigInfo {
 	}
 }
 
-// ConfigSchema implements app.ChannelSchemaViewer (BC-6): the admin channel
-// card renders its form from this descriptor. Field keys are the
-// billing_channel.stripe.* settings keys.
-func (c *Channel) ConfigSchema() []app.FieldSpec {
+// Schema is the package-level ConfigSchema single source (BC-6): the admin
+// channel card, the billing_channel.stripe.* settings keys and the product
+// factory's field lookups all read one descriptor — the instance method
+// delegates here, and Disabled() carries the same schema so the card renders
+// the paste-credentials form before any key exists.
+func Schema() []app.FieldSpec {
 	return []app.FieldSpec{
 		{Key: "secret_key", Label: "Secret key", Type: app.FieldTypeSecret, Required: true,
 			Help: "sk_test_…/sk_live_…;测试/生产各一把,分环境各自保存"},
@@ -244,6 +253,18 @@ func (c *Channel) ConfigSchema() []app.FieldSpec {
 				{Value: "prod", Label: "prod(生产)"},
 			}},
 	}
+}
+
+func (c *Channel) ConfigSchema() []app.FieldSpec { return Schema() }
+
+// Disabled returns the stripe placeholder for the "no secret key" branch of a
+// product's channel factory: registered into the ChannelSet so the admin
+// billing-channels page shows stripe's card (schema renders, credentials can
+// be pasted and saved — the BC-5 chicken-and-egg fix), while OrderedNames
+// filters it out of the active checkout set. Returning the stub instead of
+// nil also removes the typed-nil trap from factory wiring.
+func Disabled() app.PaymentChannel {
+	return app.NewDisabledChannel("stripe", Schema(), Caps())
 }
 
 // stripeEnvByField maps ConfigSchema keys to the env vars their env-fallback

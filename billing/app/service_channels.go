@@ -88,22 +88,21 @@ func (s *BillingAdminService) channelFields(ctx context.Context) (map[string]map
 }
 
 // ChannelCards assembles the admin billing-channels page: one card per
-// registered channel (OrderedNames priority order — F16: unregistered
-// channels show no card), schema from the channel's self-description, values
-// from the DB namespace with secrets masked to __SET__.
+// REGISTERED channel in priority order (OrderedChannels — F16: never
+// registered = no card). Disabled stubs (unconfigured paypal/waffo/stripe
+// factories return app.DisabledChannel) are registered and therefore DO get a
+// card — configured:false, schema rendered — so credentials can be pasted
+// without env bootstrapping (the BC-5 chicken-and-egg fix); values come from
+// the DB namespace with secrets masked to __SET__.
 func (s *BillingAdminService) ChannelCards(ctx context.Context) ([]ChannelCard, error) {
 	fields, err := s.channelFields(ctx)
 	if err != nil {
 		return nil, err
 	}
-	names := s.core.channels.OrderedNames()
-	cards := make([]ChannelCard, 0, len(names))
-	for _, name := range names {
-		ch, ok := s.core.channels.Get(name)
-		if !ok {
-			continue
-		}
-		cards = append(cards, s.channelCard(ch, fields[name]))
+	chs := s.core.channels.OrderedChannels()
+	cards := make([]ChannelCard, 0, len(chs))
+	for _, ch := range chs {
+		cards = append(cards, s.channelCard(ch, fields[ch.Name()]))
 	}
 	return cards, nil
 }

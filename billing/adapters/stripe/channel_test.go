@@ -626,3 +626,42 @@ func TestEnvProvidedKeys_Fix6(t *testing.T) {
 		assert.Equal(t, []string{"secret_key", "webhook_signing_key"}, c.EnvProvidedKeys())
 	})
 }
+
+// ---- Disabled()/Schema()/Caps()（v0.14 disabled-stub 批） ----
+
+// Disabled 是产品工厂「未配 key」分支的返回值：后台渠道页可见可贴密钥
+// （鸡生蛋修复），活动渠道集过滤它。
+func TestDisabledStub(t *testing.T) {
+	stubCh := Disabled()
+	stub, ok := stubCh.(*app.DisabledChannel)
+	require.True(t, ok, "Disabled() must return *app.DisabledChannel, got %T", stubCh)
+	assert.Equal(t, "stripe", stub.Name())
+	cc := stub.ChannelConfig()
+	assert.False(t, cc.Configured)
+	assert.Empty(t, cc.KeyMasked)
+	assert.False(t, cc.WebhookConfigured)
+
+	_, err := stub.CreateCheckout(context.Background(), app.CheckoutRequest{})
+	var we *webx.Error
+	require.ErrorAs(t, err, &we)
+	assert.Equal(t, http.StatusBadRequest, we.Status)
+	assert.Contains(t, we.Message, "stripe")
+	assert.Contains(t, we.Message, "not configured")
+
+	_, err = stub.ParseWebhook(context.Background(), app.WebhookRequest{})
+	require.ErrorAs(t, err, &we)
+	assert.Equal(t, http.StatusBadRequest, we.Status)
+}
+
+// 静态 Schema()/Caps() 与实例方法单一真源（防漂移断言）。
+func TestSchemaCapsSingleSource(t *testing.T) {
+	if !assert.Equal(t, Schema(), (&Channel{}).ConfigSchema()) {
+		t.Fatal("static Schema() must equal the instance ConfigSchema()")
+	}
+	if !assert.Equal(t, Caps(), (&Channel{}).Capabilities()) {
+		t.Fatal("static Caps() must equal the instance Capabilities()")
+	}
+	assert.Equal(t, 200, Caps().DisplayOrder)
+	assert.False(t, Caps().CatalogBased)
+	assert.True(t, Caps().SupportsCancelURL)
+}

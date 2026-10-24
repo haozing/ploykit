@@ -32,7 +32,7 @@ type Sealer struct {
 
 func New(key []byte) (*Sealer, error) {
 	if len(key) != 32 {
-		return nil, fmt.Errorf("sealx: master key must be 32 bytes (AES-256), got %d", len(key))
+		return nil, fmt.Errorf("sealx: master key must be 32 bytes (AES-256), got %d — provide base64 of 32 raw bytes, e.g. openssl rand -base64 32 (a 64-char hex string is 48 bytes when base64-decoded and will be rejected)", len(key))
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {

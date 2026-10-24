@@ -89,21 +89,53 @@ func TestBillingConfig_ViewAssembly(t *testing.T) {
 
 	view := svc.BillingConfig(context.Background())
 
-	require.Len(t, view.Channels, 3)
+	// v0.14：OrderedNames 过滤 !Configured 渠道（disabled 桩语义）——zpay
+	// 不再进 BillingConfig 视图；未配置渠道对 /config 面一律不可见
+	// （stripe 有 knownChannelNames 兜底，其余渠道由后台渠道卡负责展示）。
+	require.Len(t, view.Channels, 2)
 	assert.Equal(t, "plainchan", view.Channels[0].Name)
 	assert.Equal(t, "stripe", view.Channels[1].Name)
-	assert.Equal(t, "zpay", view.Channels[2].Name)
 
 	assert.True(t, view.Channels[1].Configured)
 	assert.Equal(t, "sk_test_***key1", view.Channels[1].KeyMasked)
 	assert.True(t, view.Channels[1].WebhookConfigured)
 
-	assert.False(t, view.Channels[2].Configured)
-	assert.Equal(t, "未配置", view.Channels[2].KeyMasked)
-	assert.False(t, view.Channels[2].WebhookConfigured)
-
 	assert.True(t, view.Channels[0].Configured)
 	assert.Equal(t, "—", view.Channels[0].KeyMasked)
+}
+
+func TestBillingConfig_DisabledStubHidden(t *testing.T) {
+	t.Run("stripe 桩：knownChannelNames 兜底显示 configured:false", func(t *testing.T) {
+		reg := NewChannelRegistry()
+		reg.Register(NewDisabledChannel("stripe", nil, ChannelCaps{DisplayOrder: 200}))
+		reg.Register(&ManualChannel{})
+		svc := NewBillingService(newFakeRepo(), reg, Config{}, BillingHooks{}, nil,
+			func() time.Time { return testNow }, nil)
+
+		view := svc.BillingConfig(context.Background())
+		// 活动集只有 manual；stripe 桩被 OrderedNames 过滤后落入
+		// knownChannelNames 兜底 → 用户可见「未配置」而非消失。
+		require.Len(t, view.Channels, 2)
+		assert.Equal(t, "manual", view.Channels[0].Name)
+		assert.True(t, view.Channels[0].Configured)
+		assert.Equal(t, ChannelConfigView{Name: "stripe", Configured: false, KeyMasked: "未配置"}, view.Channels[1])
+	})
+
+	t.Run("非 stripe 桩：不进视图（stripe 兜底仍在，由后台渠道卡负责展示）", func(t *testing.T) {
+		reg := NewChannelRegistry()
+		reg.Register(NewDisabledChannel("paypal", nil, ChannelCaps{DisplayOrder: 300}))
+		reg.Register(&ManualChannel{})
+		svc := NewBillingService(newFakeRepo(), reg, Config{}, BillingHooks{}, nil,
+			func() time.Time { return testNow }, nil)
+
+		view := svc.BillingConfig(context.Background())
+		// paypal 桩被过滤；stripe 是 knownChannelNames 兜底（未注册恒
+		// 显示未配置，既有语义），manual 是唯一活动渠道。
+		require.Len(t, view.Channels, 2)
+		assert.Equal(t, "manual", view.Channels[0].Name)
+		assert.True(t, view.Channels[0].Configured)
+		assert.Equal(t, ChannelConfigView{Name: "stripe", Configured: false, KeyMasked: "未配置"}, view.Channels[1])
+	})
 }
 
 func TestBillingConfig_UnregisteredBuiltinShowsNotConfigured(t *testing.T) {

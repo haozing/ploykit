@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -234,10 +235,15 @@ func TestNewFromFields(t *testing.T) {
 	}
 	getenv := func(k string) string { return env[k] }
 
-	// 全缺 = 未配置(nil,nil)。
+	// 全缺 = 未配置 → DisabledChannel 桩(nil 不再出现)。
 	ch, err := NewFromFields(nil, func(string) string { return "" }, log, true)
-	if ch != nil || err != nil {
-		t.Fatalf("empty = (nil,nil), got (%v,%v)", ch, err)
+	if err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	if stub, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("empty must return *app.DisabledChannel, got %T", ch)
+	} else if stub.Name() != "waffo" || stub.ChannelConfig().Configured {
+		t.Fatalf("stub = %+v, want unconfigured waffo", stub)
 	}
 
 	// fields 覆盖 env:merchant_id 来自 DB,其余回退 env。
@@ -245,7 +251,11 @@ func TestNewFromFields(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("fields overlay env: (%v,%v)", ch, err)
 	}
-	if got := ch.ChannelConfig().KeyMasked; !strings.Contains(got, "MER") {
+	live, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("fields overlay env must return live *Channel, got %T", ch)
+	}
+	if got := live.ChannelConfig().KeyMasked; !strings.Contains(got, "MER") {
 		t.Fatalf("merchant from DB expected, masked = %q", got)
 	}
 
@@ -267,16 +277,20 @@ func TestNewFromFields(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("catalog mode build: (%v,%v)", ch, err)
 	}
-	if cc := ch.ChannelConfig(); !cc.Configured {
+	catalog, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("catalog mode build must return live *Channel, got %T", ch)
+	}
+	if cc := catalog.ChannelConfig(); !cc.Configured {
 		t.Fatalf("catalog mode with credentials must report configured (products no longer gate it), got %+v", cc)
 	}
-	if ch.mode != ModeProd {
-		t.Fatalf("mode = %q, want prod", ch.mode)
+	if catalog.mode != ModeProd {
+		t.Fatalf("mode = %q, want prod", catalog.mode)
 	}
 	body := webhookBody("subscription.activated", map[string]any{
 		"orderId": "ORD_1", "currency": "USD", "chargedAmount": "19.00",
 	})
-	_, err = ch.ParseWebhook(context.Background(), app.WebhookRequest{
+	_, err = catalog.ParseWebhook(context.Background(), app.WebhookRequest{
 		Header: map[string][]string{"X-Waffo-Signature": {signWebhook(t, testRSA(t), body, time.Now())}},
 		Body:   body,
 	})
@@ -284,12 +298,28 @@ func TestNewFromFields(t *testing.T) {
 		t.Fatalf("prod channel must reject test-mode webhook (body mode=test), got %v", err)
 	}
 
-	// 半配置(merchant 无 key):production 拒、dev 降级。
+	// 半配置(merchant 无 key):production 拒、dev 降级为桩。
 	if _, err := NewFromFields(map[string]string{"merchant_id": "MER_db"}, func(string) string { return "" }, log, true); err == nil {
 		t.Fatal("partial config in production must fail")
 	}
-	if ch, err := NewFromFields(map[string]string{"merchant_id": "MER_db"}, func(string) string { return "" }, log, false); ch != nil || err != nil {
-		t.Fatalf("partial config in dev = disabled, got (%v,%v)", ch, err)
+	if ch, err := NewFromFields(map[string]string{"merchant_id": "MER_db"}, func(string) string { return "" }, log, false); err != nil {
+		t.Fatalf("partial config in dev = stub, got err %v", err)
+	} else if _, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("partial config in dev = stub, got %T", ch)
+	}
+}
+
+// ---- Schema()/Caps() 单一真源(静态与实例方法不得漂移) ----
+
+func TestSchemaCapsSingleSource(t *testing.T) {
+	if !reflect.DeepEqual(Schema(), (&Channel{}).ConfigSchema()) {
+		t.Fatal("static Schema() must equal the instance ConfigSchema()")
+	}
+	if !reflect.DeepEqual(Caps(), (&Channel{}).Capabilities()) {
+		t.Fatal("static Caps() must equal the instance Capabilities()")
+	}
+	if Caps().DisplayOrder != 100 || !Caps().CatalogBased {
+		t.Fatalf("Caps() = %+v, want catalog-based waffo at order 100", Caps())
 	}
 }
 

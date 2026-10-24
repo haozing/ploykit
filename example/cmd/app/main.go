@@ -469,6 +469,11 @@ func main() {
 	// BC-5 热生效渠道注册表：billing_channel.<name>.* 设置行（DB 凭据）优
 	// 先、env 回退（fields 空时 FromEnv/构造走 env——未迁移产品零影响），
 	// 每 30s 轮询重建、原子换指针；后台保存渠道字段后同步 RefreshNow。
+	// 未配置渠道返回 *app.DisabledChannel 桩（waffo/paypal 的 NewFromFields
+	// 与 stripe.Disabled）：后台渠道页出卡可贴密钥（鸡生蛋断链修复——
+	// 凭据齐才注册则永远没有卡可贴），活动渠道集（OrderedNames → /config
+	// billing_channels/checkout）过滤掉桩；接口直返也消掉了工厂里
+	// nil 重包装的 typed-nil 陷阱。
 	channelFactories := map[string]func(fields map[string]string) (billingapp.PaymentChannel, error){
 		"stripe": func(fields map[string]string) (billingapp.PaymentChannel, error) {
 			get := func(field, envName string) string {
@@ -480,27 +485,13 @@ func main() {
 			if k := get("secret_key", "STRIPE_SECRET_KEY"); k != "" {
 				return stripe.New(k, get("webhook_signing_key", "STRIPE_WEBHOOK_SIGNING_KEY")), nil
 			}
-			return nil, nil // 未配置：不注册
+			return stripe.Disabled(), nil // 未配置：注册桩（后台可贴密钥），活动渠道集不含它
 		},
 		"waffo": func(fields map[string]string) (billingapp.PaymentChannel, error) {
-			ch, err := waffo.NewFromFields(fields, os.Getenv, log, production)
-			if err != nil {
-				return nil, err
-			}
-			if ch == nil {
-				return nil, nil // 未配置：不注册
-			}
-			return ch, nil
+			return waffo.NewFromFields(fields, os.Getenv, log, production)
 		},
 		"paypal": func(fields map[string]string) (billingapp.PaymentChannel, error) {
-			ch, err := paypal.NewFromFields(fields, os.Getenv, log, production)
-			if err != nil {
-				return nil, err
-			}
-			if ch == nil {
-				return nil, nil // 未配置：不注册
-			}
-			return ch, nil
+			return paypal.NewFromFields(fields, os.Getenv, log, production)
 		},
 		"manual": func(fields map[string]string) (billingapp.PaymentChannel, error) {
 			infoURL := fields["info_url"]

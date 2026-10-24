@@ -702,7 +702,7 @@ func TestFormatParseAmount(t *testing.T) {
 	}
 }
 
-// ---- FromEnv 装配纪律(BC-1:原 FromEnvStrict 改名,语义不变) ----
+// ---- FromEnv 装配纪律(BC-1:未配置返回 DisabledChannel 桩,nil 不再出现) ----
 
 func TestFromEnv(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(&strings.Builder{}, nil))
@@ -714,24 +714,38 @@ func TestFromEnv(t *testing.T) {
 		return func(k string) string { return m[k] }
 	}
 
+	// 全缺(production 同判):未配置 → DisabledChannel 桩。
 	ch, err := FromEnv(getenv(map[string]string{}), log, true)
-	if ch != nil || err != nil {
-		t.Fatalf("empty env = (nil,nil), got (%v,%v)", ch, err)
+	if err != nil {
+		t.Fatalf("empty env: %v", err)
+	}
+	stub, ok := ch.(*app.DisabledChannel)
+	if !ok {
+		t.Fatalf("empty env must return *app.DisabledChannel, got %T", ch)
+	}
+	if stub.Name() != "waffo" || stub.ChannelConfig().Configured {
+		t.Fatalf("stub = %+v, want unconfigured waffo", stub)
 	}
 
 	partial := map[string]string{EnvMerchantID: "MER_x", EnvPrivateKey: "k"}
 	if _, err := FromEnv(getenv(partial), log, true); err == nil {
 		t.Fatal("partial config in production must fail")
 	}
-	if ch, err := FromEnv(getenv(partial), log, false); ch != nil || err != nil {
-		t.Fatalf("partial config in dev = disabled, got (%v,%v)", ch, err)
+	if ch, err := FromEnv(getenv(partial), log, false); err != nil {
+		t.Fatalf("partial config in dev = stub, got err %v", err)
+	} else if _, ok := ch.(*app.DisabledChannel); !ok {
+		t.Fatalf("partial config in dev = stub, got %T", ch)
 	}
 
 	ch, err = FromEnv(getenv(full), log, true)
 	if err != nil || ch == nil {
 		t.Fatalf("full config: (%v,%v)", ch, err)
 	}
-	if cc := ch.ChannelConfig(); !cc.Configured || cc.WebhookConfigured {
+	live, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("full config must return the live *Channel, got %T", ch)
+	}
+	if cc := live.ChannelConfig(); !cc.Configured || cc.WebhookConfigured {
 		t.Fatalf("channel config = %+v (webhook key unset → must show unconfigured)", cc)
 	}
 }

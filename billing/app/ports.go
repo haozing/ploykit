@@ -48,9 +48,18 @@ type WebhookRequest struct {
 // Two implementations: *ChannelRegistry (products wire channels once at boot,
 // zero-change for existing main.go wiring) and *AtomicRegistry (BC-5 hot
 // reload — DB credentials rebuilt on a poll, pointer swapped atomically).
+//
+// OrderedNames lists only ACTIVE channels (a channel whose ChannelConfig
+// reports !Configured — e.g. a *DisabledChannel stub — is filtered out): it
+// feeds /config billing_channels, checkout and the BillingConfig view, where
+// an unconfigured channel must not appear. OrderedChannels returns the full
+// registered set INCLUDING disabled placeholders — the admin billing-channels
+// page enumerates it so unconfigured channels still get a card to paste
+// credentials into.
 type ChannelSet interface {
 	Get(name string) (PaymentChannel, bool)
 	OrderedNames() []string
+	OrderedChannels() []PaymentChannel
 }
 
 type ChannelRegistry struct {
@@ -77,11 +86,20 @@ func (r *ChannelRegistry) Get(name string) (PaymentChannel, bool) {
 // framework defaults (stripe 200) but stay above manual (900).
 const DefaultChannelDisplayOrder = 500
 
-// OrderedNames returns channel names sorted by (DisplayOrder asc, name asc)
-// so /config billing_channels is a priority list the frontend can take as-is
-// (F18): first entry = recommended channel, no product-side re-sorting.
+// OrderedNames returns ACTIVE channel names sorted by (DisplayOrder asc,
+// name asc) so /config billing_channels is a priority list the frontend can
+// take as-is (F18): first entry = recommended channel, no product-side
+// re-sorting. Channels whose ChannelConfigViewer reports !Configured
+// (disabled stubs) are excluded — see orderedNamesOf.
 func (r *ChannelRegistry) OrderedNames() []string {
 	return orderedNamesOf(r.channels)
+}
+
+// OrderedChannels returns every registered channel (disabled stubs included)
+// in the same (DisplayOrder asc, name asc) order — the admin channel-cards
+// page enumerates this.
+func (r *ChannelRegistry) OrderedChannels() []PaymentChannel {
+	return orderedChannelsOf(r.channels)
 }
 
 // ChannelCaps is a channel's declared shape of difference. The registry and

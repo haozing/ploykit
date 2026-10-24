@@ -50,7 +50,11 @@ var waffoCapabilities = app.ChannelCaps{
 	Currencies:        []string{"USD", "EUR", "GBP", "HKD", "JPY"},
 }
 
-func (c *Channel) Capabilities() app.ChannelCaps { return waffoCapabilities }
+// Caps 是包级能力声明单一真源:实例方法与 DisabledChannel 桩共用(未配置
+// waffo 的后台卡片排序/币种声明与真渠道一致)。
+func Caps() app.ChannelCaps { return waffoCapabilities }
+
+func (c *Channel) Capabilities() app.ChannelCaps { return Caps() }
 
 // createSessionReq POST /v1/actions/checkout/create-session 请求体。
 // 全部字段见 docs/api-reference/endpoints/orders/create-checkout-session。
@@ -363,13 +367,14 @@ func (c *Channel) ChannelConfig() app.ChannelConfigInfo {
 	}
 }
 
-// ConfigSchema 实现 app.ChannelSchemaViewer(BC-6):后台渠道卡的表单按
-// 此描述符渲染,字段键同时是 billing_channel.waffo.<field> 设置键与
-// NewFromFields 的 fields 键 —— 三处一份真源。每个字段的 Help 都注明
+// Schema 是包级 ConfigSchema 单一真源(BC-6):实例方法、DisabledChannel 桩
+// (FromEnv/NewFromFields 未配置分支)、后台渠道卡的表单渲染共用此描述符,
+// 字段键同时是 billing_channel.waffo.<field> 设置键与 NewFromFields 的
+// fields 键 —— 三处一份真源。每个字段的 Help 都注明
 // 「清空=回退 env」:管理员清空字段保存后,该值会回退到环境变量提供的
 // 值(NewFromFields 的 fields-优先-env-回退装配),不是"清空即删除配置"
 // —— 不写明这一点,管理员会误以为清空能彻底摘掉某个值(P3-7)。
-func (c *Channel) ConfigSchema() []app.FieldSpec {
+func Schema() []app.FieldSpec {
 	return []app.FieldSpec{
 		{Key: FieldMerchantID, Label: "Merchant ID", Type: app.FieldTypeText, Required: true,
 			Help: "waffo 后台 Dashboard → API & Development 复制(MER_ 开头);清空保存后将回退到环境变量提供的值"},
@@ -391,6 +396,8 @@ func (c *Channel) ConfigSchema() []app.FieldSpec {
 			}},
 	}
 }
+
+func (c *Channel) ConfigSchema() []app.FieldSpec { return Schema() }
 
 // EnvProvidedKeys 返回进程环境变量当前实际提供(os.Getenv 非空)的配置
 // 字段键(与 ConfigSchema 的 Key 同名;env 变量名走 NewFromFields/

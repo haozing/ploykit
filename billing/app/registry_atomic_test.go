@@ -141,6 +141,87 @@ func TestAtomicRegistry_InitialSourceErrorBootsEnvOnly(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// typedNilChannel 模拟真实事故形态：工厂返回 (*atomicTestChannel)(nil)
+// 直返 —— 具体 nil 指针包进非 nil 接口。
+type typedNilChannel = atomicTestChannel
+
+func TestAtomicRegistry_TypedNilFactorySkipped(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	reg := NewAtomicRegistry(ctx, nil, func(context.Context) (map[string]map[string]string, error) {
+		return map[string]map[string]string{}, nil
+	}, map[string]func(map[string]string) (PaymentChannel, error){
+		"ghost": func(map[string]string) (PaymentChannel, error) {
+			var nilCh *typedNilChannel
+			return nilCh, nil // typed-nil：接口非 nil、指针为 nil
+		},
+		"manual": func(map[string]string) (PaymentChannel, error) {
+			return &atomicTestChannel{name: "manual"}, nil
+		},
+	}, time.Hour)
+
+	// 幽灵渠道必须被拦下：不进 Get、不进 OrderedNames/OrderedChannels。
+	_, ok := reg.Get("ghost")
+	assert.False(t, ok, "typed-nil 工厂产物不得注册（调用 Name() 能过但真用必炸）")
+	assert.Equal(t, []string{"manual"}, reg.OrderedNames())
+	require.Len(t, reg.OrderedChannels(), 1)
+	assert.Equal(t, "manual", reg.OrderedChannels()[0].Name())
+}
+
+func TestAtomicRegistry_DisabledStubHiddenFromOrderedNames(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	reg := NewAtomicRegistry(ctx, nil, func(context.Context) (map[string]map[string]string, error) {
+		return map[string]map[string]string{}, nil
+	}, map[string]func(map[string]string) (PaymentChannel, error){
+		// 未配置 paypal → 桩（v0.14 disabled-stub 语义）。
+		"paypal": func(map[string]string) (PaymentChannel, error) {
+			return NewDisabledChannel("paypal", []FieldSpec{{Key: "client_id", Type: FieldTypeText, Required: true}},
+				ChannelCaps{CatalogBased: true, DisplayOrder: 300}), nil
+		},
+		"waffo": func(map[string]string) (PaymentChannel, error) {
+			return &atomicTestChannel{name: "waffo", order: 100}, nil
+		},
+		"manual": func(map[string]string) (PaymentChannel, error) {
+			return &atomicTestChannel{name: "manual", order: 900}, nil
+		},
+	}, time.Hour)
+
+	// 活动渠道集（/config、BillingConfig、checkout）不含桩。
+	assert.Equal(t, []string{"waffo", "manual"}, reg.OrderedNames())
+
+	// 全量枚举（后台渠道卡）含桩，顺序仍按 DisplayOrder+name。
+	chs := reg.OrderedChannels()
+	require.Len(t, chs, 3)
+	assert.Equal(t, "waffo", chs[0].Name())
+	assert.Equal(t, "paypal", chs[1].Name())
+	assert.Equal(t, "manual", chs[2].Name())
+
+	// 桩在注册表里：UpdateChannelFields 的 channels.Get 能命中（鸡生蛋修复）。
+	stub, ok := reg.Get("paypal")
+	require.True(t, ok)
+	_, isViewer := stub.(ChannelConfigViewer)
+	require.True(t, isViewer)
+	assert.False(t, stub.(ChannelConfigViewer).ChannelConfig().Configured)
+}
+
+func TestChannelRegistry_DisabledStubHiddenFromOrderedNames(t *testing.T) {
+	reg := NewChannelRegistry()
+	reg.Register(&atomicTestChannel{name: "waffo", order: 100})
+	reg.Register(NewDisabledChannel("stripe", nil, ChannelCaps{DisplayOrder: 200}))
+	reg.Register(&atomicTestChannel{name: "manual", order: 900})
+
+	// 静态注册表同款过滤：产品静态注册桩也能正确隐藏（活动集）。
+	assert.Equal(t, []string{"waffo", "manual"}, reg.OrderedNames())
+	chs := reg.OrderedChannels()
+	require.Len(t, chs, 3)
+	assert.Equal(t, "waffo", chs[0].Name())
+	assert.Equal(t, "stripe", chs[1].Name())
+	assert.Equal(t, "manual", chs[2].Name())
+}
+
 // ---- CreateCheckout 目录解析（BC-7） ----
 
 type catalogChannel struct {
@@ -418,6 +499,91 @@ func TestUpdateChannelFields_Semantics(t *testing.T) {
 		require.ErrorAs(t, err, &we)
 		assert.Equal(t, 400, we.Status, "未实现 ChannelSchemaViewer 的渠道不可后台编辑")
 	})
+}
+
+// ---- disabled 桩的后台自助启用（v0.14：鸡生蛋断链修复） ----
+
+// catStubSchema 与 schemaChannel.ConfigSchema 同构（3 字段）——桩/真渠道
+// 共用一份字段面，模拟适配器静态 Schema() 单一真源。
+func catStubSchema() []FieldSpec {
+	return []FieldSpec{
+		{Key: "merchant_id", Label: "Merchant ID", Type: FieldTypeText, Required: true},
+		{Key: "private_key", Label: "私钥", Type: FieldTypeSecret, Required: true},
+		{Key: "mode", Label: "模式", Type: FieldTypeSelect, Options: []FieldOption{{Value: "test"}, {Value: "prod"}}},
+	}
+}
+
+func TestChannelCards_DisabledStubAndSelfServeEnable(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store := newFakeChannelSettings()
+	// 工厂纪律 = waffo/paypal NewFromFields：凭据齐 → 真渠道；否则桩。
+	factories := map[string]func(map[string]string) (PaymentChannel, error){
+		"cat": func(f map[string]string) (PaymentChannel, error) {
+			if f["merchant_id"] != "" && f["private_key"] != "" {
+				ch := &schemaChannel{}
+				ch.catalogChannel = catalogChannel{name: "cat"}
+				return ch, nil
+			}
+			return NewDisabledChannel("cat", catStubSchema(), ChannelCaps{CatalogBased: true, DisplayOrder: 100}), nil
+		},
+	}
+	reg := NewAtomicRegistry(ctx, nil, store.BillingChannelFields, factories, time.Hour)
+	core := NewBillingService(newFakeRepo(), reg, Config{}, BillingHooks{}, nil, func() time.Time { return testNow }, nil)
+	svc := NewBillingAdminService(core, nil, func() time.Time { return testNow }, nil).
+		WithChannelSettings(store).WithChannelRefresher(reg)
+
+	// 起点：未配置 → 桩出卡（configured:false + schema 渲染），修复前这里
+	// 是「没有卡、没有端点可保存，永远只能 env 启用」。
+	cards, err := svc.ChannelCards(ctx)
+	require.NoError(t, err)
+	require.Len(t, cards, 1)
+	stubCard := cards[0]
+	assert.Equal(t, "cat", stubCard.Name)
+	assert.False(t, stubCard.Configured)
+	assert.Equal(t, keyNotConfigured, stubCard.KeyMasked)
+	require.Len(t, stubCard.Schema, 3, "schema 必须渲染——这是贴密钥的表单")
+	assert.True(t, stubCard.Capabilities.CatalogBased)
+	assert.Equal(t, map[string]string{"merchant_id": "", "private_key": "", "mode": ""}, stubCard.Values)
+	assert.Equal(t, "env", stubCard.ConfigSource)
+
+	// 半贴（只存 merchant_id）：PUT 命中桩（Get 不再 404），保存成功但
+	// 凭据仍不齐 → 仍是桩卡，值已回显。
+	card, err := svc.UpdateChannelFields(ctx, principal(), "cat", map[string]string{"merchant_id": "MER_9"})
+	require.NoError(t, err, "桩在注册表里——channels.Get 命中，不再 404")
+	assert.False(t, card.Configured)
+	assert.Equal(t, "MER_9", card.Values["merchant_id"])
+	assert.Equal(t, "db", card.ConfigSource)
+
+	// 凭据贴齐：PUT → SetMany → RefreshNow 重建出真渠道 → 响应卡翻正。
+	card, err = svc.UpdateChannelFields(ctx, principal(), "cat", map[string]string{"private_key": "sk-secret"})
+	require.NoError(t, err)
+	assert.True(t, card.Configured, "凭据齐后 RefreshNow 重建真渠道，响应卡 configured 翻 true")
+	assert.Equal(t, "MER_***x12", card.KeyMasked)
+	assert.True(t, card.WebhookConfigured)
+	assert.Equal(t, "__SET__", card.Values["private_key"], "secret 读回掩码")
+	assert.Equal(t, "MER_9", card.Values["merchant_id"])
+
+	// 翻正后：活动渠道集（OrderedNames）出现该渠道；卡片枚举仍含它。
+	assert.Equal(t, []string{"cat"}, reg.OrderedNames())
+}
+
+func TestChannelCards_RealChannelUnaffectedByStubFilter(t *testing.T) {
+	// 真渠道（恒 Configured:true）混桩：卡序与内容不受过滤影响。
+	settings := newFakeChannelSettings()
+	stub := NewDisabledChannel("paypal", catStubSchema(), ChannelCaps{CatalogBased: true, DisplayOrder: 300})
+	real := &schemaChannel{}
+	real.catalogChannel = catalogChannel{name: "waffo"}
+	svc := newChannelAdminSvc(t, settings, stub, real)
+
+	cards, err := svc.ChannelCards(context.Background())
+	require.NoError(t, err)
+	require.Len(t, cards, 2)
+	assert.Equal(t, "waffo", cards[0].Name, "DisplayOrder 100 < 300")
+	assert.True(t, cards[0].Configured)
+	assert.Equal(t, "paypal", cards[1].Name)
+	assert.False(t, cards[1].Configured)
 }
 
 func TestRegisterAndSyncChannelProduct(t *testing.T) {

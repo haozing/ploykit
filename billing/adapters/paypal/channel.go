@@ -50,7 +50,11 @@ var paypalCapabilities = app.ChannelCaps{
 	},
 }
 
-func (c *Channel) Capabilities() app.ChannelCaps { return paypalCapabilities }
+// Caps 是包级能力声明单一真源:实例方法与 DisabledChannel 桩共用(未配置
+// paypal 的后台卡片排序/币种声明与真渠道一致)。
+func Caps() app.ChannelCaps { return paypalCapabilities }
+
+func (c *Channel) Capabilities() app.ChannelCaps { return Caps() }
 
 // ---- CreateCheckout(BC-2 签名;BC-7 目录映射) ----
 
@@ -438,10 +442,11 @@ func (c *Channel) clientID() string {
 	return c.client.ClientID
 }
 
-// ConfigSchema 实现 app.ChannelSchemaViewer(BC-6):后台渠道卡的表单按
-// 此描述符渲染,字段键同时是 billing_channel.paypal.<field> 设置键与
-// NewFromFields 的 fields 键 —— 三处一份真源。
-func (c *Channel) ConfigSchema() []app.FieldSpec {
+// Schema 是包级 ConfigSchema 单一真源(BC-6):实例方法、DisabledChannel 桩
+// (FromEnv/NewFromFields 未配置分支)、后台渠道卡的表单渲染共用此描述符,
+// 字段键同时是 billing_channel.paypal.<field> 设置键与 NewFromFields 的
+// fields 键 —— 三处一份真源。
+func Schema() []app.FieldSpec {
 	return []app.FieldSpec{
 		{Key: FieldClientID, Label: "Client ID", Type: app.FieldTypeText, Required: true,
 			Help: "PayPal 开发者后台 App 的 Client ID(sandbox/live 两套凭据各自独立,勿混用)"},
@@ -459,6 +464,8 @@ func (c *Channel) ConfigSchema() []app.FieldSpec {
 			}},
 	}
 }
+
+func (c *Channel) ConfigSchema() []app.FieldSpec { return Schema() }
 
 // EnvProvidedKeys 返回进程 env 当前已提供(os.Getenv 非空)的本渠道配置键,
 // 键名与 ConfigSchema 的 Key 一致(client_id/client_secret/webhook_id/

@@ -28,10 +28,11 @@ func TestLiveEnvKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromEnv: %v", err)
 	}
-	if ch == nil {
-		t.Fatal("channel not built from live env")
+	live, ok := ch.(*Channel)
+	if !ok {
+		t.Fatalf("channel not built from live env, got %T", ch)
 	}
-	if cc := ch.ChannelConfig(); !cc.Configured || !cc.WebhookConfigured {
+	if cc := live.ChannelConfig(); !cc.Configured || !cc.WebhookConfigured {
 		t.Fatalf("channel config = %+v, want both configured", cc)
 	}
 }

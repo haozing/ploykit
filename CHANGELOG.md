@@ -9,6 +9,31 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+### Added
+- **billing**: self-serve onboarding for not-yet-configured channels —
+  factories now return an `app.DisabledChannel` stub instead of nil when
+  credentials are absent (waffo/paypal `FromEnv`/`NewFromFields`; stripe
+  gains `stripe.Disabled()`). The stub carries the schema/capabilities
+  descriptors, so the admin channel page renders a form for channels that
+  have no credentials yet (configured: false) and `PUT` saves them —
+  previously `ChannelCards` listed only registered channels and
+  `UpdateChannelFields` 404'd unregistered names, a chicken-and-egg that
+  made UI onboarding impossible for new channels (found adopting
+  AtomicRegistry in shuijing). `FromEnv`/`NewFromFields` now return
+  `app.PaymentChannel` directly — the typed-nil ghost-registration trap
+  (concrete nil pointer as non-nil interface) is structurally impossible,
+  and `rebuild` additionally reflect-guards factories that still return
+  typed-nil. `OrderedNames()` filters `Configured:false` channels from
+  `/config` and the billing config view; `OrderedChannels()` (new,
+  `ChannelSet` breaking addition) enumerates all instances for the admin
+  cards. Adapters expose package-level `Schema()`/`Caps()` with instance
+  methods delegating (single source, drift-pinned by DeepEqual tests).
+- **platform/sealx**: the key-format error now tells you the expected
+  format (`openssl rand -base64 32`; a 64-char hex string base64-decodes to
+  48 bytes and is rejected).
+
 ## [0.13.0] — 2026-10-24
 
 Payment-channel framework batch (waffo upstream, credentials-in-DB hot

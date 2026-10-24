@@ -45,5 +45,10 @@ func TestSealWrongKeyRejected(t *testing.T) {
 
 func TestNewKeyLength(t *testing.T) {
 	_, err := New([]byte("short"))
-	assert.Error(t, err)
+	require.Error(t, err, "non-32-byte key must be rejected")
+	// v0.14：报错文案带格式指引——64 位 hex 串被 base64 解码后是 48 字节,
+	// 是最常见的误配形态,文案必须一步指出正确格式。
+	assert.Contains(t, err.Error(), "must be 32 bytes (AES-256)")
+	assert.Contains(t, err.Error(), "openssl rand -base64 32")
+	assert.Contains(t, err.Error(), "64-char hex string is 48 bytes when base64-decoded")
 }

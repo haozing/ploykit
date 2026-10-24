@@ -49,6 +49,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/haozing/ploykit/billing/app"
 )
 
 // 环境变量名(密钥一律走 env 或 BC-5 后台落库,绝不入日志)。
@@ -101,10 +103,13 @@ type Config struct {
 }
 
 // FromEnv 从环境装配渠道,纪律照抄 waffo.FromEnv:四个必填变量
-// (client_id+client_secret+webhook_id+mode)全缺 = 未配置 (nil,nil),产品照常
-// 跑(无支付渠道);缺任何一个 = 配置事故 —— production 直接报错拒启
-// (收银台半残等于丢钱),dev 打 warn 降级跳过,不挡本地开发。
-func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Channel, error) {
+// (client_id+client_secret+webhook_id+mode)全缺 = 未配置,返回
+// *app.DisabledChannel 桩(后台渠道页可见可贴密钥,活动渠道集 /config
+// 不含它);缺任何一个 = 配置事故 —— production 直接报错拒启
+// (收银台半残等于丢钱),dev 打 warn 降级为桩,不挡本地开发。
+// 返回类型是 app.PaymentChannel 接口直返:typed-nil 陷阱(nil *Channel
+// 包成非 nil 接口)从签名上消失,调用方无需再判 nil 重包装。
+func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (app.PaymentChannel, error) {
 	clientID := getenv(EnvClientID)
 	clientSecret := getenv(EnvClientSecret)
 	webhookID := getenv(EnvWebhookID)
@@ -123,7 +128,7 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 	}
 	switch len(missing) {
 	case 4:
-		return nil, nil // 未配置:paypal 不进渠道注册表,/config 也不会暴露
+		return unconfiguredStub(), nil // 未配置:注册桩,后台可贴密钥启用
 	case 0:
 		// 完整,落到下方 New
 	default:
@@ -132,16 +137,26 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 				strings.Join(missing, ", "))
 		}
 		log.Warn("paypal: partial paypal config, channel disabled", "missing", strings.Join(missing, ","))
-		return nil, nil
+		return unconfiguredStub(), nil
 	}
 
-	return New(Config{
+	ch, err := New(Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		WebhookID:    webhookID,
 		Mode:         mode,
 		APIBase:      getenv(EnvAPIBase),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return ch, nil
+}
+
+// unconfiguredStub builds the paypal DisabledChannel placeholder (schema/caps
+// from the package-level single sources).
+func unconfiguredStub() app.PaymentChannel {
+	return app.NewDisabledChannel("paypal", Schema(), Caps())
 }
 
 // NewFromFields 按 BC-5 装配:字段值(fields,键=ConfigSchema 字段名,来自
@@ -149,9 +164,11 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 // 不断)。与 FromEnv 的纪律差异:webhook_id/mode 不再必填 —— DB 渐进配置期
 // 允许先通收银台后贴 webhook id(半残态由 ChannelConfig().WebhookConfigured
 // 如实暴露),mode 缺省 test(沙箱安全方向:配错只炸收银台,不会拿沙箱
-// 密钥打到生产 API);client_id+client_secret 仍全缺=(nil,nil) 未配置、
-// 缺一报错(production 拒启/dev 降级),与 waffo.NewFromFields 同哲学。
-func NewFromFields(fields map[string]string, getenv func(string) string, log *slog.Logger, production bool) (*Channel, error) {
+// 密钥打到生产 API);client_id+client_secret 仍全缺=未配置(返回
+// DisabledChannel 桩,后台渠道页可见可贴密钥)、缺一报错(production
+// 拒启/dev 降级为桩),与 waffo.NewFromFields 同哲学。返回类型是
+// app.PaymentChannel 接口直返 —— typed-nil 陷阱从签名上消失。
+func NewFromFields(fields map[string]string, getenv func(string) string, log *slog.Logger, production bool) (app.PaymentChannel, error) {
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
@@ -172,23 +189,27 @@ func NewFromFields(fields map[string]string, getenv func(string) string, log *sl
 	}
 	switch len(missing) {
 	case 2:
-		return nil, nil // 未配置:paypal 不进渠道注册表
+		return unconfiguredStub(), nil // 未配置:注册桩,后台可贴密钥启用
 	case 1:
 		if production {
 			return nil, fmt.Errorf("paypal: partial paypal config (missing %s) would ship a dead checkout",
 				missing[0])
 		}
 		log.Warn("paypal: partial paypal config, channel disabled", "missing", strings.Join(missing, ","))
-		return nil, nil
+		return unconfiguredStub(), nil
 	}
 
-	return New(Config{
+	ch, err := New(Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		WebhookID:    lookup(FieldWebhookID),
 		Mode:         lookup(FieldMode),
 		APIBase:      getenv(EnvAPIBase),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return ch, nil
 }
 
 // normalizeMode 收敛 "test"/"prod"(大小写;sandbox→test、production/live→prod

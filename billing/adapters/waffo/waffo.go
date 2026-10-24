@@ -53,6 +53,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/haozing/ploykit/billing/app"
 )
 
 // 环境变量名(生产部署清单见 docs;密钥一律走 env 或 BC-5 后台落库,绝不入日志)。
@@ -117,11 +119,13 @@ type Config struct {
 const DefaultAPIBase = "https://api.waffo.ai"
 
 // FromEnv 从环境装配渠道(BC-1 上游化定名,原产品仓 FromEnvStrict),装配纪律
-// 与 bracelet.ProviderFromEnvStrict 同哲学:四个必填变量全缺 = 未配置
-// (nil, nil),产品照常跑(无支付渠道);缺任何一个 = 配置事故 ——
-// production 直接报错拒启(收银台半残等于丢钱),dev 打 warn 降级跳过,
-// 不挡本地开发。
-func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Channel, error) {
+// 与 bracelet.ProviderFromEnvStrict 同哲学:四个必填变量全缺 = 未配置,
+// 返回 *app.DisabledChannel 桩(后台渠道页可见可贴密钥,活动渠道集
+// /config 不含它);缺任何一个 = 配置事故 —— production 直接报错拒启
+// (收银台半残等于丢钱),dev 打 warn 降级为桩,不挡本地开发。
+// 返回类型是 app.PaymentChannel 接口直返:typed-nil 陷阱(nil *Channel 包成
+// 非 nil 接口)从签名上消失,调用方无需再判 nil 重包装。
+func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (app.PaymentChannel, error) {
 	merchant := getenv(EnvMerchantID)
 	privKey := getenv(EnvPrivateKey)
 	prodMonthly := getenv(EnvProductMonthly)
@@ -140,7 +144,7 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 	}
 	switch len(missing) {
 	case 4:
-		return nil, nil // 未配置:waffo 不进渠道注册表,/config 也不会暴露
+		return unconfiguredStub(), nil // 未配置:注册桩,后台可贴密钥启用
 	case 0:
 		// 完整,落到下方 New
 	default:
@@ -149,7 +153,7 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 				strings.Join(missing, ", "))
 		}
 		log.Warn("waffo: partial waffo config, channel disabled", "missing", strings.Join(missing, ","))
-		return nil, nil
+		return unconfiguredStub(), nil
 	}
 
 	taxIncluded := true
@@ -161,7 +165,7 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 		taxIncluded = b
 	}
 
-	return New(Config{
+	ch, err := New(Config{
 		MerchantID:       merchant,
 		PrivateKey:       privKey,
 		ProductMonthly:   prodMonthly,
@@ -173,15 +177,27 @@ func FromEnv(getenv func(string) string, log *slog.Logger, production bool) (*Ch
 		StoreID:          getenv(EnvStoreID),
 		Mode:             normalizeMode(getenv(EnvMode)),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return ch, nil
+}
+
+// unconfiguredStub builds the waffo DisabledChannel placeholder (schema/caps
+// from the package-level single sources).
+func unconfiguredStub() app.PaymentChannel {
+	return app.NewDisabledChannel("waffo", Schema(), Caps())
 }
 
 // NewFromFields 按 BC-5 装配:字段值(fields,键=ConfigSchema 字段名,来自
 // billing_channel.waffo.* 设置行)优先,缺失回退进程 env(env-only 老接法
 // 不断)。与 FromEnv 的纪律差异:静态商品 id 不再必填 —— 目录模式
 // (BC-7)下商品在后台注册、checkout 经 CheckoutRequest.ChannelProductID
-// 解析,merchant_id/private_key 仍全缺=(nil,nil) 未配置、缺一报错
-// (production 拒启/dev 降级),与 FromEnv 同哲学。
-func NewFromFields(fields map[string]string, getenv func(string) string, log *slog.Logger, production bool) (*Channel, error) {
+// 解析,merchant_id/private_key 仍全缺=未配置(返回 DisabledChannel 桩,
+// 后台渠道页可见可贴密钥)、缺一报错(production 拒启/dev 降级为桩),
+// 与 FromEnv 同哲学。返回类型是 app.PaymentChannel 接口直返 —— typed-nil
+// 陷阱从签名上消失。
+func NewFromFields(fields map[string]string, getenv func(string) string, log *slog.Logger, production bool) (app.PaymentChannel, error) {
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
@@ -202,14 +218,14 @@ func NewFromFields(fields map[string]string, getenv func(string) string, log *sl
 	}
 	switch len(missing) {
 	case 2:
-		return nil, nil // 未配置:waffo 不进渠道注册表
+		return unconfiguredStub(), nil // 未配置:注册桩,后台可贴密钥启用
 	case 1:
 		if production {
 			return nil, fmt.Errorf("waffo: partial waffo config (missing %s) would ship a dead checkout",
 				missing[0])
 		}
 		log.Warn("waffo: partial waffo config, channel disabled", "missing", strings.Join(missing, ","))
-		return nil, nil
+		return unconfiguredStub(), nil
 	}
 
 	taxIncluded := true
@@ -228,7 +244,7 @@ func NewFromFields(fields map[string]string, getenv func(string) string, log *sl
 		taxIncluded = b
 	}
 
-	return New(Config{
+	ch, err := New(Config{
 		MerchantID:       merchant,
 		PrivateKey:       privKey,
 		ProductMonthly:   lookup(FieldProductMonthly),
@@ -240,6 +256,10 @@ func NewFromFields(fields map[string]string, getenv func(string) string, log *sl
 		StoreID:          lookup(FieldStoreID),
 		Mode:             normalizeMode(lookup(FieldMode)),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return ch, nil
 }
 
 // normalizeMode 收敛 "test"/"prod"(大小写/production 别名);其余值视为未声明。
