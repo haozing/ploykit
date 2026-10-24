@@ -117,7 +117,8 @@ func (c *Client) token(ctx context.Context) (string, error) {
 	return c.accessToken, nil
 }
 
-// do 取 token、发送、解码。path 必须以 / 开头;body 为 nil 时发空 JSON 体。
+// do 取 token、发送、解码。path 必须以 / 开头;body 为 nil 时不带请求体
+// (GET 列目录等只读端点 —— GET 带 body 是互操作雷,别发)。
 // PayPal 成功响应没有统一包裹(区别于 waffo 的 {"data":...}),直接把 body
 // 解进 out;out 为 nil 时只看状态码(update-pricing-schemes/cancel 都是 204)。
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {
@@ -130,8 +131,6 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 		if raw, err = json.Marshal(body); err != nil {
 			return fmt.Errorf("paypal: encode request: %w", err)
 		}
-	} else {
-		raw = []byte("{}")
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bytes.NewReader(raw))
 	if err != nil {

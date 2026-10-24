@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,12 +32,22 @@ func (c *Channel) Name() string { return "paypal" }
 // paypalCapabilities 能力声明(BC-2):目录型渠道(product+plan 预注册,
 // checkout 只带 plan_id)、支持取消 URL(application_context.cancel_url
 // 必填,买家在 PayPal 页可取消回跳)、DisplayOrder 300(waffo 100 <
-// stripe 200 < paypal 300 < manual 900)、币种白名单留空 —— PayPal
-// 可用币种随商户账户能力变化,静态白名单只会误伤。
+// stripe 200 < paypal 300 < manual 900)、订阅币种白名单(PayPal
+// Subscriptions 官方支持的币种集,来源:developer.paypal.com/reference/
+// currency-codes 的 recurring payments 适用集;不含三位小数币 KWD/BHD/
+// JOD 等 —— billing/money 的分↔展示串换算只支持 0/2 位小数)。白名单外的
+// plan.currency 在结账(CreateCheckout)与注册(SyncPrice/RegisterProduct
+// 共用的 planPrice)出网前快速失败,不让用户走到收银台才炸(与 waffo 同款
+// 纪律;具体币种可用性仍随商户账户所在国变化,那层由 PayPal 侧报错兜底)。
 var paypalCapabilities = app.ChannelCaps{
 	CatalogBased:      true,
 	SupportsCancelURL: true,
 	DisplayOrder:      300,
+	Currencies: []string{
+		"USD", "EUR", "GBP", "AUD", "CAD", "JPY", "SGD", "HKD", "NZD", "CHF",
+		"SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "ILS", "MXN", "BRL", "MYR",
+		"PHP", "TWD", "THB",
+	},
 }
 
 func (c *Channel) Capabilities() app.ChannelCaps { return paypalCapabilities }
@@ -103,6 +115,11 @@ func (c *Channel) CreateCheckout(ctx context.Context, req app.CheckoutRequest) (
 		return domain.CheckoutSession{}, webx.NewValidation(fmt.Sprintf(
 			"paypal channel: no plan registered for plan %s (%s); register it in the admin billing page",
 			order.PlanCode, string(order.Interval)))
+	}
+	// 币种白名单(BC-2,Capabilities().Currencies,与注册侧 planPrice 同源):
+	// 出网前快速失败,白名单外币种的订单不让用户走到 PayPal 页才炸。
+	if !supportedCurrency(order.Currency) {
+		return domain.CheckoutSession{}, webx.NewValidation("paypal channel: subscription currency not supported: " + strings.ToUpper(strings.TrimSpace(order.Currency)))
 	}
 
 	body := createSubscriptionReq{
@@ -343,12 +360,19 @@ func (c *Channel) ParseWebhook(ctx context.Context, req app.WebhookRequest) (dom
 		//     SALE 后到则 addInterval 是绝对值重设到期日(非叠加),
 		//     不会把 pro_until 推两个周期 —— 两种次序都安全,故这里
 		//     不做周期号区分(PayPal 也不给)。
-		//   * sale 对象没有 custom_id,OrderID 留空,订阅推进完全走
-		//     SubscriptionRef(billing_agreement_id=SUB-xxx)路径。
+		//   * OrderID:订阅创建时我们把 ploykit 订单号塞进订阅 custom_id,
+		//     PayPal 在订阅付款的 sale 资源里原样回带(社区与官方
+		//     Subscriptions webhook 文档一致的载荷形态)→ 原样落
+		//     ev.OrderID,内核 handleRenewed 的两条防线(落 payment_intent、
+		//     按当前 plan 价对账)都以它为门;个别载荷缺失时留空,
+		//     内核退化 SubscriptionRef 路径推进并跳过对账,不误伤。
+		//   * 金额按事件币种解析:JPY 等零小数位币种会把 "4500.00" 回显
+		//     形态发回来,ParseAmountForCurrency 剥掉全零小数位。
 		ev.Type = domain.EventSubscriptionRenewed
+		ev.OrderID = res.CustomID
 		ev.SubscriptionRef = res.BillingAgreementID
 		ev.ChannelRef = res.BillingAgreementID
-		ev.AmountCents = money.ParseAmount(res.Amount.amount())
+		ev.AmountCents = money.ParseAmountForCurrency(res.Amount.amount(), res.Amount.currency())
 		ev.Currency = res.Amount.currency()
 		ev.PaymentIntentRef = res.ID // sale id:退款反查锚(SetOrderPaymentIntentRef)
 	case "BILLING.SUBSCRIPTION.CANCELLED":
@@ -360,12 +384,16 @@ func (c *Channel) ParseWebhook(ctx context.Context, req app.WebhookRequest) (dom
 		// 金额取本次退款额(resource.amount);载荷缺失时退化累计额
 		// (total_refunded_amount)。"amount_refunded" 字段在 PayPal
 		// refund 对象里不存在(实测 schema:amount + total_refunded_amount)。
+		// 金额解析按其来源字段的币种走(JPY 零小数位币的 "4500.00"
+		// 回显形态同样要剥)。
 		ev.Type = domain.EventRefundCreated
 		amount := res.Amount.amount()
+		amountCurrency := res.Amount.currency()
 		if amount == "" {
 			amount = res.TotalRefundedAmount.amount()
+			amountCurrency = res.TotalRefundedAmount.currency()
 		}
-		ev.AmountCents = money.ParseAmount(amount)
+		ev.AmountCents = money.ParseAmountForCurrency(amount, amountCurrency)
 		ev.Currency = firstNonEmpty(res.Amount.currency(), res.TotalRefundedAmount.currency())
 		// 订单反查:refund 对象优先给 billing_agreement_id(= 订阅 id,
 		// 命中 order.channel_ref=SessionRef 的反查路径);不在载荷时退化
@@ -419,10 +447,12 @@ func (c *Channel) ConfigSchema() []app.FieldSpec {
 			Help: "PayPal 开发者后台 App 的 Client ID(sandbox/live 两套凭据各自独立,勿混用)"},
 		{Key: FieldClientSecret, Label: "Client Secret", Type: app.FieldTypeSecret, Required: true,
 			Help: "与 Client ID 配对,App 详情页 Show client secret 复制"},
+		// Required 保持 true(表单不填要标红);「env 已提供即豁免」由配置面
+		// 经 EnvProvidedKeys 判定(见下),NewFromFields 对缺失的容忍不变。
 		{Key: FieldWebhookID, Label: "Webhook ID", Type: app.FieldTypeText, Required: true,
-			Help: "开发者后台 App 的 Webhook ID,验签必需(与回调 URL 配对注册;不配则回调全部拒收)"},
+			Help: "开发者后台 App 的 Webhook ID,验签必需(与回调 URL 配对注册;不配则回调全部拒收);亦可由环境变量 PAYPAL_WEBHOOK_ID 提供"},
 		{Key: FieldMode, Label: "环境模式", Type: app.FieldTypeSelect, Required: true,
-			Help: "test = api-m.sandbox.paypal.com 沙箱;prod = api-m.paypal.com 生产。注意:PayPal 订阅按 plan 价格收款(无会话级改价),DB 改价后必须在渠道页同步价格,否则旧价付款会被金额对账拒付",
+			Help: "test = api-m.sandbox.paypal.com 沙箱;prod = api-m.paypal.com 生产。注意:PayPal 订阅按 plan 价格收款(无会话级改价),改价后需同步渠道目录价,否则按旧价付款/续期会被金额对账拒绝",
 			Options: []app.FieldOption{
 				{Value: ModeTest, Label: "test(沙箱)"},
 				{Value: ModeProd, Label: "prod(生产)"},
@@ -430,12 +460,30 @@ func (c *Channel) ConfigSchema() []app.FieldSpec {
 	}
 }
 
+// EnvProvidedKeys 返回进程 env 当前已提供(os.Getenv 非空)的本渠道配置键,
+// 键名与 ConfigSchema 的 Key 一致(client_id/client_secret/webhook_id/
+// mode;env 变量名映射见 paypal.go 的 envOfField)。billing/app 的
+// ChannelEnvViewer 接口按鸭子类型断言本方法,配置面据此实现「env 已提供
+// 即豁免 Required 校验」—— 环境注入过的字段不在后台表单标红。输出按
+// ConfigSchema 字段序(map 遍历无序,别让下游断言抖动)。
+func (c *Channel) EnvProvidedKeys() []string {
+	var keys []string
+	for _, field := range []string{FieldClientID, FieldClientSecret, FieldWebhookID, FieldMode} {
+		if strings.TrimSpace(os.Getenv(envOfField[field])) != "" {
+			keys = append(keys, field)
+		}
+	}
+	return keys
+}
+
 // ---- ProductRegistrar(BC-7,目录型商品映射) ----
 
 // createProductReq POST /v1/catalogs/products:type=SERVICE(订阅类服务的
 // 正确类型;PHYSICAL/DIGITAL 是实物/数字商品)。name 带 (Monthly/Yearly)
-// 档位后缀 —— 每个 plan+interval 建一对 product+plan,PayPal 后台可辨识;
-// 幂等由服务层 GetChannelProduct 先查映射保证(RegisterChannelProduct)。
+// 档位后缀 —— 每个 plan+interval 建一对 product+plan,PayPal 后台可辨识。
+// 幂等双保险:服务层 GetChannelProduct 先查映射;映射缺席(丢失/首注册
+// 半途失败)时 RegisterProduct 建前先按 name+type 查渠道目录复用,
+// 不堆孤儿 product(见 RegisterProduct 注释)。
 type createProductReq struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -444,6 +492,47 @@ type createProductReq struct {
 
 type createProductResp struct {
 	ID string `json:"id"` // PROD-xxx
+}
+
+// listProductsResp GET /v1/catalogs/products 响应(total_required=true 才
+// 回 total_pages;只取查重用到的 id/name/type)。
+type listProductsResp struct {
+	Products []struct {
+		ID   string `json:"id"` // PROD-xxx
+		Name string `json:"name"`
+		Type string `json:"type"` // SERVICE/…
+	} `json:"products"`
+	TotalPages int `json:"total_pages"`
+}
+
+// 列目录分页参数:每页 20(PayPal 缺省 10,稳妥取 20),最多翻 50 页
+// (1000 个 product)防御异常 total_pages 不至于死循环 —— 超出这个量级的
+// 目录本身是配置事故,宁可判未命中也不该挂死注册。
+const (
+	listProductsPageSize = 20
+	maxListProductPages  = 50
+)
+
+// findProduct 按 name+type=SERVICE 在渠道目录里查已建 product,命中返回
+// 其 id,未命中返回空串。type 收窄防误并:目录里的手工商品同名不同型
+// 不算我们的注册品。
+func (c *Channel) findProduct(ctx context.Context, name string) (string, error) {
+	for page := 1; page <= maxListProductPages; page++ {
+		var resp listProductsResp
+		path := fmt.Sprintf("/v1/catalogs/products?page=%d&page_size=%d&total_required=true", page, listProductsPageSize)
+		if err := c.client.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+			return "", fmt.Errorf("paypal: list products (page %d): %w", page, err)
+		}
+		for _, p := range resp.Products {
+			if p.Name == name && p.Type == "SERVICE" {
+				return p.ID, nil
+			}
+		}
+		if len(resp.Products) == 0 || page >= resp.TotalPages {
+			return "", nil
+		}
+	}
+	return "", nil
 }
 
 type fixedPrice struct {
@@ -512,8 +601,18 @@ func intervalUnit(interval domain.BillingInterval) (string, string, error) {
 	}
 }
 
+// supportedCurrency 白名单判定(Capabilities().Currencies 单一真源,结账
+// 与注册共用);空串不在名单内 —— 服务层建订单总会带 plan 币种,空币种是
+// 调用方事故,宁可拒。
+func supportedCurrency(currency string) bool {
+	return slices.Contains(paypalCapabilities.Currencies, strings.ToUpper(strings.TrimSpace(currency)))
+}
+
 // planPrice 为 plan+interval 组装 fixed_price:价格真源在 DB plan limits
 // (app.PlanPriceCents),currency 取 plan.Currency(空=USD,与 waffo 同约)。
+// 币种过白名单(Capabilities().Currencies),换算走 FormatCentsChecked ——
+// 三位小数币(KWD 等)即便将来混进白名单也会在这里被拒而不是 10 倍错价
+// (错误向上冒泡,不静默近似)。
 func planPrice(plan domain.Plan, interval domain.BillingInterval) (fixedPrice, error) {
 	cents := app.PlanPriceCents(plan, interval)
 	if cents <= 0 {
@@ -523,13 +622,27 @@ func planPrice(plan domain.Plan, interval domain.BillingInterval) (fixedPrice, e
 	if currency == "" {
 		currency = "USD"
 	}
-	return fixedPrice{CurrencyCode: currency, Value: money.FormatCents(cents, currency)}, nil
+	if !supportedCurrency(currency) {
+		return fixedPrice{}, webx.NewValidation("paypal channel: subscription currency not supported: " + currency)
+	}
+	value, err := money.FormatCentsChecked(cents, currency)
+	if err != nil {
+		return fixedPrice{}, fmt.Errorf("paypal: plan %s %s price: %w", plan.Code, string(interval), err)
+	}
+	return fixedPrice{CurrencyCode: currency, Value: value}, nil
 }
 
-// RegisterProduct 实现 app.ProductRegistrar:两步链 —— 建 product
-// (PROD-xxx,SERVICE)→ 建 plan(P-xxx,status=ACTIVE,固定价=当前 DB 价),
-// 返回 **plan id**(对 paypal 而言渠道商品 = plan,CreateCheckout 的
-// ChannelProductID 就是它)。
+// RegisterProduct 实现 app.ProductRegistrar:两步链 —— 取 product(先列
+// 目录按 name+type 查重复用,未命中才建 PROD-xxx,SERVICE)→ 建 plan
+// (P-xxx,status=ACTIVE,固定价=当前 DB 价),返回 **plan id**(对 paypal
+// 而言渠道商品 = plan,CreateCheckout 的 ChannelProductID 就是它)。
+//
+// product 层幂等:服务层 GetChannelProduct 先查映射是第一道闸,但映射行
+// 丢失(库换过/手滑删)或首注册半途失败(建完 product、建 plan 报错,
+// 映射未落)后重试时,无查重的 POST 会在 PayPal 目录堆孤儿 product ——
+// 建前先 GET /v1/catalogs/products 按名查重,命中即复用其 id 再建 plan。
+// plan 层每次新建(PayPal plan 没有业务幂等键;映射由服务层在两步都
+// 成功后落,失败的孤儿 plan 不进映射即不可见)。
 func (c *Channel) RegisterProduct(ctx context.Context, plan domain.Plan, interval domain.BillingInterval) (string, error) {
 	unit, display, err := intervalUnit(interval)
 	if err != nil {
@@ -545,20 +658,27 @@ func (c *Channel) RegisterProduct(ctx context.Context, plan domain.Plan, interva
 	}
 	suffix := " (" + display + ")"
 
-	var productResp createProductResp
-	if err := c.client.do(ctx, http.MethodPost, "/v1/catalogs/products", createProductReq{
-		Name:        name + suffix,
-		Description: "ploykit plan " + plan.Code + " (" + string(interval) + ")",
-		Type:        "SERVICE",
-	}, &productResp); err != nil {
-		return "", fmt.Errorf("paypal: create product %s/%s: %w", plan.Code, string(interval), err)
+	productID, err := c.findProduct(ctx, name+suffix)
+	if err != nil {
+		return "", err
 	}
-	if productResp.ID == "" {
-		return "", fmt.Errorf("paypal: create product %s/%s: empty product id in response", plan.Code, string(interval))
+	if productID == "" {
+		var productResp createProductResp
+		if err := c.client.do(ctx, http.MethodPost, "/v1/catalogs/products", createProductReq{
+			Name:        name + suffix,
+			Description: "ploykit plan " + plan.Code + " (" + string(interval) + ")",
+			Type:        "SERVICE",
+		}, &productResp); err != nil {
+			return "", fmt.Errorf("paypal: create product %s/%s: %w", plan.Code, string(interval), err)
+		}
+		if productResp.ID == "" {
+			return "", fmt.Errorf("paypal: create product %s/%s: empty product id in response", plan.Code, string(interval))
+		}
+		productID = productResp.ID
 	}
 
 	var planReq createPlanReq
-	planReq.ProductID = productResp.ID
+	planReq.ProductID = productID
 	planReq.Name = name + suffix
 	planReq.Description = "Subscription plan " + plan.Code + " (" + display + ")"
 	planReq.Status = "ACTIVE"

@@ -1,0 +1,1 @@
+ALTER TABLE "order" DROP COLUMN IF EXISTS canceled_by;

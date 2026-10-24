@@ -386,6 +386,62 @@ func TestTestConnection(t *testing.T) {
 	}
 }
 
+// TestTestConnectionGraphQLErrors 200 + GraphQL errors 数组 = 探活失败。
+// GraphQL 规范允许 200 状态携带顶层 errors(凭据失效/权限不足都长这样),
+// 修复前只看状态码、len(Data)==0 即成功,探活假阳性。
+func TestTestConnectionGraphQLErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":null,"errors":[{"message":"merchant not found"}]}`)
+	}))
+	defer srv.Close()
+	ch := testChannel(t, srv.URL)
+	err := ch.TestConnection(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "merchant not found") {
+		t.Fatalf("want graphql error surfaced with first message, got %v", err)
+	}
+}
+
+// ---- EnvProvidedKeys(ChannelEnvViewer 鸭子面,billing/app 侧断言) ----
+
+func TestEnvProvidedKeys(t *testing.T) {
+	ch := testChannel(t, "https://unused.invalid")
+	// 先归零:宿主环境可能 source 了 .env.local(手动 live 测试),不归零
+	// 会把宿主的 WAFFO_* 算进来,hermetic 断言被污染。
+	for _, name := range []string{EnvMerchantID, EnvPrivateKey, EnvProductMonthly,
+		EnvProductYearly, EnvWebhookPubKey, EnvStoreID, EnvMode} {
+		t.Setenv(name, "")
+	}
+	if got := ch.EnvProvidedKeys(); len(got) != 0 {
+		t.Fatalf("no env provided = no keys, got %v", got)
+	}
+
+	t.Setenv(EnvMerchantID, "MER_env")
+	t.Setenv(EnvMode, "prod")
+	got := ch.EnvProvidedKeys()
+	// 键名 = ConfigSchema 的 Key;顺序与 ConfigSchema 一致(merchant_id 在 mode 前)。
+	want := []string{FieldMerchantID, FieldMode}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("env-provided keys = %v, want %v", got, want)
+	}
+	schema := ch.ConfigSchema()
+	known := map[string]bool{}
+	for _, s := range schema {
+		known[s.Key] = true
+	}
+	for _, k := range got {
+		if !known[k] {
+			t.Fatalf("env key %q is not a ConfigSchema key", k)
+		}
+	}
+
+	// env 值是空白串 = 未提供。
+	t.Setenv(EnvMode, "  ")
+	if got := ch.EnvProvidedKeys(); len(got) != 1 || got[0] != FieldMerchantID {
+		t.Fatalf("blank env value must not count as provided, got %v", got)
+	}
+}
+
 // ---- ParseWebhook ----
 
 func signWebhook(t *testing.T, key *rsa.PrivateKey, body []byte, at time.Time) string {
@@ -411,6 +467,60 @@ func webhookBody(eventType string, data map[string]any) []byte {
 	}
 	b, _ := json.Marshal(env)
 	return b
+}
+
+// envelopeWithID 构造顶层 id / 事件级 eventId 可分别指定的载荷(默认
+// helper 两者同值,测不出回退语义的差异)。订阅事件的顶层 id 是订单级
+// ORD_xxx,各期只有 eventId 互异 —— 这正是幂等键必须用 eventId 的原因。
+func envelopeWithID(id, eventID, eventType string, data map[string]any) []byte {
+	env := map[string]any{
+		"id":        id,
+		"eventId":   eventID,
+		"eventType": eventType,
+		"mode":      "test",
+		"timestamp": "2026-10-23T08:30:00.000Z",
+		"storeId":   "STO_x",
+		"data":      data,
+	}
+	b, _ := json.Marshal(env)
+	return b
+}
+
+// TestParseWebhookEventIDPerPeriod 幂等键 P0:同一订单(顶层 id=ORD_x)的
+// 第 2/3 期 payment_succeeded 只有 eventId 互异 —— 修复前 ChannelEventID
+// 用顶层 id,第 3 期撞第 2 期的幂等键被当重复吞掉,客户持续扣费但续费
+// 事件丢失、权益掉回 free。
+func TestParseWebhookEventIDPerPeriod(t *testing.T) {
+	ch := testChannel(t, "https://unused.invalid")
+	parse := func(eventID string) domain.PaymentEvent {
+		t.Helper()
+		body := envelopeWithID("ORD_x", eventID, "subscription.payment_succeeded", map[string]any{
+			"orderId": "ORD_x", "currency": "USD", "chargedAmount": "19.00", "periodNumber": 2,
+			"orderMetadata": map[string]any{"order_id": "ord_123"},
+		})
+		ev, err := ch.ParseWebhook(context.Background(), app.WebhookRequest{
+			Header: map[string][]string{"X-Waffo-Signature": {signWebhook(t, testRSA(t), body, time.Now())}},
+			Body:   body,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ev
+	}
+	p2 := parse("EVT-2")
+	p3 := parse("EVT-3")
+	if p2.ChannelEventID != "subscription.payment_succeeded:EVT-2" ||
+		p3.ChannelEventID != "subscription.payment_succeeded:EVT-3" {
+		t.Fatalf("event ids = %q / %q, want EVT-2 / EVT-3", p2.ChannelEventID, p3.ChannelEventID)
+	}
+	if p2.ChannelEventID == p3.ChannelEventID {
+		t.Fatal("period 2/3 of the same order must dedupe to distinct ChannelEventIDs")
+	}
+	// eventId 缺失:回退顶层 id,与旧载荷行为一致(同订单同期数同键)。
+	fallback := parse("")
+	if fallback.ChannelEventID != "subscription.payment_succeeded:ORD_x" {
+		t.Fatalf("fallback event id = %q, want subscription.payment_succeeded:ORD_x (old-payload behavior)", fallback.ChannelEventID)
+	}
 }
 
 func TestParseWebhookVerifyAndMap(t *testing.T) {
@@ -466,10 +576,32 @@ func TestParseWebhookVerifyAndMap(t *testing.T) {
 			if ev.Channel != "waffo" || ev.ChannelEventID != tc.eventType+":PAY_1" {
 				t.Fatalf("channel/id = %s / %s", ev.Channel, ev.ChannelEventID)
 			}
+			// 五律 5:Payload 必须落原始载荷(mode + raw envelope),对账/排障依赖它。
+			if ev.Payload == nil {
+				t.Fatal("payload must not be nil")
+			}
+			if ev.Payload["mode"] != "test" {
+				t.Fatalf("payload mode = %v, want test", ev.Payload["mode"])
+			}
+			raw, ok := ev.Payload["raw"].(map[string]any)
+			if !ok || raw["eventType"] != tc.eventType {
+				t.Fatalf("payload raw envelope missing eventType %q: %+v", tc.eventType, ev.Payload["raw"])
+			}
 		})
 	}
 
+	// 窗口内合法重试:签名 7h 前(> 旧 45min 窗、< 8h 重试链上沿)必须放行。
+	retryBody := webhookBody("subscription.activated", base)
+	if _, err := ch.ParseWebhook(context.Background(), app.WebhookRequest{
+		Header: map[string][]string{"X-Waffo-Signature": {signWebhook(t, testRSA(t), retryBody, time.Now().Add(-7*time.Hour))}},
+		Body:   retryBody,
+	}); err != nil {
+		t.Fatalf("legitimate retry inside the 24h window must be accepted: %v", err)
+	}
+
 	// 负路径:错钥、缺头、过期、坏签名形态都进 validation 错误(ploykit 回 401)。
+	// 过期用 -25h:验签窗口 24h(覆盖 waffo 最长 8h 的官方重试链),旧的
+	// -46min 现在是窗口内的合法重试。
 	body := webhookBody("subscription.activated", base)
 	negs := []struct {
 		name   string
@@ -477,7 +609,7 @@ func TestParseWebhookVerifyAndMap(t *testing.T) {
 	}{
 		{"wrong-key", signWebhook(t, wrongKey, body, time.Now())},
 		{"missing-header", ""},
-		{"stale", signWebhook(t, testRSA(t), body, time.Now().Add(-46*time.Minute))},
+		{"stale", signWebhook(t, testRSA(t), body, time.Now().Add(-25*time.Hour))},
 		{"garbage", "t=1"},
 	}
 	for _, tc := range negs {
@@ -524,19 +656,23 @@ func TestParseWebhookNoPubKey(t *testing.T) {
 
 func TestParseWebhookJPYAmounts(t *testing.T) {
 	ch := testChannel(t, "https://unused.invalid")
-	body := webhookBody("subscription.payment_succeeded", map[string]any{
-		"orderId": "ORD_jpy", "currency": "JPY", "chargedAmount": "4500", "periodNumber": 2,
-		"orderMetadata": map[string]any{"order_id": "ord_jpy"},
-	})
-	ev, err := ch.ParseWebhook(context.Background(), app.WebhookRequest{
-		Header: map[string][]string{"X-Waffo-Signature": {signWebhook(t, testRSA(t), body, time.Now())}},
-		Body:   body,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ev.AmountCents != 4500 {
-		t.Fatalf("JPY amount = %d, want 4500 (zero-decimal: no dot, minor unit as-is)", ev.AmountCents)
+	// 两种回显形态都得 4500:无小数点 "4500" 是主形态,"4500.00" 是部分
+	// 网关的回显形态(修复前被当两位小数解析成 450000,金额对账整单拒付)。
+	for _, form := range []string{"4500", "4500.00"} {
+		body := webhookBody("subscription.payment_succeeded", map[string]any{
+			"orderId": "ORD_jpy", "currency": "JPY", "chargedAmount": form, "periodNumber": 2,
+			"orderMetadata": map[string]any{"order_id": "ord_jpy"},
+		})
+		ev, err := ch.ParseWebhook(context.Background(), app.WebhookRequest{
+			Header: map[string][]string{"X-Waffo-Signature": {signWebhook(t, testRSA(t), body, time.Now())}},
+			Body:   body,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev.AmountCents != 4500 {
+			t.Fatalf("JPY %q parsed = %d, want 4500 (zero-decimal echo must not scale by 100)", form, ev.AmountCents)
+		}
 	}
 }
 
@@ -552,13 +688,16 @@ func TestFormatParseAmount(t *testing.T) {
 	if got := money.FormatCents(4500, "JPY"); got != "4500" {
 		t.Fatalf("jpy = %q", got)
 	}
-	if got := parseAmountCents("19.00"); got != 1900 {
+	if got := parseAmountCents("USD", "19.00"); got != 1900 {
 		t.Fatalf("parse usd = %d", got)
 	}
-	if got := parseAmountCents("", "4500"); got != 4500 {
+	if got := parseAmountCents("JPY", "", "4500"); got != 4500 {
 		t.Fatalf("parse jpy fallback = %d", got)
 	}
-	if got := parseAmountCents("", ""); got != 0 {
+	if got := parseAmountCents("JPY", "", "4500.00"); got != 4500 {
+		t.Fatalf("parse jpy echo form = %d, want 4500 (not 450000)", got)
+	}
+	if got := parseAmountCents("USD", "", ""); got != 0 {
 		t.Fatalf("parse empty = %d", got)
 	}
 }

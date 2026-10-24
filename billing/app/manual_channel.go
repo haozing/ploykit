@@ -2,15 +2,12 @@ package app
 
 import (
 	"context"
-	"time"
 
 	"github.com/haozing/ploykit/billing/domain"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
 const ChannelManual = "manual"
-
-const manualCheckoutWindow = 7 * 24 * time.Hour
 
 type ManualChannel struct {
 	InfoURL string
@@ -20,6 +17,13 @@ var _ PaymentChannel = (*ManualChannel)(nil)
 
 func (m *ManualChannel) Name() string { return ChannelManual }
 
+// CreateCheckout returns a zero ExpiresAt (billing fix #2): manual is an
+// offline-transfer channel with no hosted session to expire — the old 7-day
+// window let the abandoned-checkout sweeper flip a still-reconcilable
+// transfer order to canceled while the buyer's bank transfer was in flight.
+// A zero ExpiresAt persists as NULL (SetOrderChannelRefAndExpiry) and the
+// order never participates in the sweep; offline verification stays manual
+// (MarkOrderPaid) with no deadline.
 func (m *ManualChannel) CreateCheckout(_ context.Context, req CheckoutRequest) (domain.CheckoutSession, error) {
 	order := req.Order
 	return domain.CheckoutSession{
@@ -27,7 +31,6 @@ func (m *ManualChannel) CreateCheckout(_ context.Context, req CheckoutRequest) (
 		Channel:    ChannelManual,
 		ActionURL:  m.InfoURL,
 		SessionRef: ChannelManual + ":" + order.ID,
-		ExpiresAt:  time.Now().UTC().Add(manualCheckoutWindow),
 	}, nil
 }
 
@@ -48,6 +51,6 @@ func (m *ManualChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domai
 func (m *ManualChannel) ConfigSchema() []FieldSpec {
 	return []FieldSpec{
 		{Key: "info_url", Label: "转账说明页", Type: FieldTypeText,
-			Help: "买家点击支付跳转的说明页 URL(收款方式/备注/人工核销流程);空 = 仅展示订单"},
+			Help: "买家点击支付跳转的说明页 URL(收款方式/备注/人工核销流程);空 = 仅展示订单。线下转账无会话过期：订单不设到期时间，也不参与弃单清扫，核销无截止"},
 	}
 }

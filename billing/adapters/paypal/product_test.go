@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -28,8 +29,21 @@ func TestCapabilities(t *testing.T) {
 	if caps.DisplayOrder != 300 {
 		t.Fatalf("displayOrder = %d, want 300 (waffo 100 < stripe 200 < paypal 300 < manual 900)", caps.DisplayOrder)
 	}
-	if len(caps.Currencies) != 0 {
-		t.Fatalf("currencies must stay empty (随商户账户能力变化,白名单只会误伤), got %v", caps.Currencies)
+	// 币种白名单:PayPal Subscriptions 支持币种集(官方 currency-codes 的
+	// recurring 适用集),必须含 JPY(零小数位币),且不含三位小数币
+	// (KWD 等 —— money 层无法安全换算)与 CNY(PayPal 订阅不支持)。
+	want := []string{
+		"USD", "EUR", "GBP", "AUD", "CAD", "JPY", "SGD", "HKD", "NZD", "CHF",
+		"SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "ILS", "MXN", "BRL", "MYR",
+		"PHP", "TWD", "THB",
+	}
+	if strings.Join(caps.Currencies, ",") != strings.Join(want, ",") {
+		t.Fatalf("currencies = %v, want %v", caps.Currencies, want)
+	}
+	for _, banned := range []string{"KWD", "BHD", "CNY"} {
+		if slices.Contains(caps.Currencies, banned) {
+			t.Fatalf("currencies must not contain %q (3-decimal / unsupported-by-subscriptions)", banned)
+		}
 	}
 }
 
@@ -58,14 +72,51 @@ func TestConfigSchemaShape(t *testing.T) {
 	if !byKey[FieldWebhookID].Required || byKey[FieldWebhookID].Type != app.FieldTypeText {
 		t.Fatalf("webhook_id must be required text, got %+v", byKey[FieldWebhookID])
 	}
+	// Required 口径保持(「env 已提供即豁免」由配置面经 EnvProvidedKeys 判定),
+	// help 必须把 env 变量这条路告诉运营。
+	if !strings.Contains(byKey[FieldWebhookID].Help, "PAYPAL_WEBHOOK_ID") {
+		t.Fatalf("webhook_id help must mention the env fallback, got %q", byKey[FieldWebhookID].Help)
+	}
 	mode := byKey[FieldMode]
 	if !mode.Required || mode.Type != app.FieldTypeSelect || len(mode.Options) != 2 ||
 		mode.Options[0].Value != ModeTest || mode.Options[1].Value != ModeProd {
 		t.Fatalf("mode must be required select test/prod, got %+v", mode)
 	}
-	// SyncPrice 刚性依赖必须写进 help(运营在后台能看见)。
-	if !strings.Contains(mode.Help, "SyncPrice") && !strings.Contains(mode.Help, "同步价格") {
+	// SyncPrice 刚性依赖必须写进 help(运营在后台能看见):续期金额对账
+	// 落地后,改价不同步目录价 = 旧价付款/续期被拒。
+	if !strings.Contains(mode.Help, "同步渠道目录价") || !strings.Contains(mode.Help, "对账拒绝") {
 		t.Fatalf("mode help must explain the sync-price dependency, got %q", mode.Help)
+	}
+}
+
+// ---- EnvProvidedKeys(env 已提供即豁免 Required 的判定输入) ----
+
+func TestEnvProvidedKeys(t *testing.T) {
+	ch := testChannel(t, "https://unused.invalid")
+	// hermetic:先把本渠道四个 env 全部清空(宿主 shell 可能带 PAYPAL_*)。
+	t.Setenv(EnvClientID, "")
+	t.Setenv(EnvClientSecret, "")
+	t.Setenv(EnvWebhookID, "")
+	t.Setenv(EnvMode, "")
+
+	if got := ch.EnvProvidedKeys(); len(got) != 0 {
+		t.Fatalf("no env provided = no keys, got %v", got)
+	}
+	// 设两态:env 提供谁,谁的 ConfigSchema 键出现;顺序 = schema 字段序。
+	t.Setenv(EnvClientID, "cid-1")
+	t.Setenv(EnvMode, "test")
+	got := ch.EnvProvidedKeys()
+	if strings.Join(got, ",") != strings.Join([]string{FieldClientID, FieldMode}, ",") {
+		t.Fatalf("envProvidedKeys = %v, want [%s %s]", got, FieldClientID, FieldMode)
+	}
+	// 全提供:四个键齐、键名与 ConfigSchema 一致。
+	t.Setenv(EnvClientSecret, "sec-1")
+	t.Setenv(EnvWebhookID, "WHID-1")
+	got = ch.EnvProvidedKeys()
+	for _, field := range []string{FieldClientID, FieldClientSecret, FieldWebhookID, FieldMode} {
+		if !slices.Contains(got, field) {
+			t.Fatalf("envProvidedKeys missing %s, got %v", field, got)
+		}
 	}
 }
 
@@ -79,8 +130,10 @@ func plan99() domain.Plan {
 func TestRegisterProductRequestShape(t *testing.T) {
 	var mu sync.Mutex
 	var calls []struct {
-		path string
-		body map[string]any
+		method string
+		path   string
+		query  string
+		body   map[string]any
 	}
 	f := newFakePaypal(t, func(mux *http.ServeMux, _ *fakePaypal) {
 		mux.HandleFunc("/v1/catalogs/products", func(w http.ResponseWriter, r *http.Request) {
@@ -88,10 +141,16 @@ func TestRegisterProductRequestShape(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&b)
 			mu.Lock()
 			calls = append(calls, struct {
-				path string
-				body map[string]any
-			}{r.URL.Path, b})
+				method string
+				path   string
+				query  string
+				body   map[string]any
+			}{r.Method, r.URL.Path, r.URL.RawQuery, b})
 			mu.Unlock()
+			if r.Method == http.MethodGet {
+				fmt.Fprint(w, `{"products":[],"total_items":0,"total_pages":0}`)
+				return
+			}
 			fmt.Fprint(w, `{"id":"PROD-9","name":"Pro (Monthly)","type":"SERVICE","status":"ACTIVE"}`)
 		})
 		mux.HandleFunc("/v1/billing/plans", func(w http.ResponseWriter, r *http.Request) {
@@ -99,9 +158,11 @@ func TestRegisterProductRequestShape(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&b)
 			mu.Lock()
 			calls = append(calls, struct {
-				path string
-				body map[string]any
-			}{r.URL.Path, b})
+				method string
+				path   string
+				query  string
+				body   map[string]any
+			}{r.Method, r.URL.Path, r.URL.RawQuery, b})
 			mu.Unlock()
 			fmt.Fprint(w, `{"id":"P-9","product_id":"PROD-9","status":"ACTIVE"}`)
 		})
@@ -117,30 +178,39 @@ func TestRegisterProductRequestShape(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(calls) != 2 {
-		t.Fatalf("register must be a product→plan two-call chain, got %d calls", len(calls))
+	if len(calls) != 3 {
+		t.Fatalf("register must be a list→product→plan three-call chain, got %d calls: %+v", len(calls), calls)
+	}
+	// 第零步:GET 列目录查重(分页 + total_required 才有 total_pages)。
+	if calls[0].method != http.MethodGet || calls[0].path != "/v1/catalogs/products" {
+		t.Fatalf("call[0] = %s %s, want GET /v1/catalogs/products", calls[0].method, calls[0].path)
+	}
+	if !strings.Contains(calls[0].query, "page=1") ||
+		!strings.Contains(calls[0].query, "total_required=true") ||
+		!strings.Contains(calls[0].query, "page_size=") {
+		t.Fatalf("list query = %q, want page/page_size/total_required", calls[0].query)
 	}
 	// 第一步:product(SERVICE)。
-	if calls[0].path != "/v1/catalogs/products" {
-		t.Fatalf("call[0].path = %q", calls[0].path)
+	if calls[1].method != http.MethodPost || calls[1].path != "/v1/catalogs/products" {
+		t.Fatalf("call[1] = %s %s, want POST /v1/catalogs/products", calls[1].method, calls[1].path)
 	}
-	if calls[0].body["name"] != "Pro (Monthly)" {
-		t.Fatalf("product name = %v", calls[0].body["name"])
+	if calls[1].body["name"] != "Pro (Monthly)" {
+		t.Fatalf("product name = %v", calls[1].body["name"])
 	}
-	if calls[0].body["type"] != "SERVICE" {
-		t.Fatalf("product type = %v, want SERVICE", calls[0].body["type"])
+	if calls[1].body["type"] != "SERVICE" {
+		t.Fatalf("product type = %v, want SERVICE", calls[1].body["type"])
 	}
 	// 第二步:plan(链接上一步的 product_id,status=ACTIVE 直取免 activate)。
-	if calls[1].path != "/v1/billing/plans" {
-		t.Fatalf("call[1].path = %q", calls[1].path)
+	if calls[2].method != http.MethodPost || calls[2].path != "/v1/billing/plans" {
+		t.Fatalf("call[2] = %s %s, want POST /v1/billing/plans", calls[2].method, calls[2].path)
 	}
-	if calls[1].body["product_id"] != "PROD-9" {
-		t.Fatalf("plan product_id = %v (必须链接第一步建出的 product)", calls[1].body["product_id"])
+	if calls[2].body["product_id"] != "PROD-9" {
+		t.Fatalf("plan product_id = %v (必须链接第一步建出的 product)", calls[2].body["product_id"])
 	}
-	if calls[1].body["status"] != "ACTIVE" {
-		t.Fatalf("plan status = %v, want ACTIVE(建后即用,免二次 activate)", calls[1].body["status"])
+	if calls[2].body["status"] != "ACTIVE" {
+		t.Fatalf("plan status = %v, want ACTIVE(建后即用,免二次 activate)", calls[2].body["status"])
 	}
-	cycles := calls[1].body["billing_cycles"].([]any)
+	cycles := calls[2].body["billing_cycles"].([]any)
 	if len(cycles) != 1 {
 		t.Fatalf("billing_cycles = %v, want exactly the REGULAR cycle", cycles)
 	}
@@ -166,7 +236,11 @@ func TestRegisterProductYearlyAndGuards(t *testing.T) {
 	var mu sync.Mutex
 	var bodies []map[string]any
 	f := newFakePaypal(t, func(mux *http.ServeMux, _ *fakePaypal) {
-		mux.HandleFunc("/v1/catalogs/products", func(w http.ResponseWriter, _ *http.Request) {
+		mux.HandleFunc("/v1/catalogs/products", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodGet {
+				fmt.Fprint(w, `{"products":[],"total_pages":0}`)
+				return
+			}
 			fmt.Fprint(w, `{"id":"PROD-Y"}`)
 		})
 		mux.HandleFunc("/v1/billing/plans", func(w http.ResponseWriter, r *http.Request) {
@@ -202,6 +276,83 @@ func TestRegisterProductYearlyAndGuards(t *testing.T) {
 	unpriced := domain.Plan{Code: "x", Currency: "USD", Limits: map[string]int{}}
 	if _, err := ch.RegisterProduct(context.Background(), unpriced, domain.IntervalMonthly); err == nil {
 		t.Fatal("unpriced plan must fail before any HTTP call")
+	}
+	// 币种白名单外的 plan 在出网前快速失败(PayPal 订阅不收 CNY);
+	// 三位小数币(KWD)同样被拒 —— 白名单先拦,FormatCentsChecked 兜底。
+	for _, code := range []string{"CNY", "KWD"} {
+		offlist := domain.Plan{Code: "x", Currency: code,
+			Limits: map[string]int{"price_monthly_cents": 990}}
+		_, err := ch.RegisterProduct(context.Background(), offlist, domain.IntervalMonthly)
+		if err == nil || !strings.Contains(err.Error(), code) {
+			t.Fatalf("currency %s must fail fast with the currency named, got %v", code, err)
+		}
+	}
+}
+
+// RegisterProduct 幂等(product 层):映射丢失/首注册半途失败后重试,同
+// 名同类型的 product 必须复用 —— 只发生一次 product 创建请求,第二次
+// 直接 GET 命中后建 plan(plan 每次新建,映射由服务层两步成功后落)。
+func TestRegisterProductReusesExistingProduct(t *testing.T) {
+	var mu sync.Mutex
+	listCalls, createCalls, planBodies := 0, 0, 0
+	f := newFakePaypal(t, func(mux *http.ServeMux, _ *fakePaypal) {
+		mux.HandleFunc("/v1/catalogs/products", func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			switch r.Method {
+			case http.MethodGet:
+				listCalls++
+				// 第二次列出时目录里已有第一次建的 product(查重命中路径)。
+				if createCalls > 0 {
+					fmt.Fprint(w, `{"products":[{"id":"PROD-9","name":"Pro (Monthly)","type":"SERVICE"}],"total_items":1,"total_pages":1}`)
+					return
+				}
+				fmt.Fprint(w, `{"products":[],"total_items":0,"total_pages":0}`)
+			default:
+				createCalls++
+				fmt.Fprint(w, `{"id":"PROD-9","name":"Pro (Monthly)","type":"SERVICE"}`)
+			}
+		})
+		mux.HandleFunc("/v1/billing/plans", func(w http.ResponseWriter, r *http.Request) {
+			var b map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&b)
+			mu.Lock()
+			planBodies++
+			mu.Unlock()
+			if b["product_id"] != "PROD-9" {
+				fmt.Fprintf(w, `{"id":"P-wrong"}`)
+				return
+			}
+			fmt.Fprint(w, `{"id":"P-9","product_id":"PROD-9"}`)
+		})
+	})
+	ch := testChannel(t, f.srv.URL)
+
+	id1, err := ch.RegisterProduct(context.Background(), plan99(), domain.IntervalMonthly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id1 != "P-9" {
+		t.Fatalf("first register id = %q, want P-9", id1)
+	}
+	// 重试(模拟:映射行丢失后管理员再点注册)。
+	id2, err := ch.RegisterProduct(context.Background(), plan99(), domain.IntervalMonthly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id2 != "P-9" {
+		t.Fatalf("second register id = %q, want a fresh plan P-9 under the reused product", id2)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if createCalls != 1 {
+		t.Fatalf("product creation must happen exactly once across retries, got %d", createCalls)
+	}
+	if listCalls != 2 {
+		t.Fatalf("each register must list the catalog first, got %d list calls", listCalls)
+	}
+	if planBodies != 2 {
+		t.Fatalf("plan creation happens per register call (no plan-level idempotency), got %d", planBodies)
 	}
 }
 
@@ -240,6 +391,13 @@ func TestSyncPriceRequestShape(t *testing.T) {
 	// 空 id 拒绝。
 	if err := ch.SyncPrice(context.Background(), "", plan99(), domain.IntervalMonthly); err == nil {
 		t.Fatal("empty plan id must fail")
+	}
+
+	// 币种白名单外的 plan 改价同样在出网前快速失败(planPrice 与注册/结账
+	// 同一道闸;三位小数币由 FormatCentsChecked 兜底)。
+	kwd := domain.Plan{Code: "x", Currency: "KWD", Limits: map[string]int{"price_monthly_cents": 990}}
+	if err := ch.SyncPrice(context.Background(), "P-9", kwd, domain.IntervalMonthly); err == nil || !strings.Contains(err.Error(), "KWD") {
+		t.Fatalf("3-decimal currency must be refused with the currency named, got %v", err)
 	}
 
 	// 渠道侧 4xx 带原因返回(改价失败必须可见 —— 这是 paypal 收款价的唯一真源通道)。

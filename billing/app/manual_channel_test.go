@@ -34,7 +34,8 @@ func TestManualChannel_CheckoutAndWebhookShape(t *testing.T) {
 	assert.Equal(t, "manual", session.Channel)
 	assert.Equal(t, "https://example.com/pay-by-transfer", session.ActionURL)
 	assert.NotEmpty(t, session.SessionRef)
-	assert.True(t, session.ExpiresAt.After(time.Now()), "会话有期限（默认 7 天线下支付窗口）")
+	assert.True(t, session.ExpiresAt.IsZero(),
+		"fix #2：线下转账无会话过期——零值 ExpiresAt 落库为 NULL，不参与弃单清扫（7 天窗口曾把在途转账订单扫成 canceled）")
 
 	_, err = ch.ParseWebhook(context.Background(), WebhookRequest{})
 	var we *webx.Error

@@ -102,7 +102,7 @@ func TestWorkspacePlanFK_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "024")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.False(t, fkExists())
 
 	_, wsID := seedMigUserWS(t, pool, "fk25")
@@ -138,7 +138,7 @@ func TestWorkspaceRoleConfig_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "025")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists("workspace_role"))
 	assert.True(t, tableExists("workspace_role_permission"), "down 应重建行级表")
 
@@ -182,7 +182,7 @@ func TestMemberRemovedBy_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "027")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)
@@ -246,7 +246,7 @@ func TestAuditQueryIndexes_UpDownUp(t *testing.T) {
 	assert.True(t, idxExists("idx_audit_actor_time"), "actor 过滤/邮箱搜索支撑索引")
 
 	rolled := rollbackAbove(t, m, pool, "029")
-	require.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	require.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	require.Contains(t, rolled, "033")
 	assert.False(t, idxExists("idx_audit_created"))
 	assert.False(t, idxExists("idx_audit_actor_time"))
@@ -392,7 +392,7 @@ func TestWebhookPendingUniqueAndRotation_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "030")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.Contains(t, rolled, "032")
 	assert.NotContains(t, indexDef(), "WHERE", "down 后应恢复全量唯一索引")
 	for _, col := range []string{"old_secret", "old_secret_expires_at", "first_failure_at"} {
@@ -447,7 +447,7 @@ func TestSessionImpersonatedBy_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "033")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)
@@ -551,7 +551,7 @@ func TestAuditEventPartition_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "034")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.Contains(t, rolled, "036", "036 应先于 035 回滚（高→低）")
 	assert.Equal(t, "r", relkindOf(t, pool, "audit_event"))
 	assert.Equal(t, []string{"id"}, pkColumnsOf(t, pool, "audit_event"))
@@ -615,7 +615,7 @@ func TestAnalyticsEventPartition_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "035")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.Equal(t, "r", relkindOf(t, pool, "analytics_event"))
 	assert.Equal(t, []string{"id"}, pkColumnsOf(t, pool, "analytics_event"))
 
@@ -683,7 +683,7 @@ func TestSchedulePlanUpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "036")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err = m.Up(ctx, 0)
@@ -711,7 +711,7 @@ func TestSiteSettingsUpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "037")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "050", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 050（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err = m.Up(ctx, 0)

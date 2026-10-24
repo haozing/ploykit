@@ -55,8 +55,15 @@ type ChannelSchemaViewer interface {
 // rest per settings.IsSensitive.
 type ChannelSettingsStore interface {
 	Set(ctx context.Context, key, value, actor string) error
+	// SetMany writes multiple keys in ONE transaction (billing fix #11): a
+	// channel save is all-or-nothing — a mid-save failure used to leave the
+	// hot-reload registry reading a half-saved channel. An empty map is a no-op.
+	SetMany(ctx context.Context, kv map[string]string, actor string) error
 	// BillingChannelFields returns all billing_channel.* rows unsealed,
-	// grouped by channel name (absent = no DB config for that channel).
+	// grouped by channel name (absent = no DB config for that channel). A row
+	// that fails to unseal is skipped (that channel stays unconfigured) — it
+	// must not error the whole read (fix #5: one poisoned row used to take
+	// every channel down).
 	BillingChannelFields(ctx context.Context) (map[string]map[string]string, error)
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/haozing/ploykit/billing/domain"
+	"github.com/haozing/ploykit/billing/money"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -121,7 +122,7 @@ func (s *BillingAdminService) AdminCancelPendingOrder(ctx context.Context, actor
 	if order.Status != domain.OrderPending {
 		return webx.NewConflict("order is not pending")
 	}
-	if err := s.core.repo.UpdateOrderStatus(ctx, orderID, domain.OrderPending, domain.OrderCanceled, s.now()); err != nil {
+	if err := s.core.repo.CancelOrder(ctx, orderID, domain.OrderPending, "admin", s.now()); err != nil {
 		if errors.Is(err, domain.ErrStatusConflict) {
 
 			return webx.NewConflict("order is not pending")
@@ -177,6 +178,15 @@ func (s *BillingAdminService) AdminUpdatePlan(ctx context.Context, actor *webx.P
 	}
 	if !planCurrencyRe.MatchString(in.Currency) {
 		return PlanView{}, webx.NewValidation("plan currency must be a 3-letter uppercase ISO 4217 code")
+	}
+	// billing fix #8：三位小数币种（KWD/BHD/JOD…）闸在系统入口——框架的
+	// minor-unit 换算只支持 0/2 位小数，KWD 流入会被静默 10 倍错价。空值跳过
+	// （沿用默认币种，货币形状已由上面的正则保证）。money.ValidateCurrency 的
+	// 死代码就此接线。
+	if in.Currency != "" {
+		if err := money.CheckMinorUnit(in.Currency); err != nil {
+			return PlanView{}, webx.NewValidation("plan currency rejected: " + err.Error())
+		}
 	}
 	limits := in.Limits
 	if limits == nil {

@@ -246,9 +246,32 @@ func (s *BillingService) handlePaid(ctx context.Context, event domain.PaymentEve
 			return s.failEvent(ctx, event, err2)
 		}
 		if !ok2 || cur.Status != domain.OrderPaid {
-			s.log.Warn("paid event for non-pending order, ignored",
-				"order_id", order.ID, "status", cur.Status, "event_id", event.ChannelEventID)
-			return s.repo.MarkEventProcessed(ctx, event.Channel, event.ChannelEventID)
+			// P0 竞态修复（billing fix #1）：订单已被弃单清扫置 canceled，而钱
+			// 真的到账了。canceled_by='expiry' 的清扫是启发式记账，迟到支付赢：
+			// canceled→paid 复活后权益逻辑照常。canceled_by 为 user/admin（人
+			// 主动取消）或 NULL（051 前存量行，来源不明）→ 维持现状忽略——宁可
+			// 漏复活不可错发权益。
+			revived := false
+			if ok2 && cur.Status == domain.OrderCanceled {
+				var rerr error
+				revived, rerr = s.repo.ReviveOrderAfterExpiry(ctx, order.ID, now)
+				if rerr != nil {
+					return s.failEvent(ctx, event, rerr)
+				}
+				if revived {
+					s.log.Warn("late paid event revived expiry-canceled order; grace window missed the webhook",
+						"order_id", order.ID, "workspace_id", order.WorkspaceID,
+						"channel", event.Channel, "event_id", event.ChannelEventID)
+					s.audit(ctx, &order.WorkspaceID, nil, "billing.order_revived_after_expiry", order.ID, map[string]any{
+						"channel": event.Channel, "event_id": event.ChannelEventID,
+					})
+				}
+			}
+			if !revived {
+				s.log.Warn("paid event for non-pending order, ignored",
+					"order_id", order.ID, "status", cur.Status, "event_id", event.ChannelEventID)
+				return s.repo.MarkEventProcessed(ctx, event.Channel, event.ChannelEventID)
+			}
 		}
 	}
 
@@ -384,6 +407,38 @@ func (s *BillingService) resolveOrder(ctx context.Context, event domain.PaymentE
 }
 
 func (s *BillingService) handleRenewed(ctx context.Context, event domain.PaymentEvent) error {
+	// PayPal 续期接缝（billing fix #3，内核侧）。仅当事件携带 OrderID 时生效：
+	//   1) PaymentIntentRef 落库——续期发票携带 PI 时锚进订单 metadata，修复
+	//      「退款反查锚死代码」：此前全仓只在 handlePaid 落 PI，续期路径漏锚，
+	//      后续仅携 PI 的退款/失败事件将关联不到订单。
+	//   2) 金额对账——「目录价即收款价，改价必须同步」防线在续期路径的兑现：
+	//      按订单的 planCode+interval 查当前 plan 价格对账（plan 缺失或无价则
+	//      跳过对账），不等则与 handlePaid 的拒付语义一致：log.Error + 审计
+	//      billing.amount_mismatch + 收敛 processed，不发放续期。OrderID 为空
+	//      （waffo/stripe 续期）行为完全不变。
+	if event.OrderID != "" {
+		if event.PaymentIntentRef != "" {
+			if err := s.repo.SetOrderPaymentIntentRef(ctx, event.OrderID, event.PaymentIntentRef); err != nil {
+				return s.failEvent(ctx, event, err)
+			}
+		}
+		if mismatch, order, err := s.renewalAmountMismatch(ctx, event); err != nil {
+			return s.failEvent(ctx, event, err)
+		} else if mismatch {
+			s.log.Error("renewal amount mismatch, refusing to extend subscription",
+				"order_id", event.OrderID, "plan_price_cents", order.expectedCents,
+				"event_amount_cents", event.AmountCents,
+				"order_currency", order.currency, "event_currency", event.Currency,
+				"channel", event.Channel, "event_id", event.ChannelEventID)
+			s.audit(ctx, &order.workspaceID, nil, "billing.amount_mismatch", event.OrderID, map[string]any{
+				"phase": "renewal", "plan_price_cents": order.expectedCents,
+				"event_amount_cents": event.AmountCents,
+				"order_currency": order.currency, "event_currency": event.Currency,
+			})
+			return s.repo.MarkEventProcessed(ctx, event.Channel, event.ChannelEventID)
+		}
+	}
+
 	wsID, currentPlan, ok, err := s.repo.FindWorkspaceBySubscription(ctx, event.SubscriptionRef)
 	if err != nil {
 		return s.failEvent(ctx, event, err)
@@ -428,6 +483,47 @@ func (s *BillingService) handleRenewed(ctx context.Context, event domain.Payment
 	}
 	s.auditWS(ctx, wsID, "billing.subscription_renewed", map[string]any{"subscription_ref": event.SubscriptionRef})
 	return s.repo.MarkEventProcessed(ctx, event.Channel, event.ChannelEventID)
+}
+
+// renewalMismatchContext carries what the mismatch branch of handleRenewed
+// needs for its log/audit record.
+type renewalMismatchContext struct {
+	workspaceID    string
+	currency       string
+	expectedCents  int
+}
+
+// renewalAmountMismatch reconciles a renewal event's amount against the
+// CURRENT plan price for the order's planCode+interval (billing fix #3). The
+// order's snapshotted AmountCents is deliberately not used: renewals bill at
+// the live catalog price, and drifting channel prices are exactly what this
+// check exists to catch. Skipped (false, zero ctx, nil err) when the event
+// carries no amount, the order is unknown, or the plan is missing/unpriced —
+// reconciliation is a guard, not a blocker for degenerate catalog rows.
+func (s *BillingService) renewalAmountMismatch(ctx context.Context, event domain.PaymentEvent) (bool, renewalMismatchContext, error) {
+	if event.AmountCents <= 0 {
+		return false, renewalMismatchContext{}, nil
+	}
+	order, ok, err := s.repo.GetOrder(ctx, event.OrderID)
+	if err != nil || !ok {
+		return false, renewalMismatchContext{}, err
+	}
+	plan, ok, err := s.repo.GetPlan(ctx, order.PlanCode)
+	if err != nil || !ok {
+		return false, renewalMismatchContext{}, err
+	}
+	expected := planAmountCents(plan, order.Interval)
+	if expected <= 0 {
+		return false, renewalMismatchContext{}, nil // plan 无该周期定价 → 无从对账
+	}
+	mc := renewalMismatchContext{workspaceID: order.WorkspaceID, currency: order.Currency, expectedCents: expected}
+	if event.Currency != "" && order.Currency != "" && !strings.EqualFold(event.Currency, order.Currency) {
+		return true, mc, nil
+	}
+	if expected != event.AmountCents {
+		return true, mc, nil
+	}
+	return false, renewalMismatchContext{}, nil
 }
 
 func (s *BillingService) handleCanceled(ctx context.Context, event domain.PaymentEvent) error {
@@ -768,7 +864,7 @@ func (s *BillingService) CancelPendingOrder(ctx context.Context, p *webx.Princip
 	if order.Status != domain.OrderPending {
 		return webx.NewConflict("order is not pending")
 	}
-	if err := s.repo.UpdateOrderStatus(ctx, orderID, domain.OrderPending, domain.OrderCanceled, s.now()); err != nil {
+	if err := s.repo.CancelOrder(ctx, orderID, domain.OrderPending, "user", s.now()); err != nil {
 		return err
 	}
 	if order.ChannelRef != "" {
@@ -808,6 +904,32 @@ func PlanPriceCents(plan domain.Plan, interval domain.BillingInterval) int {
 	return planAmountCents(plan, interval)
 }
 
+// channelCurrencyAllowed reports whether the channel's declared Currencies
+// (ChannelCaps, empty = no restriction) accept the given currency
+// (case-insensitive). Non-capability channels are unrestricted.
+func channelCurrencyAllowed(ch PaymentChannel, currency string) bool {
+	viewer, ok := ch.(ChannelCapabilityViewer)
+	if !ok || len(viewer.Capabilities().Currencies) == 0 {
+		return true
+	}
+	for _, c := range viewer.Capabilities().Currencies {
+		if strings.EqualFold(c, currency) {
+			return true
+		}
+	}
+	return false
+}
+
+// errChannelCurrencyUnsupported is the register-product currency gate's 400
+// (billing fix #7): failing BEFORE the channel REST call keeps a CNY plan from
+// registering successfully on a USD-only channel and then hard-failing every
+// checkout at the cashier.
+func errChannelCurrencyUnsupported(channelName, currency, planCode string) error {
+	return webx.NewValidation(fmt.Sprintf(
+		"渠道 %s 不支持币种 %s（套餐 %s）：请先调整套餐币种或在渠道侧开通该币种，再注册渠道商品",
+		channelName, currency, planCode))
+}
+
 // resolveChannelProduct fills the CheckoutRequest.ChannelProductID for
 // catalog-based channels (BC-7): mapping hit → use it; miss + AutoRegister
 // + ProductRegistrar → register and persist; anything else → validation
@@ -818,6 +940,9 @@ func (s *BillingService) resolveChannelProduct(ctx context.Context, channel Paym
 	if !ok || !viewer.Capabilities().CatalogBased {
 		return "", nil // ad-hoc priced channel (stripe/manual): no catalog to resolve
 	}
+	if currency := planCurrency(plan, s.cfg.Currency); !channelCurrencyAllowed(channel, currency) {
+		return "", errChannelCurrencyUnsupported(channelName, currency, plan.Code)
+	}
 	if p, ok, err := s.repo.GetChannelProduct(ctx, channelName, plan.Code, interval); err != nil {
 		return "", err
 	} else if ok {
@@ -825,16 +950,16 @@ func (s *BillingService) resolveChannelProduct(ctx context.Context, channel Paym
 	}
 	reg, ok := channel.(ProductRegistrar)
 	if ok && s.cfg.AutoRegisterCatalog {
-		id, err := reg.RegisterProduct(ctx, plan, interval)
+		// check+register+upsert 原子化（billing fix #12）：渠道 REST 在 per-mapping
+		// advisory lock 内串行，并发双击只有一次真正注册。
+		id, existed, err := s.repo.RegisterChannelProductAtomic(ctx, channelName, plan.Code, interval,
+			func(ctx context.Context) (string, error) { return reg.RegisterProduct(ctx, plan, interval) },
+			amount, s.now())
 		if err != nil {
 			return "", fmt.Errorf("register channel product: %w", err)
 		}
-		now := s.now()
-		if err := s.repo.UpsertChannelProduct(ctx, domain.ChannelProduct{
-			Channel: channelName, PlanCode: plan.Code, Interval: interval,
-			ChannelProductID: id, SyncedPriceCents: amount, SyncedAt: &now,
-		}); err != nil {
-			return "", err
+		if existed {
+			return id, nil // 并发赢家已落映射：直接复用
 		}
 		s.audit(ctx, nil, nil, "billing.channel_product_auto_registered", plan.Code, map[string]any{
 			"channel": channelName, "interval": string(interval), "channel_product_id": id,

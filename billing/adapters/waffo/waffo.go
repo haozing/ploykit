@@ -10,8 +10,9 @@
 // 放 X-Signature;商户号放 X-Merchant-Id,Unix 秒放 X-Timestamp(±5min 窗口)。
 // webhook 验签:X-Waffo-Signature: "t=<毫秒>,v1=<b64>",对 "t.rawBody" 用 waffo
 // 平台公钥(后台 Settings→Webhooks 复制,按环境区分)验 RSA-SHA256(PKCS1v15),
-// 容忍窗口 45min —— waffo 重试原样重放签名头,t 不会重打,防重放靠
-// ploykit 按 ChannelEventID 幂等入库,不靠时间窗。
+// 容忍窗口 24h —— 官方重试链最长 8h,窗口须覆盖整条链;重试原样重放签名头,
+// t 不会重打,防重放靠 ploykit 按 ChannelEventID(eventType:eventId)幂等
+// 入库,不靠时间窗。
 //
 // 订阅标识:waffo 事件载荷没有 subscriptionId,data.orderId 在 activated/
 // renewed/canceled 全程不变,充当稳定订阅引用(SMS = subscription mark),

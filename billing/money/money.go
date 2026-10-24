@@ -28,6 +28,62 @@ var zeroDecimal = map[string]bool{
 	"JPY": true,
 }
 
+// threeDecimal lists ISO 4217 currencies whose minor unit has exponent 3.
+// The framework converts between minor units and display strings only for
+// exponents 0 and 2; a three-decimal currency flowing through FormatCents
+// would be silently priced 10x off (1500 fils → "15.00" instead of 1.500),
+// so these are rejected rather than approximated.
+var threeDecimal = map[string]bool{
+	"BHD": true, "IQD": true, "JOD": true, "KWD": true, "LYD": true, "OMR": true, "TND": true,
+}
+
+// CheckMinorUnit reports whether the framework can correctly convert between
+// minor units and display strings for this currency: ISO 4217 shape, minor
+// unit exponent 0 (JPY) or 2. Three-decimal currencies (KWD, BHD, …) return
+// an error instead of being approximated — wire this into plan/price
+// validation so they are rejected at the edge, never at the cashier.
+func CheckMinorUnit(currency string) error {
+	if err := ValidateCurrency(currency); err != nil {
+		return err
+	}
+	if threeDecimal[strings.ToUpper(currency)] {
+		return fmt.Errorf("currency %q has a 3-decimal minor unit, which the framework does not support (pricing would be 10x off)", strings.ToUpper(currency))
+	}
+	return nil
+}
+
+// FormatCentsChecked is FormatCents for untrusted currency input: it refuses
+// three-decimal minor units instead of formatting them wrong. Callers that
+// build channel-side prices from a plan currency must use this and surface
+// the error; FormatCents stays for already-validated currencies.
+func FormatCentsChecked(cents int, currency string) (string, error) {
+	if threeDecimal[strings.ToUpper(currency)] {
+		return "", fmt.Errorf("money: currency %q has a 3-decimal minor unit, refusing to format %d minor units as a 2-decimal amount", strings.ToUpper(currency), cents)
+	}
+	return FormatCents(cents, currency), nil
+}
+
+// ParseAmountForCurrency parses a display string according to the currency's
+// minor-unit exponent. For zero-decimal currencies (JPY) it additionally
+// normalizes the "4500.00" echo form some gateways send back: an all-zero
+// fraction is stripped ("4500.00" → 4500, "4500." → 4500), while any nonzero
+// fraction is not convertible to a whole minor unit and yields 0 (the
+// established "not reconcilable" convention). Every other currency parses
+// exactly like ParseAmount.
+func ParseAmountForCurrency(display, currency string) int {
+	if !zeroDecimal[strings.ToUpper(currency)] {
+		return ParseAmount(display)
+	}
+	s := strings.TrimSpace(display)
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		if frac := s[i+1:]; frac != "" && strings.Trim(frac, "0") != "" {
+			return 0
+		}
+		s = s[:i]
+	}
+	return ParseAmount(s)
+}
+
 // FormatCents converts a minor-unit integer to the channel display string.
 // Zero-decimal currencies (JPY) carry no decimal point; all others use two
 // decimal places: 1900/"USD" -> "19.00", 4500/"JPY" -> "4500",

@@ -1,17 +1,21 @@
 package settings
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/haozing/ploykit/platform/sealx"
 )
 
-// errNoSealer is returned when a sensitive key is written without a
+// ErrNoSealer is returned when a sensitive key is written without a
 // configured sealer. Fail-closed by design: no plaintext credential ever
 // lands in the generic site_settings table — PLOYKIT_SEAL_KEY unset means
 // sensitive writes are rejected, not degraded (AGENTS.md sealx constraint).
-var errNoSealer = errors.New("settings: sensitive key requires a configured sealer (PLOYKIT_SEAL_KEY)")
+// It wraps sealx.ErrNoKey so callers that cannot import this package (billing
+// reaches the store through its own structural port) still classify the error
+// with errors.Is(err, sealx.ErrNoKey) and surface a 503 "configure the seal
+// key" instead of a 500 (billing fix #10).
+var ErrNoSealer = fmt.Errorf("%s: %w",
+	"settings: sensitive key requires a configured sealer (PLOYKIT_SEAL_KEY)", sealx.ErrNoKey)
 
 // WithSealer attaches the credential sealer used to encrypt sensitive keys
 // (v1: smtp_pass) at rest. Call it once after Bootstrap/NewStore and before
@@ -34,7 +38,7 @@ func (s *Store) sealValue(key, value string) (string, error) {
 		return value, nil
 	}
 	if s.sealer == nil {
-		return "", errNoSealer
+		return "", ErrNoSealer
 	}
 	sealed, err := s.sealer.Seal(value)
 	if err != nil {

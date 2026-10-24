@@ -33,8 +33,17 @@ type Client struct {
 }
 
 // apiEnvelope waffo 成功响应的统一包裹 {"data": {...}}(GraphQL 响应同形)。
+// GraphQL 语义:HTTP 200 也可能带顶层 errors 数组(部分错误/全错误),
+// 只看状态码会把探活做成假阳性。
 type apiEnvelope struct {
-	Data json.RawMessage `json:"data"`
+	Data   json.RawMessage   `json:"data"`
+	Errors []apiGraphQLError `json:"errors"`
+}
+
+// apiGraphQLError GraphQL 顶层 errors 数组元素;只取 message(本包唯一
+// 的 GraphQL 调用是探活,错误码/路径不需要)。
+type apiGraphQLError struct {
+	Message string `json:"message"`
 }
 
 // apiError 非 2xx 响应;4xx 不重试(waffo 文档明确),5xx 由调用方决定
@@ -104,6 +113,16 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	var env apiEnvelope
 	if err := json.Unmarshal(respBody, &env); err != nil {
 		return fmt.Errorf("waffo: %s %s: decode envelope: %w", method, path, err)
+	}
+	// GraphQL 规范允许 200 + errors(REST 网关不会发顶层 errors,这条
+	// 实际只影响 graphql 探活):非空 errors 即失败,带首条 message ——
+	// 否则 TestConnection 对凭据失效等错误假阳性放行。
+	if len(env.Errors) > 0 {
+		first := env.Errors[0].Message
+		if first == "" {
+			first = "(empty message)"
+		}
+		return fmt.Errorf("waffo: %s %s: graphql error: %s", method, path, first)
 	}
 	if len(env.Data) == 0 {
 		return nil

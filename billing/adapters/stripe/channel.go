@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -243,6 +244,28 @@ func (c *Channel) ConfigSchema() []app.FieldSpec {
 				{Value: "prod", Label: "prod(生产)"},
 			}},
 	}
+}
+
+// stripeEnvByField maps ConfigSchema keys to the env vars their env-fallback
+// reads (same vars the example wiring passes to New — keep in sync with the
+// product's main.go factory).
+var stripeEnvByField = []struct{ field, env string }{
+	{"secret_key", "STRIPE_SECRET_KEY"},
+	{"webhook_signing_key", "STRIPE_WEBHOOK_SIGNING_KEY"},
+}
+
+// EnvProvidedKeys implements app.ChannelEnvViewer (billing fix #6): it lists
+// the schema keys whose env var is currently set, so the admin API can allow
+// clearing a required field ("empty DB row = fall back to env") and the card
+// can surface the env fallback to the frontend.
+func (c *Channel) EnvProvidedKeys() []string {
+	keys := make([]string, 0, len(stripeEnvByField))
+	for _, m := range stripeEnvByField {
+		if os.Getenv(m.env) != "" {
+			keys = append(keys, m.field)
+		}
+	}
+	return keys
 }
 
 func maskKey(k string) string {

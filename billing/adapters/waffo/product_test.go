@@ -44,6 +44,13 @@ func TestConfigSchemaShape(t *testing.T) {
 		mode.Options[0].Value != ModeTest || mode.Options[1].Value != ModeProd {
 		t.Fatalf("mode must be select test/prod, got %+v", mode)
 	}
+	// 每个字段的 Help 必须写明「清空=回退 env」语义(P3-7:管理员误以为
+	// 清空即彻底删除配置,实际 NewFromFields 的装配是 fields 优先、env 回退)。
+	for _, s := range schema {
+		if !strings.Contains(s.Help, "回退到环境变量") {
+			t.Fatalf("field %s help must explain clear-to-empty falls back to env, got %q", s.Key, s.Help)
+		}
+	}
 }
 
 // ---- RegisterProduct / SyncPrice(BC-7 REST 建品/改价) ----
@@ -243,8 +250,9 @@ func TestNewFromFields(t *testing.T) {
 	}
 
 	// 目录模式:fields 只给 merchant_id/private_key,env 不带静态商品 →
-	// 构造成功,Configured=false(products 空,判定维持),mode=prod 生效拒收
-	// test 回调。
+	// 构造成功,Configured=true(纯凭据语义,与 paypal 同判:目录模式下
+	// 静态商品留空是合法形态,products 不再参与判定),mode=prod 生效
+	// 拒收 test 回调。
 	catalogEnv := func(k string) string {
 		switch k {
 		case EnvProductMonthly, EnvProductYearly:
@@ -259,8 +267,8 @@ func TestNewFromFields(t *testing.T) {
 	if err != nil || ch == nil {
 		t.Fatalf("catalog mode build: (%v,%v)", ch, err)
 	}
-	if cc := ch.ChannelConfig(); cc.Configured {
-		t.Fatalf("catalog mode without static products must report unconfigured, got %+v", cc)
+	if cc := ch.ChannelConfig(); !cc.Configured {
+		t.Fatalf("catalog mode with credentials must report configured (products no longer gate it), got %+v", cc)
 	}
 	if ch.mode != ModeProd {
 		t.Fatalf("mode = %q, want prod", ch.mode)
@@ -282,5 +290,36 @@ func TestNewFromFields(t *testing.T) {
 	}
 	if ch, err := NewFromFields(map[string]string{"merchant_id": "MER_db"}, func(string) string { return "" }, log, false); ch != nil || err != nil {
 		t.Fatalf("partial config in dev = disabled, got (%v,%v)", ch, err)
+	}
+}
+
+// ---- ChannelConfig.Configured 纯凭据语义 ----
+
+// 零值渠道(client 为 nil = 凭据缺失)→ Configured=false,KeyMasked 空
+// 且不触发 nil 解引用(修复前 maskID(c.client.MerchantID) 直接 panic)。
+func TestChannelConfigZeroValue(t *testing.T) {
+	cc := (&Channel{}).ChannelConfig()
+	if cc.Configured || cc.KeyMasked != "" || cc.WebhookConfigured {
+		t.Fatalf("zero-value channel must report fully unconfigured, got %+v", cc)
+	}
+}
+
+// ---- 三位小数币纵深防御(FormatCentsChecked) ----
+
+// KWD(三位小数)不经渠道币种白名单(建品/改价入口比 checkout 白名单更
+// 早接触 plan.currency),必须在价格格式化处被拒 —— 不产生 10 倍错价商品。
+func TestRegisterProductRejectsThreeDecimalCurrency(t *testing.T) {
+	ch, err := New(Config{MerchantID: "M", PrivateKey: pemPrivate(testRSA(t)),
+		StoreID: "S", APIBase: "https://unused.invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kwd := domain.Plan{Code: "pro", Name: "Pro", Currency: "KWD",
+		Limits: map[string]int{"price_monthly_cents": 4500}}
+	if _, err := ch.RegisterProduct(context.Background(), kwd, domain.IntervalMonthly); err == nil || !strings.Contains(err.Error(), "3-decimal") {
+		t.Fatalf("register: want 3-decimal rejection, got %v", err)
+	}
+	if err := ch.SyncPrice(context.Background(), "PROD_x", kwd, domain.IntervalMonthly); err == nil || !strings.Contains(err.Error(), "3-decimal") {
+		t.Fatalf("sync price: want 3-decimal rejection, got %v", err)
 	}
 }

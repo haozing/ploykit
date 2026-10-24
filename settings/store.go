@@ -3,7 +3,7 @@ package settings
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/haozing/ploykit/platform/sealx"
@@ -47,6 +47,42 @@ func (s *Store) Set(ctx context.Context, key, value, actor string) error {
 	return err
 }
 
+// SetMany writes multiple keys in ONE transaction (billing fix #11,
+// 2026-10-24): the admin channel-fields save submits a whole card and used to
+// loop Set() per key — a mid-loop failure left a half-saved channel for the
+// hot-reload registry to pick up. Sealing of sensitive keys happens up front
+// so a rejected seal never opens (or partially commits) the transaction. An
+// empty map is a no-op.
+func (s *Store) SetMany(ctx context.Context, kv map[string]string, actor string) error {
+	if len(kv) == 0 {
+		return nil
+	}
+	sealed := make(map[string]string, len(kv))
+	for k, v := range kv {
+		sv, err := s.sealValue(k, v)
+		if err != nil {
+			return err
+		}
+		sealed[k] = sv
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	for k, v := range sealed {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO site_settings (key, value, updated_at, updated_by)
+			VALUES ($1, $2, now(), $3)
+			ON CONFLICT (key) DO UPDATE
+			SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+			k, v, actor); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) All(ctx context.Context) (map[string]string, error) {
 	rows, err := s.pool.Query(ctx, `SELECT key, value FROM site_settings`)
 	if err != nil {
@@ -66,10 +102,16 @@ func (s *Store) All(ctx context.Context) (map[string]string, error) {
 
 // BillingChannelFields returns every billing_channel.<name>.<field> row with
 // values unsealed, grouped by channel name (BC-5 hot-read; same shape as
-// SMTPConfig). Rows outside the prefix and malformed keys are skipped; a row
-// that fails to unseal errors the whole read — fail-closed, no plaintext
-// fallback, no partial secret leakage. A channel with no rows is absent from
-// the map. This is the source the hot-reload channel registry polls.
+// SMTPConfig). Rows outside the prefix and malformed keys are skipped. A row
+// that fails to unseal is SKIPPED with a warn log naming the key — the read
+// still returns a partial map and nil error (billing fix #5, 2026-10-24):
+// one poisoned row (legacy plaintext, rotated seal key) used to error the
+// whole read and take EVERY channel down with it; now it only leaves that one
+// channel unconfigured until the credential is re-saved. The sealx fail-closed
+// discipline is unchanged for the row itself: the unreadable value is never
+// returned, never fallen back to plaintext — skipping is a refusal, not a
+// degradation. A channel with no rows is absent from the map. This is the
+// source the hot-reload channel registry polls.
 func (s *Store) BillingChannelFields(ctx context.Context) (map[string]map[string]string, error) {
 	all, err := s.All(ctx)
 	if err != nil {
@@ -88,7 +130,9 @@ func (s *Store) BillingChannelFields(ctx context.Context) (map[string]map[string
 		if IsSensitive(k) {
 			plain, err := s.sealer.Unseal(v) // nil-receiver safe: errors when no sealer
 			if err != nil {
-				return nil, fmt.Errorf("settings: read billing channel key %s: %w", k, err)
+				slog.Default().Warn("settings: skip unreadable billing channel credential row (channel stays unconfigured until re-saved)",
+					"key", k, "err", err)
+				continue
 			}
 			v = plain
 		}

@@ -125,6 +125,76 @@ func TestOrderExpiryWorker_NameAndShutdown(t *testing.T) {
 	}
 }
 
+// TestOrderExpiryWorker_GraceAndChaseSweep_DB covers billing fix #1 (grace
+// window) and fix #14 (chase loop) against the real repo: a session that
+// expired inside orderSweepGrace survives the tick, a backlog larger than one
+// batch is drained within a single sweepOnce.
+func TestOrderExpiryWorker_GraceAndChaseSweep_DB(t *testing.T) {
+	repo, pool := workerTestDB(t)
+	ctx := context.Background()
+
+	uid := uuid.NewString()
+	_, err := pool.Exec(ctx, `INSERT INTO "user" (id, email) VALUES ($1, $2)`,
+		uid, fmt.Sprintf("swp-%s@test.dev", uid[:12]))
+	require.NoError(t, err)
+	wsID := uuid.NewString()
+	_, err = pool.Exec(ctx,
+		`INSERT INTO workspace (id, slug, name, plan_code, created_by) VALUES ($1, $2, 'sweep测试', 'free', $3)`,
+		wsID, "swp-"+wsID[:12], uid)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cctx := context.Background()
+		_, _ = pool.Exec(cctx, `DELETE FROM "order" WHERE workspace_id = $1`, wsID)
+		_, _ = pool.Exec(cctx, `DELETE FROM workspace WHERE id = $1`, wsID)
+		_, _ = pool.Exec(cctx, `DELETE FROM "user" WHERE id = $1`, uid)
+	})
+
+	insertOrder := func(expires time.Time) string {
+		id := uuid.NewString()
+		_, err := pool.Exec(ctx, `
+			INSERT INTO "order" (id, workspace_id, user_id, plan_code, interval, amount_cents, currency, channel, status, expires_at)
+			VALUES ($1, $2, $3, 'pro', 'monthly', 9900, 'CNY', 'waffo', 'pending', $4)`,
+			id, wsID, uid, expires)
+		require.NoError(t, err)
+		return id
+	}
+
+	svc := app.NewBillingService(repo, app.NewChannelRegistry(), app.Config{}, app.BillingHooks{}, nil,
+		func() time.Time { return time.Now().UTC() }, nil)
+	w := &OrderExpiryWorker{Service: svc, Batch: 100}
+
+	statusOf := func(id string) string {
+		var status string
+		require.NoError(t, pool.QueryRow(ctx, `SELECT status FROM "order" WHERE id = $1`, id).Scan(&status))
+		return status
+	}
+
+	t.Run("宽限期：23h 前到期不扫，25h 前到期扫", func(t *testing.T) {
+		inside := insertOrder(time.Now().UTC().Add(-23 * time.Hour))
+		outside := insertOrder(time.Now().UTC().Add(-25 * time.Hour))
+
+		total, err := w.sweepOnce(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 1, total)
+		assert.Equal(t, "pending", statusOf(inside), "宽限期内（<24h）的在途支付窗口不被清扫")
+		assert.Equal(t, "canceled", statusOf(outside))
+	})
+
+	t.Run("追扫：250 条积压单 tick 抽干（100×2+50）", func(t *testing.T) {
+		for i := 0; i < 250; i++ {
+			insertOrder(time.Now().UTC().Add(-25 * time.Hour))
+		}
+		total, err := w.sweepOnce(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 250, total, "满批续扫直到不满批（上限 10 批防饥饿）")
+
+		var n int
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT count(*) FROM "order" WHERE workspace_id = $1 AND status = 'pending'`, wsID).Scan(&n))
+		assert.Equal(t, 1, n, "只剩宽限期内那一条")
+	})
+}
+
 func TestExpiryWorker_DowngradesDueWorkspaces(t *testing.T) {
 	repo, pool := workerTestDB(t)
 	ctx := context.Background()

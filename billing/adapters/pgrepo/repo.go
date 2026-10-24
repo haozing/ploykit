@@ -104,6 +104,45 @@ func (r *Repo) UpdateOrderStatus(ctx context.Context, id string, from, to domain
 	return nil
 }
 
+// CancelOrder is the cancel-flavored UpdateOrderStatus that also stamps
+// canceled_by (migration 051): 'user' / 'admin' for the human cancel paths,
+// 'expiry' for the abandoned-checkout sweep. canceled_by drives the revival
+// rule — only 'expiry' rows may be revived by a late paid event
+// (ReviveOrderAfterExpiry); NULL (pre-051 rows), 'user' and 'admin' are
+// terminal. ErrStatusConflict when the from-status does not match.
+func (r *Repo) CancelOrder(ctx context.Context, id string, from domain.OrderStatus, canceledBy string, now time.Time) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE "order" SET status = 'canceled', canceled_at = $4, canceled_by = $3, updated_at = $4
+		WHERE id = $1 AND status = $2`,
+		id, from, canceledBy, now)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrStatusConflict
+	}
+	return nil
+}
+
+// ReviveOrderAfterExpiry performs the single sanctioned exit from canceled:
+// canceled → paid, and only when canceled_by = 'expiry' (the abandoned-checkout
+// sweep). A payment that actually arrived must beat the sweeper's guess — the
+// money is real even if the webhook was late. canceled_by in ('user','admin')
+// or NULL (pre-051 rows: provenance unknown) leaves the row untouched; the
+// caller then keeps the "ignore paid event on canceled order" behavior.
+// Returns false when no row was revived.
+func (r *Repo) ReviveOrderAfterExpiry(ctx context.Context, id string, now time.Time) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE "order"
+		SET status = 'paid', paid_at = $2, canceled_by = NULL, updated_at = $2
+		WHERE id = $1 AND status = 'canceled' AND canceled_by = 'expiry'`,
+		id, now)
+	if err != nil {
+		return false, mapErr(err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 func (r *Repo) SetOrderChannelRefAndExpiry(ctx context.Context, id, channelRef string, expiresAt time.Time) error {
 	var exp any
 	if !expiresAt.IsZero() {
@@ -438,15 +477,18 @@ func (r *Repo) ExpireDueWorkspaces(ctx context.Context, now time.Time, limit int
 }
 
 // ExpireStaleOrders flips pending orders whose checkout session expired to
-// canceled (F15 abandoned-checkout sweep). The status literals 'pending'/
-// 'canceled' are same-source with domain.OrderPending / domain.OrderCanceled
-// (an OrderStatus value cannot be interpolated into a SET clause without
-// losing the natural-expression scan style used below). Single UPDATE with a
-// locking subquery — atomic without an explicit tx; SKIP LOCKED keeps
-// concurrent sweepers from fighting over rows.
+// canceled (F15 abandoned-checkout sweep), stamping canceled_by = 'expiry' so
+// a late paid event can revive them (migration 051). The status literals
+// 'pending'/'canceled' are same-source with domain.OrderPending /
+// domain.OrderCanceled (an OrderStatus value cannot be interpolated into a SET
+// clause without losing the natural-expression scan style used below). Single
+// UPDATE with a locking subquery — atomic without an explicit tx; SKIP LOCKED
+// keeps concurrent sweepers from fighting over rows. The caller chooses the
+// cutoff (repo semantics stay `expires_at <= $1`); the worker passes
+// now-orderSweepGrace so in-flight webhook retries get a grace window.
 func (r *Repo) ExpireStaleOrders(ctx context.Context, now time.Time, limit int) ([]app.ExpiredOrder, error) {
 	rows, err := r.pool.Query(ctx, `
-		UPDATE "order" SET status = 'canceled', canceled_at = $1, updated_at = now()
+		UPDATE "order" SET status = 'canceled', canceled_at = $1, canceled_by = 'expiry', updated_at = now()
 		WHERE id IN (
 			SELECT id FROM "order"
 			WHERE status = 'pending' AND expires_at IS NOT NULL AND expires_at <= $1

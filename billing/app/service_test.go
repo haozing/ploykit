@@ -53,6 +53,9 @@ type fakeRepo struct {
 	expired     []ExpiredWorkspace
 	staleOrders []ExpiredOrder
 
+	// canceledBy mirrors migrations/051's order.canceled_by (domain.Order 不扩字段，fake 内部记账).
+	canceledBy map[string]string
+
 	channelRefCalls []channelRefCall
 
 	updateStatusErr error
@@ -126,6 +129,36 @@ func (f *fakeRepo) UpdateOrderStatus(_ context.Context, id string, from, to doma
 		o.PaidAt = &t
 	}
 	return nil
+}
+
+func (f *fakeRepo) CancelOrder(_ context.Context, id string, from domain.OrderStatus, canceledBy string, now time.Time) error {
+	if f.updateStatusErr != nil {
+		return f.updateStatusErr
+	}
+	o, ok := f.orders[id]
+	if !ok || o.Status != from {
+		return domain.ErrStatusConflict
+	}
+	o.Status = domain.OrderCanceled
+	t := now
+	o.CanceledAt = &t
+	if f.canceledBy == nil {
+		f.canceledBy = map[string]string{}
+	}
+	f.canceledBy[id] = canceledBy
+	return nil
+}
+
+func (f *fakeRepo) ReviveOrderAfterExpiry(_ context.Context, id string, now time.Time) (bool, error) {
+	o, ok := f.orders[id]
+	if !ok || o.Status != domain.OrderCanceled || f.canceledBy[id] != "expiry" {
+		return false, nil
+	}
+	o.Status = domain.OrderPaid
+	t := now
+	o.PaidAt = &t
+	delete(f.canceledBy, id)
+	return true, nil
 }
 
 func (f *fakeRepo) SetOrderChannelRefAndExpiry(_ context.Context, id, ref string, expiresAt time.Time) error {
@@ -828,4 +861,32 @@ func (f *fakeRepo) ListChannelProducts(context.Context) ([]domain.ChannelProduct
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// RegisterChannelProductAtomic mirrors the pgrepo advisory-lock semantics
+// single-threaded: existing mapping → (existing, true); otherwise run the
+// register callback and upsert (fix #12 的 hermetic 形态——并发串行化只在
+// 真 DB 测试里验证).
+func (f *fakeRepo) RegisterChannelProductAtomic(ctx context.Context, channel, planCode string, interval domain.BillingInterval,
+	register func(context.Context) (string, error), syncedPriceCents int, syncedAt time.Time) (string, bool, error) {
+	if f.chanProductErr != nil {
+		return "", false, f.chanProductErr
+	}
+	if p, ok := f.chanProducts[chanProductKey(channel, planCode, interval)]; ok {
+		return p.ChannelProductID, true, nil
+	}
+	id, err := register(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	p := domain.ChannelProduct{
+		Channel: channel, PlanCode: planCode, Interval: interval,
+		ChannelProductID: id, SyncedPriceCents: syncedPriceCents, SyncedAt: &syncedAt,
+	}
+	if f.chanProducts == nil {
+		f.chanProducts = map[string]domain.ChannelProduct{}
+	}
+	f.chanProducts[chanProductKey(channel, planCode, interval)] = p
+	f.chanUpserts = append(f.chanUpserts, p)
+	return id, false, nil
 }

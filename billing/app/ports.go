@@ -92,7 +92,7 @@ type ChannelCaps struct {
 	CatalogBased      bool     `json:"catalog_based"`        // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
 	SupportsCancelURL bool     `json:"supports_cancel_url"`
 	DisplayOrder      int      `json:"display_order"`       // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
-	Currencies        []string `json:"currencies"`          // 空=不声明限制
+	Currencies        []string `json:"currencies"`          // 空=不声明限制；非空时 RegisterProduct / AutoRegister 在调渠道 REST 前校验 plan 币种 ∈ 清单（不符 400，修复「CNY 计划注册成功但结账必 400」）
 }
 
 // ChannelCapabilityViewer is the optional capability interface channels
@@ -100,6 +100,20 @@ type ChannelCaps struct {
 // DefaultChannelDisplayOrder in OrderedNames.
 type ChannelCapabilityViewer interface {
 	Capabilities() ChannelCaps
+}
+
+// ChannelEnvViewer is the optional interface channels implement to expose
+// which of their ConfigSchema keys are currently provided by process env
+// (billing fix #6). Two consumers:
+//   - UpdateChannelFields: clearing a required text/select field is a 400
+//     unless the key is env-provided (empty DB row = fall back to env, a
+//     legitimate "unconfigure the override" move, not a misconfiguration);
+//   - the admin card (ChannelCard.EnvProvided): the frontend can exempt those
+//     fields from required-field highlighting.
+//
+// The returned keys are ConfigSchema field keys, not env var names.
+type ChannelEnvViewer interface {
+	EnvProvidedKeys() []string
 }
 
 // ProductRegistrar is the optional interface catalog-based channels (waffo,
@@ -118,6 +132,17 @@ type Repo interface {
 	ListOrdersByWorkspace(ctx context.Context, workspaceID string, limit int) ([]domain.Order, error)
 
 	UpdateOrderStatus(ctx context.Context, id string, from, to domain.OrderStatus, now time.Time) error
+
+	// CancelOrder is the cancel transition that also stamps canceled_by
+	// ('user' / 'admin' / 'expiry' — migration 051). Only 'expiry' rows are
+	// revivable by ReviveOrderAfterExpiry; 'user'/'admin'/NULL are terminal.
+	CancelOrder(ctx context.Context, id string, from domain.OrderStatus, canceledBy string, now time.Time) error
+
+	// ReviveOrderAfterExpiry attempts the single sanctioned exit from canceled
+	// (canceled → paid) when canceled_by = 'expiry' — a payment that actually
+	// arrived beats the sweeper's guess. false = not revivable (user/admin
+	// canceled, or a pre-051 NULL row), the caller keeps ignoring the event.
+	ReviveOrderAfterExpiry(ctx context.Context, id string, now time.Time) (bool, error)
 
 	FailOrder(ctx context.Context, o domain.Order, e domain.PaymentEvent, emit func(tx pgx.Tx) error, now time.Time) error
 
@@ -160,6 +185,15 @@ type Repo interface {
 	GetChannelProduct(ctx context.Context, channel, planCode string, interval domain.BillingInterval) (domain.ChannelProduct, bool, error)
 	UpsertChannelProduct(ctx context.Context, p domain.ChannelProduct) error
 	ListChannelProducts(ctx context.Context) ([]domain.ChannelProduct, error)
+
+	// RegisterChannelProductAtomic wraps mapping check + register callback +
+	// upsert under a per-(channel, plan, interval) advisory lock (billing fix
+	// #12): concurrent double-clicks serialize, the loser gets existed=true.
+	// The callback performs the channel REST inside the lock — see the pgrepo
+	// implementation note for the accepted trade-off.
+	RegisterChannelProductAtomic(ctx context.Context, channel, planCode string, interval domain.BillingInterval,
+		register func(ctx context.Context) (channelProductID string, err error),
+		syncedPriceCents int, syncedAt time.Time) (channelProductID string, existed bool, err error)
 }
 
 type MeteredWorkspace struct {

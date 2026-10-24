@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -116,10 +117,16 @@ func (c *Channel) CreateCheckout(ctx context.Context, req app.CheckoutRequest) (
 	if req.Locale != "" {
 		language = req.Locale
 	}
+	// 价格格式化走 Checked 形态:币种白名单已挡三位小数币,这里是纵深
+	// 防御 —— 白名单扩容失误时宁可拒单也不发 10 倍错价到收银台。
+	priceAmount, err := money.FormatCentsChecked(order.AmountCents, currency)
+	if err != nil {
+		return domain.CheckoutSession{}, fmt.Errorf("waffo channel: format price snapshot: %w", err)
+	}
 	body := createSessionReq{
 		ProductID:               productID,
 		Currency:                currency,
-		PriceSnapshot:           &priceSnapshot{Amount: money.FormatCents(order.AmountCents, currency), TaxCategory: c.taxCategory, TaxIncluded: c.taxIncluded},
+		PriceSnapshot:           &priceSnapshot{Amount: priceAmount, TaxCategory: c.taxCategory, TaxIncluded: c.taxIncluded},
 		BuyerEmail:              req.BuyerEmail,
 		SuccessURL:              req.SuccessURL,
 		Language:                language,
@@ -199,9 +206,11 @@ func (c *Channel) TestConnection(ctx context.Context) error {
 
 // ---- webhook ----
 
-// waffoSignatureTolerance 文档推荐 45min(非 5min):重试原样重放签名头,
-// t 永不重打;防重放靠 ploykit 按 ChannelEventID 幂等,不靠时间窗。
-const waffoSignatureTolerance = 45 * time.Minute
+// waffoSignatureTolerance 验签时间窗 24h:waffo 官方重试链最长可达 8h,
+// 窗口必须覆盖整条重试链(45min 会把第 4 次之后的合法重试当过期拒掉,
+// 卡在收银台边上的回调丢失)。防重放不靠时间窗 —— 签名绑定原始 body+t,
+// 同一事件的重放由 ChannelEventID 幂等兜底,不同事件签名天然不同。
+const waffoSignatureTolerance = 24 * time.Hour
 
 type webhookEnvelope struct {
 	ID        string          `json:"id"`
@@ -229,10 +238,13 @@ type webhookData struct {
 
 // ParseWebhook 验签 + 事件映射。验签必须用原始 body(本包拿到的就是
 // ploykit billinghttp 读出的 raw bytes,未经过任何 JSON 再编码)。
-// ChannelEventID = eventType + ":" + id:waffo 文档要求按 eventType+eventId
-// 去重,而 ploykit 的幂等键只有 ChannelEventID 一列 —— 不同事件类型可能
-// 共享同一顶层 id(如订阅事件 id = ORD_xxx),不拼类型会把后到的合法事件
-// 当重复吞掉。
+// ChannelEventID = eventType + ":" + eventId:waffo 文档要求按
+// (eventType, eventId) 二元组去重,而 ploykit 的幂等键只有 ChannelEventID
+// 一列 —— 必须把类型拼进去(不同事件类型可能共享同一顶层 id,如订阅
+// 事件 id = ORD_xxx)。eventId 取事件级 eventId 字段;同一订阅订单的
+// 各期 payment_succeeded 顶层 id 相同(ORD_xxx),只有 eventId 互异,
+// 回退顶层 id 会把第 2 期之后的续费当重复吞掉(客户持续扣费但权益
+// 掉回 free);eventId 缺失时回退顶层 id(兼容旧载荷,行为与初版一致)。
 func (c *Channel) ParseWebhook(_ context.Context, req app.WebhookRequest) (domain.PaymentEvent, error) {
 	if c.webhookPub == nil {
 		return domain.PaymentEvent{}, errors.New("waffo: webhook public key not configured (WAFFO_WEBHOOK_PUBLIC_KEY)")
@@ -276,8 +288,16 @@ func (c *Channel) ParseWebhook(_ context.Context, req app.WebhookRequest) (domai
 
 	ev := domain.PaymentEvent{
 		Channel:        c.Name(),
-		ChannelEventID: env.EventType + ":" + env.ID,
+		ChannelEventID: env.EventType + ":" + firstNonEmpty(env.EventID, env.ID),
 	}
+	// 五律 5 修复:Payload 恒空让对账/排障无原始载荷可查 —— 落已验签的
+	// 原始 envelope + mode(参考 stripe 适配器存 evt.Data.Object 的做法;
+	// payment_event.payload 是 jsonb,存 map 即入)。
+	var rawEnvelope map[string]any
+	if err := json.Unmarshal(req.Body, &rawEnvelope); err != nil {
+		return domain.PaymentEvent{}, fmt.Errorf("waffo: decode webhook payload for storage: %w", err)
+	}
+	ev.Payload = map[string]any{"mode": env.Mode, "raw": rawEnvelope}
 	// checkout 会话 metadata.order_id = ploykit 订单号,透传回每个事件;
 	// 缺失时退化用 orderMerchantExternalId(同一值,双保险)。
 	if v, ok := env.Data.OrderMetadata["order_id"].(string); ok {
@@ -293,15 +313,15 @@ func (c *Channel) ParseWebhook(_ context.Context, req app.WebhookRequest) (domai
 	case "subscription.activated":
 		ev.Type = domain.EventCheckoutCompleted
 		ev.SubscriptionRef = env.Data.OrderID // 稳定订阅引用,handlePaid 落 workspace_subscription
-		ev.AmountCents = parseAmountCents(env.Data.ChargedAmount, env.Data.Amount)
+		ev.AmountCents = parseAmountCents(env.Data.Currency, env.Data.ChargedAmount, env.Data.Amount)
 	case "order.completed": // 一次性购买(预留卖包路径),映射同 activated 但无订阅引用
 		ev.Type = domain.EventCheckoutCompleted
-		ev.AmountCents = parseAmountCents(env.Data.ChargedAmount, env.Data.Amount)
+		ev.AmountCents = parseAmountCents(env.Data.Currency, env.Data.ChargedAmount, env.Data.Amount)
 	case "subscription.payment_succeeded":
 		if env.Data.PeriodNumber > 1 {
 			ev.Type = domain.EventSubscriptionRenewed
 			ev.SubscriptionRef = env.Data.OrderID
-			ev.AmountCents = parseAmountCents(env.Data.ChargedAmount, env.Data.Amount)
+			ev.AmountCents = parseAmountCents(env.Data.Currency, env.Data.ChargedAmount, env.Data.Amount)
 		} else {
 			ev.Type = "ignored" // 首期:activated 已走 handlePaid,再发一次只是撞状态冲突
 		}
@@ -310,7 +330,7 @@ func (c *Channel) ParseWebhook(_ context.Context, req app.WebhookRequest) (domai
 		ev.SubscriptionRef = env.Data.OrderID
 	case "refund.succeeded":
 		ev.Type = domain.EventRefundCreated
-		ev.AmountCents = parseAmountCents(env.Data.RefundedAmount)
+		ev.AmountCents = parseAmountCents(env.Data.Currency, env.Data.RefundedAmount)
 		if env.Data.PeriodNumber > 0 {
 			ev.SubscriptionRef = env.Data.OrderID // 订阅退款:撤权并清订阅引用
 		}
@@ -323,40 +343,71 @@ func (c *Channel) ParseWebhook(_ context.Context, req app.WebhookRequest) (domai
 	return ev, nil
 }
 
-// ChannelConfig 进 billing 配置面(service_billingcfg):webhook 公钥未配
-// 时如实标未配置 —— 收银台能开但回调进不来,运营必须看得见这个半残态。
+// ChannelConfig 进 billing 配置面(service_billingcfg):Configured 是纯凭据
+// 语义(client 就绪 = merchant_id + 私钥可签名),与 paypal 的
+// Configured = ClientID+Secret 同判 —— 目录模式(BC-7)下静态商品 id 留空
+// 是合法形态(schema help 自己说"目录模式下留空"),把 products 拼进判定
+// 会让目录模式渠道卡恒显"未配置"、测试连接被 billingcfg 的门误拒。
+// 商品缺失在 CreateCheckout 才是问题,那里已有清晰报错。webhook 公钥
+// 未配时如实标未配置 —— 收银台能开但回调进不来,运营必须看得见这个半残态。
 func (c *Channel) ChannelConfig() app.ChannelConfigInfo {
+	configured := c.client != nil
+	masked := ""
+	if configured {
+		masked = maskID(c.client.MerchantID)
+	}
 	return app.ChannelConfigInfo{
-		Configured:        c.client != nil && c.productMonthly != "" && c.productYearly != "",
-		KeyMasked:         maskID(c.client.MerchantID),
+		Configured:        configured,
+		KeyMasked:         masked,
 		WebhookConfigured: c.webhookPub != nil,
 	}
 }
 
 // ConfigSchema 实现 app.ChannelSchemaViewer(BC-6):后台渠道卡的表单按
 // 此描述符渲染,字段键同时是 billing_channel.waffo.<field> 设置键与
-// NewFromFields 的 fields 键 —— 三处一份真源。
+// NewFromFields 的 fields 键 —— 三处一份真源。每个字段的 Help 都注明
+// 「清空=回退 env」:管理员清空字段保存后,该值会回退到环境变量提供的
+// 值(NewFromFields 的 fields-优先-env-回退装配),不是"清空即删除配置"
+// —— 不写明这一点,管理员会误以为清空能彻底摘掉某个值(P3-7)。
 func (c *Channel) ConfigSchema() []app.FieldSpec {
 	return []app.FieldSpec{
 		{Key: FieldMerchantID, Label: "Merchant ID", Type: app.FieldTypeText, Required: true,
-			Help: "waffo 后台 Dashboard → API & Development 复制(MER_ 开头)"},
+			Help: "waffo 后台 Dashboard → API & Development 复制(MER_ 开头);清空保存后将回退到环境变量提供的值"},
 		{Key: FieldPrivateKey, Label: "API 私钥", Type: app.FieldTypeSecret, Required: true,
-			Help: "仅创建时下发;支持 PEM / 转义 \\n / 整段 base64 / 裸 base64 体四种形态"},
+			Help: "仅创建时下发;支持 PEM / 转义 \\n / 整段 base64 / 裸 base64 体四种形态;清空保存后将回退到环境变量提供的值"},
 		{Key: FieldStoreID, Label: "Store ID", Type: app.FieldTypeText,
-			Help: "商品注册用(BC-7 建品请求的 storeId);不使用后台注册商品可留空"},
+			Help: "商品注册用(BC-7 建品请求的 storeId);不使用后台注册商品可留空;清空保存后将回退到环境变量提供的值"},
 		{Key: FieldProductMonthly, Label: "月付商品 ID", Type: app.FieldTypeText,
-			Help: "静态 PROD_ id(env-only 老接法);目录模式下留空、在渠道页按套餐注册"},
+			Help: "静态 PROD_ id(env-only 老接法);目录模式下留空、在渠道页按套餐注册;清空保存后将回退到环境变量提供的值"},
 		{Key: FieldProductYearly, Label: "年付商品 ID", Type: app.FieldTypeText,
-			Help: "静态 PROD_ id(env-only 老接法);目录模式下留空、在渠道页按套餐注册"},
+			Help: "静态 PROD_ id(env-only 老接法);目录模式下留空、在渠道页按套餐注册;清空保存后将回退到环境变量提供的值"},
 		{Key: FieldWebhookPublicKey, Label: "Webhook 验签公钥", Type: app.FieldTypeSecret,
-			Help: "waffo 后台 Settings → Webhooks 复制;test/prod 各一把,分环境各自保存"},
+			Help: "waffo 后台 Settings → Webhooks 复制;test/prod 各一把,分环境各自保存;清空保存后将回退到环境变量提供的值"},
 		{Key: FieldMode, Label: "环境模式", Type: app.FieldTypeSelect,
-			Help: "test = 测试回调/测试卡;prod = 生产。配置后跨环境回调直接拒收",
+			Help: "test = 测试回调/测试卡;prod = 生产。配置后跨环境回调直接拒收;清空保存后将回退到环境变量提供的值",
 			Options: []app.FieldOption{
 				{Value: ModeTest, Label: "test(测试)"},
 				{Value: ModeProd, Label: "prod(生产)"},
 			}},
 	}
+}
+
+// EnvProvidedKeys 返回进程环境变量当前实际提供(os.Getenv 非空)的配置
+// 字段键(与 ConfigSchema 的 Key 同名;env 变量名走 NewFromFields/
+// FromEnv 共用的 envOfField 映射)。billing 侧以 ChannelEnvViewer 鸭子
+// 类型断言取用:后台渠道卡据此展示"清空该字段后将回退到的 env 值",
+// 没被 env 提供的键不列。顺序与 ConfigSchema 一致,便于展示与断言。
+func (c *Channel) EnvProvidedKeys() []string {
+	var keys []string
+	for _, field := range []string{
+		FieldMerchantID, FieldPrivateKey, FieldStoreID,
+		FieldProductMonthly, FieldProductYearly, FieldWebhookPublicKey, FieldMode,
+	} {
+		if strings.TrimSpace(os.Getenv(envOfField[field])) != "" {
+			keys = append(keys, field)
+		}
+	}
+	return keys
 }
 
 // ---- ProductRegistrar(BC-7,目录型商品映射) ----
@@ -426,8 +477,14 @@ func (c *Channel) priceForPlan(plan domain.Plan, interval domain.BillingInterval
 	if currency == "" {
 		currency = "USD"
 	}
+	// 注册价同样走 Checked:plan.currency 不经渠道白名单(建品入口比
+	// checkout 更靠前),三位小数币在这里必须显式失败而不是 10 倍错价。
+	amount, err := money.FormatCentsChecked(cents, currency)
+	if err != nil {
+		return nil, fmt.Errorf("waffo: format price for plan %s: %w", plan.Code, err)
+	}
 	return map[string]productPrice{currency: {
-		Amount:      money.FormatCents(cents, currency),
+		Amount:      amount,
 		TaxIncluded: c.taxIncluded,
 		TaxCategory: c.taxCategory,
 	}}, nil
@@ -506,6 +563,16 @@ func headerGet(h map[string][]string, name string) string {
 	return ""
 }
 
+// firstNonEmpty 返回第一个非空串(waffo 事件级 eventId 缺失时回退顶层 id)。
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // parseSignatureHeader "t=<毫秒>,v1=<b64>"(与 Stripe 的 t=…,v1=… 同形)。
 func parseSignatureHeader(sig string) (t, v1 string, err error) {
 	for _, part := range strings.Split(sig, ",") {
@@ -528,12 +595,14 @@ func parseSignatureHeader(sig string) (t, v1 string, err error) {
 
 // parseAmountCents 展示字符串 → 最小货币单位整数,空值向后回退
 // (chargedAmount 优先、deprecated amount 兜底);解析本体在 billing/money
-// (BC-3,JPY "4500" 无小数点 → 4500,"19.00" → 1900)。不可解析输入
-// 得 0,billing 侧按"金额缺失不参与对账"处理,不拦事件。
-func parseAmountCents(values ...string) int {
+// (BC-3,JPY "4500" 无小数点 → 4500,"19.00" → 1900)。按币种解析
+// (ParseAmountForCurrency):部分网关对零小数位币种回显 "4500.00" 形态,
+// 旧 ParseAmount 会解析成 450000(100 倍),金额对账整单拒付。不可解析
+// 输入得 0,billing 侧按"金额缺失不参与对账"处理,不拦事件。
+func parseAmountCents(currency string, values ...string) int {
 	for _, v := range values {
 		if strings.TrimSpace(v) != "" {
-			return money.ParseAmount(v)
+			return money.ParseAmountForCurrency(v, currency)
 		}
 	}
 	return 0

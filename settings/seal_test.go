@@ -106,7 +106,7 @@ func TestSensitiveFailClosedIntegration(t *testing.T) {
 	require.NoError(t, err)
 	_, _, _, _, _, err = sealed.SMTPConfig(ctx)
 	require.ErrorIs(t, err, sealx.ErrPlaintext)
-	assert.False(t, errors.Is(err, errNoSealer))
+	assert.False(t, errors.Is(err, ErrNoSealer))
 }
 
 func TestSMTPEnvFallbackIntegration(t *testing.T) {
@@ -236,12 +236,62 @@ func TestBillingChannelKeysIntegration(t *testing.T) {
 	_, has := fields["waffo"][""]
 	assert.False(t, has, "缺字段段的畸形键不得产生空字段项")
 
-	// 错误密钥读 → Unseal 失败报错（不静默、不回退明文）。
+	// 错误密钥读 → 毒行跳过 + 部分结果 + nil error（fix #5：单行解封失败只废
+	// 该行所属渠道，不再整读报错炸掉全渠道；该值绝不返回、绝不回退明文）。
 	wrongKey := NewStore(pool).WithSealer(mustSecrets(t, 'x'))
-	_, err = wrongKey.BillingChannelFields(ctx)
-	require.Error(t, err)
+	fields, err = wrongKey.BillingChannelFields(ctx)
+	require.NoError(t, err, "fix #5：解封失败改为跳过毒行，不再让整读报错")
+	assert.NotContains(t, fields, "waffo", "该密钥不可解的渠道整组跳过")
+	assert.NotContains(t, fields, "stripe", "同上")
 
-	// 无 sealer 的 store 读含封存行的分组 → 报错（同 SMTPConfig 的姿态）。
-	_, err = bare.BillingChannelFields(ctx)
+	// 无 sealer 的 store 读含封存行 → 同样跳过（毒行语义一致）。
+	fields, err = bare.BillingChannelFields(ctx)
+	require.NoError(t, err)
+	assert.NotContains(t, fields, "waffo")
+	assert.NotContains(t, fields, "stripe")
+}
+
+// TestSetManyIntegration covers fix #11: multi-key writes land in ONE
+// transaction — all keys present after success, nothing persisted when any
+// seal/validation fails up front, and an empty map is a no-op.
+func TestSetManyIntegration(t *testing.T) {
+	pool, _ := newStoreEnv(t)
+	ctx := context.Background()
+	sealed := NewStore(pool).WithSealer(mustSecrets(t, 'k'))
+	bare := NewStore(pool)
+
+	require.NoError(t, bare.SetMany(ctx, map[string]string{KeyBannerText: "x"}, "ops@x.com"),
+		"非敏感键无 sealer 也可批量写")
+
+	require.NoError(t, sealed.SetMany(ctx, map[string]string{
+		BillingChannelKeyPrefix + "waffo.merchant_id": "MER_1",
+		BillingChannelKeyPrefix + "waffo.private_key": "k-2",
+		KeyBannerText:                                 "批量",
+	}, "ops@x.com"))
+	v, found, err := sealed.Get(ctx, BillingChannelKeyPrefix+"waffo.merchant_id")
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.True(t, strings.HasPrefix(v, sealx.SealedPrefix), "敏感键落库必须是封存串")
+	fields, err := sealed.BillingChannelFields(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"merchant_id": "MER_1", "private_key": "k-2"}, fields["waffo"],
+		"整批写入后全部键可读")
+
+	// 无 sealer 写敏感键 → 整批拒绝，同批非敏感键也不得落库（seal 预检先行，
+	// 事务未开即拒绝）。用非播种键（smtp_host 不被 Bootstrap 播种）作探针。
+	err = bare.SetMany(ctx, map[string]string{
+		KeySMTPHost:                                     "should-not-land",
+		BillingChannelKeyPrefix + "setmany.merchant_id": "MER_x",
+	}, "ops@x.com")
 	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoSealer, "哨兵可 errors.Is（billing 侧经 sealx.ErrNoKey 分类 → 503）")
+	_, found, err = bare.Get(ctx, KeySMTPHost)
+	require.NoError(t, err)
+	assert.False(t, found, "seal 预检失败时事务未开，同批非敏感键零落库")
+	_, found, err = bare.Get(ctx, BillingChannelKeyPrefix+"setmany.merchant_id")
+	require.NoError(t, err)
+	assert.False(t, found)
+
+	// 空批量 = no-op。
+	require.NoError(t, sealed.SetMany(ctx, map[string]string{}, "ops@x.com"))
 }

@@ -278,6 +278,13 @@ func TestCreateCheckoutGuards(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), "no plan registered") {
 		t.Fatalf("missing ChannelProductID must fail clearly, got %v", err)
 	}
+	// 币种白名单(Capabilities().Currencies):白名单外订单出网前快速失败。
+	if _, err := ch.CreateCheckout(context.Background(), app.CheckoutRequest{
+		Order:            domain.Order{ID: "o", PlanCode: "pro", Interval: domain.IntervalMonthly, AmountCents: 1900, Currency: "CNY"},
+		ChannelProductID: "P-1",
+	}); err == nil || !strings.Contains(err.Error(), "currency not supported") {
+		t.Fatalf("off-whitelist currency must fail fast, got %v", err)
+	}
 }
 
 func TestCreateCheckoutNoApproveLink(t *testing.T) {
@@ -505,22 +512,39 @@ func TestParseWebhookMapping(t *testing.T) {
 			map[string]any{"id": "SUB-1", "plan_id": "P-1", "status": "ACTIVE", "custom_id": "ord_123",
 				"start_time": "2026-10-24T00:00:00Z"},
 			domain.EventCheckoutCompleted, "ord_123", "SUB-1", "SUB-1", "", 0, ""},
-		// 钱到账(五律 1):sale 对象无 custom_id,OrderID 留空走 SubscriptionRef 路径;
-		// 金额 v1 形态 {currency,total}。
+		// 钱到账(五律 1):载荷不带 custom_id → OrderID 留空(内核退化
+		// SubscriptionRef 路径,跳过对账);金额 v1 形态 {currency,total}。
 		{"sale-completed-v1-amount", "PAYMENT.SALE.COMPLETED",
 			map[string]any{"id": "SAL-9", "state": "completed", "amount": v1Amount("19.00", "USD"),
 				"billing_agreement_id": "SUB-1"},
 			domain.EventSubscriptionRenewed, "", "SUB-1", "SUB-1", "SAL-9", 1900, "USD"},
+		// sale 资源回带订阅 custom_id(= 订单号)→ ev.OrderID 落订单 id,
+		// 内核 handleRenewed 的 payment_intent + 金额对账两条防线才有钥匙。
+		{"sale-completed-custom-id", "PAYMENT.SALE.COMPLETED",
+			map[string]any{"id": "SAL-12", "state": "completed",
+				"amount": v1Amount("19.00", "USD"), "billing_agreement_id": "SUB-1",
+				"custom_id": "ord_2f6e8c10-a1b2-4c3d-9e8f-000000000001"},
+			domain.EventSubscriptionRenewed, "ord_2f6e8c10-a1b2-4c3d-9e8f-000000000001", "SUB-1", "SUB-1", "SAL-12", 1900, "USD"},
 		// 金额 v2 形态 {currency_code,value} 的兼容形态。
 		{"sale-completed-v2-amount", "PAYMENT.SALE.COMPLETED",
 			map[string]any{"id": "SAL-10", "state": "completed",
 				"amount":               map[string]any{"value": "99.00", "currency_code": "USD"},
 				"billing_agreement_id": "SUB-2"},
 			domain.EventSubscriptionRenewed, "", "SUB-2", "SUB-2", "SAL-10", 9900, "USD"},
-		// JPY 零小数。
+		// JPY 零小数:整数形态 "4500"。
 		{"sale-completed-jpy", "PAYMENT.SALE.COMPLETED",
 			map[string]any{"id": "SAL-11", "amount": v1Amount("4500", "JPY"), "billing_agreement_id": "SUB-3"},
 			domain.EventSubscriptionRenewed, "", "SUB-3", "SUB-3", "SAL-11", 4500, "JPY"},
+		// JPY 回显形态 "4500.00"(网关把两位小数形态发回来)→ 按币种解析
+		// 剥掉全零小数位,仍是 4500 円。
+		{"sale-completed-jpy-echo", "PAYMENT.SALE.COMPLETED",
+			map[string]any{"id": "SAL-13", "amount": v1Amount("4500.00", "JPY"), "billing_agreement_id": "SUB-4",
+				"custom_id": "ord_jpy"},
+			domain.EventSubscriptionRenewed, "ord_jpy", "SUB-4", "SUB-4", "SAL-13", 4500, "JPY"},
+		// JPY 非零小数 "4500.50" 无法换算成整円 → 0(不可对账约定,内核忽略)。
+		{"sale-completed-jpy-fraction", "PAYMENT.SALE.COMPLETED",
+			map[string]any{"id": "SAL-14", "amount": v1Amount("4500.50", "JPY"), "billing_agreement_id": "SUB-5"},
+			domain.EventSubscriptionRenewed, "", "SUB-5", "SUB-5", "SAL-14", 0, "JPY"},
 		{"cancelled", "BILLING.SUBSCRIPTION.CANCELLED",
 			map[string]any{"id": "SUB-1", "status": "CANCELLED", "custom_id": "ord_123"},
 			domain.EventSubscriptionCanceled, "ord_123", "SUB-1", "SUB-1", "", 0, ""},
@@ -536,6 +560,11 @@ func TestParseWebhookMapping(t *testing.T) {
 			map[string]any{"id": "RE-2", "sale_id": "SAL-9",
 				"total_refunded_amount": v1Amount("19.00", "USD")},
 			domain.EventRefundCreated, "", "", "RE-2", "SAL-9", 1900, "USD"},
+		// 退款兜底金额(JPY 回显形态)按其来源字段的币种解析。
+		{"refunded-jpy-echo-total", "PAYMENT.SALE.REFUNDED",
+			map[string]any{"id": "RE-3", "sale_id": "SAL-13",
+				"total_refunded_amount": v1Amount("4500.00", "JPY")},
+			domain.EventRefundCreated, "", "", "RE-3", "SAL-13", 4500, "JPY"},
 		// 订阅中间态/催收/争议 → ignored(五律:只认钱与终态)。
 		{"suspended", "BILLING.SUBSCRIPTION.SUSPENDED", map[string]any{"id": "SUB-1", "status": "SUSPENDED"}, "ignored", "", "", "", "", 0, ""},
 		{"expired", "BILLING.SUBSCRIPTION.EXPIRED", map[string]any{"id": "SUB-1", "status": "EXPIRED"}, "ignored", "", "", "", "", 0, ""},

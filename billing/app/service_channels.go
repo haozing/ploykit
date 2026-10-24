@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/haozing/ploykit/billing/domain"
+	"github.com/haozing/ploykit/platform/sealx"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -21,6 +24,10 @@ type ChannelCard struct {
 	Schema            []FieldSpec       `json:"schema"`
 	Values            map[string]string `json:"values"`
 	ConfigSource      string            `json:"config_source"` // "db" | "env" | ""
+	// EnvProvided lists the schema keys currently supplied by process env
+	// (ChannelEnvViewer, billing fix #6): the frontend exempts them from
+	// required-field highlighting — clearing the DB row falls back to env.
+	EnvProvided []string `json:"env_provided,omitempty"`
 }
 
 // channelSecretSetMarker is what a secret field reads back as once stored
@@ -146,6 +153,11 @@ func (s *BillingAdminService) channelCard(ch PaymentChannel, dbFields map[string
 			card.KeyMasked = info.KeyMasked
 		}
 	}
+	if envViewer, ok := ch.(ChannelEnvViewer); ok {
+		if keys := envViewer.EnvProvidedKeys(); len(keys) > 0 {
+			card.EnvProvided = keys
+		}
+	}
 	if !card.Configured && card.KeyMasked == keyMaskUnavailable {
 		card.KeyMasked = keyNotConfigured
 	}
@@ -169,10 +181,16 @@ const channelFieldValueLimit = 8192
 
 // UpdateChannelFields persists one channel's edited fields as
 // billing_channel.<name>.<field> rows (BC-5): unknown field names 400; a
-// secret submitted as the empty string keeps the stored value; text/select
-// fields overwrite (empty = clear). After the write the channel set is
-// rebuilt synchronously when a refresher is wired, so the returned card
-// reflects the new effective state.
+// secret submitted as the empty string OR the __SET__ masked read-back keeps
+// the stored value (billing fix #4 — a GET→PUT round-trip must never store
+// the marker as a literal key); text/select fields overwrite (empty = clear,
+// except a required field cleared while env does not provide it — 400, fix
+// #6). ALL fields are validated before the first write and the writes land in
+// one transaction via SetMany (fix #11 — a mid-loop failure used to leave a
+// half-saved channel). After the write the channel set is rebuilt
+// synchronously when a refresher is wired, and the response card is rebuilt
+// from the freshly-Get-ed channel instance + a fresh DB read (fix #9 — the
+// old card echoed the pre-save instance's mask/status).
 func (s *BillingAdminService) UpdateChannelFields(ctx context.Context, actor *webx.Principal, channel string, fields map[string]string) (ChannelCard, error) {
 	if s.channelSettings == nil {
 		return ChannelCard{}, webx.NewError(503, webx.CodeUnavailable, "渠道设置存储未接线（channel settings store not wired）")
@@ -189,7 +207,17 @@ func (s *BillingAdminService) UpdateChannelFields(ctx context.Context, actor *we
 	for _, spec := range schemaViewer.ConfigSchema() {
 		specByKey[spec.Key] = spec
 	}
-	actorLabel := actorLabelOf(actor)
+	// 「清空=回退 env」豁免（fix #6）：required 字段清空时，环境变量在供的键合法。
+	envProvided := map[string]bool{}
+	if envViewer, ok := ch.(ChannelEnvViewer); ok {
+		for _, k := range envViewer.EnvProvidedKeys() {
+			envProvided[k] = true
+		}
+	}
+
+	// Pass 1 — validate everything, collect writes; nothing is persisted until
+	// every submitted field passed (fix #11).
+	writes := make(map[string]string, len(fields))
 	for key, raw := range fields {
 		spec, ok := specByKey[key]
 		if !ok {
@@ -199,15 +227,27 @@ func (s *BillingAdminService) UpdateChannelFields(ctx context.Context, actor *we
 		if len(value) > channelFieldValueLimit {
 			return ChannelCard{}, webx.NewValidation(fmt.Sprintf("字段 %s 值过长（上限 %d 字符）", key, channelFieldValueLimit))
 		}
-		if spec.Type == FieldTypeSecret && value == "" {
-			continue // keep stored value
+		if spec.Type == FieldTypeSecret && (value == "" || value == channelSecretSetMarker) {
+			continue // keep stored value（__SET__ 是读回掩码，不是新密钥——fix #4）
 		}
 		if spec.Type == FieldTypeSelect && value != "" && len(spec.Options) > 0 && !fieldOptionHas(spec.Options, value) {
 			return ChannelCard{}, webx.NewValidation(fmt.Sprintf("字段 %s 的值必须是 %s", key, fieldOptionList(spec.Options)))
 		}
-		if err := s.channelSettings.Set(ctx, ChannelSettingsKey(channel, key), value, actorLabel); err != nil {
-			return ChannelCard{}, fmt.Errorf("save channel field %s: %w", key, err)
+		if value == "" && spec.Required && spec.Type != FieldTypeSecret && !envProvided[key] {
+			return ChannelCard{}, webx.NewValidation(fmt.Sprintf(
+				"字段 %s 为必填字段，清空且环境变量未提供（如需回退环境变量，请配置对应 env 后再清空）", key))
 		}
+		writes[ChannelSettingsKey(channel, key)] = value
+	}
+
+	// Pass 2 — one transactional write (fix #11); a missing seal key is an
+	// operator problem, not a server bug → 503 with the fix-it hint (fix #10).
+	if err := s.channelSettings.SetMany(ctx, writes, actorLabelOf(actor)); err != nil {
+		if errors.Is(err, sealx.ErrNoKey) {
+			return ChannelCard{}, webx.NewError(http.StatusServiceUnavailable, webx.CodeUnavailable,
+				"PLOYKIT_SEAL_KEY 未配置，无法保存凭据：请配置该环境变量并重启后重试（明文凭据一律不入库）")
+		}
+		return ChannelCard{}, fmt.Errorf("save channel fields: %w", err)
 	}
 	if s.refresher != nil {
 		if err := s.refresher.RefreshNow(ctx); err != nil {
@@ -217,6 +257,11 @@ func (s *BillingAdminService) UpdateChannelFields(ctx context.Context, actor *we
 	if s.core.auditor != nil {
 		s.core.auditor.Record(ctx, nil, actor, "admin.billing_channel_update", "billing_channel", channel,
 			map[string]any{"fields": fieldKeysSorted(fields)}) // keys only — values are credentials
+	}
+	// fix #9：RefreshNow 成功换指针后，从注册表重新 Get 新实例，卡片反映新状态
+	// （新掩码/新 Configured），而不是被替换前的旧实例。
+	if fresh, ok := s.core.channels.Get(channel); ok {
+		ch = fresh
 	}
 	dbFields, err := s.channelFields(ctx)
 	if err != nil {
@@ -327,6 +372,11 @@ func (s *BillingAdminService) RegisterChannelProduct(ctx context.Context, actor 
 	if !ok {
 		return "", webx.NewNotFound("plan not found: " + planCode)
 	}
+	// billing fix #7：币种闸在渠道 REST 之前——CNY 计划撞上仅收 USD 的渠道时，
+	// 注册必然白做且结账必 400，直接以清晰文案拒绝。
+	if currency := planCurrency(plan, s.core.cfg.Currency); !channelCurrencyAllowed(ch, currency) {
+		return "", errChannelCurrencyUnsupported(channel, currency, planCode)
+	}
 	if existing, found, err := s.core.repo.GetChannelProduct(ctx, channel, planCode, iv); err != nil {
 		return "", err
 	} else if found {
@@ -336,16 +386,17 @@ func (s *BillingAdminService) RegisterChannelProduct(ctx context.Context, actor 
 	if amount <= 0 {
 		return "", webx.NewValidation("plan is not priced for this interval: " + planCode)
 	}
-	id, err := reg.RegisterProduct(ctx, plan, iv)
+	// billing fix #12：check+register+upsert 在 per-(channel,plan,interval) 的
+	// pg_advisory_xact_lock 内串行（渠道 REST 在锁内执行）——并发双击只有一次
+	// 真正调渠道注册，败者直接拿到胜者落库的映射。
+	id, existed, err := s.core.repo.RegisterChannelProductAtomic(ctx, channel, planCode, iv,
+		func(ctx context.Context) (string, error) { return reg.RegisterProduct(ctx, plan, iv) },
+		amount, s.now())
 	if err != nil {
 		return "", fmt.Errorf("register product on %s: %w", channel, err)
 	}
-	now := s.now()
-	if err := s.core.repo.UpsertChannelProduct(ctx, domain.ChannelProduct{
-		Channel: channel, PlanCode: planCode, Interval: iv,
-		ChannelProductID: id, SyncedPriceCents: amount, SyncedAt: &now,
-	}); err != nil {
-		return "", err
+	if existed {
+		return id, nil // 并发赢家已完成注册：幂等返回，不再审计
 	}
 	if s.core.auditor != nil {
 		s.core.auditor.Record(ctx, nil, actor, "admin.billing_channel_register_product", "billing_channel", channel,

@@ -22,4 +22,16 @@
 //     ChannelEventID 这一个字段（"type:id"）。
 //  5. 环境标记：事件带 mode: test|prod 时记入 Payload 并审计；渠道配置了 mode 时
 //     跨环境事件直接拒收（test 回调永不落生产权益）。
+//
+// 五律契约修订（2026-10-24 billing 内核修复 #3，续期路径两条）：
+//
+//  6. 续期事件锚 PI：续期事件（EventSubscriptionRenewed）携带 OrderID 与
+//     PaymentIntentRef 时，内核把 PI 落库进订单 metadata（SetOrderPaymentIntentRef）。
+//     此前全仓只在 checkout.completed 落 PI，续期发票漏锚导致后续仅携 PI 的
+//     退款/失败事件反查不到订单。渠道适配器因此必须在续期事件里尽量带上 PI。
+//  7. 续期金额对账：续期事件携带 OrderID 且金额 > 0 时，内核按订单 planCode+interval
+//     查「当前」plan 价格对账（目录价即收款价，改价必须同步——这条防线原本只在
+//     handlePaid 生效，续期路径是漏洞）。不等（EqualFold 比币种）则拒发续期：
+//     log.Error + 审计 billing.amount_mismatch + 事件收敛 processed；plan 缺失或
+//     无价则跳过对账。OrderID 为空的续期（waffo/stripe）不受影响。
 package billing

@@ -16,7 +16,10 @@ import (
 //
 // Build rules:
 //   - source error → keep the previous set + log.Warn (a flaky DB read must
-//     not take checkout down; the next tick retries),
+//     not take checkout down; the next tick retries); at BOOT the previous
+//     set does not exist yet, so the factories run once over an EMPTY fields
+//     map — env-only channels still register, only DB-configured ones wait
+//     for the poll to heal them (fix #5),
 //   - factory returning (nil, nil) → the channel is simply not registered
 //     this round (credentials incomplete = unconfigured),
 //   - factory error → that channel is skipped this round + log.Warn (a bad
@@ -36,10 +39,12 @@ type AtomicRegistry struct {
 
 var _ ChannelSet = (*AtomicRegistry)(nil)
 
-// NewAtomicRegistry builds the first channel set synchronously (a failing
-// source leaves the registry empty with a log — serving then heals on the
-// next tick) and keeps rebuilding every pollEvery until ctx is done.
-// pollEvery <= 0 defaults to 30s.
+// NewAtomicRegistry builds the first channel set synchronously and keeps
+// rebuilding every pollEvery until ctx is done. pollEvery <= 0 defaults to
+// 30s. A failing initial source no longer starts the process with ZERO
+// channels (billing fix #5): the factories are run once with an empty fields
+// map — env-only channels (manual, env-configured stripe) register as usual,
+// only DB-configured channels wait for the poll to heal them.
 func NewAtomicRegistry(ctx context.Context, log *slog.Logger,
 	source func(ctx context.Context) (map[string]map[string]string, error),
 	factories map[string]func(fields map[string]string) (PaymentChannel, error),
@@ -52,7 +57,8 @@ func NewAtomicRegistry(ctx context.Context, log *slog.Logger,
 	}
 	r := &AtomicRegistry{log: log, source: source, factories: factories, channels: map[string]PaymentChannel{}}
 	if err := r.RefreshNow(ctx); err != nil {
-		log.Error("channel registry initial build failed, starting with zero channels", "err", err)
+		r.log.Error("channel registry initial build failed, booting with env-only channels (DB-configured channels heal on the next poll)", "err", err)
+		r.rebuild(map[string]map[string]string{})
 	}
 	go func() {
 		t := time.NewTicker(pollEvery)
@@ -81,6 +87,13 @@ func (r *AtomicRegistry) RefreshNow(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	r.rebuild(fields)
+	return nil
+}
+
+// rebuild runs every factory over the given fields snapshot and swaps the
+// active set atomically.
+func (r *AtomicRegistry) rebuild(fields map[string]map[string]string) {
 	channels := make(map[string]PaymentChannel, len(r.factories))
 	for name, factory := range r.factories {
 		ch, err := factory(fields[name])
@@ -103,7 +116,6 @@ func (r *AtomicRegistry) RefreshNow(ctx context.Context) error {
 	r.mu.Lock()
 	r.channels, r.names = channels, names
 	r.mu.Unlock()
-	return nil
 }
 
 func (r *AtomicRegistry) Get(name string) (PaymentChannel, bool) {
@@ -120,7 +132,10 @@ func (r *AtomicRegistry) OrderedNames() []string {
 }
 
 // orderedNamesOf is the ChannelRegistry.OrderedNames ordering (DisplayOrder
-// asc, name asc) computed over an arbitrary channel map.
+// asc, name asc) computed over an arbitrary channel map. DisplayOrder == 0
+// (an unset caps field — Go's zero value) is treated as
+// DefaultChannelDisplayOrder (billing fix #13): a channel that forgot to set
+// the field used to jump the queue above stripe (200).
 func orderedNamesOf(channels map[string]PaymentChannel) []string {
 	type entry struct {
 		name  string
@@ -131,6 +146,9 @@ func orderedNamesOf(channels map[string]PaymentChannel) []string {
 		order := DefaultChannelDisplayOrder
 		if viewer, ok := ch.(ChannelCapabilityViewer); ok {
 			order = viewer.Capabilities().DisplayOrder
+			if order == 0 {
+				order = DefaultChannelDisplayOrder
+			}
 		}
 		entries = append(entries, entry{name: name, order: order})
 	}

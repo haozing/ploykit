@@ -601,3 +601,28 @@ func TestCancelSubscription(t *testing.T) {
 		assert.Equal(t, app.CodeChannelNotConfigured, we.Code)
 	})
 }
+
+// TestEnvProvidedKeys_Fix6 covers billing fix #6: the channel exposes which
+// schema keys the process env currently provides, so the admin API can allow
+// "clear = fall back to env" for required fields.
+func TestEnvProvidedKeys_Fix6(t *testing.T) {
+	c := &Channel{}
+
+	t.Run("env 全缺 → 空", func(t *testing.T) {
+		t.Setenv("STRIPE_SECRET_KEY", "")
+		t.Setenv("STRIPE_WEBHOOK_SIGNING_KEY", "")
+		assert.Empty(t, c.EnvProvidedKeys())
+	})
+
+	t.Run("仅 secret_key 在供", func(t *testing.T) {
+		t.Setenv("STRIPE_SECRET_KEY", "sk_test_x")
+		t.Setenv("STRIPE_WEBHOOK_SIGNING_KEY", "")
+		assert.Equal(t, []string{"secret_key"}, c.EnvProvidedKeys())
+	})
+
+	t.Run("双键在供 → 稳定序（schema 序）", func(t *testing.T) {
+		t.Setenv("STRIPE_SECRET_KEY", "sk_test_x")
+		t.Setenv("STRIPE_WEBHOOK_SIGNING_KEY", "whsec_y")
+		assert.Equal(t, []string{"secret_key", "webhook_signing_key"}, c.EnvProvidedKeys())
+	})
+}

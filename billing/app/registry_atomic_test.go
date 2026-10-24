@@ -114,18 +114,31 @@ func TestAtomicRegistry_SourceErrorKeepsOldSet(t *testing.T) {
 	require.Len(t, reg.OrderedNames(), 1)
 }
 
-func TestAtomicRegistry_InitialSourceErrorStartsEmpty(t *testing.T) {
+func TestAtomicRegistry_InitialSourceErrorBootsEnvOnly(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	reg := NewAtomicRegistry(ctx, nil, func(context.Context) (map[string]map[string]string, error) {
 		return nil, errors.New("db down at boot")
 	}, map[string]func(map[string]string) (PaymentChannel, error){
+		// env-only 渠道：不看 fields，工厂恒返回实例。
 		"manual": func(map[string]string) (PaymentChannel, error) {
 			return &atomicTestChannel{name: "manual"}, nil
 		},
+		// DB-only 渠道：fields 为 nil/缺 key → 未配置不注册。
+		"waffo": func(f map[string]string) (PaymentChannel, error) {
+			if f == nil || f["merchant_id"] == "" {
+				return nil, nil
+			}
+			return &atomicTestChannel{name: "waffo", order: 100}, nil
+		},
 	}, time.Hour)
-	assert.Empty(t, reg.OrderedNames(), "启动构建失败 = 空集合（不 panic），下一轮询自愈")
+	assert.Equal(t, []string{"manual"}, reg.OrderedNames(),
+		"fix #5：启动构建失败不再零渠道起服——env-only 渠道照常注册，DB 渠道等轮询自愈")
+	_, ok := reg.Get("manual")
+	assert.True(t, ok)
+	_, ok = reg.Get("waffo")
+	assert.False(t, ok)
 }
 
 // ---- CreateCheckout 目录解析（BC-7） ----
@@ -243,8 +256,9 @@ func TestCreateCheckout_NonCatalogChannelSkipsResolution(t *testing.T) {
 // ---- BillingAdminService 渠道卡/目录/注册/改价（BC-6/BC-7 服务层） ----
 
 type fakeChannelSettings struct {
-	saved map[string]string
+	saved  map[string]string
 	getErr error
+	setErr error // SetMany 返回的错误（fix #10：seal key 未配置 → 503 判定）
 }
 
 func newFakeChannelSettings() *fakeChannelSettings {
@@ -253,6 +267,16 @@ func newFakeChannelSettings() *fakeChannelSettings {
 
 func (f *fakeChannelSettings) Set(_ context.Context, key, value, _ string) error {
 	f.saved[key] = value
+	return nil
+}
+
+func (f *fakeChannelSettings) SetMany(_ context.Context, kv map[string]string, _ string) error {
+	if f.setErr != nil {
+		return f.setErr
+	}
+	for k, v := range kv {
+		f.saved[k] = v
+	}
 	return nil
 }
 
