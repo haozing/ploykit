@@ -9,7 +9,80 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.15.0] — 2026-10-25
+
+shuijing upstream batch (2026-10-25 report, five issues — all adopted, all
+landed): SMTP send-context correctness fix, product-registered settings
+keys, Resend HTTP email adapter, Svix webhook verification helper, and the
+AdminSettingsPage extension seams. Delivery audit:
+`docs/delivery-audit-shuijing-resend-batch.md` (21 items traced, 18 ✅ /
+1 🟡 / 1 deliberate deferral / 1 means-deviation; zero ⚪). Go (`notify`,
+`settings`, `platform/webx`, `example`) + npm (`@ploykit/ui` 2.5.0;
+client 0.7.6 / runtime 0.9.0 / hooks 0.9.0 unchanged, skipped by
+release.yml).
+
+### Fixed
+- **notify/smtp**: send methods no longer inherit the caller's context
+  cancellation/deadline — an HTTP request timeout (typically 5s) used to
+  kill an in-flight login-code send mid-conversation: the mail lost AND the
+  request failed. Every send now runs under its own timeout
+  (`Config.SendTimeout`, default 30s) with the caller's ctx values
+  preserved (`context.WithoutCancel`); the timeout is ALSO mirrored into
+  go-mail's own connection deadline (`gomail.WithTimeout`) because the
+  dial/greeting phases are bounded by go-mail's 15s default, not by ctx.
+  Hermetic tests prove a canceled parent no longer kills the send and the
+  own cap bounds a silent relay. emaildev documented as unaffected (no IO).
+- **settings**: the admin test-email response echoed a hardcoded
+  `"mode": "smtp"` even when the integrator did not track a mail mode — now
+  reports the actual mode like every other surface.
+
+### Added
+- **settings**: `Store.RegisterKeys(specs ...KeySpec)` — product-registered
+  settings keys (the report's ~200-line-per-consumer shadow-endpoint
+  bypass, eliminated). A registered key behaves exactly like a built-in on
+  every surface: generic admin PUT validates through the spec, sensitive
+  keys seal at rest (sealx fail-closed) and mask on every read-back,
+  `Effective`/list merge them with descriptions/defaults, and an optional
+  live env fallback (`KeySpec.Env`) keeps working on every boot until an
+  admin saves a DB row (never bootstrap-seeded — the D2 fork in
+  `settings/keys.go`). Registration is atomic (a bad spec rejects the
+  batch); the package-level `Validate`/`IsSensitive` stay closed-whitelist
+  for callers without a Store. The admin HTTP adapter and the public
+  `/config` sensitive-filter now go through store-level checks so
+  registered credentials never leak publicly.
+- **notify**: `adapters/email/resend` — the Resend HTTP email channel
+  (sidesteps outbound SMTP port blocks; structured errors via
+  `resend.APIError{Name, Status, Message}` distinguish "key invalid" from
+  "recipient refused"). Implemented with net/http directly, no resend-go
+  SDK (one endpoint/one JSON shape does not justify a dependency — same
+  ruling as webx.SvixVerify below; also sidesteps resend-go v2's missing
+  Receiving API). Same ctx-detachment contract as smtp from day one.
+- **notify**: `adapters/email/mailtpl` — the email copy set shared by every
+  email adapter; smtp re-exports it as type aliases so
+  `notifysmtp.Templates` IS `mailtpl.Templates` (zero source break), giving
+  SMTP and Resend a single source of copy.
+- **settings**: `MailModeResend = "resend"` (the /config mail_mode value
+  and the admin status badge share it).
+- **platform/webx**: `SvixVerify` / `SvixHeaders` — Svix inbound-webhook
+  signature verification (the standard behind Resend/Clerk-style inbound
+  webhooks): v1 candidates space-separated with any constant-time match,
+  `whsec_`-form secrets, ±5min replay tolerance. Stdlib only, no new
+  dependency. Indexed in `docs/platform-api-index.md`.
+- **ui (2.5.0)**: `AdminSettingsPage` gains two extension seams — optional
+  `children` rendered after the framework cards, and a metadata-driven
+  generic card that renders registered keys (settings.RegisterKeys) with
+  the same masked-credential semantics as smtp_pass; the built-in key
+  skip-list is pinned by a snapshot test against the backend KeyOrder.
+- **example**: registers `resend_api_key` (sensitive, `re_` prefix
+  validation) / `resend_from` as the RegisterKeys reference wiring; mail
+  channel priority resend → smtp → dev; `NavVisibilityCard` (the
+  shell_nav_hidden key had no admin surface anywhere) wired through the
+  children seam; RESEND_* env documented in the README.
+
+## [0.14.0] — 2026-10-24
+
+Go-only release (no `packages/` code; npm packages stay at their last
+changing release — @ploykit/ui 2.4.0 from 0.13.0).
 
 ### Added
 - **billing**: self-serve onboarding for not-yet-configured channels —
