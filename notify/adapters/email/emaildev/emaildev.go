@@ -1,3 +1,8 @@
+// Package emaildev is the log-only mail channel: every send writes an info
+// log line instead of doing network IO (the default when no real channel is
+// configured). No IO means no timeouts — the ctx-detachment contract the
+// smtp/resend adapters impose is irrelevant here, and ctx is accepted only
+// for interface parity with the other EmailSender implementations.
 package emaildev
 
 import (

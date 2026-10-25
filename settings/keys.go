@@ -51,6 +51,15 @@ var KeyOrder = []string{
 	KeyShellNavHidden,
 }
 
+// builtinKeySet mirrors KeyOrder for O(1) registry-collision checks.
+var builtinKeySet = func() map[string]bool {
+	m := make(map[string]bool, len(KeyOrder))
+	for _, k := range KeyOrder {
+		m[k] = true
+	}
+	return m
+}()
+
 var Defaults = map[string]string{
 	KeyBannerText:             "",
 	KeyBannerKind:             KindInfo,
@@ -179,6 +188,11 @@ func (s *Store) effectiveValue(key, tableValue string, found bool) string {
 	if found {
 		return tableValue
 	}
+	// Registered keys resolve their no-row fallback through the spec (env
+	// live-fallback > Default); they never take part in bootstrap seeding.
+	if spec, ok := s.specOf(key); ok {
+		return s.effectiveSpecValue(spec)
+	}
 	envName := envOf(key)
 	if envName != "" && s.env != nil {
 		switch key {
@@ -217,7 +231,7 @@ func (s *Store) value(ctx context.Context, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if found && IsSensitive(key) {
+	if found && s.IsSensitive(key) {
 		// Fail-closed on reads too: a stored credential row must unseal or
 		// the read errors — there is no plaintext fallback for DB rows
 		// (legacy plaintext surfaces sealx.ErrPlaintext). The env fallback
@@ -231,9 +245,12 @@ func (s *Store) value(ctx context.Context, key string) (string, error) {
 	return s.effectiveValue(key, v, found), nil
 }
 
+// Effective resolves every key — built-ins in KeyOrder order, then
+// product-registered keys in registration order (registry.go).
 func (s *Store) Effective(ctx context.Context) (map[string]string, error) {
+	keys := append(append([]string(nil), KeyOrder...), s.registeredKeys()...)
 	out := map[string]string{}
-	for _, k := range KeyOrder {
+	for _, k := range keys {
 		v, err := s.value(ctx, k)
 		if err != nil {
 			return nil, err

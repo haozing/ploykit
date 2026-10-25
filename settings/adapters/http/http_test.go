@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -21,6 +22,8 @@ import (
 	"github.com/haozing/ploykit/platform/webx"
 	"github.com/haozing/ploykit/settings"
 )
+
+var errBadResendKey = errors.New("resend_api_key 必须以 re_ 开头")
 
 func newTestMux(t *testing.T, store *settings.Store, mailer Mailer, mailMode string, guard func(http.Handler) http.Handler) *http.ServeMux {
 	t.Helper()
@@ -160,7 +163,7 @@ func TestTestEmail(t *testing.T) {
 	})
 	t.Run("smtp fake → mode=smtp/sent", func(t *testing.T) {
 		fm := &fakeMailer{}
-		mux := newTestMux(t, &settings.Store{}, fm, "", nil)
+		mux := newTestMux(t, &settings.Store{}, fm, MailModeSMTP, nil)
 		w, body := doJSON(t, mux, http.MethodPost, "/api/admin/settings/test-email", `{"to":"a@b.com"}`)
 		require.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "smtp", body["mode"])
@@ -416,4 +419,46 @@ func TestTestEmailLogNoSecretsIntegration(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.NotContains(t, logBuf.String(), "super-secret", "testEmail 日志不得出现敏感值")
 	assert.NotContains(t, logBuf.String(), sealx.SealedPrefix)
+}
+
+func TestRegisteredKeysAdminSurface(t *testing.T) {
+	newStore := func(t *testing.T) *settings.Store {
+		t.Helper()
+		s := settings.NewStore(nil)
+		require.NoError(t, s.RegisterKeys(
+			settings.KeySpec{
+				Key:         "resend_api_key",
+				Description: "Resend API key",
+				Sensitive:   true,
+				Validate: func(v string) error {
+					if v != "" && !strings.HasPrefix(v, "re_") {
+						return errBadResendKey
+					}
+					return nil
+				},
+			},
+			settings.KeySpec{Key: "resend_from", Description: "Resend 发件人"},
+		))
+		return s
+	}
+
+	t.Run("掩码回显 = 不修改（注册敏感键同享约定）", func(t *testing.T) {
+		mux := newTestMux(t, newStore(t), nil, "", nil)
+		w, body := doJSON(t, mux, http.MethodPut, "/api/admin/settings/resend_api_key", `{"value":"******"}`)
+		require.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "******", body["value"])
+	})
+
+	t.Run("自定义 Validate 拒绝非法值", func(t *testing.T) {
+		mux := newTestMux(t, newStore(t), nil, "", nil)
+		w, body := doJSON(t, mux, http.MethodPut, "/api/admin/settings/resend_api_key", `{"value":"not-re-prefixed"}`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "E_VALIDATION", body["error"])
+	})
+
+	t.Run("未注册键依旧 400（白名单仍封闭）", func(t *testing.T) {
+		mux := newTestMux(t, newStore(t), nil, "", nil)
+		w, _ := doJSON(t, mux, http.MethodPut, "/api/admin/settings/rogue_key", `{"value":"x"}`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }

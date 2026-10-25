@@ -19,6 +19,11 @@ const (
 	MailModeSMTP = "smtp"
 
 	MailModeDev = "dev"
+
+	// MailModeResend labels the Resend HTTP email channel
+	// (notify/adapters/email/resend) — the /config mail_mode value and the
+	// admin status badge share it (shuijing already used the string).
+	MailModeResend = "resend"
 )
 
 type Mailer interface {
@@ -93,13 +98,15 @@ func (d AdminDeps) list(w http.ResponseWriter, r *http.Request) {
 	}
 	// Both tables are masked: items may hold the sealed smtp_pass blob and
 	// effective the decrypted value — neither may ever reach the client.
-	maskMap(items)
-	maskMap(effective)
+	// Masking and the merged defaults/descriptions are store-aware so
+	// product-registered keys (settings.RegisterKeys) behave like built-ins.
+	d.maskMap(items)
+	d.maskMap(effective)
 	resp := map[string]any{
 		"items":        items,
 		"effective":    effective,
-		"defaults":     settings.Defaults,
-		"descriptions": settings.Descriptions,
+		"defaults":     d.Store.DefaultsMap(),
+		"descriptions": d.Store.Descriptions(),
 		"mail_mode":    d.mailMode(),
 	}
 	if d.OAuthInfo != nil {
@@ -110,9 +117,10 @@ func (d AdminDeps) list(w http.ResponseWriter, r *http.Request) {
 
 // maskMap masks sensitive values in place. Empty stays empty (nothing to
 // leak); anything else — plaintext or sealed blob — becomes MaskedValue.
-func maskMap(m map[string]string) {
+// Store-level sensitivity so registered credential keys mask too.
+func (d AdminDeps) maskMap(m map[string]string) {
 	for k, v := range m {
-		if settings.IsSensitive(k) && v != "" {
+		if d.Store.IsSensitive(k) && v != "" {
 			m[k] = settings.MaskedValue
 		}
 	}
@@ -129,15 +137,15 @@ func (d AdminDeps) put(w http.ResponseWriter, r *http.Request) {
 	// Mask echo = "unchanged": the UI round-trips the masked read-back, so a
 	// submit of MaskedValue is acknowledged without touching the store (and
 	// without requiring the sealer). Runs before Validate on purpose.
-	if settings.IsSensitive(key) && body.Value == settings.MaskedValue {
+	if d.Store.IsSensitive(key) && body.Value == settings.MaskedValue {
 		webx.WriteJSON(w, http.StatusOK, map[string]string{"key": key, "value": settings.MaskedValue})
 		return
 	}
-	if err := settings.Validate(key, body.Value); err != nil {
+	if err := d.Store.Validate(key, body.Value); err != nil {
 		webx.WriteError(w, http.StatusBadRequest, webx.CodeValidation, "invalid settings key/value", err.Error())
 		return
 	}
-	value := settings.Normalize(key, body.Value)
+	value := d.Store.Normalize(key, body.Value)
 
 	old, _, err := d.Store.Get(r.Context(), key)
 	if err != nil {
@@ -156,7 +164,7 @@ func (d AdminDeps) put(w http.ResponseWriter, r *http.Request) {
 	// neither the new plaintext nor the previous stored (sealed) value.
 	logFrom, logTo := old, value
 	respValue := value
-	if settings.IsSensitive(key) {
+	if d.Store.IsSensitive(key) {
 		logFrom, logTo = settings.MaskedValue, settings.MaskedValue
 		respValue = settings.MaskedValue
 	}
@@ -209,7 +217,7 @@ func (d AdminDeps) testEmail(w http.ResponseWriter, r *http.Request) {
 	p := webx.PrincipalFromRequest(r)
 	d.Log.Info("admin.setting_change",
 		"key", "test-email", "to", to, "actor", actorOf(r), "user_id", pUserID(p), "request_id", webx.RequestID(r))
-	webx.WriteJSON(w, http.StatusOK, map[string]string{"mode": "smtp", "status": "sent"})
+	webx.WriteJSON(w, http.StatusOK, map[string]string{"mode": d.mailMode(), "status": "sent"})
 }
 
 func actorOf(r *http.Request) string {

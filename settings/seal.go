@@ -32,9 +32,10 @@ func (s *Store) WithSealer(secrets *sealx.Secrets) *Store {
 	return s
 }
 
-// sealValue seals value when key is sensitive; plain keys pass through.
+// sealValue seals value when key is sensitive (built-ins per the package-level
+// rule, registered keys per the store registry); plain keys pass through.
 func (s *Store) sealValue(key, value string) (string, error) {
-	if !IsSensitive(key) {
+	if !s.IsSensitive(key) {
 		return value, nil
 	}
 	if s.sealer == nil {

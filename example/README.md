@@ -71,6 +71,7 @@ example 同时示范 step-up 的两条路，**同一操作只挂一条**（双�
 | DATABASE_URL | postgres://pk:pk@localhost:5432/pk | PostgreSQL |
 | AUTH_SECRET | dev-pepper | 验证码 HMAC |
 | DEV_CODE | 000000 | 开发万能码（生产留空） |
+| RESEND_API_KEY / RESEND_FROM | 空 | Resend HTTP 邮件通道（优先于 SMTP）：两者齐备才启用；也可在后台"系统"页改配（settings.RegisterKeys 注册键，API key 密封落库，改后重启生效） |
 | WEBHOOK_ALLOW_PRIVATE_TARGET | 关 | 仅 dev：放行私网/环回 webhook 目标（本地接收端 E2E 需要；生产务必保持关闭，防 SSRF） |
 | DEV_DEBUG_POOL | 关 | 仅 dev：/debug/pool 免认证（默认须平台管理员；生产勿开） |
 | AUDIT_RETENTION_MONTHS | 12 | audit_event 分区保留月数（ADR 0009：合规惯例下限 12；有更长留存义务的行业向上调，勿向下） |

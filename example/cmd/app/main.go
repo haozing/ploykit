@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/mail"
 	"os"
 	"os/signal"
 	"path"
@@ -55,6 +56,7 @@ import (
 	"github.com/haozing/ploykit/migrations"
 	bellog "github.com/haozing/ploykit/notify/adapters/bell"
 	emaildev "github.com/haozing/ploykit/notify/adapters/email/emaildev"
+	notifyresend "github.com/haozing/ploykit/notify/adapters/email/resend"
 	notifysmtp "github.com/haozing/ploykit/notify/adapters/email/smtp"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
 	notifyworkers "github.com/haozing/ploykit/notify/adapters/workers"
@@ -178,28 +180,57 @@ type mailerChannel interface {
 	notifyapp.EmailSender
 }
 
-func assembleMailer(log *slog.Logger) (mailerChannel, string) {
-	if host := env("SMTP_HOST", ""); host != "" {
-		// UP-7: copy is injectable per product — example ships English to
-		// prove the seam; empty fields fall back to the built-in defaults.
-		tpl := notifysmtp.Templates{
-			LoginCode: notifysmtp.Template{
-				Subject: "Your sign-in code",
-				Body:    "Your sign-in code is {{.Code}}.\n\nIf you did not request it, you can ignore this email.",
-			},
-			Invite: notifysmtp.Template{
-				Subject: "Workspace invitation",
-				Body:    "You have been invited to join workspace \"{{.Workspace}}\".\n\nInvitation reference: {{.InvitationID}}",
-			},
-			PasswordReset: notifysmtp.Template{
-				Subject: "Reset your password",
-				Body:    "Open the link below to reset your password (it expires; ignore this email if it wasn't you):\n{{.Link}}",
-			},
-			EmailVerification: notifysmtp.Template{
-				Subject: "Verify your email",
-				Body:    "Open the link below to verify your email:\n{{.Link}}",
-			},
+// exampleMailTemplates is the English copy set shared by every real email
+// channel (UP-7 seam: per-product copy). One Templates value drives both the
+// SMTP and the Resend adapter — notifysmtp.Templates is a mailtpl.Templates
+// alias, so both channels compile the same copy (single source of copy).
+func exampleMailTemplates() notifysmtp.Templates {
+	return notifysmtp.Templates{
+		LoginCode: notifysmtp.Template{
+			Subject: "Your sign-in code",
+			Body:    "Your sign-in code is {{.Code}}.\n\nIf you did not request it, you can ignore this email.",
+		},
+		Invite: notifysmtp.Template{
+			Subject: "Workspace invitation",
+			Body:    "You have been invited to join workspace \"{{.Workspace}}\".\n\nInvitation reference: {{.InvitationID}}",
+		},
+		PasswordReset: notifysmtp.Template{
+			Subject: "Reset your password",
+			Body:    "Open the link below to reset your password (it expires; ignore this email if it wasn't you):\n{{.Link}}",
+		},
+		EmailVerification: notifysmtp.Template{
+			Subject: "Verify your email",
+			Body:    "Open the link below to verify your email:\n{{.Link}}",
+		},
+	}
+}
+
+// assembleMailer picks the outbound mail channel (shuijing batch 2026-10-25):
+// Resend HTTP first (resend_api_key + resend_from via the settings registry —
+// DB row sealed at rest > env RESEND_API_KEY/RESEND_FROM), then SMTP (env),
+// then the log-only dev channel. Boot-time resolution: admin edits to the
+// registered keys apply after restart, same contract as the rate-limit keys.
+func assembleMailer(log *slog.Logger, siteSettings *settings.Store) (mailerChannel, string) {
+	tpl := exampleMailTemplates()
+	eff, err := siteSettings.Effective(context.Background())
+	if err != nil {
+		log.Error("settings effective for mail channel", "err", err)
+		os.Exit(1)
+	}
+	if key, from := eff["resend_api_key"], eff["resend_from"]; key != "" && from != "" {
+		sender, err := notifyresend.NewWithTemplates(notifyresend.Config{
+			APIKey: key,
+			From:   from,
+		}, tpl, log)
+		if err != nil {
+			log.Error("resend templates invalid", "err", err)
+			os.Exit(1)
 		}
+		log.Info("mail channel: resend HTTP API")
+		return sender, settingshttp.MailModeResend
+	}
+
+	if host := env("SMTP_HOST", ""); host != "" {
 		sender, err := notifysmtp.NewWithTemplates(notifysmtp.Config{
 			Host:     host,
 			Port:     envInt("SMTP_PORT", 587),
@@ -211,9 +242,15 @@ func assembleMailer(log *slog.Logger) (mailerChannel, string) {
 			log.Error("smtp templates invalid", "err", err)
 			os.Exit(1)
 		}
+		if key, from := eff["resend_api_key"], eff["resend_from"]; key != "" || from != "" {
+			log.Warn("Resend channel partially configured (needs BOTH resend_api_key and resend_from); falling through to SMTP until both are set")
+		}
 		return sender, settingshttp.MailModeSMTP
 	}
-	log.Warn("SMTP_HOST not set; mail channel degraded to emaildev (log-only) — set SMTP_HOST/PORT/USER/PASS/FROM to enable real email")
+	if key := eff["resend_api_key"]; key != "" {
+		log.Warn("resend_api_key set but resend_from (or SMTP_HOST) missing — no real mail channel; set resend_from to activate Resend")
+	}
+	log.Warn("SMTP_HOST not set; mail channel degraded to emaildev (log-only) — set RESEND_API_KEY/RESEND_FROM or SMTP_HOST/PORT/USER/PASS/FROM to enable real email")
 	return emaildev.New(), settingshttp.MailModeDev
 }
 
@@ -268,6 +305,42 @@ func main() {
 		log.Error("settings bootstrap", "err", err)
 		os.Exit(1)
 	}
+	// shuijing batch (2026-10-25): product-registered settings keys for the
+	// Resend email channel — the settings.RegisterKeys seam. Registered keys
+	// ride the generic admin settings API and the admin UI's generic card
+	// (validate + seal + mask), with a live env fallback until an admin saves
+	// a DB row — zero product-owned endpoints.
+	if err := siteSettings.RegisterKeys(
+		settings.KeySpec{
+			Key:         "resend_api_key",
+			Description: "Resend API key（re_ 开头，控制台 API Keys 页获取）：启用 Resend 邮件通道；保存后仅以掩码回显，落库前经 PLOYKIT_SEAL_KEY 加密",
+			Sensitive:   true,
+			Env:         "RESEND_API_KEY",
+			Validate: func(v string) error {
+				if v != "" && !strings.HasPrefix(v, "re_") {
+					return errors.New("resend_api_key 必须以 re_ 开头（Resend 控制台 → API Keys）")
+				}
+				return nil
+			},
+		},
+		settings.KeySpec{
+			Key:         "resend_from",
+			Description: "Resend 发件人地址（需先在 Resend 控制台完成域名验证），如 no-reply@example.com；与 resend_api_key 同时配置后启用 Resend 通道",
+			Env:         "RESEND_FROM",
+			Validate: func(v string) error {
+				if v == "" {
+					return nil // 空 = 未配置
+				}
+				if _, err := mail.ParseAddress(v); err != nil {
+					return errors.New("resend_from 必须是合法邮箱地址")
+				}
+				return nil
+			},
+		},
+	); err != nil {
+		log.Error("settings key registration", "err", err)
+		os.Exit(1)
+	}
 	// UP-4 (shuijing upstream batch): first platform-admin bootstrap —
 	// promotes BOOTSTRAP_ADMIN_EMAIL only while zero platform admins exist
 	// (never demotes, never mints a second admin). A misconfigured value
@@ -299,6 +372,30 @@ func main() {
 		log.Error("secrets env invalid", "err", err)
 		os.Exit(1)
 	}
+	var secrets *sealx.Secrets
+	if resolved.SealKey != nil {
+		secrets, err = sealx.NewSecrets(resolved.SealKey)
+		if err != nil {
+			log.Error("seal key invalid", "err", err)
+			os.Exit(1)
+		}
+		if resolved.SealFromMaster {
+			log.Info("seal key derived from master secret", "env", masterSecretEnv, "domain", "credential-sealing")
+		}
+	} else {
+		secrets, err = sealx.NewSecretsFromEnv() // None form: warn + nil, nil (legacy behavior)
+		if err != nil {
+			log.Error("PLOYKIT_SEAL_KEY invalid", "err", err)
+			os.Exit(1)
+		}
+	}
+	// UP-1 (shuijing upstream batch): sensitive settings keys (smtp_pass and
+	// the registered resend_api_key) seal at rest via sealx. nil secrets (no
+	// PLOYKIT_SEAL_KEY and no master secret) keeps every non-sensitive key
+	// working but rejects new sensitive writes — the fail-closed posture
+	// AGENTS.md mandates for sealed credentials. Attached BEFORE the mail
+	// channel assembly so assembleMailer can read a stored (sealed) key.
+	siteSettings = siteSettings.WithSealer(secrets)
 	if resolved.IPHash != "" {
 		authCfg.IPHashSecret = resolved.IPHash
 	} else if production {
@@ -331,7 +428,7 @@ func main() {
 	auditor := auditrec.NewRecorder(pool, log)
 	quotaSvc := quota.NewService(pool)
 
-	mailer, mailMode := assembleMailer(log)
+	mailer, mailMode := assembleMailer(log, siteSettings)
 	notifyRepo := bellog.New(pool)
 
 	notifySvc := notifyapp.NewNotifyService(notifyRepo, mailer, now).WithPrefGate(notifyRepo)
@@ -378,28 +475,6 @@ func main() {
 		log.Info("oauth providers registered", "providers", oauthSvc.Names())
 	}
 
-	var secrets *sealx.Secrets
-	if resolved.SealKey != nil {
-		secrets, err = sealx.NewSecrets(resolved.SealKey)
-		if err != nil {
-			log.Error("seal key invalid", "err", err)
-			os.Exit(1)
-		}
-		if resolved.SealFromMaster {
-			log.Info("seal key derived from master secret", "env", masterSecretEnv, "domain", "credential-sealing")
-		}
-	} else {
-		secrets, err = sealx.NewSecretsFromEnv() // None form: warn + nil, nil (legacy behavior)
-		if err != nil {
-			log.Error("PLOYKIT_SEAL_KEY invalid", "err", err)
-			os.Exit(1)
-		}
-	}
-	// UP-1 (shuijing upstream batch): sensitive settings keys (smtp_pass) seal
-	// at rest via sealx. nil secrets (no PLOYKIT_SEAL_KEY and no master secret)
-	// keeps every non-sensitive key working but rejects new sensitive writes —
-	// the fail-closed posture AGENTS.md mandates for sealed credentials.
-	siteSettings = siteSettings.WithSealer(secrets)
 	fedOpts := []identityapp.FedOption{}
 	if secrets != nil {
 		fedOpts = append(fedOpts, identityapp.WithSecrets(secrets))
@@ -974,9 +1049,10 @@ func main() {
 			}
 			out := make(map[string]any, len(eff)+1)
 			for k, v := range eff {
-				// UP-1: /config is public — sensitive keys (smtp_pass) must
-				// never ride along, not even masked.
-				if settings.IsSensitive(k) {
+				// UP-1: /config is public — sensitive keys (smtp_pass,
+				// registered resend_api_key) must never ride along, not even
+				// masked. Store-level check so registry keys are covered too.
+				if siteSettings.IsSensitive(k) {
 					continue
 				}
 				out[k] = v

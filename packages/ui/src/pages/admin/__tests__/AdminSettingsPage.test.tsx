@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AdminSettingsPage } from '../AdminSettingsPage';
+import { AdminSettingsPage, BUILTIN_SETTING_KEYS } from '../AdminSettingsPage';
 
 const mockedGet = vi.hoisted(() => vi.fn());
 const mockedPut = vi.hoisted(() => vi.fn());
@@ -474,6 +474,125 @@ describe('AdminSettingsPage', () => {
       expect(
         screen.queryByRole('button', { name: /复制.*回调地址/ }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('产品注册键通用卡 + children 缝（shuijing 2026-10-25）', () => {
+    const EXTRA_ENVELOPE = {
+      ...ENVELOPE,
+      effective: {
+        ...ENVELOPE.effective,
+        resend_api_key: '******',
+        resend_from: 'noreply@example.com',
+      },
+      descriptions: {
+        ...ENVELOPE.descriptions,
+        resend_api_key: 'Resend API key：保存后仅以掩码回显',
+        resend_from: 'Resend 发件人地址',
+      },
+    };
+
+    it('注册键渲染为通用卡：敏感键掩码语义 + 普通键回填，内建键不进通用卡', async () => {
+      mockedGet.mockResolvedValueOnce(EXTRA_ENVELOPE);
+      renderPage();
+      expect(await screen.findByText('产品接入的配置键')).toBeInTheDocument();
+
+      const apiKey = screen.getByLabelText('resend_api_key');
+      expect(apiKey).toHaveAttribute(
+        'placeholder',
+        '已配置（输入新值以更换，留空 = 不修改）',
+      );
+      expect(apiKey).toHaveAttribute('type', 'password');
+      expect(apiKey).toHaveValue('');
+
+      expect(screen.getByLabelText('resend_from')).toHaveValue(
+        'noreply@example.com',
+      );
+      expect(screen.getByLabelText('resend_from')).toHaveAttribute(
+        'type',
+        'text',
+      );
+      // 描述文案来自信封 descriptions
+      expect(screen.getByText('Resend 发件人地址')).toBeInTheDocument();
+      // 内建键绝不进通用卡（各有专属卡，此处按专属卡文案断言）
+      expect(screen.getByLabelText('SMTP 服务器')).toBeInTheDocument();
+      expect(screen.queryByLabelText('banner_text')).not.toBeInTheDocument();
+    });
+
+    it('保存：敏感键留空跳过、非敏感键提交；敏感键非空才提交', async () => {
+      // 保存成功后 invalidate 触发重取——注册键是常驻信封字段，
+      // 用持续 mock 而非 Once
+      mockedGet.mockResolvedValue(EXTRA_ENVELOPE);
+      renderPage();
+      await screen.findByText('产品接入的配置键');
+
+      // 留空敏感键，只改普通键 → 只 PUT 普通键
+      fireEvent.change(screen.getByLabelText('resend_from'), {
+        target: { value: 'ops@example.com' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '保存扩展配置' }));
+      await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
+      expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/resend_from', {
+        value: 'ops@example.com',
+      });
+      expect(mockedPut).not.toHaveBeenCalledWith(
+        '/api/admin/settings/resend_api_key',
+        expect.anything(),
+      );
+
+      // 输入新密钥 → 两键都提交，密钥为原文
+      mockedPut.mockClear();
+      fireEvent.change(screen.getByLabelText('resend_api_key'), {
+        target: { value: 're_live_2' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '保存扩展配置' }));
+      await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(2));
+      expect(mockedPut).toHaveBeenCalledWith(
+        '/api/admin/settings/resend_api_key',
+        { value: 're_live_2' },
+      );
+    });
+
+    it('无注册键 → 整卡不渲染；children 渲染在框架卡之后', async () => {
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const { container } = render(
+        <QueryClientProvider client={qc}>
+          <AdminSettingsPage>
+            <div data-testid="product-card">产品自定义卡</div>
+          </AdminSettingsPage>
+        </QueryClientProvider>,
+      );
+      await screen.findByText('顶部公告横条');
+      expect(screen.queryByText('产品接入的配置键')).not.toBeInTheDocument();
+      expect(screen.getByTestId('product-card')).toBeInTheDocument();
+      // children 出现在页面根节点的最后一个位置（框架卡之后）
+      const pageRoot = container.firstChild as HTMLElement;
+      expect(pageRoot.lastElementChild).toHaveAttribute(
+        'data-testid',
+        'product-card',
+      );
+    });
+
+    it('BUILTIN 清单快照：后端 settings.KeyOrder 漂移时此处必红', () => {
+      expect(BUILTIN_SETTING_KEYS).toEqual([
+        'banner_text',
+        'banner_kind',
+        'maintenance_mode',
+        'allow_signup',
+        'allowed_domains',
+        'rate_limit_per_user_per_min',
+        'rate_limit_per_ip_per_min',
+        'rate_limit_allowlist',
+        'smtp_host',
+        'smtp_port',
+        'smtp_user',
+        'smtp_pass',
+        'smtp_from',
+        'site_verification_meta',
+        'shell_nav_hidden',
+      ]);
     });
   });
 });

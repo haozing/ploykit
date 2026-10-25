@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Copy } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormField } from '../../components/FormField';
@@ -79,6 +79,32 @@ interface KeySaveResult {
 
 const ERROR_TOAST_MS = 8_000;
 
+// 框架内建键全集（= 后端 settings.KeyOrder）。本页对 effective 里不属于
+// 内建集的键（产品经 settings.RegisterKeys 注册）渲染通用配置卡；内建键
+// 各有专属卡或专属页面，绝不进通用卡。后端增删内建键时同步此清单
+//（AdminSettingsPage.test.tsx 的 BUILTIN 清单快照守住漂移）。
+export const BUILTIN_SETTING_KEYS = [
+  'banner_text',
+  'banner_kind',
+  'maintenance_mode',
+  'allow_signup',
+  'allowed_domains',
+  'rate_limit_per_user_per_min',
+  'rate_limit_per_ip_per_min',
+  'rate_limit_allowlist',
+  'smtp_host',
+  'smtp_port',
+  'smtp_user',
+  'smtp_pass',
+  'smtp_from',
+  'site_verification_meta',
+  'shell_nav_hidden',
+];
+
+// 掩码回显值（settings.MaskedValue）：敏感键读回永远长这样，输入框据此
+// 判定"已配置 + 永不回填"。
+const MASKED = '******';
+
 
 function parseRateLimit(
   raw: string,
@@ -140,7 +166,13 @@ function copyCallbackUrl(name: string, url: string) {
   }
 }
 
-export function AdminSettingsPage() {
+// shuijing field report (2026-10-25): the page had zero extension points —
+// product cards had to be sibling nodes with their own data sources. Two
+// seams now: `children` renders after every framework card (fully custom
+// cards), and registered keys (settings.RegisterKeys on the backend) render
+// as a generic card from the same list envelope — no product endpoints, no
+// product page code.
+export function AdminSettingsPage({ children }: { children?: ReactNode }) {
   const api = useApi();
   const qc = useQueryClient();
 
@@ -172,6 +204,31 @@ export function AdminSettingsPage() {
   const [hydrated, setHydrated] = useState(false);
 
   const eff = settingsQ.data?.effective;
+
+  // 产品注册键（settings.RegisterKeys）：effective 里出现在内建集之外、
+  // 且不带 billing_channel. 前缀的键。掩码键（敏感）state 恒空、永不回填，
+  // 与 smtp_pass 同款水合规则。
+  const extraKeys = Object.keys(settingsQ.data?.effective ?? {})
+    .filter(
+      (k) =>
+        !BUILTIN_SETTING_KEYS.includes(k) &&
+        !k.startsWith('billing_channel.'),
+    )
+    .sort();
+  const [extraVals, setExtraVals] = useState<Record<string, string>>({});
+  const [extraHydrated, setExtraHydrated] = useState(false);
+  useEffect(() => {
+    if (!eff || extraHydrated) return;
+    const next: Record<string, string> = {};
+    for (const k of extraKeys) {
+      if (eff[k] !== MASKED) next[k] = eff[k];
+    }
+    setExtraVals(next);
+    setExtraHydrated(true);
+    // extraKeys 依赖 eff 的键集合，水合一次即定格
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eff, extraHydrated]);
+
   useEffect(() => {
     if (!eff || hydrated) return;
     setBannerText(eff.banner_text ?? '');
@@ -201,6 +258,7 @@ export function AdminSettingsPage() {
   const rollbackToServer = async () => {
     await qc.invalidateQueries({ queryKey: ['admin', 'settings'] });
     setHydrated(false);
+    setExtraHydrated(false);
   };
 
   
@@ -342,6 +400,30 @@ export function AdminSettingsPage() {
     },
     onError: (e) => {
       toast.error(adminError(e, '站长验证配置保存失败'), {
+        duration: ERROR_TOAST_MS,
+      });
+      void rollbackToServer();
+    },
+  });
+
+  // 产品注册键通用卡：一键一 PUT；敏感键（读回为掩码）留空 = 不修改，
+  // 非空才提交——绝不把掩码/空值落库
+  const extraM = useMutation({
+    mutationFn: async () => {
+      const descriptions = settingsQ.data?.descriptions ?? {};
+      const entries = extraKeys
+        .filter((k) => (eff?.[k] === MASKED ? (extraVals[k] ?? '') !== '' : true))
+        .map((k) => ({
+          key: k,
+          label: descriptions[k] || k,
+          value: (extraVals[k] ?? '').trim(),
+        }));
+      return putKeys(api, entries);
+    },
+    onSuccess: (results) =>
+      reportKeySaves(results, '扩展配置已保存', '扩展配置'),
+    onError: (e) => {
+      toast.error(adminError(e, '扩展配置保存失败'), {
         duration: ERROR_TOAST_MS,
       });
       void rollbackToServer();
@@ -854,6 +936,67 @@ export function AdminSettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* 产品注册键通用卡（settings.RegisterKeys）：键由后端注册表驱动，
+          descriptions 提供说明文案；敏感键（读回为掩码）走 smtp_pass 同款
+          "留空 = 不修改" 语义。无注册键时整卡不渲染 */}
+      {extraKeys.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardDescription>扩展配置</CardDescription>
+            <CardTitle>产品接入的配置键</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {extraKeys.map((k) => {
+              const masked = eff?.[k] === MASKED;
+              const described =
+                settingsQ.data?.descriptions?.[k];
+              return (
+                <FormField
+                  key={k}
+                  label={k}
+                  htmlFor={`extra-${k}`}
+                  description={described}
+                >
+                  <Input
+                    id={`extra-${k}`}
+                    className="font-mono"
+                    type={masked ? 'password' : 'text'}
+                    placeholder={
+                      masked
+                        ? eff?.[k]
+                          ? '已配置（输入新值以更换，留空 = 不修改）'
+                          : '未配置'
+                        : ''
+                    }
+                    autoComplete={masked ? 'new-password' : 'off'}
+                    value={extraVals[k] ?? ''}
+                    onChange={(e) =>
+                      setExtraVals((prev) => ({
+                        ...prev,
+                        [k]: e.target.value,
+                      }))
+                    }
+                  />
+                </FormField>
+              );
+            })}
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={extraM.isPending || !extraHydrated}
+                onClick={() => extraM.mutate()}
+              >
+                {extraM.isPending ? '保存中…' : '保存扩展配置'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 产品自定义卡：渲染在框架卡之后，产品自带数据源 */}
+      {children}
     </div>
   );
 }

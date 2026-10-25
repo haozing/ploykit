@@ -14,6 +14,7 @@ import {
   AdminSettingsPage,
 } from '@ploykit/ui';
 import { RequirePlatformAdmin, userPanelItems } from './shell';
+import { NavVisibilityCard } from './pages/admin/NavVisibilityCard';
 
 /**
  * 平台管理控制台：一个 chunk，只有平台管理员会下载。
@@ -82,5 +83,11 @@ export function AdminSSO() {
 }
 
 export function AdminSettings() {
-  return adminPage(<AdminSettingsPage />);
+  // children 缝（shuijing 2026-10-25 批）：产品卡渲染在框架卡之后，
+  // 共用同一页；菜单显隐是产品壳的事，框架页没有它的专属卡。
+  return adminPage(
+    <AdminSettingsPage>
+      <NavVisibilityCard />
+    </AdminSettingsPage>,
+  );
 }

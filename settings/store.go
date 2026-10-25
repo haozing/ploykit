@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 
 	"github.com/haozing/ploykit/platform/sealx"
 	"github.com/jackc/pgx/v5"
@@ -17,6 +18,12 @@ type Store struct {
 	// sealer encrypts sensitive keys (IsSensitive) at rest; nil = writes of
 	// sensitive keys are rejected (fail-closed). See seal.go / WithSealer.
 	sealer *sealx.Secrets
+
+	// Product-registered custom keys (registry.go); guarded by mu. Written
+	// only at boot via RegisterKeys, read on every settings surface.
+	mu        sync.RWMutex
+	specByKey map[string]KeySpec
+	specOrder []string
 }
 
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
@@ -127,6 +134,9 @@ func (s *Store) BillingChannelFields(ctx context.Context) (map[string]map[string
 		if !ok || name == "" || field == "" || strings.Contains(field, ".") {
 			continue
 		}
+		// Registered keys can never live under the reserved billing_channel.
+		// prefix (RegisterKeys rejects it), so the package-level rule is
+		// exact here.
 		if IsSensitive(k) {
 			plain, err := s.sealer.Unseal(v) // nil-receiver safe: errors when no sealer
 			if err != nil {

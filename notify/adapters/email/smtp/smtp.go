@@ -4,9 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	gomail "github.com/wneessen/go-mail"
 )
+
+// DefaultSendTimeout bounds one SMTP conversation when the caller's context
+// carries no deadline of its own. See Sender for the context contract.
+const DefaultSendTimeout = 30 * time.Second
 
 type Config struct {
 	Host     string
@@ -14,15 +19,29 @@ type Config struct {
 	Username string
 	Password string
 	From     string
+
+	// SendTimeout caps each send (zero = DefaultSendTimeout). Raise it for
+	// slow relays; it exists so a hanging SMTP server cannot pin a goroutine
+	// forever once the caller's deadline is deliberately ignored.
+	SendTimeout time.Duration
 }
 
+// Sender sends templated email over SMTP. Context contract (shuijing field
+// report, 2026-10-25): every send method DETACHES from the caller's
+// cancellation and deadline — the ctx passed in by an HTTP handler carries the
+// request timeout (typically 5s), and a slow SMTP relay used to get the login
+// code killed mid-send: the mail lost AND the request failed. Sends keep only
+// the ctx VALUES (request id, tenant values) and run under their own timeout
+// (Config.SendTimeout, default 30s): better late than lost. Callers that need
+// to bound a send should set Config.SendTimeout, not a request-scoped ctx.
 type Sender struct {
 	cfg    Config
 	log    *slog.Logger
 	client *gomail.Client
 	tpl    *compiledTemplates
 
-	initErr error
+	sendTimeout time.Duration
+	initErr     error
 }
 
 // New builds a Sender with the built-in Chinese copy (zero-value Templates).
@@ -45,10 +64,18 @@ func NewWithTemplates(cfg Config, tpl Templates, log *slog.Logger) (*Sender, err
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Sender{cfg: cfg, log: log, tpl: compiled}
+	s := &Sender{cfg: cfg, log: log, tpl: compiled, sendTimeout: cfg.SendTimeout}
+	if s.sendTimeout <= 0 {
+		s.sendTimeout = DefaultSendTimeout
+	}
 	opts := []gomail.Option{
 		gomail.WithPort(cfg.Port),
 		gomail.WithTLSPolicy(gomail.TLSMandatory),
+		// The connection deadline for the phases go-mail bounds with its own
+		// timer (dial + greeting read) instead of the ctx — both must agree
+		// with SendTimeout, otherwise a hanging relay outlives the sender's
+		// cap by the go-mail default (15s).
+		gomail.WithTimeout(s.sendTimeout),
 	}
 	if cfg.Username != "" {
 		opts = append(opts,
@@ -88,7 +115,12 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 		s.log.Error("smtp build message failed", "to", to, "err", err)
 		return err
 	}
-	if err := s.client.DialAndSendWithContext(ctx, msg); err != nil {
+	// Detach from the caller's cancellation/deadline (request timeouts must
+	// not kill an in-flight send), keep its values, and impose the sender's
+	// own cap — see the Sender doc comment.
+	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.sendTimeout)
+	defer cancel()
+	if err := s.client.DialAndSendWithContext(sendCtx, msg); err != nil {
 		s.log.Error("smtp send failed", "to", to, "subject", subject, "err", err)
 		return fmt.Errorf("smtp send to %s: %w", to, err)
 	}
@@ -96,11 +128,11 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 }
 
 func (s *Sender) SendLoginCode(ctx context.Context, to, code string) error {
-	return s.renderAndSend(ctx, to, s.tpl.loginCodeSubject, s.tpl.loginCodeBody, LoginCodeData{Code: code})
+	return s.renderAndSend(ctx, to, s.tpl.LoginCodeSubject, s.tpl.LoginCodeBody, LoginCodeData{Code: code})
 }
 
 func (s *Sender) SendInvite(ctx context.Context, to, workspaceName, invitationID string) error {
-	return s.renderAndSend(ctx, to, s.tpl.inviteSubject, s.tpl.inviteBody, InviteData{Workspace: workspaceName, InvitationID: invitationID})
+	return s.renderAndSend(ctx, to, s.tpl.InviteSubject, s.tpl.InviteBody, InviteData{Workspace: workspaceName, InvitationID: invitationID})
 }
 
 func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
@@ -108,9 +140,9 @@ func (s *Sender) Send(ctx context.Context, to, subject, body string) error {
 }
 
 func (s *Sender) SendPasswordReset(ctx context.Context, to, link string) error {
-	return s.renderAndSend(ctx, to, s.tpl.passwordResetSubject, s.tpl.passwordResetBody, LinkData{Link: link})
+	return s.renderAndSend(ctx, to, s.tpl.PasswordResetSubject, s.tpl.PasswordResetBody, LinkData{Link: link})
 }
 
 func (s *Sender) SendEmailVerification(ctx context.Context, to, link string) error {
-	return s.renderAndSend(ctx, to, s.tpl.emailVerificationSubject, s.tpl.emailVerificationBody, LinkData{Link: link})
+	return s.renderAndSend(ctx, to, s.tpl.EmailVerificationSubject, s.tpl.EmailVerificationBody, LinkData{Link: link})
 }

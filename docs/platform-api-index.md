@@ -98,6 +98,14 @@ Runtime contract-test pattern for products: build the production mux as `webx.Ne
 | ConfigHandler | `ConfigHandler(d ConfigDeps) http.HandlerFunc` | The GET /config handler: always outputs `{csrf_token, oauth_providers, billing_channels}` — the hard contract behind @ploykit/client CSRF bootstrap |
 | ConfigDeps | `OAuthProviders` / `BillingChannels` function injection (nil → empty arrays); `Extra func() map[string]any` — returned key-value pairs are merged verbatim into the response body (Extra wins on conflicts; nil-safe) | Optional extension surface of /config; platform does not import business domains; public settings-domain configuration such as announcements/maintenance mode is delivered through `Extra` |
 
+### Inbound webhook signatures (Svix)
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| SvixVerify | `SvixVerify(secret, msgID, timestamp, signature string, body []byte) bool` | Verifies a Svix-signed inbound webhook (the scheme behind Resend, Clerk and much of the SaaS ecosystem) against the RAW request body. Secret is the usual `whsec_<base64>` form (raw base64 accepted); the signature header carries space-separated `v1,<sig>` candidates, any constant-time match passes; timestamps outside ±SvixTolerance (5 minutes) are rejected as replays. Read the body once (webx.DecodeJSON consumes it — capture the raw bytes first or re-read via r.GetBody) |
+| SvixHeaders | `SvixHeaders(r *http.Request) (msgID, timestamp, signature string)` | Extracts the `svix-id` / `svix-timestamp` / `svix-signature` triple; missing headers come back empty and SvixVerify then fails |
+| SvixTolerance | `const SvixTolerance = 5 * time.Minute` | The allowed clock skew (the Svix standard); the anti-replay window |
+
 ### Health and connection pool
 
 | Symbol | Signature essentials | Purpose |
