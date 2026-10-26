@@ -9,6 +9,75 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.16.0] — 2026-10-26
+
+shuijing performance/SEO audit batch (2026-10-25 perf report, six of seven
+issues — all landed; the seventh, per-language cache keys, is already on
+ROADMAP as a declared boundary and stays there). Go (`platform/renderx`,
+`platform/renderx/internal/qjs`, `platform/webx`) + npm (`@ploykit/hooks`
+0.9.1; ui/client/runtime unchanged, skipped by release.yml).
+
+### Fixed
+- **renderx/qjs (correctness — prerender bakes wrong content)**: the QuickJS
+  sandbox wall clock was frozen at 2022-01-01. Root cause (definitive, no
+  longer a suspicion): wazero installs a deterministic fake clock
+  (`FakeEpochNanos` = midnight UTC 2022-01-01, +1ms per read) whenever a
+  ModuleConfig does not explicitly opt into the real one, and the qjs
+  bridge instantiated with a bare `wazero.NewModuleConfig()` — so any
+  component whose rendered output reads `Date.now()` / `new Date()` baked
+  2022 into the prerendered HTML, hydration mismatched (Minified React
+  #418 → the client discarded and re-rendered the whole tree, prerender
+  wasted), and a live site footer literally said "© 2022" for four years.
+  Fixed by wiring `WithSysWalltime().WithSysNanotime()` at the single
+  instantiation site (covers every engine instance; `performance.now()`
+  was a fake monotonic counter likewise). `Math.random` seeding now varies
+  with real time, matching browsers — prerender output must not depend on
+  its determinism. New `qjs.VerifyClock(ctx, maxSkew)` fails fast when the
+  sandbox drifts from the host, so broken clock wiring surfaces at build
+  time instead of in production HTML. No wasm rebuild involved — the fake
+  epoch lives on the Go side.
+- **renderx (zombie pages)**: `Invalidate` only deleted the runtime
+  LayeredCache — an embed-tier snapshot kept serving deleted resources
+  with full prerendered content until the next build (field report: the
+  page kept 200-ing while the API already 404'd and the sitemap had
+  excluded the slug). Invalidate now also tombstones the embed tier
+  (exact + pattern keys, the RegisterDep graph included — deleting a work
+  drops the stale homepage snapshot that still linked to it); tombstones
+  are in-memory and reset naturally on the next build.
+- **hooks**: PloykitProvider fired `/auth/me` + `/api/workspaces`
+  unconditionally on every route — anonymous visits to public pages
+  produced two 401 console errors on every load (browser network-layer
+  logs; JS cannot suppress them — the only fix is not sending). The
+  workspace query is now gated on the auth probe result (fires only when
+  /auth/me returns a user); hidden session expiry (cookie gone without an
+  explicit logout) clears the stale workspace cache; the loading flag no
+  longer sticks on the disabled state.
+
+### Added
+- **renderx: unknown-path policy + trailing-slash 301 + shell meta** —
+  the soft-404 family. Unmatched paths used to fall through to a 200 SPA
+  shell (search engines indexed /login, /random-page and every
+  trailing-slash twin). `HandlerDeps.UnknownPath` selects `spa-shell`
+  (v0.15.0 default, kept for compatibility — flip consciously) or
+  `not-found` (reuses notFoundWriter: humans still get the shell, crawlers
+  get 404); trailing-slash variants of extensionless GET/HEAD paths now
+  301 to the canonical form; `HandlerDeps.ShellMeta` injects head meta
+  (e.g. robots noindex) into shell responses — conservative: text/html
+  only, never into compressed streams, 256KB scan cap, byte-identical
+  when unconfigured.
+- **renderx/template**: React 19 float preloads (`<link rel=preload>` for
+  eager images) are hoisted from the leading run of `#root` into `<head>`,
+  ahead of the CSS links — a preload buried in body depth loses the
+  early-scan window it exists for. Conservative boundary: only the leading
+  link run moves; without preloads the output is byte-identical.
+- **webx**: `CachePrefix(rules)` / `CachePrefixTTL(paths, ttl)` —
+  Cache-Control per path prefix for non-hashed public assets, the class
+  AssetCache deliberately leaves to the product. Longest-prefix match,
+  2xx only (never pin a 404 for the TTL), never overwrites a header the
+  inner handler already set. Boundary: example does not wire it (example
+  serves hashed assets only); intended for products with public/ media
+  directories.
+
 ## [0.15.0] — 2026-10-25
 
 shuijing upstream batch (2026-10-25 report, five issues — all adopted, all
