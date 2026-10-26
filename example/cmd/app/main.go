@@ -40,6 +40,9 @@ import (
 	"github.com/haozing/ploykit/authz"
 	authzpg "github.com/haozing/ploykit/authz/adapters/pgrepo"
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
+	"github.com/haozing/ploykit/identity"
+	legal "github.com/haozing/ploykit/legal"
+	legalhttp "github.com/haozing/ploykit/legal/adapters/http"
 	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
 	paypal "github.com/haozing/ploykit/billing/adapters/paypal"
 	sim "github.com/haozing/ploykit/billing/adapters/sim"
@@ -483,6 +486,56 @@ func main() {
 	fedSvc := identityapp.NewFedService(idRepo, wsRepo.FindWorkspaceIDBySlug, oidcfed.NewResolver(), now, fedOpts...).
 		WithSecureCookie(authCfg.Secure)
 
+	// LC-1 legal module — the compliance P0 batch. Docs register BEFORE Wire
+	// (Wire reconciles every doc's BillingModel against the legal_billing_model
+	// setting and fails fast on mismatch or emptiness); channels is declared
+	// here and assigned below because the ProcessorName callback must read the
+	// LIVE registry (hot-configured payment channels update every legal text
+	// referencing the processor, audit L5/L7) while the hooks need legalMod
+	// before the registry exists. ChainHooks composes provisioning and legal
+	// onto the same identity hook slots (both AfterRegister/AfterLogin).
+	var channels *billingapp.AtomicRegistry
+	if err := legal.RegisterDocs(
+		legal.Doc{
+			Key:           "tos",
+			Version:       "1.0",
+			EffectiveFrom: time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC),
+			BillingModel:  legal.BillingV1Subscription,
+			Placeholders:  []string{"legal_entity_name", "legal_jurisdiction", "payment_processor_name"},
+		},
+		legal.Doc{
+			Key:           "privacy",
+			Version:       "1.0",
+			EffectiveFrom: time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC),
+			BillingModel:  legal.BillingV1Subscription,
+			Placeholders:  []string{"legal_entity_name", "payment_processor_name"},
+		},
+	); err != nil {
+		log.Error("legal docs registration", "err", err)
+		os.Exit(1)
+	}
+	legalMod, err := legal.Wire(legal.Config{
+		Pool:  pool,
+		Store: siteSettings,
+		Log:   log,
+		Auditor: auditor,
+		ProcessorName: func() string {
+			if channels == nil {
+				return ""
+			}
+			ns := channels.OrderedNames()
+			if len(ns) == 0 {
+				return ""
+			}
+			return billingapp.ProcessorDisplayName(ns[0])
+		},
+		SiteURL: func() string { return env("APP_URL", "http://localhost:5173") },
+	})
+	if err != nil {
+		log.Error("legal wire", "err", err)
+		os.Exit(1)
+	}
+
 	// ADR 0016: personal-workspace provisioning as one wiring line, replacing
 	// the old hand-written AfterRegister literal (which only logged a welcome
 	// line — PersonalWorkspace's "personal workspace provisioned" info log
@@ -491,13 +544,19 @@ func main() {
 	// mid-provision and lost races converge); OnRegisterTx stays nil because
 	// a workspace insert must never roll a registration back. Idempotency is
 	// the uq_workspace_personal partial unique index, not code discipline.
-	sessions.WithHooks(provisioning.PersonalWorkspace(provisioning.PersonalConfig{
-		Pool:       pool,
-		Workspaces: wsRepo,
-		Quota:      quotaSvc,
-		Credits:    []provisioning.Credit{{Key: "tasks_monthly", Amount: 5}},
-		Log:        log,
-	}))
+	// legalMod.Hooks() rides the same slots via ChainHooks (LC-3: signup
+	// acceptance on every registration path incl. OAuth/code JIT, implicit
+	// login acceptance backfill — both idempotent by the hooks contract).
+	sessions.WithHooks(identity.ChainHooks(
+		provisioning.PersonalWorkspace(provisioning.PersonalConfig{
+			Pool:       pool,
+			Workspaces: wsRepo,
+			Quota:      quotaSvc,
+			Credits:    []provisioning.Credit{{Key: "tasks_monthly", Amount: 5}},
+			Log:        log,
+		}),
+		legalMod.Hooks(),
+	))
 
 	workspaces.WithHooks(workspace.WorkspaceHooks{
 		OnTeardown: func(_ context.Context, _ pgx.Tx, workspaceID string) error {
@@ -588,7 +647,7 @@ func main() {
 		}
 		log.Info("sim payment channels registered (DEV-ONLY)", "channels", []string{sim.NameWaffo, sim.NamePaypal, sim.NameStripe})
 	}
-	channels := billingapp.NewAtomicRegistry(ctx, log, siteSettings.BillingChannelFields, channelFactories, 30*time.Second)
+	channels = billingapp.NewAtomicRegistry(ctx, log, siteSettings.BillingChannelFields, channelFactories, 30*time.Second)
 
 	billingRepo := billingpg.New(pool)
 	billingSvc := billingapp.NewBillingService(
@@ -794,6 +853,9 @@ func main() {
 	})
 
 	billinghttp.Mount(mux, billinghttp.Deps{Svc: billingSvc, WsMW: wsMW, Authz: authorizer, Usage: quotaSvc.Usage})
+	// LC-3/LC-9: user-facing re-acceptance endpoint (webx.P rejects
+	// anonymous callers); the admin mounts live next to settingshttp below.
+	legalhttp.Mount(mux, legalhttp.Deps{Svc: legalMod.Service()})
 
 	notifyhttp.Mount(mux, notifyhttp.Deps{Svc: notifySvc})
 
@@ -991,6 +1053,11 @@ func main() {
 		Log: log,
 	})
 
+	// LC-4 operator queue + LC-9 compliance surface: both behind the
+	// platform-admin guard, same injected-guard discipline as settingshttp.
+	billinghttp.MountAdmin(mux, billinghttp.AdminDeps{Svc: billingSvc, Guard: adminhttp.PlatformAdminGuard()})
+	legalhttp.MountAdmin(mux, legalhttp.AdminDeps{Mod: legalMod, Svc: legalMod.Service(), Guard: adminhttp.PlatformAdminGuard()})
+
 	audithttp.Mount(mux, audithttp.Deps{Rec: auditor, WsMW: wsMW, Authz: authorizer})
 
 	whkMembers := func(ctx context.Context, workspaceID, userID string) (string, bool, error) {
@@ -1059,6 +1126,11 @@ func main() {
 			}
 
 			out["mail_mode"] = mailMode
+			// LC-6: the legal block rides the existing public /config —
+			// products render their copy placeholders (entity, jurisdiction,
+			// live payment-processor name, doc versions) from here instead of
+			// hardcoding them into i18n files.
+			out["legal"] = legalMod.PublicConfig(context.Background())
 			return out
 		},
 	}))
@@ -1235,9 +1307,13 @@ func main() {
 					webx.Authenticate(&authCfg, idRepo, idRepo)(apiUserRateLimitMW(mux))))))
 	handler := mnt.Middleware(authRateLimitMW(webx.PrincipalHolder()(
 		webx.RequestIDMiddleware(
-			webx.AccessLog(log)(
-				webx.SecurityHeaders(
-					apiBodyLimitMW(chainInner)))))))
+			// LC-3: client IP + metadata into ctx — the legal acceptance
+			// rows read them as evidence; same trusted-proxy semantics as
+			// AccessLog (none here: direct dev exposure).
+			webx.ClientMetadata()(
+				webx.AccessLog(log)(
+					webx.SecurityHeaders(
+						apiBodyLimitMW(chainInner))))))))
 
 	wk.Add(&webhookworkers.DeliveryWorker{Service: whkSvc})
 	wk.Add(&notifyworkers.RetentionWorker{Repo: notifyRepo})

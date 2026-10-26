@@ -102,7 +102,7 @@ func TestWorkspacePlanFK_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "024")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.False(t, fkExists())
 
 	_, wsID := seedMigUserWS(t, pool, "fk25")
@@ -138,7 +138,7 @@ func TestWorkspaceRoleConfig_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "025")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists("workspace_role"))
 	assert.True(t, tableExists("workspace_role_permission"), "down 应重建行级表")
 
@@ -182,7 +182,7 @@ func TestMemberRemovedBy_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "027")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)
@@ -246,7 +246,7 @@ func TestAuditQueryIndexes_UpDownUp(t *testing.T) {
 	assert.True(t, idxExists("idx_audit_actor_time"), "actor 过滤/邮箱搜索支撑索引")
 
 	rolled := rollbackAbove(t, m, pool, "029")
-	require.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	require.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	require.Contains(t, rolled, "033")
 	assert.False(t, idxExists("idx_audit_created"))
 	assert.False(t, idxExists("idx_audit_actor_time"))
@@ -392,7 +392,7 @@ func TestWebhookPendingUniqueAndRotation_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "030")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.Contains(t, rolled, "032")
 	assert.NotContains(t, indexDef(), "WHERE", "down 后应恢复全量唯一索引")
 	for _, col := range []string{"old_secret", "old_secret_expires_at", "first_failure_at"} {
@@ -447,7 +447,7 @@ func TestSessionImpersonatedBy_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "033")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.False(t, colExists())
 
 	_, err = m.Up(ctx, 0)
@@ -551,7 +551,7 @@ func TestAuditEventPartition_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "034")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.Contains(t, rolled, "036", "036 应先于 035 回滚（高→低）")
 	assert.Equal(t, "r", relkindOf(t, pool, "audit_event"))
 	assert.Equal(t, []string{"id"}, pkColumnsOf(t, pool, "audit_event"))
@@ -615,7 +615,7 @@ func TestAnalyticsEventPartition_UpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "035")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.Equal(t, "r", relkindOf(t, pool, "analytics_event"))
 	assert.Equal(t, []string{"id"}, pkColumnsOf(t, pool, "analytics_event"))
 
@@ -683,7 +683,7 @@ func TestSchedulePlanUpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "036")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err = m.Up(ctx, 0)
@@ -711,10 +711,111 @@ func TestSiteSettingsUpDownUp(t *testing.T) {
 
 	rolled := rollbackAbove(t, m, pool, "037")
 	require.NotEmpty(t, rolled)
-	assert.Equal(t, "051", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 051（回滚清单随更高版本自动扩展）")
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
 	assert.False(t, tableExists())
 
 	_, err = m.Up(ctx, 0)
 	require.NoError(t, err)
 	assert.True(t, tableExists(), "down 后再 up 幂等重建")
+}
+
+// ---- 052 legal_acceptances（LC-3 接受留痕） ----
+
+func TestLegalAcceptancesUpDownUp(t *testing.T) {
+	pool, m := testMigrator(t)
+	ctx := context.Background()
+
+	tableExists := func() bool {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'legal_acceptances')`).Scan(&exists))
+		return exists
+	}
+	idxExists := func() bool {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_legal_acceptances_user_time')`).Scan(&exists))
+		return exists
+	}
+
+	assert.True(t, tableExists(), "052 up 后 legal_acceptances 应存在")
+	assert.True(t, idxExists(), "admin 取证索引（user_id, accepted_at DESC）应存在")
+
+	uid, _ := seedMigUserWS(t, pool, "leg52")
+	_, err := pool.Exec(ctx,
+		`INSERT INTO legal_acceptances (user_id, doc_key, doc_version, method) VALUES ($1, 'tos', '1.0', 'signup')`, uid)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO legal_acceptances (user_id, doc_key, doc_version, method) VALUES ($1, 'tos', '1.0', 'reaccept')`, uid)
+	assert.Error(t, err, "自然键 (user_id, doc_key, doc_version) 唯一：同版本二次接受由 ON CONFLICT DO NOTHING 吸收，直接插必拒")
+	_, err = pool.Exec(ctx,
+		`INSERT INTO legal_acceptances (user_id, doc_key, doc_version, method) VALUES ($1, 'tos', '1.0', 'handshake')`, uid)
+	assert.Error(t, err, "method CHECK：仅 signup/login_implicit/reaccept 三档")
+
+	_, err = pool.Exec(ctx, `DELETE FROM workspace WHERE created_by = $1`, uid)
+	require.NoError(t, err, "先清工作区（created_by FK），让账号删除走到 CASCADE 断言")
+	_, err = pool.Exec(ctx, `DELETE FROM "user" WHERE id = $1`, uid)
+	require.NoError(t, err)
+	var orphan int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM legal_acceptances WHERE user_id = $1`, uid).Scan(&orphan))
+	assert.Zero(t, orphan, "ON DELETE CASCADE：接受留痕随账号删除连带清理（保留期风险 #2 的库级保证）")
+
+	rolled := rollbackAbove(t, m, pool, "051")
+	require.NotEmpty(t, rolled)
+	assert.Equal(t, "053", rolled[0], "框架回滚清单头（最高框架版本回滚位）必须是 053（回滚清单随更高版本自动扩展）")
+	assert.False(t, tableExists())
+	assert.False(t, idxExists())
+
+	_, err = m.Up(ctx, 0)
+	require.NoError(t, err)
+	assert.True(t, tableExists(), "down 后再 up 幂等重建")
+	assert.True(t, idxExists())
+}
+
+// ---- 053 workspace.cancel_requested_at（LC-4 自助取消记账） ----
+
+func TestBillingCancelRequestedUpDownUp(t *testing.T) {
+	pool, m := testMigrator(t)
+	ctx := context.Background()
+
+	colExists := func() bool {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'workspace' AND column_name = 'cancel_requested_at')`).Scan(&exists))
+		return exists
+	}
+	idxExists := func() bool {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_workspace_cancel_requested')`).Scan(&exists))
+		return exists
+	}
+
+	assert.True(t, colExists(), "053 up 后 workspace.cancel_requested_at 应存在")
+	assert.True(t, idxExists(), "运营队列部分索引（WHERE cancel_requested_at IS NOT NULL）应存在")
+
+	_, wsID := seedMigUserWS(t, pool, "can53")
+	_, err := pool.Exec(ctx,
+		`UPDATE workspace SET cancel_requested_at = now() WHERE id = $1`, wsID)
+	require.NoError(t, err, "up 后可落取消请求时间戳")
+
+	rolled := rollbackAbove(t, m, pool, "052")
+	require.NotEmpty(t, rolled)
+	assert.Equal(t, "053", rolled[0], "052 为回滚下限时首个回滚位应是 053 本身")
+	assert.False(t, colExists())
+	assert.False(t, idxExists())
+
+	_, err = pool.Exec(ctx,
+		`UPDATE workspace SET cancel_requested_at = now() WHERE id = $1`, wsID)
+	assert.Error(t, err, "down 后列已删除，写取消请求应失败")
+
+	_, err = m.Up(ctx, 0)
+	require.NoError(t, err)
+	assert.True(t, colExists(), "down 后再 up 幂等重建")
+	assert.True(t, idxExists())
+	var at any
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT cancel_requested_at FROM workspace WHERE id = $1`, wsID).Scan(&at))
+	assert.Nil(t, at, "down 前的标记不复活：重建列为 NULL 起步")
 }

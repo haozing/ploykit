@@ -18,7 +18,7 @@ func TestAccessLog_ClientMetadataAndResolvedIP(t *testing.T) {
 	_, trusted, err := net.ParseCIDR("10.0.0.0/8")
 	require.NoError(t, err)
 
-	h := ClientMetadata(AccessLog(log, trusted)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := ClientMetadata(trusted)(AccessLog(log, trusted)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

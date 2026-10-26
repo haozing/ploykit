@@ -321,6 +321,9 @@ func TestSchemaCapsSingleSource(t *testing.T) {
 	if Caps().DisplayOrder != 100 || !Caps().CatalogBased {
 		t.Fatalf("Caps() = %+v, want catalog-based waffo at order 100", Caps())
 	}
+	if Caps().CancelTiming != app.CancelTimingPeriodEnd {
+		t.Fatalf("Caps().CancelTiming = %q, want period_end (LC-4; live-verify pending)", Caps().CancelTiming)
+	}
 }
 
 // ---- ChannelConfig.Configured 纯凭据语义 ----

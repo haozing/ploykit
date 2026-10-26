@@ -48,6 +48,13 @@ var waffoCapabilities = app.ChannelCaps{
 	SupportsCancelURL: false,
 	DisplayOrder:      100,
 	Currencies:        []string{"USD", "EUR", "GBP", "HKD", "JPY"},
+	// LC-4: an ACTIVE subscription order cancel stops at period end — the
+	// cancel-order REST response documents status "canceling" for active/
+	// past_due orders (stays until the current period runs out) and only
+	// pending orders stop immediately ("canceled"). MoR convention: the buyer
+	// keeps what they paid for. TODO(lc4): live-verify the REST timing when
+	// LC-4 ships and correct this declaration if observed otherwise.
+	CancelTiming: app.CancelTimingPeriodEnd,
 }
 
 // Caps 是包级能力声明单一真源:实例方法与 DisabledChannel 桩共用(未配置

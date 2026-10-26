@@ -290,6 +290,13 @@ func (s *BillingService) handlePaid(ctx context.Context, event domain.PaymentEve
 		}
 	}
 
+	// LC-4: a completed (re)subscribe clears any stale cancel request — the
+	// user paid again, the old request must not linger in the operator queue.
+	// Blind idempotent UPDATE (no-op when nothing is pending).
+	if err := s.repo.ClearWorkspaceCancelRequested(ctx, order.WorkspaceID); err != nil {
+		return s.failEvent(ctx, event, err)
+	}
+
 	if from != order.PlanCode {
 		if s.hooks.OnPlanChanged != nil {
 			if err := s.hooks.OnPlanChanged(ctx, order.WorkspaceID, from, order.PlanCode); err != nil {
@@ -376,6 +383,11 @@ func (s *BillingService) handleRefund(ctx context.Context, event domain.PaymentE
 		if err := s.repo.SetWorkspaceSubscription(ctx, order.WorkspaceID, "", time.Time{}, now); err != nil {
 			return s.failEvent(ctx, event, err)
 		}
+		// LC-4: the subscription is revoked — any recorded cancel request is
+		// resolved (out of the operator queue).
+		if err := s.repo.ClearWorkspaceCancelRequested(ctx, order.WorkspaceID); err != nil {
+			return s.failEvent(ctx, event, err)
+		}
 	}
 	if s.hooks.OnPlanChanged != nil {
 		if err := s.hooks.OnPlanChanged(ctx, order.WorkspaceID, order.PlanCode, "free"); err != nil {
@@ -446,6 +458,20 @@ func (s *BillingService) handleRenewed(ctx context.Context, event domain.Payment
 	if !ok {
 		s.log.Info("renewal for unknown subscription, ignored", "subscription_ref", event.SubscriptionRef)
 		return s.repo.MarkEventProcessed(ctx, event.Channel, event.ChannelEventID)
+	}
+
+	// LC-4 guard: a renewal charged on a workspace with a recorded cancel
+	// request means the channel-side auto-renewal was NOT stopped (no channel
+	// canceller, or the operator has not finished the queue item yet). The
+	// money is already charged, so rights follow the payment — the extension
+	// below proceeds and NO automatic refund is issued; the loud ERROR log is
+	// the operator-intervention signal and the request stays in the queue.
+	if reqAt, pending, err := s.repo.GetWorkspaceCancelRequested(ctx, wsID); err != nil {
+		return s.failEvent(ctx, event, err)
+	} else if pending {
+		s.log.Error("renewal charged after cancel request; channel-side auto-renewal was not stopped, operator intervention required",
+			"workspace_id", wsID, "subscription_ref", event.SubscriptionRef,
+			"cancel_requested_at", reqAt, "channel", event.Channel, "event_id", event.ChannelEventID)
 	}
 
 	now := s.now()
@@ -541,6 +567,11 @@ func (s *BillingService) handleCanceled(ctx context.Context, event domain.Paymen
 		return s.failEvent(ctx, event, err)
 	}
 	if err := s.repo.SetWorkspaceSubscription(ctx, wsID, "", time.Time{}, now); err != nil {
+		return s.failEvent(ctx, event, err)
+	}
+	// LC-4: the channel confirmed the subscription ended — any recorded user
+	// cancel request is resolved (out of the operator queue).
+	if err := s.repo.ClearWorkspaceCancelRequested(ctx, wsID); err != nil {
 		return s.failEvent(ctx, event, err)
 	}
 

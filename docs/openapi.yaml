@@ -1564,6 +1564,29 @@ paths:
           $ref: '#/components/responses/Forbidden'
         default:
           $ref: '#/components/responses/DefaultError'
+  /api/billing/subscription/cancel:
+    post:
+      operationId: userCancelSubscription
+      tags: [billing]
+      summary: 用户自助取消订阅（billing:manage；X-Workspace-Id）——渠道直通，outcome=cancelled|period_end|operator_pending
+      responses:
+        '200':
+          description: 取消受理结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  outcome: { type: string, enum: [cancelled, period_end, operator_pending] }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /api/billing/usage-preview:
     get:
       operationId: billingUsagePreview
@@ -2742,6 +2765,123 @@ paths:
         '400': { $ref: '#/components/responses/DefaultError', description: "未配置密钥 E_CHANNEL_NOT_CONFIGURED / 不支持测试 E_CHANNEL_TEST_UNSUPPORTED" }
         '502': { $ref: '#/components/responses/DefaultError', description: 渠道侧连接失败 }
         default: { $ref: '#/components/responses/DefaultError' }
+  /api/admin/billing/cancel-requests:
+    get:
+      operationId: adminListCancelRequests
+      tags: [admin]
+      summary: LC-4 运营队列——等待渠道侧人工完成/周期末到期的取消请求
+      responses:
+        '200':
+          description: 取消请求列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CancelRequestView' }
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/legal/compliance:
+    get:
+      operationId: adminLegalCompliance
+      tags: [admin]
+      summary: LC-9 合规对账——缺键红灯 + 承诺对账清单（法务设置/支付处理方声明/后续批次项）
+      responses:
+        '200':
+          description: 合规对账报告（AdminComplianceCard 信封：missing_keys/legal_config/checks）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [missing_keys, legal_config, checks]
+                properties:
+                  missing_keys:
+                    type: array
+                    description: 未填写的 legal_* 必填键红灯列表（空数组=配置完整）
+                    items:
+                      type: object
+                      required: [key, description]
+                      properties:
+                        key: { type: string }
+                        description: { type: string }
+                  legal_config:
+                    type: object
+                    description: 法务主体配置现状（legal_* 键解析值；空串=未填写）
+                    required: [entity_name, jurisdiction, processor_name, billing_model]
+                    properties:
+                      entity_name: { type: string }
+                      jurisdiction: { type: string }
+                      processor_name: { type: string }
+                      billing_model: { type: string }
+                  checks:
+                    type: array
+                    description: 承诺对账清单（manual=框架无法自动判定的人工项）
+                    items:
+                      type: object
+                      required: [id, label, status]
+                      properties:
+                        id: { type: string }
+                        label: { type: string }
+                        status: { type: string, enum: [ok, warn, manual] }
+                        detail: { type: string }
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/legal/acceptances:
+    post:
+      operationId: reacceptLegalDoc
+      tags: [auth]
+      summary: 显式再接受当前版本条款（method=reaccept；登录态）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doc_key]
+              properties:
+                doc_key: { type: string }
+      responses:
+        '200':
+          description: 已记录
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/admin/legal/acceptances:
+    get:
+      operationId: adminLegalAcceptancesByUser
+      tags: [admin]
+      summary: 按用户查询条款接受历史（争议取证）
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 接受记录列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/LegalAcceptance' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /api/admin/billing/channels:
     get:
       operationId: adminListBillingChannels
@@ -4224,6 +4364,26 @@ components:
             $ref: '#/components/schemas/ErrorBody'
 
   schemas:
+    # ---- LC-3/LC-4 法务合规批新增 ----
+    LegalAcceptance:
+      type: object
+      properties:
+        user_id: { type: string }
+        doc_key: { type: string }
+        doc_version: { type: string }
+        method: { type: string, enum: [signup, login_implicit, reaccept] }
+        ip: { type: string }
+        client_platform: { type: string }
+        client_version: { type: string }
+        client_os: { type: string }
+        accepted_at: { type: string, format: date-time }
+    CancelRequestView:
+      type: object
+      properties:
+        workspace_id: { type: string }
+        requested_at: { type: string, format: date-time }
+        plan: { type: string }
+        subscription_ref: { type: string }
     # ---- 统一错误信封（webx.ErrorBody） ----
     ErrorBody:
       type: object
@@ -4743,6 +4903,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Order'
+        cancel_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 用户取消请求受理时间（LC-4/R5，RFC3339）；null = 无待处理取消
+        renews_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 当前已付费周期期末（workspace.plan_expires_at）；null = 永久/手工套餐
+        cancel_timing:
+          type: string
+          nullable: true
+          enum: [immediate, period_end, null]
+          description: 订阅渠道声明的取消时序（LC-4 Caps；未声明的 canceller 渠道按 period_end 兜底）；null = 无渠道订阅/渠道未注册/渠道无取消器（运营队列形态）
     SSOConfigRequest:
       type: object
       required: [issuer_url, client_id, client_secret]

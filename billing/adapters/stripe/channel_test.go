@@ -577,6 +577,13 @@ func TestCancelSubscription(t *testing.T) {
 		require.NoError(t, ch.CancelSubscription(context.Background(), "sub_1"))
 		assert.Equal(t, "/v1/subscriptions/sub_1", gotPath)
 		assert.Equal(t, http.MethodDelete, gotMethod)
+		// The wire evidence behind Caps().CancelTiming=immediate: the cancel
+		// goes out as DELETE /v1/subscriptions/{id} — Stripe's cancel-now call
+		// (its params carry InvoiceNow/Prorate final-invoice flags, not
+		// cancel_at_period_end; the period-end variant is the subscription
+		// UPDATE path, which this adapter never sends).
+		assert.Equal(t, app.CancelTimingImmediate, Caps().CancelTiming,
+			"Caps 必须与真实调用一致：DELETE /v1/subscriptions = 立即取消")
 	})
 
 	t.Run("渠道侧失败 → 错误透传", func(t *testing.T) {
@@ -664,4 +671,10 @@ func TestSchemaCapsSingleSource(t *testing.T) {
 	assert.Equal(t, 200, Caps().DisplayOrder)
 	assert.False(t, Caps().CatalogBased)
 	assert.True(t, Caps().SupportsCancelURL)
+	// LC-4 (2026-10-26 audit correction): stripe.Channel implements
+	// SubscriptionCanceller (CancelSubscription → DELETE /v1/subscriptions/{id})
+	// and that call cancels IMMEDIATELY — the period-end variant would be the
+	// UPDATE-path cancel_at_period_end=true, which this adapter never sends.
+	// The timing declaration must stay in sync with the adapter's real call.
+	assert.Equal(t, app.CancelTimingImmediate, Caps().CancelTiming)
 }

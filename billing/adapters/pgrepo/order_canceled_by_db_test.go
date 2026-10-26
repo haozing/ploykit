@@ -67,10 +67,22 @@ func TestOrderCanceledBy_UpDownUp_051_DB(t *testing.T) {
 	assert.True(t, colExists(), "051 up 后 order 应有 canceled_by 列")
 
 	m := pgmigrate.New(pool, migrations.FS, ".")
-	rolled, err := m.Down(ctx, 1) // scratch 库无产品迁移，最新一条必是 051
+	// 051 之上可能已有更新的框架迁移（052/053…）——按 Status 数出 051 之上的
+	// 框架版本步数回滚到 050 为止，rolled 末位必须是 051 本身（清单随更高版本自动扩展）。
+	st, err := m.Status(ctx)
 	require.NoError(t, err)
-	require.Len(t, rolled, 1)
-	assert.Equal(t, "051", rolled[0], "框架最新版本必须是 051")
+	steps := 0
+	for _, r := range st {
+		if r.Applied && len(r.Version) == 3 && r.Version > "051" {
+			steps++
+		}
+	}
+	require.Positive(t, steps, "051 之上应已有更新的框架迁移（052/053）")
+	steps++ // 连 051 本身一起回滚（对齐原语义：验证 051 的对称 DROP）
+	rolled, err := m.Down(ctx, steps)
+	require.NoError(t, err)
+	require.Len(t, rolled, steps)
+	assert.Equal(t, "051", rolled[len(rolled)-1], "回滚清单末位必须是 051")
 	assert.False(t, colExists(), "down 应对称 DROP 列")
 
 	_, err = m.Up(ctx, 0)

@@ -141,6 +141,8 @@ export { SecuritySettingsPage } from './pages/account/SecuritySettingsPage'
 export { TokensPage } from './pages/account/TokensPage'
 export { NotificationPreferencesPage } from './pages/account/NotificationPreferencesPage'
 export type { NotificationPreferencesPageProps, NotificationTypeMeta } from './pages/account/NotificationPreferencesPage'
+export { LegalAndPrivacySection } from './pages/account/LegalAndPrivacySection'
+export type { LegalAndPrivacySectionProps, LegalAndPrivacySubscription } from './pages/account/LegalAndPrivacySection'
 
 export { MembersPage } from './pages/workspace/MembersPage'
 export { RolePermissionsPage } from './pages/workspace/RolePermissionsPage'
@@ -177,3 +179,11 @@ export { WebhookDeliveriesPage } from './pages/admin/WebhookDeliveriesPage'
 export { AuditPage } from './pages/admin/AuditPage'
 export { SSOPage } from './pages/admin/SSOPage'
 export { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
+export { AdminComplianceCard, ADMIN_LEGAL_COMPLIANCE_QUERY_KEY } from './pages/admin/AdminComplianceCard'
+export type {
+  AdminComplianceEnvelope,
+  AdminComplianceCheck,
+  AdminComplianceCheckStatus,
+  AdminComplianceLegalConfig,
+  AdminComplianceMissingKey,
+} from './pages/admin/AdminComplianceCard'

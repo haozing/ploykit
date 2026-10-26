@@ -35,10 +35,41 @@ func Mount(mux webx.Router, d Deps) {
 	mux.Handle("GET /api/billing/usage-preview", wsMW(d.guard("billing:read", http.HandlerFunc(d.usagePreview))))
 	mux.Handle("POST /api/billing/checkout", wsMW(d.guard("billing:manage", http.HandlerFunc(d.createCheckout))))
 	mux.Handle("POST /api/billing/orders/{id}/cancel", wsMW(d.guard("billing:manage", http.HandlerFunc(d.cancelOrder))))
+	mux.Handle("POST /api/billing/subscription/cancel", wsMW(d.guard("billing:manage", http.HandlerFunc(d.cancelSubscription))))
 
 	mux.HandleFunc("GET /api/billing/plans", d.listPlans)
 
 	mux.HandleFunc("POST /webhooks/billing/{channel}", d.handleWebhook)
+}
+
+// AdminDeps mounts the operator-facing billing endpoints. Guard is the
+// platform-admin middleware — pass adminhttp.PlatformAdminGuard() (products
+// mount their own admin-facing endpoints through it instead of hand-written
+// closures; billing cannot import admin, so the guard is injected). A nil
+// Guard panics: an unguarded admin route is a security hole, not a degraded
+// feature (same discipline as settingshttp.AdminDeps).
+type AdminDeps struct {
+	Svc *app.BillingService
+
+	Guard func(http.Handler) http.Handler
+}
+
+func MountAdmin(mux webx.Router, d AdminDeps) {
+	if d.Guard == nil {
+		panic("billing: AdminDeps.Guard is required (platform admin closure, e.g. adminhttp.PlatformAdminGuard())")
+	}
+	// LC-4 operator queue: user cancel requests that need a human on the
+	// channel side (no canceller API) or are waiting out the paid period.
+	mux.Handle("GET /api/admin/billing/cancel-requests", d.Guard(http.HandlerFunc(d.listCancelRequests)))
+}
+
+func (d AdminDeps) listCancelRequests(w http.ResponseWriter, r *http.Request) {
+	items, err := d.Svc.ListCancelRequests(r.Context(), 0)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (d Deps) listPlans(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +92,21 @@ func (d Deps) getSubscription(w http.ResponseWriter, r *http.Request) {
 		webx.WriteErr(w, err)
 		return
 	}
+	// R5 cancel-state triple (cancel_requested_at / renews_at / cancel_timing):
+	// the framework data source for account-settings cancel UIs. Assembled
+	// after plan/orders so a snapshot failure cannot half-answer — and the
+	// 409-free shapes (free workspace, no subscription) render as nulls.
+	snap, err := d.Svc.GetCancelSnapshot(r.Context(), p.WorkspaceID)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
 	webx.WriteJSON(w, http.StatusOK, map[string]any{
-		"plan_code": plan,
-		"orders":    orders,
+		"plan_code":            plan,
+		"orders":               orders,
+		"cancel_requested_at":  snap.CancelRequestedAt,
+		"renews_at":            snap.RenewsAt,
+		"cancel_timing":        snap.CancelTiming,
 	})
 }
 
@@ -118,6 +161,24 @@ func (d Deps) cancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	webx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// cancelSubscription is the LC-4 user self-serve cancel: same medium and
+// difficulty as signup (CA ARL / AB 2863). Every accepted outcome answers 200
+// with {ok:true, outcome} — operator_pending is an ACCEPTED request that
+// needs a human on the channel side, not a client error.
+func (d Deps) cancelSubscription(w http.ResponseWriter, r *http.Request) {
+	p := webx.PrincipalFromRequest(r)
+	if p == nil || p.WorkspaceID == "" {
+		webx.ErrValidation(w, "workspace context required")
+		return
+	}
+	outcome, err := d.Svc.UserCancelSubscription(r.Context(), p, p.WorkspaceID)
+	if err != nil {
+		webx.WriteErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "outcome": outcome})
 }
 
 func (d Deps) handleWebhook(w http.ResponseWriter, r *http.Request) {

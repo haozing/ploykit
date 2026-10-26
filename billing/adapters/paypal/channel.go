@@ -43,6 +43,14 @@ var paypalCapabilities = app.ChannelCaps{
 	CatalogBased:      true,
 	SupportsCancelURL: true,
 	DisplayOrder:      300,
+	// LC-4: POST /v1/billing/subscriptions/{id}/cancel moves the subscription
+	// to CANCELLED right away — the subscription stops and no further billing
+	// cycles run (unlike a waffo active-order cancel, which stops at period
+	// end), so the local plan may flip to free immediately. TODO(lc4): this is
+	// declared from the PayPal REST documentation reading, not a live test —
+	// live-verify when LC-4 ships (source unconfirmed; PayPal notes about
+	// already-owed amounts do not change the access-revocation timing).
+	CancelTiming: app.CancelTimingImmediate,
 	Currencies: []string{
 		"USD", "EUR", "GBP", "AUD", "CAD", "JPY", "SGD", "HKD", "NZD", "CHF",
 		"SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "ILS", "MXN", "BRL", "MYR",

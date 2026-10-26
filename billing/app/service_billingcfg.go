@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haozing/ploykit/billing/domain"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -108,6 +107,11 @@ func (s *BillingService) AdminCancelSubscription(ctx context.Context, actor *web
 	if err := s.repo.SetWorkspaceSubscription(ctx, workspaceID, "", time.Time{}, now); err != nil {
 		return err
 	}
+	// LC-4: an operator-completed cancel resolves any recorded user cancel
+	// request — take the workspace out of the cancel-requests queue.
+	if err := s.repo.ClearWorkspaceCancelRequested(ctx, workspaceID); err != nil {
+		return err
+	}
 	if s.hooks.OnPlanChanged != nil {
 		if err := s.hooks.OnPlanChanged(ctx, workspaceID, fromPlan, "free"); err != nil {
 			s.log.Error("OnPlanChanged hook failed", "err", err)
@@ -121,23 +125,14 @@ func (s *BillingService) AdminCancelSubscription(ctx context.Context, actor *web
 }
 
 func (s *BillingService) subscriptionChannel(ctx context.Context, workspaceID string) (PaymentChannel, error) {
-	orders, err := s.repo.ListOrdersByWorkspace(ctx, workspaceID, 20)
+	ch, reason, err := s.locateSubscriptionChannel(ctx, workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	for _, o := range orders {
-		if o.Status != domain.OrderPaid || o.Interval == domain.IntervalOneTime {
-			continue
-		}
-		ch, ok := s.channels.Get(o.Channel)
-		if !ok {
-			return nil, webx.NewError(http.StatusBadRequest, CodeChannelCancelUnsupported,
-				"subscription channel not registered: "+o.Channel)
-		}
-		return ch, nil
+	if ch == nil {
+		return nil, webx.NewError(http.StatusBadRequest, CodeChannelCancelUnsupported, reason)
 	}
-	return nil, webx.NewError(http.StatusBadRequest, CodeChannelCancelUnsupported,
-		"cannot locate subscription channel (no paid recurring order)")
+	return ch, nil
 }
 
 func (s *BillingAdminService) BillingConfig(ctx context.Context) (BillingConfigView, error) {

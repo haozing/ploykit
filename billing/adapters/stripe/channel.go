@@ -219,8 +219,17 @@ func stripeRecurringInterval(i domain.BillingInterval) string {
 // Caps is the package-level capability single source: the instance method and
 // the DisabledChannel stub (Disabled) share it, so an unconfigured stripe's
 // admin card keeps its priority slot (200, between waffo 100 and paypal 300).
+//
+// CancelTiming=immediate (LC-4, 2026-10-26 audit correction): CancelSubscription
+// calls Subscriptions.Cancel — DELETE /v1/subscriptions/{id} — which cancels
+// the subscription immediately. Evidence from the vendored stripe-go v87
+// (subscription.go): SubscriptionCancelParams carries InvoiceNow/Prorate, the
+// final-invoice / unused-time-credit flags that only make sense for an
+// immediate cancel; the period-end variant is cancel_at_period_end=true on the
+// subscription UPDATE path (SubscriptionParams.CancelAtPeriodEnd), a call this
+// adapter never makes. So the local plan may flip to free right away.
 func Caps() app.ChannelCaps {
-	return app.ChannelCaps{CatalogBased: false, SupportsCancelURL: true, DisplayOrder: 200}
+	return app.ChannelCaps{CatalogBased: false, SupportsCancelURL: true, DisplayOrder: 200, CancelTiming: app.CancelTimingImmediate}
 }
 
 func (c *Channel) Capabilities() app.ChannelCaps {
@@ -323,10 +332,20 @@ func (c *Channel) CancelCheckout(ctx context.Context, sessionRef string) error {
 	return nil
 }
 
+// 2026-10-26 audit correction (LC-4): stripe DOES implement
+// SubscriptionCanceller — this CancelSubscription — and has since v0.15.0.
+// Earlier design notes claiming "stripe lacks a canceller" were wrong; the
+// operator-queue branch in the user-cancel flow is for third-party channels
+// without one, not for stripe.
+var _ app.SubscriptionCanceller = (*Channel)(nil)
+
 func (c *Channel) CancelSubscription(ctx context.Context, providerSubID string) error {
 	if c.SecretKey == "" {
 		return errNotConfigured()
 	}
+	// Subscriptions.Cancel = DELETE /v1/subscriptions/{id}: cancels
+	// IMMEDIATELY (see Caps for the full timing rationale — Caps().CancelTiming
+	// must stay in sync with this call).
 	if _, err := c.api.Subscriptions.Cancel(providerSubID, &stripeapi.SubscriptionCancelParams{
 		Params: stripeapi.Params{Context: ctx},
 	}); err != nil {

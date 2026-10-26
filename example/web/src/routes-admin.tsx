@@ -1,6 +1,7 @@
 import { Navigate } from '@tanstack/react-router';
 import {
   AdminShell,
+  AdminComplianceCard,
   OverviewPage,
   UsersPage,
   UserDetailPage,
@@ -88,6 +89,9 @@ export function AdminSettings() {
   return adminPage(
     <AdminSettingsPage>
       <NavVisibilityCard />
+      {/* LC-9 合规对账卡：自拉 GET /api/admin/legal/compliance，与 NavVisibilityCard
+          同款经 children 缝挂载；LegalAndPrivacySection 不在 example 挂载（plan §9 boundary）。 */}
+      <AdminComplianceCard />
     </AdminSettingsPage>,
   );
 }

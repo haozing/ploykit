@@ -260,6 +260,17 @@ func (s *Store) Effective(ctx context.Context) (map[string]string, error) {
 	return out, nil
 }
 
+// EffectiveKey is the single-key hot-read (DB row > env fallback > default,
+// same merge as Effective) for callers that need ONE value: unlike Effective
+// it never touches unrelated keys, so a sealed credential that cannot be
+// unsealed in this environment (no PLOYKIT_SEAL_KEY) cannot fail the read —
+// boot-time reconcilers (e.g. legal.Wire's billing-model check) must use
+// this, not Effective, or an unrelated sensitive key would refuse the app
+// startup.
+func (s *Store) EffectiveKey(ctx context.Context, key string) (string, error) {
+	return s.value(ctx, key)
+}
+
 func (s *Store) RegistrationGate(ctx context.Context) (allow bool, domains []string, err error) {
 	v, err := s.value(ctx, KeyAllowSignup)
 	if err != nil {

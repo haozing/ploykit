@@ -47,6 +47,12 @@ type fakeRepo struct {
 	wsSub       map[string]subState
 	wsExists    map[string]bool
 	bySub       map[string]string
+
+	// LC-4 cancel_requested_at bookkeeping (migration 053): per-workspace
+	// mark plus the call traces the user-cancel tests assert on.
+	wsCancelReq     map[string]time.Time
+	setCancelReqs   []string
+	clearCancelReqs []string
 	paidIv      map[string]domain.BillingInterval
 	setSubs     []setSubCall
 	changePlans []changePlanCall
@@ -88,6 +94,7 @@ func newFakeRepo() *fakeRepo {
 		wsSub:        map[string]subState{},
 		wsExists:     map[string]bool{},
 		bySub:        map[string]string{},
+		wsCancelReq:  map[string]time.Time{},
 		paidIv:       map[string]domain.BillingInterval{},
 		overageIndex: map[string]bool{},
 		meters:       map[string]Meter{},

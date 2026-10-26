@@ -409,6 +409,87 @@ func (r *Repo) FindWorkspaceBySubscription(ctx context.Context, subscriptionRef 
 	return wsID, planCode, true, nil
 }
 
+// ---- LC-4 self-serve cancel bookkeeping (migration 053) ----
+
+func (r *Repo) SetWorkspaceCancelRequested(ctx context.Context, workspaceID string, now time.Time) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspace SET cancel_requested_at = $2, updated_at = $3 WHERE id = $1`,
+		workspaceID, now, now)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("set workspace cancel requested: workspace not found: %s", workspaceID)
+	}
+	return nil
+}
+
+func (r *Repo) GetWorkspaceCancelRequested(ctx context.Context, workspaceID string) (time.Time, bool, error) {
+	var at *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT cancel_requested_at FROM workspace WHERE id = $1`, workspaceID).Scan(&at)
+	if isNoRows(err) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, mapErr(err)
+	}
+	if at == nil {
+		return time.Time{}, false, nil
+	}
+	return *at, true, nil
+}
+
+// GetWorkspacePlanExpiry reads workspace.plan_expires_at (R5): the end of the
+// currently paid period — the renews_at field of the subscription view. NULL
+// (perpetual/manual plan) answers ok=false.
+func (r *Repo) GetWorkspacePlanExpiry(ctx context.Context, workspaceID string) (time.Time, bool, error) {
+	var at *time.Time
+	err := r.pool.QueryRow(ctx,
+		`SELECT plan_expires_at FROM workspace WHERE id = $1`, workspaceID).Scan(&at)
+	if isNoRows(err) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, mapErr(err)
+	}
+	if at == nil {
+		return time.Time{}, false, nil
+	}
+	return *at, true, nil
+}
+
+func (r *Repo) ClearWorkspaceCancelRequested(ctx context.Context, workspaceID string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE workspace SET cancel_requested_at = NULL WHERE id = $1`, workspaceID)
+	if err != nil {
+		return mapErr(err)
+	}
+	return nil
+}
+
+func (r *Repo) ListCancelRequestedWorkspaces(ctx context.Context, limit int) ([]app.CancelRequestView, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, cancel_requested_at, plan_code, COALESCE(subscription_ref, '')
+		FROM workspace
+		WHERE cancel_requested_at IS NOT NULL
+		ORDER BY cancel_requested_at
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	defer rows.Close()
+	out := []app.CancelRequestView{}
+	for rows.Next() {
+		var v app.CancelRequestView
+		if err := rows.Scan(&v.WorkspaceID, &v.RequestedAt, &v.PlanCode, &v.SubscriptionRef); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repo) LatestPaidOrderInterval(ctx context.Context, workspaceID string) (string, bool, error) {
 	var interval string
 	err := r.pool.QueryRow(ctx, `
@@ -457,9 +538,12 @@ func (r *Repo) ExpireDueWorkspaces(ctx context.Context, now time.Time, limit int
 
 	for _, e := range out {
 
+		// LC-4: a period-end cancel request whose period ran out without a
+		// renewal is resolved by this very sweep — clear the mark so the
+		// admin cancel-requests queue only shows work still pending.
 		if _, err := tx.Exec(ctx, `
 			UPDATE workspace
-			SET plan_code = 'free', plan_expires_at = NULL, updated_at = $2
+			SET plan_code = 'free', plan_expires_at = NULL, cancel_requested_at = NULL, updated_at = $2
 			WHERE id = $1`, e.WorkspaceID, now); err != nil {
 			return nil, err
 		}

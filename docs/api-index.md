@@ -11,6 +11,7 @@
 | AfterLogin | identity/hooks.go | Observational | Post-login analytics / risk control |
 | OnLoginFailed | identity/hooks.go | Observational | Alert on failed-login risk signals |
 | AfterPasswordChange | identity/hooks.go | Observational | Notify other devices that they have been logged out |
+| ChainHooks | identity/chain.go | Combinator (not a hook itself) | `ChainHooks(hooks ...IdentityHooks)` composes several IdentityHooks into the one value WithHooks accepts — the extension points are composition magnets (provisioning + legal acceptance evidence both take AfterRegister/AfterLogin) and without a chain one product hook silently shadows the other; field semantics follow the rows above (OnRegisterTx runs in argument order and short-circuits on first error; observational fields run every chained hook, join errors with hook-index attribution, never short-circuit; nil args/fields skipped) |
 | AfterCreate | workspace/hooks.go | Transactional | Seed default projects / boards / agents inside the workspace-creation transaction |
 | BeforeDelete | workspace/hooks.go | Validating | Block deletion when open orders or active resources exist |
 | OnTeardown | workspace/hooks.go | Cleanup | Cascade cleanup on workspace deletion (cancel active tasks, etc.) |

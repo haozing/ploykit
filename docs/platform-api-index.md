@@ -64,7 +64,7 @@ Runtime contract-test pattern for products: build the production mux as `webx.Ne
 | AccessLog | `AccessLog(log, trustedProxies ...*net.IPNet)` | Logs method/path/status/ms/ip/user_id/request_id/client_* with severity leveled by status code; must sit inside RequestIDMiddleware |
 | SecurityHeaders | `SecurityHeaders(next)` | nosniff / X-Frame-Options DENY / Referrer-Policy / CSP default-src 'none' |
 | RequestIDMiddleware | `RequestIDMiddleware(next)` | Generates/passes through X-Request-Id (uuid v7), writes it back to the response header and injects it into ctx |
-| ClientMetadata | `ClientMetadata(next)` | Extracts X-Client-Platform/Version/OS and injects them into the request context |
+| ClientMetadata | `ClientMetadata(trustedProxies ...)(next)` | Extracts X-Client-Platform/Version/OS and, with the same trusted-proxy semantics as AccessLog, resolves the client IP; both are injected into the request context (legal acceptance rows read them as evidence) |
 | Authenticate | `Authenticate(cfg *AuthConfig, sessions SessionStore, pats PATLookup)` | Dual-channel global authentication (Bearer tk_ → PAT; Cookie → DB validation + sliding renewal); anonymous requests pass through, protected routes additionally mount RequireAuth/P |
 | RequireAuth / RequireHuman | `RequireAuth(next)` / `RequireHuman(next)` | Rejects anonymous requests with 401; RequireHuman restricts to browser sessions (PAT/system → 403), dedicated to sensitive operations |
 | RequireRecentAuth | `RequireRecentAuth(maxAge)` (mounted after Authenticate) | Step-up (sudo mode): only browser sessions with a fresh `PasswordConfirmedAt` pass; stale or never-confirmed → 403 `E_REAUTH_REQUIRED` + `details.max_age_seconds`, the client stamps via `POST /auth/confirm-password` and retries; PAT/system always 403. No default window — pick explicitly per mount site (ADR 0011; protocol in docs/api-conventions.md) |
@@ -137,6 +137,7 @@ Runtime contract-test pattern for products: build the production mux as `webx.Ne
 |---|---|---|
 | HeaderRequestID / RequestIDFromCtx / RequestID | The `"X-Request-Id"` constant / ctx retrieval ("" before the middleware) / direct request-header read | Request identification readers (for audit and log correlation) |
 | HeaderClientPlatform / HeaderClientVersion / HeaderClientOS, ClientUnknown, ClientMetadataFrom | X-Client-* header constants and ctx reads (default "unknown") | Readers for client self-reported metadata |
+| WithClientIP / ClientIPFrom | `WithClientIP(ctx, ip)` / `ClientIPFrom(ctx) string` ("" before the ClientMetadata middleware) | Client-IP ctx carrier pair — acceptance evidence and any downstream consumer read the resolved IP off the context |
 
 ## platform/wsx (WebSocket realtime layer)
 

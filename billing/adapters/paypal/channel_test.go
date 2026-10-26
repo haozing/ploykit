@@ -812,4 +812,7 @@ func TestSchemaCapsSingleSource(t *testing.T) {
 	if Caps().DisplayOrder != 300 || !Caps().CatalogBased || !Caps().SupportsCancelURL {
 		t.Fatalf("Caps() = %+v, want catalog-based cancel-URL paypal at order 300", Caps())
 	}
+	if Caps().CancelTiming != app.CancelTimingImmediate {
+		t.Fatalf("Caps().CancelTiming = %q, want immediate (LC-4; source unconfirmed, live-verify pending)", Caps().CancelTiming)
+	}
 }

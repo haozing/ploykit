@@ -25,6 +25,8 @@ import (
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
 	identityapp "github.com/haozing/ploykit/identity/app"
+	"github.com/haozing/ploykit/legal"
+	legalhttp "github.com/haozing/ploykit/legal/adapters/http"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
 	"github.com/haozing/ploykit/platform/devx"
 	"github.com/haozing/ploykit/platform/webx"
@@ -41,7 +43,7 @@ import (
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-const expectedRouteCount = 156
+const expectedRouteCount = 161
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
@@ -79,6 +81,10 @@ func mountProductionRoutes(mux *webx.Mux) {
 	workspacehttp.Mount(mux, workspacehttp.Deps{})
 	identityhttp.MountFedAdmin(mux, identityhttp.Deps{FedAdminGuard: passthrough})
 	billinghttp.Mount(mux, billinghttp.Deps{})
+	// LC-3: user re-acceptance endpoint — Deps.Svc nil-panics by contract, so
+	// the zero-value *legal.Service stands in (the handler only dereferences
+	// it per request; this test never sends one).
+	legalhttp.Mount(mux, legalhttp.Deps{Svc: &legal.Service{}})
 	notifyhttp.Mount(mux, notifyhttp.Deps{})
 	mux.HandleFunc("GET /api/notification-types", noopHandler)
 	quotahttp.Mount(mux, quotahttp.Deps{})
@@ -90,6 +96,12 @@ func mountProductionRoutes(mux *webx.Mux) {
 	adminhttp.MountWsOps(mux, adminhttp.WsOpsDeps{})
 	adminhttp.MountBillingOps(mux, adminhttp.BillingOpsDeps{})
 	settingshttp.MountAdmin(mux, settingshttp.AdminDeps{Guard: passthrough})
+	// LC-4 operator queue + LC-9 compliance/history: both Mounts panic on a
+	// nil Guard by design; their service/module deps are registration-safe
+	// zero values (legalhttp.MountAdmin only registers Mod/Svc-gated routes
+	// when the pointers are non-nil, hence the empty literals).
+	billinghttp.MountAdmin(mux, billinghttp.AdminDeps{Guard: passthrough})
+	legalhttp.MountAdmin(mux, legalhttp.AdminDeps{Mod: &legal.Module{}, Svc: &legal.Service{}, Guard: passthrough})
 	audithttp.Mount(mux, audithttp.Deps{})
 	webhookhttp.Mount(mux, webhookhttp.Deps{})
 	// uploads surface (storage-walk #14): serving is a method-less subtree

@@ -102,15 +102,38 @@ func (r *ChannelRegistry) OrderedChannels() []PaymentChannel {
 	return orderedChannelsOf(r.channels)
 }
 
+// CancelTiming declares when a channel-side subscription cancel takes effect
+// (LC-4). It is channel knowledge, so it lives here — next to the rest of the
+// capability declaration — instead of being hardcoded in the cancel flows:
+//
+//   - CancelTimingImmediate: the channel revokes access right away, so the
+//     local plan flips to free at once (same local path as admin cancel).
+//   - CancelTimingPeriodEnd: the channel honors the already-paid period, so
+//     the local plan stays untouched and only cancel_requested_at is set; the
+//     existing plan-expiry machinery collects the workspace when the period
+//     runs out without a renewal.
+//   - "" (empty): timing unknown. A channel that implements
+//     SubscriptionCanceller but declares no timing is treated as period-end
+//     (the promise-preserving default: never cut a paying user short).
+//
+// A channel without SubscriptionCanceller never reads this field.
+type CancelTiming string
+
+const (
+	CancelTimingImmediate CancelTiming = "immediate"
+	CancelTimingPeriodEnd CancelTiming = "period_end"
+)
+
 // ChannelCaps is a channel's declared shape of difference. The registry and
 // product frontends key ordering off DisplayOrder; CatalogBased/SupportsCancelURL
 // document behavior the adapter absorbs (F1/F3): a channel that ignores
 // CancelURL must say so here instead of silently dropping the parameter.
 type ChannelCaps struct {
-	CatalogBased      bool     `json:"catalog_based"`        // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
-	SupportsCancelURL bool     `json:"supports_cancel_url"`
-	DisplayOrder      int      `json:"display_order"`       // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
-	Currencies        []string `json:"currencies"`          // 空=不声明限制；非空时 RegisterProduct / AutoRegister 在调渠道 REST 前校验 plan 币种 ∈ 清单（不符 400，修复「CNY 计划注册成功但结账必 400」）
+	CatalogBased      bool         `json:"catalog_based"`        // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
+	SupportsCancelURL bool         `json:"supports_cancel_url"`
+	DisplayOrder      int          `json:"display_order"`       // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
+	Currencies        []string     `json:"currencies"`          // 空=不声明限制；非空时 RegisterProduct / AutoRegister 在调渠道 REST 前校验 plan 币种 ∈ 清单（不符 400，修复「CNY 计划注册成功但结账必 400」）
+	CancelTiming      CancelTiming `json:"cancel_timing"`       // 取消时序（LC-4）；空=未声明（有 canceller 时按 period_end 对待）
 }
 
 // ChannelCapabilityViewer is the optional capability interface channels
@@ -189,6 +212,27 @@ type Repo interface {
 
 	FindWorkspaceBySubscription(ctx context.Context, subscriptionRef string) (workspaceID, planCode string, ok bool, err error)
 
+	// LC-4 self-serve cancel bookkeeping (migration 053):
+	// workspace.cancel_requested_at marks a user-requested cancel that has not
+	// resolved locally yet — either the channel stops at period end (plan
+	// collected by the expiry sweeper once the period runs out) or the channel
+	// has no canceller API and an operator must finish it in the channel
+	// console (the admin cancel-requests queue lists these rows). Set on a
+	// workspace that re-subscribes is cleared by the checkout-completed path.
+	SetWorkspaceCancelRequested(ctx context.Context, workspaceID string, now time.Time) error
+
+	GetWorkspaceCancelRequested(ctx context.Context, workspaceID string) (requestedAt time.Time, ok bool, err error)
+
+	// GetWorkspacePlanExpiry reads workspace.plan_expires_at — the end of the
+	// currently paid period. It feeds the renews_at field of the subscription
+	// view (R5): a period-end cancel keeps access until this timestamp; a
+	// NULL (perpetual/manual plan) surfaces as no renews_at.
+	GetWorkspacePlanExpiry(ctx context.Context, workspaceID string) (expiresAt time.Time, ok bool, err error)
+
+	ClearWorkspaceCancelRequested(ctx context.Context, workspaceID string) error
+
+	ListCancelRequestedWorkspaces(ctx context.Context, limit int) ([]CancelRequestView, error)
+
 	LatestPaidOrderInterval(ctx context.Context, workspaceID string) (interval string, ok bool, err error)
 
 	ExpireDueWorkspaces(ctx context.Context, now time.Time, limit int) ([]ExpiredWorkspace, error)
@@ -224,6 +268,16 @@ type MeteredWorkspace struct {
 type ExpiredWorkspace struct {
 	WorkspaceID string
 	FromPlan    string
+}
+
+// CancelRequestView is one row of the admin operator queue (LC-4): a workspace
+// whose user requested a cancel that still needs operator attention or is
+// waiting out the paid period.
+type CancelRequestView struct {
+	WorkspaceID     string    `json:"workspace_id"`
+	RequestedAt     time.Time `json:"requested_at"`
+	PlanCode        string    `json:"plan"`
+	SubscriptionRef string    `json:"subscription_ref"`
 }
 
 // ExpiredOrder is one pending order swept to canceled because its checkout
