@@ -978,6 +978,16 @@ func (s *BillingService) resolveChannelProduct(ctx context.Context, channel Paym
 		return "", err
 	} else if ok {
 		return p.ChannelProductID, nil
+	} else if res, isStatic := channel.(StaticProductResolver); isStatic {
+		// BC-7 fallback order fix: DB mapping > ADAPTER STATIC product >
+		// auto-register > error. The static tier honors env-only wiring
+		// without forcing AutoRegisterCatalog (which would duplicate
+		// manually curated channel-side products); before this seam the
+		// service 400'd here while the adapter's identical fallback sat
+		// unreachable behind the error (shuijing prod incident 2026-10-26).
+		if id := res.StaticProductID(plan.Code, interval); id != "" {
+			return id, nil
+		}
 	}
 	reg, ok := channel.(ProductRegistrar)
 	if ok && s.cfg.AutoRegisterCatalog {

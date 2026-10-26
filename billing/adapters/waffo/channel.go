@@ -508,6 +508,21 @@ func (c *Channel) priceForPlan(plan domain.Plan, interval domain.BillingInterval
 // 返回 PROD_ id(F4:一次性 create-products 脚本收编为后台按钮)。名称
 // "套餐名 (Monthly|Yearly)";价格真源仍是 DB plan limits —— 渠道侧价目
 // 只是目录壳,checkout 时 priceSnapshot 覆盖。
+// StaticProductID 实现 app.StaticProductResolver:与 CreateCheckout 内部
+// 的静态回退同源(env WAFFO_PRODUCT_* / DB 渠道字段 product_monthly/
+// product_yearly),让服务层在映射表缺行、自动注册关闭时先吃到静态商品
+// 而不是 400(shuijing 生产实修:env 商品在配,checkout 仍被服务层拒绝)。
+func (c *Channel) StaticProductID(_ string, interval domain.BillingInterval) string {
+	switch interval {
+	case domain.IntervalMonthly:
+		return c.productMonthly
+	case domain.IntervalYearly:
+		return c.productYearly
+	default:
+		return ""
+	}
+}
+
 func (c *Channel) RegisterProduct(ctx context.Context, plan domain.Plan, interval domain.BillingInterval) (string, error) {
 	period, err := intervalPeriod(interval)
 	if err != nil {
@@ -631,4 +646,5 @@ var (
 	_ app.ConnectionTester        = (*Channel)(nil)
 	_ app.SubscriptionCanceller   = (*Channel)(nil)
 	_ app.ProductRegistrar        = (*Channel)(nil)
+	_ app.StaticProductResolver   = (*Channel)(nil)
 )

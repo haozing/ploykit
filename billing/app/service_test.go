@@ -805,6 +805,79 @@ func TestHandleWebhook_SubscriptionCanceledUnknown(t *testing.T) {
 
 func principal() *webx.Principal { return &webx.Principal{UserID: "usr_1"} }
 
+// catalogStaticChannel 是目录型渠道测试替身:CatalogBased=true,可选携带
+// 静态商品(StaticProductResolver)与映射表行,验证 BC-7 回退次序
+// DB 映射 > 适配器静态 > 自动注册 > 400(shuijing 生产实修 2026-10-26)。
+type catalogStaticChannel struct {
+	name    string
+	req     *CheckoutRequest
+	static  map[domain.BillingInterval]string
+	sessRef string
+}
+
+func (c *catalogStaticChannel) Name() string { return c.name }
+func (c *catalogStaticChannel) CreateCheckout(_ context.Context, req CheckoutRequest) (domain.CheckoutSession, error) {
+	*c.req = req
+	return domain.CheckoutSession{OrderID: req.Order.ID, Channel: c.name, SessionRef: c.sessRef, ExpiresAt: testNow.Add(time.Hour)}, nil
+}
+func (c *catalogStaticChannel) ParseWebhook(_ context.Context, _ WebhookRequest) (domain.PaymentEvent, error) {
+	return domain.PaymentEvent{}, nil
+}
+func (c *catalogStaticChannel) Capabilities() ChannelCaps { return ChannelCaps{CatalogBased: true} }
+func (c *catalogStaticChannel) StaticProductID(_ string, interval domain.BillingInterval) string {
+	return c.static[interval]
+}
+
+func newCatalogStaticSvc(repo *fakeRepo, ch *catalogStaticChannel) *BillingService {
+	reg := NewChannelRegistry()
+	reg.Register(ch)
+	return NewBillingService(repo, reg, Config{
+		SuccessURL: "https://app.example.com/s", CancelURL: "https://app.example.com/c",
+	}, BillingHooks{}, nil, func() time.Time { return testNow }, nil)
+}
+
+func TestCreateCheckout_CatalogStaticFallback(t *testing.T) {
+	seed := func() (*fakeRepo, *catalogStaticChannel, *CheckoutRequest) {
+		repo := newFakeRepo()
+		repo.plans["pro"] = domain.Plan{Code: "pro", Limits: map[string]int{"price_monthly_cents": 9900}}
+		var got CheckoutRequest
+		ch := &catalogStaticChannel{name: "cat", req: &got, sessRef: "cs_cat",
+			static: map[domain.BillingInterval]string{domain.IntervalMonthly: "PROD_static_m"}}
+		return repo, ch, &got
+	}
+
+	t.Run("映射表缺行+静态商品在配 → 静态回退生效,不再 400", func(t *testing.T) {
+		repo, ch, got := seed()
+		svc := newCatalogStaticSvc(repo, ch)
+		_, err := svc.CreateCheckout(context.Background(), principal(), "ws_1", "pro", domain.IntervalMonthly, "cat")
+		require.NoError(t, err, "AutoRegisterCatalog=false 且映射表空,静态商品应兜住(shuijing 生产事故路径)")
+		assert.Equal(t, "PROD_static_m", got.ChannelProductID)
+	})
+
+	t.Run("映射表有行 → DB 行优先于静态商品", func(t *testing.T) {
+		repo, ch, got := seed()
+		if repo.chanProducts == nil {
+			repo.chanProducts = map[string]domain.ChannelProduct{}
+		}
+		repo.chanProducts["cat/pro/"+string(domain.IntervalMonthly)] = domain.ChannelProduct{
+			Channel: "cat", PlanCode: "pro", Interval: domain.IntervalMonthly, ChannelProductID: "PROD_db_row",
+		}
+		svc := newCatalogStaticSvc(repo, ch)
+		_, err := svc.CreateCheckout(context.Background(), principal(), "ws_1", "pro", domain.IntervalMonthly, "cat")
+		require.NoError(t, err)
+		assert.Equal(t, "PROD_db_row", got.ChannelProductID)
+	})
+
+	t.Run("静态空+自动注册关 → 仍 400 报清晰错误", func(t *testing.T) {
+		repo, ch, _ := seed()
+		ch.static = nil
+		svc := newCatalogStaticSvc(repo, ch)
+		_, err := svc.CreateCheckout(context.Background(), principal(), "ws_1", "pro", domain.IntervalMonthly, "cat")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "尚未注册")
+	})
+}
+
 func TestCreateCheckout_PassesTrialDays(t *testing.T) {
 
 	repo := newFakeRepo()

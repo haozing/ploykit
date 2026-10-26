@@ -167,6 +167,20 @@ type ProductRegistrar interface {
 	SyncPrice(ctx context.Context, channelProductID string, plan domain.Plan, interval domain.BillingInterval) error
 }
 
+// StaticProductResolver is the adapter-side static product fallback for
+// catalog-based channels: when the billing_channel_products table has no row
+// for (channel, plan, interval) and AutoRegisterCatalog is off, the service
+// uses the adapter's statically configured product id (env / channel fields)
+// BEFORE failing. Without this seam the adapter's own fallback promise (waffo
+// channel.go: "env-only 老接法不断") is dead code — the service 400s first,
+// which is exactly what happened live (shuijing prod 2026-10-26: env products
+// present, checkout still refused with "product not registered").
+type StaticProductResolver interface {
+	// StaticProductID returns the statically configured channel product for
+	// the plan+interval, "" when this interval has no static product.
+	StaticProductID(planCode string, interval domain.BillingInterval) string
+}
+
 type Repo interface {
 	CreateOrder(ctx context.Context, o domain.Order) (domain.Order, error)
 	GetOrder(ctx context.Context, id string) (domain.Order, bool, error)

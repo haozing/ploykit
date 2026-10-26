@@ -9,6 +9,26 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.18.1] — 2026-10-26
+
+Catalog-product fallback fix (billing). Go-only (`billing/app`,
+`billing/adapters/waffo`; no `packages/` code — npm skipped by release.yml).
+
+### Fixed
+- **billing**: `resolveChannelProduct` refused checkout with a 400
+  ("product not registered") even when the adapter held a valid statically
+  configured product id — the service short-circuited before the adapter's
+  own fallback could fire, which made waffo's "env-only wiring keeps
+  working" fallback (`WAFFO_PRODUCT_MONTHLY`/`WAFFO_PRODUCT_YEARLY`) dead
+  code behind the error. Found live on shuijing production (2026-10-26):
+  static products configured, first real checkout still refused. New
+  optional `StaticProductResolver` interface; catalog resolution order is
+  now **DB mapping > adapter static product > auto-register > error**. The
+  static tier sits deliberately before auto-register so the fallback never
+  duplicates manually curated channel-side products. waffo implements it
+  from the same source its `CreateCheckout` reads (env vars / channel
+  fields).
+
 ## [0.18.0] — 2026-10-26
 
 renderx SEO/pipeline batch (shuijing 2026-10-26 audit, F-1..F-5 all fixed
