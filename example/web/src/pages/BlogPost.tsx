@@ -27,6 +27,7 @@ export function BlogPost({ post }: { post: BlogPostData }) {
     canonical: `/blog/${post.slug}`,
     ogSiteName: 'MyProduct',
     ogLocale: 'zh_CN',
+    ogType: 'article',
   })
 
   // ---- In-flow sign-in（框架 SignInModal 的产品接线）----

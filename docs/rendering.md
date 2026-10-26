@@ -534,6 +534,7 @@ Social scrapers (Facebook/LinkedIn/Telegram) require absolute `og:image` / `twit
 - When `Document.BaseURL` (from `ViteAssets.BaseURL`, i.e. the `PUBLIC_BASE_URL` env in both example wiring paths) is an absolute http(s) origin, relative `og:image`, `twitter:image` and `og:url` content values are prefixed with it. Already-absolute and protocol-relative (`//…`) values are left alone.
 - An empty, malformed or missing BaseURL is a complete no-op — nothing is rewritten, nothing fails. `canonical` is never touched (a relative canonical is legal) and no other meta/link is rewritten.
 - `cmd/render` reads `PUBLIC_BASE_URL` itself (empty = no-op; an invalid value logs a warning and disables the rewrite).
+- **Changing the domain after a deployment**: embed prerender snapshots bake the origin at build time — rebuild with the new env. Runtime-SSR pages self-heal when the layered cache TTL (default 1h) expires; the cache key does not include BaseURL, so within the TTL window old-origin HTML can still be served. A domain migration is: set the env, rebuild, redeploy.
 
 ### 5.7 Data surface (loader.go)
 
@@ -620,6 +621,7 @@ import { emitDirective, type HeadEntry } from '@ploykit/runtime'
 export function useSEO(meta: {
   title?: string; description?: string; ogImage?: string; canonical?: string;
   ogTitle?: string; ogDescription?: string; ogUrl?: string; ogType?: string; twitterSite?: string;
+  ogSiteName?: string; ogLocale?: string; ogImageAlt?: string; ogImageWidth?: number; ogImageHeight?: number;
 }) {
   const entries: HeadEntry[] = []
   if (meta.title) entries.push({ tag: 'title', children: meta.title })

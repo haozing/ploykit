@@ -154,9 +154,13 @@ func renderxHandler(ctx context.Context, mux *webx.Mux, pool *pgxpool.Pool, cach
 		BuildID:     buildID,
 		Assets:      assets,
 		Lang:        "zh-CN",
-		// 未知路径按 404 兜底（S-12）：人仍然拿到 SPA 壳（客户端路由照常
-		// 接管），爬虫看到诚实的 404 而非可收录的薄壳。example 的 CSR 路由
-		// 均在路由表内、静态页走 embed/cache/render 层，不受影响。
+		// 未知路径按 404 兜底（S-12）：只有 HTML 壳文档被降级为 404——
+		// 人仍然拿到壳字节（客户端路由照常启动渲染），爬虫看到诚实的
+		// 404 而非可收录的薄壳；SPA 处理器服务的真实静态文件（assets/
+		// favicon）保持原状态码（2026-10-26 审计 P0 回归）。example 的
+		// CSR 应用页（/app、/admin/* 等非内容页）深链以 404+壳 服务：
+		// 渲染照常、不被收录，符合预期；静态内容页走 embed/cache/render
+		// 层不受此策略影响。
 		UnknownPath: renderx.UnknownPathNotFound,
 	})
 	return h, eng, true, nil

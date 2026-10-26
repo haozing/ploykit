@@ -67,15 +67,21 @@ const (
 	// turns every garbage URL (/random-page, /zh/fake, trailing-slash twins)
 	// into an indexable soft-404 — the shell has no canonical, no noindex and
 	// a generic title, and crawlers collect them (field report:
-	// braceletmakeronline.com, GSC exposure on shell URLs). Consumers whose
-	// CSR routes live at known paths should enumerate those as ModeCSR/ModeStatic
-	// routes or serve them ahead of renderx, then flip this to not-found.
+	// braceletmakeronline.com, GSC exposure on shell URLs). Products that
+	// need a real 200 on specific CSR paths (they are app pages, not content)
+	// should mount those paths ahead of renderx — registering them as ModeCSR
+	// in the route table does NOT create a serving exemption (ModeCSR is
+	// projection metadata: sitemap excludes non-static routes either way);
+	// every non-static path flows through this policy.
 	UnknownPathSPAShell UnknownPathPolicy = "spa-shell"
 
-	// UnknownPathNotFound wraps the same SPA shell in a 404 status via
-	// notFoundWriter: human visitors still get the app shell (their client
-	// router can take over), but crawlers see an honest 404 instead of an
-	// indexable thin shell.
+	// UnknownPathNotFound downgrades the SPA shell DOCUMENT to 404 via
+	// notFoundWriter: human visitors still get the shell bytes (their client
+	// router boots and renders the route) and crawlers see an honest 404
+	// instead of an indexable thin shell. Static files the SPA handler
+	// serves for real (assets, favicon) keep their genuine statuses — only
+	// the HTML shell document is downgraded (audit P0 2026-10-26: an
+	// earlier draft 404'd assets too, killing hydration site-wide).
 	UnknownPathNotFound UnknownPathPolicy = "not-found"
 )
 
@@ -268,28 +274,65 @@ func (h *handler) serveNotFound(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	// 404 semantics for the same shell bytes: notFoundWriter sits between the
-	// shell-meta injector and the real writer, so injected meta still flows
-	// through its Write (which forces the 404 status before any body byte).
+	// 404 semantics for the shell DOCUMENT only: notFoundWriter sits between
+	// the shell-meta injector and the real writer, so injected meta still
+	// flows through its Write. Only the HTML shell is downgraded to 404 —
+	// the SPA handler also serves real static files (assets, favicon), and
+	// those keep their genuine 200 (audit P0 2026-10-26: forcing 404 on
+	// /assets/*.js broke hydration and styling for every page).
 	h.serveSPA(&notFoundWriter{ResponseWriter: w}, r)
 }
 
+// notFoundWriter downgrades an HTML shell response to 404 while passing
+// every other response (static files: 200 js/css/images, redirects, real
+// errors) through with its original status. The decision gates on
+// Content-Type at the first status/body write — mirroring shellMetaWriter's
+// htmlShellCandidate — because handlers set the header before writing; when
+// no type is declared yet, the first body bytes are sniffed.
 type notFoundWriter struct {
 	http.ResponseWriter
-	wrote bool
+	wrote  bool
+	pended int // status recorded by WriteHeader, emitted at first Write
 }
 
 func (w *notFoundWriter) WriteHeader(code int) {
 	if w.wrote {
 		return
 	}
-	w.wrote = true
-	w.ResponseWriter.WriteHeader(http.StatusNotFound)
+	// Body-less statuses (redirects, 304) never reach Write: only an
+	// untyped 200 — the shell case, decided by sniffing the first body
+	// bytes — can afford to defer; everything else emits now.
+	if ct := w.Header().Get("Content-Type"); ct != "" || code != http.StatusOK {
+		w.wrote = true
+		if ct != "" && htmlShellCandidate(w.Header()) {
+			w.ResponseWriter.WriteHeader(http.StatusNotFound)
+		} else {
+			w.ResponseWriter.WriteHeader(code)
+		}
+		return
+	}
+	w.pended = code
 }
 
 func (w *notFoundWriter) Write(b []byte) (int, error) {
 	if !w.wrote {
-		w.WriteHeader(http.StatusNotFound)
+		if w.Header().Get("Content-Type") == "" {
+			// No declared type: sniff the first bytes the way net/http would,
+			// so an untyped HTML shell still downgrades.
+			if strings.Contains(http.DetectContentType(b[:min(len(b), 512)]), "text/html") {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			}
+		}
+		code := w.pended
+		if code == 0 {
+			code = http.StatusOK
+		}
+		w.wrote = true
+		if htmlShellCandidate(w.Header()) {
+			w.ResponseWriter.WriteHeader(http.StatusNotFound)
+		} else {
+			w.ResponseWriter.WriteHeader(code)
+		}
 	}
 	return w.ResponseWriter.Write(b)
 }

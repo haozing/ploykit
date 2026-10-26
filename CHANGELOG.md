@@ -54,7 +54,28 @@ enrichment fields; version bumped at release).
 - **example**: renderx fallback switched to
   `UnknownPath: renderx.UnknownPathNotFound` — garbage/case-variant URLs
   now get an honest 404 instead of a 200 indexable SPA shell (the soft-404
-  GSC exposure class documented on the policy; humans still get the shell).
+  GSC exposure class documented on the policy). Humans still get the shell
+  bytes (the client router boots from them) and every real static file the
+  SPA handler serves keeps its genuine status — see the release-audit fix
+  below.
+- **renderx** (release-audit fixes, 3-agent pre-release review): the
+  notFoundWriter that backs the not-found policy had never run against a
+  real file-serving SPA handler and forced 404 on EVERY response —
+  flipping example to the recommended policy took down all assets
+  (audit P0, caught by a real-binary E2E before release). It now
+  downgrades only the HTML shell document (Content-Type gated, with
+  byte-sniffing for untyped shells and pass-through for redirects/errors);
+  pinned by a fileServingSPA regression test. Hardening from the same
+  review: link dedup keys include href so same-rel siblings survive (a
+  page's font preload no longer retires the shell's image preload /
+  modulepreload set; icons stay rel-only so a page favicon still replaces
+  the shell's), event-handler attributes (on*) and case-variant
+  http-equiv are rejected on every attr channel (head directives,
+  HTMLAttrs/BodyAttrs, shell inheritance), and commented-out link/meta
+  tags in the shell head stay dead instead of being resurrected. Docs
+  corrected: registering a path as ModeCSR does not exempt it from the
+  unknown-path policy (no serving branch exists for it — mount real-200
+  CSR paths ahead of renderx).
 
 ## [0.17.0] — 2026-10-26
 

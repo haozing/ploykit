@@ -80,7 +80,19 @@ var denyTags = map[string]bool{
 	"frame": true, "applet": true, "base": true,
 }
 
-var denyAttrs = map[string]bool{"http-equiv": true}
+// denyAttr reports whether an attribute name is rejected outright. Matching
+// is case-insensitive (attribute names in the wild may arrive in any case)
+// and covers the whole event-handler family — the on* prefix has no
+// legitimate use in server-rendered head/html/body markup (audit 2026-10-26:
+// the old exact-match {"http-equiv"} let `onload`/`ONLOAD` through wherever
+// the attr charset allowed them).
+func denyAttr(name string) bool {
+	n := strings.ToLower(name)
+	if strings.HasPrefix(n, "on") {
+		return true
+	}
+	return n == "http-equiv"
+}
 
 var voidElements = map[string]bool{
 	"area": true, "base": true, "br": true, "col": true, "embed": true,
@@ -246,7 +258,7 @@ func renderTagAttrs(attrs map[string]string, tag string) (string, error) {
 	}
 	names := make([]string, 0, len(attrs))
 	for k := range attrs {
-		if !attrRE.MatchString(k) || denyAttrs[k] {
+		if !attrRE.MatchString(k) || denyAttr(k) {
 			return "", fmt.Errorf("%w: attr %q on <%s>", ErrInvalidHeadTag, k, tag)
 		}
 		names = append(names, k)
@@ -278,7 +290,20 @@ func headKey(e HeadEntry) (string, bool) {
 	switch strings.ToLower(e.Tag) {
 	case "link":
 		if rel, ok := e.Attrs["rel"]; ok && rel != "" {
-			return "link " + normalizeRel(rel), true
+			norm := normalizeRel(rel)
+			// Icons stay rel-only keyed: a page declaring its own favicon
+			// replaces the shell's set wholesale. Every other same-rel
+			// family (preload, modulepreload…) keys on href too, so
+			// siblings survive each other — a page's font preload must not
+			// retire the shell's image preload, and multiple modulepreload
+			// links are distinct hints (audit 2026-10-26).
+			if strings.Contains(" "+norm+" ", " icon ") {
+				return "link " + norm, true
+			}
+			if href, ok := e.Attrs["href"]; ok && href != "" {
+				return "link " + norm + " " + href, true
+			}
+			return "link " + norm, true
 		}
 	case "meta":
 		if v, ok := e.Attrs["name"]; ok && v != "" {
@@ -392,7 +417,7 @@ func renderHeadEntry(e HeadEntry) (string, error) {
 	}
 	names := make([]string, 0, len(e.Attrs))
 	for k := range e.Attrs {
-		if !attrRE.MatchString(k) || denyAttrs[k] {
+		if !attrRE.MatchString(k) || denyAttr(k) {
 			return "", fmt.Errorf("%w: attr %q on <%s>", ErrInvalidHeadTag, k, e.Tag)
 		}
 		names = append(names, k)

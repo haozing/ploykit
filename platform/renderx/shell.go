@@ -34,6 +34,7 @@ type ShellHead struct {
 // tag matching; Vite never emits those in the shell head.
 var (
 	shellHeadBlockRE = regexp.MustCompile(`(?is)<head\b[^>]*>(.*?)</head>`)
+	shellCommentRE   = regexp.MustCompile(`(?s)<!--.*?-->`)
 	shellHeadTagRE   = regexp.MustCompile(`(?i)<(link|meta)\b([^>]*?)/?>`)
 	shellHTMLOpenRE  = regexp.MustCompile(`(?is)<html\b([^>]*)>`)
 	shellBodyOpenRE  = regexp.MustCompile(`(?is)<body\b([^>]*)>`)
@@ -61,10 +62,13 @@ var (
 func ParseShellHead(shellHTML string) ShellHead {
 	var out ShellHead
 	if head := shellHeadBlockRE.FindStringSubmatch(shellHTML); head != nil {
+		// Strip comments first: a commented-out link/meta must stay dead —
+		// the tag scan below would otherwise resurrect it (audit 2026-10-26).
+		headContent := shellCommentRE.ReplaceAllString(head[1], "")
 		// One combined scan keeps the shell's document order (links and metas
 		// interleaved as written); group 2 is the attribute region only, so
 		// the tag name never leaks into parseShellAttrs as a bare attribute.
-		for _, m := range shellHeadTagRE.FindAllStringSubmatch(head[1], -1) {
+		for _, m := range shellHeadTagRE.FindAllStringSubmatch(headContent, -1) {
 			if e, ok := shellEntry(strings.ToLower(m[1]), m[2]); ok {
 				out.HeadTags = append(out.HeadTags, e)
 			}
@@ -125,13 +129,13 @@ func shellEntry(tag, openTag string) (HeadEntry, bool) {
 // following it, so it never matches as an attribute value. Values are
 // returned HTML-unquoted (still entity-encoded); RenderDocument re-escapes
 // on output. clean=false reports that an attribute name was dropped because
-// it is outside the whitelist (attrRE/denyAttrs) — the caller drops the whole
+// it is outside the whitelist (attrRE/denyAttr) — the caller drops the whole
 // tag rather than emitting a mutated version of it.
 func parseShellAttrs(s string) (attrs map[string]string, clean bool) {
 	clean = true
 	for _, m := range shellAttrRE.FindAllStringSubmatch(s, -1) {
 		name := strings.ToLower(m[1])
-		if !attrRE.MatchString(name) || denyAttrs[name] {
+		if !attrRE.MatchString(name) || denyAttr(name) {
 			clean = false
 			continue
 		}

@@ -485,3 +485,77 @@ func TestRenderDocumentRejectsUnsafeTagAttrs(t *testing.T) {
 		}
 	}
 }
+
+// 审计回归（2026-10-26）：on* 事件属性与大小写变体的 http-equiv 一律拒绝
+//（Head 指令通道与 HTMLAttrs/BodyAttrs 同一白名单）；style 合法透传。
+func TestDenyAttrEventHandlers(t *testing.T) {
+	for _, name := range []string{"onload", "onerror", "ONCLICK", "onMouseOver"} {
+		if !denyAttr(name) {
+			t.Errorf("denyAttr(%q) 应拒绝 on* 事件属性", name)
+		}
+	}
+	for _, name := range []string{"http-equiv", "HTTP-EQUIV"} {
+		if !denyAttr(name) {
+			t.Errorf("denyAttr(%q) 应大小写不敏感地拒绝", name)
+		}
+	}
+	for _, name := range []string{"style", "class", "data-x", "content"} {
+		if denyAttr(name) {
+			t.Errorf("denyAttr(%q) 不应误伤合法属性", name)
+		}
+	}
+
+	_, err := RenderDocument(Document{
+		Lang: "zh",
+		Head: []HeadEntry{{Tag: "meta", Attrs: map[string]string{"name": "x", "onload": "alert(1)"}}},
+	})
+	if err == nil {
+		t.Error("Head 指令携带 onload 必须整条拒绝")
+	}
+	_, err = RenderDocument(Document{
+		Lang:      "zh",
+		HTMLAttrs: map[string]string{"ONLOAD": "alert(1)"},
+	})
+	if err == nil {
+		t.Error("HTMLAttrs 携带大写 ONLOAD 必须拒绝")
+	}
+	html, err := RenderDocument(Document{
+		Lang:      "zh",
+		HTMLAttrs: map[string]string{"style": "background:#fff"},
+	})
+	if err != nil || !strings.Contains(string(html), `style="background:#fff"`) {
+		t.Errorf("style 应合法透传, err=%v:\n%s", err, html)
+	}
+}
+
+// 审计回归（2026-10-26）：link 去重键含 href——页面同 rel 不同 href 的
+// preload 不得挤掉壳的 preload/modulepreload 提示。
+func TestInheritDedupeKeepsSiblingLinks(t *testing.T) {
+	doc := Document{
+		Lang: "zh",
+		InheritHead: []HeadEntry{
+			{Tag: "link", Attrs: map[string]string{"rel": "preload", "as": "image", "href": "/hero.png"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "modulepreload", "href": "/vendor.js"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "icon", "href": "/favicon.png"}},
+		},
+		Head: []HeadEntry{
+			{Tag: "link", Attrs: map[string]string{"rel": "preload", "as": "font", "href": "/font.woff2"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "icon", "href": "/page-icon.png"}},
+		},
+	}
+	html, err := RenderDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"/hero.png", "/vendor.js", "/font.woff2"} {
+		if !strings.Contains(string(html), want) {
+			t.Errorf("同 rel 不同 href 的提示应共存，缺 %q:\n%s", want, html)
+		}
+	}
+	if strings.Contains(string(html), "/favicon.png") {
+		t.Errorf("页面同 href 键的 icon 应淘汰壳版本:\n%s", html)
+	}
+	if !strings.Contains(string(html), "/page-icon.png") {
+		t.Errorf("页面 icon 应保留:\n%s", html)
+	}
+}

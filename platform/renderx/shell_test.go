@@ -172,3 +172,22 @@ func TestParseShellHeadToDocument(t *testing.T) {
 		t.Errorf("modulepreload 应在 stylesheet 之前:\n%s", html)
 	}
 }
+
+// 审计回归（2026-10-26）：被注释掉的 link/meta 必须保持死亡——注释剥离
+// 之前的扫描会把 <!-- <link rel=icon …> --> 复活成真实继承条目。
+func TestParseShellHeadCommentedTagsStayDead(t *testing.T) {
+	shell := `<html lang="zh"><head>` +
+		`<!-- legacy icon: <link rel="icon" href="/old.ico"> -->` +
+		`<link rel="icon" type="image/png" href="/favicon.png">` +
+		`</head><body></body></html>`
+	out := ParseShellHead(shell)
+	var hrefs []string
+	for _, e := range out.HeadTags {
+		if e.Attrs["rel"] == "icon" {
+			hrefs = append(hrefs, e.Attrs["href"])
+		}
+	}
+	if len(hrefs) != 1 || hrefs[0] != "/favicon.png" {
+		t.Errorf("注释内的 icon 不得复活, got %v", hrefs)
+	}
+}

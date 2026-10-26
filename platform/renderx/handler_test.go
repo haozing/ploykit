@@ -88,6 +88,34 @@ func (s *spaStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("SPA-FALLBACK"))
 }
 
+// fileServingSPA mimics a real SPA handler (example's frontendHandler): it
+// serves genuinely existing static files with their true types, a redirect,
+// an untyped HTML shell (the sniff path) and the typed HTML shell for
+// everything else.
+type fileServingSPA struct{ shellHits atomic.Int32 }
+
+func (s *fileServingSPA) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/assets/app.js":
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("console.log(1)"))
+	case "/favicon.png":
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte{0x89, 'P', 'N', 'G'})
+	case "/moved":
+		w.Header().Set("Location", "/")
+		w.WriteHeader(http.StatusMovedPermanently)
+	case "/raw-html":
+		_, _ = w.Write([]byte("<!doctype html><html><body>shell</body></html>"))
+	default:
+		s.shellHits.Add(1)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<!doctype html><div id=root></div>"))
+	}
+}
+
 func get(t *testing.T, h http.Handler, path string) *http.Response {
 	t.Helper()
 	return do(t, h, http.MethodGet, path)
@@ -724,15 +752,58 @@ func TestHandlerUnknownPathPolicy(t *testing.T) {
 		t.Errorf("not-found 策略 tier = %q, want %q", tier, TierSPA)
 	}
 
-	// 资产形路径（末段带扩展名）在 not-found 策略下同样 404；tier 沿用 404 壳
-	// 既有语义（serveNotFound 固定 TierSPA，见 TestHandlerTierHeaderNotFoundViaSPA）
+	// 资产形路径（末段带扩展名）在 not-found 策略下同样 404——spaStub 对一切
+	// 路径回 HTML 壳，壳即降级对象；tier 沿用 404 壳既有语义（serveNotFound
+	// 固定 TierSPA，见 TestHandlerTierHeaderNotFoundViaSPA）。真实文件（下
+	// 方 fileServingSPA 回归）不在此列。
 	resp = get(t, newHandler(UnknownPathNotFound), "/nope.js")
 	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("资产形未匹配路径在 not-found 策略下应 404, got %d", resp.StatusCode)
+		t.Errorf("资产形未匹配路径（壳响应）在 not-found 策略下应 404, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 	if tier := resp.Header.Get(HeaderTier); tier != TierSPA {
 		t.Errorf("404 壳 tier = %q, want %q（既有语义）", tier, TierSPA)
+	}
+
+	// P0 回归（2026-10-26 集成审计）：notFoundWriter 只降级 HTML 壳文档。
+	// SPA 处理器同时服务真实静态文件——强制 404 曾把 /assets/*.js 与
+	// favicon 全部打灭，页面水合与样式全死。真实文件保持原状态码、
+	// 重定向透传、未声明类型的 HTML 壳经嗅探仍降级。
+	fileHandler := Handler(HandlerDeps{
+		SPA:   &fileServingSPA{},
+		Cache: newMemOnlyCache(t, "b1", 16, 0),
+		Renderer: newStubRenderer(handlerTestRoutes(), func(int, string, string, json.RawMessage) (string, *DirectiveSink, error) {
+			return "<main>x</main>", titleSink("x"), nil
+		}),
+		Routes:      handlerTestRoutes(),
+		BuildID:     "b1",
+		Registry:    newHandlerTestReg(),
+		UnknownPath: UnknownPathNotFound,
+	})
+	if resp := get(t, fileHandler, "/assets/app.js"); resp.StatusCode != http.StatusOK {
+		t.Errorf("真实 JS 资产必须保持 200, got %d", resp.StatusCode)
+	} else {
+		resp.Body.Close()
+	}
+	if resp := get(t, fileHandler, "/favicon.png"); resp.StatusCode != http.StatusOK {
+		t.Errorf("favicon 必须保持 200, got %d", resp.StatusCode)
+	} else {
+		resp.Body.Close()
+	}
+	if resp := get(t, fileHandler, "/moved"); resp.StatusCode != http.StatusMovedPermanently {
+		t.Errorf("重定向必须透传原状态码, got %d", resp.StatusCode)
+	} else {
+		resp.Body.Close()
+	}
+	if resp := get(t, fileHandler, "/raw-html"); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("未声明 Content-Type 的 HTML 壳应经嗅探降级 404, got %d", resp.StatusCode)
+	} else {
+		resp.Body.Close()
+	}
+	if resp := get(t, fileHandler, "/random-page"); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("HTML 壳文档应 404, got %d", resp.StatusCode)
+	} else {
+		resp.Body.Close()
 	}
 
 	// 非 GET/HEAD 不经策略门（维持既有方法闸行为）
