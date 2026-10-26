@@ -679,3 +679,318 @@ func TestHandlerRespectsHydrateNone(t *testing.T) {
 		t.Errorf("hydrate=load 页应带 props 脚本与入口:\n%s", hydrated)
 	}
 }
+
+// 未匹配路径的策略开关：默认（零值）保持 v0.15.0 的 SPA 壳 200（消费方的
+// CSR 路由靠它）；显式 not-found 后壳内容保留给人类用户、状态变 404。
+// loader 返回 ErrPageNotFound 的既有 404 行为在 TestHandlerPageNotFound 里
+// 单独守住，不受该开关影响。
+func TestHandlerUnknownPathPolicy(t *testing.T) {
+	newHandler := func(policy UnknownPathPolicy) http.Handler {
+		return Handler(HandlerDeps{
+			SPA:   &spaStub{},
+			Cache: newMemOnlyCache(t, "b1", 16, 0),
+			Renderer: newStubRenderer(handlerTestRoutes(), func(int, string, string, json.RawMessage) (string, *DirectiveSink, error) {
+				return "<main>x</main>", titleSink("x"), nil
+			}),
+			Routes:      handlerTestRoutes(),
+			BuildID:     "b1",
+			Registry:    newHandlerTestReg(),
+			UnknownPath: policy,
+		})
+	}
+
+	resp := get(t, newHandler(""), "/app/dashboard")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("默认策略：未匹配路径应仍 200 壳（v0.15.0 兼容）, got %d", resp.StatusCode)
+	}
+	if got := body(t, resp); got != "SPA-FALLBACK" {
+		t.Errorf("默认策略 body = %q, want SPA-FALLBACK", got)
+	}
+
+	resp = get(t, newHandler(UnknownPathSPAShell), "/random-page")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("显式 spa-shell：应 200 壳, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = get(t, newHandler(UnknownPathNotFound), "/random-page")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("not-found 策略：未匹配路径应 404, got %d", resp.StatusCode)
+	}
+	if got := body(t, resp); got != "SPA-FALLBACK" {
+		t.Errorf("not-found 策略 body = %q, want 壳内容保留（SPA-FALLBACK）", got)
+	}
+	if tier := resp.Header.Get(HeaderTier); tier != TierSPA {
+		t.Errorf("not-found 策略 tier = %q, want %q", tier, TierSPA)
+	}
+
+	// 资产形路径（末段带扩展名）在 not-found 策略下同样 404；tier 沿用 404 壳
+	// 既有语义（serveNotFound 固定 TierSPA，见 TestHandlerTierHeaderNotFoundViaSPA）
+	resp = get(t, newHandler(UnknownPathNotFound), "/nope.js")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("资产形未匹配路径在 not-found 策略下应 404, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if tier := resp.Header.Get(HeaderTier); tier != TierSPA {
+		t.Errorf("404 壳 tier = %q, want %q（既有语义）", tier, TierSPA)
+	}
+
+	// 非 GET/HEAD 不经策略门（维持既有方法闸行为）
+	resp = do(t, newHandler(UnknownPathNotFound), http.MethodPost, "/random-page")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("POST 未匹配路径维持 spa 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	defer func() {
+		if recover() == nil {
+			t.Error("未知策略取值应在构造期 panic")
+		}
+	}()
+	Handler(HandlerDeps{
+		SPA:   &spaStub{},
+		Cache: newMemOnlyCache(t, "b1", 16, 0),
+		Renderer: newStubRenderer(handlerTestRoutes(), func(int, string, string, json.RawMessage) (string, *DirectiveSink, error) {
+			return "x", titleSink("x"), nil
+		}),
+		Routes:      handlerTestRoutes(),
+		BuildID:     "b1",
+		Registry:    newHandlerTestReg(),
+		UnknownPath: "typo",
+	})
+}
+
+// 尾斜杠归一：无扩展名路径的带斜杠形态 301 到去斜杠版（与 cacheKey 拒绝尾
+// 斜杠、validPattern 禁尾斜杠的既有语义对齐——斜杠形态本来就进不了任何层，
+// 不归一就落 SPA 壳成为真页的薄壳孪生）。GET/HEAD only。
+func TestHandlerTrailingSlashRedirect(t *testing.T) {
+	h := Handler(HandlerDeps{
+		PrerenderFS: &fstest.MapFS{"pricing.html": {Data: []byte("<html>embed-pricing</html>")}},
+		SPA:         &spaStub{},
+		Cache:       newMemOnlyCache(t, "b1", 16, 0),
+		Renderer: newStubRenderer(handlerTestRoutes(), func(int, string, string, json.RawMessage) (string, *DirectiveSink, error) {
+			return "<main>x</main>", titleSink("x"), nil
+		}),
+		Routes:   handlerTestRoutes(),
+		BuildID:  "b1",
+		Registry: newHandlerTestReg(),
+	})
+
+	// /foo/ → 301 /foo；query 保留
+	resp := get(t, h, "/calculator/?ref=x")
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("GET /calculator/?ref=x = %d, want 301", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/calculator?ref=x" {
+		t.Errorf("Location = %q, want /calculator?ref=x", loc)
+	}
+	resp.Body.Close()
+
+	// 多余斜杠一跳归一（目标不再带斜杠 → 不会循环重定向）
+	resp = get(t, h, "/calculator//")
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("GET /calculator// = %d, want 301", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/calculator" {
+		t.Errorf("Location = %q, want /calculator（一跳）", loc)
+	}
+	resp.Body.Close()
+
+	// 已是规范形态：不重定向（/foo 落默认 SPA 壳 200）
+	resp = get(t, h, "/calculator")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET /calculator = %d, want 200（无重定向）", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "" {
+		t.Errorf("/calculator 不应带 Location, got %q", loc)
+	}
+	resp.Body.Close()
+
+	// 根路径 "/" 是唯一带斜杠的规范形态，绝不重定向（否则就是自环）
+	resp = get(t, h, "/")
+	if resp.StatusCode == http.StatusMovedPermanently {
+		t.Error("GET / 不应重定向")
+	}
+	resp.Body.Close()
+
+	// 有 embed 快照的路径同样先归一（斜杠形态进不了 embed/cacheKey，301 到真页）
+	resp = get(t, h, "/pricing/")
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("GET /pricing/ = %d, want 301", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// 带扩展名的路径不受影响（无论有无斜杠）
+	for _, p := range []string{"/assets/app.js", "/logo.png"} {
+		resp = get(t, h, p)
+		if resp.StatusCode == http.StatusMovedPermanently {
+			t.Errorf("GET %s 不应重定向", p)
+		}
+		if loc := resp.Header.Get("Location"); loc != "" {
+			t.Errorf("GET %s 不应带 Location, got %q", p, loc)
+		}
+		resp.Body.Close()
+	}
+
+	// 非 GET/HEAD 不归一（维持既有方法闸）
+	resp = do(t, h, http.MethodPost, "/calculator/")
+	if resp.StatusCode == http.StatusMovedPermanently {
+		t.Error("POST /calculator/ 不应重定向")
+	}
+	resp.Body.Close()
+
+	// HEAD 也归一
+	resp = do(t, h, http.MethodHead, "/calculator/")
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Errorf("HEAD /calculator/ = %d, want 301", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestTrailingSlashRedirectUnits(t *testing.T) {
+	cases := []struct {
+		path, query, wantTarget string
+		want                    bool
+	}{
+		{"/", "", "", false},         // 根是规范形态
+		{"/foo", "", "", false},      // 无尾斜杠
+		{"/foo/", "", "/foo", true},  // 基本形态
+		{"/foo//", "", "/foo", true}, // 多斜杠一跳
+		// query 不属于 path：真实入口传 r.URL.Path / r.URL.RawQuery 两个参数
+		{"/foo/?a=1&b=2", "", "", false},
+		{"/foo/", "a=1&b=2", "/foo?a=1&b=2", true},
+		{"/logo.png/", "", "", false},  // 末段带扩展名（资产形）不归一
+		{"/blog/v1.2/", "", "", false}, // 带点末段视作资产形（与 spaTier 启发式同边界）
+		{"/works/my-bracelet/", "", "/works/my-bracelet", true},
+	}
+	for _, c := range cases {
+		got, ok := trailingSlashRedirect(c.path, c.query)
+		if ok != c.want || got != c.wantTarget {
+			t.Errorf("trailingSlashRedirect(%q, %q) = (%q, %v), want (%q, %v)", c.path, c.query, got, ok, c.wantTarget, c.want)
+		}
+	}
+}
+
+// htmlShellStub 模拟消费方的 SPA 壳 handler：按给定分片写出 body，可配置
+// Content-Type / Content-Encoding。
+type htmlShellStub struct {
+	chunks []string
+	ctype  string
+	enc    string
+}
+
+func (s *htmlShellStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.ctype != "" {
+		w.Header().Set("Content-Type", s.ctype)
+	}
+	if s.enc != "" {
+		w.Header().Set("Content-Encoding", s.enc)
+	}
+	for _, c := range s.chunks {
+		_, _ = w.Write([]byte(c))
+	}
+}
+
+// 壳层 meta 注入：ShellMeta 配置后注入进壳 HTML 的 head（SPA 200 壳与 404
+// 壳都算）；未配置时壳字节逐字节不变。
+func TestHandlerShellMeta(t *testing.T) {
+	shell := `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>shell</title></head><body><div id="root"></div><script src="/assets/app.js"></script></body></html>`
+	robotsMeta := `<meta content="noindex, follow" name="robots">`
+	metaDeps := func(spa http.Handler) HandlerDeps {
+		return HandlerDeps{
+			SPA:   spa,
+			Cache: newMemOnlyCache(t, "b1", 16, 0),
+			Renderer: newStubRenderer(handlerTestRoutes(), func(int, string, string, json.RawMessage) (string, *DirectiveSink, error) {
+				return "<main>x</main>", titleSink("x"), nil
+			}),
+			Routes:   handlerTestRoutes(),
+			BuildID:  "b1",
+			Registry: newHandlerTestReg(),
+			ShellMeta: []HeadEntry{{
+				Tag:   "meta",
+				Attrs: map[string]string{"name": "robots", "content": "noindex, follow"},
+			}},
+		}
+	}
+
+	// 配置后：meta 进 head（</head> 之前），body 其余部分原样
+	h := Handler(metaDeps(&htmlShellStub{chunks: []string{shell}, ctype: "text/html; charset=utf-8"}))
+	resp := get(t, h, "/login")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("壳页应 200, got %d", resp.StatusCode)
+	}
+	got := body(t, resp)
+	headPart := got[:strings.Index(got, "</head>")]
+	if !strings.Contains(headPart, robotsMeta) {
+		t.Errorf("meta 应注入 </head> 之前:\n%s", got)
+	}
+	if strings.Count(got, robotsMeta) != 1 {
+		t.Errorf("meta 只注入一次:\n%s", got)
+	}
+	if !strings.HasSuffix(got, "</body></html>") {
+		t.Errorf("壳尾应原样保留:\n%s", got)
+	}
+
+	// 404 壳同样注入（UnknownPath=not-found 的未匹配路径走 serveNotFound）
+	deps404 := metaDeps(&htmlShellStub{chunks: []string{shell}, ctype: "text/html; charset=utf-8"})
+	deps404.UnknownPath = UnknownPathNotFound
+	h404 := Handler(deps404)
+	resp = get(t, h404, "/random-page")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("404 壳应 404, got %d", resp.StatusCode)
+	}
+	if got := body(t, resp); !strings.Contains(got[:strings.Index(got, "</head>")], robotsMeta) {
+		t.Errorf("404 壳同样应注入 meta:\n%s", got)
+	}
+
+	// 分片写出、</head> 跨分片：注入仍成立
+	chunky := &htmlShellStub{chunks: []string{`<!doctype html><html><head><title>t</`, `title></head><body>x</body></html>`}, ctype: "text/html"}
+	resp = get(t, Handler(metaDeps(chunky)), "/login")
+	if got := body(t, resp); !strings.Contains(got, `</head>`) || strings.Count(got, "name=\"robots\"") != 1 {
+		t.Errorf("跨分片 </head> 注入失败:\n%s", got)
+	} else if i := strings.Index(got, `name="robots"`); i > strings.Index(got, "</head>") {
+		t.Errorf("meta 应在 </head> 之前:\n%s", got)
+	}
+
+	// 缺 </head> 的极小壳：兜底插到 <html> 开标签之后
+	noHead := &htmlShellStub{chunks: []string{`<html><body>tiny shell</body></html>`}, ctype: "text/html"}
+	resp = get(t, Handler(metaDeps(noHead)), "/login")
+	if got := body(t, resp); !strings.Contains(got, robotsMeta) {
+		t.Errorf("无 </head> 壳应走兜底注入:\n%s", got)
+	} else if i := strings.Index(got, robotsMeta); i > strings.Index(got, "<body>") {
+		t.Errorf("兜底注入位置应在 body 开始前:\n%s", got)
+	}
+
+	// 非 HTML 响应（SPA 兜底也接资产）：逐字节透传，不注入
+	assetShell := &htmlShellStub{chunks: []string{`console.log("</head>");`}, ctype: "text/javascript"}
+	resp = get(t, Handler(metaDeps(assetShell)), "/assets/app.js")
+	if got := body(t, resp); got != `console.log("</head>");` {
+		t.Errorf("非 HTML 响应必须逐字节透传, got %q", got)
+	}
+
+	// 自带 Content-Encoding 的响应：不解码不注入，透传
+	encShell := &htmlShellStub{chunks: []string{"\x1f\x8b-garbage-</head>"}, ctype: "text/html", enc: "gzip"}
+	resp = get(t, Handler(metaDeps(encShell)), "/login")
+	if got := body(t, resp); strings.Contains(got, "robots") {
+		t.Errorf("压缩响应注入会损坏字节流, got %q", got)
+	}
+
+	// 未配置：产物逐字节等于壳 handler 的输出
+	plainDeps := metaDeps(&htmlShellStub{chunks: []string{shell}, ctype: "text/html; charset=utf-8"})
+	plainDeps.ShellMeta = nil
+	hPlain := Handler(plainDeps)
+	resp = get(t, hPlain, "/login")
+	if got := body(t, resp); got != shell {
+		t.Errorf("未配置 ShellMeta 时壳应逐字节不变:\n got %q\nwant %q", got, shell)
+	}
+
+	// 非法条目构造期 panic（同 RobotsHandler 的"坏配置当场炸"契约）
+	defer func() {
+		if recover() == nil {
+			t.Error("ShellMeta 含 script 条目应在构造期 panic")
+		}
+	}()
+	bad := metaDeps(&htmlShellStub{chunks: []string{shell}})
+	bad.ShellMeta = []HeadEntry{{Tag: "script", Children: "x"}}
+	Handler(bad)
+}

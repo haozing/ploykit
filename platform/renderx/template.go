@@ -60,6 +60,68 @@ func escapePropsJSON(b []byte) []byte {
 	return bytes.ReplaceAll(b, []byte("<"), []byte(`\u003c`))
 }
 
+var (
+	linkTagRE = regexp.MustCompile(`(?i)^<link\b[^>]*>$`)
+	relAttrRE = regexp.MustCompile(`(?i)\brel="([^"]*)"`)
+)
+
+// hoistLeadingPreloads splits off the leading run of `<link rel="preload">`
+// tags at the very start of the body HTML.
+//
+// React 19 float emits one preload link per non-lazy <img> (plus fonts/styles
+// preloads when asked), and renderToString embeds them inside #root — where a
+// preload scanner discovers them far later than in <head>, losing most of the
+// head start. Only the contiguous run that starts at byte 0 of the body HTML is
+// considered: the first byte that is not a preload link — a `<!--$-->` suspense
+// marker, any other tag, text, even leading whitespace — stops the scan and
+// everything from there on stays in the body verbatim (conservative by design;
+// a missed hoist costs a bit of latency, a wrong one costs hydration markers).
+// No-preload input returns the input unchanged so the assembled document stays
+// byte-identical.
+func hoistLeadingPreloads(body string) (tags []string, rest string) {
+	pos := 0
+	for {
+		s := body[pos:]
+		if !strings.HasPrefix(s, "<link") {
+			break
+		}
+		end := strings.IndexByte(s, '>')
+		if end < 0 || strings.Contains(s[1:end], "<") {
+			break
+		}
+		tag := s[:end+1]
+		if !isPreloadLinkTag(tag) {
+			break
+		}
+		tags = append(tags, tag)
+		pos += end + 1
+	}
+	if pos == 0 {
+		return nil, body
+	}
+	return tags, body[pos:]
+}
+
+// isPreloadLinkTag reports whether tag is a well-formed <link> whose rel value
+// (a space-separated token list, HTML spec) contains "preload". Attribute
+// matching is limited to double-quoted values — the only form React emits;
+// anything else fails the match and is left in place.
+func isPreloadLinkTag(tag string) bool {
+	if !linkTagRE.MatchString(tag) {
+		return false
+	}
+	m := relAttrRE.FindStringSubmatch(tag)
+	if m == nil {
+		return false
+	}
+	for _, tok := range strings.Fields(m[1]) {
+		if strings.EqualFold(tok, "preload") {
+			return true
+		}
+	}
+	return false
+}
+
 func RenderDocument(doc Document) ([]byte, error) {
 	props := doc.PropsJSON
 	if len(props) == 0 {
@@ -68,6 +130,9 @@ func RenderDocument(doc Document) ([]byte, error) {
 	if len(props) > MaxPropsBytes {
 		return nil, fmt.Errorf("%w: %d bytes > %d", ErrPropsTooLarge, len(props), MaxPropsBytes)
 	}
+	// Float preloads lifted into <head> (see hoistLeadingPreloads); everything
+	// else in the body stays byte-for-byte.
+	preloads, bodyHTML := hoistLeadingPreloads(doc.BodyHTML)
 
 	var buf bytes.Buffer
 	buf.WriteString("<!doctype html>\n")
@@ -81,12 +146,18 @@ func RenderDocument(doc Document) ([]byte, error) {
 		}
 		buf.WriteString("  " + s + "\n")
 	}
+	// Preloads go before the stylesheets: they start high-priority fetches the
+	// render-blocking CSS download would otherwise queue behind, which is the
+	// whole point of hoisting them out of the body.
+	for _, tag := range preloads {
+		buf.WriteString("  " + tag + "\n")
+	}
 	for _, href := range doc.CSS {
 		buf.WriteString(`  <link rel="stylesheet" href="` + escapeHTML(href) + `">` + "\n")
 	}
 	buf.WriteString("</head>\n")
 	buf.WriteString("<body>\n")
-	buf.WriteString(`  <div id="root">` + doc.BodyHTML + `</div>` + "\n")
+	buf.WriteString(`  <div id="root">` + bodyHTML + `</div>` + "\n")
 	if !doc.NoHydration {
 		propsScript := `<script type="application/json" id="__PLOYKIT_PROPS__"`
 		if doc.PageID != "" {

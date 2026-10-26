@@ -132,3 +132,151 @@ func TestRenderDocumentRejectsUnsafe(t *testing.T) {
 		})
 	}
 }
+
+// React 19 float 把非 lazy <img> 的 <link rel="preload"> 产在 body 里（#root
+// 内部）；文档组装必须把紧跟 #root 开标签的前导 preload 连续段提升进 <head>，
+// 且不惊动其后的 `<!--$-->` 悬念边界标记与正常元素（水合期两者都是载荷）。
+func TestRenderDocumentHoistsLeadingFloatPreloads(t *testing.T) {
+	bodyIn := `<link rel="preload" as="image" href="/hero.png" fetchpriority="high">` +
+		`<link rel="preload" as="image" href="/bead-1.png">` +
+		`<!--$--><main><img src="/hero.png" alt="hero"><p>x</p></main><!--/$-->`
+	got, err := RenderDocument(Document{
+		Lang:          "en",
+		Head:          []HeadEntry{{Tag: "title", Children: "T"}},
+		CSS:           []string{"/assets/entry.css"},
+		BodyHTML:      bodyIn,
+		HydrateScript: `<script type="module" src="/assets/entry.js"></script>`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(got)
+	headPart := html[:strings.Index(html, "</head>")]
+	bodyPart := html[strings.Index(html, `<div id="root">`):]
+
+	for _, want := range []string{
+		`<link rel="preload" as="image" href="/hero.png" fetchpriority="high">`,
+		`<link rel="preload" as="image" href="/bead-1.png">`,
+	} {
+		if !strings.Contains(headPart, want) {
+			t.Errorf("提升后 head 应含 %q:\n%s", want, headPart)
+		}
+		if strings.Contains(bodyPart, want) {
+			t.Errorf("body #root 内不应再含 %q:\n%s", want, bodyPart)
+		}
+	}
+	// preload 在 CSS link 之前（提前量是这个修复的全部意义）
+	if strings.Index(headPart, `rel="preload"`) > strings.Index(headPart, `rel="stylesheet"`) {
+		t.Errorf("preload 应排在 CSS link 之前:\n%s", headPart)
+	}
+	// `<!--$-->` 悬念标记与正常元素原样保留在 body
+	for _, keep := range []string{`<!--$-->`, `<!--/$-->`, `<main>`, `<img src="/hero.png"`, `</main>`} {
+		if !strings.Contains(bodyPart, keep) {
+			t.Errorf("body 应原样保留 %q:\n%s", keep, bodyPart)
+		}
+	}
+}
+
+// 保守边界：只动紧跟 #root 的前导段——正文中间的 preload、前导的非 preload
+// link、以及 link 段之前的任何字节（注释/空白/文本）都不算，产物逐字节不变。
+func TestRenderDocumentPreloadHoistConservative(t *testing.T) {
+	cases := []struct {
+		name     string
+		bodyHTML string
+		want     string // 完整期望产物（body 原样）
+	}{
+		{
+			name:     "正文中间的 preload 不动",
+			bodyHTML: `<main><link rel="preload" as="image" href="/mid.png"><p>x</p></main>`,
+			want: `<!doctype html>
+<html lang="">
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+  <div id="root"><main><link rel="preload" as="image" href="/mid.png"><p>x</p></main></div>
+  <script type="application/json" id="__PLOYKIT_PROPS__">{}</script>
+</body>
+</html>
+`,
+		},
+		{
+			name:     "前导 stylesheet link 不提升",
+			bodyHTML: `<link rel="stylesheet" href="/x.css"><p>x</p>`,
+			want: `<!doctype html>
+<html lang="">
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+  <div id="root"><link rel="stylesheet" href="/x.css"><p>x</p></div>
+  <script type="application/json" id="__PLOYKIT_PROPS__">{}</script>
+</body>
+</html>
+`,
+		},
+		{
+			name:     "悬念标记在前 preload 在后——整段不动",
+			bodyHTML: `<!--$--><link rel="preload" as="image" href="/after.png"><p>x</p>`,
+			want: `<!doctype html>
+<html lang="">
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+  <div id="root"><!--$--><link rel="preload" as="image" href="/after.png"><p>x</p></div>
+  <script type="application/json" id="__PLOYKIT_PROPS__">{}</script>
+</body>
+</html>
+`,
+		},
+		{
+			name:     "无 preload 时产物逐字节不变",
+			bodyHTML: `<h1>Hello</h1><p>world</p>`,
+			want: `<!doctype html>
+<html lang="">
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+  <div id="root"><h1>Hello</h1><p>world</p></div>
+  <script type="application/json" id="__PLOYKIT_PROPS__">{}</script>
+</body>
+</html>
+`,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := RenderDocument(Document{BodyHTML: c.bodyHTML})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != c.want {
+				t.Errorf("产物不符（保守边界内应逐字节不变）：\n--- got ---\n%s--- want ---\n%s", got, c.want)
+			}
+		})
+	}
+}
+
+// 单元级：rel 值按 token 列表识别（rel="preload stylesheet" 也算），属性顺序
+// 无关；未闭合的 link 不吞。
+func TestHoistLeadingPreloadsUnits(t *testing.T) {
+	tags, rest := hoistLeadingPreloads(`<link href="/b.png" as="image" rel="preload"><link rel="preload alternate" href="/a.png"><p/>`)
+	if len(tags) != 2 {
+		t.Fatalf("want 2 hoisted tags, got %d (%v)", len(tags), tags)
+	}
+	if rest != `<p/>` {
+		t.Errorf("rest = %q, want %q", rest, `<p/>`)
+	}
+
+	tags, rest = hoistLeadingPreloads(`<link rel="preload" href="/x.png"`)
+	if tags != nil || rest != `<link rel="preload" href="/x.png"` {
+		t.Errorf("未闭合 link 不应吞: tags=%v rest=%q", tags, rest)
+	}
+
+	tags, rest = hoistLeadingPreloads("")
+	if tags != nil || rest != "" {
+		t.Errorf("空 body: tags=%v rest=%q", tags, rest)
+	}
+}

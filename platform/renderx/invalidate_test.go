@@ -3,8 +3,12 @@ package renderx
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -143,4 +147,153 @@ func TestPackageLevelConvenience(t *testing.T) {
 	}
 
 	RegisterService(nil)
+}
+
+// Invalidate 必须打穿 embed 层：go:embed 快照只读，v0.15.0 里 handler 的
+// embedPage 命中即 return，DB 已删资源以完整预渲染内容 200 服务到下次构建
+// （生产实测僵尸页 X-Renderx-Tier: embed）。墓碑集让命中过墓碑的 embed 路径
+// 视为 miss 走后续层：带参数形态（/works/:slug + params）与字面路径都要正确
+// 映射到墓碑键；sitemap/Paths 枚举不受运行期失效影响。
+func TestInvalidatePunchesEmbedLayer(t *testing.T) {
+	routes := []RouteSpec{
+		{Path: "/", PageID: "home", Render: ModeStatic},
+		{Path: "/works/:slug", PageID: "work", Render: ModeStatic},
+	}
+	reg := NewRegistry()
+	reg.RegisterPaths("/works/:slug", func(ctx context.Context) ([]PagePath, error) {
+		return []PagePath{{Params: Params{"slug": "my-bracelet"}}, {Params: Params{"slug": "other"}}}, nil
+	})
+	reg.RegisterLoader("/works/:slug", func(ctx context.Context, p Params) (any, error) {
+		if p["slug"] == "my-bracelet" {
+			return nil, fmt.Errorf("work %q: %w", p["slug"], ErrPageNotFound)
+		}
+		return map[string]string{"slug": p["slug"]}, nil
+	})
+	reg.RegisterDep("/", "/works/:slug")
+
+	embedFS := &fstest.MapFS{
+		"index.html":             {Data: []byte("<html>embed-home</html>")},
+		"works/my-bracelet.html": {Data: []byte("<html>embed-my-bracelet</html>")},
+		"works/other.html":       {Data: []byte("<html>embed-other</html>")},
+	}
+	fr := newStubRenderer(routes, func(call int, pageID, location string, props json.RawMessage) (string, *DirectiveSink, error) {
+		return "<main>rendered:" + location + "</main>", titleSink("t"), nil
+	})
+	h := Handler(HandlerDeps{
+		PrerenderFS: embedFS,
+		SPA:         &spaStub{},
+		Cache:       newMemOnlyCache(t, "b1", 16, 0),
+		Renderer:    fr,
+		Routes:      routes,
+		BuildID:     "b1",
+		Registry:    reg,
+	})
+	ctx := context.Background()
+
+	// 改前：embed 层 200
+	resp := get(t, h, "/works/my-bracelet")
+	if resp.StatusCode != http.StatusOK || resp.Header.Get(HeaderTier) != TierEmbed {
+		t.Fatalf("改前 /works/my-bracelet 应 200 embed, got %d tier=%q", resp.StatusCode, resp.Header.Get(HeaderTier))
+	}
+	resp.Body.Close()
+
+	// 带参数失效（消费方 deleteWork 的调用形态）
+	if err := Invalidate(ctx, "/works/:slug", Params{"slug": "my-bracelet"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 墓碑命中：embed 视为 miss → 走 static 路由 → loader 报 ErrPageNotFound → 404 壳
+	resp = get(t, h, "/works/my-bracelet")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("失效后 /works/my-bracelet 应 404, got %d（僵尸页回归）", resp.StatusCode)
+	}
+	if got := body(t, resp); got != "SPA-FALLBACK" {
+		t.Errorf("404 body = %q, want SPA 壳", got)
+	}
+
+	// 点失效不误伤同模式的兄弟页（仍 embed）
+	resp = get(t, h, "/works/other")
+	if resp.StatusCode != http.StatusOK || resp.Header.Get(HeaderTier) != TierEmbed {
+		t.Fatalf("/works/other 应仍 200 embed, got %d tier=%q", resp.StatusCode, resp.Header.Get(HeaderTier))
+	}
+	resp.Body.Close()
+
+	// 失效图反向依赖把首页也打下 embed 层：首页快照还含死链，继续发就是旧内容
+	resp = get(t, h, "/")
+	if resp.Header.Get(HeaderTier) == TierEmbed {
+		t.Fatalf("失效图波及 / 后首页不应再命中 embed, tier=%q", resp.Header.Get(HeaderTier))
+	}
+	if got := body(t, resp); !strings.Contains(got, "rendered:/") {
+		t.Errorf("首页应落到现场渲染层, got %q", got)
+	}
+
+	// 字面路径失效（消费方同样会调 Invalidate("/", nil) 这类无参形态）
+	if err := Invalidate(ctx, "/", nil); err != nil {
+		t.Fatal(err)
+	}
+	resp = get(t, h, "/")
+	if resp.Header.Get(HeaderTier) == TierEmbed {
+		t.Fatalf("字面路径失效后 / 不应再命中 embed, tier=%q", resp.Header.Get(HeaderTier))
+	}
+	resp.Body.Close()
+
+	// 模式整体失效（params=nil 走宽失效）：/works/* 全部下 embed 层
+	if err := Invalidate(ctx, "/works/:slug", nil); err != nil {
+		t.Fatal(err)
+	}
+	resp = get(t, h, "/works/other")
+	if resp.Header.Get(HeaderTier) == TierEmbed {
+		t.Fatalf("模式宽失效后 /works/other 不应再命中 embed, tier=%q", resp.Header.Get(HeaderTier))
+	}
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body(t, resp), "rendered:/works/other") {
+		t.Errorf("仍存在的作品应落到渲染层 200, got %d", resp.StatusCode)
+	}
+
+	// sitemap / Paths 枚举不受运行期失效影响（收录来源与页面服务解耦）
+	sm := SitemapHandler(routes, "https://example.com", SitemapOptions{Registry: reg})
+	before := smServe(t, sm)
+	if !strings.Contains(before, "https://example.com/works/my-bracelet") {
+		t.Errorf("sitemap 应含枚举实例:\n%s", before)
+	}
+	if after := smServe(t, sm); after != before {
+		t.Errorf("Invalidate 不应改变 sitemap 产物")
+	}
+}
+
+func smServe(t *testing.T, h http.Handler) string {
+	t.Helper()
+	resp := get(t, h, "/sitemap.xml")
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// 墓碑单元：字面路径与模式两类键、同键幂等、nil 接收者安全。
+func TestEmbedTombstoneUnits(t *testing.T) {
+	var nilTomb *embedTombstone
+	nilTomb.add("/x") // nil 不 panic、不生效
+	if nilTomb.has("/x") {
+		t.Error("nil 墓碑不应命中")
+	}
+
+	tomb := newEmbedTombstone()
+	tomb.add("/works/my-bracelet")
+	tomb.add("/works/:slug")
+	tomb.add("/works/:slug") // 幂等
+	tomb.add("/")
+
+	for path, want := range map[string]bool{
+		"/works/my-bracelet": true,
+		"/works/other":       true, // 模式键覆盖
+		"/":                  true,
+		"/works":             false, // 段数不同不匹配
+		"/pricing":           false,
+	} {
+		if got := tomb.has(path); got != want {
+			t.Errorf("tomb.has(%q) = %v, want %v", path, got, want)
+		}
+	}
 }

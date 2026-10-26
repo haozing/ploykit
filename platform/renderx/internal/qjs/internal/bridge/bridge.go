@@ -180,7 +180,22 @@ func New(ctx context.Context) (*Bridge, error) {
 		return nil, fmt.Errorf("failed to compile WASM module: %w", err)
 	}
 
-	b.module, err = b.wasmRuntime.InstantiateModule(ctx, compiled, wazero.NewModuleConfig())
+	// Clock wiring: wazero's default ModuleConfig installs a deterministic
+	// FAKE clock — wall time fixed at epoch 2022-01-01T00:00:00Z and advancing
+	// exactly 1ms per read, monotonic time 0-based with the same +1ms-per-read
+	// behavior (wazero internal/platform.NewFakeWalltime / NewFakeNanotime).
+	// quickjs-ng reads Date.now()/new Date() via gettimeofday → WASI
+	// clock_time_get(REALTIME), and performance.now() via
+	// clock_gettime(CLOCK_MONOTONIC) → clock_time_get(MONOTONIC); with the
+	// default config every prerender rendered "now" as 2022-01-01 and any
+	// component reading the current time silently baked wrong dates into
+	// prerendered HTML (field-reported as "© 2022" footers + React #418
+	// hydration mismatches). WithSysWalltime/WithSysNanotime swap in the real
+	// host clock so sandbox time == host time (guarded by
+	// quickjs.VerifyClock and the clock probe in clock_test.go).
+	b.module, err = b.wasmRuntime.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().
+		WithSysWalltime().
+		WithSysNanotime())
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate WASM module: %w", err)
 	}

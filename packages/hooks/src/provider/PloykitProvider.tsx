@@ -214,8 +214,16 @@ function AuthLayer({ children }: { children: ReactNode }) {
         throw err
       }),
   })
+
+  // 登录态门控（2026-10-25 上游 issue #2）：/auth/me 探针确认登录后才拉工作区
+  // 列表。匿名（queryFn 把 401 吞成 data=null，非 error 态）与探针 pending
+  // （data=undefined）都必须挡住——cookie 型会话客户端无本地 token 可判，
+  // 匿名访客（公开营销页/预渲染壳全站挂本 Provider）原实现每载必白发一条
+  // /api/workspaces 401，浏览器网络层红字 JS 无法抑制，唯一出路是"不发"。
+  const authed = meQ.data != null
   const wsQ = useQuery({
     queryKey: queryKeys.workspaceList,
+    enabled: authed,
     queryFn: () =>
       api.get<PKWorkspace[]>('/api/workspaces').catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 401) return [] as PKWorkspace[]
@@ -223,8 +231,23 @@ function AuthLayer({ children }: { children: ReactNode }) {
       }),
   })
 
+  // 隐性过期兜底：cookie 失效但未走显式 logout 时，me 探针翻转为 null 后 wsQ
+  // 已被门控 disable，但 queryCache 里旧的工作区列表会残留（workspaces 继续
+  // 暴露过期数据）。显式 logout 路径已有 removeQueries() 全量兜底，这里只补
+  // list 键：用 remove 而非 setQueryData([])，否则重新登录时 [] 若仍在
+  // staleTime 窗口内会被当作新鲜数据而不重拉（空列表假象）。
+  useEffect(() => {
+    if (meQ.data === null) {
+      qc.removeQueries({ queryKey: queryKeys.workspaceList })
+    }
+  }, [meQ.data, qc])
+
   const user = meQ.data ?? null
   const workspaces = Array.isArray(wsQ.data) ? wsQ.data : []
+  // wsQ 被 disable 时 v5 语义是 status 恒 'pending'（isPending 恒 true）——匿名
+  // 态不能把 loading 卡死成永远 true（消费方拿 loading 渲染全页 spinner），
+  // 故仅登录态把 wsQ 计入 loading。
+  const loading = meQ.isPending || (authed && wsQ.isPending)
 
   
   
@@ -262,12 +285,12 @@ function AuthLayer({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     user,
     workspaces,
-    loading: meQ.isPending || wsQ.isPending,
+    loading,
     error: meQ.error ?? wsQ.error ?? null,
     refresh,
     logout,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [user, workspaces, meQ.isPending, wsQ.isPending, meQ.error, wsQ.error, refresh, logout])
+  }), [user, workspaces, loading, meQ.error, wsQ.error, refresh, logout])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

@@ -84,13 +84,14 @@ describe('AuthLayer FT-D2 分流', () => {
   it('401：me → user null、workspaces → []，不算错误', async () => {
     apiMocks.get.mockImplementation((url: string) => {
       if (url === '/auth/me') return Promise.reject(new ApiError(401, 'E_UNAUTHENTICATED', 'unauthenticated'))
-      if (url === '/api/workspaces') return Promise.reject(new ApiError(401, 'E_UNAUTHENTICATED', 'unauthenticated'))
       return Promise.reject(new Error(`unexpected ${url}`))
     })
     renderApp(<AuthProbe />)
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('null'))
     expect(screen.getByTestId('workspaces').textContent).toBe('empty')
     expect(screen.getByTestId('error').textContent).toBe('none')
+    // 门控后匿名只发 me 探针一条：/api/workspaces 不再被无条件拉取
+    expect(apiMocks.get.mock.calls.map((c) => c[0])).toEqual(['/auth/me'])
   })
 
   it('非 401（如 500）：错误经 error 暴露，不伪装成未登录', async () => {
@@ -129,7 +130,8 @@ describe('logout/refresh 语义（P2-10）', () => {
       </PloykitProvider>,
     )
     await waitFor(() => expect(screen.getByTestId('cache').textContent).toBe('cached'))
-    expect(await screen.findByTestId('current')).toHaveTextContent('a')
+    // 门控后列表是 me 之后的串行一跳，current 到位需等列表到达（原并行假设不再成立）
+    await waitFor(() => expect(screen.getByTestId('current')).toHaveTextContent('a'))
     
     expect(qc.getQueryData(['sessions', 'mine'])).toEqual([{ id: 's-1' }])
     expect(qc.getQueryData(['auth', 'me'])).toEqual(userBody)
@@ -214,5 +216,72 @@ describe('stale currentId 回收（P2-9）', () => {
       screen.getByRole('button', { name: 'refresh-all' }).click()
     })
     await waitFor(() => expect(screen.getByTestId('current').textContent).toBe('null'))
+  })
+})
+
+describe('工作区列表登录态门控（2026-10-25 上游 issue #2）', () => {
+  it('匿名：只发 /auth/me 探针，loading 收敛 false 不被 disable 态卡死', async () => {
+    apiMocks.get.mockImplementation((url: string) => {
+      if (url === '/auth/me') return Promise.reject(new ApiError(401, 'E_UNAUTHENTICATED', 'unauthenticated'))
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    renderApp(<AuthProbe />)
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('null'))
+    // v5 里 disabled query 的 status 恒 'pending'——loading 必须绕过 wsQ 收敛
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('no'))
+    expect(apiMocks.get.mock.calls.map((c) => c[0])).toEqual(['/auth/me'])
+  })
+
+  it('登录态：me 探针返回用户后才发 /api/workspaces（串行一跳）', async () => {
+    let resolveMe!: (v: unknown) => void
+    apiMocks.get.mockImplementation((url: string) => {
+      if (url === '/auth/me') return new Promise((r) => { resolveMe = r })
+      if (url === '/api/workspaces') return Promise.resolve([ws('a')])
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    renderApp(<AuthProbe />)
+    // me 未决期间（data=undefined）：门控关闭，不预发列表请求
+    await waitFor(() => expect(apiMocks.get).toHaveBeenCalledTimes(1))
+    expect(apiMocks.get.mock.calls[0][0]).toBe('/auth/me')
+
+    await act(async () => {
+      resolveMe(userBody)
+    })
+    await waitFor(() => expect(screen.getByTestId('workspaces').textContent).toBe('a'))
+    expect(screen.getByTestId('loading').textContent).toBe('no')
+    await waitFor(() => expect(screen.getByTestId('current').textContent).toBe('a'))
+  })
+
+  it('隐性过期（cookie 失效但未显式 logout）：me 翻转 null 后清 list 缓存，workspaces 不残留', async () => {
+    apiMocks.get.mockImplementation((url: string) => {
+      if (url === '/auth/me') return Promise.resolve(userBody)
+      if (url === '/api/workspaces') return Promise.resolve([ws('a'), ws('b')])
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <PloykitProvider queryClient={qc}>
+        <AuthProbe />
+      </PloykitProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('current').textContent).toBe('a'))
+    expect(qc.getQueryData(['workspace', 'list'])).toEqual([ws('a'), ws('b')])
+
+    // 会话隐性过期：me 与列表都 401（列表即便旧缓存也翻不出登录态）
+    apiMocks.get.mockImplementation((url: string) => {
+      if (url === '/auth/me') return Promise.reject(new ApiError(401, 'E_UNAUTHENTICATED', 'unauthenticated'))
+      if (url === '/api/workspaces') return Promise.reject(new ApiError(401, 'E_UNAUTHENTICATED', 'unauthenticated'))
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    await act(async () => {
+      screen.getByRole('button', { name: 'refresh-all' }).click()
+    })
+    await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('null'))
+    // 门控 + 清缓存：列表缓存被移除（remove 而非 setQueryData，重登录才不会
+    // 拿 staleTime 窗口内的空数组当新鲜数据），workspaces 归空、loading 收敛
+    await waitFor(() => expect(qc.getQueryData(['workspace', 'list'])).toBeUndefined())
+    expect(screen.getByTestId('workspaces').textContent).toBe('empty')
+    expect(screen.getByTestId('current').textContent).toBe('null')
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('no'))
   })
 })

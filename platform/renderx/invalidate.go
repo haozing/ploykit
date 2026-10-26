@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -49,6 +50,66 @@ type Service struct {
 	Warn func(format string, args ...any)
 
 	RefreshTimeout time.Duration
+
+	// embedDead is the tombstone set shared with the handler's embedded
+	// prerender layer: go:embed FS is read-only, so runtime invalidation
+	// records paths here and the handler's embedPage consults the set before
+	// serving a snapshot (hit = serve as a miss, fall through to cache/render,
+	// whose Delete Invalidate performed directly). The set lives in memory
+	// only — the next build (fresh process) starts empty and its snapshots are
+	// authoritative again. Set by Handler; a hand-constructed Service leaves
+	// it nil and invalidation stays cache-only, as in v0.15.0.
+	embedDead *embedTombstone
+}
+
+// embedTombstone is the delete set layered over a read-only go:embed FS.
+// Entries are concrete paths ("/works/my-bracelet") or parameterized patterns
+// ("/works/:slug", recorded by pattern-wide invalidation); a lookup matches
+// either form. Pattern semantics reuse Match, so a tombstoned "/works/:slug"
+// covers every "/works/<slug>" the embed layer could serve.
+type embedTombstone struct {
+	mu       sync.Mutex
+	exact    map[string]bool
+	patterns []string
+}
+
+func newEmbedTombstone() *embedTombstone {
+	return &embedTombstone{exact: map[string]bool{}}
+}
+
+func (t *embedTombstone) add(pathOrPattern string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if hasParams(pathOrPattern) {
+		for _, p := range t.patterns {
+			if p == pathOrPattern {
+				return
+			}
+		}
+		t.patterns = append(t.patterns, pathOrPattern)
+		return
+	}
+	t.exact[pathOrPattern] = true
+}
+
+func (t *embedTombstone) has(path string) bool {
+	if t == nil {
+		return false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.exact[path] {
+		return true
+	}
+	for _, p := range t.patterns {
+		if _, ok := Match(p, path); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) registry() *Registry {
@@ -79,12 +140,19 @@ func (s *Service) Invalidate(ctx context.Context, pattern string, params Params)
 }
 
 func (s *Service) invalidatePattern(ctx context.Context, pattern string, params Params) error {
+	// Every branch mirrors its cache-delete target onto the embed tombstone,
+	// so runtime invalidation reaches the embedded snapshot layer too —
+	// without this a deleted resource kept serving its embed page (zombie
+	// page) until the next build.
 	if !hasParams(pattern) {
+		s.embedDead.add(pattern)
 		return s.Cache.Delete(ctx, pattern)
 	}
 	if loc, ok := ExpandPath(pattern, params); ok {
+		s.embedDead.add(loc)
 		return s.Cache.Delete(ctx, loc)
 	}
+	s.embedDead.add(pattern)
 	_, err := s.Cache.EvictMatching(ctx, func(key string) bool {
 		_, mok := Match(pattern, keyToPath(key))
 		return mok

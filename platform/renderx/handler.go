@@ -1,12 +1,14 @@
 package renderx
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -50,6 +52,33 @@ const (
 	TierSitemap = "sitemap"
 )
 
+// UnknownPathPolicy selects what the handler does with a GET/HEAD path that
+// matched no static route and hit no embedded prerender snapshot — the SPA
+// fallback decision at the bottom of ServeHTTP.
+type UnknownPathPolicy string
+
+const (
+	// UnknownPathSPAShell serves the SPA shell with status 200 — the v0.15.0
+	// behavior and still the zero-value default, so existing deployments keep
+	// serving their CSR routes (e.g. /login) without touching wiring.
+	//
+	// NOTE: this default is kept for compatibility only, and new deployments
+	// are recommended to migrate to UnknownPathNotFound. SPA-fallback-200
+	// turns every garbage URL (/random-page, /zh/fake, trailing-slash twins)
+	// into an indexable soft-404 — the shell has no canonical, no noindex and
+	// a generic title, and crawlers collect them (field report:
+	// braceletmakeronline.com, GSC exposure on shell URLs). Consumers whose
+	// CSR routes live at known paths should enumerate those as ModeCSR/ModeStatic
+	// routes or serve them ahead of renderx, then flip this to not-found.
+	UnknownPathSPAShell UnknownPathPolicy = "spa-shell"
+
+	// UnknownPathNotFound wraps the same SPA shell in a 404 status via
+	// notFoundWriter: human visitors still get the app shell (their client
+	// router can take over), but crawlers see an honest 404 instead of an
+	// indexable thin shell.
+	UnknownPathNotFound UnknownPathPolicy = "not-found"
+)
+
 type HandlerDeps struct {
 	PrerenderFS fs.FS
 
@@ -76,6 +105,27 @@ type HandlerDeps struct {
 	Registry *Registry
 
 	PoisonTTL time.Duration
+
+	// UnknownPath selects the unmatched-path policy (see UnknownPathPolicy).
+	// Zero value keeps the v0.15.0 behavior: SPA shell with 200.
+	UnknownPath UnknownPathPolicy
+
+	// ShellMeta is injected into the <head> of every SPA shell response —
+	// both the plain fallback (spa) and its notFoundWriter-wrapped 404 form.
+	// The typical use is declaring the shell pages "not indexable" once for
+	// the whole site:
+	//
+	//	ShellMeta: []renderx.HeadEntry{{
+	//	    Tag:   "meta",
+	//	    Attrs: map[string]string{"name": "robots", "content": "noindex, follow"},
+	//	}},
+	//
+	// Entries go through the same whitelist as renderer head directives
+	// (renderHeadEntry: tag/attr name rules, deny script/iframe/base,
+	// deny http-equiv) and a malformed entry panics at Handler construction.
+	// Full-document responses (embed/cache/render tiers) never get ShellMeta —
+	// they carry their own head.
+	ShellMeta []HeadEntry
 }
 
 func Handler(deps HandlerDeps) http.Handler {
@@ -87,6 +137,12 @@ func Handler(deps HandlerDeps) http.Handler {
 	}
 	if deps.BuildID == "" {
 		panic("renderx: HandlerDeps.BuildID 不能为空")
+	}
+	switch deps.UnknownPath {
+	case "", UnknownPathSPAShell, UnknownPathNotFound:
+	default:
+		panic(fmt.Sprintf("renderx: HandlerDeps.UnknownPath 未知取值 %q（可用：%s / %s，空串=v0.15.0 默认 SPA 壳）",
+			deps.UnknownPath, UnknownPathSPAShell, UnknownPathNotFound))
 	}
 	if deps.CacheControl == "" {
 		deps.CacheControl = DefaultCacheControl
@@ -100,21 +156,29 @@ func Handler(deps HandlerDeps) http.Handler {
 	if deps.Registry == nil {
 		deps.Registry = defaultRegistry
 	}
+	shellMeta := renderShellMeta(deps.ShellMeta)
+	// embedDead is shared with the registered Service so Invalidate can punch
+	// through to the embedded prerender layer (go:embed FS is read-only; the
+	// tombstone set is the only way to "delete" from it until the next build).
+	embedDead := newEmbedTombstone()
 	h := &handler{
 		deps:          deps,
 		statics:       staticRoutes(deps.Routes),
 		manifestETags: readManifestETags(deps.PrerenderFS),
 		poison:        newPoisonList(deps.Cache.diskRoot(), deps.PoisonTTL),
+		embedDead:     embedDead,
+		shellMeta:     shellMeta,
 	}
 	RegisterService(&Service{
-		Cache:    deps.Cache,
-		Renderer: deps.Renderer,
-		Routes:   deps.Routes,
-		BuildID:  deps.BuildID,
-		Assets:   deps.Assets,
-		Lang:     deps.Lang,
-		Registry: deps.Registry,
-		Warn:     deps.Warn,
+		Cache:     deps.Cache,
+		Renderer:  deps.Renderer,
+		Routes:    deps.Routes,
+		BuildID:   deps.BuildID,
+		Assets:    deps.Assets,
+		Lang:      deps.Lang,
+		Registry:  deps.Registry,
+		Warn:      deps.Warn,
+		embedDead: embedDead,
 	})
 	return h
 }
@@ -124,6 +188,8 @@ type handler struct {
 	statics       []RouteSpec
 	manifestETags map[string]string
 	poison        *poisonList
+	embedDead     *embedTombstone
+	shellMeta     string
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +199,16 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := r.URL.Path
+
+	// Trailing-slash normalization for page paths: /calculator/ would miss
+	// every layer (embed's cacheKey, matchStatic patterns — both forbid
+	// trailing slashes) and fall through to the SPA shell as a thin 200 twin
+	// of the real page. Redirect to the canonical slash-less form first
+	// (GET/HEAD only — the method gate above already routed the rest).
+	if target, ok := trailingSlashRedirect(path, r.URL.RawQuery); ok {
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
+	}
 
 	if html, etag, ok := h.embedPage(path); ok {
 		h.serveHTML(w, r, html, h.deps.CacheControl, etag, TierEmbed)
@@ -144,6 +220,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.deps.UnknownPath == UnknownPathNotFound {
+		h.serveNotFound(w, r)
+		return
+	}
 	h.spa(w, r)
 }
 
@@ -188,7 +268,10 @@ func (h *handler) serveNotFound(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.deps.SPA.ServeHTTP(&notFoundWriter{ResponseWriter: w}, r)
+	// 404 semantics for the same shell bytes: notFoundWriter sits between the
+	// shell-meta injector and the real writer, so injected meta still flows
+	// through its Write (which forces the 404 status before any body byte).
+	h.serveSPA(&notFoundWriter{ResponseWriter: w}, r)
 }
 
 type notFoundWriter struct {
@@ -224,6 +307,14 @@ func (h *handler) serveStaleOrError(w http.ResponseWriter, r *http.Request, path
 
 func (h *handler) embedPage(path string) (html []byte, etag string, ok bool) {
 	if h.deps.PrerenderFS == nil {
+		return nil, "", false
+	}
+	// Runtime invalidation punched through to the embed layer: a tombstoned
+	// path serves as a miss and falls through to cache/render, whose Delete
+	// Invalidate already performed. Without this check a deleted resource kept
+	// serving its embedded snapshot until the next build (zombie page,
+	// X-Renderx-Tier: embed).
+	if h.embedDead.has(path) {
 		return nil, "", false
 	}
 	name, err := pageFilePath(path)
@@ -270,8 +361,223 @@ func (h *handler) spa(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	h.serveSPA(w, r)
+}
 
-	h.deps.SPA.ServeHTTP(w, r)
+// serveSPA runs the product's SPA handler on w (either the plain shell writer
+// or its notFoundWriter-wrapped variant) and drains the shell-meta injector
+// afterwards — a shell that never emitted </head> gets its fallback-ladder
+// insertion here.
+func (h *handler) serveSPA(w http.ResponseWriter, r *http.Request) {
+	sw := h.shellWriter(w)
+	h.deps.SPA.ServeHTTP(sw, r)
+	if inj, ok := sw.(*shellMetaWriter); ok {
+		inj.finish()
+	}
+}
+
+// shellWriter wraps the response writer with ShellMeta injection when the
+// handler was configured with ShellMeta; otherwise it returns w untouched so
+// the shell bytes (and the 404-wrapped variant) are exactly what deps.SPA
+// produced.
+func (h *handler) shellWriter(w http.ResponseWriter) http.ResponseWriter {
+	if h.shellMeta == "" {
+		return w
+	}
+	return newShellMetaWriter(w, h.shellMeta)
+}
+
+// renderShellMeta validates and serializes the ShellMeta entries once at
+// construction, applying the same whitelist the head-directive channel uses
+// (renderHeadEntry). A malformed entry is a wiring error and panics here —
+// same "malformed options explode at construction" contract as
+// RobotsHandler/SitemapHandler.
+func renderShellMeta(entries []HeadEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		s, err := renderHeadEntry(e)
+		if err != nil {
+			panic(fmt.Sprintf("renderx: HandlerDeps.ShellMeta 非法条目 tag=%q: %v", e.Tag, err))
+		}
+		parts = append(parts, s)
+	}
+	return "\n  " + strings.Join(parts, "\n  ")
+}
+
+// shellMetaScanLimit caps how much of a shell response shellMetaWriter buffers
+// while looking for the insertion point. Real SPA shells are kilobytes; a
+// "shell" response still streaming after this much HTML with no </head> is
+// passed through unmodified rather than buffered indefinitely.
+const shellMetaScanLimit = 256 << 10
+
+var headCloseTag = []byte("</head>")
+
+// shellMetaWriter injects prepared meta tags into an HTML response produced by
+// the product's SPA handler, whose bytes the framework does not control. It is
+// deliberately narrow:
+//
+//   - Only responses that declare a text/html Content-Type and no
+//     Content-Encoding are touched; everything else (JS/CSS/assets, a
+//     self-compressed handler's byte stream) passes through byte-identical.
+//   - Injection happens right before </head> (case-insensitive). Until that
+//     point bytes are buffered (bounded by shellMetaScanLimit); once inserted
+//     the writer streams through with zero copies.
+//   - A shell with no </head> gets the fallback ladder in finish: after the
+//     <head>/<html>/<!doctype> opener, in that order; a response matching none
+//     of those shapes is flushed unmodified (never corrupt a body we do not
+//     understand).
+type shellMetaWriter struct {
+	http.ResponseWriter
+	inject   []byte
+	buf      []byte
+	scanning bool
+	started  bool
+	skip     bool
+}
+
+func newShellMetaWriter(w http.ResponseWriter, inject string) *shellMetaWriter {
+	return &shellMetaWriter{ResponseWriter: w, inject: []byte(inject), scanning: true}
+}
+
+func (m *shellMetaWriter) Write(p []byte) (int, error) {
+	if !m.started {
+		m.started = true
+		m.skip = !htmlShellCandidate(m.Header())
+	}
+	if m.skip || !m.scanning {
+		return m.ResponseWriter.Write(p)
+	}
+	m.buf = append(m.buf, p...)
+	if i := indexFold(m.buf, headCloseTag); i >= 0 {
+		if err := m.emit(i); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
+	if len(m.buf) > shellMetaScanLimit {
+		// No </head> in a quarter megabyte of HTML: give up on injection,
+		// stream the buffered bytes and everything after unchanged.
+		if err := m.emitPassthrough(); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
+	return len(p), nil
+}
+
+// emit writes the buffered bytes with the meta injected before offset split
+// (the </head> match) and switches the writer to passthrough. The buffer is
+// released so finish() knows insertion already happened.
+func (m *shellMetaWriter) emit(split int) error {
+	buf := m.buf
+	m.buf = nil
+	m.scanning = false
+	if err := flush(m.ResponseWriter, buf[:split]); err != nil {
+		return err
+	}
+	if err := flush(m.ResponseWriter, m.inject); err != nil {
+		return err
+	}
+	return flush(m.ResponseWriter, buf[split:])
+}
+
+func (m *shellMetaWriter) emitPassthrough() error {
+	buf := m.buf
+	m.buf = nil
+	m.scanning = false
+	return flush(m.ResponseWriter, buf)
+}
+
+// finish flushes whatever is still buffered when the SPA handler returns —
+// either the tail of a scan that never saw </head> (fallback ladder) or
+// nothing (passthrough/skip modes).
+func (m *shellMetaWriter) finish() {
+	if !m.scanning || m.skip || len(m.buf) == 0 {
+		return
+	}
+	for _, opener := range [...][]byte{[]byte("<head"), []byte("<html"), []byte("<!doctype")} {
+		i := indexFold(m.buf, opener)
+		if i < 0 {
+			continue
+		}
+		if end := bytes.IndexByte(m.buf[i:], '>'); end >= 0 {
+			at := i + end + 1
+			buf := m.buf
+			m.buf = nil
+			m.scanning = false
+			_ = flush(m.ResponseWriter, buf[:at])
+			_ = flush(m.ResponseWriter, m.inject)
+			_ = flush(m.ResponseWriter, buf[at:])
+			return
+		}
+	}
+	// No recognizable document shape: flush verbatim rather than risk
+	// corrupting a body the shell contract did not promise.
+	_ = m.emitPassthrough()
+}
+
+func flush(w io.Writer, b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+	_, err := w.Write(b)
+	return err
+}
+
+// htmlShellCandidate reports whether the response headers describe an identity
+// (uncompressed) HTML body — the only kind shellMetaWriter will touch.
+func htmlShellCandidate(h http.Header) bool {
+	if h.Get("Content-Encoding") != "" {
+		return false
+	}
+	return strings.Contains(h.Get("Content-Type"), "text/html")
+}
+
+// indexFold is a case-insensitive bytes.Index for ASCII needles.
+func indexFold(b, needle []byte) int {
+	if len(b) < len(needle) {
+		return -1
+	}
+	fold := make([]byte, len(b))
+	for i := range b {
+		c := b[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		fold[i] = c
+	}
+	return bytes.Index(fold, needle)
+}
+
+// trailingSlashRedirect reports whether a GET/HEAD request path is a
+// trailing-slash twin of a canonical page path and returns the redirect
+// target (query preserved). Rules, aligned with the rest of the package
+// (cacheKey rejects trailing slashes, validPattern forbids them in route
+// patterns, so no layer can ever serve the slashed form):
+//
+//   - "/" and paths whose last segment carries a file extension are exempt —
+//     the former is the canonical root, the latter are asset-shaped URLs that
+//     never matched a page route anyway;
+//   - all trailing slashes collapse in one hop (/foo// → /foo), so the target
+//     itself never triggers another redirect.
+func trailingSlashRedirect(path, rawQuery string) (string, bool) {
+	if len(path) < 2 || !strings.HasSuffix(path, "/") {
+		return "", false
+	}
+	cleaned := strings.TrimRight(path, "/")
+	if cleaned == "" {
+		return "", false
+	}
+	if seg := cleaned[strings.LastIndexByte(cleaned, '/')+1:]; strings.Contains(seg, ".") {
+		return "", false
+	}
+	if rawQuery != "" {
+		cleaned += "?" + rawQuery
+	}
+	return cleaned, true
 }
 
 // spaTier splits SPA-fallback requests into page shells and static assets
