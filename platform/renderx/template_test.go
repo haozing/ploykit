@@ -28,6 +28,7 @@ func TestRenderDocumentGolden(t *testing.T) {
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hello 世界</title>
   <meta content="首篇" name="description">
   <meta content="/og.png" property="og:image">
@@ -192,6 +193,7 @@ func TestRenderDocumentPreloadHoistConservative(t *testing.T) {
 <html lang="">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
   <div id="root"><main><link rel="preload" as="image" href="/mid.png"><p>x</p></main></div>
@@ -207,6 +209,7 @@ func TestRenderDocumentPreloadHoistConservative(t *testing.T) {
 <html lang="">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
   <div id="root"><link rel="stylesheet" href="/x.css"><p>x</p></div>
@@ -222,6 +225,7 @@ func TestRenderDocumentPreloadHoistConservative(t *testing.T) {
 <html lang="">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
   <div id="root"><!--$--><link rel="preload" as="image" href="/after.png"><p>x</p></div>
@@ -237,6 +241,7 @@ func TestRenderDocumentPreloadHoistConservative(t *testing.T) {
 <html lang="">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
   <div id="root"><h1>Hello</h1><p>world</p></div>
@@ -278,5 +283,205 @@ func TestHoistLeadingPreloadsUnits(t *testing.T) {
 	tags, rest = hoistLeadingPreloads("")
 	if tags != nil || rest != "" {
 		t.Errorf("空 body: tags=%v rest=%q", tags, rest)
+	}
+}
+
+// F-1 兜底可被页面覆盖：页面 head 自发 meta[name=viewport]（如编辑器页的
+// user-scalable=no）时不重复输出兜底版。
+func TestRenderDocumentViewportFallbackOverridden(t *testing.T) {
+	got, err := RenderDocument(Document{
+		Head: []HeadEntry{{Tag: "meta", Attrs: map[string]string{
+			"name": "viewport", "content": "width=device-width, user-scalable=no",
+		}}},
+		BodyHTML: "<p>x</p>",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(got), `name="viewport"`); n != 1 {
+		t.Errorf("自发 viewport 时应只输出页面版，got %d 处:\n%s", n, got)
+	}
+	if !strings.Contains(string(got), `content="width=device-width, user-scalable=no"`) {
+		t.Errorf("页面版 viewport 应保留原 content:\n%s", got)
+	}
+	if strings.Contains(string(got), viewportFallback) {
+		t.Errorf("兜底版不应出现:\n%s", got)
+	}
+}
+
+// F-1 兜底也要被继承集里的 viewport 抑制（ParseShellHead 会排除壳 viewport，
+// 这里直接构造，守 RenderDocument 自身的判据）。
+func TestRenderDocumentViewportFallbackSuppressedByInherit(t *testing.T) {
+	got, err := RenderDocument(Document{
+		InheritHead: []HeadEntry{{Tag: "meta", Attrs: map[string]string{
+			"name": "viewport", "content": "width=1024",
+		}}},
+		BodyHTML: "<p>x</p>",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), viewportFallback) {
+		t.Errorf("继承集已有 viewport 时兜底不应出现:\n%s", got)
+	}
+	if !strings.Contains(string(got), `content="width=1024"`) {
+		t.Errorf("继承版 viewport 应保留:\n%s", got)
+	}
+}
+
+// 壳继承：顺序（viewport 兜底 → 继承集 → 页面 head → preload → CSS）、
+// 去重（页面赢）、html/body 属性透传（lang 归 Lang 所有）。
+func TestRenderDocumentInheritsShellHead(t *testing.T) {
+	got, err := RenderDocument(Document{
+		Lang: "zh-CN",
+		Head: []HeadEntry{
+			{Tag: "title", Children: "页面标题"},
+			{Tag: "meta", Attrs: map[string]string{"name": "theme-color", "content": "#111111"}},
+		},
+		InheritHead: []HeadEntry{
+			{Tag: "link", Attrs: map[string]string{"rel": "icon", "type": "image/png", "href": "/favicon.png"}},
+			{Tag: "meta", Attrs: map[string]string{"name": "theme-color", "content": "#faf8f3"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "modulepreload", "href": "/assets/chunk-1.js"}},
+		},
+		HTMLAttrs: map[string]string{"style": "background:#faf8f3"},
+		BodyAttrs: map[string]string{"class": "warm"},
+		CSS:       []string{"/assets/entry.css"},
+		BodyHTML:  "<p>x</p>",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(got)
+
+	// 去重：页面 theme-color 赢，壳 theme-color 被跳过
+	if strings.Contains(html, "#faf8f3\"></meta>") || strings.Contains(html, `content="#faf8f3"`) {
+		t.Errorf("壳 theme-color 应被页面版去重:\n%s", html)
+	}
+	if !strings.Contains(html, `content="#111111"`) {
+		t.Errorf("页面 theme-color 应保留:\n%s", html)
+	}
+	// favicon 与 modulepreload 继承
+	if !strings.Contains(html, `rel="icon"`) || !strings.Contains(html, `href="/favicon.png"`) {
+		t.Errorf("壳 favicon link 应继承:\n%s", html)
+	}
+	if !strings.Contains(html, `rel="modulepreload"`) {
+		t.Errorf("壳 modulepreload 应继承:\n%s", html)
+	}
+	// 顺序：viewport 兜底 < 继承的 icon < 页面 title < modulepreload < stylesheet
+	idx := func(sub string) int { return strings.Index(html, sub) }
+	for _, pair := range [][2]string{
+		{`name="viewport"`, `rel="icon"`},
+		{`rel="icon"`, `<title>`},
+		{`rel="modulepreload"`, `<title>`},
+		{`<title>`, `rel="stylesheet"`},
+	} {
+		if idx(pair[0]) < 0 || idx(pair[1]) < 0 || idx(pair[0]) > idx(pair[1]) {
+			t.Errorf("顺序不符：%q 应在 %q 之前:\n%s", pair[0], pair[1], html)
+		}
+	}
+	// html/body 属性
+	if !strings.Contains(html, `<html lang="zh-CN" style="background:#faf8f3">`) {
+		t.Errorf("html 属性应透传在 lang 之后:\n%s", html)
+	}
+	if !strings.Contains(html, `<body class="warm">`) {
+		t.Errorf("body 属性应透传:\n%s", html)
+	}
+}
+
+// F-2：og:image / twitter:image / og:url 绝对化；canonical 与其它 meta 不动；
+// 已绝对/协议相对不动；BaseURL 空或非法 = no-op。
+func TestRenderDocumentAbsolutizesSocialMeta(t *testing.T) {
+	head := func() []HeadEntry {
+		return []HeadEntry{
+			{Tag: "meta", Attrs: map[string]string{"property": "og:image", "content": "/shots/a.jpg"}},
+			{Tag: "meta", Attrs: map[string]string{"name": "twitter:image", "content": "shots/b.jpg"}},
+			{Tag: "meta", Attrs: map[string]string{"property": "og:url", "content": "/about"}},
+			{Tag: "meta", Attrs: map[string]string{"property": "og:image:secure_url", "content": "/keep.jpg"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "canonical", "href": "/about"}},
+		}
+	}
+	cases := []struct {
+		name    string
+		baseURL string
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "BaseURL 设置：相对值绝对化",
+			baseURL: "https://example.test",
+			want: []string{
+				`content="https://example.test/shots/a.jpg" property="og:image"`,
+				`content="https://example.test/shots/b.jpg"`,
+				`content="https://example.test/about" property="og:url"`,
+			},
+			notWant: []string{`content="/shots/a.jpg"`, `content="shots/b.jpg"`, `content="/about"`},
+		},
+		{
+			name:    "BaseURL 为空：完全 no-op",
+			baseURL: "",
+			want:    []string{`content="/shots/a.jpg"`, `content="shots/b.jpg"`},
+			notWant: []string{"example.test"},
+		},
+		{
+			name:    "BaseURL 非法：视同未设置",
+			baseURL: "not-a-url",
+			want:    []string{`content="/shots/a.jpg"`},
+			notWant: []string{"not-a-url"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := RenderDocument(Document{Head: head(), BodyHTML: "<p>x</p>", BaseURL: c.baseURL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, w := range c.want {
+				if !strings.Contains(string(got), w) {
+					t.Errorf("应含 %q:\n%s", w, got)
+				}
+			}
+			for _, w := range c.notWant {
+				if strings.Contains(string(got), w) {
+					t.Errorf("不应含 %q:\n%s", w, got)
+				}
+			}
+		})
+	}
+
+	// 已绝对 / 协议相对不动
+	got, err := RenderDocument(Document{
+		Head: []HeadEntry{
+			{Tag: "meta", Attrs: map[string]string{"property": "og:image", "content": "https://cdn.example/x.jpg"}},
+			{Tag: "meta", Attrs: map[string]string{"property": "og:image", "content": "//cdn.example/y.jpg"}},
+		},
+		BodyHTML: "<p>x</p>", BaseURL: "https://example.test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), `content="https://cdn.example/x.jpg"`) ||
+		!strings.Contains(string(got), `content="//cdn.example/y.jpg"`) {
+		t.Errorf("已绝对/协议相对的 og:image 不应改写:\n%s", got)
+	}
+
+	// 绝对化不能改调用方的 Attrs（copy-on-write）
+	entries := head()
+	_, _ = RenderDocument(Document{Head: entries, BodyHTML: "<p>x</p>", BaseURL: "https://example.test"})
+	if entries[0].Attrs["content"] != "/shots/a.jpg" {
+		t.Errorf("输入 HeadEntry 被原地改写: %v", entries[0].Attrs)
+	}
+}
+
+// html/body 属性走与 head 条目同一白名单：非法属性名报 ErrInvalidHeadTag。
+func TestRenderDocumentRejectsUnsafeTagAttrs(t *testing.T) {
+	for _, attrs := range []map[string]string{
+		{"a/b": "y"}, {"x onmouseover": "z"}, {"http-equiv": "refresh"},
+	} {
+		if _, err := RenderDocument(Document{BodyHTML: "<p>x</p>", HTMLAttrs: attrs}); !errors.Is(err, ErrInvalidHeadTag) {
+			t.Errorf("HTMLAttrs %v 应报 ErrInvalidHeadTag, got %v", attrs, err)
+		}
+		if _, err := RenderDocument(Document{BodyHTML: "<p>x</p>", BodyAttrs: attrs}); !errors.Is(err, ErrInvalidHeadTag) {
+			t.Errorf("BodyAttrs %v 应报 ErrInvalidHeadTag, got %v", attrs, err)
+		}
 	}
 }

@@ -19,7 +19,13 @@ const OAUTH_LABELS: Record<string, string> = {
 };
 
 export function Login() {
-  useSEO({ title: '登录 · MyProduct', description: '登录你的账号', canonical: '/login' });
+  useSEO({
+    title: '登录 · MyProduct',
+    description: '登录你的账号',
+    canonical: '/login',
+    ogSiteName: 'MyProduct',
+    ogLocale: 'zh_CN',
+  });
   const { data: cfg } = useSiteConfig();
   const oauthProviders: OAuthProviderOption[] = (
     cfg?.oauth_providers ?? []

@@ -98,6 +98,12 @@ func renderxHandler(ctx context.Context, mux *webx.Mux, pool *pgxpool.Pool, cach
 	}
 	buildID := renderx.ViteBuildID(manifestData)
 
+	// 壳 head 继承 + og 绝对化基址（与 cmd/render 同一能力，随 ViteAssets
+	// 生效）：运行时 SSR 文档继承壳的 favicon/theme-color/modulepreload 与
+	// html/body 属性；PUBLIC_BASE_URL（已在上方校验）做相对 og:* 的绝对化。
+	assets.Shell = shellHeadFromFS(fe)
+	assets.BaseURL = baseURL
+
 	// TanStack SSR（router-tanstack 迁移）：SSR bundle 需要 prelude 补编
 	// （URLSearchParams / AbortController shim），由 renderx 提供（TS 常量
 	// PRELUDE_SHIMS 的 Go 副本，platform/renderx 的测试守漂移）。
@@ -148,8 +154,24 @@ func renderxHandler(ctx context.Context, mux *webx.Mux, pool *pgxpool.Pool, cach
 		BuildID:     buildID,
 		Assets:      assets,
 		Lang:        "zh-CN",
+		// 未知路径按 404 兜底（S-12）：人仍然拿到 SPA 壳（客户端路由照常
+		// 接管），爬虫看到诚实的 404 而非可收录的薄壳。example 的 CSR 路由
+		// 均在路由表内、静态页走 embed/cache/render 层，不受影响。
+		UnknownPath: renderx.UnknownPathNotFound,
 	})
 	return h, eng, true, nil
+}
+
+// shellHeadFromFS 从内嵌前端产物里解析 Vite 壳，供文档组装继承壳 head
+// （favicon/theme-color/modulepreload）与 html/body 属性。缺 index.html
+// （未构建的 checkout）降级为零值并告警——渲染照常，只是不继承。
+func shellHeadFromFS(fe fs.FS) renderx.ShellHead {
+	data, err := fs.ReadFile(fe, "index.html")
+	if err != nil {
+		slog.Warn("embed 缺 index.html：壳 head（favicon/theme-color/modulepreload）不继承")
+		return renderx.ShellHead{}
+	}
+	return renderx.ParseShellHead(string(data))
 }
 
 // validatedBaseURL normalizes PUBLIC_BASE_URL into a usable origin: trailing

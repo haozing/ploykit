@@ -191,6 +191,8 @@ export function Product() {
     description:
       '一站式任务管理与团队协作工具。创建工作区、邀请团队成员、追踪任务进度。',
     canonical: '/',
+    ogSiteName: 'MyProduct',
+    ogLocale: 'zh_CN',
   });
   return (
     <LandingPage

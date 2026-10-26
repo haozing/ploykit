@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -78,6 +79,17 @@ func main() {
 		os.Exit(1)
 	}
 	buildID := renderx.ViteBuildID(manifestData)
+
+	// 壳 head 继承 + og 绝对化基址（F-2/F-4/S-1/S-5 一族，框架能力随
+	// ViteAssets 生效）：预渲染产物继承壳的 favicon/theme-color/
+	// modulepreload 与 html/body 属性；PUBLIC_BASE_URL 提供相对
+	// og:image/twitter:image/og:url 的绝对化基址（未设置 = 关闭）。
+	if shellData, err := os.ReadFile(filepath.Join(web, "dist", "index.html")); err != nil {
+		log.Warn("Vite 壳 index.html 读取失败：壳 head（favicon/theme-color/modulepreload）不继承", "err", err)
+	} else {
+		assets.Shell = renderx.ParseShellHead(string(shellData))
+	}
+	assets.BaseURL = prerenderBaseURL(os.Getenv("PUBLIC_BASE_URL"), log)
 
 	pool, err := renderx.NewEnginePool(bundle, renderx.PoolOptions{
 		RenderTimeout: 10 * time.Second,
@@ -162,6 +174,22 @@ func main() {
 	// 运行期渲染页（--warm 未列入的 Loader 页）不在此列：它们没有构建期产物，
 	// 上线前请用 --warm 预热一次做体检，或在产品侧加监控。
 	auditSEO(log, outDir, manifest)
+}
+
+// prerenderBaseURL 校验 PUBLIC_BASE_URL 作为 og:* 绝对化基址：非绝对
+// http(s) origin（或未设置）时返回空串关闭该能力——renderx 对非法值本就
+// 静默 no-op，这里的告警是配置写错时唯一的信号，不能省。
+func prerenderBaseURL(raw string, log *slog.Logger) string {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		log.Warn("PUBLIC_BASE_URL 非绝对 http(s) origin（如 https://example.com）：og:url/og:image 绝对化关闭", "value", raw)
+		return ""
+	}
+	return raw
 }
 
 func auditSEO(log *slog.Logger, outDir string, manifest renderx.PrerenderManifest) {

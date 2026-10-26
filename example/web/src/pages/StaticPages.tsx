@@ -60,6 +60,8 @@ export function Pricing() {
     title: '定价 · MyProduct',
     description: 'MyProduct 的定价方案：免费版与专业版的功能对比与价格。',
     canonical: '/pricing',
+    ogSiteName: 'MyProduct',
+    ogLocale: 'zh_CN',
   });
   const plans = [
     {
@@ -134,6 +136,8 @@ export function Docs() {
     title: '文档 · MyProduct',
     description: 'MyProduct 的快速上手、工作区管理、任务与通知指南。',
     canonical: '/docs',
+    ogSiteName: 'MyProduct',
+    ogLocale: 'zh_CN',
   });
   return (
     <main className={SHELL}>
@@ -185,6 +189,8 @@ export function About() {
     title: '关于 · MyProduct',
     description: 'MyProduct 是什么、为谁而做，以及联系方式。',
     canonical: '/about',
+    ogSiteName: 'MyProduct',
+    ogLocale: 'zh_CN',
   });
   return (
     <main className={SHELL}>

@@ -43,6 +43,19 @@ const defaultPrerenderConcurrency = 4
 type ViteAssets struct {
 	CSS []string
 	JS  []string
+
+	// Shell carries the parsed Vite shell (dist/index.html) so every document
+	// assembled from these assets inherits the shell's head entries (favicon
+	// links, theme-color, rel=modulepreload — F-4/S-1/S-5 family) and its
+	// <html>/<body> attributes (background color vs FOUC). Zero value = no
+	// inheritance; typical wiring is one ParseShellHead call attached here.
+	Shell ShellHead
+
+	// BaseURL is the absolute http(s) origin the build is served under
+	// (usually the PUBLIC_BASE_URL env). When set, RenderOnce turns relative
+	// og:image / twitter:image / og:url values into absolute URLs; empty or
+	// malformed values disable the rewrite (no-op).
+	BaseURL string
 }
 
 func (v ViteAssets) hydrateScript() string {
@@ -60,6 +73,9 @@ func (v ViteAssets) hydrateScript() string {
 // 一次性渲染入口，预渲染 / handler 未命中 / 缓存回填共用此组装。
 // 预览（草稿渲染）、邮件合成、调试等场景直接调用即可，语义与预渲染管线
 // 完全一致（props 规范化、空输出校验、head 指令与 <title> 校验）。
+// assets.Shell / assets.BaseURL 随 assets 一起生效：壳 head 继承与
+// og:image/twitter:image/og:url 绝对化对直接调用方同样成立（壳只需解析
+// 一次挂到 assets 上，无需在每条组装路径单独接线）。
 //
 // hydrate=none 的页面不注入 props 脚本与水合入口：两者唯一的消费者都是
 // 客户端入口，没有它就没有意义——留在 HTML 里只会把 props 白发给所有人，
@@ -106,6 +122,10 @@ func RenderOnce(ctx context.Context, r Renderer, pageID, location string, props 
 		PageID:        pageID,
 		HydrateScript: assets.hydrateScript(),
 		NoHydration:   hydrate == HydrateNone,
+		InheritHead:   assets.Shell.HeadTags,
+		HTMLAttrs:     assets.Shell.HTMLAttrs,
+		BodyAttrs:     assets.Shell.BodyAttrs,
+		BaseURL:       assets.BaseURL,
 	}
 	doc, err := RenderDocument(docIn)
 	if err != nil {

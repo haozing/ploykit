@@ -360,6 +360,11 @@ cache, _ := renderx.NewLayeredCache(renderx.CacheConfig{
     BuildID: buildID,            // renderx.ViteBuildID(vite manifest)
     Disk:    disk,               // storagex.NewLocal(cacheDir)
 })
+assets, _ := renderx.ParseViteManifest(manifestData, "")  // hydration CSS/JS
+if shell, err := fs.ReadFile(frontendFS, "index.html"); err == nil {
+    assets.Shell = renderx.ParseShellHead(string(shell))  // §5.6.2: inherit favicon/theme-color/modulepreload + html/body attrs
+}
+assets.BaseURL = baseURL                                   // §5.6.3: PUBLIC_BASE_URL origin, "" = no-op
 mux.Handle("/", renderx.Handler(renderx.HandlerDeps{
     PrerenderFS: prerenderFS,    // go:embed'd build-time artifacts (code-determined pages)
     SPA:         spaHandler,     // existing Vite artifacts (also the 404/SPA fallback)
@@ -367,10 +372,13 @@ mux.Handle("/", renderx.Handler(renderx.HandlerDeps{
     Renderer:    eng,            // §5.4 engine pool (in-process)
     Routes:      routes,         // route projection from __ploykit_routes__()
     BuildID:     buildID,
-    Assets:      assets,         // renderx.ParseViteManifest(...) — hydration CSS/JS
+    Assets:      assets,         // hydration CSS/JS + Shell + BaseURL
     Lang:        "zh-CN",
+    UnknownPath: renderx.UnknownPathNotFound, // recommended: see below
 }))
 ```
+
+**Unknown-path policy (recommended: `UnknownPathNotFound`)**: a GET to a path that matched no route, embed snapshot or runtime layer still gets the SPA shell body — human visitors keep their client-side routing — but wrapped in an honest 404 status instead of the v0.15.0 default 200 (which turns every garbage URL into an indexable soft-404 with a generic title; field report: braceletmakeronline.com, GSC exposure on shell URLs). Enumerate the product's CSR routes in the route table (or serve them ahead of renderx) before flipping the policy, and consider `ShellMeta` with `noindex` for deployments that keep the 200 shell. The prerender path needs no policy decision — it only renders routes it was asked to render.
 
 ```makefile
 build:
@@ -392,6 +400,7 @@ platform/renderx/
 ├── routes.go        §5.2 Routes() route inquiry + Reconcile / ReconcileEngine reconciliation (incl. projection field validation)
 ├── build.go         §5.3 BuildSSRBundle (esbuild Go API; the §5.3 parameter table implemented line by line) + DefaultSSRAliases
 ├── vite.go          §5.3 ParseViteManifest / ViteBuildID / ViteAssets (manifest parsing, hydration assets, build ID)
+├── shell.go         §5.6.2 ParseShellHead / ShellHead (Vite-shell head + html/body attrs inheritance)
 ├── engine.go        §5.4 Renderer interface + EnginePool (per-instance owner goroutine, prelude, SetMemoryLimit, watchdog, host functions → per-render Sink)
 ├── internal/qjs     Go binding vendored from Gaurav-Gosain/quickjs (MIT) + csrc/ builds the embedded wasm in-repo (quickjs-ng v0.17.0 pinned, 8MiB shadow stack; see csrc/README.md)
 ├── directive.go     §5.5 directive collection: per-render DirectiveSink (4096 entries / 1MB cap; overflow flags truncation and the host fn throws)
@@ -485,13 +494,16 @@ packages/runtime/   (react/react-dom/react-router are peerDeps, consumed via sou
 
 ```html
 <!doctype html>
-<html lang="{{LANG}}">
+<html lang="{{LANG}}" {{HTML_ATTRS}}>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- fallback; skipped when the page (or shell) declares its own -->
+  {{INHERIT_HEAD}}   <!-- shell-inherited entries (favicon, theme-color, modulepreload…); page keys win -->
   {{HEAD}}            <!-- directive entries, each one escaped -->
+  {{BODY_PRELOADS}}   <!-- preload links hoisted out of the body (React 19 float) -->
   {{CSS_LINKS}}       <!-- CSS for the hydration chunks from the vite manifest -->
 </head>
-<body>
+<body {{BODY_ATTRS}}>
   <div id="root">{{BODY_HTML}}</div>
   <script type="application/json" id="__PLOYKIT_PROPS__" data-page-id="…">{{PROPS_JSON}}</script>
   {{HYDRATE_SCRIPT}}
@@ -500,6 +512,28 @@ packages/runtime/   (react/react-dom/react-router are peerDeps, consumed via sou
 ```
 
 `RenderDocument` composes these slots directly (the sketch shows structure, not a string template). Escaping obligations (cannot be pushed down): attrs/children fully HTML-escaped (eliminating attribute-escape XSS); `<`→`\u003c` applied to PROPS_JSON before writing (prevents a `</script>` escape), with the hydrate side doing `JSON.parse(textContent)`; BODY is the verbatim renderToString output and is not escaped a second time. Head entries additionally pass a tag/attr-name fence (§9).
+
+#### 5.6.1 Viewport fallback and override
+
+RenderDocument always writes `<meta name="viewport" content="width=device-width, initial-scale=1">` right after the charset line, unless the assembled head already contains a `meta[name=viewport]` — from the page's head directives (an editor page that needs `user-scalable=no` overrides the fallback by emitting its own) or from the inherited shell head. Rationale: a missing viewport is a silent, site-wide mobile-ranking penalty (mobile browsers fall back to a 980px desktop viewport), and relying on every page to remember it is exactly the kind of default a framework should own.
+
+#### 5.6.2 Shell head inheritance (`ParseShellHead` / `ShellHead`)
+
+RenderDocument **rebuilds** documents rather than rewriting the Vite shell, so anything that only exists in `web/dist/index.html` would be dropped on every rendered page. The fix is inheritance, not rewriting: the product parses the shell once and attaches the result to `ViteAssets.Shell`; `RenderOnce` copies it onto every `Document` it assembles (prerender, runtime SSR, cache backfill, and direct preview calls all share this path — the attachment point travels with the assets, so there is exactly one wiring line per process).
+
+- `renderx.ParseShellHead(shellHTML string) ShellHead` extracts the shell's `<link>`/`<meta>` head tags plus the `<html>`/`<body>` open-tag attributes. It is a pure function that never fails: a missing head, missing tags, or tags the head-entry whitelist rejects all degrade to "not inherited".
+- **Exclusions** (each excluded kind has a dedicated, overridable channel): `rel=stylesheet` links (CSS goes through the manifest-derived `Document.CSS`), `meta charset` (RenderDocument writes its own), `meta name=viewport` (§5.6.1 owns it), and everything that is not link/meta (`<title>`, `<script>` — the page owns its title, scripts have their own channel). Everything else is kept, including `rel=modulepreload`, `rel=icon`, `rel=preconnect` and `meta name=theme-color`.
+- **Order and dedup**: inherited entries render between the viewport fallback and the page's own head, before the stylesheets — so modulepreload hints are discovered before the render-blocking CSS (that early position is the entire point of F-4). An inherited entry whose `(tag, rel/name/property)` key collides with a page head entry is skipped: the page always wins over the shell (e.g. a page-emitted theme-color suppresses the shell's).
+- `<html>` attributes lose `lang` (`Document.Lang` owns it); `<body>` attributes pass through verbatim. Both go through the same tag/attr-name fence as head entries — a malformed name fails the render loudly.
+- **Wiring, both assembly paths**: prerender reads `web/dist/index.html` from disk (`cmd/render`), runtime SSR reads the embedded copy (`cmd/app`'s `fs.Sub(frontendFS, …)`). A missing shell (unbuilt checkout) logs a warning and disables inheritance — rendering itself never fails because of the shell.
+
+#### 5.6.3 Absolute og/twitter URLs (`Document.BaseURL`)
+
+Social scrapers (Facebook/LinkedIn/Telegram) require absolute `og:image` / `twitter:image` / `og:url` values and silently drop relative ones, so the framework absolutizes them at document assembly — the Go layer, deliberately not `useSEO` (the TS hook cannot know the deployment origin, and SPA-navigated head updates are crawler-invisible anyway; crawlers read the first HTML only).
+
+- When `Document.BaseURL` (from `ViteAssets.BaseURL`, i.e. the `PUBLIC_BASE_URL` env in both example wiring paths) is an absolute http(s) origin, relative `og:image`, `twitter:image` and `og:url` content values are prefixed with it. Already-absolute and protocol-relative (`//…`) values are left alone.
+- An empty, malformed or missing BaseURL is a complete no-op — nothing is rewritten, nothing fails. `canonical` is never touched (a relative canonical is legal) and no other meta/link is rewritten.
+- `cmd/render` reads `PUBLIC_BASE_URL` itself (empty = no-op; an invalid value logs a warning and disables the rewrite).
 
 ### 5.7 Data surface (loader.go)
 
@@ -602,7 +636,7 @@ export function useSEO(meta: {
 }
 ```
 
-og prefixes, twitter cards, and the layout-overrides-page merge policy — all at this layer. The framework knows nothing about "SEO" — with one deliberate exception in the runtime's browser branch: `link[rel=canonical]` is applied as a **singleton** (SPA navigation updates the existing element's href in place instead of appending a duplicate, the same identity-keyed treatment `meta[name|property]` already gets; hydration adopts an SSR-emitted canonical rather than adding a second one). A duplicated canonical is worse than a missing one — crawlers may treat it as ambiguous — so the identity semantics live in `@ploykit/runtime`, and every `link` that is not canonical keeps plain exact-match dedup behavior (`preload` etc.). Matching trims whitespace and is case-insensitive on both sides (browser upsert and Go's `AuditSEO`). Two product-side rules complete the story: canonical is **sticky** (a page emitting none inherits the previous one — declare your own where that is wrong), and **one page, one canonical** (the SSR head path does not dedupe; duplicate emits are caught by the `cmd/render` audit via `SEOSignals.CanonicalCount`). Future `useJsonLd()` grows in the same pattern (note: JSON-LD needs a `<script>` head entry, which the §9 tag fence denies today — it would ride a deliberate allowlist exception, still no pipeline change).
+og prefixes, twitter cards, and the layout-overrides-page merge policy — all at this layer. URL absolutization is deliberately **not** at this layer: `og:image`/`twitter:image`/`og:url` are absolutized against the deployment origin by the Go assembly step (§5.6.3) — the hook cannot know `PUBLIC_BASE_URL`, and crawlers read only the first HTML, which the Go layer produces. The framework knows nothing about "SEO" — with one deliberate exception in the runtime's browser branch: `link[rel=canonical]` is applied as a **singleton** (SPA navigation updates the existing element's href in place instead of appending a duplicate, the same identity-keyed treatment `meta[name|property]` already gets; hydration adopts an SSR-emitted canonical rather than adding a second one). A duplicated canonical is worse than a missing one — crawlers may treat it as ambiguous — so the identity semantics live in `@ploykit/runtime`, and every `link` that is not canonical keeps plain exact-match dedup behavior (`preload` etc.). Matching trims whitespace and is case-insensitive on both sides (browser upsert and Go's `AuditSEO`). Two product-side rules complete the story: canonical is **sticky** (a page emitting none inherits the previous one — declare your own where that is wrong), and **one page, one canonical** (the SSR head path does not dedupe; duplicate emits are caught by the `cmd/render` audit via `SEOSignals.CanonicalCount`). Future `useJsonLd()` grows in the same pattern (note: JSON-LD needs a `<script>` head entry, which the §9 tag fence denies today — it would ride a deliberate allowlist exception, still no pipeline change).
 
 ---
 

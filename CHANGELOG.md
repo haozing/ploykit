@@ -9,6 +9,53 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+renderx SEO/pipeline batch (shuijing 2026-10-26 audit, F-1..F-5 all fixed
+plus the shell-head inheritance mechanism that also resolves the audit's
+product-side S-1/S-5 root causes and the example-side S-12 fallback switch;
+audit record: `docs/audit-renderx-seo-pipeline-2026-10-26.md`). Go
+(`platform/renderx`, `example`) + npm (`@ploykit/hooks` — useSEO og
+enrichment fields; version bumped at release).
+
+### Fixed
+- **renderx**: RenderDocument had no viewport fallback — prerendered pages
+  inherited nothing from the Vite shell, so every page that did not emit
+  its own viewport rendered at a 980px desktop viewport on mobile
+  (platform-level default gap; shuijing production was hit site-wide).
+  RenderDocument now writes
+  `<meta name="viewport" content="width=device-width, initial-scale=1">`
+  after charset unless the page (or inherited shell head) declares its own
+  — pages can still override (e.g. `user-scalable=no`).
+- **renderx**: shell head inheritance — `renderx.ParseShellHead(shellHTML)`
+  extracts the inheritable shell head tags (link/meta minus
+  stylesheet/charset/viewport/title) plus html/body open-tag attributes,
+  carried on `ViteAssets.Shell` through every document-assembly path
+  (runtime SSR, Service refresh, prerender, direct RenderOnce) and emitted
+  by RenderDocument (viewport → inherited → page head → preloads → CSS,
+  page entries winning collisions). This restores favicon links (the
+  audit's S-1 root cause), theme-color (S-5) and modulepreload (F-4)
+  site-wide without per-page components, and adds
+  `Document.HTMLAttrs`/`BodyAttrs` for shell-styled `<html>`/`<body>` tags
+  (F-5, FOUC prevention; `lang` stays owned by `Lang`).
+- **renderx**: relative `og:image` / `twitter:image` / `og:url` values are
+  absolutized at render time against `Document.BaseURL` (sourced from
+  PUBLIC_BASE_URL; empty/invalid = no-op; already-absolute untouched;
+  canonical deliberately untouched; client-side SPA head updates keep
+  page-emitted values — crawlers read the first HTML only).
+
+### Added
+- **hooks**: SeoMeta gains `ogSiteName`, `ogLocale` (ll_CC),
+  `ogImageAlt`, `ogImageWidth`, `ogImageHeight` — emitted when present
+  (image dimension/alt only alongside an actual ogImage). Example wires
+  ogSiteName/ogLocale on its public pages; og:image dimensions stay
+  unwired by example (no OG image asset — boundary declared in the
+  useSEO JSDoc).
+- **example**: renderx fallback switched to
+  `UnknownPath: renderx.UnknownPathNotFound` — garbage/case-variant URLs
+  now get an honest 404 instead of a 200 indexable SPA shell (the soft-404
+  GSC exposure class documented on the policy; humans still get the shell).
+
 ## [0.17.0] — 2026-10-26
 
 Legal compliance P0 batch (framework minimal compliance kernel, LC-1..LC-9

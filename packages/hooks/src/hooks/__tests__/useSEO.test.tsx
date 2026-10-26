@@ -108,3 +108,71 @@ describe('useSEO OG 四要素（#22：镜像默认 + 显式覆盖 + twitter 镜�
     expect(document.head.querySelector('meta[name="twitter:title"]')).toBeNull()
   })
 })
+
+describe('useSEO F-3 og 增强字段（site_name / locale / image 子标签）', () => {
+  it('ogSiteName/ogLocale 存在即发：og:site_name / og:locale', () => {
+    render(<Probe title="页题" ogSiteName="MyProduct" ogLocale="zh_CN" />)
+    expect(document.head.querySelector('meta[property="og:site_name"]')).toHaveAttribute(
+      'content', 'MyProduct',
+    )
+    expect(document.head.querySelector('meta[property="og:locale"]')).toHaveAttribute('content', 'zh_CN')
+  })
+
+  it('ogImage 存在时 ogImageAlt/Width/Height 随图发出（尺寸序列化为像素数字串）', () => {
+    render(
+      <Probe
+        title="页题"
+        ogImage="/cover.png"
+        ogImageAlt="产品封面图"
+        ogImageWidth={1200}
+        ogImageHeight={630}
+      />,
+    )
+    expect(document.head.querySelector('meta[property="og:image:alt"]')).toHaveAttribute(
+      'content', '产品封面图',
+    )
+    expect(document.head.querySelector('meta[property="og:image:width"]')).toHaveAttribute(
+      'content', '1200',
+    )
+    expect(document.head.querySelector('meta[property="og:image:height"]')).toHaveAttribute(
+      'content', '630',
+    )
+    // 原有 og:image 透传不回归（绝对化归 Go 层，hook 原样透传）。
+    expect(document.head.querySelector('meta[property="og:image"]')).toHaveAttribute('content', '/cover.png')
+  })
+
+  it('无 ogImage 时 ogImageAlt/Width/Height 不发（alt/尺寸不落成无图孤儿标签）', () => {
+    render(
+      <Probe
+        title="页题"
+        description="描述"
+        ogImageAlt="孤儿 alt"
+        ogImageWidth={1200}
+        ogImageHeight={630}
+      />,
+    )
+    expect(document.head.querySelector('meta[property="og:image"]')).toBeNull()
+    expect(document.head.querySelector('meta[property="og:image:alt"]')).toBeNull()
+    expect(document.head.querySelector('meta[property="og:image:width"]')).toBeNull()
+    expect(document.head.querySelector('meta[property="og:image:height"]')).toBeNull()
+    // og 块本身照常激活，其余字段不受影响。
+    expect(document.head.querySelector('meta[property="og:title"]')).toHaveAttribute('content', '页题')
+  })
+
+  it('仅 ogSiteName（或仅 ogLocale）也能激活 og 块——存在即发的字面语义', () => {
+    render(<Probe ogSiteName="MyProduct" />)
+    expect(document.head.querySelector('meta[property="og:site_name"]')).toHaveAttribute(
+      'content', 'MyProduct',
+    )
+    expect(document.head.querySelector('meta[property="og:title"]')).toBeNull()
+    expect(document.head.querySelector('meta[property="og:type"]')).toHaveAttribute('content', 'website')
+  })
+
+  it('新字段不进 twitter 镜像：twitter:* 组不含 site_name/locale 对应物', () => {
+    render(<Probe title="页题" description="描述" ogSiteName="MyProduct" ogLocale="zh_CN" />)
+    const twitterNames = [...document.head.querySelectorAll('meta[name^="twitter:"]')].map((m) =>
+      m.getAttribute('name'),
+    )
+    expect(twitterNames).toEqual(['twitter:title', 'twitter:description'])
+  })
+})

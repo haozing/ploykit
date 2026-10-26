@@ -19,6 +19,8 @@ export function RegisterPage() {
     title: '创建账号 · MyProduct',
     description: '创建你的 MyProduct 账号',
     canonical: '/register',
+    ogSiteName: 'MyProduct',
+    ogLocale: 'zh_CN',
   });
   return <RegisterPageBase />;
 }
