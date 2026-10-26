@@ -9,6 +9,86 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.17.0] — 2026-10-26
+
+Legal compliance P0 batch (framework minimal compliance kernel, LC-1..LC-9
+P0 scope; plan + round-1 audit docs live in docs/). Go (`legal`, `identity`,
+`billing`, `settings`, `platform/webx`, `example`) + npm (`@ploykit/ui`
+2.6.0; hooks/client/runtime unchanged, skipped by release.yml).
+
+### Breaking (called out per repo policy)
+- **webx**: `ClientMetadata` is now a middleware factory —
+  `ClientMetadata(trustedProxies ...*net.IPNet) func(http.Handler) http.Handler`
+  — instead of `ClientMetadata(next http.Handler)`. The proxies make the
+  XFF-derived client IP consistent with AccessLog by construction.
+  Migration: wrap the old call site and pass the same trusted-proxy list
+  AccessLog uses (`example/cmd/app/main.go` shows the shape).
+
+### Added
+- **legal** (new composition package, provisioning-style per ADR-0016):
+  `legal.Wire(...)` one-line wiring registers the six `legal_*` settings
+  keys via RegisterKeys (`legal_billing_model` has Default
+  `v1_subscription`, so a fresh deployment with no key and no env boots)
+  and reconciles the declared billing model fail-fast — via the new
+  single-key hot read `settings.Store.EffectiveKey`, so an unrelated
+  sealed key without PLOYKIT_SEAL_KEY can no longer prevent boot.
+  `RegisterDocs` is the versioned document registry (placeholders as a
+  closed set, batch-validated atomically). Acceptance ledger (migration
+  052: `(user_id, doc_key, doc_version)` unique, method CHECK, account
+  CASCADE, ON CONFLICT idempotent): AfterRegister records `signup`,
+  AfterLogin records `login_implicit` with zero steady-state writes.
+  `legalhttp.Mount` (user re-accept + snapshot; webx.P anonymous 401) and
+  `MountAdmin` (compliance + acceptances-by-user export; injected Guard,
+  nil panics fail-fast). `Compliance` reconciles required keys plus a
+  seven-point commitment checklist (manual items honestly marked).
+- **billing**: user self-service cancellation — `POST
+  /api/billing/subscription/cancel` (billing:manage; cross-workspace
+  404): outcome `cancelled | period_end | operator_pending` derived from
+  the channel's declared CancelTiming; idempotent replay derived from
+  live state; channel pass-through via SubscriptionCanceller (waffo
+  `period_end`, paypal `immediate`, stripe `immediate` — **erratum**: the
+  plan's "stripe has no canceller" premise was wrong, stripe.Channel has
+  implemented it since v0.15 via DELETE /v1/subscriptions; docs carry the
+  correction). Channels without a canceller park `cancel_requested_at`
+  (migration 053, partial index) in an operator queue (`GET
+  /api/admin/billing/cancel-requests`). Five clear-points (renewal
+  payment, refund, webhook canceled, admin cancel, expiry sweep);
+  renewal after a cancel request logs ERROR, keeps the paid entitlement
+  and the queue entry — no silent refund. `GET /api/billing/subscription`
+  now carries `cancel_requested_at / renews_at / cancel_timing` so
+  product UIs have a framework data source for the cancel affordance.
+  `ProcessorDisplayName` maps channels to human names (waffo → "Waffo
+  Pancake").
+- **identity**: `ChainHooks` — compose multiple IdentityHooks into one
+  slot (tx hooks sequential, first error short-circuits; observational
+  hooks all run with errors joined and index-attributed; nil-safe).
+- **webx**: `WithClientIP` / `ClientIPFrom` — request-scoped client IP
+  using the same ClientIP(trustedProxies) resolution AccessLog uses.
+- **ui 2.6.0**: `LegalAndPrivacySection` (account-page legal block:
+  subscription snapshot, cancellation confirm modal with three-way
+  timing copy, DSAR export hook) and `AdminComplianceCard`
+  (self-fetching compliance dashboard). Boundary: LegalAndPrivacySection
+  is NOT wired in example (it needs product-side subscription assembly —
+  the GET subscription fields above are the data source);
+  AdminComplianceCard is mounted in the example admin settings children
+  seam.
+
+### Fixed
+- **docs/openapi.yaml**: two structural YAML faults from the batch draft
+  (duplicate `responses` key on the cancel path; admin error responses
+  misplaced under the wrong operation) — check_api is regex-based and
+  could not catch them; the contract test's strict YAML parse does.
+  New endpoints now carry the file's conventional default-error ref, and
+  the admin compliance operation documents its envelope schema.
+- **docs/platform-api-index.md**: restored the CachePrefix/CachePrefixTTL
+  rows accidentally dropped from v0.16.0 by this batch's base revision.
+
+### Caveats (P0 live verification still open)
+- waffo/paypal CancelTiming declarations are document-derived
+  (`TODO(lc4)` in channel.go); waffo's period_end timing should be
+  re-confirmed against the live dashboard before copy promises it to
+  users.
+
 ## [0.16.0] — 2026-10-26
 
 shuijing performance/SEO audit batch (2026-10-25 perf report, six of seven
