@@ -220,10 +220,17 @@ func TestMemoryTransportFanoutCopies(t *testing.T) {
 		return len(sinks[0]) >= 2 && len(sinks[1]) >= 2
 	}, 3*time.Second, 10*time.Millisecond)
 
+	// 断言用 Contains 而非"最后一条"：上面的探针发布写在 Eventually 的
+	// cond 里（cond 在独立 goroutine 执行），高负载下一发探针可能晚于
+	// payload 到达、追加在 sink 尾部——"最后一条"断言在慢调度机器上真实
+	// 翻车过（CI 2026-10-26）。Contains 同样完整验证拷贝语义：若 transport
+	// 未在 Publish 内拷贝，订阅者拿到的将是改写后的 "xxxxxxx"。
 	mu.Lock()
 	defer mu.Unlock()
-	assert.Equal(t, "payload", string(sinks[0][len(sinks[0])-1]), "subscriber owns its copy")
-	assert.Equal(t, "payload", string(sinks[1][len(sinks[1])-1]))
+	assert.Contains(t, sinks[0], []byte("payload"), "subscriber owns its copy")
+	assert.Contains(t, sinks[1], []byte("payload"), "subscriber owns its copy")
+	assert.NotContains(t, sinks[0], []byte("xxxxxxx"), "改写发布后的 buffer 不得影响已发布内容")
+	assert.NotContains(t, sinks[1], []byte("xxxxxxx"))
 }
 
 func TestMemoryTransportSubscribeCancel(t *testing.T) {

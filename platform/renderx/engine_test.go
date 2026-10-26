@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -264,15 +265,26 @@ func TestEngineWatchdogBusyLoop(t *testing.T) {
 
 	// CI-headroom: this wait has flaked three times on shared ubuntu runners
 	// (31s budget exhausted by scheduler starvation, mechanism intact — the
-	// timeout/recovery assertions above all passed). 90s locally, skipped
-	// under -short (CI unit runs stay fast; the full check runs in the DB job).
+	// timeout/recovery assertions above all passed) and once more on
+	// 2026-10-26 after the ubuntu-latest image migration (v0.18.0 CI red:
+	// 90s exhausted; the same commit passes in ~1s on an idle machine —
+	// starvation stalls the allocating loop, the exit mechanism is fine).
+	// Budget: 90s locally, 240s on CI (CI=true is set by GitHub Actions).
+	// Skipped under -short (CI unit runs stay fast; the full check runs in
+	// the DB job). Do NOT shrink MemoryLimit to speed the exit up — 32MB
+	// makes the corpse never exit (measured 2026-10-26; the OOM path needs
+	// the larger arena).
 	if testing.Short() {
-		t.Skip("corpse-exit wait skipped in -short (CI scheduler starvation makes the 30s budget flaky; the kill/recovery assertions above already passed)")
+		t.Skip("corpse-exit wait skipped in -short (CI scheduler starvation makes the budget flaky; the kill/recovery assertions above already passed)")
+	}
+	budget := 90 * time.Second
+	if os.Getenv("CI") == "true" {
+		budget = 240 * time.Second
 	}
 	select {
 	case <-corpse.exited:
-	case <-time.After(90 * time.Second):
-		t.Fatal("分配型 corpse 未在 90s 内因内存上限退出（GC 毒化风险）")
+	case <-time.After(budget):
+		t.Fatalf("分配型 corpse 未在 %v 内因内存上限退出（GC 毒化风险）", budget)
 	}
 }
 
