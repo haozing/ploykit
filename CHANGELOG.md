@@ -9,14 +9,16 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.18.0] — 2026-10-26
 
 renderx SEO/pipeline batch (shuijing 2026-10-26 audit, F-1..F-5 all fixed
 plus the shell-head inheritance mechanism that also resolves the audit's
 product-side S-1/S-5 root causes and the example-side S-12 fallback switch;
-audit record: `docs/audit-renderx-seo-pipeline-2026-10-26.md`). Go
-(`platform/renderx`, `example`) + npm (`@ploykit/hooks` — useSEO og
-enrichment fields; version bumped at release).
+audit record: `docs/audit-renderx-seo-pipeline-2026-10-26.md`; pre-release
+3-agent audit fixes folded in — see the release-audit entries below). Go
+(`platform/renderx`, `example`) + npm (`@ploykit/hooks` 0.9.2 — useSEO og
+enrichment fields; ui 2.6.0 / client 0.7.6 / runtime 0.9.0 unchanged,
+skipped by release.yml).
 
 ### Fixed
 - **renderx**: RenderDocument had no viewport fallback — prerendered pages
