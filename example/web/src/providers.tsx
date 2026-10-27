@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { useLocation } from '@tanstack/react-router';
-import { useWorkspace } from '@ploykit/hooks';
+import { useSiteConfig, useWorkspace, type SiteConfig } from '@ploykit/hooks';
 import { AppProviders as PloykitAppProviders } from '@ploykit/ui';
+import { bootGA4 } from './analytics';
 import { setWsWorkspace } from './ws';
 
 /**
@@ -67,6 +68,23 @@ function WsSync() {
   return null;
 }
 
+/** 产品注册键在本地扩展框架的 SiteConfig 类型——框架类型不可能预知产品键。 */
+type SiteConfigWithGA4 = SiteConfig & { ga4_measurement_id?: string };
+
+/**
+ * GA4 启动器：公开 /config 带回非空 ga4_measurement_id 时注入 gtag.js。
+ * 挂在 Provider 链里意味着每个水合页面都会跑；零 JS 页面（hydrate:'none'）
+ * 不会执行任何 effect，是统计盲区——营销四页为此已翻回默认水合。
+ */
+function GA4Boot() {
+  const cfg = useSiteConfig();
+  const id = (cfg.data as SiteConfigWithGA4 | undefined)?.ga4_measurement_id?.trim();
+  useEffect(() => {
+    if (id) bootGA4(id);
+  }, [id]);
+  return null;
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <PloykitAppProviders>
@@ -74,6 +92,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       {/* B-orders-7：路由级标题（TanStack 迁移后经 assembler 的 wrapInRouter
           挂在 Router 上下文之内——useLocation 依赖 router context）。 */}
       <DocumentTitle />
+      <GA4Boot />
       {children}
     </PloykitAppProviders>
   );

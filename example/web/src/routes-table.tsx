@@ -250,15 +250,15 @@ export function Product() {
 export function buildRouteTable(auth: AuthRouteSpecs) {
   return routeTable(
   {
-    // 落地页：无 Loader → 构建期预渲染进 embed。hydrate: 'none' —— 整页只有
-    // 声明式内容与 <Link>（服务端渲染成 <a href>），水合换不到任何东西，却要
-    // 付整个客户端入口的体积；跳过水合后这一页零 JS。
-    '/': { component: Product, render: 'static', hydrate: 'none' },
-    // 内容面：纯声明式页面，零 JS（hydrate: 'none'）。判据见 pages/StaticPages.tsx
-    // 顶部注释——关掉 JavaScript 打开仍能用，就不该发 JS。
-    '/pricing': { component: Pricing, render: 'static', hydrate: 'none' },
-    '/docs': { component: Docs, render: 'static', hydrate: 'none' },
-    '/about': { component: About, render: 'static', hydrate: 'none' },
+    // 落地页：无 Loader → 构建期预渲染进 embed。GA4 全站统计（2026-10-27）
+    // 放弃零 JS：信标是浏览器侧 JS，不水合就没有统计。判据取舍记档见
+    // pages/StaticPages.tsx 顶部注释——统计诉求在此页组压过了零 JS 诉求。
+    '/': { component: Product, render: 'static' },
+    // 内容面：纯声明式页面，原本零 JS（hydrate: 'none'）；GA4 全站统计批
+    // （2026-10-27）翻回默认水合——预渲染不变，只是不再跳过水合。
+    '/pricing': { component: Pricing, render: 'static' },
+    '/docs': { component: Docs, render: 'static' },
+    '/about': { component: About, render: 'static' },
     // 有 Loader → 运行期缓存渲染（数据决定型）；「收藏」按钮需要水合，保持
     // 同步导入（static 页不能在沙箱里等 promise）。
     '/blog/:slug': { component: BlogPost, render: 'static' },

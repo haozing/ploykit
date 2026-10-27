@@ -102,6 +102,17 @@ tool's tracker script, which posts to its collect endpoint (Umami: `/script.js`
 - Caveat: crawler traffic is invisible to a script beacon (crawlers don't run
   JS) — that is what the traffic counters above are for; use both.
 
+**Route 1 is wired live in example (GA4, 2026-10-27)** — the reference for any
+cross-origin tracker: a `ga4_measurement_id` product-registered settings key
+(`settings.RegisterKeys`, non-sensitive so it rides the public `/config`),
+a one-shot `bootGA4` DOM injection in `example/web/src/analytics.ts` fired by
+a provider-level effect, CSP extended for `googletagmanager.com` /
+`*.google-analytics.com` in `example/cmd/app/main.go` (spaCsp), and the four
+formerly zero-JS marketing routes re-hydrated — a `hydrate: 'none'` page runs
+no effects, so a beacon needs hydration. The measurement ID is
+admin-configurable (admin console → System settings → the generic extension
+card) with a live `GA4_MEASUREMENT_ID` env fallback.
+
 **Route 2 — server-side event relay (no JS).** Renderx already sees every
 request: a middleware (model it on `Mount.Traffic`) can POST an event to the
 tool's collect API per request (`/api/send` for Umami v2, `/api/event` for

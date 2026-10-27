@@ -3,16 +3,15 @@ import { useSEO } from '@ploykit/hooks';
 /**
  * 静态营销/内容页：定价、文档、关于。
  *
- * 三页都标 `render: 'static'` + `hydrate: 'none'`——它们是纯声明式内容，没有
- * 状态、没有事件处理器，唯一的交互是 `<a href>` 导航（服务端渲染成真链接，
- * 不依赖客户端路由接管）。所以这些页面的访客下载 **0 字节 JS**。
+ * 三页保持 `render: 'static'`（构建期预渲染，SEO 首字节不依赖浏览器），但
+ * 2026-10-27 GA4 全站统计批撤掉了原先的 `hydrate: 'none'`——页面本身仍是
+ * 纯声明式内容，唯一新增的客户端行为是 providers.tsx 的 GA4Boot 注入
+ * gtag.js（管理台 ga4_measurement_id 配置后生效）。这是刻意取舍：全站
+ * 统计的价值 > 三页各省一份共享入口 JS。
  *
- * 这正是"要不要换掉 React"这个问题的实际答案：不需要换框架，只要把
- * "这页要不要 JS" 变成路由表上的一行声明。React 的成本只落在真正需要水合
- * 的页面上（登录后的应用区），内容面可以是零。
- *
- * 判据（与 docs/rendering.md §2.1 一致）：关掉 JavaScript 打开这一页，用户
- * 该做的事还能做完 ⇒ 就是 `hydrate: 'none'`。
+ * 通用判据不变（与 docs/rendering.md §2.1 一致）：关掉 JavaScript 打开这
+ * 一页，用户该做的事还能做完 ⇒ 就该是 `hydrate: 'none'`。本页组是判据的
+ * 已知例外——"该做的事"里现在包含了"被统计"。
  */
 
 const SHELL = 'mx-auto max-w-3xl px-6 py-16';

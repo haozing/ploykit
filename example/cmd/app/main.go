@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -115,6 +116,37 @@ import (
 
 //go:embed migrations/*.sql
 var productMigrations embed.FS
+
+// ga4IDRe pins the GA4 Measurement ID shape (G- followed by 4..32
+// alphanumeric chars; real IDs are ~10). Validation only — the value is a
+// public identifier that ships in every page's HTML, not a credential.
+var ga4IDRe = regexp.MustCompile(`^G-[A-Za-z0-9]{4,32}$`)
+
+// ga4KeySpec is the product-registered settings key behind the admin GA4
+// field (docs/visitor-analytics.md Route 1 wired in example): the Measurement
+// ID is a public identifier — it ships in every page's HTML once configured —
+// so the key is NOT Sensitive (no sealing, rides the public /config for the
+// frontend GA4Boot). Env fallback follows the "never seeded" generation: the
+// env value stays live on every boot until an admin saves a DB row.
+func ga4KeySpec() settings.KeySpec {
+	return settings.KeySpec{
+		Key:   "ga4_measurement_id",
+		Env:   "GA4_MEASUREMENT_ID",
+		Description: "Google Analytics 4 Measurement ID（G- 开头，GA4 管理后台 → 数据流 → 网页流详情）：配置后全站页面注入 gtag.js 统计；清空 = 停用。注意 EEA 访客需自担同意横幅合规",
+		Validate: func(v string) error {
+			if v == "" {
+				return nil // 空 = 未配置
+			}
+			// 管理台 PUT 是 Validate(原始值) 在前、Normalize 在后
+			// （settings/adapters/http/http.go），所以剪空白必须发生在
+			// 校验内部——否则粘贴带尾随空格的 ID 会得到格式错误而非静默剪裁。
+			if !ga4IDRe.MatchString(strings.TrimSpace(v)) {
+				return errors.New("ga4_measurement_id 必须形如 G-XXXXXXXXXX（GA4 管理后台 → 数据流获取；空 = 停用统计）")
+			}
+			return nil
+		},
+	}
+}
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -340,6 +372,9 @@ func main() {
 				return nil
 			},
 		},
+		// GA4 统计（docs/visitor-analytics.md Route 1 的 example 接线）：
+		// spec 见 ga4KeySpec——抽出函数供 ga4_settings_test 共用同一份定义。
+		ga4KeySpec(),
 	); err != nil {
 		log.Error("settings key registration", "err", err)
 		os.Exit(1)
@@ -1183,8 +1218,13 @@ func main() {
 
 	spaCsp := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// GA4（ga4_measurement_id 配置后启用）：gtag.js 脚本域 + 事件收集域。
+			// 静态放行——未配置统计时没有任何请求会打这两个域，CSP 放行是无害的。
 			w.Header().Set("Content-Security-Policy",
-				"default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+				"default-src 'self'; style-src 'self' 'unsafe-inline'; "+
+					"script-src 'self' https://www.googletagmanager.com; "+
+					"connect-src 'self' ws: wss: https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com; "+
+					"img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 			next.ServeHTTP(w, r)
 		})
 	}

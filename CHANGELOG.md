@@ -9,6 +9,44 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.20.0] — 2026-10-27
+
+GA4 analytics wired in example, admin-configurable, site-wide (example-only
+release: no Go module code, no `packages/` code — npm skipped by release.yml).
+
+### Added
+- **example: Google Analytics 4 site-wide tracking, admin-configurable** —
+  the live wiring of docs/visitor-analytics.md Route 1. A product-registered
+  settings key `ga4_measurement_id` (`settings.RegisterKeys`): non-sensitive
+  by design — a measurement ID is a public identifier that ships in every
+  page's HTML once configured, so it rides the public `/config` for the
+  frontend; live `GA4_MEASUREMENT_ID` env fallback until an admin saves a DB
+  row (never-seeded generation). Validation pins the `G-` shape and trims
+  inside the Validate closure (the admin PUT pipeline runs Validate on the
+  raw value before Normalize — audit round caught the original
+  trim-after-validate mismatch; the test pins the real order).
+- **example frontend**: one-shot `bootGA4` DOM injection
+  (`example/web/src/analytics.ts`) fired by a `GA4Boot` provider-level
+  effect (`providers.tsx`) when `/config` delivers a non-empty id. SPA route
+  changes are counted by GA4 enhanced measurement (history-API listener) —
+  no extra code. Script injection lives in the React tree, NOT renderx head
+  directives: the renderx tag fence deliberately denies `script` on the
+  server-side multi-source head assembly path.
+- **CSP**: `spaCsp` gains `script-src 'self' https://www.googletagmanager.com`
+  and `connect-src` additions for `*.google-analytics.com` /
+  `*.analytics.google.com`. Statically allowed — with no id configured no
+  request ever hits those origins.
+- **The four formerly zero-JS marketing routes re-hydrated**: `/`,
+  `/pricing`, `/docs`, `/about` drop `hydrate: 'none'` (prerender
+  unchanged). A `hydrate: 'none'` page runs no client effects, so a beacon
+  needs hydration; the trade-off (site-wide stats > one shared entry chunk
+  per page) is recorded in `StaticPages.tsx` and visitor-analytics.md, which
+  now points at example as the Route 1 live reference.
+- Known blind spots (documented, by design): crawlers don't run JS — pair
+  with the `ploykit_traffic_requests` counters; EEA visitors need a consent
+  banner, which stays the product's legal responsibility; ad blockers drop
+  the cross-origin gtag.js load.
+
 ## [0.19.0] — 2026-10-27
 
 Hydration parity + anonymous login probe. Go (`identity/adapters/http`) +
