@@ -244,6 +244,28 @@ function TanstackRouterMount({ pages, propsByPageId, wrapInRouter }: TanstackRou
       : undefined,
   })
 
+  // [hydration parity，fragility register +1] Matches.js (1.170.45) 在客户端
+  // 会给 MatchesInner 额外套一层根 Suspense（`(isServer ?? router.isServer)
+  // || router.ssr ? MatchesInner : Suspense(...)` 的 else 分支），而 SSR 沙箱
+  // （isServer server 变体）直通 MatchesInner。两侧因此只共享 Outlet 根路由
+  // 那一对 `<!--$-->` 标记：客户端两层边界里，内层配不到服务端标记 →
+  // React 19 判失配、#418 整树客户端重建 —— 预渲染 DOM 全部作废，LCP 退化为
+  // 「等整条 JS 链执行完」（shuijing 生产实锤 2026-10-27：LCP 3.9s / element
+  // render delay 2.5s，DEV React diff 指认 `<Suspense>` vs `<div>`）。
+  //
+  // 修法 = Matches 的 SSR 分支开关走 router.ssr 实例属性（注意不是
+  // options.ssr——模块级 isServer=false 在客户端把 `isServer ?? router.isServer`
+  // 短路，options 不参与；官方只在自己的 hydrate() 里赋 `{ manifest }`，但那条
+  // 路需要 window.$_TSR 引导数据，与我们的 Go loader + props 脚本数据面无关）。
+  // 两侧都赋：真实 SSR 沙箱 isServer=true 本就直通（赋值是无操作级保险），
+  // 客户端（水合/SPA）靠它消除多余边界；同模块测试环境（无 isServer 别名）
+  // 两侧也因此同构。manifest:undefined 对齐 Router 类型声明，同形于官方赋值；
+  // Scripts/HeadContent 两个 `router.ssr?.manifest` 消费点本框架从不渲染。副作用
+  // 面已全量枚举：canWrapInSuspense 在 root 路由两侧本就同为 false；MatchInner
+  // 的 pending 分支只在 status pending 时触达（populateSync 强制 success，异步
+  // 导航时 root 路由无 loader 也不受影响）。
+  router.ssr = { manifest: undefined }
+
   populateSync(router)
 
   return createElement(RouterProvider, { router })

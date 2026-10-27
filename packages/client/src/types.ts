@@ -252,9 +252,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 当前用户
-         * @description 模拟会话（管理员 impersonation 签发）额外透出 impersonated_by
-         *     （发起管理员 userID，ADR 0008）；普通会话无此字段。
+         * 当前用户（匿名探测 200）
+         * @description 只读登录态探测。「未登录」是正常答案而非错误状态：匿名返回
+         *     200 {"authenticated": false}（浏览器网络层把 401 记成硬错误且无法被
+         *     fetch 抑制，应用壳的每访客探测曾对 Best Practices 审计全站亮红——
+         *     2026-10-27 改）。已登录返回 PKUser（扁平），模拟会话（管理员
+         *     impersonation 签发）额外透出 impersonated_by（发起管理员 userID，
+         *     ADR 0008）；普通会话无此字段。
          */
         get: operations["getMe"];
         put?: never;
@@ -300,6 +304,108 @@ export interface paths {
         put?: never;
         /** step-up 重认证（校验密码后为当前会话盖 password_confirmed_at 戳；配合 E_REAUTH_REQUIRED 两段式协议后重试原请求；仅浏览器会话） */
         post: operations["confirmPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前账号的 MFA 状态（enabled = 已确认启用；pending = 已开始注册但未验证首码） */
+        get: operations["mfaStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 开始 TOTP 注册：生成密钥（sealx 封存存储）并返回 otpauth:// URI（QR 载荷）与 base32 密钥（手动录入）；已启用时 409 */
+        post: operations["mfaEnroll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 启用 MFA：验证首码后确认注册，签发一次性备份码并为当前会话盖 mfa_confirmed_at 戳 */
+        post: operations["mfaEnable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 关闭 MFA（挂载点 step-up 守卫；撤销该用户全部会话） */
+        post: operations["mfaDisable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/mfa/regenerate-backup-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新生成备份码（挂载点 step-up 守卫；旧码全部作废，新码仅此一次返回） */
+        post: operations["mfaRegenerateBackupCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/verify-mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AAL2 step-up 盖戳（confirm-password 的第二因子孪生）：验证 TOTP 或一次性备份码后为当前会话盖 mfa_confirmed_at；尝试限流与登录/confirm-password 同族 */
+        post: operations["verifyMFA"];
         delete?: never;
         options?: never;
         head?: never;
@@ -678,6 +784,23 @@ export interface paths {
         get: operations["getBillingSubscription"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing/subscription/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 用户自助取消订阅（billing:manage；X-Workspace-Id）——渠道直通，outcome=cancelled|period_end|operator_pending */
+        post: operations["userCancelSubscription"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1354,6 +1477,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/plans/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 全量编辑套餐（name/currency/sort_no/limits；code 为路径标识不可改）
+         * @description 全量替换语义（UI 整卡提交）：limits 中未出现的键即删除；-1 = 不限哨兵。
+         *     校验：name 1..100 字符（rune 计）、currency `^[A-Z]{3}$`（与 040 迁移
+         *     CHECK 对齐）、limits 键 `^[a-z][a-z0-9_]{0,63}$` 且值为 JSON 整数；
+         *     limits 为自由 KV，未知键服务端放行。落库即生效（checkout / 套餐目录
+         *     均为请求期直读，无缓存）；既有订单金额为创建时快照，不受影响。
+         *     成功写平台级审计 admin.plan_change（from/to 快照），可经
+         *     GET /api/admin/audit?action=admin.plan_change 查询。
+         */
+        patch: operations["adminUpdatePlan"];
+        trace?: never;
+    };
     "/api/admin/orders": {
         parameters: {
             query?: never;
@@ -1526,6 +1675,164 @@ export interface paths {
         put?: never;
         /** 测试支付渠道连接（stripe 调 Balance API 验 key） */
         post: operations["adminTestChannelConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/billing/cancel-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** LC-4 运营队列——等待渠道侧人工完成/周期末到期的取消请求 */
+        get: operations["adminListCancelRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/legal/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** LC-9 合规对账——缺键红灯 + 承诺对账清单（法务设置/支付处理方声明/后续批次项） */
+        get: operations["adminLegalCompliance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/legal/acceptances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 显式再接受当前版本条款（method=reaccept；登录态） */
+        post: operations["reacceptLegalDoc"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/legal/acceptances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按用户查询条款接受历史（争议取证） */
+        get: operations["adminLegalAcceptancesByUser"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/billing/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 支付渠道配置卡（适配器 ConfigSchema 自描述表单 + DB 值脱敏回显；BC-5/BC-6） */
+        get: operations["adminListBillingChannels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/billing/channels/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 保存渠道凭据字段（billing_channel.<name>.<field> 落库封存，保存后热重建渠道）
+         * @description secret 字段空串=保持已存值；text/select 字段=覆写（空=清除）；
+         *     未知字段名 400、select 值必须在 Options 内。保存成功后同步触发渠道
+         *     重建，响应卡片即生效态（config_source=db）。
+         */
+        put: operations["adminUpdateBillingChannel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/billing/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 目录型渠道商品映射总览（已注册行 join 当前 plan 价；BC-7） */
+        get: operations["adminBillingCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/billing/channels/{name}/register-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 在渠道侧注册套餐商品（幂等：已有映射直接返回现有 id；BC-7） */
+        post: operations["adminRegisterChannelProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/billing/channels/{name}/sync-price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 把套餐当前 DB 价推送给已注册渠道商品（改价联动；BC-7） */
+        post: operations["adminSyncChannelPrice"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1909,6 +2216,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 已存对象只读服务（storagex.ServeUploads；GET/HEAD only，immutable cache，非脚本类型 inline） */
+        get: operations["serveUpload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/uploads/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 头像上传参考端点（example wiring：multipart 'file' 部件、4MB 上限、仅 image/*；产品侧鉴权自定） */
+        post: operations["uploadAvatar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/config": {
         parameters: {
             query?: never;
@@ -1973,6 +2314,117 @@ export interface paths {
          *     （生产默认关）。
          */
         get: operations["debugPool"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取回进程日志（按 request_id 关联或全局尾窗；dev 门控）
+         * @description logring 环形缓冲的查询出口——"一次故障一个 artifact"：失败响应头
+         *     X-Request-Id → 按该 id 取回其全部日志记录。进程内、有界、重启即失，
+         *     开发期工具，不替代生产日志栈。
+         */
+        get: operations["devLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 后台任务列表（river；按状态/队列/类型过滤；dev 门控） */
+        get: operations["devJobList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 单个后台任务详情（含 args 载荷与逐次尝试错误；dev 门控） */
+        get: operations["devJobGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即重试一个后台任务（dev:operate） */
+        post: operations["devJobRetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/jobs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 取消一个后台任务（队列中立即取消，运行中协作取消；dev:operate） */
+        post: operations["devJobCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/doctor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 启动自检（river schema / seal key / cookie / drain 窗口 / 健康探针；dev 门控）
+         * @description 逐项 pass/fail + 失败项的 fix_hint——把"经典接线失败"的诊断从
+         *     agent 的逆向推理变成一次查询。产品可注册自己的检查项。
+         */
+        get: operations["devDoctor"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2071,6 +2523,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        LegalAcceptance: {
+            user_id?: string;
+            doc_key?: string;
+            doc_version?: string;
+            /** @enum {string} */
+            method?: "signup" | "login_implicit" | "reaccept";
+            ip?: string;
+            client_platform?: string;
+            client_version?: string;
+            client_os?: string;
+            /** Format: date-time */
+            accepted_at?: string;
+        };
+        CancelRequestView: {
+            workspace_id?: string;
+            /** Format: date-time */
+            requested_at?: string;
+            plan?: string;
+            subscription_ref?: string;
+        };
         ErrorBody: {
             /** @description 错误码（E_UNAUTHENTICATED / E_FORBIDDEN / E_NOT_FOUND / E_VALIDATION / E_CONFLICT / E_RATE_LIMITED / E_QUOTA_EXCEEDED / E_INTERNAL / E_TIMEOUT / E_PAYLOAD_TOO_LARGE / E_UNAVAILABLE） */
             error: string;
@@ -2123,6 +2595,8 @@ export interface components {
             user: components["schemas"]["PKUser"];
             /** Format: date-time */
             expires_at: string;
+            /** @description 会话建立即轮换后的新 CSRF token，与本响应 Set-Cookie 的 ploykit_csrf 同值。三个会话建立端点（verify-code / register / login）均携带；后续写操作直接用它带 X-CSRF-Token，无需再 GET /config 换新。 */
+            csrf_token?: string;
         };
         ExpiresAtResponse: {
             /** Format: date-time */
@@ -2224,9 +2698,7 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "admin" | "member";
-            /**
-             * @description Effective permission keys of the requesting user's role in this workspace (override row if present, otherwise built-in defaults; owner gets the full catalog)
-             */
+            /** @description Effective permission keys of the requesting user's role in this workspace (override row if present, otherwise built-in defaults; owner gets the full catalog) */
             role_perms: string[];
         };
         Member: {
@@ -2352,6 +2824,21 @@ export interface components {
         Subscription: {
             plan_code: string;
             orders: components["schemas"]["Order"][];
+            /**
+             * Format: date-time
+             * @description 用户取消请求受理时间（LC-4/R5，RFC3339）；null = 无待处理取消
+             */
+            cancel_requested_at?: string | null;
+            /**
+             * Format: date-time
+             * @description 当前已付费周期期末（workspace.plan_expires_at）；null = 永久/手工套餐
+             */
+            renews_at?: string | null;
+            /**
+             * @description 订阅渠道声明的取消时序（LC-4 Caps；未声明的 canceller 渠道按 period_end 兜底）；null = 无渠道订阅/渠道未注册/渠道无取消器（运营队列形态）
+             * @enum {string|null}
+             */
+            cancel_timing?: "immediate" | "period_end" | null;
         };
         SSOConfigRequest: {
             /** @description IdP 基址（自动 discovery .well-known/openid-configuration） */
@@ -2681,6 +3168,8 @@ export interface components {
              * @enum {string}
              */
             mail_mode?: "smtp" | "dev";
+            /** @description 编译期链接的 ploykit 模块版本（经 Go build info 读取；`go run` 等无模块元数据的运行形态为空串=未知——消费方必须按"unknown"处理而非当作版本号） */
+            framework_version?: string;
             /** @description 站点公告（空=无横幅） */
             banner_text?: string;
             /**
@@ -2711,6 +3200,102 @@ export interface components {
             acquired: number;
             idle: number;
             total: number;
+        };
+        DevLogEntry: {
+            /** Format: date-time */
+            time: string;
+            /** @description slog 级别数值（0=info 4=warn 8=error，负数为 debug） */
+            level: number;
+            message: string;
+            request_id?: string;
+            attrs?: {
+                key: string;
+                value: string;
+            }[];
+        };
+        DevLogEntries: {
+            /** @description 精确取回时的请求 id；尾窗模式为空串 */
+            request_id: string;
+            entries: components["schemas"]["DevLogEntry"][];
+        };
+        DevJobSummary: {
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            queue: string;
+            state: string;
+            tags?: string[];
+            attempt: number;
+            max_attempts: number;
+            /** Format: date-time */
+            scheduled_at: string;
+            /** Format: date-time */
+            finalized_at?: string;
+            errors?: {
+                /** Format: date-time */
+                at: string;
+                error: string;
+                trace_id?: string;
+            }[];
+        };
+        DevJobList: {
+            jobs: components["schemas"]["DevJobSummary"][];
+        };
+        DevJobDetail: components["schemas"]["DevJobSummary"] & {
+            /** @description 任务参数载荷（river job args 原样 JSON） */
+            args: Record<string, never>;
+        };
+        DevDoctorReport: {
+            ok: boolean;
+            duration_ms: number;
+            checks: {
+                name: string;
+                summary: string;
+                pass: boolean;
+                detail: string;
+                fix_hint?: string;
+            }[];
+        };
+        /** @description 渠道配置卡（GET /api/admin/billing/channels 与 PUT 响应共用；BC-6 API 契约） */
+        BillingChannelCard: {
+            name: string;
+            /** @description 渠道实例当前已构建且密钥齐 */
+            configured: boolean;
+            /** @description 如 MER_x1***x12；未配置为「未配置」 */
+            key_masked: string;
+            webhook_configured: boolean;
+            capabilities: {
+                /** @description 目录型（需预注册商品）vs 临时定价型 */
+                catalog_based?: boolean;
+                supports_cancel_url?: boolean;
+                display_order?: number;
+                /** @description 空=不声明限制 */
+                currencies?: string[];
+            };
+            /** @description 适配器自描述表单字段（后台一页自助配置，第四渠道零 UI 改动） */
+            schema: {
+                /** @description 同时是 billing_channel.<name>.<field> 设置键 */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "secret" | "select";
+                required: boolean;
+                help?: string;
+                /** @description select 字段候选；非 select 为 null */
+                options?: {
+                    value: string;
+                    label: string;
+                }[] | null;
+            }[];
+            /** @description text=实际值；secret=已设则 "__SET__" 否则 ""（绝不回传密钥本体） */
+            values: {
+                [key: string]: string;
+            };
+            /**
+             * @description 有 billing_channel.<name>.* 库键=db；无库键但渠道已建=env；未配置=空串
+             * @enum {string}
+             */
+            config_source: "db" | "env" | "";
         };
     };
     responses: {
@@ -3267,16 +3852,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 当前用户资料 */
+            /** @description 已登录=当前用户资料；匿名={"authenticated": false} */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PKUser"];
+                    "application/json": components["schemas"]["PKUser"] | {
+                        /** @enum {boolean} */
+                        authenticated: false;
+                    };
                 };
             };
-            401: components["responses"]["Unauthenticated"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -3387,6 +3974,174 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    mfaStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MFA 状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled?: boolean;
+                        pending?: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    mfaEnroll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 注册载荷（密钥仅此一次返回明文） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        otpauth_uri: string;
+                        /** @description base32（无填充）密钥 */
+                        secret: string;
+                        issuer: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    mfaEnable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 认证器 6 位码 */
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 启用成功（备份码仅此一次返回） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        backup_codes?: string[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    mfaDisable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已关闭 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    mfaRegenerateBackupCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 新备份码 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        backup_codes?: string[];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    verifyMFA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 6 位 TOTP 或一次性备份码（不区分大小写、连字符可选） */
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 验证成功（当前会话已盖 MFA 戳） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        mfa_confirmed_at?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             429: components["responses"]["RateLimited"];
             default: components["responses"]["DefaultError"];
         };
@@ -4201,6 +4956,34 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    userCancelSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 取消受理结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                        /** @enum {string} */
+                        outcome?: "cancelled" | "period_end" | "operator_pending";
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     billingUsagePreview: {
         parameters: {
             query?: never;
@@ -4339,6 +5122,8 @@ export interface operations {
             query?: {
                 /** @description 条数（非整数或 >100 拒绝 400；≤0 由服务层静默归一为缺省 20——不按违约 400） */
                 limit?: number;
+                /** @description 可选的工作区作用域过滤（F8）——缺省返回用户全部收件箱（框架 bell 语义）；携带则只返回该工作区的通知（写入时带 workspace 维度的产品收件箱）。非法 uuid 拒绝 400 */
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -4362,7 +5147,10 @@ export interface operations {
     };
     notificationBadge: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 可选的工作区作用域过滤（F8）——缺省返回用户全部收件箱（框架 bell 语义）；携带则只返回该工作区的通知（写入时带 workspace 维度的产品收件箱）。非法 uuid 拒绝 400 */
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5379,6 +6167,44 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    adminUpdatePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    currency: string;
+                    /** @description 展示序（ORDER BY sort_no），任意整数 */
+                    sort_no: number;
+                    /** @description 配额/价格 KV（-1 = 不限；键 `^[a-z][a-z0-9_]{0,63}$`） */
+                    limits: {
+                        [key: string]: number;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description 编辑后的套餐视图（与 GET /api/admin/plans 的 plans 行同形） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+            400: components["responses"]["DefaultError"];
+            404: components["responses"]["DefaultError"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     adminListOrders: {
         parameters: {
             query?: {
@@ -5623,6 +6449,309 @@ export interface operations {
             /** @description 未配置密钥 E_CHANNEL_NOT_CONFIGURED / 不支持测试 E_CHANNEL_TEST_UNSUPPORTED */
             400: components["responses"]["DefaultError"];
             /** @description 渠道侧连接失败 */
+            502: components["responses"]["DefaultError"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminListCancelRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 取消请求列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["CancelRequestView"][];
+                    };
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminLegalCompliance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 合规对账报告（AdminComplianceCard 信封：missing_keys/legal_config/checks） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description 未填写的 legal_* 必填键红灯列表（空数组=配置完整） */
+                        missing_keys: {
+                            key: string;
+                            description: string;
+                        }[];
+                        /** @description 法务主体配置现状（legal_* 键解析值；空串=未填写） */
+                        legal_config: {
+                            entity_name: string;
+                            jurisdiction: string;
+                            processor_name: string;
+                            billing_model: string;
+                        };
+                        /** @description 承诺对账清单（manual=框架无法自动判定的人工项） */
+                        checks: {
+                            id: string;
+                            label: string;
+                            /** @enum {string} */
+                            status: "ok" | "warn" | "manual";
+                            detail?: string;
+                        }[];
+                    };
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    reacceptLegalDoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    doc_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已记录 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminLegalAcceptancesByUser: {
+        parameters: {
+            query: {
+                user_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 接受记录列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["LegalAcceptance"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminListBillingChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 渠道卡列表（DisplayOrder 升序；未注册渠道无卡） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        channels?: components["schemas"]["BillingChannelCard"][];
+                    };
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminUpdateBillingChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fields: {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description 更新后的渠道卡 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        channel?: components["schemas"]["BillingChannelCard"];
+                    };
+                };
+            };
+            /** @description 未知渠道字段/非法 select 值/渠道不可后台编辑 */
+            400: components["responses"]["DefaultError"];
+            /** @description 渠道不存在 */
+            404: components["responses"]["DefaultError"];
+            /** @description 渠道设置存储未接线（无 sealer 时敏感写同样拒绝） */
+            503: components["responses"]["DefaultError"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminBillingCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 映射行 + plans 供前端拼未注册空位 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows?: {
+                            channel?: string;
+                            plan_code?: string;
+                            /** @enum {string} */
+                            interval?: "monthly" | "yearly";
+                            channel_product_id?: string;
+                            synced_price_cents?: number;
+                            /** @description 当前 DB plan 价（与 synced 比对提示待同步） */
+                            plan_price_cents?: number;
+                            /** Format: date-time */
+                            synced_at?: string | null;
+                        }[];
+                        plans?: {
+                            code?: string;
+                            name?: string;
+                            currency?: string;
+                            monthly_cents?: number;
+                            yearly_cents?: number;
+                        }[];
+                    };
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminRegisterChannelProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    plan_code: string;
+                    /** @enum {string} */
+                    interval: "monthly" | "yearly";
+                };
+            };
+        };
+        responses: {
+            /** @description 渠道商品 id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        channel_product_id?: string;
+                    };
+                };
+            };
+            /** @description 非目录渠道 E_CHANNEL_PRODUCT_UNSUPPORTED / 套餐该档位未定价 */
+            400: components["responses"]["DefaultError"];
+            /** @description 渠道或套餐不存在 */
+            404: components["responses"]["DefaultError"];
+            /** @description 渠道侧建品失败 */
+            502: components["responses"]["DefaultError"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    adminSyncChannelPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    plan_code: string;
+                    /** @enum {string} */
+                    interval: "monthly" | "yearly";
+                };
+            };
+        };
+        responses: {
+            /** @description 已同步的价（分） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        synced_price_cents?: number;
+                    };
+                };
+            };
+            /** @description 非目录渠道 E_CHANNEL_PRODUCT_UNSUPPORTED / 套餐该档位未定价 */
+            400: components["responses"]["DefaultError"];
+            /** @description 渠道/套餐/映射不存在 */
+            404: components["responses"]["DefaultError"];
+            /** @description 渠道侧改价失败 */
             502: components["responses"]["DefaultError"];
             default: components["responses"]["DefaultError"];
         };
@@ -6389,6 +7518,62 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    serveUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 存储键（local 后端即 /uploads/ URL 形态） */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 对象内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    uploadAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 上传成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        key?: string;
+                        url?: string;
+                        size?: number;
+                    };
+                };
+            };
+            413: components["responses"]["DefaultError"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getConfig: {
         parameters: {
             query?: never;
@@ -6475,6 +7660,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PoolStats"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    devLogs: {
+        parameters: {
+            query?: {
+                /** @description 按请求 id 精确取回；缺省为全局尾窗 */
+                request_id?: string;
+                /** @description 最低级别过滤（缺省全量） */
+                level?: "debug" | "info" | "warn" | "error";
+                /** @description 返回上限（保留最新的） */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 日志条目（时间正序） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevLogEntries"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    devJobList: {
+        parameters: {
+            query?: {
+                /** @description 任务状态；discarded = 重试耗尽 */
+                state?: "available" | "cancelled" | "completed" | "discarded" | "pending" | "retryable" | "running" | "scheduled";
+                queue?: string;
+                kind?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务摘要列表（id/kind/state/attempt/errors） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevJobList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    devJobGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 任务详情 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevJobDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    devJobRetry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已排入重试 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOK"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    devJobCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已取消 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOK"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    devDoctor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 自检结果（全部通过时 ok=true） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDoctorReport"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { routeTable } from '../routes'
 import {
   ESBUILD_ALIASES,
@@ -141,5 +141,78 @@ describe('plain-string search serialization', () => {
     expect(rawParseSearch(rawStringifySearch({ page: 7 }))).toEqual({ page: '7' })
     // the old default would have produced %22-quoted digits
     expect(rawStringifySearch({ mpage: 2 })).not.toContain('%22')
+  })
+})
+
+// 客户端水合同构回归（shuijing 生产实锤 2026-10-27：React #418 整树重建，
+// LCP 3.9s / element render delay 2.5s，预渲染 DOM 全作废）。走真
+// renderToString → jsdom hydrateRoot 全链，且分两阶段各自装载模块，精确
+// 模拟生产的不对称：SSR 阶段 mock '@tanstack/router-core/isServer' 为
+// server 变体（= renderx ESBUILD_ALIASES 的效果），客户端阶段用真实（client
+// 变体）模块。断言无水合恢复错误、服务端的 Suspense 标记注释被原地接管
+// （整树重建的签名 = 注释节点清零）。失配机理与修复见 router-tanstack.tsx
+// TanstackRouterMount 内 [hydration parity] 注释（fragility register）。
+describe('客户端水合同构（#418 整树重建回归）', () => {
+  it('SSR(aliased) HTML 经 hydrateRoot 接管：无恢复错误、服务端注释标记保留', async () => {
+    const { renderToString: ssr } = await import('react-dom/server')
+    const { hydrateRoot } = await import('react-dom/client')
+
+    function Home2() {
+      return <div>home-content</div>
+    }
+
+    // —— SSR 阶段：isServer=server 变体（模拟 renderx 沙箱别名）——
+    vi.resetModules()
+    vi.doMock('@tanstack/router-core/isServer', () => ({ isServer: true }))
+    const ssrMod = await import('../router-tanstack')
+    const routesMod = await import('../routes')
+    const ssrTable = routesMod.routeTable(
+      { '/': { component: Home2, render: 'static' } },
+      ssrMod.tanstackAssembler(),
+    )
+    ssrMod.setTanstackSsrLocation('/')
+    const html = ssr(ssrTable.routes())
+    // Outlet 根路由的唯一边界标记必须在（单对 = 无多余 Matches 边界）
+    expect(html).toContain('<!--$-->')
+
+    // —— 客户端阶段：真实 client 变体模块（无 mock）——
+    vi.doUnmock('@tanstack/router-core/isServer')
+    vi.resetModules()
+    const clientMod = await import('../router-tanstack')
+    const clientRoutesMod = await import('../routes')
+    const clientTable = clientRoutesMod.routeTable(
+      { '/': { component: Home2, render: 'static' } },
+      clientMod.tanstackAssembler(),
+    )
+
+    document.body.innerHTML = `<div id="root">${html}</div>`
+    const rootEl = document.getElementById('root') as HTMLElement
+
+    const recoverable: string[] = []
+    const consoleErrors: string[] = []
+    const errSpy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => {
+      consoleErrors.push(a.map(String).join(' '))
+    })
+    try {
+      const root = hydrateRoot(rootEl, clientTable.routes(), {
+        onRecoverableError: (err: unknown) => recoverable.push(String(err)),
+      })
+      await new Promise((r) => setTimeout(r, 60))
+
+      // 水合成功：不出现「Hydration failed」/「#418」恢复错误
+      const allErrors = [...recoverable, ...consoleErrors].join('\n')
+      expect(allErrors).not.toContain('Hydration failed')
+      expect(allErrors).not.toContain('#418')
+
+      // 服务端 DOM 被接管而非重建：Suspense 标记注释仍在原地
+      const comments: string[] = []
+      const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_COMMENT)
+      while (walker.nextNode()) comments.push(walker.currentNode.nodeValue ?? '')
+      expect(comments).toContain('$')
+
+      root.unmount()
+    } finally {
+      errSpy.mockRestore()
+    }
   })
 })

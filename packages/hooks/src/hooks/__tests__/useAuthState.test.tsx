@@ -43,6 +43,14 @@ describe('useAuthState（无 Provider 可用）', () => {
     expect(result.current.error).toBeNull()
   })
 
+  it('200 {authenticated:false} → user 为 null（0.9.3 匿名新形态，服务端不再 401）', async () => {
+    fetchMock.mockResolvedValueOnce({ authenticated: false })
+    const { result } = renderHook(() => useAuthState(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.user).toBeNull()
+    expect(result.current.error).toBeNull()
+  })
+
   it('500 → error 透传（非 401 不吞）', async () => {
     const { ApiError } = await import('@ploykit/client')
     fetchMock.mockRejectedValueOnce(new ApiError(500, 'boom'))

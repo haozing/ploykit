@@ -451,19 +451,28 @@ paths:
     get:
       operationId: getMe
       tags: [session]
-      summary: 当前用户
+      summary: 当前用户（匿名探测 200）
       description: |
-        模拟会话（管理员 impersonation 签发）额外透出 impersonated_by
-        （发起管理员 userID，ADR 0008）；普通会话无此字段。
+        只读登录态探测。「未登录」是正常答案而非错误状态：匿名返回
+        200 {"authenticated": false}（浏览器网络层把 401 记成硬错误且无法被
+        fetch 抑制，应用壳的每访客探测曾对 Best Practices 审计全站亮红——
+        2026-10-27 改）。已登录返回 PKUser（扁平），模拟会话（管理员
+        impersonation 签发）额外透出 impersonated_by（发起管理员 userID，
+        ADR 0008）；普通会话无此字段。
       responses:
         '200':
-          description: 当前用户资料
+          description: '已登录=当前用户资料；匿名={"authenticated": false}'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PKUser'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
+                oneOf:
+                  - $ref: '#/components/schemas/PKUser'
+                  - type: object
+                    required: [authenticated]
+                    properties:
+                      authenticated:
+                        type: boolean
+                        enum: [false]
         default:
           $ref: '#/components/responses/DefaultError'
     patch:

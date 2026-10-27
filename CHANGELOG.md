@@ -9,6 +9,61 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.19.0] — 2026-10-27
+
+Hydration parity + anonymous login probe. Go (`identity/adapters/http`) +
+npm (`@ploykit/runtime` 0.9.1, `@ploykit/hooks` 0.9.3, `@ploykit/client`
+0.7.7 types-only; `@ploykit/ui` 2.6.0 unchanged — skipped by release.yml).
+
+### Fixed
+- **runtime (TanStack adapter)**: client hydration rebuilt the entire
+  server-rendered tree (minified React error #418), silently voiding the
+  runtime benefit of prerendered HTML — FCP/LCP waited for the full JS
+  chain instead of adopting the server DOM (measured live on shuijing:
+  LCP 3.9s with a 2.5s element render delay on a page whose TTFB was
+  30ms). Mechanism, pinned to @tanstack/react-router 1.170.45: `Matches`
+  renders `MatchesInner` bare on the server (`isServer` true via the
+  renderx `ESBUILD_ALIASES` swap) but wraps it in an extra root
+  `<Suspense>` on the client, so the two sides shared only the root
+  Outlet's single `<!--$-->` pair; the client's second boundary found no
+  matching server marker and React 19 discarded the whole tree. Fix:
+  `TanstackRouterMount` now sets the instance property `router.ssr =
+  { manifest: undefined }` (the same shape TanStack's own `hydrate()`
+  assigns; `Matches` gates its Suspense branch on `router.ssr`, NOT on
+  `options.ssr` — the module-level `isServer=false` short-circuits the
+  options path on the client). Assigned on both SSR and client mounts so
+  same-module test environments are also isomorphic. Side-effect surface
+  enumerated for 1.170.45 (`canWrapInSuspense` root-route parity,
+  `MatchInner` pending branch unreachable under `populateSync`'s forced
+  `success`, `Scripts`/`HeadContent` manifest readers never rendered by
+  the framework). Regression test renders through the real
+  `renderToString` → jsdom `hydrateRoot` chain with the isServer module
+  mocked to the server variant for the SSR pass (mirroring the renderx
+  alias) — red/green verified: without the fix the test fails with
+  "Hydration failed" and zero comment nodes left in the container (the
+  whole-tree-rebuild signature); with it the server's Suspense markers
+  survive in place.
+- **hooks**: `useAuthState` and `PloykitProvider`'s `AuthLayer` probe
+  shared duplicated `/auth/me` normalization; both now use one
+  `fetchMeNullable()` helper (also exported) that normalizes BOTH the new
+  `200 {"authenticated":false}` body and the legacy `401` to `null`.
+
+### Changed
+- **BREAKING-ish (called out per house rule), identity**: `GET /auth/me`
+  for anonymous callers now returns `200 {"authenticated": false}`
+  instead of `401`. "Not logged in" is a normal answer to a read-only
+  login probe, not an error state: every anonymous page load fires this
+  probe from app chrome (`useAuthState`, `AuthLayer`), and a 401 is a
+  hard browser-network error that fetch cannot suppress — Best Practices
+  audits ("Browser errors were logged to the console") flagged every
+  anonymous visitor (shuijing production, 2026-10-27). The authenticated
+  response body is byte-identical (flat `PKUser`, `impersonated_by`
+  unchanged); mutating endpoints (`PATCH`/`DELETE /auth/me`, logout)
+  still return 401. `@ploykit/hooks` ≥ 0.9.3 accepts both shapes, so
+  ploykit-based products are unaffected; direct API consumers that used
+  401 as their anonymous signal must switch to the body flag
+  (`openapi.yaml` getMe documents the union).
+
 ## [0.18.1] — 2026-10-26
 
 Catalog-product fallback fix (billing). Go-only (`billing/app`,

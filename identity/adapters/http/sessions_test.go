@@ -189,6 +189,23 @@ func TestMeRoute(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 		assert.NotContains(t, w.Body.String(), "impersonated_by", "普通会话不得出现模拟标记字段")
 	})
+
+	t.Run("匿名 200 authenticated:false（meOptional，不再 401 污染浏览器 console）", func(t *testing.T) {
+		f := newFakeRepo(app.User{ID: "u-admin", Email: "a@example.com", Status: "active"})
+		w := doJSON(t, newSessionMux(f), http.MethodGet, "/auth/me", nil, nil)
+		require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+		var body struct {
+			Authenticated bool `json:"authenticated"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body), "body: %s", w.Body.String())
+		assert.False(t, body.Authenticated)
+	})
+
+	t.Run("PATCH /auth/me 匿名仍 401（变更类端点不受 meOptional 影响）", func(t *testing.T) {
+		f := newFakeRepo(app.User{ID: "u1", Email: "u1@example.com", Status: "active"})
+		w := doJSON(t, newSessionMux(f), http.MethodPatch, "/auth/me", map[string]any{"display_name": "x"}, nil)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
 }
 
 func TestDeleteMeRoute(t *testing.T) {

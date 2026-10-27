@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, setWorkspaceIdProvider } from '@ploykit/client'
+import { fetchMeNullable } from '../hooks/useAuthState'
 import type {
   APIUser, APIWorkspace, APISubscription, APIOrder, APIPlan,
 } from '@ploykit/client'
@@ -208,11 +209,7 @@ function AuthLayer({ children }: { children: ReactNode }) {
   
   const meQ = useQuery({
     queryKey: queryKeys.me,
-    queryFn: () =>
-      api.get<PKUser | null>('/auth/me').catch((err: unknown) => {
-        if (err instanceof ApiError && err.status === 401) return null
-        throw err
-      }),
+    queryFn: fetchMeNullable,
   })
 
   // 登录态门控（2026-10-25 上游 issue #2）：/auth/me 探针确认登录后才拉工作区

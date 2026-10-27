@@ -177,6 +177,30 @@ type meResponse struct {
 	ImpersonatedBy string `json:"impersonated_by,omitempty"`
 }
 
+// anonymousMe 是 GET /auth/me 对匿名访客的响应体（见 meOptional）。
+type anonymousMe struct {
+	Authenticated bool `json:"authenticated"`
+}
+
+// meOptional: GET /auth/me 的挂载入口——「未登录」对只读的登录态探测是正常
+// 答案而非错误状态，匿名返回 200 {"authenticated":false} 而非 401。
+//
+// 动机：应用壳（SiteNav/marketing header 的 useAuthState、PloykitProvider 的
+// AuthLayer 探针）在每个匿名访客的页面加载都会 GET /auth/me；401 在浏览器
+// 网络层是硬错误，无法被 fetch 的 catch 抑制——Best Practices 审计
+// （"Browser errors were logged to the console"）对每个匿名访客亮红
+// （shuijing 生产实锤 2026-10-27）。已登录分支复用 me（响应形状不变，
+// impersonated_by 等扁平字段字节级兼容）；@ploykit/hooks ≥0.9.3 同时认
+// 200-authenticated:false 与 401 两种形态（版本偏差窗口兜底）。
+func (d Deps) meOptional(w http.ResponseWriter, r *http.Request) {
+	p := webx.PrincipalFromRequest(r)
+	if p == nil {
+		webx.WriteJSON(w, http.StatusOK, anonymousMe{Authenticated: false})
+		return
+	}
+	d.me(w, r, p)
+}
+
 func (d Deps) me(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
 	res, err := d.SessionsSvc.Me(r.Context(), p)
 	if err != nil {

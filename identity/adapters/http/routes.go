@@ -72,7 +72,9 @@ func Mount(mux webx.Router, d Deps) {
 	mux.HandleFunc("POST /auth/verify-email", d.handleVerifyEmail)
 
 	mux.HandleFunc("POST /auth/logout", d.requireAuthFunc(d.logout))
-	mux.HandleFunc("GET /auth/me", d.requireAuthFunc(d.me))
+	// GET /auth/me 走 meOptional：匿名 200 {authenticated:false}（见
+	// meOptional 注释）；变更类端点（PATCH/DELETE /auth/me）保持 401。
+	mux.HandleFunc("GET /auth/me", d.meOptional)
 	mux.HandleFunc("PATCH /auth/me", d.requireAuthFunc(d.updateMe))
 	mux.HandleFunc("DELETE /auth/me", webx.RequireHuman(d.handle(d.deleteMe)))
 	mux.HandleFunc("POST /auth/change-password", webx.RequireHuman(d.handle(d.changePassword)))
