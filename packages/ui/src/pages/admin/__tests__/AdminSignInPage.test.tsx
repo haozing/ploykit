@@ -23,6 +23,10 @@ const mockedRefresh = vi.hoisted(() => vi.fn())
 vi.mock('../../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({ refresh: mockedRefresh, user: null, workspaces: [], loading: false, logout: vi.fn() }),
 }))
+// useSignInFlow 读 /config 判断是否要求 Turnstile token（默认未配置 → 零感知）
+vi.mock('../../../../../hooks/src/hooks/useSiteConfig', () => ({
+  useSiteConfig: () => ({ data: undefined }),
+}))
 
 const locState = vi.hoisted(() => ({ state: null as unknown }))
 vi.mock('../../../router', () => ({

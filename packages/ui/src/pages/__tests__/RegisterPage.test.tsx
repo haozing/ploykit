@@ -19,11 +19,19 @@ vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
 vi.mock('../../../../hooks/src/hooks/useSiteConfig', () => ({
   useSiteConfig: () => ({ data: { allow_signup: '1' } }),
 }))
+// Turnstile 接线后注册走 lib/turnstile → apiFetch（useApi().post 不收自定义头；
+// 无 site key 时与 api.post 行为一致）。ApiError 保留真实实现。
+const mockedApiFetch = vi.hoisted(() => vi.fn())
+vi.mock('@ploykit/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ploykit/client')>()
+  return { ...actual, apiFetch: mockedApiFetch }
+})
 
 const STRONG_PW = 'Abcdef1234!'
 
 beforeEach(() => {
   mockedPost.mockReset().mockResolvedValue({ user: { id: 'u1' }, expires_at: '2026-01-01T00:00:00Z' })
+  mockedApiFetch.mockReset().mockResolvedValue({ user: { id: 'u1' }, expires_at: '2026-01-01T00:00:00Z' })
   mockedRefresh.mockReset().mockResolvedValue(undefined)
 })
 
@@ -50,7 +58,7 @@ describe('RegisterPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
 
     expect(await screen.findByText('需包含大写/小写/数字/符号中的至少三类')).toBeInTheDocument()
-    expect(mockedPost).not.toHaveBeenCalled()
+    expect(mockedApiFetch).not.toHaveBeenCalled()
   })
 
   it('有效提交 → POST /auth/register 携带正确 payload 并触发 onSuccess', async () => {
@@ -59,11 +67,14 @@ describe('RegisterPage', () => {
     fillValidForm()
     fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
 
-    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
-    expect(mockedPost).toHaveBeenCalledWith('/auth/register', {
-      email: 'user@example.com',
-      password: STRONG_PW,
-      display_name: '小明',
+    await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
+    expect(mockedApiFetch).toHaveBeenCalledWith('/auth/register', {
+      method: 'POST',
+      body: {
+        email: 'user@example.com',
+        password: STRONG_PW,
+        display_name: '小明',
+      },
     })
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
     expect(mockedRefresh).toHaveBeenCalledTimes(1)
@@ -77,8 +88,8 @@ describe('RegisterPage', () => {
     
     fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
 
-    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
-    const payload = mockedPost.mock.calls[0][1] as Record<string, unknown>
+    await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
+    const payload = mockedApiFetch.mock.calls[0][1].body as Record<string, unknown>
     expect('display_name' in payload).toBe(false)
     expect(payload.email).toBe('user@example.com')
     expect(payload.password).toBe(STRONG_PW)
@@ -92,8 +103,8 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText('昵称（可选）'), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
 
-    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
-    const payload = mockedPost.mock.calls[0][1] as Record<string, unknown>
+    await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
+    const payload = mockedApiFetch.mock.calls[0][1].body as Record<string, unknown>
     expect('display_name' in payload).toBe(false)
   })
 
@@ -104,16 +115,19 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText('昵称（可选）'), { target: { value: '  小明  ' } })
     fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
 
-    await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
-    expect(mockedPost).toHaveBeenCalledWith('/auth/register', {
-      email: 'user@example.com',
-      password: STRONG_PW,
-      display_name: '小明',
+    await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
+    expect(mockedApiFetch).toHaveBeenCalledWith('/auth/register', {
+      method: 'POST',
+      body: {
+        email: 'user@example.com',
+        password: STRONG_PW,
+        display_name: '小明',
+      },
     })
   })
 
   it('注册失败展示后端错误文案且不跳转', async () => {
-    mockedPost.mockRejectedValueOnce(new Error('该邮箱已被注册'))
+    mockedApiFetch.mockRejectedValueOnce(new Error('该邮箱已被注册'))
     const onSuccess = vi.fn()
     render(<RegisterPage onSuccess={onSuccess} />)
     fillValidForm()
@@ -124,7 +138,7 @@ describe('RegisterPage', () => {
   })
 
   it('RE2-3：重复邮箱（ApiError "email already registered"）映射为中文提示，不直出英文', async () => {
-    mockedPost.mockRejectedValueOnce(new ApiError(409, 'E_CONFLICT', 'email already registered'))
+    mockedApiFetch.mockRejectedValueOnce(new ApiError(409, 'E_CONFLICT', 'email already registered'))
     const onSuccess = vi.fn()
     render(<RegisterPage onSuccess={onSuccess} />)
     fillValidForm()

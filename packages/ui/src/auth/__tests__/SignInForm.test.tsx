@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import type { ReactNode } from 'react'
 import { SignInForm } from '../SignInForm'
@@ -22,6 +22,20 @@ const mockedPost = vi.hoisted(() => vi.fn())
 vi.mock('../../../../hooks/src/hooks/useApi', () => ({
   useApi: () => ({ post: mockedPost, get: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() }),
 }))
+// Turnstile 接线后发码走 lib/turnstile → apiFetch（X-Turnstile-Token 头通道；
+// 密码登录仍走 api.post）。ApiError 等保留真实实现。
+const mockedApiFetch = vi.hoisted(() => vi.fn())
+vi.mock('@ploykit/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ploykit/client')>()
+  return { ...actual, apiFetch: mockedApiFetch }
+})
+// useSignInFlow 读 /config 判断是否要求 Turnstile token（默认未配置 → 零感知）
+const siteCfgState = vi.hoisted(() => ({
+  data: undefined as { turnstile_site_key?: string } | undefined,
+}))
+vi.mock('../../../../hooks/src/hooks/useSiteConfig', () => ({
+  useSiteConfig: () => ({ data: siteCfgState.data }),
+}))
 const mockedRefresh = vi.hoisted(() => vi.fn())
 vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({ refresh: mockedRefresh, user: null, workspaces: [], loading: false, logout: vi.fn() }),
@@ -42,8 +56,12 @@ beforeAll(async () => {
 beforeEach(() => {
   loginMock.submit.mockReset().mockResolvedValue({ ok: true })
   mockedPost.mockReset().mockResolvedValue({ user: { id: 'u1' }, expires_at: '2026-01-01T00:00:00Z' })
+  mockedApiFetch.mockReset().mockResolvedValue(undefined)
   mockedRefresh.mockReset().mockResolvedValue(undefined)
   locState.state = null
+  siteCfgState.data = undefined
+  delete window.turnstile
+  document.querySelectorAll('script').forEach((s) => s.remove())
 })
 
 function renderForm(props: Parameters<typeof SignInForm>[0], wrapper?: (n: ReactNode) => ReactNode) {
@@ -78,7 +96,10 @@ describe('SignInForm flow="tabs"（老形态，显式启用）', () => {
     fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: '发送' }))
     await waitFor(() =>
-      expect(mockedPost).toHaveBeenCalledWith('/auth/send-code', { email: 'user@example.com' }),
+      expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
+        method: 'POST',
+        body: { email: 'user@example.com' },
+      }),
     )
     expect(await screen.findByRole('button', { name: /重发（60s）/ })).toBeDisabled()
 
@@ -120,7 +141,10 @@ describe('SignInForm email-first（渐进披露）', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送' }))
 
     await waitFor(() =>
-      expect(mockedPost).toHaveBeenCalledWith('/auth/send-code', { email: 'user@example.com' }),
+      expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
+        method: 'POST',
+        body: { email: 'user@example.com' },
+      }),
     )
     const codeInput = await screen.findByLabelText('验证码')
     fireEvent.change(codeInput, { target: { value: '654321' } })
@@ -230,6 +254,84 @@ describe('SignInForm OAuth 槽位', () => {
   it('不传 providers 不渲染第三方登录区块', () => {
     const { container } = renderForm({})
     expect(container.querySelector('a[href^="/auth/oauth/"]')).toBeNull()
+  })
+})
+
+describe('SignInForm × Turnstile（验证码发码路径，密码路径不挂）', () => {
+  /** 安装 window.turnstile mock 并让已注入的 api.js「加载完成」。 */
+  function bootTurnstile() {
+    let seq = 0
+    const api = {
+      render: vi.fn(() => `w${++seq}`),
+      reset: vi.fn(),
+      remove: vi.fn(),
+    }
+    window.turnstile = api
+    const script = document.getElementById('ploykit-turnstile-api') as HTMLScriptElement
+    act(() => {
+      script.dispatchEvent(new Event('load'))
+    })
+    return api
+  }
+
+  it('site key 存在：token 未就绪禁用发送；拿到 token 后发码带 X-Turnstile-Token 头', async () => {
+    siteCfgState.data = { turnstile_site_key: '1x00000000000000000000AA' }
+    renderForm({})
+
+    // widget 挂载 + api.js 注入，但用户尚未完成挑战 → 发送禁用
+    expect(screen.getByTestId('turnstile-widget')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
+    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled()
+
+    // 挑战通过 → 解禁 → 发码带一次性 token 头
+    const turnstile = bootTurnstile()
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    act(() => turnstile.render.mock.calls[0][1].callback('tok-send-1'))
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    await waitFor(() =>
+      expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
+        method: 'POST',
+        body: { email: 'user@example.com' },
+        headers: { 'X-Turnstile-Token': 'tok-send-1' },
+      }),
+    )
+    // 发码成功即消费 token：widget 重置、重发按钮回到禁用（等新挑战）
+    await waitFor(() => expect(turnstile.reset).toHaveBeenCalledTimes(1))
+    expect(await screen.findByRole('button', { name: /重发（60s）/ })).toBeDisabled()
+  })
+
+  it('未配置 site key：无 widget、发送行为与接线前一致（不带 token 头）', async () => {
+    siteCfgState.data = {}
+    renderForm({})
+    expect(screen.queryByTestId('turnstile-widget')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    await waitFor(() =>
+      expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
+        method: 'POST',
+        body: { email: 'user@example.com' },
+      }),
+    )
+    expect(mockedApiFetch.mock.calls[0][1].headers).toBeUndefined()
+  })
+
+  it('密码路径不挂 widget：切换到密码表单后 widget 卸载，登录不带 token 头', async () => {
+    siteCfgState.data = { turnstile_site_key: 'sk' }
+    renderForm({})
+    expect(screen.getByTestId('turnstile-widget')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
+    await screen.findByLabelText('密码')
+    expect(screen.queryByTestId('turnstile-widget')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'a@b.co' } })
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'pw-123456' } })
+    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith('/auth/login', { email: 'a@b.co', password: 'pw-123456' }),
+    )
+    expect(mockedApiFetch).not.toHaveBeenCalled()
   })
 })
 

@@ -2,6 +2,7 @@ import { Button } from '../components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Spinner } from '../components/ui/spinner'
 import { SignInCodeErrors, SignInCodeField, SignInEmailField, SignInPasswordForm } from './sign-in-parts'
+import { TurnstileWidget } from './TurnstileWidget'
 import type { SignInFlow } from './useSignInFlow'
 
 /**
@@ -28,6 +29,13 @@ export default function SignInFormTabs({ flow }: { flow: SignInFlow }) {
         <form onSubmit={flow.handleCodeSubmit} className="space-y-4 pt-2">
           <SignInEmailField flow={flow} />
           <SignInCodeField flow={flow} />
+          {/* Turnstile 只护发码（验证码 Tab 的发送/重发按钮），密码 Tab 不挂。 */}
+          <TurnstileWidget
+            ref={flow.turnstileRef}
+            onToken={flow.setTurnstileToken}
+            onExpire={flow.clearTurnstileToken}
+            onError={(msg) => flow.setSendError(msg)}
+          />
           <SignInCodeErrors flow={flow} />
           <Button type="submit" className="w-full" disabled={flow.loading || !flow.email || !flow.code}>
             {flow.loading ? (

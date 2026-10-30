@@ -46,7 +46,8 @@ const KNOWN_CODES: Record<string, string> = {
   E_MALFORMED_RESPONSE: '服务返回了无法识别的响应，请稍后重试；若持续出现请联系平台管理员',
   
   E_VALIDATION: '请求参数有误，请检查填写内容后重试',
-  
+  E_TURNSTILE: '人机验证未通过，请重新完成验证后再试',
+
   E_INVALID_CRON: 'Cron 表达式格式有误（应为 5 段：分 时 日 月 周），请检查后重试',
   E_INVALID_TZ: '时区无效，请填写 IANA 时区名（如 Asia/Shanghai）',
   

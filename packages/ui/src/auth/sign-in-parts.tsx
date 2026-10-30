@@ -132,7 +132,13 @@ export function SignInResendButton({ flow }: { flow: SignInFlow }) {
   return (
     <Button
       type="button" variant="outline" size="sm" onClick={() => void flow.handleSendCode()}
-      disabled={flow.sending || flow.cooldown > 0 || !flow.email}
+      disabled={
+        flow.sending ||
+        flow.cooldown > 0 ||
+        !flow.email ||
+        // Turnstile 启用时，token（发码一次性消费）没就绪不允许重发。
+        (flow.turnstileRequired && !flow.turnstileToken)
+      }
     >
       {flow.sendButtonLabel}
     </Button>

@@ -1,6 +1,6 @@
 {
   "name": "@ploykit/ui",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -34,6 +34,7 @@
     "tailwind.css"
   ],
   "peerDependencies": {
+    "@ploykit/hooks": "^0.9.0",
     "@tanstack/react-query": "^5.0.0",
     "@tanstack/react-router": "^1.170.0",
     "react": "^19.0.0",
@@ -43,7 +44,6 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@ploykit/client": "^0.7.4",
-    "@ploykit/hooks": "^0.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.4.0",

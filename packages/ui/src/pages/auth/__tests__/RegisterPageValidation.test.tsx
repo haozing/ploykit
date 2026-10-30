@@ -12,12 +12,17 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
  */
 
 const post = vi.fn()
+const apiFetch = vi.hoisted(() => vi.fn())
 
-vi.mock('@ploykit/client', () => ({
-  api: { post: (...args: unknown[]) => post(...args), get: vi.fn(async () => ({})) },
-  apiFetch: vi.fn(),
-  isApiError: () => false,
-}))
+vi.mock('@ploykit/client', async (importOriginal) => {
+  // ApiError 保留真实实现（lib/api-error 的 instanceof 链路依赖它）
+  const actual = await importOriginal<typeof import('@ploykit/client')>()
+  return {
+    ...actual,
+    api: { post: (...args: unknown[]) => post(...args), get: vi.fn(async () => ({})) },
+    apiFetch,
+  }
+})
 vi.mock('@ploykit/hooks', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@ploykit/hooks')
   return {
@@ -37,7 +42,8 @@ import { RegisterPage } from '../RegisterPage'
 describe('RegisterPage：非法输入由 zod 拦截，不发请求', () => {
   beforeEach(() => {
     post.mockReset()
-    post.mockResolvedValue({ user: { id: 'u1' }, expires_at: '' })
+    apiFetch.mockReset()
+    apiFetch.mockResolvedValue({ user: { id: 'u1' }, expires_at: '' })
   })
 
   it('全空提交 → 邮箱与密码的文案都出现，且未调用 API', async () => {
@@ -46,7 +52,7 @@ describe('RegisterPage：非法输入由 zod 拦截，不发请求', () => {
 
     expect(await screen.findByText('请输入邮箱')).toBeInTheDocument()
     expect(await screen.findByText('密码至少 10 位')).toBeInTheDocument()
-    expect(post).not.toHaveBeenCalled()
+    expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('合法邮箱 + 弱密码（仅小写）→ 触发复杂度文案，且未调用 API', async () => {
@@ -58,19 +64,24 @@ describe('RegisterPage：非法输入由 zod 拦截，不发请求', () => {
     expect(
       await screen.findByText('需包含大写/小写/数字/符号中的至少三类'),
     ).toBeInTheDocument()
-    expect(post).not.toHaveBeenCalled()
+    expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('合法输入 → 走到 API（证明拦截没有过度）', async () => {
-    render(<RegisterPage />)
+    render(<RegisterPage onSuccess={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'Abcdef12345!' } })
     fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-    expect(post).toHaveBeenCalledWith('/auth/register', {
-      email: 'user@example.com',
-      password: 'Abcdef12345!',
+    // Turnstile 接线后注册走 lib/turnstile → apiFetch（无 site key 时与
+    // api.post 行为一致：同样的 POST + body，不带额外头）。
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1))
+    expect(apiFetch).toHaveBeenCalledWith('/auth/register', {
+      method: 'POST',
+      body: {
+        email: 'user@example.com',
+        password: 'Abcdef12345!',
+      },
     })
   })
 })

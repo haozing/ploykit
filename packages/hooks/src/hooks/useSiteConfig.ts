@@ -23,6 +23,8 @@ export interface SiteConfig {
   allowed_domains?: string;
   
   mail_mode?: string;
+
+  turnstile_site_key?: string;
 }
 
 export function useSiteConfig() {

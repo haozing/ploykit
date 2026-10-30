@@ -1,10 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from '../router'
 import { useLogin } from '@ploykit/hooks'
 import { useApi } from '@ploykit/hooks'
 import { useAuth } from '@ploykit/hooks'
+import { useSiteConfig } from '@ploykit/hooks'
 import { apiErrorMessage } from '../lib/api-error'
+import { postTurnstileProtected, turnstileSiteKey } from '../lib/turnstile'
 import { useKitLabels } from '../labels/kit-labels'
+import type { TurnstileWidgetHandle } from './TurnstileWidget'
 
 /**
  * 登录表单的全部状态与行为（不含任何 JSX）。
@@ -68,6 +71,16 @@ export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback
   const api = useApi()
   const { refresh } = useAuth()
 
+  // Turnstile：/auth/send-code 是邮件成本端点，/config 带回非空 site key 时
+  // 要求 token（未配置的产品零感知）。验证码提交（/auth/verify-code）与密码
+  // 登录（/auth/login）不挂——服务端不校验，不加摩擦。widget 实例与 token
+  // 状态放在 flow 里：三种形态渲染器（email-first / tabs / modal 复用）经
+  // flow 对象统一拿到 ref 与回调，不用各自再接一份。
+  const { data: siteCfg } = useSiteConfig()
+  const turnstileRequired = turnstileSiteKey(siteCfg) !== null
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null)
+
   const from = loginRedirectTarget(
     (useLocation().state as { from?: unknown } | null)?.from,
     redirectFallback,
@@ -95,14 +108,26 @@ export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback
 
   const handleSendCode = async () => {
     if (!email || sending || cooldown > 0) return
+    // Turnstile 启用时没拿到 token 不发（按钮本身也被禁用，这里是行为兜底）。
+    if (turnstileRequired && !turnstileToken) return
     setSending(true)
     setSendError(null)
     try {
-      await api.post('/auth/send-code', { email })
+      await postTurnstileProtected('/auth/send-code', { email }, turnstileToken)
       setCodeSent(true)
       setCooldown(SEND_COOLDOWN_S)
+      // token 一次性：发码成功即被服务端消费。冷却后重发需要新挑战，
+      // 现在就清掉旧值并重置 widget（而非等到重发失败）。
+      if (turnstileRequired) {
+        setTurnstileToken(null)
+        turnstileRef.current?.reset()
+      }
     } catch (e) {
       setSendError(apiErrorMessage(e, '验证码发送失败，请稍后重试'))
+      if (turnstileRequired) {
+        setTurnstileToken(null)
+        turnstileRef.current?.reset()
+      }
     } finally {
       setSending(false)
     }
@@ -147,7 +172,7 @@ export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback
     email, setEmail,
     code, setCode,
     codeSent, setCodeSent,
-    sending, sendError, cooldown,
+    sending, sendError, setSendError, cooldown,
     loading, codeError,
     password, setPassword,
     pwLoading, pwError,
@@ -155,6 +180,11 @@ export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback
     handleCodeSubmit,
     handlePasswordSubmit,
     sendButtonLabel,
+    turnstileRequired,
+    turnstileToken,
+    turnstileRef,
+    setTurnstileToken,
+    clearTurnstileToken: () => setTurnstileToken(null),
   }
 }
 

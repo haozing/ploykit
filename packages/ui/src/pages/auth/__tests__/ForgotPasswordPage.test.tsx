@@ -4,19 +4,26 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ForgotPasswordPage } from '../ForgotPasswordPage'
 
-const mockedPost = vi.hoisted(() => vi.fn())
-vi.mock('@ploykit/client', () => ({
-  api: {
-    post: mockedPost,
-    get: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-  },
-}))
+// Turnstile 接线后本页改走 lib/turnstile → apiFetch（usePasswordReset 的
+// requestReset 不支持自定义头）；无 site key 时行为与 api.post 等价。
+const mockedApiFetch = vi.hoisted(() => vi.fn())
+vi.mock('@ploykit/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ploykit/client')>()
+  return {
+    ...actual,
+    apiFetch: mockedApiFetch,
+  }
+})
+// 页面读 /config 判断是否挂 Turnstile widget（默认未配置 → 零感知）。
+// 注：pages/auth/__tests__ 比 auth/__tests__ 深一层，源文件相对路径易错，
+// 这里直接 mock '@ploykit/hooks' 包（importActual 保真 + 覆写 useSiteConfig）。
+vi.mock('@ploykit/hooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ploykit/hooks')>()
+  return { ...actual, useSiteConfig: () => ({ data: undefined }) }
+})
 
 beforeEach(() => {
-  mockedPost.mockReset().mockResolvedValue(undefined)
+  mockedApiFetch.mockReset().mockResolvedValue(undefined)
 })
 
 describe('ForgotPasswordPage', () => {
@@ -28,8 +35,9 @@ describe('ForgotPasswordPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送重置链接' }))
 
     await waitFor(() =>
-      expect(mockedPost).toHaveBeenCalledWith('/auth/forgot-password', {
-        email: 'user@example.com',
+      expect(mockedApiFetch).toHaveBeenCalledWith('/auth/forgot-password', {
+        method: 'POST',
+        body: { email: 'user@example.com' },
       }),
     )
   })
@@ -47,7 +55,7 @@ describe('ForgotPasswordPage', () => {
   })
 
   it('请求失败 → 展示错误（不伪装成已发送）', async () => {
-    mockedPost.mockRejectedValueOnce(new Error('发送过于频繁'))
+    mockedApiFetch.mockRejectedValueOnce(new Error('发送过于频繁'))
     render(<ForgotPasswordPage />)
     fireEvent.change(screen.getByLabelText('邮箱'), {
       target: { value: 'user@example.com' },
@@ -63,5 +71,11 @@ describe('ForgotPasswordPage', () => {
     expect(
       screen.getByRole('button', { name: '发送重置链接' }),
     ).toBeDisabled()
+  })
+
+  it('未配置 Turnstile → 不渲染 widget、脚本零注入（产品零感知）', () => {
+    render(<ForgotPasswordPage />)
+    expect(screen.queryByTestId('turnstile-widget')).toBeNull()
+    expect(document.getElementById('ploykit-turnstile-api')).toBeNull()
   })
 })

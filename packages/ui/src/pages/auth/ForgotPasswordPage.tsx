@@ -1,12 +1,15 @@
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { AuthShell } from '../../layouts/AuthShell'
 import { FormField } from '../../components/FormField'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Spinner } from '../../components/ui/spinner'
-import { usePasswordReset } from '@ploykit/hooks'
+import { TurnstileWidget, type TurnstileWidgetHandle } from '../../auth/TurnstileWidget'
+import { useSiteConfig } from '@ploykit/hooks'
+import { apiErrorMessage } from '../../lib/api-error'
+import { postTurnstileProtected, turnstileSiteKey } from '../../lib/turnstile'
 
 export interface ForgotPasswordPageProps {
   
@@ -22,7 +25,14 @@ export function ForgotPasswordPage({
   sentHint = '如果该邮箱存在，重置链接已发送，请查收邮箱。',
   backPath = '/login',
 }: ForgotPasswordPageProps) {
-  const { requestReset } = usePasswordReset()
+  const { data: siteCfg } = useSiteConfig()
+  // Turnstile：/auth/forgot-password 是邮件成本端点，/config 带回非空
+  // site key 时挂 widget 并要求 token（未配置的产品零感知，行为不变）。
+  // 这里不再走 usePasswordReset().requestReset——它不支持自定义请求头，
+  // 改经 lib/turnstile 的 postTurnstileProtected（同一 apiFetch plumbing）。
+  const turnstileRequired = turnstileSiteKey(siteCfg) !== null
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null)
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -34,10 +44,15 @@ export function ForgotPasswordPage({
     setError(null)
     setLoading(true)
     try {
-      await requestReset(email)
+      await postTurnstileProtected('/auth/forgot-password', { email }, turnstileToken)
       setSent(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发送失败，请稍后重试')
+      setError(apiErrorMessage(err, '发送失败，请稍后重试'))
+      // token 一次性：失败（含 400 E_TURNSTILE）后重置出题，不复用旧值。
+      if (turnstileRequired) {
+        setTurnstileToken(null)
+        turnstileRef.current?.reset()
+      }
     } finally {
       setLoading(false)
     }
@@ -67,7 +82,18 @@ export function ForgotPasswordPage({
               />
             </FormField>
 
-            <Button type="submit" className="w-full" disabled={loading || !email}>
+            <TurnstileWidget
+              ref={turnstileRef}
+              onToken={setTurnstileToken}
+              onExpire={() => setTurnstileToken(null)}
+              onError={(msg) => setError(msg)}
+            />
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || !email || (turnstileRequired && !turnstileToken)}
+            >
               {loading ? (
                 <>
                   <Spinner aria-hidden="true" />

@@ -42,6 +42,16 @@ type Deps struct {
 	// Nil = creation needs only a human session.
 	PATCreateGuard func(http.Handler) http.Handler
 
+	// BotGuard, when non-nil, wraps the bot-facing auth routes (register /
+	// send-code / forgot-password / send-verification) in the product's
+	// human verification — e.g. webx.Turnstile (Cloudflare). On
+	// send-verification it sits OUTSIDE RequireHuman: a bot must be judged
+	// before it can elicit a session-verdict. login / verify-code /
+	// reset-password stay unguarded (per-IP rate limiting is their defense;
+	// adding the guard there is product policy, one line away). Nil = the
+	// capability is absent, behavior unchanged.
+	BotGuard func(http.Handler) http.Handler
+
 	OAuthAppURL string
 
 	TrustedProxies []*net.IPNet
@@ -53,11 +63,26 @@ func Routes(d Deps) http.Handler {
 	return webx.Authenticate(&d.AuthCfg, d.Sessions, d.PATs)(mux)
 }
 
+// botGuard applies d.BotGuard when the capability is present; nil passes the
+// handler through untouched — products that mount no human verification must
+// observe zero difference (the framework compatibility floor).
+func (d Deps) botGuard(h http.Handler) http.Handler {
+	if d.BotGuard == nil {
+		return h
+	}
+	return d.BotGuard(h)
+}
+
 func Mount(mux webx.Router, d Deps) {
 
-	mux.HandleFunc("POST /auth/send-code", d.handleSendCode)
+	// Bot-facing entry points (register / send-code / forgot-password /
+	// send-verification) take the product's human-verification guard via
+	// Deps.BotGuard — OUTERMOST on send-verification (a bot is judged before
+	// it can elicit a session verdict). Pattern literals stay inline: the
+	// check_api route scanner greps them off these calls.
+	mux.Handle("POST /auth/send-code", d.botGuard(http.HandlerFunc(d.handleSendCode)))
 	mux.HandleFunc("POST /auth/verify-code", d.handleVerifyCode)
-	mux.HandleFunc("POST /auth/register", d.handleRegister)
+	mux.Handle("POST /auth/register", d.botGuard(http.HandlerFunc(d.handleRegister)))
 	mux.HandleFunc("POST /auth/login", d.handleLogin)
 
 	mux.HandleFunc("GET /auth/oauth/{provider}/start", d.handleOAuthStart)
@@ -66,9 +91,9 @@ func Mount(mux webx.Router, d Deps) {
 	mux.HandleFunc("GET /auth/fed/start", d.handleFedStart)
 	mux.HandleFunc("GET /auth/fed/callback", d.handleFedCallback)
 
-	mux.HandleFunc("POST /auth/forgot-password", d.handleForgotPassword)
+	mux.Handle("POST /auth/forgot-password", d.botGuard(http.HandlerFunc(d.handleForgotPassword)))
 	mux.HandleFunc("POST /auth/reset-password", d.handleResetPassword)
-	mux.HandleFunc("POST /auth/send-verification", webx.RequireHuman(d.handle(d.sendVerification)))
+	mux.Handle("POST /auth/send-verification", d.botGuard(webx.RequireHuman(d.handle(d.sendVerification))))
 	mux.HandleFunc("POST /auth/verify-email", d.handleVerifyEmail)
 
 	mux.HandleFunc("POST /auth/logout", d.requireAuthFunc(d.logout))

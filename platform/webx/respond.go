@@ -137,6 +137,13 @@ const (
 	// gates inspected must never diverge (GitLab #22435 class). 401, and
 	// logged as a security signal, never silently disambiguated.
 	CodeAuthTransportConflict = "E_AUTH_TRANSPORT_CONFLICT"
+
+	// CodeTurnstile is the human-verification rejection (the Turnstile
+	// middleware): the request carried no X-Turnstile-Token, or Cloudflare
+	// siteverify answered success=false. 400; the client re-runs the
+	// challenge and retries. Only ever produced while the middleware is
+	// ENABLED — a CF-side outage fails open (log.Error), never as this code.
+	CodeTurnstile = "E_TURNSTILE"
 )
 
 func ErrUnauthenticated(w http.ResponseWriter, msg string) {

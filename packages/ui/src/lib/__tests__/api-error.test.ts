@@ -31,6 +31,11 @@ describe('apiErrorMessage', () => {
       .toContain('无法识别的响应')
   })
 
+  it('E_TURNSTILE（人机验证 400）→ 重新验证指引，不透传英文原文', () => {
+    expect(apiErrorMessage(new ApiError(400, 'E_TURNSTILE', 'turnstile verification failed')))
+      .toBe('人机验证未通过，请重新完成验证后再试')
+  })
+
   it('X4/B-settings-2：服务端中文 details 优先于英文 message', () => {
     expect(apiErrorMessage(new ApiError(400, 'E_VALIDATION', 'invalid settings key/value', '必须是 0..100000 的整数（0 = 关闭限流）')))
       .toBe('必须是 0..100000 的整数（0 = 关闭限流）')

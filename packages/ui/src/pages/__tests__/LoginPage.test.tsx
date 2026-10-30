@@ -22,6 +22,16 @@ const mockedRefresh = vi.hoisted(() => vi.fn())
 vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
   useAuth: () => ({ refresh: mockedRefresh, user: null, workspaces: [], loading: false, logout: vi.fn() }),
 }))
+// useSignInFlow 读 /config 判断是否要求 Turnstile token（默认未配置 → 零感知）
+vi.mock('../../../../hooks/src/hooks/useSiteConfig', () => ({
+  useSiteConfig: () => ({ data: undefined }),
+}))
+// Turnstile 接线后发码走 lib/turnstile → apiFetch（密码登录仍走 api.post）
+const mockedApiFetch = vi.hoisted(() => vi.fn())
+vi.mock('@ploykit/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ploykit/client')>()
+  return { ...actual, apiFetch: mockedApiFetch }
+})
 
 const locState = vi.hoisted(() => ({ state: null as unknown }))
 vi.mock('../../router', () => ({
@@ -37,6 +47,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mockedPost.mockReset().mockResolvedValue({ user: { id: 'u1' }, expires_at: '2026-01-01T00:00:00Z' })
+  mockedApiFetch.mockReset().mockResolvedValue(undefined)
   mockedRefresh.mockReset().mockResolvedValue(undefined)
   locState.state = null
 })
@@ -132,13 +143,16 @@ describe('LoginPage 验证码发送（P3-26）', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送' }))
 
     await waitFor(() =>
-      expect(mockedPost).toHaveBeenCalledWith('/auth/send-code', { email: 'user@example.com' }),
+      expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
+        method: 'POST',
+        body: { email: 'user@example.com' },
+      }),
     )
     expect(await screen.findByRole('button', { name: /重发（60s）/ })).toBeDisabled()
   })
 
   it('发送失败 → 展示错误（role=alert），不误置"已发送"形态', async () => {
-    mockedPost.mockRejectedValueOnce(new Error('发送过于频繁'))
+    mockedApiFetch.mockRejectedValueOnce(new Error('发送过于频繁'))
     renderLogin({})
     fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: '发送' }))

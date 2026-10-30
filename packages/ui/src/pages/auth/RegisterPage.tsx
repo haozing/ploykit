@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 // zod/mini：注册页是整站唯一带校验 schema 的公开页，全量 zod 会把整个
 // classic API 面（约 39KB gzip）拖进每个访客的首包。mini 只带核心校验器 +
 // 显式 check 组合，同样的规则体积约为其十分之一；错误对象结构一致
@@ -12,11 +12,12 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { FieldDescription, FieldSeparator } from '../../components/ui/field';
 import { Spinner } from '../../components/ui/spinner';
-import { useApi } from '@ploykit/hooks';
+import { TurnstileWidget, type TurnstileWidgetHandle } from '../../auth/TurnstileWidget';
 import { useAuth } from '@ploykit/hooks';
 import { useSiteConfig } from '@ploykit/hooks';
 import { useZodForm } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
+import { postTurnstileProtected, turnstileSiteKey } from '../../lib/turnstile';
 import { passwordKinds, passwordSchema } from '../../lib/password-schema';
 import { toast } from '../../components/toast';
 import type { PKUser } from '@ploykit/hooks';
@@ -54,13 +55,16 @@ export function RegisterPage({
   title = '创建账号',
   description,
 }: RegisterPageProps) {
-  const api = useApi();
   const { refresh } = useAuth();
-  
-  
-  
+
   const { data: siteCfg } = useSiteConfig();
   const inviteOnly = siteCfg?.allow_signup === '0';
+  // Turnstile：/config 带回非空 site key 才启用（未配置的产品整个 widget
+  // render null，表单行为与本批之前完全一致）。token 一次性，提交失败后
+  // reset 重取。
+  const turnstileRequired = turnstileSiteKey(siteCfg) !== null;
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -73,27 +77,29 @@ export function RegisterPage({
     setServerError(null);
     setSubmitting(true);
     try {
-      
-      
       const body: { email: string; password: string; display_name?: string } = {
         email: values.email,
         password: values.password,
       }
       if (values.display_name?.trim()) body.display_name = values.display_name.trim()
-      await api.post<{ user: PKUser; expires_at: string }>(
+      await postTurnstileProtected<{ user: PKUser; expires_at: string }>(
         '/auth/register',
         body,
+        turnstileToken,
       )
       await refresh();
       toast.success('注册成功');
       if (onSuccess) onSuccess();
       else window.location.href = '/app';
     } catch (e) {
-      
-      
       const msg = apiErrorMessage(e, '注册失败，请稍后重试');
       setServerError(msg);
       toast.error(msg);
+      // token 一次性：无论何种失败（含 400 E_TURNSTILE）都不复用，重置出题。
+      if (turnstileRequired) {
+        setTurnstileToken(null);
+        turnstileRef.current?.reset();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +182,14 @@ export function RegisterPage({
             </p>
           )}
 
-          <Button type="submit" disabled={submitting}>
+          <TurnstileWidget
+            ref={turnstileRef}
+            onToken={setTurnstileToken}
+            onExpire={() => setTurnstileToken(null)}
+            onError={(msg) => setServerError(msg)}
+          />
+
+          <Button type="submit" disabled={submitting || (turnstileRequired && !turnstileToken)}>
             {submitting ? (
               <>
                 <Spinner aria-hidden="true" />

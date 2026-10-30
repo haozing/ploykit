@@ -9,6 +9,57 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.21.0] — 2026-10-30
+
+Cloudflare Turnstile human verification, framework-native and
+admin-configurable per product (Go module + npm packages both change in this
+tag). Threat model and product wiring audited in
+shuijing `docs/audit-cloudflare-turnstile-2026-10-30.md`; design doc
+`docs/turnstile-integration-design-2026-10-30.md` (as corrected by the audit).
+
+### Added
+- **webx: Turnstile verification middleware** (`platform/webx/turnstile.go`)
+  — enabled only when the product-supplied provider returns both a site key
+  and a secret key (either missing = fully disabled, zero siteverify calls,
+  30s TTL config cache). Token is read from the `X-Turnstile-Token` header
+  (`webx.HeaderTurnstileToken`); a missing token or an explicit
+  `success:false` verdict rejects with `400 webx.CodeTurnstile`
+  (fail-closed on the verdict), while transport errors / timeouts / non-200 /
+  unparseable responses fail OPEN with `log.Error` — fail-closed there would
+  turn every Cloudflare outage window into "registration and password reset
+  are down site-wide". `remoteip` is resolved via `webx.ClientIPFrom(ctx)`
+  with a bare `webx.ClientIP(r)` fallback, and is omitted when unresolvable.
+  The token itself is never logged; `error-codes` go to debug.
+- **identity: optional `Deps.BotGuard` seam** — when non-nil, wraps
+  `POST /auth/register`, `POST /auth/send-code`,
+  `POST /auth/forgot-password` and `POST /auth/send-verification`
+  (outermost of the existing `RequireHuman` on send-verification). Nil = the
+  capability is absent, byte-identical behavior (products that do not wire
+  Turnstile are unaffected). login / verify-code / reset-password are
+  deliberately not guarded — the per-IP auth rate limit already covers
+  brute-force without adding login friction.
+- **@ploykit/ui: `TurnstileWidget` + auth form wiring** — renders `null` and
+  injects nothing when the site key is absent from the public `/config`
+  (unconfigured products are untouched); api.js is DOM-injected once per page
+  (id-guarded promise gate, StrictMode-stable), explicit
+  `turnstile.render`/`remove` lifecycle, `ref.reset()` for the one-time-token
+  retry flow. Wired into `RegisterPage`, `ForgotPasswordPage` and the
+  SignInForm code-tab path via a single header-injection point
+  (`postTurnstileProtected` → `apiFetch`, `X-Turnstile-Token`), with an
+  `E_TURNSTILE` human-readable message in `api-error.ts`.
+- **@ploykit/hooks: `SiteConfig.turnstile_site_key?: string`** — additive
+  type only.
+
+### Fixed
+- **@ploykit/ui: `@ploykit/hooks` moved from `dependencies` to
+  `peerDependencies`** — ui imports it in 53 files and it owns the
+  `PloykitProvider` React context; as a regular dependency, any future
+  version-range split between a product's hooks and ui's would install two
+  instances, making every `useContext` return null and white-screening the
+  whole app (this exact failure mode hit shuijing on 2026-10-17, invisible to
+  tsc/vitest/prerender). Peer-ization forces single-instance resolution at
+  the product layer. Consumers should declare `@ploykit/hooks` explicitly.
+
 ## [0.20.0] — 2026-10-27
 
 GA4 analytics wired in example, admin-configurable, site-wide (example-only

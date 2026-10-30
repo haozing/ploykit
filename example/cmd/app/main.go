@@ -849,6 +849,14 @@ func main() {
 		// the password step-up — GitHub's sudo-guarded 2FA settings shape.
 		// The window is product policy: explicit per mount site.
 		MFAChangeGuard: webx.RequireRecentAuth(15 * time.Minute),
+
+		// BotGuard (human verification) intentionally NOT wired here: example
+		// has no Turnstile keys and nil = capability absent (see
+		// docs/platform-api-index.md). A product wires it in one line:
+		//   BotGuard: webx.Turnstile(provider, nil, log)
+		// where provider reads the product's settings keys (both non-empty =
+		// enabled, 30s TTL hot-reload); it then guards register / send-code /
+		// forgot-password / send-verification.
 	}
 	// Strong-profile reference wiring (ADR 0005 restart / ADR 0013 batch 1):
 	// the destructive pair (workspace delete / transfer ownership) is gated

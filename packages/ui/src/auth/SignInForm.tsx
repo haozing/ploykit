@@ -22,6 +22,7 @@
 import { Suspense, lazy, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button'
 import { Spinner } from '../components/ui/spinner'
+import { TurnstileWidget } from './TurnstileWidget'
 import {
   SignInCodeErrors,
   SignInCodeField,
@@ -158,6 +159,15 @@ export function SignInForm({
           >
             <SignInEmailField flow={signIn} />
             {signIn.codeSent && <SignInCodeField flow={signIn} />}
+            {/* Turnstile 只护发码（邮件成本端点）：验证码提交/密码登录不挂。 */}
+            {!signIn.codeSent && (
+              <TurnstileWidget
+                ref={signIn.turnstileRef}
+                onToken={signIn.setTurnstileToken}
+                onExpire={signIn.clearTurnstileToken}
+                onError={(msg) => signIn.setSendError(msg)}
+              />
+            )}
             <SignInCodeErrors flow={signIn} />
             <Button
               type="submit"
@@ -165,7 +175,10 @@ export function SignInForm({
               disabled={
                 signIn.codeSent
                   ? signIn.loading || !signIn.email || !signIn.code
-                  : signIn.sending || signIn.cooldown > 0 || !signIn.email
+                  : signIn.sending ||
+                    signIn.cooldown > 0 ||
+                    !signIn.email ||
+                    (signIn.turnstileRequired && !signIn.turnstileToken)
               }
             >
               {signIn.codeSent ? (
