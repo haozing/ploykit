@@ -1,8 +1,11 @@
 package http
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/haozing/ploykit/identity/app"
 	"github.com/haozing/ploykit/platform/webx"
@@ -52,6 +55,12 @@ type Deps struct {
 	// capability is absent, behavior unchanged.
 	BotGuard func(http.Handler) http.Handler
 
+	// OAuthAppURL is where OAuth success/failure 302s land (the product's
+	// public origin). When OAuth is wired and this still points at loopback,
+	// Mount logs a warning — the shuijing 2026-10-31 deployment enabled
+	// Google login in production without setting it, sending successful
+	// logins to a dead localhost:5173 (the dev default had never been
+	// exercised because OAuth had never been enabled before).
 	OAuthAppURL string
 
 	TrustedProxies []*net.IPNet
@@ -73,7 +82,44 @@ func (d Deps) botGuard(h http.Handler) http.Handler {
 	return d.BotGuard(h)
 }
 
+// isLoopbackURL reports whether the given absolute URL targets the local
+// machine (localhost / 127.x / ::1 host). Unparseable or hostless input is
+// NOT loopback — the warning is for the specific "dev default survived"
+// misconfiguration, and a strange URL should not trip it.
+func isLoopbackURL(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" {
+		return false
+	}
+	h := strings.ToLower(strings.Trim(u.Hostname(), "[]"))
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return true
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
 func Mount(mux webx.Router, d Deps) {
+	// Boot-time sanity check (shuijing field report 2026-10-31): OAuth wired
+	// but the 302 landing URL is still loopback is almost always the dev
+	// default surviving into a real deployment — the FIRST OAuth login would
+	// silently redirect to a dead localhost. One warning per boot; local dev
+	// with OAuth credentials configured also sees it (harmless, and a fair
+	// reminder of where callbacks land). Deliberately not tied to
+	// OAuth.Names(): with a provider source the boot-time name list can be
+	// empty and fill in 30s later, so names would under-report.
+	if d.OAuth != nil && isLoopbackURL(d.OAuthAppURL) {
+		slog.Warn("identity: OAuth is enabled but OAuthAppURL points at loopback — "+
+			"OAuth success/failure will redirect there; if this is a production "+
+			"deployment set APP_URL to the public origin (dev: safe to ignore)",
+			"oauth_app_url", d.OAuthAppURL)
+	}
 
 	// Bot-facing entry points (register / send-code / forgot-password /
 	// send-verification) take the product's human-verification guard via

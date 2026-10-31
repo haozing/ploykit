@@ -9,6 +9,21 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+### Added
+- **identity: boot-time warning when OAuth is wired but `Deps.OAuthAppURL`
+  points at loopback** — OAuth success/failure 302s land on `OAuthAppURL`,
+  and a product that enables OAuth without setting `APP_URL` keeps the dev
+  default (`http://localhost:5173`), sending every successful login to a
+  dead localhost (shuijing production, 2026-10-31: first-ever OAuth enable
+  surfaced it because nothing else exercised the field). `Mount` now logs
+  one warning naming the URL and the fix; local dev with OAuth credentials
+  sees it too (harmless, a fair reminder of where callbacks land).
+  Deliberately NOT tied to `OAuth.Names()` — with a provider source the
+  boot-time list can be empty and fill in 30s later, so names would
+  under-report. Unparseable/hostless URLs never trip the check.
+
 ## [0.23.0] — 2026-10-31
 
 OAuth provider hot source + the admin-settings save fix it depends on
