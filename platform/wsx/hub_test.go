@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -540,17 +541,41 @@ func TestSlowConsumerEvicted(t *testing.T) {
 	}
 }
 
+// fakeMetrics is written by hub goroutines (register/unregister/evict call
+// Incr/Gauge) and read by the test goroutine inside Eventually conditions —
+// an unguarded map pair is a fatal "concurrent map read and map write" race
+// (CI 2026-10-31: the whole test binary died inside TestWSConnectionGauge's
+// second Eventually). All access goes through the mutex.
 type fakeMetrics struct {
+	mu     sync.Mutex
 	incr   map[string]int
 	gauges map[string]float64
 }
 
-func (f *fakeMetrics) Incr(name string) { f.incr[name]++ }
+func (f *fakeMetrics) Incr(name string) {
+	f.mu.Lock()
+	f.incr[name]++
+	f.mu.Unlock()
+}
 func (f *fakeMetrics) Gauge(name string, v float64) {
+	f.mu.Lock()
 	if f.gauges == nil {
 		f.gauges = map[string]float64{}
 	}
 	f.gauges[name] = v
+	f.mu.Unlock()
+}
+
+func (f *fakeMetrics) gaugeValue(name string) float64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.gauges[name]
+}
+
+func (f *fakeMetrics) incrValue(name string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.incr[name]
 }
 
 func TestWSConnectionGauge(t *testing.T) {
@@ -560,9 +585,9 @@ func TestWSConnectionGauge(t *testing.T) {
 	p := &webx.Principal{UserID: "u1", Source: webx.SourceSession}
 	_, url := newHubSrv(t, h, p)
 	c := dial(t, url)
-	require.Eventually(t, func() bool { return m.gauges["ws_connections"] == 1 }, 2*time.Second, 20*time.Millisecond)
+	require.Eventually(t, func() bool { return m.gaugeValue("ws_connections") == 1 }, 2*time.Second, 20*time.Millisecond)
 	_ = c.Close()
-	require.Eventually(t, func() bool { return m.gauges["ws_connections"] == 0 }, 3*time.Second, 50*time.Millisecond,
+	require.Eventually(t, func() bool { return m.gaugeValue("ws_connections") == 0 }, 3*time.Second, 50*time.Millisecond,
 		"connection gauge should return to zero after disconnect")
 }
 
@@ -582,7 +607,7 @@ func TestWSEvictionCounted(t *testing.T) {
 		h.Broadcast(context.Background(), scope, frame(t, "evict-"+strings.Repeat("b", i+1)+time.Now().Format("150405.000000000")))
 	}
 	require.Eventually(t, func() bool { return h.RoomSize(scope) == 0 }, 3*time.Second, 20*time.Millisecond)
-	assert.Equal(t, 1, m.incr["ws_evictions"], "eviction count exactly once (concurrent full-buffer collisions deduped by CAS)")
+	assert.Equal(t, 1, m.incrValue("ws_evictions"), "eviction count exactly once (concurrent full-buffer collisions deduped by CAS)")
 }
 
 // F16: the JS WsClient's send() encodes control frames with the fields nested

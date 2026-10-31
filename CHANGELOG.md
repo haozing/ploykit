@@ -9,6 +9,19 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [Unreleased]
+
+### Fixed
+- **wsx: fatal data race in the test fake's metrics** — `fakeMetrics` maps
+  were written by hub goroutines (register/unregister/evict) and read by the
+  test goroutine inside `require.Eventually` conditions with no lock; when the
+  scheduler interleaved them, the Go runtime's unrecoverable "concurrent map
+  read and map write" fatal killed the whole test binary (CI 2026-10-31,
+  run 41189360123: TestWSConnectionGauge died inside its second Eventually).
+  All access now goes through a mutex with snapshot getters. Test-only;
+  surfaced by the v0.22.0 push on a slower shared runner, latent since the
+  orkome ws batch.
+
 ## [0.22.0] — 2026-10-31
 
 Framework fixes from the shuijing backlog triage (`docs/issues-backlog-2026-10-31.md`
