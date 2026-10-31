@@ -25,6 +25,13 @@ Go-only patch. Boot-time guard from the same shuijing OAuth field report.
   Deliberately NOT tied to `OAuth.Names()` — with a provider source the
   boot-time list can be empty and fill in 30s later, so names would
   under-report. Unparseable/hostless URLs never trip the check.
+- **@ploykit/ui: `SignInForm`/`SignInModal` `renderOAuth?: ReactNode`** —
+  custom third-party sign-in block: when non-empty it REPLACES the default
+  `SignInOAuthBlock` (the generic "使用 X 登录" buttons rendered from the
+  `oauthProviders` array) and the「或使用邮箱」divider. Brands with official
+  mark buttons and non-Chinese copy self-render; second occurrence of the
+  need (shuijing login page hand-rolled it 2026-10-16, its sign-in modal
+  2026-10-31) = framework seam. Untouched behavior when omitted.
 
 ## [0.23.0] — 2026-10-31
 

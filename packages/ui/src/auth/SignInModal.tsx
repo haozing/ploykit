@@ -30,6 +30,12 @@ export interface SignInModalProps {
 
   oauthProviders?: OAuthProviderOption[]
 
+  /**
+   * 自定义第三方登录区（语义同 SignInForm.renderOAuth）：非空时整块替换
+   * 默认 OAuth 按钮区与分隔行。品牌化登录入口（官方 mark + 英文文案）用。
+   */
+  renderOAuth?: ReactNode
+
   enableFedLogin?: boolean
 
   /** 纯密码形态（语义同 SignInForm）。 */
@@ -72,6 +78,7 @@ export function SignInModal({
   resetPath,
   registerPath,
   oauthProviders = [],
+  renderOAuth,
   enableFedLogin = false,
   passwordOnly = false,
   onSuccess,
@@ -110,6 +117,7 @@ export function SignInModal({
           resetPath={resetPath}
           registerPath={registerPath}
           oauthProviders={oauthProviders}
+          renderOAuth={renderOAuth}
           enableFedLogin={enableFedLogin}
           passwordOnly={passwordOnly}
           onSuccess={handleSuccess}

@@ -49,6 +49,16 @@ export interface SignInFormProps {
   oauthProviders?: OAuthProviderOption[]
   enableFedLogin?: boolean
 
+  /**
+   * 自定义第三方登录区（ReactNode）：非空时**整块替换**默认的
+   * SignInOAuthBlock（oauthProviders 数组渲染的「使用 X 登录」按钮）与
+   * 其后的「或使用邮箱」分隔行——品牌化入口（官方 G/GitHub mark、英文
+   * 文案、自定义样式）由消费方自带，分隔行自己渲染。未传 = 现行为。
+   * shuijing 第二次出现该需求（登录页 2026-10-16 手工抑制 + 弹层
+   * 2026-10-31），第二次出现即框架缝的信号。
+   */
+  renderOAuth?: ReactNode
+
   /** 纯密码形态（企业内部工具）：直接给邮箱 + 密码，不渲染验证码与 Tab。 */
   passwordOnly?: boolean
 
@@ -90,6 +100,7 @@ export function SignInForm({
   registerPath = '/register',
   oauthProviders = [],
   enableFedLogin = false,
+  renderOAuth,
   passwordOnly = false,
   onSuccess,
   loginRedirectTarget: redirectFallback,
@@ -128,10 +139,15 @@ export function SignInForm({
         </div>
       )}
 
-      {/* 第三方登录在表单之上：一键登录是首选路径，邮箱表单是备选。 */}
-      <SignInOAuthBlock providers={oauthProviders} />
-      {oauthProviders.length > 0 && !passwordOnly && !passwordMode && (
-        <SignInOr>或使用邮箱</SignInOr>
+      {/* 第三方登录在表单之上：一键登录是首选路径，邮箱表单是备选。
+          renderOAuth 非空时整块替换默认 OAuth 区（含分隔行）。 */}
+      {renderOAuth ?? (
+        <>
+          <SignInOAuthBlock providers={oauthProviders} />
+          {oauthProviders.length > 0 && !passwordOnly && !passwordMode && (
+            <SignInOr>或使用邮箱</SignInOr>
+          )}
+        </>
       )}
 
       {passwordOnly ? (
