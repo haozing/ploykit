@@ -312,3 +312,81 @@ describe('CSRF self-heal 单飞与兜底刷新', () => {
     expect(isApiError(err, 'E_CSRF_RELOADING')).toBe(true)
   })
 })
+
+describe('错误分类 kind：基建故障不得混入业务文案路径', () => {
+  // shuijing field report: backend 504 E_TIMEOUT / Vite-proxy non-JSON 500
+  // surfaced as "这套参数暂时出不了方案" — callers had no first-class way to
+  // tell "fix your input" from "retry later". kind is that classification.
+
+  function errOf(p: Promise<unknown>): Promise<ApiError> {
+    return p.catch((e: unknown) => e as ApiError)
+  }
+
+  it('后端 504 E_TIMEOUT 信封 → kind=gateway（不是业务错）', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'E_TIMEOUT', message: 'request timeout' }, 504))
+    const err = await errOf(apiFetch('/api/x'))
+    expect(isApiError(err, 'E_TIMEOUT')).toBe(true)
+    expect(err.kind).toBe('gateway')
+  })
+
+  it('代理回非 JSON 500（Vite HTML 错误页）→ E_MALFORMED_RESPONSE → kind=gateway', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('<html>proxy error</html>', { status: 500, headers: { 'content-type': 'text/html' } }),
+    )
+    const err = await errOf(apiFetch('/api/x'))
+    expect(isApiError(err, 'E_MALFORMED_RESPONSE')).toBe(true)
+    expect(err.kind).toBe('gateway')
+  })
+
+  it('502/503 无论信封形态 → kind=gateway', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('bad gateway', { status: 502 }))
+    const err1 = await errOf(apiFetch('/api/x'))
+    expect(err1.kind).toBe('gateway')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'E_UNAVAILABLE', message: 'down' }, 503))
+    const err2 = await errOf(apiFetch('/api/x'))
+    expect(err2.kind).toBe('gateway')
+  })
+
+  it('客户端超时（status=0, E_TIMEOUT）→ kind=gateway', async () => {
+    fetchMock.mockImplementation(hangingFetch())
+    const err = await errOf(apiFetch('/api/x', { timeoutMs: 50 }))
+    expect(isApiError(err, 'E_TIMEOUT')).toBe(true)
+    expect(err.kind).toBe('gateway')
+  })
+
+  it('传输层失败（服务趴了，fetch 原生 TypeError）→ 包成 E_NETWORK，kind=network（不再是裸 TypeError）', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const err = await errOf(apiFetch('/api/x'))
+    expect(err).toBeInstanceOf(ApiError)
+    expect(isApiError(err, 'E_NETWORK')).toBe(true)
+    expect(err.kind).toBe('network')
+    expect(err.status).toBe(0)
+    expect(err.message).toContain('Failed to fetch')
+  })
+
+  it('timeoutMs=0 不限时分支的传输层失败同样包成 E_NETWORK', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const err = await errOf(apiFetch('/api/x', { timeoutMs: 0 }))
+    expect(isApiError(err, 'E_NETWORK')).toBe(true)
+  })
+
+  it('业务信封（400 E_VALIDATION / 409）→ kind=business', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'E_VALIDATION', message: 'bad' }, 400))
+    const err1 = await errOf(apiFetch('/api/x'))
+    expect(err1.kind).toBe('business')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'E_CONFLICT', message: 'state' }, 409))
+    const err2 = await errOf(apiFetch('/api/x'))
+    expect(err2.kind).toBe('business')
+  })
+
+  it('caller 中止 → E_ABORTED → kind=network', async () => {
+    fetchMock.mockImplementation(hangingFetch())
+    const ac = new AbortController()
+    setTimeout(() => ac.abort(new Error('user cancel')), 20)
+    const err = await errOf(apiFetch('/api/x', { signal: ac.signal, timeoutMs: 5000 }))
+    expect(isApiError(err, 'E_ABORTED')).toBe(true)
+    expect(err.kind).toBe('network')
+  })
+})

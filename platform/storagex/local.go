@@ -191,7 +191,7 @@ func (l *LocalBackend) Open(_ context.Context, key string) (io.ReadCloser, Objec
 // content sniffing and says so; a CORRUPT sidecar stays a hard error — that is
 // real metadata damage, not an absence.
 func (l *LocalBackend) objectFor(key, p string, f *os.File) (Object, error) {
-	mb, err := os.ReadFile(p+".meta.json")
+	mb, err := os.ReadFile(p + ".meta.json")
 	if errors.Is(err, os.ErrNotExist) {
 		return sniffObject(key, f)
 	}

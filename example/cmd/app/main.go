@@ -41,22 +41,22 @@ import (
 	"github.com/haozing/ploykit/authz"
 	authzpg "github.com/haozing/ploykit/authz/adapters/pgrepo"
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
-	"github.com/haozing/ploykit/identity"
-	legal "github.com/haozing/ploykit/legal"
-	legalhttp "github.com/haozing/ploykit/legal/adapters/http"
-	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
 	paypal "github.com/haozing/ploykit/billing/adapters/paypal"
+	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
 	sim "github.com/haozing/ploykit/billing/adapters/sim"
 	simhttp "github.com/haozing/ploykit/billing/adapters/sim/simhttp"
 	stripe "github.com/haozing/ploykit/billing/adapters/stripe"
 	waffo "github.com/haozing/ploykit/billing/adapters/waffo"
 	billingapp "github.com/haozing/ploykit/billing/app"
+	"github.com/haozing/ploykit/identity"
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
 	oauthgh "github.com/haozing/ploykit/identity/adapters/oauth/github"
 	oauthgoogle "github.com/haozing/ploykit/identity/adapters/oauth/googleoidc"
 	oidcfed "github.com/haozing/ploykit/identity/adapters/oauth/oidcfed"
 	identitypg "github.com/haozing/ploykit/identity/adapters/pgrepo"
 	identityapp "github.com/haozing/ploykit/identity/app"
+	legal "github.com/haozing/ploykit/legal"
+	legalhttp "github.com/haozing/ploykit/legal/adapters/http"
 	"github.com/haozing/ploykit/migrations"
 	bellog "github.com/haozing/ploykit/notify/adapters/bell"
 	emaildev "github.com/haozing/ploykit/notify/adapters/email/emaildev"
@@ -130,8 +130,8 @@ var ga4IDRe = regexp.MustCompile(`^G-[A-Za-z0-9]{4,32}$`)
 // env value stays live on every boot until an admin saves a DB row.
 func ga4KeySpec() settings.KeySpec {
 	return settings.KeySpec{
-		Key:   "ga4_measurement_id",
-		Env:   "GA4_MEASUREMENT_ID",
+		Key:         "ga4_measurement_id",
+		Env:         "GA4_MEASUREMENT_ID",
 		Description: "Google Analytics 4 Measurement ID（G- 开头，GA4 管理后台 → 数据流 → 网页流详情）：配置后全站页面注入 gtag.js 统计；清空 = 停用。注意 EEA 访客需自担同意横幅合规",
 		Validate: func(v string) error {
 			if v == "" {
@@ -550,9 +550,9 @@ func main() {
 		os.Exit(1)
 	}
 	legalMod, err := legal.Wire(legal.Config{
-		Pool:  pool,
-		Store: siteSettings,
-		Log:   log,
+		Pool:    pool,
+		Store:   siteSettings,
+		Log:     log,
 		Auditor: auditor,
 		ProcessorName: func() string {
 			if channels == nil {
@@ -1346,8 +1346,15 @@ func main() {
 
 	// /mcp joins /ws on the timeout exemption: MCP sessions (and tool calls
 	// over the streamable transport) outlive the 5s default — pitfall #1 of
-	// the non-browser mounting checklist.
-	chainInner := webx.TimeoutExcept(5*time.Second, "/ws", "/mcp")(
+	// the non-browser mounting checklist. Timeouts is the multi-tier form
+	// (longest prefix wins, 0 = fully exempt); products needing a middle tier
+	// (e.g. a 30s generation route) add entries here instead of nesting a
+	// second TimeoutExcept, whose outer cap can kill a handler that manages
+	// its own internal deadline.
+	chainInner := webx.Timeouts(5*time.Second, map[string]time.Duration{
+		"/ws":  0,
+		"/mcp": 0,
+	})(
 		webx.CORS([]string{frontendOrigin}, true)(
 			csrfMW(
 				webx.Recover(log)(

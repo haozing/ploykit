@@ -1,0 +1,55 @@
+# Normalize all text files to LF in the repository. Explicit eol pins keep
+# checkouts deterministic on every platform: Go tooling (gofmt), prettier and
+# shell scripts all expect LF, and Windows clones without these pins get
+# phantom "existing files unformatted" noise from gofmt -l (zijianfang field
+# report 2026-10-31: whole-repo gofmt -l flagged everything via CRLF).
+* text=auto
+
+# Source and config: LF everywhere, including Windows checkouts.
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.htm text eol=lf
+*.md text eol=lf
+*.mdx text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.svg text eol=lf
+*.map text eol=lf
+*.map.js text eol=lf
+
+# Windows-only scripts stay CRLF so cmd/PowerShell parse them natively.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binaries: never normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.wasm binary
+*.gz binary
+*.br binary
+*.zip binary
+
+# The attribute file itself stays LF (self-referential pin; silences the
+# "LF will be replaced by CRLF" warning under core.autocrlf=true).
+.gitattributes text eol=lf

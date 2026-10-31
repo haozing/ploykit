@@ -159,27 +159,27 @@ func CSRFConditional(cfg *CSRFConfig, secure bool) func(http.Handler) http.Handl
 		var inner http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r)
 		})
-	protected := func() http.Handler {
-		// gorilla applies its 12h default only for NEGATIVE MaxAge (0 = session
-		// cookie); an unset framework config must keep the historical 12h
-		// cookie, so map 0 → gorilla-default here and pass everything else
-		// through verbatim.
-		age := cfg.MaxAge
-		if age == 0 {
-			age = -1
-		}
-		return csrf.Protect(cfg.Key,
-			csrf.CookieName("ploykit_csrf"),
-			csrf.Path("/"),
-			csrf.Secure(secure), csrf.HttpOnly(true), csrf.SameSite(csrf.SameSiteLaxMode),
-			csrf.TrustedOrigins(trusted),
-			csrf.MaxAge(age),
+		protected := func() http.Handler {
+			// gorilla applies its 12h default only for NEGATIVE MaxAge (0 = session
+			// cookie); an unset framework config must keep the historical 12h
+			// cookie, so map 0 → gorilla-default here and pass everything else
+			// through verbatim.
+			age := cfg.MaxAge
+			if age == 0 {
+				age = -1
+			}
+			return csrf.Protect(cfg.Key,
+				csrf.CookieName("ploykit_csrf"),
+				csrf.Path("/"),
+				csrf.Secure(secure), csrf.HttpOnly(true), csrf.SameSite(csrf.SameSiteLaxMode),
+				csrf.TrustedOrigins(trusted),
+				csrf.MaxAge(age),
 
-			csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				writeCSRFError(w, r, trusted)
-			})),
-		)(inner)
-	}()
+				csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					writeCSRFError(w, r, trusted)
+				})),
+			)(inner)
+		}()
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, prefix := range cfg.ExemptPrefixes {
 				if strings.HasPrefix(r.URL.Path, prefix) {

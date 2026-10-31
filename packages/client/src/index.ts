@@ -9,7 +9,7 @@ export {
   DEFAULT_TIMEOUT_MS,
   __resetApiForTests,
 } from './api'
-export type { ApiFetchOptions } from './api'
+export type { ApiFetchOptions, ApiErrorKind } from './api'
 
 export { WsClient } from './ws'
 export type { WsFrame, WsStatus, FrameHandler, StatusHandler, WsClientOptions, ScopePrefix } from './ws'

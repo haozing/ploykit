@@ -61,9 +61,9 @@ func TestDisabledChannel_RejectsOperations(t *testing.T) {
 	// 三个可选操作面同款 E_CHANNEL_NOT_CONFIGURED(与 stripe 适配器
 	// errNotConfigured 同型)。
 	for name, call := range map[string]func() error{
-		"TestConnection":      func() error { return stub.TestConnection(ctx) },
-		"CancelSubscription":  func() error { return stub.CancelSubscription(ctx, "SUB_1") },
-		"CancelCheckout":      func() error { return stub.CancelCheckout(ctx, "cs_1") },
+		"TestConnection":     func() error { return stub.TestConnection(ctx) },
+		"CancelSubscription": func() error { return stub.CancelSubscription(ctx, "SUB_1") },
+		"CancelCheckout":     func() error { return stub.CancelCheckout(ctx, "cs_1") },
 	} {
 		require.ErrorAs(t, call(), &we, "%s must fail", name)
 		assert.Equal(t, http.StatusBadRequest, we.Status, name)

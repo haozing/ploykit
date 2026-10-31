@@ -266,7 +266,7 @@ func TestSetManyIntegration(t *testing.T) {
 	require.NoError(t, sealed.SetMany(ctx, map[string]string{
 		BillingChannelKeyPrefix + "waffo.merchant_id": "MER_1",
 		BillingChannelKeyPrefix + "waffo.private_key": "k-2",
-		KeyBannerText:                                 "批量",
+		KeyBannerText: "批量",
 	}, "ops@x.com"))
 	v, found, err := sealed.Get(ctx, BillingChannelKeyPrefix+"waffo.merchant_id")
 	require.NoError(t, err)
@@ -280,7 +280,7 @@ func TestSetManyIntegration(t *testing.T) {
 	// 无 sealer 写敏感键 → 整批拒绝，同批非敏感键也不得落库（seal 预检先行，
 	// 事务未开即拒绝）。用非播种键（smtp_host 不被 Bootstrap 播种）作探针。
 	err = bare.SetMany(ctx, map[string]string{
-		KeySMTPHost:                                     "should-not-land",
+		KeySMTPHost: "should-not-land",
 		BillingChannelKeyPrefix + "setmany.merchant_id": "MER_x",
 	}, "ops@x.com")
 	require.Error(t, err)

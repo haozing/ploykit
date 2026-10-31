@@ -9,6 +9,79 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.22.0] — 2026-10-31
+
+Framework fixes from the shuijing backlog triage (`docs/issues-backlog-2026-10-31.md`
+items ①–④; all four confirmed as genuine framework problems and fixed).
+Go module + npm packages both change in this tag (client 0.7.8, ui 2.7.1 —
+both patch: additive-only surface, and a client minor would tear the
+`^0.7.4` ranges ui/hooks declare and split the ApiError class into two
+instances).
+
+### Added
+- **webx: `Timeouts(base, overrides)`** — the multi-tier timeout middleware:
+  longest matching prefix wins, a zero override fully exempts that prefix
+  (no context deadline — the handler owns its time budget), unmatched paths
+  get base; fails fast (panic) at wiring time on `base <= 0` or a negative
+  override. `TimeoutExcept` remains the single-tier shorthand. Motivation
+  (shuijing ①): a three-tier policy (default 5s / generation 30s / negotiate
+  unlimited) previously required nesting two `TimeoutExcept` layers, and the
+  outer cap 504'd a negotiate route that still had its own 35s wall clock to
+  honor — the middleware silently killed a handler-managed deadline, a
+  semantics only visible by reading `timeout.go`. Example wiring swapped to
+  `Timeouts(5s, {"/ws": 0, "/mcp": 0})`; AGENTS.md mounting pitfall #1 and
+  docs/platform-api-index.md updated.
+- **@ploykit/client: `ApiError.kind`** — first-class error taxonomy
+  (`'business' | 'network' | 'gateway'`), derived from (status, code) in the
+  constructor so every throw site carries it: application answers are
+  `business` ("fix your input"), 502/503/504, `E_TIMEOUT`,
+  `E_MALFORMED_RESPONSE` and `E_CSRF_BOOTSTRAP` are `gateway` ("retry later"),
+  transport failures and aborts are `network`. Raw fetch rejections
+  (`TypeError("Failed to fetch")` — unclassifiable, shown verbatim to users)
+  are now wrapped as `ApiError(0, 'E_NETWORK')`. Motivation (shuijing ②):
+  e2e repeatedly caught a backend 504 or a Vite-proxy HTML 500 being shown as
+  "these parameters produce no plan" — callers had to reverse-engineer the
+  classification from scattered status/code checks and got it wrong for many
+  rounds. `ApiErrorKind` is exported from the package root; additive, no
+  call-site changes required.
+- **@ploykit/ui: `E_NETWORK` message mapping** — `网络连接失败，请检查网络后重试`
+  in `apiErrorMessage`'s KNOWN_CODES, so the newly wrapped transport errors
+  get actionable Chinese copy instead of the raw `Failed to fetch` English.
+- **`.gitattributes` (repo root + example/)** — `* text=auto` with LF pins
+  for Go/TS/JSON/YAML/SQL/sh sources and CRLF pins for `*.bat`/`*.cmd`/`*.ps1`;
+  binaries marked binary. The repository index is already all-LF, so this is
+  a pure no-op renormalization that makes Windows clones deterministic:
+  zijianfang (shuijing ④) saw whole-repo `gofmt -l` "existing files
+  unformatted" noise and LF→CRLF warnings on every `git add` because neither
+  ploykit nor the example template carried the pins. The example copy travels
+  with template clones, so products inherit the contract on day one.
+
+### Fixed
+- **quota: month-end flake in `TestRefreshWorker_RefreshesPeriodicGrants`** —
+  the seed used `AddDate(0,-1,0)` as "one month ago", which on a 31st absent
+  from the previous month rolls FORWARD into the current period (2026-10-31:
+  Sep 31 → Oct 1), so the seeded grant's period equals the current one and the
+  refresh predicate `period <> $1` never matches — the test failed for the
+  whole last day of any such month (reproduced on clean HEAD v0.21.0, i.e.
+  pre-existing, surfaced by this release's DB gate). The seed now constructs
+  the previous period's first day via `time.Date(y, m-1, 1, ...)` (month
+  normalization + day-1 are always valid). Production logic was correct;
+  test-only fix.
+- **repo: one-time gofmt pass over 22 files with real formatting drift** —
+  struct-field alignment and import ordering that had been invisible because
+  `gofmt -l` on Windows flagged EVERY file via CRLF; with line endings pinned
+  (see .gitattributes above) the real drift surfaced and is now clean
+  (`gofmt -l .` = 0). Mechanical only, no semantic changes.
+- **example: `routes_contract_test` is no longer structurally red for
+  template-cloned products** (shuijing ③): the test required
+  `../../../docs/openapi.yaml` (the ploykit monorepo root, three levels up)
+  and asserted the pinned route count BEFORE reading the file — a product
+  cloned from the example template fails both on day one, forever (zijianfang
+  carried a red `TestRuntimeRoutesMatchOpenAPI` for nine rounds). The spec is
+  now resolved FIRST from `<monorepo>/docs/openapi.yaml` or
+  `<product>/docs/openapi.yaml`, and the test skips with copy-the-spec-or-
+  delete guidance when neither exists.
+
 ## [0.21.0] — 2026-10-30
 
 Cloudflare Turnstile human verification, framework-native and

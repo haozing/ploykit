@@ -97,14 +97,14 @@ type AdminChannelCaps struct {
 }
 
 type AdminChannelCard struct {
-	Name              string                 `json:"name"`
-	Configured        bool                   `json:"configured"`
-	KeyMasked         string                 `json:"key_masked"`
-	WebhookConfigured bool                   `json:"webhook_configured"`
-	Capabilities      AdminChannelCaps       `json:"capabilities"`
-	Schema            []AdminFieldSpec       `json:"schema"`
-	Values            map[string]string      `json:"values"`
-	ConfigSource      string                 `json:"config_source"`
+	Name              string            `json:"name"`
+	Configured        bool              `json:"configured"`
+	KeyMasked         string            `json:"key_masked"`
+	WebhookConfigured bool              `json:"webhook_configured"`
+	Capabilities      AdminChannelCaps  `json:"capabilities"`
+	Schema            []AdminFieldSpec  `json:"schema"`
+	Values            map[string]string `json:"values"`
+	ConfigSource      string            `json:"config_source"`
 }
 
 type AdminChannelCatalogRow struct {

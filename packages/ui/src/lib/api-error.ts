@@ -40,6 +40,7 @@ const KNOWN_CODES: Record<string, string> = {
   E_QUOTA_EXCEEDED: '配额已用尽，可在 设置→计费 升级套餐后重试',
   E_TIMEOUT: '请求超时，网络可能较慢，请稍后重试',
   E_ABORTED: '请求已取消',
+  E_NETWORK: '网络连接失败，请检查网络后重试',
   
   E_CHANNEL_TEST_UNSUPPORTED: '该支付渠道不支持测试连接（manual 渠道无外部端点可探测）',
   

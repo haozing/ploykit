@@ -170,7 +170,34 @@ func openapiRoutes(t *testing.T, data []byte) []string {
 	return keys
 }
 
+// locateOpenapiSpec finds the contract spec: in the ploykit monorepo it sits
+// at <root>/docs/openapi.yaml (three levels up from this test); a product
+// cloned from the example template has no ploykit above it, so a spec copied
+// into <product>/docs/ (two levels up) is accepted too. Absent both, the
+// caller skips — a structurally red test on day one helps nobody.
+func locateOpenapiSpec(t *testing.T) []byte {
+	t.Helper()
+	candidates := []string{
+		filepath.Join("..", "..", "..", "docs", "openapi.yaml"),
+		filepath.Join("..", "..", "docs", "openapi.yaml"),
+	}
+	var lastErr error
+	for _, p := range candidates {
+		data, err := os.ReadFile(p)
+		if err == nil {
+			return data
+		}
+		lastErr = err
+	}
+	t.Skipf("docs/openapi.yaml not found (%v). This test pins the example app to the ploykit monorepo's API contract. Copy the spec into <product>/docs/openapi.yaml to re-enable it, or delete this test if you do not keep a spec.", lastErr)
+	return nil
+}
+
 func TestRuntimeRoutesMatchOpenAPI(t *testing.T) {
+	// Resolve the spec BEFORE any assertion: in a template-cloned product the
+	// file does not exist and the whole test must skip, not fail.
+	data := locateOpenapiSpec(t)
+
 	runtime := runtimeRoutes(t)
 	assert.Len(t, runtime, expectedRouteCount,
 		"runtime endpoint count drifted from the pinned check_api.py total; if routes were added/removed on purpose, update expectedRouteCount together with docs/openapi.yaml")
@@ -184,8 +211,6 @@ func TestRuntimeRoutesMatchOpenAPI(t *testing.T) {
 		seen[k] = true
 	}
 
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "openapi.yaml"))
-	require.NoError(t, err, "docs/openapi.yaml must be reachable from the example module (repo root is three levels up)")
 	spec := openapiRoutes(t, data)
 	assert.Len(t, spec, expectedRouteCount, "docs/openapi.yaml drifted from the pinned check_api.py total")
 

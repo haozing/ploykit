@@ -31,6 +31,11 @@ describe('apiErrorMessage', () => {
       .toContain('无法识别的响应')
   })
 
+  it('E_NETWORK（传输层失败包装，服务趴了）→ 网络文案，不裸显英文 Failed to fetch', () => {
+    expect(apiErrorMessage(new ApiError(0, 'E_NETWORK', 'network request failed: Failed to fetch')))
+      .toBe('网络连接失败，请检查网络后重试')
+  })
+
   it('E_TURNSTILE（人机验证 400）→ 重新验证指引，不透传英文原文', () => {
     expect(apiErrorMessage(new ApiError(400, 'E_TURNSTILE', 'turnstile verification failed')))
       .toBe('人机验证未通过，请重新完成验证后再试')

@@ -18,9 +18,9 @@ type Auditor interface {
 }
 
 type CheckoutRequest struct {
-	Order domain.Order
+	Order      domain.Order
 	SuccessURL string
-	CancelURL string // 目录型渠道可忽略，但须在 Capabilities().SupportsCancelURL=false 声明，不许静默
+	CancelURL  string // 目录型渠道可忽略，但须在 Capabilities().SupportsCancelURL=false 声明，不许静默
 	BuyerEmail string // 渠道预填买家邮箱；空=不预填
 	Locale     string // 站点语言透传收银台（如 "en"/"zh"）；空=渠道默认
 
@@ -129,11 +129,11 @@ const (
 // document behavior the adapter absorbs (F1/F3): a channel that ignores
 // CancelURL must say so here instead of silently dropping the parameter.
 type ChannelCaps struct {
-	CatalogBased      bool         `json:"catalog_based"`        // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
+	CatalogBased      bool         `json:"catalog_based"` // 目录型（waffo/paypal 需预注册商品）vs 临时定价型（stripe price_data）
 	SupportsCancelURL bool         `json:"supports_cancel_url"`
-	DisplayOrder      int          `json:"display_order"`       // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
-	Currencies        []string     `json:"currencies"`          // 空=不声明限制；非空时 RegisterProduct / AutoRegister 在调渠道 REST 前校验 plan 币种 ∈ 清单（不符 400，修复「CNY 计划注册成功但结账必 400」）
-	CancelTiming      CancelTiming `json:"cancel_timing"`       // 取消时序（LC-4）；空=未声明（有 canceller 时按 period_end 对待）
+	DisplayOrder      int          `json:"display_order"` // /config billing_channels 排序；stripe 建议 200、manual 900、waffo 将来 100
+	Currencies        []string     `json:"currencies"`    // 空=不声明限制；非空时 RegisterProduct / AutoRegister 在调渠道 REST 前校验 plan 币种 ∈ 清单（不符 400，修复「CNY 计划注册成功但结账必 400」）
+	CancelTiming      CancelTiming `json:"cancel_timing"` // 取消时序（LC-4）；空=未声明（有 canceller 时按 period_end 对待）
 }
 
 // ChannelCapabilityViewer is the optional capability interface channels

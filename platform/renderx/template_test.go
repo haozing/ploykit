@@ -487,7 +487,7 @@ func TestRenderDocumentRejectsUnsafeTagAttrs(t *testing.T) {
 }
 
 // 审计回归（2026-10-26）：on* 事件属性与大小写变体的 http-equiv 一律拒绝
-//（Head 指令通道与 HTMLAttrs/BodyAttrs 同一白名单）；style 合法透传。
+// （Head 指令通道与 HTMLAttrs/BodyAttrs 同一白名单）；style 合法透传。
 func TestDenyAttrEventHandlers(t *testing.T) {
 	for _, name := range []string{"onload", "onerror", "ONCLICK", "onMouseOver"} {
 		if !denyAttr(name) {

@@ -82,10 +82,10 @@ func TestRequireAdmin_MatchesExportedGuard(t *testing.T) {
 
 	t.Run("拒绝分支与 PlatformAdminGuard 文案逐字一致", func(t *testing.T) {
 		cases := []struct {
-			name     string
-			p        *webx.Principal
-			status   int
-			message  string
+			name    string
+			p       *webx.Principal
+			status  int
+			message string
 		}{
 			{"匿名", nil, http.StatusUnauthorized, "authentication required"},
 			{"非管理员", &webx.Principal{UserID: "u1"}, http.StatusForbidden, "platform admin required"},

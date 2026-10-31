@@ -102,11 +102,11 @@ func (d Deps) getSubscription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	webx.WriteJSON(w, http.StatusOK, map[string]any{
-		"plan_code":            plan,
-		"orders":               orders,
-		"cancel_requested_at":  snap.CancelRequestedAt,
-		"renews_at":            snap.RenewsAt,
-		"cancel_timing":        snap.CancelTiming,
+		"plan_code":           plan,
+		"orders":              orders,
+		"cancel_requested_at": snap.CancelRequestedAt,
+		"renews_at":           snap.RenewsAt,
+		"cancel_timing":       snap.CancelTiming,
 	})
 }
 

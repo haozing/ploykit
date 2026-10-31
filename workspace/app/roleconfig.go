@@ -25,8 +25,8 @@ type RoleConfig struct {
 // lockout, and owner always carries roles:manage so the mistake stays
 // recoverable.
 var configurableRoles = map[string]struct{}{
-	authz.RoleAdmin:   {},
-	authz.RoleMember:  {},
+	authz.RoleAdmin:  {},
+	authz.RoleMember: {},
 }
 
 func roleConfigurable(role string) bool {

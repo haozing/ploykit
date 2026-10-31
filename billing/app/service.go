@@ -445,7 +445,7 @@ func (s *BillingService) handleRenewed(ctx context.Context, event domain.Payment
 			s.audit(ctx, &order.workspaceID, nil, "billing.amount_mismatch", event.OrderID, map[string]any{
 				"phase": "renewal", "plan_price_cents": order.expectedCents,
 				"event_amount_cents": event.AmountCents,
-				"order_currency": order.currency, "event_currency": event.Currency,
+				"order_currency":     order.currency, "event_currency": event.Currency,
 			})
 			return s.repo.MarkEventProcessed(ctx, event.Channel, event.ChannelEventID)
 		}
@@ -514,9 +514,9 @@ func (s *BillingService) handleRenewed(ctx context.Context, event domain.Payment
 // renewalMismatchContext carries what the mismatch branch of handleRenewed
 // needs for its log/audit record.
 type renewalMismatchContext struct {
-	workspaceID    string
-	currency       string
-	expectedCents  int
+	workspaceID   string
+	currency      string
+	expectedCents int
 }
 
 // renewalAmountMismatch reconciles a renewal event's amount against the

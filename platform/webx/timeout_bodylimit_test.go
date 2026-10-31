@@ -106,6 +106,93 @@ func TestTimeoutExcept_NonExemptPathStillTimesOut(t *testing.T) {
 	assert.Equal(t, "E_TIMEOUT", body.Code)
 }
 
+// handlerBudget sleeps then reports whether the request context outlived the
+// sleep (deadline still in the future = the tier's budget was larger than the
+// sleep) and whether a deadline existed at all.
+func handlerBudget(sleep time.Duration) (http.HandlerFunc, chan budgetResult) {
+	ch := make(chan budgetResult, 1)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(sleep)
+		dl, has := r.Context().Deadline()
+		ch <- budgetResult{hasDeadline: has, outlived: !has || dl.After(time.Now())}
+		w.WriteHeader(http.StatusOK)
+	})
+	return h, ch
+}
+
+type budgetResult struct {
+	hasDeadline bool
+	outlived    bool
+}
+
+func TestTimeouts_LongestPrefixWins_ThreeTiers(t *testing.T) {
+	// three tiers: default 60ms / plans 400ms / negotiate fully exempt
+	h := Timeouts(60*time.Millisecond, map[string]time.Duration{
+		"/api":                 60 * time.Millisecond,
+		"/api/plans":           400 * time.Millisecond,
+		"/api/plans/negotiate": 0,
+	})
+
+	t.Run("longest prefix tier applies: slow-within-tier handler survives", func(t *testing.T) {
+		hd, ch := handlerBudget(150 * time.Millisecond) // > base 60ms, < tier 400ms
+		rec := httptest.NewRecorder()
+		h(hd).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/plans/123", nil))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.True(t, (<-ch).outlived, "请求须以 /api/plans 的 400ms 预算存活，而非 60ms base")
+	})
+
+	t.Run("shorter prefix tier applies when longer ones miss", func(t *testing.T) {
+		hd, ch := handlerBudget(0)
+		rec := httptest.NewRecorder()
+		h(hd).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/tasks", nil))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		res := <-ch
+		require.True(t, res.hasDeadline, "非豁免路径必须有 ctx 超时")
+	})
+
+	t.Run("zero override = full exemption, no context deadline", func(t *testing.T) {
+		hd, ch := handlerBudget(150 * time.Millisecond) // > base 60ms
+		rec := httptest.NewRecorder()
+		h(hd).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/plans/negotiate", nil))
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.False(t, (<-ch).hasDeadline, "0 档=完全豁免，不得设置 ctx 超时")
+	})
+
+	t.Run("unmatched path gets the base timeout and 504s past it", func(t *testing.T) {
+		hd := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(300 * time.Millisecond)
+			w.WriteHeader(http.StatusOK)
+		})
+		rec := httptest.NewRecorder()
+		start := time.Now()
+		h(hd).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		require.Less(t, time.Since(start), 250*time.Millisecond, "超时不得等 handler 跑完")
+		assert.Equal(t, http.StatusGatewayTimeout, rec.Code)
+		var body ErrorBody
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		assert.Equal(t, "E_TIMEOUT", body.Code)
+	})
+
+	t.Run("tier budget itself fires: over-tier handler 504s", func(t *testing.T) {
+		hd := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(1 * time.Second) // > 400ms tier
+			w.WriteHeader(http.StatusOK)
+		})
+		rec := httptest.NewRecorder()
+		h(hd).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/plans/x", nil))
+		assert.Equal(t, http.StatusGatewayTimeout, rec.Code)
+	})
+}
+
+func TestTimeouts_WiringTimeValidation(t *testing.T) {
+	assert.PanicsWithValue(t, "webx: Timeouts base must be > 0 (use a 0 override to exempt a prefix)", func() {
+		_ = Timeouts(0, nil)
+	})
+	assert.PanicsWithValue(t, "webx: Timeouts override for /ws must be >= 0 (0 = exempt)", func() {
+		_ = Timeouts(5*time.Second, map[string]time.Duration{"/ws": -1})
+	})
+}
+
 func TestBodyLimit_DecodeJSONReturns413OverLimit(t *testing.T) {
 	type payload struct {
 		Data string `json:"data"`

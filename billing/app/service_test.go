@@ -53,11 +53,11 @@ type fakeRepo struct {
 	wsCancelReq     map[string]time.Time
 	setCancelReqs   []string
 	clearCancelReqs []string
-	paidIv      map[string]domain.BillingInterval
-	setSubs     []setSubCall
-	changePlans []changePlanCall
-	expired     []ExpiredWorkspace
-	staleOrders []ExpiredOrder
+	paidIv          map[string]domain.BillingInterval
+	setSubs         []setSubCall
+	changePlans     []changePlanCall
+	expired         []ExpiredWorkspace
+	staleOrders     []ExpiredOrder
 
 	// canceledBy mirrors migrations/051's order.canceled_by (domain.Order 不扩字段，fake 内部记账).
 	canceledBy map[string]string

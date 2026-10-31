@@ -1,19 +1,51 @@
 
 
+// Error taxonomy: 'business' = the application answered (fix your input /
+// permissions per its message); 'gateway' = an answer arrived but not from the
+// application — proxy error pages, gateway timeouts, non-JSON bodies (retry
+// later, do NOT show "change your parameters" copy); 'network' = no answer at
+// all — transport failure or caller abort (check connection / retry later).
+// Derived from (status, code) at construction so every throw site — including
+// future ones — carries it. shuijing field report: a 504 E_TIMEOUT was shown
+// as "these parameters produce no plan" for many rounds because callers had
+// to reverse-engineer this classification from scattered status/code checks.
+export type ApiErrorKind = 'business' | 'network' | 'gateway'
+
+function classifyKind(status: number, code: string): ApiErrorKind {
+  if (code === 'E_ABORTED' || code === 'E_NETWORK') return 'network'
+  if (code === 'E_TIMEOUT' || code === 'E_MALFORMED_RESPONSE' || code === 'E_CSRF_BOOTSTRAP') return 'gateway'
+  if (status === 502 || status === 503 || status === 504) return 'gateway'
+  return 'business'
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly details?: unknown
-  
+  readonly kind: ApiErrorKind
+
   readonly retryAfter?: number
   constructor(status: number, code: string, message: string, details?: unknown, retryAfter?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.kind = classifyKind(status, code)
     this.details = details
     this.retryAfter = retryAfter
   }
+}
+
+// Wrap a raw fetch rejection (transport failure / abort) into the ApiError
+// taxonomy. Before this, a dead server threw a bare TypeError("Failed to
+// fetch") with no status/code/kind — unclassifiable by UI error mapping.
+function toTransportError(err: unknown): ApiError {
+  if (err instanceof ApiError) return err
+  if (err instanceof Error && err.name === 'AbortError') {
+    return new ApiError(0, 'E_ABORTED', 'request aborted')
+  }
+  const msg = err instanceof Error ? err.message : String(err)
+  return new ApiError(0, 'E_NETWORK', `network request failed: ${msg}`)
 }
 
 export function isApiError(err: unknown, code?: string): err is ApiError {
@@ -105,9 +137,12 @@ async function fetchWithTimeout(
 ): Promise<TimedFetch> {
   const outer = init.signal
   if (!timeoutMs || timeoutMs <= 0) {
-    
-    
-    const response = await fetch(path, init)
+    let response: Response
+    try {
+      response = await fetch(path, init)
+    } catch (err) {
+      throw toTransportError(err)
+    }
     return { response, readBody: (read) => read() }
   }
   if (outer?.aborted) {
@@ -162,11 +197,11 @@ async function fetchWithTimeout(
       throw new ApiError(0, 'E_TIMEOUT', `request timed out after ${timeoutMs}ms`)
     }
     if (outer?.aborted) {
-      
-      
+
+
       throw new ApiError(0, 'E_ABORTED', 'request aborted by caller')
     }
-    throw err
+    throw toTransportError(err)
   } finally {
     clearTimeout(timer)
     if (outer) outer.removeEventListener('abort', cascade)

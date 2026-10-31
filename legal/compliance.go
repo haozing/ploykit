@@ -11,8 +11,8 @@ import "context"
 // surfaced, not guessed.
 type Compliance struct {
 	MissingKeys []ComplianceMissingKey `json:"missing_keys"`
-	LegalConfig ComplianceLegalConfig   `json:"legal_config"`
-	Checks      []ComplianceCheck       `json:"checks"`
+	LegalConfig ComplianceLegalConfig  `json:"legal_config"`
+	Checks      []ComplianceCheck      `json:"checks"`
 }
 
 // ComplianceMissingKey is one unfilled required legal_* key.
@@ -23,10 +23,10 @@ type ComplianceMissingKey struct {
 
 // ComplianceLegalConfig mirrors the /config legal block's identity subset.
 type ComplianceLegalConfig struct {
-	EntityName     string `json:"entity_name"`
-	Jurisdiction   string `json:"jurisdiction"`
-	ProcessorName  string `json:"processor_name"`
-	BillingModel   string `json:"billing_model"`
+	EntityName    string `json:"entity_name"`
+	Jurisdiction  string `json:"jurisdiction"`
+	ProcessorName string `json:"processor_name"`
+	BillingModel  string `json:"billing_model"`
 }
 
 // ComplianceCheck statuses: ok (framework verified), warn (action needed),

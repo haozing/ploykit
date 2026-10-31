@@ -219,7 +219,6 @@ func TestEvents_Roundtrip(t *testing.T) {
 	require.Equal(t, 1, countJobs(t, pool, "state = 'completed'"), "handled job completes exactly once")
 }
 
-
 func TestMigrate_Idempotent(t *testing.T) {
 	pool := newScratchPool(t) // 内部已 Migrate 一次
 	ctx := context.Background()
@@ -228,7 +227,6 @@ func TestMigrate_Idempotent(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM river_job").Scan(&n))
 	require.Equal(t, 0, n)
 }
-
 
 func TestEmitAt_ScheduledAtPersisted(t *testing.T) {
 	pool := newScratchPool(t)
@@ -247,4 +245,3 @@ func TestEmitAt_ScheduledAtPersisted(t *testing.T) {
 		`SELECT scheduled_at FROM river_job WHERE args->>'kind' = 'probe.once'`).Scan(&got))
 	require.WithinDuration(t, at, got, time.Second, "scheduled_at 应等于传入时刻")
 }
-

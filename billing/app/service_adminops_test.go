@@ -40,7 +40,7 @@ type fakeAdminRepo struct {
 
 	codes []string
 
-	gotUpdate  updatePlanCall
+	gotUpdate   updatePlanCall
 	updateFound bool
 	updateErr   error
 }

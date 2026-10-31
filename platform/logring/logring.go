@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	defaultCapacity     = 4096 // global tail window, records
-	defaultPerRequest   = 256  // records retained per request id
-	defaultMaxRequests  = 512  // distinct request ids retained (LRU)
+	defaultCapacity    = 4096 // global tail window, records
+	defaultPerRequest  = 256  // records retained per request id
+	defaultMaxRequests = 512  // distinct request ids retained (LRU)
 )
 
 // Attr is one flattened key/value pair of a captured record. Group nesting is
@@ -75,19 +75,19 @@ type Options struct {
 
 // Ring is the queryable store behind a capture Handler. Create one with New.
 type Ring struct {
-	mu                 sync.Mutex
-	tail               []Entry // global ring buffer
-	tailHead           int     // index of the oldest element, when full
-	capacity           int
-	perRequest         int
-	maxRequests        int
-	redact             bool
-	buckets            map[string]*bucket
-	lru                *list.List // front = least recently used request id
-	captured           uint64
-	droppedGlobal      uint64
-	droppedPerRequest  uint64
-	droppedRequests    uint64
+	mu                sync.Mutex
+	tail              []Entry // global ring buffer
+	tailHead          int     // index of the oldest element, when full
+	capacity          int
+	perRequest        int
+	maxRequests       int
+	redact            bool
+	buckets           map[string]*bucket
+	lru               *list.List // front = least recently used request id
+	captured          uint64
+	droppedGlobal     uint64
+	droppedPerRequest uint64
+	droppedRequests   uint64
 }
 
 type bucket struct {
@@ -112,12 +112,12 @@ type Stats struct {
 // unchanged and only records actually emitted are captured.
 func New(next slog.Handler, opt Options) *Handler {
 	r := &Ring{
-		capacity:   orDefault(opt.Capacity, defaultCapacity),
-		perRequest: orDefault(opt.PerRequestCapacity, defaultPerRequest),
+		capacity:    orDefault(opt.Capacity, defaultCapacity),
+		perRequest:  orDefault(opt.PerRequestCapacity, defaultPerRequest),
 		maxRequests: orDefault(opt.MaxRequests, defaultMaxRequests),
-		redact:     opt.Redact == nil || *opt.Redact,
-		buckets:    make(map[string]*bucket),
-		lru:        list.New(),
+		redact:      opt.Redact == nil || *opt.Redact,
+		buckets:     make(map[string]*bucket),
+		lru:         list.New(),
 	}
 	return &Handler{ring: r, next: next}
 }

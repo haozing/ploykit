@@ -67,7 +67,9 @@ func seedBootUser(t *testing.T, pool *pgxpool.Pool, email string) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `INSERT INTO "user" (email) VALUES ($1)`, email)
 	require.NoError(t, err)
-	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM "user" WHERE lower(email) = $1`, strings.ToLower(email)) })
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM "user" WHERE lower(email) = $1`, strings.ToLower(email))
+	})
 }
 
 func bootAdminCount(t *testing.T, pool *pgxpool.Pool) int {
@@ -101,33 +103,33 @@ func TestBootstrapPlatformAdmin_Branches(t *testing.T) {
 		wantLogWarn  bool
 	}{
 		{
-			name: "空白 email → info 跳过（功能关闭）",
-			email: "   ",
-			seedUser: "boot-blank@test.dev",
+			name:         "空白 email → info 跳过（功能关闭）",
+			email:        "   ",
+			seedUser:     "boot-blank@test.dev",
 			wantPromoted: false,
-			wantLogSub: "skipping",
+			wantLogSub:   "skipping",
 		},
 		{
-			name: "已有平台管理员 → 跳过（只升不降、绝不提第二个号）",
-			email: "boot-target@test.dev",
-			seedUser: "boot-target@test.dev",
-			seedAdmin: "boot-incumbent@test.dev",
+			name:         "已有平台管理员 → 跳过（只升不降、绝不提第二个号）",
+			email:        "boot-target@test.dev",
+			seedUser:     "boot-target@test.dev",
+			seedAdmin:    "boot-incumbent@test.dev",
 			wantPromoted: false,
-			wantLogSub: "already exists",
+			wantLogSub:   "already exists",
 		},
 		{
-			name: "count==0 且用户已注册 → 提升首个管理员（大小写不敏感 + trim）",
-			email: "  Bootstrap.Case@Example.COM  ",
-			seedUser: "bootstrap.case@example.com",
+			name:         "count==0 且用户已注册 → 提升首个管理员（大小写不敏感 + trim）",
+			email:        "  Bootstrap.Case@Example.COM  ",
+			seedUser:     "bootstrap.case@example.com",
 			wantPromoted: true,
-			wantLogSub: "promoted first platform admin",
+			wantLogSub:   "promoted first platform admin",
 		},
 		{
-			name: "邮箱未注册 → warn 跳过不报错（先部署后注册合法）",
-			email: "boot-missing@test.dev",
+			name:         "邮箱未注册 → warn 跳过不报错（先部署后注册合法）",
+			email:        "boot-missing@test.dev",
 			wantPromoted: false,
-			wantLogSub: "no user with this email yet",
-			wantLogWarn: true,
+			wantLogSub:   "no user with this email yet",
+			wantLogWarn:  true,
 		},
 	}
 	for _, tc := range cases {

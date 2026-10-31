@@ -62,7 +62,9 @@ func TestMcpx_EnabledEndToEnd(t *testing.T) {
 	require.NotEmpty(t, res.Content)
 	txt, ok := res.Content[0].(*mcp.TextContent)
 	require.True(t, ok, "first content block must be text, got %T", res.Content[0])
-	var out struct{ Echo string `json:"echo"` }
+	var out struct {
+		Echo string `json:"echo"`
+	}
 	require.NoError(t, json.Unmarshal([]byte(txt.Text), &out))
 	assert.Equal(t, "hi", out.Echo)
 	assert.False(t, res.IsError)

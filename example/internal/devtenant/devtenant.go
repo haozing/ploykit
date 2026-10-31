@@ -37,8 +37,8 @@ import (
 // Default holds the conventional dev-tenant identifiers. Products may override
 // any of them via Options.
 const (
-	DefaultEmail     = "dev@tenant.local"
-	DefaultUserName  = "Dev Tenant"
+	DefaultEmail    = "dev@tenant.local"
+	DefaultUserName = "Dev Tenant"
 	// DefaultWorkspace satisfies the slug CHECK (4+ chars: the tests always
 	// passed an explicit slug, so this default only now meets a real insert).
 	DefaultWorkspace = "dev-tenant"

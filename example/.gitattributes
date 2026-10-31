@@ -1,0 +1,48 @@
+# Line-ending contract for the example app — and for every product cloned
+# from it as a template: this file travels with the copy, so the product
+# repo inherits the same normalization (LF source on every platform, CRLF
+# only for Windows scripts) instead of each consumer discovering gofmt CRLF
+# noise the hard way (zijianfang field report 2026-10-31). Keep in sync with
+# the root /.gitattributes.
+* text=auto
+
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.htm text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.svg text eol=lf
+*.map text eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.wasm binary
+*.gz binary
+*.br binary
+
+.gitattributes text eol=lf

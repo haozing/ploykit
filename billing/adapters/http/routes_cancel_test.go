@@ -310,10 +310,10 @@ func TestGetSubscriptionCancelFields(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 		var body struct {
-			PlanCode          string             `json:"plan_code"`
-			CancelRequestedAt *time.Time         `json:"cancel_requested_at"`
-			RenewsAt          *time.Time         `json:"renews_at"`
-			CancelTiming      *app.CancelTiming  `json:"cancel_timing"`
+			PlanCode          string            `json:"plan_code"`
+			CancelRequestedAt *time.Time        `json:"cancel_requested_at"`
+			RenewsAt          *time.Time        `json:"renews_at"`
+			CancelTiming      *app.CancelTiming `json:"cancel_timing"`
 		}
 		require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
 		assert.Equal(t, "pro", body.PlanCode)
@@ -338,10 +338,10 @@ func TestGetSubscriptionCancelFields(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 		var body struct {
-			PlanCode          string             `json:"plan_code"`
-			CancelRequestedAt *time.Time         `json:"cancel_requested_at"`
-			RenewsAt          *time.Time         `json:"renews_at"`
-			CancelTiming      *app.CancelTiming  `json:"cancel_timing"`
+			PlanCode          string            `json:"plan_code"`
+			CancelRequestedAt *time.Time        `json:"cancel_requested_at"`
+			RenewsAt          *time.Time        `json:"renews_at"`
+			CancelTiming      *app.CancelTiming `json:"cancel_timing"`
 		}
 		require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
 		assert.Equal(t, "free", body.PlanCode)
