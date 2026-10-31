@@ -9,7 +9,9 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.23.1] — 2026-10-31
+
+Go-only patch. Boot-time guard from the same shuijing OAuth field report.
 
 ### Added
 - **identity: boot-time warning when OAuth is wired but `Deps.OAuthAppURL`
