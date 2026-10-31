@@ -9,18 +9,74 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [Unreleased]
+## [0.23.0] — 2026-10-31
+
+OAuth provider hot source + the admin-settings save fix it depends on
+(motivation and audit: shuijing `docs/oauth-admin-config-design-audit-2026-10-31.md`;
+integration guide incl. the example-does-not-wire boundary:
+docs/api-conventions.md "OAuth providers: static wiring vs the hot source").
+Go module + npm packages both change in this tag (ui 2.7.2 — patch, behavior fix;
+Go is a minor for the new `WithProviderSource` surface). Also carries the
+post-v0.22.0 master fix below (wsx test race).
+
+### Added
+- **identity: `OAuthService.WithProviderSource(src func() []OAuthProvider)`** —
+  the provider hot source: providers become a 30s-TTL cached set rebuilt from
+  `src` on read (billing `AtomicRegistry` semantics: the source itself is the
+  error policy — a failing read logs and returns the degraded set; an empty set
+  IS a valid snapshot). Static construction is byte-for-byte unchanged (no
+  source = immutable boot set, zero locking); with a source, `Names()` /
+  `provider()` / `Start()` / `Callback()` are concurrent-safe under an
+  RWMutex with double-checked rebuild. This is what lets a product register
+  OAuth credentials as admin settings keys and hot-swap providers without a
+  restart (`EffectiveKey` per provider pair; id+secret both non-empty =
+  enabled).
+- **identity/app: `ErrOAuthLinkConflict`** — sentinel for the OA-1 fix below.
 
 ### Fixed
-- **wsx: fatal data race in the test fake's metrics** — `fakeMetrics` maps
-  were written by hub goroutines (register/unregister/evict) and read by the
-  test goroutine inside `require.Eventually` conditions with no lock; when the
-  scheduler interleaved them, the Go runtime's unrecoverable "concurrent map
-  read and map write" fatal killed the whole test binary (CI 2026-10-31,
-  run 41189360123: TestWSConnectionGauge died inside its second Eventually).
-  All access now goes through a mutex with snapshot getters. Test-only;
-  surfaced by the v0.22.0 push on a slower shared runner, latent since the
+- **wsx: fatal data race in the test fake's metrics** (post-v0.22.0 master
+  fix, ships in this tag) — `fakeMetrics` maps were written by hub goroutines
+  (register/unregister/evict) and read by the test goroutine inside
+  `require.Eventually` conditions with no lock; when the scheduler interleaved
+  them, the Go runtime's unrecoverable "concurrent map read and map write"
+  fatal killed the whole test binary (CI 2026-10-31, run 41189360123:
+  TestWSConnectionGauge died inside its second Eventually). All access now
+  goes through a mutex with snapshot getters. Test-only; latent since the
   orkome ws batch.
+- **identity/pgrepo: `LinkOAuthAccount` silently swallowed same-subject
+  conflicts (OA-1, P2)** — `ON CONFLICT (provider, subject) DO NOTHING`
+  returned success even when the row already pointed at a DIFFERENT user: two
+  concurrent callbacks for one provider account (the email-change window)
+  created a second user whose login succeeded while the row kept pointing at
+  the first — the next login landed back on the old account, splitting the
+  identity with no warning. Now a no-op upsert (`DO UPDATE SET user_id =
+  oauth_account.user_id RETURNING user_id`) reads back the surviving owner and
+  returns `app.ErrOAuthLinkConflict` on mismatch (fail-closed; a retry goes
+  through `FindOAuthAccount` and hits the existing binding). Idempotent replay
+  for the same user is unchanged.
+- **identity: OAuth state compared in non-constant time (OA-4)** — the CSRF
+  state check now goes through `subtle.ConstantTimeCompare` (hygiene; the
+  value is a 256-bit random token, network timing makes the old `!=`
+  practically unexploitable).
+- **identity/oauth adapters: scope was a hand-pre-encoded query fragment
+  (OA-8)** — `googleoidc`/`github` built `AuthURL` by concatenating a
+  pre-percent-encoded scope const alongside `QueryEscape`-encoded params;
+  any future wrapping would double-encode. Both now build the query with
+  `url.Values.Encode()` (params alphabetical, space as `+` — equivalent
+  encoding, goldens updated).
+- **@ploykit/ui (2.7.2): AdminSettingsPage「扩展配置」saved every
+  non-sensitive registered key on every save** — the extra-keys save PUT the
+  hydrated `effective` values of ALL non-masked keys back to the store: one
+  unrelated save froze the live env fallback of every product-registered key
+  into the table (the exact "never frozen" invariant `settings.RegisterKeys`
+  documents), and with no env present it wrote empty-string rows that
+  permanently shadowed the fallback (no DELETE endpoint to recover). Saves
+  now submit only keys the admin actually edited (dirty tracking); clearing a
+  non-sensitive key still submits the empty string (the explicit-disable
+  path, e.g. clearing `oauth_google_client_id` takes the provider offline),
+  masked keys keep the leave-blank-unchanged semantics, typed secrets are
+  wiped from state after a successful save, and the button is disabled until
+  something is dirty.
 
 ## [0.22.0] — 2026-10-31
 

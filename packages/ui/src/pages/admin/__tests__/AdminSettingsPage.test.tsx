@@ -519,18 +519,26 @@ describe('AdminSettingsPage', () => {
       expect(screen.queryByLabelText('banner_text')).not.toBeInTheDocument();
     });
 
-    it('保存：敏感键留空跳过、非敏感键提交；敏感键非空才提交', async () => {
+    it('保存（dirty 语义，v2.7.2）：只提交编辑过的键；无关保存不再冻结 env 兜底', async () => {
       // 保存成功后 invalidate 触发重取——注册键是常驻信封字段，
       // 用持续 mock 而非 Once
       mockedGet.mockResolvedValue(EXTRA_ENVELOPE);
       renderPage();
       await screen.findByText('产品接入的配置键');
 
-      // 留空敏感键，只改普通键 → 只 PUT 普通键
+      // 未编辑任何键 → 按钮禁用，点不出任何 PUT（旧实现会把全部非敏感
+      // 键水合值原样 PUT 回库，把 env 兜底值冻结进表）
+      const saveBtn = screen.getByRole('button', { name: '保存扩展配置' });
+      expect(saveBtn).toBeDisabled();
+      fireEvent.click(saveBtn);
+      expect(mockedPut).not.toHaveBeenCalled();
+
+      // 只改普通键 → 只 PUT 该键；未动的敏感键不提交
       fireEvent.change(screen.getByLabelText('resend_from'), {
         target: { value: 'ops@example.com' },
       });
-      fireEvent.click(screen.getByRole('button', { name: '保存扩展配置' }));
+      expect(saveBtn).toBeEnabled();
+      fireEvent.click(saveBtn);
       await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
       expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/resend_from', {
         value: 'ops@example.com',
@@ -540,17 +548,42 @@ describe('AdminSettingsPage', () => {
         expect.anything(),
       );
 
-      // 输入新密钥 → 两键都提交，密钥为原文
+      // 保存成功后 dirty 归零：再输入密钥 → 只 PUT 密钥键（旧实现此处
+      // 会把 resend_from 再冻结一次）；成功后明文不驻留 state
       mockedPut.mockClear();
       fireEvent.change(screen.getByLabelText('resend_api_key'), {
         target: { value: 're_live_2' },
       });
-      fireEvent.click(screen.getByRole('button', { name: '保存扩展配置' }));
-      await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(2));
+      fireEvent.click(saveBtn);
+      await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
       expect(mockedPut).toHaveBeenCalledWith(
         '/api/admin/settings/resend_api_key',
         { value: 're_live_2' },
       );
+      expect(mockedPut).not.toHaveBeenCalledWith(
+        '/api/admin/settings/resend_from',
+        expect.anything(),
+      );
+      await waitFor(() =>
+        expect(screen.getByLabelText('resend_api_key')).toHaveValue(''),
+      );
+    });
+
+    it('保存（dirty 语义）：非敏感键清空 = 显式停用，空串必须提交', async () => {
+      mockedGet.mockResolvedValue(EXTRA_ENVELOPE);
+      renderPage();
+      await screen.findByText('产品接入的配置键');
+
+      // 清空已配置的非敏感键 → dirty + 空串 → 提交空串（后台停用路径，
+      // 如 oauth_google_client_id 清空即下线 provider）
+      fireEvent.change(screen.getByLabelText('resend_from'), {
+        target: { value: '' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '保存扩展配置' }));
+      await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
+      expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/resend_from', {
+        value: '',
+      });
     });
 
     it('无注册键 → 整卡不渲染；children 渲染在框架卡之后', async () => {

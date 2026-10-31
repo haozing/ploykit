@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/haozing/ploykit/identity/app"
 	"github.com/haozing/ploykit/migrations"
 	"github.com/haozing/ploykit/platform/pg"
 	"github.com/haozing/ploykit/platform/pgmigrate"
@@ -62,10 +63,20 @@ func TestOAuthAccount_LinkAndFind(t *testing.T) {
 	assert.Equal(t, uid, got)
 
 	other, otherEmail := oauthTestUser(t, repo)
-	require.NoError(t, repo.LinkOAuthAccount(ctx, "github", subject, other, otherEmail, now))
+	// OA-1（v0.23.0）：同一 (provider, subject) 绑到另一用户必须 fail-closed
+	// 报 ErrOAuthLinkConflict——旧实现 DO NOTHING 静默吞冲突，并发双回调会
+	// 造出第二个用户且登录成功、oauth_account 行永久指向第一个用户。
+	err = repo.LinkOAuthAccount(ctx, "github", subject, other, otherEmail, now)
+	require.ErrorIs(t, err, app.ErrOAuthLinkConflict)
 	got, _, err = repo.FindOAuthAccount(ctx, "github", subject)
 	require.NoError(t, err)
-	assert.Equal(t, uid, got, "重复 Link 不得改写既有归属")
+	assert.Equal(t, uid, got, "冲突拒绝后既有归属不得改写")
+
+	// 同一用户幂等重放（DO UPDATE 目标值 = 既有值）不报错。
+	require.NoError(t, repo.LinkOAuthAccount(ctx, "github", subject, uid, email, now))
+	got, _, err = repo.FindOAuthAccount(ctx, "github", subject)
+	require.NoError(t, err)
+	assert.Equal(t, uid, got)
 }
 
 func TestOAuthAccount_ProviderScoping(t *testing.T) {

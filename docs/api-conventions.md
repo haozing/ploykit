@@ -235,6 +235,42 @@ The openapi contract stays at the root form; the rewrite happens at the edge.
 (Parameterizing the Mount signature itself is on the ROADMAP — revisit only if
 this wrapper pattern proves insufficient for a second product.)
 
+## OAuth providers: static wiring vs the hot source (v0.23.0)
+
+`identityapp.NewOAuthService(repo, providers, clock)` takes a fixed provider
+set — the default wiring shape: build github/googleoidc adapters from env
+credentials at boot and never look back. **example wires this static form
+only** (`example/cmd/app/main.go` reads `GITHUB_CLIENT_ID`/`GOOGLE_CLIENT_ID`
+etc.).
+
+`WithProviderSource(src func() []OAuthProvider)` is the optional hot source
+for products that register OAuth credentials as admin settings keys
+(`settings.RegisterKeys` + `AdminSettingsPage`'s extra-keys card) and want
+provider changes live without a restart:
+
+- 30s TTL cached snapshot, rebuilt synchronously on first read after expiry;
+  `Names()` / `Start()` / `Callback()` are concurrent-safe; the static form is
+  byte-for-byte unchanged (no source = immutable boot set, zero locking).
+- **The source owns the error policy** (billing `AtomicRegistry` semantics):
+  the signature has no error — on a settings read failure, log and return the
+  degraded set; **an empty slice is a valid snapshot meaning "all providers
+  disabled"** (clearing `oauth_google_client_id` in the admin UI takes the
+  provider offline within the TTL). Enable a provider pair when both id and
+  secret are non-empty (`EffectiveKey`).
+- Call it once during boot wiring, before serving traffic; swapping the source
+  while requests are in flight is not supported.
+- Boundary declaration (per the wiring discipline): example does NOT wire the
+  hot source — the reference consumer is shuijing's OAuth admin-config
+  integration (`docs/oauth-admin-config-design-audit-2026-10-31.md` in that
+  repo); v0.23.0 ships the seam + the admin-settings save fix it depends on.
+
+Related behavioral note (OA-1, v0.23.0): linking an OAuth account whose
+`(provider, subject)` is already bound to a DIFFERENT user now fails closed
+with `identityapp.ErrOAuthLinkConflict` (previously the conflict was silently
+swallowed and the two identities drifted apart). The user-visible effect in
+the rare concurrent-callback race: that one login fails with a clear error;
+the next login resolves through the existing binding.
+
 ## Route style (Go stdlib ServeMux pitfalls)
 
 All action endpoints in the framework use the **slash style**: `POST /{id}/accept`,

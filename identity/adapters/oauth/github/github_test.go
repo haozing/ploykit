@@ -24,11 +24,12 @@ func fakeGitHub(t *testing.T, h http.HandlerFunc) (tokenURL, apiBase string) {
 func TestAuthURL(t *testing.T) {
 	p := New("cid", "secret")
 	got := p.AuthURL("abc123", "http://localhost:8030/auth/oauth/github/callback")
+	// OA-8 之后整串走 url.Values.Encode()：参数按字母序、空格编码为 +。
 	want := "https://github.com/login/oauth/authorize" +
 		"?client_id=cid" +
 		"&redirect_uri=" + url.QueryEscape("http://localhost:8030/auth/oauth/github/callback") +
-		"&state=abc123" +
-		"&scope=read:user%20user:email"
+		"&scope=read%3Auser+user%3Aemail" +
+		"&state=abc123"
 	assert.Equal(t, want, got)
 }
 

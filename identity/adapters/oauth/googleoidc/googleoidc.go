@@ -18,7 +18,11 @@ const (
 	defaultTokenURL     = "https://oauth2.googleapis.com/token"
 	defaultAPIBase      = "https://openidconnect.googleapis.com"
 
-	scope = "openid%20email%20profile"
+	// scope 是明文值（OA-8）：旧实现手工预编码 "openid%20email%20profile"
+	// 直接拼 URL，与其余参数走 QueryEscape 的风格不一致——谁顺手再包一层
+	// 就双重编码。现在统一走 url.Values.Encode()（空格编码为 +，
+	// application/x-www-form-urlencoded 合法，Google 两种都收）。
+	scope = "openid email profile"
 )
 
 type Provider struct {
@@ -55,12 +59,13 @@ func (p *Provider) WithHTTPClient(hc *http.Client) *Provider {
 func (p *Provider) Name() string { return "google" }
 
 func (p *Provider) AuthURL(state, redirectURI string) string {
-	return p.authorizeURL + "?" +
-		"response_type=code" +
-		"&scope=" + scope +
-		"&client_id=" + url.QueryEscape(p.clientID) +
-		"&redirect_uri=" + url.QueryEscape(redirectURI) +
-		"&state=" + url.QueryEscape(state)
+	q := url.Values{}
+	q.Set("response_type", "code")
+	q.Set("scope", scope)
+	q.Set("client_id", p.clientID)
+	q.Set("redirect_uri", redirectURI)
+	q.Set("state", state)
+	return p.authorizeURL + "?" + q.Encode()
 }
 
 type tokenResp struct {

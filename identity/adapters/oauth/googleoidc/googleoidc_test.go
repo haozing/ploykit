@@ -24,11 +24,13 @@ func fakeGoogle(t *testing.T, h http.HandlerFunc) (tokenURL, apiBase string) {
 func TestAuthURL(t *testing.T) {
 	p := New("cid", "secret")
 	got := p.AuthURL("abc123", "http://localhost:8030/auth/oauth/google/callback")
+	// OA-8 之后整串走 url.Values.Encode()：参数按字母序、空格编码为 +
+	// （与 %20 等价，Google 两种都收）。
 	want := "https://accounts.google.com/o/oauth2/v2/auth" +
-		"?response_type=code" +
-		"&scope=openid%20email%20profile" +
-		"&client_id=cid" +
+		"?client_id=cid" +
 		"&redirect_uri=" + url.QueryEscape("http://localhost:8030/auth/oauth/google/callback") +
+		"&response_type=code" +
+		"&scope=openid+email+profile" +
 		"&state=abc123"
 	assert.Equal(t, want, got)
 }

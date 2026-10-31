@@ -19,7 +19,8 @@ const (
 	defaultTokenURL     = "https://github.com/login/oauth/access_token"
 	defaultAPIBase      = "https://api.github.com"
 
-	scope = "read:user%20user:email"
+	// scope 明文值，统一走 url.Values.Encode()（OA-8，与 googleoidc 同批）。
+	scope = "read:user user:email"
 )
 
 type Provider struct {
@@ -56,11 +57,12 @@ func (p *Provider) WithHTTPClient(hc *http.Client) *Provider {
 func (p *Provider) Name() string { return "github" }
 
 func (p *Provider) AuthURL(state, redirectURI string) string {
-	return p.authorizeURL + "?" +
-		"client_id=" + url.QueryEscape(p.clientID) +
-		"&redirect_uri=" + url.QueryEscape(redirectURI) +
-		"&state=" + url.QueryEscape(state) +
-		"&scope=" + scope
+	q := url.Values{}
+	q.Set("client_id", p.clientID)
+	q.Set("redirect_uri", redirectURI)
+	q.Set("state", state)
+	q.Set("scope", scope)
+	return p.authorizeURL + "?" + q.Encode()
 }
 
 type tokenResp struct {

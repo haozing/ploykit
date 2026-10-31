@@ -217,6 +217,13 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
     .sort();
   const [extraVals, setExtraVals] = useState<Record<string, string>>({});
   const [extraHydrated, setExtraHydrated] = useState(false);
+  // dirty 集合（v2.7.2 修复，oauth 后台化设计 §2.3.1）：只提交用户真正
+  // 编辑过的键。旧实现一次 PUT 全部非敏感注册键——水合值来自 effective
+  // （可能是 env 兜底值），一次无关保存就会把 env 值冻结进表（D2 fork 失败
+  // 模式），env 未配时更会写空串行永久遮蔽兜底且无 DELETE 端点可清。
+  // 非敏感键 dirty+清空 = 显式停用（提交空串）；敏感键沿用留空 = 不修改。
+  const [extraDirty, setExtraDirty] = useState<Record<string, boolean>>({});
+  const extraDirtyCount = extraKeys.filter((k) => extraDirty[k]).length;
   useEffect(() => {
     if (!eff || extraHydrated) return;
     const next: Record<string, string> = {};
@@ -406,13 +413,18 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
     },
   });
 
-  // 产品注册键通用卡：一键一 PUT；敏感键（读回为掩码）留空 = 不修改，
-  // 非空才提交——绝不把掩码/空值落库
+  // 产品注册键通用卡：一键一 PUT；只提交 dirty 键（见 extraDirty 注释）。
+  // 敏感键（读回为掩码）在 dirty 之上仍叠加「留空 = 不修改」——绝不把
+  // 掩码/空值落库；非敏感键 dirty + 空串 = 显式停用，必须放行提交。
   const extraM = useMutation({
     mutationFn: async () => {
       const descriptions = settingsQ.data?.descriptions ?? {};
       const entries = extraKeys
-        .filter((k) => (eff?.[k] === MASKED ? (extraVals[k] ?? '') !== '' : true))
+        .filter((k) => {
+          if (!extraDirty[k]) return false;
+          if (eff?.[k] === MASKED) return (extraVals[k] ?? '') !== '';
+          return true;
+        })
         .map((k) => ({
           key: k,
           label: descriptions[k] || k,
@@ -420,12 +432,29 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
         }));
       return putKeys(api, entries);
     },
-    onSuccess: (results) =>
-      reportKeySaves(results, '扩展配置已保存', '扩展配置'),
+    onSuccess: (results) => {
+      // 成功键解除 dirty（失败键保留，修完直接再保存）；敏感键提交后
+      // 清掉 state 里的明文——读回永远掩码，state 归位空串防内存驻留。
+      const okKeys = new Set(results.filter((r) => r.ok).map((r) => r.key));
+      setExtraDirty((prev) => {
+        const next = { ...prev };
+        for (const k of okKeys) delete next[k];
+        return next;
+      });
+      setExtraVals((prev) => {
+        const next = { ...prev };
+        for (const k of okKeys) {
+          if (eff?.[k] === MASKED) next[k] = '';
+        }
+        return next;
+      });
+      reportKeySaves(results, '扩展配置已保存', '扩展配置');
+    },
     onError: (e) => {
       toast.error(adminError(e, '扩展配置保存失败'), {
         duration: ERROR_TOAST_MS,
       });
+      setExtraDirty({});
       void rollbackToServer();
     },
   });
@@ -971,12 +1000,13 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                     }
                     autoComplete={masked ? 'new-password' : 'off'}
                     value={extraVals[k] ?? ''}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setExtraVals((prev) => ({
                         ...prev,
                         [k]: e.target.value,
-                      }))
-                    }
+                      }));
+                      setExtraDirty((prev) => ({ ...prev, [k]: true }));
+                    }}
                   />
                 </FormField>
               );
@@ -985,7 +1015,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={extraM.isPending || !extraHydrated}
+                disabled={extraM.isPending || !extraHydrated || extraDirtyCount === 0}
                 onClick={() => extraM.mutate()}
               >
                 {extraM.isPending ? '保存中…' : '保存扩展配置'}

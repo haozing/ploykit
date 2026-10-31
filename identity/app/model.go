@@ -29,6 +29,11 @@ var ErrDuplicate = errors.New("duplicate")
 
 var ErrNotFound = errors.New("not found")
 
+// ErrOAuthLinkConflict：同一 (provider, subject) 已绑到另一个用户时
+// LinkOAuthAccount 拒绝（OA-1 fail-closed）。并发竞态窗口内第二个登录
+// 请求会拿到它——登录失败，重试走 FindOAuthAccount 命中既有绑定。
+var ErrOAuthLinkConflict = errors.New("oauth account already linked to another user")
+
 type PAT struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
