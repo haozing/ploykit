@@ -9,6 +9,71 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.24.1] — 2026-11-01
+
+Calendar-boundary test fixes (Go test files only — production code was
+correct in all four; the bombs detonated in the 2026-11-01 CI run on
+v0.24.0, whose own Go diff was empty) + the zijianfang evolution-proposal
+triage batch (docs + example scaffolding; `packages/` untouched, npm
+skipped by release.yml).
+
+### Fixed
+- **four calendar-boundary test bombs, all detonated by the 2026-11-01 CI
+  run on v0.24.0** (whose Go diff was empty — the calendar, not the change):
+  ① audit query fixtures seeded a `now()-48h` event, which lands in the
+  PREVIOUS month on the 1st-2nd of each month, and partition migrations
+  only create [earliest data .. now+2 months] — a fresh test DB migrated
+  on the 1st has no previous-month partition and the insert dies with
+  SQLSTATE 23514; the harness now creates the previous-month partition when
+  missing (analytics-precedent dance) and, while there, bootstraps its own
+  migrations (off the §4 warm-DB debt list). ② analytics
+  `TestQueries_ThreeShapes` pinned `2026-10-07` — a hard date that stopped
+  fitting any partition the moment a fresh DB was first migrated in
+  November; now anchored to day 7 of the current month. ③ analytics
+  `TestRecent_AcrossPartitions_WithWindow` asserted Empty against a
+  `now+1h` window while its seeded row sits on the 5th of the month —
+  inverted on days 1-5 of every month; now anchored past the seeded rows.
+  ④ billing `TestMeteredOverageWorker_LoopCreatesOrders` pinned the
+  "2026-09" metering period while the worker meters exactly the previous
+  closed month off the real clock — starved from November onward; the
+  period is now derived with the service's first-of-previous-month
+  construction (never `AddDate(0,-1,0)` — see the v0.22.0 quota fix).
+  Production code was correct in all four; test-only.
+
+zijianfang evolution proposal triage (`docs/ploykit-evolution-proposal.md`
+in that repo, 2026-11-01 — four proposals, all "second occurrence" framed).
+Verdict: proposals 三 (gating discipline) and 四 (adversarial verification)
+adopted as docs + template + live demo; proposals 一 (phase cache) and 二
+(determinism testkit) deferred to ROADMAP triggers per their own
+counter-proposal (single consumer; replay semantics domain-specific).
+
+### Added
+- **testing-strategy.md rule 9** — `-short` gating discipline for heavy
+  lanes (contract/regression anchors never gated; reason string mandatory;
+  fast-path PASS/SKIP determinism; wall-clock guards need load headroom).
+- **testing-strategy.md rule 10** — adversarial verifier + seeded-defect
+  self-test pattern for "engine claims X" surfaces (independent recompute
+  sharing zero code with the path under test + a seeded lie the verifier
+  must catch; reference demo example/internal/task/stats_verify_test.go,
+  which re-verifies `/api/task-stats` via DB-side now()/interval SQL and
+  catches a lying repo decorator).
+- **example Makefile `test` / `test-fast` / `test-db` lanes** — the dual
+  target discipline travels with every template clone (same philosophy as
+  the v0.22.0 .gitattributes carry), with the gating rules inlined as
+  comments. `test-fast` gates exactly one lane today: fidelity cold-boot
+  e2e (heavy); TestPrerenderProductionFidelity stays ungated as the release
+  contract anchor. Also corrected a stale §4 recorded-debt entry (the task
+  harness self-bootstraps since the fidelity batch).
+
+### Declined (recorded)
+- **ShortGuard helper package** (proposal 三's code half): the framework
+  itself has exactly one `testing.Short()` site; a 3-line helper does not
+  carry a platform package. The discipline ships as rule 9 + the
+  `t.Skip("short: <reason>")` convention instead.
+- **phasecache / determinism testkit**: ROADMAP entries with triggers
+  (second product exhibiting each pattern); see docs/ROADMAP.md "API &
+  Tooling".
+
 ## [0.24.0] — 2026-11-01
 
 npm-only minor (Go module diff vs v0.23.2 is empty; Go consumers can stay on

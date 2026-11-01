@@ -204,8 +204,18 @@ func TestMeteredOverageWorker_LoopCreatesOrders(t *testing.T) {
 	active := time.Now().UTC().AddDate(0, 1, 0)
 	ws := seedMeteredWS(t, pool, planCode, &active)
 
+	// The worker uses the REAL clock, and MeterDueOverages meters exactly the
+	// previous closed month (service.previousMonthPeriod). A pinned
+	// "2026-09" period stopped being due the moment the calendar turned
+	// November (CI 2026-11-01 run 41257532855: the loop ran, the period was
+	// no longer metered, Eventually starved). Derive the period with the
+	// same first-of-previous-month construction the service uses (never
+	// AddDate(0,-1,0) — its forward normalization on month ends picks the
+	// wrong month; see the v0.22.0 quota month-end fix).
+	nowUTC := time.Now().UTC()
+	period := time.Date(nowUTC.Year(), nowUTC.Month()-1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01")
 	usage := &fakeUsageReader{vals: map[string]int64{
-		ws + "|tasks_monthly|2026-09": 120,
+		ws + "|tasks_monthly|" + period: 120,
 	}}
 	svc := app.NewBillingService(repo, app.NewChannelRegistry(), app.Config{Currency: "CNY"},
 		app.BillingHooks{}, nil, func() time.Time { return time.Now().UTC() }, nil)
@@ -215,7 +225,7 @@ func TestMeteredOverageWorker_LoopCreatesOrders(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- w.Run(wctx) }()
 	require.Eventually(t, func() bool {
-		return countOverageOrdersQuiet(pool, ws, "2026-09") == 1
+		return countOverageOrdersQuiet(pool, ws, period) == 1
 	}, 5*time.Second, 20*time.Millisecond, "worker 应在数个 tick 内生成超额订单")
 	cancel()
 	select {
@@ -225,7 +235,7 @@ func TestMeteredOverageWorker_LoopCreatesOrders(t *testing.T) {
 		t.Fatal("worker 未随 ctx 取消退出")
 	}
 
-	assert.Equal(t, 1, countOverageOrdersQuiet(pool, ws, "2026-09"))
+	assert.Equal(t, 1, countOverageOrdersQuiet(pool, ws, period))
 }
 
 func countOverageOrdersQuiet(pool *pgxpool.Pool, ws, period string) int {

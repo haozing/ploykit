@@ -112,7 +112,14 @@ func TestQueries_ThreeShapes(t *testing.T) {
 	ctx := context.Background()
 	ws1, ws2 := uuid.NewString(), uuid.NewString()
 	typ := anType("an_q")
-	base := time.Date(2026, 10, 7, 10, 0, 0, 0, time.UTC)
+	// Anchor to day 7 of the CURRENT month, never a hardcoded date: partition
+	// migrations only create [earliest data .. now+2 months], so a hardcoded
+	// October base stopped fitting any partition the moment a fresh test DB
+	// was first migrated in November (CI 2026-11-01 run 41257532855). Day 7
+	// of the current month always has a partition, and the ±minutes offsets
+	// below never cross the month edge.
+	cur := time.Now().UTC()
+	base := time.Date(cur.Year(), cur.Month(), 7, 10, 0, 0, 0, time.UTC)
 
 	t.Cleanup(func() {
 		_, _ = pool.Exec(context.Background(),

@@ -153,7 +153,11 @@ func TestRecent_AcrossPartitions_WithWindow(t *testing.T) {
 	require.Len(t, rows, 1, "P2-17：时间窗谓词裁剪上月分区")
 	assert.True(t, rows[0].CreatedAt.Equal(curAt))
 
-	rows, err = repo.Recent(ctx, now.Add(time.Hour), 10)
+	// A window strictly past all seeded rows must return empty. Anchor to
+	// curAt, NOT now.Add(1h): curAt is the 5th of the current month, so for
+	// the first five days of every month it lies in the future relative to
+	// now+1h and this assertion inverted (CI 2026-11-01, days 1-5 bomb).
+	rows, err = repo.Recent(ctx, curAt.Add(time.Minute), 10)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
 }

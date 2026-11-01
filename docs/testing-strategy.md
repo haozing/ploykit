@@ -114,6 +114,36 @@ Lane notes:
    through an owner/superuser connection prove nothing. Copy the shape of
    example/internal/task/rls_test.go; register devx.RLSCheck with the same
    connection the application queries through.
+9. **`-short` gating discipline for heavy lanes** (zijianfang proposal three,
+   2026-11-01 — a suite that outgrew the Go default 10-minute budget): heavy
+   tests (stress runs, multi-config audit matrices, cold-boot e2e) self-skip
+   with `if testing.Short() { t.Skip("short: <reason>") }` — the reason
+   string is mandatory and review-grepable. **Contract and regression
+   anchors are never gated**: a fast path that skips its contract tests has
+   no reason to exist (zijianfang's TestDiffScoreRegionDiversity lesson —
+   five reworks happened precisely on the anchor that gating would have
+   hidden). The Makefile dual targets (`test` / `test-fast`, carried with
+   the example template) are the lane harness; two `test-fast` runs must
+   produce byte-identical PASS/SKIP sets (gating itself must be
+   deterministic), and per-test wall-clock guards need load headroom —
+   hostile CI neighbors cause false failures at tight thresholds. Reference
+   gating point: example/internal/fidelity/coldboot_test.go (heavy, gated)
+   beside the ungated TestPrerenderProductionFidelity release anchor.
+10. **Adversarial verifier + seeded-defect self-test for "engine claims X"
+   surfaces** (zijianfang proposal four — their highest-scoring audit lane):
+   wherever a domain computes results AND reports metrics about them
+   (scores, totals, validity claims), the test suite must contain a
+   verifier that (a) recomputes the claim independently — sharing zero code
+   with the path under test, ideally a second implementation against the
+   schema/data contract — and (b) proves the verifier itself bites, by
+   feeding it a synthetic input with a seeded defect and asserting the
+   mismatch IS caught. A "zero violations" pass without the seeded-defect
+   self-test proves nothing: the verifier might be comparing nothing
+   against itself. Reference demo: example/internal/task/
+   stats_verify_test.go (independent SQL recompute of `/api/task-stats` +
+   a lying repo decorator that must be caught). The verifier logic itself
+   is domain-specific and stays in the product; this rule frameworkizes
+   only the pattern.
 
 ## 4. Recorded debt
 
@@ -121,12 +151,15 @@ Debt is listed here so it is a decision, not a surprise (same rule as ADR
 0016's adoption section):
 
 - **Warm-DB assumptions in DB-gated harnesses**: quota/hooks_test.go,
-  quota/adapters/http/usage_test.go, quota/adapters/workers/expiry_test.go,
-  and example/internal/task/handlers_test.go skip without
-  `TEST_DATABASE_URL` but do not run the migration chain themselves — they
-  pass only against an already-migrated database. Migrating them to the
-  provisioning/personal_db_test.go pattern is outstanding work; until then a
-  fresh `TEST_DATABASE_URL` is NOT a supported way to run the L1 lane.
+  quota/adapters/http/usage_test.go, and quota/adapters/workers/expiry_test.go
+  skip without `TEST_DATABASE_URL` but do not run the migration chain
+  themselves — they pass only against an already-migrated database.
+  Migrating them to the provisioning/personal_db_test.go pattern is
+  outstanding work; until then a fresh `TEST_DATABASE_URL` is NOT a
+  supported way to run the L1 lane. (example/internal/task/handlers_test.go
+  and audit's two harnesses have since migrated to the self-bootstrapping
+  pattern and are no longer on this list — the audit ones on 2026-11-01,
+  when the assumption cost a debugging detour on a fresh cold DB.)
 - **Session-level cookie-expiry behavior is covered by design, not by
   long-running tests**: the CSRF expiry-outlives-session class is mitigated
   in the client (single-flight self-heal + guarded one-shot reload,

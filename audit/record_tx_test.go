@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/haozing/ploykit/migrations"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -25,6 +27,10 @@ func TestRecordTx_SameTxLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+
+	// Cold-DB-safe bootstrap — same rationale as newQueryEnv (audit sorts
+	// early alphabetically; a fresh TEST_DATABASE_URL has no tables yet).
+	require.NoError(t, pgmigrate.Up(ctx, pool, migrations.FS, "."), "框架迁移链")
 
 	rec := NewRecorder(pool, nil)
 	ws := uuid.New() // 任意 UUID：audit_event.workspace_id 不做外键约束，仅做租户隔离维度

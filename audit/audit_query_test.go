@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/haozing/ploykit/migrations"
+	"github.com/haozing/ploykit/platform/pgmigrate"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -28,6 +30,44 @@ func newQueryEnv(t *testing.T) (*Recorder, *pgxpool.Pool, string, string, string
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
 	ctx := context.Background()
+
+	// Cold-DB-safe bootstrap (testing-strategy.md rule 7): apply the
+	// framework chain here instead of assuming an earlier package's suite
+	// migrated this database (audit sorts early alphabetically — on a fresh
+	// TEST_DATABASE_URL the tables would not exist yet; this package came
+	// off the §4 warm-DB debt list on 2026-11-01, the day that assumption
+	// cost a debugging detour).
+	require.NoError(t, pgmigrate.Up(ctx, pool, migrations.FS, "."), "框架迁移链")
+
+	// The seed rows below include a now()-48h event; on the 1st-2nd of each
+	// month that lands in the PREVIOUS month, and partition migrations only
+	// create [earliest data .. now+2 months] — a fresh test DB first migrated
+	// on the 1st has no previous-month partition, so the seed insert dies with
+	// 23514 (CI 2026-11-01 run 41257532855). Create the previous-month
+	// partition when missing (same dance as the analytics pgrepo partition
+	// tests) and detach+drop it only when created here.
+	now := time.Now().UTC()
+	prev := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+	prevPart := fmt.Sprintf("audit_event_%s", prev.Format("2006_01"))
+	var attached bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_inherits i
+		JOIN pg_class c ON c.oid = i.inhrelid
+		WHERE i.inhparent = 'audit_event'::regclass AND c.relname = $1)`, prevPart).Scan(&attached))
+	if !attached {
+		lo := prev.Format("2006-01-02")
+		hi := prev.AddDate(0, 1, 0).Format("2006-01-02")
+		_, err := pool.Exec(ctx, fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF audit_event FOR VALUES FROM ('%sT00:00:00+00') TO ('%sT00:00:00+00')`,
+			prevPart, lo, hi))
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			cctx := context.Background()
+			_, _ = pool.Exec(cctx, fmt.Sprintf(`DELETE FROM %s`, prevPart))
+			_, _ = pool.Exec(cctx, fmt.Sprintf(`ALTER TABLE audit_event DETACH PARTITION %s`, prevPart))
+			_, _ = pool.Exec(cctx, fmt.Sprintf(`DROP TABLE %s`, prevPart))
+		})
+	}
 
 	var uid string
 	email := fmt.Sprintf("aqt-%s@test.local", uuid.NewString()[:12])

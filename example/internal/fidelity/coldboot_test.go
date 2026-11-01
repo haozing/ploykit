@@ -60,6 +60,15 @@ const (
 )
 
 func TestColdBootProductionFidelity(t *testing.T) {
+	// short: heavy lane — boots the real binary against a fresh, fully
+	// migrated database. Gated for the make test-fast daily lane.
+	// TestPrerenderProductionFidelity (prerender_test.go) is deliberately NOT
+	// gated: it is the release contract anchor, and a fast path that skips
+	// its contract anchors has no reason to exist (docs/testing-strategy.md
+	// rule 8).
+	if testing.Short() {
+		t.Skip("short: cold-boot e2e is a heavy lane; run via make test / make test-db")
+	}
 	baseDSN := os.Getenv("TEST_DATABASE_URL")
 	if baseDSN == "" {
 		t.Skip("TEST_DATABASE_URL not set; cold-boot e2e needs a disposable postgres (see package comment)")

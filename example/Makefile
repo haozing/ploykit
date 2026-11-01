@@ -1,4 +1,25 @@
-.PHONY: db-up db-down backend frontend build clean
+.PHONY: db-up db-down backend frontend build clean test test-fast test-db
+
+# ---- Test lanes (carried with every product cloned from this template) ----
+# Gating discipline (docs/testing-strategy.md rule 8, zijianfang proposal 三):
+#   test-fast is the DAILY lane (-short): heavy lanes self-skip via
+#   `if testing.Short() { t.Skip("short: <reason>") }` — the reason string is
+#   mandatory and review-grepable. CONTRACT / REGRESSION ANCHORS ARE NEVER
+#   GATED — a fast path that skips its contract tests has no reason to exist.
+#   Fast-path determinism: two test-fast runs must yield byte-identical
+#   PASS/SKIP sets; per-test wall-clock guards need load headroom (hostile
+#   CI neighbors cause false failures otherwise).
+test:
+	go test -p 1 -timeout 1500s ./...
+
+test-fast:
+	go test -short -p 1 -timeout 300s ./...
+
+# Full lane against the dev database (make db-up first). Framework/product
+# suites are DB-gated: they self-skip without TEST_DATABASE_URL.
+test-db:
+	TEST_DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable \
+	go test -p 1 -timeout 1500s ./...
 
 db-up:
 	docker compose up -d postgres 2>/dev/null || docker run -d --name ploykit-pg \
