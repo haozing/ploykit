@@ -9,6 +9,45 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.24.0] — 2026-11-01
+
+npm-only minor (Go module diff vs v0.23.2 is empty; Go consumers can stay on
+v0.23.2). Framework UI copy goes English-first with an opt-in Chinese mode.
+
+### Added
+- **@ploykit/ui (2.8.0): framework i18n layer — English by default, opt-in
+  Chinese** — 78 files / 4,428 hardcoded Chinese strings across the signed-in
+  surfaces (sign-in forms, account pages, workspace, billing, admin console)
+  extracted into a flat-key dictionary. Motivation: an EN-market product
+  (shuijing) showed a Chinese sign-in page to US visitors — login is the
+  paywall door. Design keeps the kit-labels "no i18n framework" philosophy:
+  `useT()` hook + module-level `t(key, vars)` for non-React call sites,
+  `{x}` interpolation, resolution `current lang → en → key`; the language is
+  the host's explicit decision (`<AppProviders uiLang="zh">`, default
+  `'en'`; no browser negotiation, no cookies). Dictionary ships as 10
+  machine-merged fragments (1,418 keys, en/zh aligned) under
+  `src/i18n/messages/`; keys are `<domain>.<component>.<semantic>`.
+- **Module-level code maps now translate lazily** — `ROLE_LABEL` /
+  `STATUS_LABEL` / `DIM_LABEL` in `lib/utils` keep their export shape but
+  resolve per current language via getters (zero consumer changes); zod/mini
+  schemas validate through `{ error: () => t(key) }` so a runtime language
+  switch takes effect without rebuilding schemas.
+- **`api-error` mapping keys instead of literals** — the three known-message
+  maps now store i18n keys resolved through module-level `t()`; public API
+  unchanged (30+ call sites untouched). The two server-side Chinese message
+  matchers are intentionally kept as match keys, never displayed directly.
+- **`kit-labels` built-in defaults are now English** — the override mechanism
+  is unchanged; a Chinese host passes its own labels via `KitLabelsProvider`.
+- Locale-aware formatting: `formatDate`/`formatDateTime` and the CronInput
+  preview follow `currentLang()` (`zh-CN` / `en-US`).
+
+### Notes
+- Backend-provided data (channel schema labels, compliance check items, plan
+  names) is not UI copy and stays as delivered — server-side concern.
+- Gates: vitest 965/965 green (assertions follow the EN defaults; injected
+  host-label assertions keep their semantics), tsc clean, npm build +
+  tarball smoke (510 files) pass.
+
 ## [0.23.2] — 2026-10-31
 
 npm-only patch (Go module diff vs v0.23.1 is empty; consumers of the Go
