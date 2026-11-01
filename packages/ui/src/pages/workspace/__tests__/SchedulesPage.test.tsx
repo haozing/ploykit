@@ -89,14 +89,14 @@ describe('SchedulesPage（调度页：列表/启停/新建）', () => {
     expect(await screen.findByText('task.cleanup')).toBeInTheDocument()
     expect(screen.getByText('0 9 * * *')).toBeInTheDocument()
     expect(screen.getByText('Asia/Shanghai')).toBeInTheDocument()
-    expect(screen.getByText('错过跳过')).toBeInTheDocument()
-    expect(screen.getByText('每天 09:00')).toBeInTheDocument() 
-    expect(screen.getByRole('switch', { name: /停用计划 task.cleanup/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Skip')).toBeInTheDocument()
+    expect(screen.getByText('Every day at 09:00')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: /Disable schedule task.cleanup/ })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('Switch 停用 → PATCH /api/schedules/{id} {enabled:false}', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('switch', { name: /停用计划/ }))
+    fireEvent.click(await screen.findByRole('switch', { name: /Disable schedule/ }))
     await waitFor(() =>
       expect(apiMocks.patch).toHaveBeenCalledWith('/api/schedules/plan-1', { enabled: false }),
     )
@@ -105,15 +105,15 @@ describe('SchedulesPage（调度页：列表/启停/新建）', () => {
 
   it('新建计划：填 kind + CronInput 预览 + 提交 POST /api/schedules', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /创建计划/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Create schedule/ }))
 
-    fireEvent.change(await screen.findByLabelText('触发标识（kind）'), {
+    fireEvent.change(await screen.findByLabelText('Trigger key (kind)'), {
       target: { value: 'task.cleanup' },
     })
 
-    
-    fireEvent.change(screen.getByLabelText('Cron 表达式'), { target: { value: '0 9 * * *' } })
-    fireEvent.click(screen.getByRole('button', { name: /预览下次 3 次/ }))
+
+    fireEvent.change(screen.getByLabelText('Cron expression'), { target: { value: '0 9 * * *' } })
+    fireEvent.click(screen.getByRole('button', { name: /Preview next 3 runs/ }))
     await waitFor(() =>
       expect(clientPost).toHaveBeenCalledWith('/api/schedules/preview', {
         cron_expr: '0 9 * * *',
@@ -122,7 +122,7 @@ describe('SchedulesPage（调度页：列表/启停/新建）', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '创建计划' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create schedule' }))
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/schedules', {
         kind: 'task.cleanup',
@@ -137,50 +137,50 @@ describe('SchedulesPage（调度页：列表/启停/新建）', () => {
   it('空态：无计划时显示引导', async () => {
     apiMocks.get.mockResolvedValue({ items: [] })
     renderPage()
-    expect(await screen.findByText('暂无调度计划')).toBeInTheDocument()
+    expect(await screen.findByText('No schedules yet')).toBeInTheDocument()
   })
 
-  
+
 
   it('删除：确认弹窗回显 kind+下次触发+不可恢复，放行后 DELETE /api/schedules/{id}', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '删除' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
 
-    
+
     expect(confirmMock.calls.length).toBe(1)
-    expect(confirmMock.calls[0].title).toBe('删除调度计划')
+    expect(confirmMock.calls[0].title).toBe('Delete schedule')
     expect(confirmMock.calls[0].description).toContain('task.cleanup')
-    expect(confirmMock.calls[0].description).toContain('每天 09:00')
+    expect(confirmMock.calls[0].description).toContain('Every day at 09:00')
     expect(confirmMock.calls[0].description).toContain('Asia/Shanghai')
-    expect(confirmMock.calls[0].description).toContain('不可恢复')
+    expect(confirmMock.calls[0].description).toContain('cannot be undone')
 
     await waitFor(() => expect(apiMocks.delete).toHaveBeenCalledWith('/api/schedules/plan-1'))
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('计划 task.cleanup 已删除'))
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('Schedule task.cleanup deleted'))
   })
 
   it('删除：确认取消时不发 DELETE', async () => {
     confirmMock.ret = false
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '删除' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(confirmMock.calls.length).toBe(1))
     expect(apiMocks.delete).not.toHaveBeenCalled()
   })
 
-  
+
 
   it('编辑：对话框回填行值（kind 只读），改 cron 提交 PATCH 只含改动字段', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '编辑' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
 
-    
-    const kindInput = await screen.findByLabelText('触发标识（kind，不可修改）')
+
+    const kindInput = await screen.findByLabelText('Trigger key (kind, read-only)')
     expect(kindInput).toHaveValue('task.cleanup')
     expect(kindInput).toBeDisabled()
-    expect(screen.getByLabelText('Cron 表达式')).toHaveValue('0 9 * * *')
+    expect(screen.getByLabelText('Cron expression')).toHaveValue('0 9 * * *')
 
-    
-    fireEvent.change(screen.getByLabelText('Cron 表达式'), { target: { value: '30 8 * * 1' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+
+    fireEvent.change(screen.getByLabelText('Cron expression'), { target: { value: '30 8 * * 1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() =>
       expect(apiMocks.patch).toHaveBeenCalledWith('/api/schedules/plan-1', { cron_expr: '30 8 * * 1' }),
@@ -190,23 +190,23 @@ describe('SchedulesPage（调度页：列表/启停/新建）', () => {
 
   it('编辑：无改动提交直接关窗，不发 PATCH', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '编辑' }))
-    await screen.findByLabelText('触发标识（kind，不可修改）')
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
-    await waitFor(() => expect(screen.queryByLabelText('触发标识（kind，不可修改）')).not.toBeInTheDocument())
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+    await screen.findByLabelText('Trigger key (kind, read-only)')
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(screen.queryByLabelText('Trigger key (kind, read-only)')).not.toBeInTheDocument())
     expect(apiMocks.patch).not.toHaveBeenCalled()
   })
 
-  
+
 
   it('下次触发正文带 (GMT±X) 口径，悬停/聚焦提示计划时区与显示口径', async () => {
     renderPage()
-    
+
     const trigger = await screen.findByText(formatDateTimeTz(plan.next_fire_at))
     expect(trigger).toBeInTheDocument()
-    
+
     fireEvent.focus(trigger)
-    expect(await screen.findByText(`计划时区 Asia/Shanghai；此处按浏览器本地时区（${browserTzLabel()}）显示`)).toBeInTheDocument()
+    expect(await screen.findByText(`Schedule time zone Asia/Shanghai; shown here in your browser's local time zone (${browserTzLabel()})`)).toBeInTheDocument()
   })
 
   it('最近触发同样带口径标注（有值行）', async () => {

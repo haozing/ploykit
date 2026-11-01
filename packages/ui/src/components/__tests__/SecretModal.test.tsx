@@ -30,10 +30,10 @@ describe('SecretModal', () => {
 
     values.forEach((value, index) => {
       expect(screen.getByDisplayValue(value)).toBeInTheDocument()
-      expect(screen.getByLabelText(`密钥 ${index + 1}（共 3 项，只显示一次）`)).toBeInTheDocument()
+      expect(screen.getByLabelText(`Secret ${index + 1} of 3 (shown only once)`)).toBeInTheDocument()
     })
-    expect(screen.queryByRole('button', { name: '复制' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '复制全部' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy all' })).toBeInTheDocument()
   })
 
   it('数组值：复制全部把各项以 \\n 连接写入剪贴板', async () => {
@@ -41,9 +41,9 @@ describe('SecretModal', () => {
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     setup(['tk_alpha', 'tk_beta'], true, vi.fn())
 
-    fireEvent.click(screen.getByRole('button', { name: '复制全部' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy all' }))
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '已复制全部' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'All copied' })).toBeInTheDocument(),
     )
     expect(writeText).toHaveBeenCalledTimes(1)
     expect(writeText).toHaveBeenCalledWith('tk_alpha\ntk_beta')
@@ -53,12 +53,12 @@ describe('SecretModal', () => {
     const onOpenChange = vi.fn()
     setup(['tk_alpha', 'tk_beta'], true, onOpenChange)
 
-    expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: '请先确认已保存' }))
+    expect(screen.getByRole('button', { name: 'Confirm you saved it first' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm you saved it first' }))
     expect(onOpenChange).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '我已保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'I saved it' }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
@@ -69,7 +69,7 @@ describe('SecretModal', () => {
     const { rerender } = setup(['tk_first_a', 'tk_first_b'], true, onOpenChange)
 
     fireEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button', { name: '我已保存' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'I saved it' })).toBeEnabled()
 
     rerender(
       <SecretModal
@@ -84,7 +84,7 @@ describe('SecretModal', () => {
     expect(screen.getByDisplayValue('tk_second_b')).toBeInTheDocument()
     expect(screen.queryByDisplayValue('tk_first_a')).not.toBeInTheDocument()
     expect(screen.getByRole('checkbox')).not.toBeChecked()
-    expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm you saved it first' })).toBeDisabled()
   })
 
   it('单值传入 [单值] 数组：视觉与行为等价于字符串（join 后原串不变）', async () => {
@@ -92,9 +92,9 @@ describe('SecretModal', () => {
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     setup(['tk_solo'], true, vi.fn())
 
-    expect(screen.getByLabelText('密钥（只显示一次）')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '复制全部' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    expect(screen.getByLabelText('Secret (shown only once)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy all' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('tk_solo'))
   })
 
@@ -104,7 +104,7 @@ describe('SecretModal', () => {
 
     
     fireEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button', { name: '我已保存' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'I saved it' })).toBeEnabled()
 
     
     rerender(
@@ -119,7 +119,7 @@ describe('SecretModal', () => {
     
     expect(await screen.findByDisplayValue('tk_second')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).not.toBeChecked()
-    expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm you saved it first' })).toBeDisabled()
     expect(screen.queryByDisplayValue('tk_first')).not.toBeInTheDocument()
   })
 
@@ -128,7 +128,7 @@ describe('SecretModal', () => {
     const { rerender } = setup('tk_first', true, onOpenChange)
 
     fireEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button', { name: '我已保存' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'I saved it' })).toBeEnabled()
 
     rerender(
       <SecretModal
@@ -149,15 +149,15 @@ describe('SecretModal', () => {
 
     expect(await screen.findByDisplayValue('tk_first')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).not.toBeChecked()
-    expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm you saved it first' })).toBeDisabled()
   })
 
   it('复制后 copied 状态随 secretValue 变化重置', async () => {
     const onOpenChange = vi.fn()
     const { rerender } = setup('tk_first', true, onOpenChange)
 
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: '已复制' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument())
 
     rerender(
       <SecretModal
@@ -167,20 +167,20 @@ describe('SecretModal', () => {
         secretValue="tk_second"
       />,
     )
-    expect(await screen.findByRole('button', { name: '复制' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Copy' })).toBeInTheDocument()
   })
 
-  
+
   it('复制失败如实提示手动复制，不显示"已复制"', async () => {
     vi.stubGlobal('navigator', {
       clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     })
     setup('tk_first', true, vi.fn())
 
-    fireEvent.click(screen.getByRole('button', { name: '复制' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: '复制失败，请手动复制' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'Copy failed. Please copy manually.' })).toBeInTheDocument(),
     )
-    expect(screen.queryByRole('button', { name: '已复制' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copied' })).not.toBeInTheDocument()
   })
 })

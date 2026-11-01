@@ -56,14 +56,14 @@ describe('SignInModal 开合', () => {
     const { container } = setup(true)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     // 默认 flow='email-first'：首屏只有邮箱 + 主按钮，无 Tab
-    expect(await screen.findByLabelText('邮箱')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Email')).toBeInTheDocument()
     expect(screen.queryByRole('tab')).toBeNull()
     // 表单自带 h1 被关闭（showHeading=false），标题由 DialogTitle 承担
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     // Dialog 走 portal，内容挂在 document.body
     const titleEl = document.body.querySelector('[data-slot="dialog-title"]')
     expect(titleEl).not.toBeNull()
-    expect(titleEl).toHaveTextContent('登录')
+    expect(titleEl).toHaveTextContent('Sign in')
   })
 
   it('renderOAuth：非空时整块替换默认 OAuth 区（默认块与分隔行都不渲染）', async () => {
@@ -75,28 +75,28 @@ describe('SignInModal 开合', () => {
       'href',
       '/auth/oauth/google/start',
     )
-    // 默认块（oauth-providers 容器 + 中文文案按钮）被替换掉
+    // 默认块（oauth-providers 容器 + 默认文案按钮）被替换掉
     expect(screen.queryByTestId('oauth-providers')).toBeNull()
-    expect(screen.queryByText('使用 Google 登录')).toBeNull()
-    expect(screen.queryByText('或使用邮箱')).toBeNull()
+    expect(screen.queryByText('Sign in with Google')).toBeNull()
+    expect(screen.queryByText('Or continue with email')).toBeNull()
     // 邮箱表单照常渲染（renderOAuth 只替换 OAuth 区）
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
   })
 
   it('renderOAuth：未传 = 默认 OAuth 区照常（oauthProviders 渲染 + 分隔行）', async () => {
     setup(true, { oauthProviders: [{ id: 'google', label: 'Google' }] })
     expect(await screen.findByTestId('oauth-providers')).toBeInTheDocument()
-    expect(screen.getByText('使用 Google 登录')).toHaveAttribute(
+    expect(screen.getByText('Sign in with Google')).toHaveAttribute(
       'href',
       '/auth/oauth/google/start',
     )
-    expect(screen.getByText('或使用邮箱')).toBeInTheDocument()
+    expect(screen.getByText('Or continue with email')).toBeInTheDocument()
   })
 
   it('closed 时不渲染任何内容', () => {
     setup(false)
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByLabelText('邮箱')).toBeNull()
+    expect(screen.queryByLabelText('Email')).toBeNull()
   })
 
   it('X 关闭按钮回调 onOpenChange(false)', () => {
@@ -111,10 +111,10 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
     locState.state = { from: '/admin/settings' }
     const { onOpenChange } = setup(true)
 
-    fireEvent.click(await screen.findByRole('button', { name: '使用密码登录' }))
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Use password' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(hardNavigateMock).toHaveBeenCalledWith('/admin/settings'))
@@ -123,10 +123,10 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
 
   it('未传 onSuccess 且无深链：硬跳转默认目标 /app', async () => {
     setup(true)
-    fireEvent.click(await screen.findByRole('button', { name: '使用密码登录' }))
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Use password' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => expect(hardNavigateMock).toHaveBeenCalledWith('/app'))
   })
@@ -134,10 +134,10 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
   it('传入 onSuccess：不做任何导航，仅回调 onSuccess', async () => {
     const onSuccess = vi.fn()
     setup(true, { onSuccess })
-    fireEvent.click(await screen.findByRole('button', { name: '使用密码登录' }))
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Use password' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
     expect(hardNavigateMock).not.toHaveBeenCalled()

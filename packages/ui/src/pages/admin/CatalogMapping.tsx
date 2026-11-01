@@ -7,6 +7,7 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { toast } from '../../components/toast';
 import { Button } from '../../components/ui/button';
 import { useApi } from '@ploykit/hooks';
+import { useT } from '../../i18n';
 import { adminError, formatCents } from './shared';
 import {
   BILLING_CHANNELS_QUERY_KEY,
@@ -46,14 +47,11 @@ export const BILLING_CATALOG_QUERY_KEY = ['admin', 'billing-catalog'] as const;
 
 const INTERVALS = ['monthly', 'yearly'] as const;
 
+// 周期 → i18n key（渲染/吐司时经 t() 解析；未知周期原样回显）
 const INTERVAL_LABEL: Record<string, string> = {
-  monthly: '每月',
-  yearly: '每年',
+  monthly: 'admin.catalogMapping.intervalMonthly',
+  yearly: 'admin.catalogMapping.intervalYearly',
 };
-
-function intervalLabel(interval: string): string {
-  return INTERVAL_LABEL[interval] ?? interval;
-}
 
 interface MappingRow {
   channel: string;
@@ -129,6 +127,12 @@ function buildMappings(
 export function CatalogMapping() {
   const api = useApi();
   const qc = useQueryClient();
+  const t = useT();
+
+  function intervalLabel(interval: string): string {
+    const key = INTERVAL_LABEL[interval];
+    return key ? t(key) : interval;
+  }
 
   // 与 BillingChannelsSection 同键同源（react-query 共享缓存），只读复用
   const channelsQ = useQuery({
@@ -183,11 +187,16 @@ export function CatalogMapping() {
     onSettled: (_d, _e, v) => untrackRow(v),
     onSuccess: (_d, v) => {
       toast.success(
-        `已注册 ${v.channel} · ${v.plan_code}（${intervalLabel(v.interval)}）商品`,
+        t('admin.catalogMapping.registered', {
+          channel: v.channel,
+          plan: v.plan_code,
+          interval: intervalLabel(v.interval),
+        }),
       );
       void qc.invalidateQueries({ queryKey: BILLING_CATALOG_QUERY_KEY });
     },
-    onError: (e) => toast.error(adminError(e, '商品注册失败')),
+    onError: (e) =>
+      toast.error(adminError(e, t('admin.catalogMapping.registerFailed'))),
   });
 
   const syncM = useMutation({
@@ -200,11 +209,16 @@ export function CatalogMapping() {
     onSettled: (_d, _e, v) => untrackRow(v),
     onSuccess: (_d, v) => {
       toast.success(
-        `已同步 ${v.channel} · ${v.plan_code}（${intervalLabel(v.interval)}）价格`,
+        t('admin.catalogMapping.priceSynced', {
+          channel: v.channel,
+          plan: v.plan_code,
+          interval: intervalLabel(v.interval),
+        }),
       );
       void qc.invalidateQueries({ queryKey: BILLING_CATALOG_QUERY_KEY });
     },
-    onError: (e) => toast.error(adminError(e, '价格同步失败')),
+    onError: (e) =>
+      toast.error(adminError(e, t('admin.catalogMapping.priceSyncFailed'))),
   });
 
   // 未注册任何目录型渠道 → 整卡隐藏（BC-6：catalog_based 渠道才有商品映射）；
@@ -226,13 +240,13 @@ export function CatalogMapping() {
   const columns: Column<MappingRow>[] = [
     {
       key: 'channel',
-      header: '渠道',
+      header: t('admin.catalogMapping.colChannel'),
       className: 'w-24',
       render: (r) => <span className="text-muted-foreground">{r.channel}</span>,
     },
     {
       key: 'plan',
-      header: '套餐',
+      header: t('admin.catalogMapping.colPlan'),
       render: (r) => (
         <div className="min-w-0 max-w-[12rem]">
           <p className="truncate">{r.planName}</p>
@@ -244,13 +258,13 @@ export function CatalogMapping() {
     },
     {
       key: 'interval',
-      header: '周期',
+      header: t('admin.catalogMapping.colInterval'),
       className: 'w-16',
       render: (r) => intervalLabel(r.interval),
     },
     {
       key: 'product',
-      header: '渠道商品 ID',
+      header: t('admin.catalogMapping.colProductId'),
       render: (r) =>
         r.registered ? (
           <span className="font-mono text-xs break-all text-muted-foreground">
@@ -262,7 +276,7 @@ export function CatalogMapping() {
     },
     {
       key: 'price',
-      header: '同步价',
+      header: t('admin.catalogMapping.colSyncedPrice'),
       className: 'w-40',
       render: (r) => {
         if (!r.registered)
@@ -280,7 +294,9 @@ export function CatalogMapping() {
             {synced}
             <span className="text-muted-foreground">
               {' '}
-              → 目标 {formatCents(r.expectedCents, currency)}
+              {t('admin.catalogMapping.target', {
+                price: formatCents(r.expectedCents, currency),
+              })}
             </span>
           </span>
         );
@@ -288,21 +304,32 @@ export function CatalogMapping() {
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('admin.catalogMapping.colStatus'),
       className: 'w-28',
       render: (r) => {
         if (!r.registered)
-          return <StatusBadge label="未注册" tone="neutral" />;
+          return (
+            <StatusBadge
+              label={t('admin.catalogMapping.statusNotRegistered')}
+              tone="neutral"
+            />
+          );
         return r.registered.synced_price_cents === r.expectedCents ? (
-          <StatusBadge label="已同步" tone="positive" />
+          <StatusBadge
+            label={t('admin.catalogMapping.statusSynced')}
+            tone="positive"
+          />
         ) : (
-          <StatusBadge label="价格待同步" tone="warning" />
+          <StatusBadge
+            label={t('admin.catalogMapping.statusPendingSync')}
+            tone="warning"
+          />
         );
       },
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.catalogMapping.colAction'),
       className: 'w-28',
       render: (r) => {
         const pending = pendingCombo(r);
@@ -318,7 +345,9 @@ export function CatalogMapping() {
             disabled={pending}
             onClick={() => syncM.mutate(args)}
           >
-            {pending ? '同步中…' : '同步价格'}
+            {pending
+              ? t('admin.catalogMapping.btnSyncing')
+              : t('admin.catalogMapping.btnSyncPrice')}
           </Button>
         ) : (
           <Button
@@ -327,7 +356,9 @@ export function CatalogMapping() {
             disabled={pending}
             onClick={() => registerM.mutate(args)}
           >
-            {pending ? '注册中…' : '注册'}
+            {pending
+              ? t('admin.catalogMapping.btnRegistering')
+              : t('admin.catalogMapping.btnRegister')}
           </Button>
         );
       },
@@ -336,19 +367,27 @@ export function CatalogMapping() {
 
   return (
     <section className="mt-10">
-      <h2 className="text-base font-semibold">渠道商品映射</h2>
+      <h2 className="text-base font-semibold">
+        {t('admin.catalogMapping.title')}
+      </h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        目录型渠道需先注册商品才能收款；改价后在此同步渠道目录价，使买家实付与套餐标价一致。
+        {t('admin.catalogMapping.description')}
       </p>
       {catalogQ.isError ? (
         <PageError
-          message={adminError(catalogQ.error, '渠道商品映射加载失败')}
+          message={adminError(
+            catalogQ.error,
+            t('admin.catalogMapping.loadFailed'),
+          )}
           onRetry={() => void catalogQ.refetch()}
         />
       ) : catalogQ.isPending ? (
-        <PageLoading label="加载商品映射中…" />
+        <PageLoading label={t('admin.catalogMapping.loading')} />
       ) : (catalogQ.data?.plans ?? []).length === 0 ? (
-        <PageEmpty label="暂无套餐" hint="套餐创建后在此维护渠道商品映射" />
+        <PageEmpty
+          label={t('admin.catalogMapping.emptyLabel')}
+          hint={t('admin.catalogMapping.emptyHint')}
+        />
       ) : (
         <DataTable
           columns={columns}

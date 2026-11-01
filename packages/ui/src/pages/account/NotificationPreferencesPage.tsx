@@ -8,6 +8,7 @@ import { useSEO } from '@ploykit/hooks'
 import {
   useNotificationPrefs, useSetNotificationPref, type NotificationPreference,
 } from '@ploykit/hooks'
+import { useT } from '../../i18n'
 
 export interface NotificationTypeMeta {
   type: string
@@ -28,32 +29,35 @@ export interface NotificationPreferencesPageProps {
 
 export function NotificationPreferencesPage({
   types,
-  title = '通知偏好',
-  description = '未显示的类型默认全部开启',
+  title,
+  description,
   siteName,
   emailChannelNote,
 }: NotificationPreferencesPageProps) {
   const { prefs, loading, error, refetch } = useNotificationPrefs()
   const { setPref } = useSetNotificationPref()
-  
-  
-  const uid = useId()
-  
-  
-  
-  useSEO({ title: siteName ? `${title} · ${siteName}` : title })
+  const t = useT() // i18n（B 方案）：默认标题/说明走字典，title/description prop 优先
+  const pageTitle = title ?? t('account.notifications.title')
+  const pageDesc = description ?? t('account.notifications.desc')
 
-  if (loading) return <div><PageHeader title={title} description={description} /><PageLoading /></div>
+
+  const uid = useId()
+
+
+
+  useSEO({ title: siteName ? `${pageTitle} · ${siteName}` : pageTitle })
+
+  if (loading) return <div><PageHeader title={pageTitle} description={pageDesc} /><PageLoading /></div>
   if (error) {
     return (
       <div>
-        <PageHeader title={title} description={description} />
-        <PageError message={error instanceof Error ? error.message : '偏好加载失败'} onRetry={() => refetch()} />
+        <PageHeader title={pageTitle} description={pageDesc} />
+        <PageError message={error instanceof Error ? error.message : t('account.notifications.loadFailed')} onRetry={() => refetch()} />
       </div>
     )
   }
 
-  
+
   const byType = new Map(prefs.map((p: NotificationPreference) => [p.notification_type, p]))
   const list: NotificationTypeMeta[] =
     types ?? prefs.map((p: NotificationPreference) => ({ type: p.notification_type, label: p.notification_type }))
@@ -61,10 +65,10 @@ export function NotificationPreferencesPage({
   if (list.length === 0) {
     return (
       <div>
-        <PageHeader title={title} description={description} />
+        <PageHeader title={pageTitle} description={pageDesc} />
         <PageEmpty
-          label="暂无可配置的通知类型"
-          hint="产生通知设置后，可配置的类型会显示在列表中"
+          label={t('account.notifications.empty')}
+          hint={t('account.notifications.emptyHint')}
         />
       </div>
     )
@@ -74,30 +78,30 @@ export function NotificationPreferencesPage({
     try {
       await setPref(type, { [channel]: next })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '保存失败') 
+      toast.error(e instanceof Error ? e.message : t('account.notifications.saveFailed'))
     }
   }
 
   return (
     <div>
-      <PageHeader title={title} description={description} />
+      <PageHeader title={pageTitle} description={pageDesc} />
 
       <div className="w-full space-y-4">
         {/* B2 诚实化：邮件未接线时产品传入的能力说明（单行渲染一次，不随行重复——
             390 窄屏行内追加会挤压开关组造成溢出） */}
         {emailChannelNote && (
           <Alert>
-            <AlertDescription>邮件渠道：{emailChannelNote}</AlertDescription>
+            <AlertDescription>{t('account.notifications.emailChannel', { note: emailChannelNote })}</AlertDescription>
           </Alert>
         )}
         {list.map(({ type, label, description: desc }) => {
           const row = byType.get(type)
           const inApp = row?.in_app_enabled ?? true
           const email = row?.email_enabled ?? true
-          
-          
-          
-          
+
+
+
+
           const inAppInputId = `${uid}-${type}-in-app`
           const emailInputId = `${uid}-${type}-email`
           const inAppLabelId = `${inAppInputId}-label`
@@ -111,7 +115,7 @@ export function NotificationPreferencesPage({
               <div className="flex shrink-0 items-center gap-5">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <label id={inAppLabelId} htmlFor={inAppInputId} className="cursor-pointer select-none">
-                    站内<span className="sr-only">（{label}）</span>
+                    {t('account.notifications.inApp')}<span className="sr-only">{t('account.notifications.channelSrOnly', { label })}</span>
                   </label>
                   <Switch
                     id={inAppInputId}
@@ -122,7 +126,7 @@ export function NotificationPreferencesPage({
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <label id={emailLabelId} htmlFor={emailInputId} className="cursor-pointer select-none">
-                    邮件<span className="sr-only">（{label}）</span>
+                    {t('account.notifications.email')}<span className="sr-only">{t('account.notifications.channelSrOnly', { label })}</span>
                   </label>
                   <Switch
                     id={emailInputId}

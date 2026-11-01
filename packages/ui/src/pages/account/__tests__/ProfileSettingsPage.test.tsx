@@ -51,28 +51,28 @@ describe('ProfileSettingsPage', () => {
   it('loading 时渲染加载骨架', () => {
     mocks.loading = true
     render(<ProfileSettingsPage />)
-    expect(screen.getByText('加载账号信息…')).toBeInTheDocument()
+    expect(screen.getByText('Loading account information…')).toBeInTheDocument()
   })
 
   it('渲染资料表单与邮箱行；未验证邮箱展示 Alert 提示 + 重发按钮', () => {
     render(<ProfileSettingsPage />)
-    expect((screen.getByLabelText(/昵称/) as HTMLInputElement).value).toBe('小明')
+    expect((screen.getByLabelText(/Display name/) as HTMLInputElement).value).toBe('小明')
     expect(screen.getByTestId('profile-email')).toHaveTextContent('user@example.com')
-    expect(screen.getByText('登录邮箱尚未验证')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '重新发送验证邮件' })).toBeInTheDocument()
+    expect(screen.getByText('Sign-in email not verified yet')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resend verification email' })).toBeInTheDocument()
   })
 
   it('已验证邮箱不渲染重发按钮', () => {
     mocks.user = fakeUser({ email_verified: true })
     render(<ProfileSettingsPage />)
-    expect(screen.getByText('已验证')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '重新发送验证邮件' })).toBeNull()
+    expect(screen.getByText('Verified')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Resend verification email' })).toBeNull()
   })
 
   it('保存资料 → PATCH /auth/me 携带 display_name/avatar_url', async () => {
     render(<ProfileSettingsPage />)
-    fireEvent.change(screen.getByLabelText(/昵称/), { target: { value: '大明' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.change(screen.getByLabelText(/Display name/), { target: { value: '大明' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(1))
     expect(mocks.patch).toHaveBeenCalledWith('/auth/me', {
@@ -83,7 +83,7 @@ describe('ProfileSettingsPage', () => {
 
   it('点击重发验证邮件 → POST /auth/send-verification', async () => {
     render(<ProfileSettingsPage />)
-    fireEvent.click(screen.getByRole('button', { name: '重新发送验证邮件' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }))
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1))
     expect(mocks.post).toHaveBeenCalledWith('/auth/send-verification')
   })
@@ -92,80 +92,80 @@ describe('ProfileSettingsPage', () => {
     render(<ProfileSettingsPage />)
     // 确认强度由 ImpactConfirmation（勾选 + 确认弹窗）单层承担，不再有邮箱匹配门控
     expect(screen.queryByLabelText('输入登录邮箱以确认')).toBeNull()
-    const deleteBtn = screen.getByRole('button', { name: '删除账号' })
+    const deleteBtn = screen.getByRole('button', { name: 'Delete account' })
     expect(deleteBtn).toBeEnabled()
     fireEvent.click(deleteBtn)
 
-    
-    const confirm = await screen.findByRole('button', { name: '永久删除' })
+
+    const confirm = await screen.findByRole('button', { name: 'Delete permanently' })
     expect(confirm).toBeDisabled()
-    fireEvent.click(screen.getByRole('checkbox', { name: '我理解并接受以上影响' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I understand and accept the impacts above' }))
     fireEvent.click(confirm)
 
     await waitFor(() => expect(mocks.del).toHaveBeenCalledWith('/auth/me'))
   })
 
-  
+
   it('B5：昵称为必填字段（aria-required + 视觉星号）', () => {
     render(<ProfileSettingsPage />)
-    const input = screen.getByLabelText(/昵称/)
+    const input = screen.getByLabelText(/Display name/)
     expect(input).toHaveAttribute('aria-required', 'true')
     expect(screen.getByText('*')).toHaveAttribute('aria-hidden', 'true')
-    
-    expect(screen.getByLabelText(/头像链接/)).not.toHaveAttribute('aria-required')
+
+    expect(screen.getByLabelText(/Avatar URL/)).not.toHaveAttribute('aria-required')
   })
 
-  
+
   it('G7.3：昵称校验失败 → aria-invalid=true 且 aria-describedby 指向错误节点', async () => {
     render(<ProfileSettingsPage />)
-    const input = screen.getByLabelText(/昵称/)
+    const input = screen.getByLabelText(/Display name/)
     fireEvent.change(input, { target: { value: '' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(await screen.findByText('请输入昵称')).toBeInTheDocument()
+    expect(await screen.findByText('Enter a display name')).toBeInTheDocument()
     expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(input.getAttribute('aria-describedby')).toContain('profile-name-error')
     expect(document.getElementById('profile-name-error')).toHaveAttribute('role', 'alert')
   })
 
-  
+
   it('B2：头像链接 javascript: 与超长均被前端校验拦截（不发请求）', async () => {
     render(<ProfileSettingsPage />)
-    const avatar = screen.getByLabelText(/头像链接/)
+    const avatar = screen.getByLabelText(/Avatar URL/)
     fireEvent.change(avatar, { target: { value: 'javascript:alert(1)' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
-    expect(await screen.findByText('头像链接需以 http(s):// 开头')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Avatar URL must start with http(s)://')).toBeInTheDocument()
     expect(mocks.patch).not.toHaveBeenCalled()
 
     fireEvent.change(avatar, { target: { value: 'https://' + 'a'.repeat(2049) } })
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
-    expect(await screen.findByText('头像链接最多 2048 字符')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Avatar URL can be at most 2048 characters')).toBeInTheDocument()
     expect(mocks.patch).not.toHaveBeenCalled()
   })
 
-  
+
   it('B2：头像字段呈现"部分网站限制外链"的如实说明', () => {
     render(<ProfileSettingsPage />)
-    expect(screen.getByText(/部分网站限制外链/)).toBeInTheDocument()
-    expect(screen.getByText(/将显示默认头像/)).toBeInTheDocument()
+    expect(screen.getByText(/block hotlinking/)).toBeInTheDocument()
+    expect(screen.getByText(/default avatar/)).toBeInTheDocument()
   })
 
-  
+
   it('B3：邮箱行说明"暂无法在此修改"，页头不含登录邮箱承诺', () => {
     render(<ProfileSettingsPage />)
-    expect(screen.getByText(/暂无法在此修改/)).toBeInTheDocument()
-    expect(screen.getByText('个人资料').textContent).toBe('个人资料')
+    expect(screen.getByText(/cannot be changed here/)).toBeInTheDocument()
+    expect(screen.getByText('Profile').textContent).toBe('Profile')
   })
 
-  
+
   it('B8：保存失败（E_VALIDATION 英文 message）→ toast 中文文案', async () => {
     mocks.patch.mockRejectedValueOnce(
       new ApiError(400, 'E_VALIDATION', 'display_name must be 1-100 characters after trim'),
     )
     render(<ProfileSettingsPage />)
-    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
-    expect(mocks.toastError).toHaveBeenCalledWith('请求参数有误，请检查填写内容后重试')
+    expect(mocks.toastError).toHaveBeenCalledWith('Invalid request parameters. Check your input and try again')
   })
 })

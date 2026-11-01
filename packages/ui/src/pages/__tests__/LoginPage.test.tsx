@@ -102,18 +102,18 @@ describe('LoginPage flow="tabs"（老形态，显式启用）', () => {
   it('展示验证码登录 Tab，可切到密码登录', async () => {
     renderLogin({ flow: 'tabs' })
     // tabs 子模块动态 import（不用 tabs 的形态不付 Base UI 的字节）
-    expect(await screen.findByRole('tab', { name: '验证码登录' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: 'Sign in with code' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Sign in with password' })).toBeInTheDocument()
   })
 
   it('密码模式提交 → POST /auth/login 携带 email/password 并触发 onSuccess', async () => {
     const onSuccess = vi.fn()
     renderLogin({ flow: 'tabs', onSuccess })
-    fireEvent.click(await screen.findByRole('tab', { name: '密码登录' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sign in with password' }))
 
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1))
     expect(mockedPost).toHaveBeenCalledWith('/auth/login', {
@@ -126,11 +126,11 @@ describe('LoginPage flow="tabs"（老形态，显式启用）', () => {
   it('密码模式登录失败展示后端错误文案', async () => {
     mockedPost.mockRejectedValueOnce(new Error('邮箱或密码错误'))
     renderLogin({ flow: 'tabs' })
-    fireEvent.click(await screen.findByRole('tab', { name: '密码登录' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sign in with password' }))
 
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'wrong' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByText('邮箱或密码错误')).toBeInTheDocument()
   })
@@ -139,8 +139,8 @@ describe('LoginPage flow="tabs"（老形态，显式启用）', () => {
 describe('LoginPage 验证码发送（P3-26）', () => {
   it('发送成功 → POST /auth/send-code，按钮进入重发倒计时（节流）', async () => {
     renderLogin({})
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
 
     await waitFor(() =>
       expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
@@ -148,45 +148,45 @@ describe('LoginPage 验证码发送（P3-26）', () => {
         body: { email: 'user@example.com' },
       }),
     )
-    expect(await screen.findByRole('button', { name: /重发（60s）/ })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /Resend in 60s/ })).toBeDisabled()
   })
 
   it('发送失败 → 展示错误（role=alert），不误置"已发送"形态', async () => {
     mockedApiFetch.mockRejectedValueOnce(new Error('发送过于频繁'))
     renderLogin({})
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('发送过于频繁')
     
-    expect(screen.getByRole('button', { name: '发送' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Send code' })).toBeEnabled()
   })
 })
 
 describe('LoginPage 认证辅助链接（aiblog-15：未挂载路由须可隐藏）', () => {
   it('默认渲染 忘记密码/创建账号，指向 resetPath/registerPath 默认路由', () => {
     renderLogin({})
-    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/forgot-password')
-    expect(screen.getByRole('link', { name: '创建账号' })).toHaveAttribute('href', '/register')
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password')
+    expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute('href', '/register')
   })
 
   it('resetPath/registerPath 传空串时对应链接隐藏（产品未挂载该路由）', () => {
     renderLogin({ resetPath: '', registerPath: '' })
-    expect(screen.queryByRole('link', { name: '忘记密码？' })).toBeNull()
-    expect(screen.queryByRole('link', { name: '创建账号' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Forgot password?' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Create account' })).toBeNull()
   })
 
   it('仅隐藏 reset 链接时 register 链接仍渲染', () => {
     renderLogin({ resetPath: '' })
-    expect(screen.queryByRole('link', { name: '忘记密码？' })).toBeNull()
-    expect(screen.getByRole('link', { name: '创建账号' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Forgot password?' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Create account' })).toBeInTheDocument()
   })
 
   it('自定义路径覆盖默认路由', () => {
     renderLogin({ resetPath: '/my-reset', registerPath: '/my-register' })
-    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/my-reset')
-    expect(screen.getByRole('link', { name: '创建账号' })).toHaveAttribute('href', '/my-register')
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/my-reset')
+    expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute('href', '/my-register')
   })
 })
 
@@ -195,11 +195,11 @@ describe('LoginPage 深链回跳（B-settings-8）', () => {
     locState.state = { from: '/admin/settings' }
     const onSuccess = vi.fn()
     renderLogin({ flow: 'tabs', onSuccess })
-    fireEvent.click(await screen.findByRole('tab', { name: '密码登录' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sign in with password' }))
 
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
@@ -220,20 +220,20 @@ describe('LoginPage 深链回跳（B-settings-8）', () => {
 describe('LoginPage passwordOnly（aifengkong #4：企业内部纯密码形态）', () => {
   it('passwordOnly 时无验证码 Tab/表单，密码表单直出', () => {
     const { container } = renderLogin({ passwordOnly: true })
-    expect(screen.queryByRole('tab', { name: '验证码登录' })).toBeNull()
-    expect(screen.queryByRole('tab', { name: '密码登录' })).toBeNull()
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.getByLabelText('密码')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '发送' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Sign in with code' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Sign in with password' })).toBeNull()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Send code' })).toBeNull()
     expect(container.querySelector('form')).not.toBeNull()
   })
 
   it('passwordOnly 提交走 /auth/login', async () => {
     const onSuccess = vi.fn()
     renderLogin({ passwordOnly: true, onSuccess })
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith('/auth/login', {
         email: 'user@example.com',
@@ -247,8 +247,8 @@ describe('LoginPage passwordOnly（aifengkong #4：企业内部纯密码形态�
     renderLogin({})
     // 默认形态已改为 email-first：首屏无 Tab，只有邮箱 + 主按钮
     expect(screen.queryByRole('tab')).toBeNull()
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send code' })).toBeInTheDocument()
   })
 })
 

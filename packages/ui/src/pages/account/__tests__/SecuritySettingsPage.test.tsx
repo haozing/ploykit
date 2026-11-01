@@ -69,16 +69,16 @@ describe('SecuritySettingsPage', () => {
       session({ id: 's-old', user_agent: 'iPhone Safari' }), // 后端 current 并行落地前的形态
     ]
     render(<SecuritySettingsPage />)
-    expect(screen.getByText('当前设备')).toBeInTheDocument()
+    expect(screen.getByText('Current device')).toBeInTheDocument()
     expect(screen.getByText('MacBook Chrome/130')).toBeInTheDocument()
     expect(screen.getByText('iPhone Safari')).toBeInTheDocument()
   })
 
   it('修改密码 → POST /auth/change-password 携带 old/new', async () => {
     render(<SecuritySettingsPage />)
-    fireEvent.change(screen.getByLabelText('当前密码'), { target: { value: 'old-password' } })
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'Abcdef1234!' } })
-    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'old-password' } })
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'Abcdef1234!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
 
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1))
     expect(mocks.post).toHaveBeenCalledWith('/auth/change-password', {
@@ -88,33 +88,33 @@ describe('SecuritySettingsPage', () => {
 
   it('弱新密码被 zod 拦截，不发请求', async () => {
     render(<SecuritySettingsPage />)
-    fireEvent.change(screen.getByLabelText('当前密码'), { target: { value: 'old-password' } })
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'abcdefgh' } }) 
-    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'old-password' } })
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'abcdefgh' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
 
-    expect(await screen.findByText('密码至少 10 位')).toBeInTheDocument()
+    expect(await screen.findByText('Password must be at least 10 characters')).toBeInTheDocument()
     expect(mocks.post).not.toHaveBeenCalled()
   })
 
-  
-  
+
+
   it('B4：新密码与当前密码相同 → 内联报错且不发请求', async () => {
     render(<SecuritySettingsPage />)
-    fireEvent.change(screen.getByLabelText('当前密码'), { target: { value: 'Abcdef1234!' } })
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'Abcdef1234!' } })
-    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'Abcdef1234!' } })
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'Abcdef1234!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
 
-    expect(await screen.findByText('新密码不能与当前密码相同')).toBeInTheDocument()
+    expect(await screen.findByText('New password cannot be the same as the current password')).toBeInTheDocument()
     expect(mocks.post).not.toHaveBeenCalled()
   })
 
   it('B4 边界：当前密码为空时不触发 new==old 跨字段报错（仍报必填）', async () => {
     render(<SecuritySettingsPage />)
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'Abcdef1234!' } })
-    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'Abcdef1234!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
 
-    expect(await screen.findByText('请输入当前密码')).toBeInTheDocument()
-    expect(screen.queryByText('新密码不能与当前密码相同')).not.toBeInTheDocument()
+    expect(await screen.findByText('Enter your current password')).toBeInTheDocument()
+    expect(screen.queryByText('New password cannot be the same as the current password')).not.toBeInTheDocument()
     expect(mocks.post).not.toHaveBeenCalled()
   })
 
@@ -123,10 +123,10 @@ describe('SecuritySettingsPage', () => {
     mocks.sessions = [session({ id: 's-9', user_agent: 'iPad Safari', current: false })]
     render(<SecuritySettingsPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: '吊销' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith('s-9'))
     expect(mocks.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: '吊销此会话？', danger: true }),
+      expect.objectContaining({ title: 'Revoke this session?', danger: true }),
     )
   })
 
@@ -135,7 +135,7 @@ describe('SecuritySettingsPage', () => {
     mocks.sessions = [session({ id: 's-9' })]
     render(<SecuritySettingsPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: '吊销' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalled())
     expect(mocks.revoke).not.toHaveBeenCalled()
   })
@@ -144,7 +144,7 @@ describe('SecuritySettingsPage', () => {
     mocks.sessions = [session({ id: 's-cur', current: true })]
     render(<SecuritySettingsPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: '吊销' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith('s-cur'))
     await waitFor(() => expect(mocks.logout).toHaveBeenCalledTimes(1))
   })
@@ -153,7 +153,7 @@ describe('SecuritySettingsPage', () => {
     mocks.sessions = [session({ id: 's-other', current: false })]
     render(<SecuritySettingsPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: '吊销' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith('s-other'))
     expect(mocks.logout).not.toHaveBeenCalled()
   })
@@ -162,13 +162,13 @@ describe('SecuritySettingsPage', () => {
     mocks.sessions = [session({ id: 's-1' }), session({ id: 's-2', current: true })]
     render(<SecuritySettingsPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: '全部吊销' }))
-    
-    expect(await screen.findByText('吊销全部会话？')).toBeInTheDocument()
-    expect(screen.getByText(/个人访问令牌（PAT）不受影响/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke all' }))
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }))
-    fireEvent.click(screen.getByRole('button', { name: '全部吊销', hidden: false }))
+    expect(await screen.findByText('Revoke all sessions?')).toBeInTheDocument()
+    expect(screen.getByText(/Personal access tokens \(PATs\) are unaffected/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand and accept the impacts above/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke all', hidden: false }))
     await waitFor(() => expect(mocks.revokeAll).toHaveBeenCalledTimes(1))
   })
 
@@ -176,9 +176,9 @@ describe('SecuritySettingsPage', () => {
     mocks.revokeAll.mockRejectedValueOnce(new Error('网络连接失败'))
     render(<SecuritySettingsPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: '全部吊销' }))
-    fireEvent.click(await screen.findByRole('checkbox', { name: /我理解并接受以上影响/ }))
-    fireEvent.click(screen.getByRole('button', { name: '全部吊销', hidden: false }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke all' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /I understand and accept the impacts above/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke all', hidden: false }))
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('网络连接失败'))
   })
@@ -186,27 +186,26 @@ describe('SecuritySettingsPage', () => {
   it('P2-24：修改密码失败 → 错误 toast（服务端语义透出）', async () => {
     mocks.post.mockRejectedValueOnce(new Error('当前密码不正确'))
     render(<SecuritySettingsPage />)
-    fireEvent.change(screen.getByLabelText('当前密码'), { target: { value: 'wrong-old' } })
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'Abcdef1234!' } })
-    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrong-old' } })
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'Abcdef1234!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
 
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('当前密码不正确'))
   })
 
-  
-  
-  
+
+
   it('B3：旧密码错 401 信封（英文 message）→ toast 中文域文案，不直出英文行话', async () => {
     mocks.post.mockRejectedValueOnce(
       new ApiError(401, 'E_UNAUTHENTICATED', 'current password incorrect'),
     )
     render(<SecuritySettingsPage />)
-    fireEvent.change(screen.getByLabelText('当前密码'), { target: { value: 'wrong-old' } })
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'Abcdef1234!' } })
-    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrong-old' } })
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'Abcdef1234!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }))
 
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('当前密码不正确，请确认后重新输入'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('Current password is incorrect. Please re-enter it'))
   })
 })

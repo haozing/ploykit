@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { useApi } from '@ploykit/hooks'
 import { isApiError } from '@ploykit/client'
+import { useT } from '../i18n'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from './ui/dialog'
@@ -26,6 +27,7 @@ export interface ReauthDialogProps {
 
 export function ReauthDialog({ open, retry, onClose }: ReauthDialogProps) {
   const api = useApi()
+  const t = useT()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,15 +39,15 @@ export function ReauthDialog({ open, retry, onClose }: ReauthDialogProps) {
     try {
       await api.post('/auth/confirm-password', { password })
       if (retry) await retry()
-      toast.success('已验证，操作已重试')
+      toast.success(t('ui.reauth.verifiedToast'))
       setPassword('')
       onClose()
     } catch (err) {
       if (isApiError(err, 'E_UNAUTHENTICATED')) {
-        setError('密码不正确，请重试')
+        setError(t('ui.reauth.wrongPassword'))
         return
       }
-      toast.error('操作失败，请稍后重试')
+      toast.error(t('ui.reauth.failedToast'))
       onClose()
     } finally {
       setBusy(false)
@@ -58,10 +60,10 @@ export function ReauthDialog({ open, retry, onClose }: ReauthDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
-            需要验证密码
+            {t('ui.reauth.title')}
           </DialogTitle>
           <DialogDescription>
-            这是敏感操作，需要确认密码后自动重试。密码确认在一段时间内有效。
+            {t('ui.reauth.description')}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -72,8 +74,8 @@ export function ReauthDialog({ open, retry, onClose }: ReauthDialogProps) {
             type="password"
             autoFocus
             autoComplete="current-password"
-            aria-label="当前密码"
-            placeholder="当前密码"
+            aria-label={t('ui.reauth.currentPassword')}
+            placeholder={t('ui.reauth.currentPassword')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={busy}
@@ -81,10 +83,10 @@ export function ReauthDialog({ open, retry, onClose }: ReauthDialogProps) {
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
-              取消
+              {t('ui.reauth.cancel')}
             </Button>
             <Button type="submit" disabled={!password || busy}>
-              {busy ? '验证中…' : '验证并继续'}
+              {busy ? t('ui.reauth.verifying') : t('ui.reauth.verifyAndContinue')}
             </Button>
           </DialogFooter>
         </form>

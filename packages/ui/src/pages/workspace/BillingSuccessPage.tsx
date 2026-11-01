@@ -10,6 +10,7 @@ import { toast } from '../../components/toast'
 import { useApi } from '@ploykit/hooks'
 import { useWorkspace } from '@ploykit/hooks'
 import { queryKeys, type PKSubscription } from '@ploykit/hooks'
+import { useT } from '../../i18n'
 
 const POLL_MS = 5_000
 const MAX_TRIES = 12
@@ -28,6 +29,7 @@ export interface BillingSuccessPageProps {
 }
 
 export function BillingSuccessPage({ redirectTo = '/settings/workspace/billing' }: BillingSuccessPageProps = {}) {
+  const t = useT()
   const { current } = useWorkspace()
   const api = useApi()
   const qc = useQueryClient()
@@ -55,8 +57,8 @@ export function BillingSuccessPage({ redirectTo = '/settings/workspace/billing' 
   const finish = (ok: boolean) => {
     if (done.current) return
     done.current = true
-    if (ok) toast.success('支付成功，套餐已生效')
-    else toast.info('支付结果确认超时，可稍后在计费页查看')
+    if (ok) toast.success(t('workspace.billingSuccess.paidToast'))
+    else toast.info(t('workspace.billingSuccess.timeoutToast'))
     navigate(redirectTo)
   }
 
@@ -89,9 +91,9 @@ export function BillingSuccessPage({ redirectTo = '/settings/workspace/billing' 
   if (!wsId) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6">
-        <PageEmpty label="暂无法确认支付结果" hint="当前没有选中的工作区，无法查询订阅状态。" />
+        <PageEmpty label={t('workspace.billingSuccess.noWsLabel')} hint={t('workspace.billingSuccess.noWsHint')} />
         <Button variant="link" render={<a href={redirectTo} />}>
-          前往计费页查看当前套餐
+          {t('workspace.billingSuccess.goBilling')}
         </Button>
       </div>
     )
@@ -100,8 +102,8 @@ export function BillingSuccessPage({ redirectTo = '/settings/workspace/billing' 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-6">
       <Spinner className="size-8 text-primary" />
-      <p className="text-sm font-medium">正在确认支付结果…</p>
-      <p className="text-xs text-muted-foreground">确认完成后将自动返回计费页，请勿关闭页面。</p>
+      <p className="text-sm font-medium">{t('workspace.billingSuccess.confirming')}</p>
+      <p className="text-xs text-muted-foreground">{t('workspace.billingSuccess.waitHint')}</p>
       <div className="mt-4 w-full max-w-md space-y-2" aria-hidden="true">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />

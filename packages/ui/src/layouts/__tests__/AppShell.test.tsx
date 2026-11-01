@@ -128,7 +128,7 @@ describe('AppShell 模拟会话横幅（ADR 0008）', () => {
   it('impersonated_by 非空：内容区顶部持久显示警示条（顶栏之上）', async () => {
     mocks.impersonatedBy = '11111111-2222-3333-4444-555555555555'
     const { container } = await renderAt('/app')
-    const banner = screen.getByText('您正处于管理员模拟会话')
+    const banner = screen.getByText('You are in an admin impersonation session')
     expect(banner).toBeInTheDocument()
     
     const bannerSlot = banner.closest('[data-slot="impersonation-banner"]')
@@ -140,7 +140,7 @@ describe('AppShell 模拟会话横幅（ADR 0008）', () => {
 
   it('普通会话（impersonated_by 缺省）：不渲染警示条', async () => {
     await renderAt('/app')
-    expect(screen.queryByText('您正处于管理员模拟会话')).not.toBeInTheDocument()
+    expect(screen.queryByText('You are in an admin impersonation session')).not.toBeInTheDocument()
   })
 })
 

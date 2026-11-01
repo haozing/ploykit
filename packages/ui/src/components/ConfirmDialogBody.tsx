@@ -8,6 +8,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from './ui/alert-dialog'
+import { useT } from '../i18n'
 
 /**
  * 确认弹窗的视觉实现（Base UI AlertDialog 原语）。
@@ -35,6 +36,7 @@ export default function ConfirmDialogBody({
   state: ConfirmDialogState
   onClose: (result: boolean) => void
 }) {
+  const t = useT() // 默认按钮文案走字典（g9：ui.confirm.*），confirmText/cancelText prop 优先
   return (
     <AlertDialog open onOpenChange={(open: boolean) => !open && onClose(false)}>
       <AlertDialogContent>
@@ -46,13 +48,13 @@ export default function ConfirmDialogBody({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={() => onClose(false)}>
-            {state.cancelText ?? '取消'}
+            {state.cancelText ?? t('ui.confirm.cancel')}
           </AlertDialogCancel>
           <AlertDialogAction
             variant={state.danger ? 'destructive' : 'default'}
             onClick={() => onClose(true)}
           >
-            {state.confirmText ?? '确认'}
+            {state.confirmText ?? t('ui.confirm.confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

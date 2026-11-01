@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from '../../components/ui/card';
 import type { StatusTone } from '../../lib/utils';
+import { useT } from '../../i18n';
 import { adminError } from './shared';
 
 /**
@@ -66,12 +67,12 @@ export interface AdminComplianceEnvelope {
 
 export const ADMIN_LEGAL_COMPLIANCE_QUERY_KEY = ['admin', 'legal-compliance'] as const;
 
-// 三色语义：ok 绿 / warn 黄 / manual 灰（人工项）。文案是状态词，
-// check.label 才是"查什么"。
-const CHECK_STATUS: Record<AdminComplianceCheckStatus, { tone: StatusTone; label: string }> = {
-  ok: { tone: 'positive', label: '正常' },
-  warn: { tone: 'warning', label: '注意' },
-  manual: { tone: 'neutral', label: '人工' },
+// 三色语义：ok 绿 / warn 黄 / manual 灰（人工项）。文案是状态词（i18n key，
+// 渲染时 t() 解析），check.label 才是"查什么"。
+const CHECK_STATUS: Record<AdminComplianceCheckStatus, { tone: StatusTone; labelKey: string }> = {
+  ok: { tone: 'positive', labelKey: 'admin.compliance.statusOk' },
+  warn: { tone: 'warning', labelKey: 'admin.compliance.statusWarn' },
+  manual: { tone: 'neutral', labelKey: 'admin.compliance.statusManual' },
 };
 
 function LegalFact({ label, value }: { label: string; value: string }) {
@@ -85,6 +86,7 @@ function LegalFact({ label, value }: { label: string; value: string }) {
 
 export function AdminComplianceCard() {
   const api = useApi();
+  const t = useT();
 
   const complianceQ = useQuery({
     queryKey: ADMIN_LEGAL_COMPLIANCE_QUERY_KEY,
@@ -92,12 +94,12 @@ export function AdminComplianceCard() {
   });
 
   if (complianceQ.isPending) {
-    return <PageLoading label="加载合规状态中…" />;
+    return <PageLoading label={t('admin.compliance.loading')} />;
   }
   if (complianceQ.isError) {
     return (
       <PageError
-        message={adminError(complianceQ.error, '合规状态加载失败')}
+        message={adminError(complianceQ.error, t('admin.compliance.loadFailed'))}
         onRetry={() => void complianceQ.refetch()}
       />
     );
@@ -108,30 +110,32 @@ export function AdminComplianceCard() {
   return (
     <Card>
       <CardHeader>
-        <CardDescription>法务合规</CardDescription>
-        <CardTitle>Compliance</CardTitle>
+        <CardDescription>{t('admin.compliance.description')}</CardDescription>
+        <CardTitle>{t('admin.compliance.title')}</CardTitle>
         <CardAction>
           {missing.length > 0 ? (
-            <Badge variant="destructive">缺 {missing.length} 项法务配置</Badge>
+            <Badge variant="destructive">
+              {t('admin.compliance.missingCount', { count: missing.length })}
+            </Badge>
           ) : (
-            <Badge variant="secondary">法务配置完整</Badge>
+            <Badge variant="secondary">{t('admin.compliance.allSet')}</Badge>
           )}
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* 法务主体现状（legal_* 键解析值）：红灯列表的对照上下文，空值如实显示 — */}
         <div className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-          <LegalFact label="法定名称" value={legal.entity_name} />
-          <LegalFact label="管辖法" value={legal.jurisdiction} />
-          <LegalFact label="支付处理方" value={legal.processor_name} />
-          <LegalFact label="计费模式" value={legal.billing_model} />
+          <LegalFact label={t('admin.compliance.factEntityName')} value={legal.entity_name} />
+          <LegalFact label={t('admin.compliance.factJurisdiction')} value={legal.jurisdiction} />
+          <LegalFact label={t('admin.compliance.factProcessor')} value={legal.processor_name} />
+          <LegalFact label={t('admin.compliance.factBillingModel')} value={legal.billing_model} />
         </div>
 
         {/* 缺键红灯：F1 的 grep 人工环节后台化 */}
         {missing.length > 0 && (
           <div>
             <p className="text-sm font-medium text-destructive">
-              未填写的法务配置
+              {t('admin.compliance.missingTitle')}
             </p>
             <ul className="mt-1.5 space-y-1.5">
               {missing.map((m) => (
@@ -152,7 +156,7 @@ export function AdminComplianceCard() {
         {/* 承诺对账清单：ok 绿 / warn 黄 / manual 灰 */}
         {checks.length > 0 && (
           <div>
-            <p className="text-sm font-medium">承诺对账</p>
+            <p className="text-sm font-medium">{t('admin.compliance.checksTitle')}</p>
             <ul className="mt-1.5 space-y-1.5">
               {checks.map((c) => {
                 const s = CHECK_STATUS[c.status] ?? CHECK_STATUS.manual;
@@ -160,7 +164,7 @@ export function AdminComplianceCard() {
                   <li key={c.id} className="text-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="min-w-0 flex-1">{c.label}</span>
-                      <StatusBadge tone={s.tone} label={s.label} />
+                      <StatusBadge tone={s.tone} label={t(s.labelKey)} />
                     </div>
                     {c.detail && (
                       <p className="mt-0.5 text-xs text-muted-foreground">

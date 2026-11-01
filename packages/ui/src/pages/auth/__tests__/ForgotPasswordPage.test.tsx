@@ -29,10 +29,10 @@ beforeEach(() => {
 describe('ForgotPasswordPage', () => {
   it('提交邮箱 → POST /auth/forgot-password {email}', async () => {
     render(<ForgotPasswordPage />)
-    fireEvent.change(screen.getByLabelText('邮箱'), {
+    fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'user@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '发送重置链接' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
 
     await waitFor(() =>
       expect(mockedApiFetch).toHaveBeenCalledWith('/auth/forgot-password', {
@@ -44,23 +44,23 @@ describe('ForgotPasswordPage', () => {
 
   it('防枚举：无论结果，成功提示同一句（不区分邮箱是否存在）', async () => {
     render(<ForgotPasswordPage />)
-    fireEvent.change(screen.getByLabelText('邮箱'), {
+    fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'whoever@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '发送重置链接' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
 
     expect(await screen.findByTestId('sent-hint')).toHaveTextContent(
-      '如果该邮箱存在，重置链接已发送，请查收邮箱。',
+      'If that email exists, a reset link has been sent. Please check your inbox.',
     )
   })
 
   it('请求失败 → 展示错误（不伪装成已发送）', async () => {
     mockedApiFetch.mockRejectedValueOnce(new Error('发送过于频繁'))
     render(<ForgotPasswordPage />)
-    fireEvent.change(screen.getByLabelText('邮箱'), {
+    fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'user@example.com' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '发送重置链接' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }))
 
     expect(await screen.findByText('发送过于频繁')).toBeInTheDocument()
     expect(screen.queryByTestId('sent-hint')).not.toBeInTheDocument()
@@ -69,7 +69,7 @@ describe('ForgotPasswordPage', () => {
   it('空邮箱不可提交（按钮禁用）', () => {
     render(<ForgotPasswordPage />)
     expect(
-      screen.getByRole('button', { name: '发送重置链接' }),
+      screen.getByRole('button', { name: 'Send reset link' }),
     ).toBeDisabled()
   })
 

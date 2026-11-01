@@ -76,19 +76,19 @@ describe('KitLabelsProvider', () => {
     mocks.wsCurrent = null
   })
 
-  it('默认值与历史硬编码逐字一致（DEFAULT_KIT_LABELS 抽查）', () => {
-    expect(DEFAULT_KIT_LABELS.workspaceSwitcherAria).toBe('切换工作区')
-    expect(DEFAULT_KIT_LABELS.create).toBe('创建')
+  it('默认值为英文直字（B 方案默认语言 en；DEFAULT_KIT_LABELS 抽查）', () => {
+    expect(DEFAULT_KIT_LABELS.workspaceSwitcherAria).toBe('Switch workspace')
+    expect(DEFAULT_KIT_LABELS.create).toBe('Create')
     expect(DEFAULT_KIT_LABELS.quotaBillingHref).toBe('/settings/workspace/billing')
-    expect(DEFAULT_KIT_LABELS.workspaceCreatedToast('Acme')).toBe('工作区「Acme」已创建')
-    expect(DEFAULT_KIT_LABELS.paginationTotal(42, 2, 3)).toBe('共 42 条 · 第 2/3 页')
-    expect(DEFAULT_KIT_LABELS.emptyState).toBe('本页没有数据，可返回上一页')
-    expect(DEFAULT_KIT_LABELS.confirmSaved).toBe('我已保存')
-    expect(DEFAULT_KIT_LABELS.confirmPending).toBe('请先确认已保存')
-    expect(DEFAULT_KIT_LABELS.logout).toBe('退出登录')
-    expect(DEFAULT_KIT_LABELS.pageLoading).toBe('加载中…')
-    expect(DEFAULT_KIT_LABELS.pageEmpty).toBe('暂无数据')
-    expect(DEFAULT_KIT_LABELS.pageRetry).toBe('重试')
+    expect(DEFAULT_KIT_LABELS.workspaceCreatedToast('Acme')).toBe('Workspace "Acme" created')
+    expect(DEFAULT_KIT_LABELS.paginationTotal(42, 2, 3)).toBe('42 items · page 2 of 3')
+    expect(DEFAULT_KIT_LABELS.emptyState).toBe('No data on this page. Go back to the previous page')
+    expect(DEFAULT_KIT_LABELS.confirmSaved).toBe('I saved it')
+    expect(DEFAULT_KIT_LABELS.confirmPending).toBe('Confirm you saved it first')
+    expect(DEFAULT_KIT_LABELS.logout).toBe('Sign out')
+    expect(DEFAULT_KIT_LABELS.pageLoading).toBe('Loading…')
+    expect(DEFAULT_KIT_LABELS.pageEmpty).toBe('No data yet')
+    expect(DEFAULT_KIT_LABELS.pageRetry).toBe('Retry')
   })
 
   it('useKitLabels 未挂 Provider 时返回内置默认（Provider-safe）', () => {
@@ -139,10 +139,10 @@ describe('KitLabelsProvider', () => {
         <Toaster />
       </KitLabelsProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Gamma' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    fireEvent.change(await screen.findByLabelText('New workspace name'), { target: { value: 'Gamma' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(await screen.findByText('Workspace Gamma is ready')).toBeInTheDocument()
   })
 
@@ -156,10 +156,10 @@ describe('KitLabelsProvider', () => {
         </SidebarProvider>
       </KitLabelsProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
     // Provider 层生效：默认 /settings/workspace/billing 被替换
-    expect(await screen.findByRole('link', { name: '设置→计费' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Settings → Billing' })).toHaveAttribute(
       'href', '/product/pricing',
     )
   })
@@ -173,9 +173,9 @@ describe('KitLabelsProvider', () => {
         </SidebarProvider>
       </KitLabelsProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    expect(await screen.findByRole('link', { name: '设置→计费' })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    expect(await screen.findByRole('link', { name: 'Settings → Billing' })).toHaveAttribute(
       'href', '/acme/billing',
     )
   })
@@ -243,7 +243,7 @@ describe('KitLabelsProvider', () => {
     expect(await screen.findByRole('menuitem', { name: 'Sign out' })).toBeVisible()
   })
 
-  it('无 Provider：四个组件默认中文渲染不变（零行为变化抽查）', async () => {
+  it('无 Provider：四个组件默认英文渲染（B 方案 en 直字默认抽查）', async () => {
     const table = render(
       <DataTable
         columns={columns}
@@ -252,17 +252,17 @@ describe('KitLabelsProvider', () => {
         pagination={{ page: 2, pageSize: 20, total: 42, onPageChange: () => {} }}
       />,
     )
-    expect(screen.getByText('共 42 条 · 第 2/3 页')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '上一页' })).toBeInTheDocument()
+    expect(screen.getByText('42 items · page 2 of 3')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeInTheDocument()
     table.unmount()
 
     render(<SecretModal open onOpenChange={() => {}} secretName="Token" secretValue="tk_1" />)
-    expect(screen.getByRole('button', { name: '请先确认已保存' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm you saved it first' })).toBeDisabled()
 
     await renderUi(<UserMenu />)
-    expect(screen.getByRole('button', { name: '用户菜单' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
-    expect(await screen.findByRole('menuitem', { name: '退出登录' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'User menu' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Sign out' })).toBeVisible()
   })
 
   it('prop > provider：UserMenu 传 labels prop 时覆盖 Provider 值（存量消费方不受影响）', async () => {
@@ -302,12 +302,12 @@ describe('KitLabelsProvider', () => {
 
   it('部分覆盖：未涉及的键落回默认值', async () => {
     await renderUi(
-      <KitLabelsProvider labels={{ logout: 'Sign out' }}>
+      <KitLabelsProvider labels={{ logout: 'Log out' }}>
         <UserMenu />
       </KitLabelsProvider>,
     )
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
-    expect(await screen.findByRole('menuitem', { name: 'Sign out' })).toBeVisible()
-    expect(screen.getByRole('menuitem', { name: '账户设置' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Log out' })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: 'Account settings' })).toBeVisible()
   })
 })

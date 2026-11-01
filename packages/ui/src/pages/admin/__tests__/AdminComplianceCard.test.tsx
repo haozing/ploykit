@@ -72,7 +72,7 @@ describe('AdminComplianceCard', () => {
   it('pending：就地渲染加载态，请求 GET /api/admin/legal/compliance', () => {
     mockedGet.mockReturnValue(new Promise(() => {}));
     renderCard();
-    expect(screen.getByText('加载合规状态中…')).toBeInTheDocument();
+    expect(screen.getByText('Loading compliance status…')).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledWith('/api/admin/legal/compliance');
   });
 
@@ -83,17 +83,17 @@ describe('AdminComplianceCard', () => {
     renderCard();
     expect(
       await screen.findByText(
-        '服务暂时不可用，请稍后重试；若持续出现请联系平台管理员',
+        'The service is temporarily unavailable. Please retry later; if it persists, contact the platform administrator',
       ),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
   });
 
   it('缺键红灯：key+description 逐行呈现，徽标计缺，legal_config 现状对照', async () => {
     renderCard();
     expect(await screen.findByText('Compliance')).toBeInTheDocument();
-    expect(screen.getByText('缺 1 项法务配置')).toBeInTheDocument();
+    expect(screen.getByText('Missing legal config items: 1')).toBeInTheDocument();
     expect(screen.getByText('legal_entity_name')).toBeInTheDocument();
     expect(
       screen.getByText('法定名称（个人姓名或公司注册名）'),
@@ -107,11 +107,11 @@ describe('AdminComplianceCard', () => {
   it('checks 三色状态行：ok/warn/manual 各自色调 + manual 附 detail', async () => {
     renderCard();
     expect(await screen.findByText('DSAR 导出端点')).toBeInTheDocument();
-    expect(screen.getByText('正常')).toBeInTheDocument();
+    expect(screen.getByText('OK')).toBeInTheDocument();
     expect(screen.getByText('保留期清扫最近运行')).toBeInTheDocument();
-    expect(screen.getByText('注意')).toBeInTheDocument();
+    expect(screen.getByText('Warning')).toBeInTheDocument();
     expect(screen.getByText('退款政策（渠道侧配置）')).toBeInTheDocument();
-    expect(screen.getByText('人工')).toBeInTheDocument();
+    expect(screen.getByText('Manual')).toBeInTheDocument();
     expect(
       screen.getByText('退款文案单一真源在渠道店铺设置，框架侧只提示不代填'),
     ).toBeInTheDocument();
@@ -120,9 +120,9 @@ describe('AdminComplianceCard', () => {
   it('无缺键：不渲染红灯块，徽标为完整', async () => {
     mockedGet.mockResolvedValueOnce({ ...ENVELOPE, missing_keys: [] });
     renderCard();
-    expect(await screen.findByText('法务配置完整')).toBeInTheDocument();
+    expect(await screen.findByText('Legal config complete')).toBeInTheDocument();
     expect(
-      screen.queryByText('未填写的法务配置'),
+      screen.queryByText('Unfilled legal config'),
     ).not.toBeInTheDocument();
   });
 });

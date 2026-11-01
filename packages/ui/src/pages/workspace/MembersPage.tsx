@@ -1,6 +1,7 @@
 
 import { useState } from 'react'
 import { useSearchParamsCompat } from '../../router'
+import { t, useT } from '../../i18n'
 import * as z from 'zod/mini'
 import { UserPlus, Link2, MoreHorizontal } from 'lucide-react'
 import {
@@ -36,10 +37,11 @@ import { roleSatisfies } from '@ploykit/hooks'
 
 
 
+// i18n（B 方案）：校验文案走 error 函数——safeParse 时才取字典，语言随 setUiLang 生效。
 export const inviteSchema = z.object({
   email: z.string().check(
-    z.minLength(1, '请输入邮箱'),
-    z.email('邮箱格式不正确'),
+    z.minLength(1, { error: () => t('workspace.members.form.emailRequired') }),
+    z.email({ error: () => t('workspace.members.form.emailInvalid') }),
   ),
   role: z.enum(['admin', 'member']),
 })
@@ -48,13 +50,13 @@ type InviteForm = z.infer<typeof inviteSchema>
 export const shareLinkSchema = z.object({
   role: z.enum(['admin', 'member']),
   max_uses: z.number().check(
-    z.int('须为整数'),
-    z.minimum(1, '至少 1 次'),
+    z.int({ error: () => t('workspace.members.form.mustBeInteger') }),
+    z.minimum(1, { error: () => t('workspace.members.form.minUses') }),
     z.maximum(10000),
   ),
   ttl_hours: z.number().check(
-    z.int('须为整数'),
-    z.minimum(1, '至少 1 小时'),
+    z.int({ error: () => t('workspace.members.form.mustBeInteger') }),
+    z.minimum(1, { error: () => t('workspace.members.form.minTtlHours') }),
     z.maximum(24 * 30),
   ),
 })
@@ -76,10 +78,10 @@ export interface MembersPageProps {
 }
 
 export function MembersPage(_props: MembersPageProps = {}) {
-  
-  
-  
-  
+  const t = useT() // i18n（B 方案）：本页文案走 g5 分片字典，en 默认、zh 可选
+
+
+
   const [searchParams, setSearchParams] = useSearchParamsCompat()
   const tabParam = searchParams.get('tab')
   const tab: MembersTab =
@@ -89,11 +91,11 @@ export function MembersPage(_props: MembersPageProps = {}) {
   const memberPage = pageFromParams(searchParams.get('mpage'))
   const invitePage = pageFromParams(searchParams.get('ipage'))
   const linkPage = pageFromParams(searchParams.get('lpage'))
-  
-  const setTab = (t: string) => {
+
+  const setTab = (v: string) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
-      next.set('tab', t)
+      next.set('tab', v)
       return next
     })
   }
@@ -134,16 +136,16 @@ export function MembersPage(_props: MembersPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="成员" />
-        <PageEmpty label="请先创建并选择一个工作区" />
+        <PageHeader title={t('workspace.members.title')} />
+        <PageEmpty label={t('workspace.members.needWorkspace')} />
       </div>
     )
   }
-  if (loading) return <PageLoading label="加载工作区数据…" />
+  if (loading) return <PageLoading label={t('workspace.members.loading')} />
   if (membersError) {
     return (
       <PageError
-        message={apiErrorMessage(membersError, '成员数据加载失败')}
+        message={apiErrorMessage(membersError, t('workspace.members.loadError'))}
         onRetry={() => refetchAll()}
       />
     )
@@ -162,52 +164,52 @@ export function MembersPage(_props: MembersPageProps = {}) {
     if (role === m.role) return
     try {
       await mut.updateRole.mutateAsync({ userId: m.user_id, role })
-      toast.success(`已将 ${m.email} 的角色改为 ${ROLE_LABEL[role] ?? role}`)
+      toast.success(t('workspace.members.toastRoleChanged', { email: m.email, role: ROLE_LABEL[role] ?? role }))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '角色变更失败'))
+      toast.error(apiErrorMessage(e, t('workspace.members.toastRoleChangeFailed')))
     }
   }
 
   const onRemove = async (m: PKMember) => {
     if (!(await confirm({
-      title: '移除成员',
-      description: `确定将 ${m.email} 移出本工作区？对方将立即失去访问权限。`,
-      confirmText: '移除', danger: true,
+      title: t('workspace.members.removeMember'),
+      description: t('workspace.members.removeConfirmDesc', { email: m.email }),
+      confirmText: t('workspace.members.removeConfirmButton'), danger: true,
     }))) return
     try {
       await mut.removeMember.mutateAsync(m.user_id)
-      toast.success(`已移除 ${m.email}`)
+      toast.success(t('workspace.members.toastRemoved', { email: m.email }))
     } catch (e) {
-      
-      toast.error(apiErrorMessage(e, '移除失败') + (isConflict(e) ? '（请先转移或删除工作区）' : ''))
+
+      toast.error(apiErrorMessage(e, t('workspace.members.toastRemoveFailed')) + (isConflict(e) ? t('workspace.members.removeConflictHint') : ''))
     }
   }
 
   const onRevokeInvite = async (inv: PKInvitation) => {
     if (!(await confirm({
-      title: '撤销邀请',
-      description: `撤销发给 ${inv.email} 的邀请？对方将无法再接受。`,
-      confirmText: '撤销', danger: true,
+      title: t('workspace.members.revokeInviteTitle'),
+      description: t('workspace.members.revokeInviteDesc', { email: inv.email }),
+      confirmText: t('workspace.members.revokeButton'), danger: true,
     }))) return
     try {
       await mut.revokeInvitation.mutateAsync(inv.id)
-      toast.success('邀请已撤销')
+      toast.success(t('workspace.members.toastInviteRevoked'))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '撤销失败'))
+      toast.error(apiErrorMessage(e, t('workspace.members.toastRevokeFailed')))
     }
   }
 
   const onRevokeLink = async (link: PKShareLink) => {
     if (!(await confirm({
-      title: '撤销加入码',
-      description: `撤销前缀为 ${link.code_prefix}… 的加入码？撤销后该加入码立即失效，持有者无法再加入，已兑换的成员不受影响。`,
-      confirmText: '撤销', danger: true,
+      title: t('workspace.members.revokeLinkTitle'),
+      description: t('workspace.members.revokeLinkDesc', { prefix: link.code_prefix }),
+      confirmText: t('workspace.members.revokeButton'), danger: true,
     }))) return
     try {
       await mut.revokeShareLink.mutateAsync(link.id)
-      toast.success('加入码已撤销')
+      toast.success(t('workspace.members.toastLinkRevoked'))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '撤销失败'))
+      toast.error(apiErrorMessage(e, t('workspace.members.toastRevokeFailed')))
     }
   }
 
@@ -221,21 +223,21 @@ export function MembersPage(_props: MembersPageProps = {}) {
     if (!m) return
     try {
       await mut.transferOwnership.mutateAsync(m.user_id)
-      toast.success(`所有权已转让给 ${m.email}（你已降为成员）`)
+      toast.success(t('workspace.members.toastTransferDone', { email: m.email }))
       setTransferTarget(null)
     } catch (e) {
-      toast.error(apiErrorMessage(e, '所有权转让失败'))
+      toast.error(apiErrorMessage(e, t('workspace.members.toastTransferFailed')))
     }
   }
 
   const submitInvite = inviteForm.handleSubmit(async (values) => {
     try {
       await mut.invite.mutateAsync(values)
-      toast.success(`已向 ${values.email} 发出邀请，待对方接受`)
+      toast.success(t('workspace.members.toastInviteSent', { email: values.email }))
       inviteForm.reset()
       setInviteOpen(false)
     } catch (e) {
-      toast.error(apiErrorMessage(e, '邀请失败'))
+      toast.error(apiErrorMessage(e, t('workspace.members.toastInviteFailed')))
     }
   })
 
@@ -246,7 +248,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
       linkForm.reset()
       setShareOpen(false)
     } catch (e) {
-      toast.error(apiErrorMessage(e, '创建加入码失败'))
+      toast.error(apiErrorMessage(e, t('workspace.members.toastLinkCreateFailed')))
     }
   })
 
@@ -255,7 +257,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
   const memberColumns: Column<PKMember>[] = [
     {
       key: 'email',
-      header: '邮箱',
+      header: t('workspace.members.colEmail'),
       className: 'w-[28%]',
       render: (m) => (
         <div className="min-w-0">
@@ -266,14 +268,14 @@ export function MembersPage(_props: MembersPageProps = {}) {
     },
     {
       key: 'role',
-      header: '角色',
+      header: t('workspace.members.colRole'),
       className: 'w-[20%]',
       render: (m) =>
         m.role === 'owner' ? (
           <Badge variant="outline">{ROLE_LABEL.owner}</Badge>
         ) : canManage ? (
           <Select value={m.role} onValueChange={(v) => typeof v === 'string' && onRoleChange(m, v)}>
-            <SelectTrigger size="sm" aria-label={`变更 ${m.email} 的角色`}>
+            <SelectTrigger size="sm" aria-label={t('workspace.members.roleChangeAria', { email: m.email })}>
               <SelectValue>{ROLE_LABEL[m.role] ?? m.role}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -288,19 +290,19 @@ export function MembersPage(_props: MembersPageProps = {}) {
     },
     {
       key: 'created_at',
-      header: '加入时间',
+      header: t('workspace.members.colJoinedAt'),
       className: 'w-[22%]',
       render: (m) => <span className="text-muted-foreground">{formatDateTime(m.created_at)}</span>,
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('workspace.members.colActions'),
       className: 'w-[22%] text-right',
       render: (m) =>
         m.role !== 'owner' && (canManage || canTransfer) ? (
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" aria-label={`更多操作：${m.email}`} />}
+              render={<Button variant="ghost" size="icon" aria-label={t('workspace.members.moreActionsAria', { email: m.email })} />}
             >
               <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
@@ -310,7 +312,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
                   disabled={mut.transferOwnership.isPending}
                   onClick={() => setTransferTarget(m)}
                 >
-                  转让所有权
+                  {t('workspace.members.transferOwnership')}
                 </DropdownMenuItem>
               )}
               {canManage && (
@@ -319,7 +321,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
                   disabled={mut.removeMember.isPending}
                   onClick={() => onRemove(m)}
                 >
-                  移除成员
+                  {t('workspace.members.removeMember')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -329,19 +331,19 @@ export function MembersPage(_props: MembersPageProps = {}) {
   ]
 
   const invitationColumns: Column<PKInvitation>[] = [
-    { key: 'email', header: '邮箱', render: (i) => <span className="font-medium">{i.email}</span> },
-    { key: 'role', header: '角色', render: (i) => <Badge variant="secondary">{ROLE_LABEL[i.role] ?? i.role}</Badge> },
-    { key: 'status', header: '状态', render: (i) => <StatusBadge status={i.status} /> },
+    { key: 'email', header: t('workspace.members.colEmail'), render: (i) => <span className="font-medium">{i.email}</span> },
+    { key: 'role', header: t('workspace.members.colRole'), render: (i) => <Badge variant="secondary">{ROLE_LABEL[i.role] ?? i.role}</Badge> },
+    { key: 'status', header: t('workspace.members.colStatus'), render: (i) => <StatusBadge status={i.status} /> },
     {
-      key: 'expires_at', header: '过期时间',
+      key: 'expires_at', header: t('workspace.members.colExpiresAt'),
       render: (i) => <span className="text-muted-foreground">{formatDateTime(i.expires_at)}</span>,
     },
     {
-      key: 'actions', header: '操作', className: 'text-right',
+      key: 'actions', header: t('workspace.members.colActions'), className: 'text-right',
       render: (i) =>
         i.status === 'pending' && canManage ? (
           <Button size="sm" variant="outline" disabled={mut.revokeInvitation.isPending} onClick={() => onRevokeInvite(i)}>
-            撤销
+            {t('workspace.members.revokeButton')}
           </Button>
         ) : null,
     },
@@ -349,28 +351,28 @@ export function MembersPage(_props: MembersPageProps = {}) {
 
   const shareLinkColumns: Column<PKShareLink>[] = [
     {
-      key: 'code_prefix', header: '加入码',
+      key: 'code_prefix', header: t('workspace.members.colJoinCode'),
       render: (l) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{l.code_prefix}…</code>,
     },
-    { key: 'role', header: '授予角色', render: (l) => <Badge variant="secondary">{ROLE_LABEL[l.role] ?? l.role}</Badge> },
+    { key: 'role', header: t('workspace.members.colGrantedRole'), render: (l) => <Badge variant="secondary">{ROLE_LABEL[l.role] ?? l.role}</Badge> },
     {
-      key: 'uses', header: '兑换 / 上限',
+      key: 'uses', header: t('workspace.members.colUses'),
       render: (l) => (
         <span className="tabular-nums">
-          {l.uses} / {l.max_uses === -1 ? '不限' : l.max_uses}
+          {l.uses} / {l.max_uses === -1 ? t('workspace.members.usesUnlimited') : l.max_uses}
         </span>
       ),
     },
     {
-      key: 'expires_at', header: '过期时间',
+      key: 'expires_at', header: t('workspace.members.colExpiresAt'),
       render: (l) => <span className="text-muted-foreground">{formatDateTime(l.expires_at)}</span>,
     },
     {
-      key: 'actions', header: '操作', className: 'text-right',
+      key: 'actions', header: t('workspace.members.colActions'), className: 'text-right',
       render: (l) =>
         canManage ? (
           <Button size="sm" variant="outline" disabled={mut.revokeShareLink.isPending} onClick={() => onRevokeLink(l)}>
-            撤销
+            {t('workspace.members.revokeButton')}
           </Button>
         ) : null,
     },
@@ -379,15 +381,15 @@ export function MembersPage(_props: MembersPageProps = {}) {
   return (
     <div>
       <PageHeader
-        title="成员"
+        title={t('workspace.members.title')}
         actions={
           canManage ? (
             <>
               <Button variant="outline" onClick={() => setShareOpen(true)}>
-                <Link2 /> 创建加入码
+                <Link2 /> {t('workspace.members.createLink')}
               </Button>
               <Button onClick={() => setInviteOpen(true)}>
-                <UserPlus /> 邀请成员
+                <UserPlus /> {t('workspace.members.inviteMember')}
               </Button>
             </>
           ) : undefined
@@ -396,9 +398,9 @@ export function MembersPage(_props: MembersPageProps = {}) {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="members">成员（{membersTotal}）</TabsTrigger>
-          <TabsTrigger value="invitations">邀请（{invitationsTotal}）</TabsTrigger>
-          <TabsTrigger value="share-links">加入码（{shareLinksTotal}）</TabsTrigger>
+          <TabsTrigger value="members">{t('workspace.members.tabMembers', { count: membersTotal })}</TabsTrigger>
+          <TabsTrigger value="invitations">{t('workspace.members.tabInvitations', { count: invitationsTotal })}</TabsTrigger>
+          <TabsTrigger value="share-links">{t('workspace.members.tabShareLinks', { count: shareLinksTotal })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members" className="mt-4">
@@ -406,7 +408,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
             columns={memberColumns}
             rows={members}
             rowKey={(m) => m.user_id}
-            empty={<PageEmpty label="暂无成员" />}
+            empty={<PageEmpty label={t('workspace.members.membersEmpty')} />}
             pagination={{
               page: memberPage,
               pageSize: LIST_PAGE_SIZE,
@@ -418,9 +420,9 @@ export function MembersPage(_props: MembersPageProps = {}) {
 
         <TabsContent value="invitations" className="mt-4">
           {invitationsError ? (
-            
+
             <PageError
-              message={apiErrorMessage(invitationsError, '邀请列表加载失败')}
+              message={apiErrorMessage(invitationsError, t('workspace.members.invitationsLoadError'))}
               onRetry={() => refetchAll()}
             />
           ) : (
@@ -428,7 +430,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
               columns={invitationColumns}
               rows={invitations}
               rowKey={(i) => i.id}
-              empty={<PageEmpty label="暂无邀请" hint="尚未发出邀请。定向邀请按邮箱一对一送达，公开加入请用加入码" />}
+              empty={<PageEmpty label={t('workspace.members.invitationsEmpty')} hint={t('workspace.members.invitationsEmptyHint')} />}
               pagination={{
                 page: invitePage,
                 pageSize: LIST_PAGE_SIZE,
@@ -441,9 +443,9 @@ export function MembersPage(_props: MembersPageProps = {}) {
 
         <TabsContent value="share-links" className="mt-4">
           {shareLinksError ? (
-            
+
             <PageError
-              message={apiErrorMessage(shareLinksError, '加入码加载失败')}
+              message={apiErrorMessage(shareLinksError, t('workspace.members.linksLoadError'))}
               onRetry={() => refetchAll()}
             />
           ) : (
@@ -452,8 +454,8 @@ export function MembersPage(_props: MembersPageProps = {}) {
               rows={shareLinks}
               rowKey={(l) => l.id}
               empty={
-                
-                <PageEmpty label="暂无加入码" hint="加入码可让多人凭码自助加入工作区。创建后把码发给需加入的人" />
+
+                <PageEmpty label={t('workspace.members.linksEmpty')} hint={t('workspace.members.linksEmptyHint')} />
               }
               pagination={{
                 page: linkPage,
@@ -470,25 +472,25 @@ export function MembersPage(_props: MembersPageProps = {}) {
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>邀请成员</DialogTitle>
-            <DialogDescription>邀请将送达对方邮箱；对方也可在「我的邀请」中直接接受</DialogDescription>
+            <DialogTitle>{t('workspace.members.inviteMember')}</DialogTitle>
+            <DialogDescription>{t('workspace.members.inviteDialogDesc')}</DialogDescription>
           </DialogHeader>
           {/* B7：noValidate 关掉浏览器原生校验气泡——错误文案唯一出口仍是下方
               zod（inviteSchema 兜底保留：字段级中文文案 + aria 关联不随浏览器
               语言漂移，jsdom/真实浏览器行为一致）。 */}
           <form className="space-y-4" onSubmit={submitInvite} noValidate>
-            <FormField label="邮箱" error={inviteForm.formState.errors.email?.message} htmlFor="invite-email">
+            <FormField label={t('workspace.members.fieldEmail')} error={inviteForm.formState.errors.email?.message} htmlFor="invite-email">
               {/* B7：语义 type="email"——移动端唤出邮箱键盘、桌面端自动填充可识别；
                   输入法兼容：仅影响软键盘倾向 ASCII 布局，中文输入法粘贴/切英文
                   输入域名段不受影响；校验仍由 zod 统一裁决（见上 noValidate）。 */}
               <Input id="invite-email" type="email" autoComplete="email" placeholder="name@example.com" {...inviteForm.register('email')} />
             </FormField>
-            <FormField label="授予角色" error={inviteForm.formState.errors.role?.message}>
+            <FormField label={t('workspace.members.fieldGrantRole')} error={inviteForm.formState.errors.role?.message}>
               <Select
                 value={inviteForm.watch('role')}
                 onValueChange={(v) => typeof v === 'string' && inviteForm.setValue('role', v as 'admin' | 'member')}
               >
-                <SelectTrigger className="w-full" aria-label="邀请角色">
+                <SelectTrigger className="w-full" aria-label={t('workspace.members.inviteRoleAria')}>
                   <SelectValue>{ROLE_LABEL[inviteForm.watch('role')]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -499,9 +501,9 @@ export function MembersPage(_props: MembersPageProps = {}) {
               </Select>
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>取消</Button>
+              <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>{t('workspace.members.cancel')}</Button>
               <Button type="submit" disabled={mut.invite.isPending}>
-                {mut.invite.isPending ? '发送中…' : '发送邀请'}
+                {mut.invite.isPending ? t('workspace.members.sending') : t('workspace.members.sendInvite')}
               </Button>
             </DialogFooter>
           </form>
@@ -512,18 +514,18 @@ export function MembersPage(_props: MembersPageProps = {}) {
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>创建加入码</DialogTitle>
+            <DialogTitle>{t('workspace.members.createLink')}</DialogTitle>
             <DialogDescription>
-              生成可分享的兑换码；持有者可按所选角色自助加入工作区。完整兑换码仅创建时展示一次。
+              {t('workspace.members.createLinkDesc')}
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitLink}>
-            <FormField label="授予角色" error={linkForm.formState.errors.role?.message}>
+            <FormField label={t('workspace.members.fieldGrantRole')} error={linkForm.formState.errors.role?.message}>
               <Select
                 value={linkForm.watch('role')}
                 onValueChange={(v) => typeof v === 'string' && linkForm.setValue('role', v as 'admin' | 'member')}
               >
-                <SelectTrigger className="w-full" aria-label="加入码角色">
+                <SelectTrigger className="w-full" aria-label={t('workspace.members.linkRoleAria')}>
                   <SelectValue>{ROLE_LABEL[linkForm.watch('role')]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -533,16 +535,16 @@ export function MembersPage(_props: MembersPageProps = {}) {
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="最大兑换次数" error={linkForm.formState.errors.max_uses?.message} htmlFor="link-max">
+            <FormField label={t('workspace.members.fieldMaxUses')} error={linkForm.formState.errors.max_uses?.message} htmlFor="link-max">
               <Input id="link-max" type="number" min={1} {...linkForm.register('max_uses', { valueAsNumber: true })} />
             </FormField>
-            <FormField label="有效期（小时）" error={linkForm.formState.errors.ttl_hours?.message} htmlFor="link-ttl">
+            <FormField label={t('workspace.members.fieldTtl')} error={linkForm.formState.errors.ttl_hours?.message} htmlFor="link-ttl">
               <Input id="link-ttl" type="number" min={1} {...linkForm.register('ttl_hours', { valueAsNumber: true })} />
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShareOpen(false)}>取消</Button>
+              <Button type="button" variant="outline" onClick={() => setShareOpen(false)}>{t('workspace.members.cancel')}</Button>
               <Button type="submit" disabled={mut.createShareLink.isPending}>
-                {mut.createShareLink.isPending ? '创建中…' : '创建'}
+                {mut.createShareLink.isPending ? t('workspace.members.creating') : t('workspace.members.create')}
               </Button>
             </DialogFooter>
           </form>
@@ -553,7 +555,7 @@ export function MembersPage(_props: MembersPageProps = {}) {
       <SecretModal
         open={secret !== null}
         onOpenChange={(o) => !o && setSecret(null)}
-        secretName="加入码"
+        secretName={t('workspace.members.joinCode')}
         secretValue={secret ?? ''}
       />
       {transferTarget && (
@@ -563,12 +565,12 @@ export function MembersPage(_props: MembersPageProps = {}) {
             if (!o) setTransferTarget(null)
           }}
           onConfirm={() => void onTransfer()}
-          title={`将所有权转让给 ${transferTarget.email}`}
-          confirmText="确认转让"
+          title={t('workspace.members.transferTitle', { email: transferTarget.email })}
+          confirmText={t('workspace.members.transferConfirm')}
           danger
           impacts={[
-            `${transferTarget.email} 将成为新所有者（获得最高权限与计费控制权）`,
-            '你将降为普通成员',
+            t('workspace.members.transferImpactOwner', { email: transferTarget.email }),
+            t('workspace.members.transferImpactSelf'),
           ]}
         />
       )}

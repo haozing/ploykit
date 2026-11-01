@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
+import { t, useT } from '../../i18n'
 import * as z from 'zod/mini'
 import {
   PageHeader, PageLoading, PageError, PageEmpty,
@@ -43,9 +44,10 @@ interface SchedulePlan {
   enabled: boolean
 }
 
+/** misfire 键 → i18n key（渲染处经 t() 取文案；未知键回退显示原始值）。 */
 export const MISFIRE_LABEL: Record<string, string> = {
-  skip: '错过跳过',
-  once: '错过补发',
+  skip: 'workspace.schedules.misfireSkip',
+  once: 'workspace.schedules.misfireOnce',
 }
 
 
@@ -57,16 +59,17 @@ function localTimezone(): string {
   }
 }
 
+// i18n（B 方案）：校验文案走 error 函数——safeParse 时才取字典，语言随 setUiLang 生效。
 export const createSchema = z.object({
   kind: z.string().check(
     z.trim(),
-    z.minLength(1, '请填写触发标识（kind），如 task.cleanup'),
+    z.minLength(1, { error: () => t('workspace.schedules.form.kindRequired') }),
   ),
   cron_expr: z.string().check(
     z.trim(),
-    z.regex(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/, '表达式须为五字段：分 时 日 月 周'),
+    z.regex(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/, { error: () => t('workspace.schedules.form.cronFiveFields') }),
   ),
-  timezone: z.string().check(z.minLength(1, '请选择时区')),
+  timezone: z.string().check(z.minLength(1, { error: () => t('workspace.schedules.form.tzRequired') })),
   misfire: z.enum(['skip', 'once']),
 })
 type CreateForm = z.infer<typeof createSchema>
@@ -74,6 +77,7 @@ type CreateForm = z.infer<typeof createSchema>
 export interface SchedulesPageProps {}
 
 export function SchedulesPage(_props: SchedulesPageProps = {}) {
+  const t = useT() // i18n（B 方案）：本页文案走 g5 分片字典，en 默认、zh 可选
   const { current } = useWorkspace()
   const api = useApi()
   const wsId = current?.id ?? ''
@@ -102,14 +106,14 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
   const toggle = useMutation({
     mutationFn: (p: SchedulePlan) =>
       api.patch<SchedulePlan>(`${base}/${p.id}`, { enabled: !p.enabled }),
-    onSuccess: async () => { toast.success('状态已更新'); await invalidate() },
-    onError: (e) => onError(e, '操作失败'),
+    onSuccess: async () => { toast.success(t('workspace.schedules.toastStatusUpdated')); await invalidate() },
+    onError: (e) => onError(e, t('workspace.schedules.toastOpFailed')),
   })
 
   const create = useMutation({
     mutationFn: (values: CreateForm) => api.post<SchedulePlan>(base, values),
-    onSuccess: async () => { toast.success('计划已创建'); await invalidate() },
-    onError: (e) => onError(e, '创建失败'),
+    onSuccess: async () => { toast.success(t('workspace.schedules.toastCreated')); await invalidate() },
+    onError: (e) => onError(e, t('workspace.schedules.toastCreateFailed')),
   })
 
   
@@ -119,11 +123,11 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
     mutationFn: (v: { plan: SchedulePlan; body: Partial<Pick<SchedulePlan, 'cron_expr' | 'timezone' | 'misfire'>> }) =>
       api.patch<SchedulePlan>(`${base}/${v.plan.id}`, v.body),
     onSuccess: async (_d, v) => {
-      toast.success(`计划 ${v.plan.kind} 已更新`)
+      toast.success(t('workspace.schedules.toastUpdated', { kind: v.plan.kind }))
       setEditing(null)
       await invalidate()
     },
-    onError: (e) => onError(e, '更新失败'),
+    onError: (e) => onError(e, t('workspace.schedules.toastUpdateFailed')),
   })
 
   
@@ -132,16 +136,19 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
   const confirm = useConfirm()
   const removeM = useMutation({
     mutationFn: (p: SchedulePlan) => api.delete<void>(`${base}/${p.id}`),
-    onSuccess: async (_d, p) => { toast.success(`计划 ${p.kind} 已删除`); await invalidate() },
-    onError: (e) => onError(e, '删除失败'),
+    onSuccess: async (_d, p) => { toast.success(t('workspace.schedules.toastDeleted', { kind: p.kind })); await invalidate() },
+    onError: (e) => onError(e, t('workspace.schedules.toastDeleteFailed')),
   })
   const onRemove = async (p: SchedulePlan) => {
     const ok = await confirm({
-      title: '删除调度计划',
-      description:
-        `确定删除计划 ${p.kind}（${describeCron(p.cron_expr)}，计划时区 ${p.timezone}）吗？` +
-        `下次触发 ${formatDateTimeTz(p.next_fire_at)}。删除后该计划不再触发，操作不可恢复。`,
-      confirmText: '删除',
+      title: t('workspace.schedules.removeTitle'),
+      description: t('workspace.schedules.removeDesc', {
+        kind: p.kind,
+        cron: describeCron(p.cron_expr),
+        tz: p.timezone,
+        next: formatDateTimeTz(p.next_fire_at),
+      }),
+      confirmText: t('workspace.schedules.remove'),
       danger: true,
     })
     if (ok) removeM.mutate(p)
@@ -202,9 +209,9 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
 
   const columns: Column<SchedulePlan>[] = [
     {
-      
-      
-      key: 'kind', header: '触发',
+
+
+      key: 'kind', header: t('workspace.schedules.colTrigger'),
       render: (p) => (
         <div className="min-w-0">
           <code className="block max-w-[20rem] break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{p.kind}</code>
@@ -213,7 +220,7 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
       ),
     },
     {
-      key: 'cron', header: '表达式 / 时区',
+      key: 'cron', header: t('workspace.schedules.colExprTz'),
       render: (p) => (
         <div className="min-w-0">
           <code className="block max-w-[20rem] break-all font-mono text-xs">{p.cron_expr}</code>
@@ -222,17 +229,17 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
       ),
     },
     {
-      key: 'misfire', header: '错过策略',
+      key: 'misfire', header: t('workspace.schedules.fieldMisfire'),
       render: (p) => (
         <Badge variant="outline">
-          {MISFIRE_LABEL[p.misfire] ?? p.misfire}
+          {MISFIRE_LABEL[p.misfire] ? t(MISFIRE_LABEL[p.misfire]) : p.misfire}
         </Badge>
       ),
     },
     {
-      key: 'next_fire_at', header: '下次触发',
+      key: 'next_fire_at', header: t('workspace.schedules.colNextRun'),
       render: (p) => (
-        
+
         <Tooltip>
           <TooltipTrigger
             render={<span className="whitespace-nowrap text-muted-foreground" tabIndex={0} />}
@@ -240,13 +247,13 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
             {formatDateTimeTz(p.next_fire_at)}
           </TooltipTrigger>
           <TooltipContent>
-            计划时区 {p.timezone}；此处按浏览器本地时区（{tzLabel}）显示
+            {t('workspace.schedules.tzTooltip', { tz: p.timezone, browserTz: tzLabel })}
           </TooltipContent>
         </Tooltip>
       ),
     },
     {
-      key: 'last_fired_at', header: '最近触发',
+      key: 'last_fired_at', header: t('workspace.schedules.colLastRun'),
       render: (p) => p.last_fired_at
         ? (
           <Tooltip>
@@ -256,31 +263,33 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
               {formatDateTimeTz(p.last_fired_at)}
             </TooltipTrigger>
             <TooltipContent>
-              计划时区 {p.timezone}；此处按浏览器本地时区（{tzLabel}）显示
+              {t('workspace.schedules.tzTooltip', { tz: p.timezone, browserTz: tzLabel })}
             </TooltipContent>
           </Tooltip>
-          )
+        )
         : <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'enabled', header: '启用',
+      key: 'enabled', header: t('workspace.schedules.colEnabled'),
       render: (p) => (
-        
+
         <Switch
           checked={p.enabled}
           disabled={toggle.isPending}
           onCheckedChange={() => toggle.mutate(p)}
-          aria-label={`${p.enabled ? '停用' : '启用'}计划 ${p.kind}`}
+          aria-label={p.enabled
+            ? t('workspace.schedules.disableAria', { kind: p.kind })
+            : t('workspace.schedules.enableAria', { kind: p.kind })}
         />
       ),
     },
     {
-      
+
       key: 'actions', header: '', className: 'text-right',
       render: (p) => (
         <div className="flex justify-end gap-1">
           <Button variant="ghost" size="sm" onClick={() => setEditing(p)}>
-            编辑
+            {t('workspace.schedules.edit')}
           </Button>
           <Button
             variant="ghost"
@@ -289,7 +298,7 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
             disabled={removeM.isPending}
             onClick={() => void onRemove(p)}
           >
-            删除
+            {t('workspace.schedules.remove')}
           </Button>
         </div>
       ),
@@ -301,8 +310,8 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="调度" />
-        <PageEmpty label="请先创建并选择一个工作区" />
+        <PageHeader title={t('workspace.schedules.title')} />
+        <PageEmpty label={t('workspace.schedules.needWorkspace')} />
       </div>
     )
   }
@@ -310,20 +319,20 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
   return (
     <div>
       <PageHeader
-        title="调度"
-        actions={<Button onClick={() => setCreateOpen(true)}><Plus /> 创建计划</Button>}
+        title={t('workspace.schedules.title')}
+        actions={<Button onClick={() => setCreateOpen(true)}><Plus /> {t('workspace.schedules.createAction')}</Button>}
       />
 
       {plansQ.isError ? (
-        <PageError message={apiErrorMessage(plansQ.error, '计划列表加载失败')} onRetry={() => plansQ.refetch()} />
+        <PageError message={apiErrorMessage(plansQ.error, t('workspace.schedules.loadError'))} onRetry={() => plansQ.refetch()} />
       ) : plansQ.isPending ? (
-        <PageLoading label="加载计划…" />
+        <PageLoading label={t('workspace.schedules.loading')} />
       ) : (
         <DataTable
           columns={columns}
           rows={plansQ.data?.items ?? []}
           rowKey={(p) => p.id}
-          empty={<PageEmpty label="暂无调度计划" hint="创建计划后，任务将按设定的 cron 规则定时触发" />}
+          empty={<PageEmpty label={t('workspace.schedules.emptyLabel')} hint={t('workspace.schedules.emptyHint')} />}
         />
       )}
 
@@ -331,37 +340,36 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>创建调度计划</DialogTitle>
+            <DialogTitle>{t('workspace.schedules.createTitle')}</DialogTitle>
             <DialogDescription>
-              五字段 cron 表达式 + IANA 时区；错过策略“跳过”等下一个周期，
-              “补发”会先补最近一次。预览与实际触发一致。
+              {t('workspace.schedules.createDesc')}
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitCreate}>
-            <FormField label="触发标识（kind）" error={form.formState.errors.kind?.message} htmlFor="sched-kind">
+            <FormField label={t('workspace.schedules.fieldKind')} error={form.formState.errors.kind?.message} htmlFor="sched-kind">
               <Input id="sched-kind" placeholder="task.cleanup" {...form.register('kind')} />
             </FormField>
-            <FormField label="调度规则" error={form.formState.errors.cron_expr?.message ?? form.formState.errors.timezone?.message}>
+            <FormField label={t('workspace.schedules.fieldRule')} error={form.formState.errors.cron_expr?.message ?? form.formState.errors.timezone?.message}>
               <CronInput idPrefix="sched" value={cronValue} onChange={setCron} />
             </FormField>
-            <FormField label="错过策略" error={form.formState.errors.misfire?.message} htmlFor="sched-misfire">
+            <FormField label={t('workspace.schedules.fieldMisfire')} error={form.formState.errors.misfire?.message} htmlFor="sched-misfire">
               <Select
                 value={form.watch('misfire')}
                 onValueChange={(v) => form.setValue('misfire', v === 'once' ? 'once' : 'skip', { shouldValidate: true })}
               >
                 <SelectTrigger id="sched-misfire" className="w-full">
-                  <SelectValue>{form.watch('misfire') === 'once' ? '错过补发一次' : '错过跳过（默认）'}</SelectValue>
+                  <SelectValue>{form.watch('misfire') === 'once' ? t('workspace.schedules.misfireOnceFull') : t('workspace.schedules.misfireSkipDefault')}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="skip">错过跳过（默认）</SelectItem>
-                  <SelectItem value="once">错过补发一次</SelectItem>
+                  <SelectItem value="skip">{t('workspace.schedules.misfireSkipDefault')}</SelectItem>
+                  <SelectItem value="once">{t('workspace.schedules.misfireOnceFull')}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{t('workspace.schedules.cancel')}</Button>
               <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? '创建中…' : '创建计划'}
+                {create.isPending ? t('workspace.schedules.creating') : t('workspace.schedules.createAction')}
               </Button>
             </DialogFooter>
           </form>
@@ -372,36 +380,36 @@ export function SchedulesPage(_props: SchedulesPageProps = {}) {
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑调度计划</DialogTitle>
+            <DialogTitle>{t('workspace.schedules.editTitle')}</DialogTitle>
             <DialogDescription>
-              修改 {editing?.kind} 的调度规则；下次触发时间按新规则重新计算。
+              {t('workspace.schedules.editDesc', { kind: editing?.kind ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitEdit}>
-            <FormField label="触发标识（kind，不可修改）" htmlFor="sched-edit-kind">
+            <FormField label={t('workspace.schedules.fieldKindReadonly')} htmlFor="sched-edit-kind">
               <Input id="sched-edit-kind" value={editing?.kind ?? ''} readOnly disabled />
             </FormField>
-            <FormField label="调度规则" error={editForm.formState.errors.cron_expr?.message ?? editForm.formState.errors.timezone?.message}>
+            <FormField label={t('workspace.schedules.fieldRule')} error={editForm.formState.errors.cron_expr?.message ?? editForm.formState.errors.timezone?.message}>
               <CronInput idPrefix="sched-edit" value={editCronValue} onChange={setEditCron} />
             </FormField>
-            <FormField label="错过策略" error={editForm.formState.errors.misfire?.message} htmlFor="sched-edit-misfire">
+            <FormField label={t('workspace.schedules.fieldMisfire')} error={editForm.formState.errors.misfire?.message} htmlFor="sched-edit-misfire">
               <Select
                 value={editForm.watch('misfire')}
                 onValueChange={(v) => editForm.setValue('misfire', v === 'once' ? 'once' : 'skip', { shouldValidate: true })}
               >
                 <SelectTrigger id="sched-edit-misfire" className="w-full">
-                  <SelectValue>{editForm.watch('misfire') === 'once' ? '错过补发一次' : '错过跳过（默认）'}</SelectValue>
+                  <SelectValue>{editForm.watch('misfire') === 'once' ? t('workspace.schedules.misfireOnceFull') : t('workspace.schedules.misfireSkipDefault')}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="skip">错过跳过（默认）</SelectItem>
-                  <SelectItem value="once">错过补发一次</SelectItem>
+                  <SelectItem value="skip">{t('workspace.schedules.misfireSkipDefault')}</SelectItem>
+                  <SelectItem value="once">{t('workspace.schedules.misfireOnceFull')}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditing(null)}>取消</Button>
+              <Button type="button" variant="outline" onClick={() => setEditing(null)}>{t('workspace.schedules.cancel')}</Button>
               <Button type="submit" disabled={updateM.isPending}>
-                {updateM.isPending ? '保存中…' : '保存修改'}
+                {updateM.isPending ? t('workspace.schedules.saving') : t('workspace.schedules.saveChanges')}
               </Button>
             </DialogFooter>
           </form>

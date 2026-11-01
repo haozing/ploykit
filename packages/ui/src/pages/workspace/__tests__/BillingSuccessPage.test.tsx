@@ -64,8 +64,8 @@ describe('BillingSuccessPage', () => {
     queryData = { plan_code: 'free', orders: [] }
     queryStamp = 1
     renderPage()
-    expect(screen.getByText('正在确认支付结果…')).toBeInTheDocument()
-    expect(screen.getByText(/请勿关闭页面/)).toBeInTheDocument()
+    expect(screen.getByText('Confirming payment result…')).toBeInTheDocument()
+    expect(screen.getByText(/Do not close this page/)).toBeInTheDocument()
   })
 
   it('出现已支付订单 → toast 成功并跳转计费页', async () => {
@@ -73,12 +73,12 @@ describe('BillingSuccessPage', () => {
     queryStamp = 1
     const { rerender } = renderPage()
 
-    
+
     queryData = PAID_SUB
     queryStamp = 2
     rerenderPage(rerender)
 
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('支付成功，套餐已生效'))
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('Payment successful; your plan is now active'))
     await waitFor(() => expect(navMocks.navigate).toHaveBeenCalledWith('/settings/workspace/billing'))
   })
 
@@ -98,26 +98,26 @@ describe('BillingSuccessPage', () => {
     queryStamp = 1
     const { rerender } = renderPage()
 
-    
-    
+
+
     for (let i = 2; i <= 14; i++) {
       queryStamp = i
       rerenderPage(rerender)
     }
-    await waitFor(() => expect(toastMocks.info).toHaveBeenCalledWith('支付结果确认超时，可稍后在计费页查看'))
+    await waitFor(() => expect(toastMocks.info).toHaveBeenCalledWith('Payment confirmation timed out; check the billing page later'))
     await waitFor(() => expect(navMocks.navigate).toHaveBeenCalledWith('/settings/workspace/billing'))
     expect(toastMocks.success).not.toHaveBeenCalled()
   })
 
   it('P1-4：基线来自 query 缓存（支付完成早于首次轮询）→ 首询即判定成功', async () => {
-    
+
     cacheData = { plan_code: 'free', orders: [] }
-    
+
     queryData = PAID_SUB
     queryStamp = 1
     renderPage()
 
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('支付成功，套餐已生效'))
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('Payment successful; your plan is now active'))
     await waitFor(() => expect(navMocks.navigate).toHaveBeenCalledWith('/settings/workspace/billing'))
   })
 })

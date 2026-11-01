@@ -2,6 +2,7 @@
 import { useLocation, useNavigate } from '../router'
 import { useEffect, type ReactNode } from 'react'
 import { FolderKanban } from 'lucide-react'
+import { useT } from '../i18n'
 import {
   permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe, type Perm,
 } from '../lib/useWorkspaceRoleSafe'
@@ -98,6 +99,7 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, 
   const navigate = useNavigate()
   const { role, rolePerms } = useWorkspaceRoleSafe()
   const isPlatformAdmin = useIsPlatformAdminSafe()
+  const t = useT() // i18n（B 方案）：默认 nav 项 / logo alt 走字典，nav label prop 优先
 
   // 输入焦点时不劫持 Ctrl/Cmd+B（P3-1，自 stock 镜像化后上提至此）：
   // 捕获阶段拦截可编辑目标上的快捷键，阻断 stock SidebarProvider 的全局监听。
@@ -114,7 +116,7 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, 
   }, [])
 
   const items = nav ?? [
-    { path: '/app', label: '概览', icon: <FolderKanban size={17} aria-hidden="true" /> },
+    { path: '/app', label: t('app.shell.navOverview'), icon: <FolderKanban size={17} aria-hidden="true" /> },
   ]
   const flatItems: NavItem[] = [
     ...items,
@@ -159,7 +161,7 @@ export function AppShell({ children, nav, brand, logo, logoDark, sidebarHeader, 
                   <source media="(prefers-color-scheme: dark)" srcSet={logoDark ?? logo} />
                   <img
                     src={logo}
-                    alt={`${brand ?? 'App'} logo`}
+                    alt={t('app.shell.logoAlt', { brand: brand ?? 'App' })}
                     className="h-7 w-auto group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:object-contain"
                   />
                 </picture>

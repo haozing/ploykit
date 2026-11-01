@@ -21,6 +21,7 @@ import {
 import { SignInForm, loginRedirectTarget, type OAuthProviderOption } from './SignInForm'
 import { hardNavigate } from './hard-navigate'
 import { useLocation } from '../router'
+import { useT } from '../i18n'
 
 export interface SignInModalProps {
 
@@ -82,7 +83,7 @@ export function SignInModal({
   enableFedLogin = false,
   passwordOnly = false,
   onSuccess,
-  title = '登录',
+  title,
   description,
   legalNote,
   termsUrl,
@@ -92,6 +93,8 @@ export function SignInModal({
   onOpenChange,
   size = 'sm',
 }: SignInModalProps) {
+  const t = useT() // i18n（B 方案）：默认标题走字典，title prop 优先
+  const modalTitle = title ?? t('auth.signIn.title')
   // 整页硬跳转的目标：与软导航同一守卫（仅站内相对路径）。
   // 注意这里独立取 location.state——不能复用表单内部的软跳转 succeed。
   const from = loginRedirectTarget(
@@ -110,7 +113,7 @@ export function SignInModal({
     >
       <DialogContent size={size}>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{modalTitle}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         <SignInForm
@@ -121,7 +124,7 @@ export function SignInModal({
           enableFedLogin={enableFedLogin}
           passwordOnly={passwordOnly}
           onSuccess={handleSuccess}
-          title={title}
+          title={modalTitle}
           description={description}
           legalNote={legalNote}
           termsUrl={termsUrl}

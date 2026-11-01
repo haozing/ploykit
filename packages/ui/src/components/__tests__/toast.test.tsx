@@ -16,6 +16,12 @@ describe('toast / Toaster', () => {
     expect(await screen.findByText('保存失败')).toBeInTheDocument()
   })
 
+  it('Toaster 容器 aria-label 走 i18n 字典（默认 en → Notifications）', () => {
+    const { container } = render(<Toaster />)
+    // sonner 会在 aria-label 后追加 ' alt+T' 快捷键提示，故用 toContain。
+    expect(container.querySelector('section')?.getAttribute('aria-label')).toContain('Notifications')
+  })
+
   
   
   

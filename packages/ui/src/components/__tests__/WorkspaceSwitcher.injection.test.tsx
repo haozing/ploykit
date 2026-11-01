@@ -64,7 +64,7 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     await renderSwitcher(<WorkspaceSwitcher {...props} />)
 
     // 触发按钮渲染注入的 current（名称 + plan_code 副行）
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     expect(trigger).toHaveTextContent('Injected')
     expect(trigger).toHaveTextContent('pro')
 
@@ -79,14 +79,14 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     expect(switchTo).toHaveBeenCalledWith('ws-y')
 
     // 重新打开菜单 → 新建工作区 → 注入的 create('Delta', { slug: 'delta' })（第二参携带 kit 生成的 slug，消费方可忽略）
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Delta' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    fireEvent.change(await screen.findByLabelText('New workspace name'), { target: { value: 'Delta' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(create).toHaveBeenCalledWith('Delta', { slug: 'delta' }))
 
     // resolve 后面板收起（注入流程成功即关闭）
-    await waitFor(() => expect(screen.queryByLabelText('新工作区名称')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByLabelText('New workspace name')).not.toBeInTheDocument())
   })
 
   it('data.create reject：面板保持打开（错误展示归消费方），组件不崩', async () => {
@@ -94,21 +94,21 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     const { props } = injectedProps({ create: failingCreate })
     await renderSwitcher(<WorkspaceSwitcher {...props} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Epsilon' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    fireEvent.change(await screen.findByLabelText('New workspace name'), { target: { value: 'Epsilon' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
     await waitFor(() => expect(failingCreate).toHaveBeenCalledWith('Epsilon', { slug: 'epsilon' }))
-    expect(screen.getByLabelText('新工作区名称')).toBeInTheDocument()
+    expect(screen.getByLabelText('New workspace name')).toBeInTheDocument()
   })
 
   it('注入 error（string）原样显示，不做 ApiError 翻译', async () => {
     const { props } = injectedProps({ error: '工作区数量已达套餐上限' })
     await renderSwitcher(<WorkspaceSwitcher {...props} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
     expect(await screen.findByRole('alert')).toHaveTextContent('工作区数量已达套餐上限')
   })
 
@@ -117,22 +117,22 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
     const { props } = injectedProps({ error: new ApiError(402, 'E_QUOTA_EXCEEDED', 'quota exceeded for workspaces') })
     await renderSwitcher(<WorkspaceSwitcher {...props} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('配额已用尽')
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Quota exhausted')
     // 死分支修复的核心断言：注入模式下配额引导可达
-    expect(screen.getByText(/已达当前工作区数上限/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '设置→计费' })).toBeInTheDocument()
+    expect(screen.getByText(/You've reached the workspace limit/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Settings → Billing' })).toBeInTheDocument()
   })
 
   it('注入 create 二参携带 kit 生成的 slug（slugifyWorkspaceName 同源，orkome 报告 #5）', async () => {
     const { props, create } = injectedProps()
     await renderSwitcher(<WorkspaceSwitcher {...props} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: 'Delta' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    fireEvent.change(await screen.findByLabelText('New workspace name'), { target: { value: 'Delta' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(create).toHaveBeenCalledWith('Delta', { slug: 'delta' }))
   })
 
@@ -142,24 +142,24 @@ describe('WorkspaceSwitcher 数据注入缝（无 WorkspaceContext）', () => {
       <WorkspaceSwitcher {...props} menuFooter={<div data-testid="menu-footer">自定义页脚</div>} />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
     const footer = await screen.findByTestId('menu-footer')
     const menu = screen.getByRole('menu')
     expect(menu).toContainElement(footer)
 
     // DOM 顺序：footer 在「新建工作区」菜单项之后
-    const createItem = screen.getByRole('menuitem', { name: /新建工作区/ })
+    const createItem = screen.getByRole('menuitem', { name: /New workspace/ })
     expect(createItem.compareDocumentPosition(footer)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
   it('无 data 且无 Provider：占位渲染（选择工作区），钩子降级不炸', async () => {
     await renderSwitcher(<WorkspaceSwitcher />)
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
-    expect(trigger).toHaveTextContent('选择工作区')
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
+    expect(trigger).toHaveTextContent('Select workspace')
 
     // 菜单可打开（空 list），但创建流程在钩子缺失时不会误触发网络调用
     fireEvent.click(trigger)
     expect(await screen.findByRole('menu')).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: /新建工作区/ })).toBeVisible()
+    expect(screen.queryByRole('menuitem', { name: /New workspace/ })).toBeVisible()
   })
 })

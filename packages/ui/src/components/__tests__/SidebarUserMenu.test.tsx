@@ -9,6 +9,7 @@ import type { UserMenuExtraItem } from '../UserMenu'
 const logout = vi.fn(async () => {})
 const mocks = vi.hoisted(() => ({
   noProvider: false,
+  isPlatformAdmin: false,
   // perm/permKey 过滤用例的当前工作区：null 模拟无 Provider（真实 useWorkspace
   // 无 PloykitProvider 时同步抛错，走 useWorkspaceRoleSafe 的 try/catch 回退）。
   wsCurrent: null as
@@ -24,7 +25,7 @@ vi.mock('../../../../hooks/src/hooks/useAuth', () => ({
         email: 'alice@example.com',
         display_name: 'Alice',
         avatar_url: undefined,
-        is_platform_admin: false,
+        is_platform_admin: mocks.isPlatformAdmin,
       },
       workspaces: [],
       loading: false,
@@ -62,30 +63,38 @@ describe('SidebarUserMenu', () => {
   beforeEach(() => {
     logout.mockClear()
     mocks.noProvider = false
+    mocks.isPlatformAdmin = false
     mocks.wsCurrent = null
     document.cookie = 'sidebar_state=; path=/; max-age=0'
   })
 
-  it('默认渲染：用户卡 + 菜单项为内置中文', async () => {
+  it('默认渲染：用户卡 + 菜单项为内置英文（kit-labels 默认 en）', async () => {
     await renderMenu()
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
     expect(await screen.findByRole('menu')).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '账户设置' })).not.toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: '退出登录' })).toBeVisible()
+    expect(screen.queryByRole('menuitem', { name: 'Account settings' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeVisible()
+  })
+
+  it('is_platform_admin：出现管理控制台入口（i18n 默认 en → Admin console）', async () => {
+    mocks.isPlatformAdmin = true
+    await renderMenu()
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Admin console' })).toBeVisible()
   })
 
   it('无 Provider（useAuth 抛错）：渲染空，不抛错（AppShell 不强制 Provider）', async () => {
     mocks.noProvider = true
     await renderMenu()
-    expect(screen.queryByRole('button', { name: '用户菜单' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'User menu' })).not.toBeInTheDocument()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('labels 覆盖：自定义文案替换默认中文（aria-label + 退出登录）', async () => {
-    await renderMenu({ logout: 'Sign out', userMenuAria: 'User menu' })
-    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
-    expect(await screen.findByRole('menuitem', { name: 'Sign out' })).toBeVisible()
-    expect(screen.queryByRole('menuitem', { name: '退出登录' })).not.toBeInTheDocument()
+  it('labels 覆盖：自定义文案替换默认英文（aria-label + 退出登录）', async () => {
+    await renderMenu({ logout: 'Custom sign out', userMenuAria: 'Custom user menu' })
+    fireEvent.click(screen.getByRole('button', { name: 'Custom user menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Custom sign out' })).toBeVisible()
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument()
   })
 })
 
@@ -99,7 +108,7 @@ describe('SidebarUserMenu 面板条目权限过滤（perm / permKey）', () => {
 
   async function renderWithItems() {
     const result = await renderMenu(undefined, gatedItems)
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
     await screen.findByRole('menu')
     return result
   }

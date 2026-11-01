@@ -93,7 +93,7 @@ describe('ui 包 SSR 渲染冒烟（R2：渲染期禁摸浏览器 API）', () =>
       React.createElement(PloykitProvider, null, <LoginPage />),
     )
     expect(html.length).toBeGreaterThan(0)
-    expect(html).toContain('登录')
+    expect(html).toContain('Sign in')
     expect(touched).toEqual([])
   })
 

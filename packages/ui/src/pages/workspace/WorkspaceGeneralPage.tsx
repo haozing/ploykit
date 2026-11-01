@@ -18,14 +18,16 @@ import { useZodForm } from '@ploykit/hooks'
 import { queryKeys, type PKWorkspace } from '@ploykit/hooks'
 import { apiErrorMessage } from '../../lib/api-error'
 import { roleSatisfies } from '@ploykit/hooks'
+import { useT, t as moduleT } from '../../i18n'
 
 
 
 export const renameSchema = z.object({
   name: z.string().check(
     z.trim(),
-    z.minLength(1, '请输入工作区名称'),
-    z.maxLength(64, '名称最多 64 字符'),
+    // g6 i18n：校验文案经模块级 t() 在校验时解析（error 回调惰性求值，随 setUiLang 变化）
+    z.minLength(1, { error: () => moduleT('workspace.workspaceGeneral.nameRequired') }),
+    z.maxLength(64, { error: () => moduleT('workspace.workspaceGeneral.nameMaxLength') }),
   ),
 })
 type RenameForm = z.infer<typeof renameSchema>
@@ -36,6 +38,7 @@ export interface WorkspaceGeneralPageProps {
 }
 
 export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPageProps = {}) {
+  const t = useT()
   const { current, clear } = useWorkspace()
   const api = useApi()
   const confirm = useConfirm()
@@ -54,8 +57,8 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
   if (!ws) {
     return (
       <div>
-        <PageHeader title="工作区概况" />
-        <PageError message="工作区不存在或尚未选择" onRetry={() => qc.invalidateQueries({ queryKey: queryKeys.workspaceList })} />
+        <PageHeader title={t('workspace.workspaceGeneral.title')} />
+        <PageError message={t('workspace.workspaceGeneral.notFound')} onRetry={() => qc.invalidateQueries({ queryKey: queryKeys.workspaceList })} />
       </div>
     )
   }
@@ -74,9 +77,9 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
     try {
       await api.patch<PKWorkspace>(`/api/workspaces/${ws.id}`, { name: values.name })
       await refreshList()
-      toast.success('工作区名称已更新')
+      toast.success(t('workspace.workspaceGeneral.renamed'))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '重命名失败'))
+      toast.error(apiErrorMessage(e, t('workspace.workspaceGeneral.renameFailed')))
     } finally {
       setSaving(false)
     }
@@ -90,77 +93,79 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
 
   const handleLeave = async () => {
     if (!(await confirm({
-      title: '退出工作区',
-      description: `退出后将失去「${ws.name}」的访问权限；你创建的数据会保留在工作区内。`,
-      confirmText: '退出', danger: true,
+      title: t('workspace.workspaceGeneral.leaveTitle'),
+      description: t('workspace.workspaceGeneral.leaveConfirmDesc', { name: ws.name }),
+      confirmText: t('workspace.workspaceGeneral.leaveAction'), danger: true,
     }))) return
     try {
       await api.post(`/api/workspaces/${ws.id}/leave`)
-      toast.success('已退出工作区')
+      toast.success(t('workspace.workspaceGeneral.leftToast'))
       await afterExit()
     } catch (e) {
-      
-      
-      
+
+
+
       toast.error(is409(e)
-        ? '最后一个所有者不能离开工作区，请先转移所有权或删除工作区'
-        : apiErrorMessage(e, '退出失败'))
+        ? t('workspace.workspaceGeneral.lastOwner')
+        : apiErrorMessage(e, t('workspace.workspaceGeneral.leaveFailed')))
     }
   }
 
   const handleDelete = async () => {
     try {
       await api.delete(`/api/workspaces/${ws.id}`)
-      toast.success('工作区已删除')
+      toast.success(t('workspace.workspaceGeneral.deletedToast'))
       await afterExit()
     } catch (e) {
-      
-      toast.error(apiErrorMessage(e, '删除失败'))
+
+      toast.error(apiErrorMessage(e, t('workspace.workspaceGeneral.deleteFailed')))
     }
   }
 
   return (
     <div>
-      <PageHeader title="工作区概况" />
+      <PageHeader title={t('workspace.workspaceGeneral.title')} />
 
-      <SettingsCard title="基础信息">
+      <SettingsCard title={t('workspace.workspaceGeneral.basicInfo')}>
         <form className="max-w-md space-y-4" onSubmit={handleRename}>
-          <FormField label="工作区名称" error={form.formState.errors.name?.message} htmlFor="ws-name">
+          <FormField label={t('workspace.workspaceGeneral.nameLabel')} error={form.formState.errors.name?.message} htmlFor="ws-name">
             <Input id="ws-name" disabled={!canRename} {...form.register('name')} />
           </FormField>
-          <FormField label="Slug（只读）" htmlFor="ws-slug">
+          <FormField label={t('workspace.workspaceGeneral.slugReadonly')} htmlFor="ws-slug">
             <Input id="ws-slug" value={ws.slug} readOnly disabled />
           </FormField>
           {canRename && (
-            <Button type="submit" disabled={saving}>{saving ? '保存中…' : '保存修改'}</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? t('workspace.workspaceGeneral.saving') : t('workspace.workspaceGeneral.saveChanges')}
+            </Button>
           )}
         </form>
       </SettingsCard>
 
-      <SettingsCard danger title="危险区" description="以下操作影响全部成员，请谨慎执行。">
+      <SettingsCard danger title={t('workspace.workspaceGeneral.dangerZone')} description={t('workspace.workspaceGeneral.dangerZoneDesc')}>
         <div className="space-y-4">
           <Item variant="outline" className="justify-between gap-4 p-4">
             <ItemContent>
-              <ItemTitle>退出工作区</ItemTitle>
+              <ItemTitle>{t('workspace.workspaceGeneral.leaveTitle')}</ItemTitle>
               <ItemDescription>
-                退出后你将不再是「{ws.name}」的成员。最后一位 owner 无法退出。
+                {t('workspace.workspaceGeneral.leaveDesc', { name: ws.name })}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
-              <Button variant="outline" onClick={handleLeave}>退出工作区</Button>
+              <Button variant="outline" onClick={handleLeave}>{t('workspace.workspaceGeneral.leaveTitle')}</Button>
             </ItemActions>
           </Item>
 
           {canDelete && (
             <Item variant="outline" className="justify-between gap-4 border-destructive/40 p-4">
               <ItemContent>
-                <ItemTitle className="text-destructive">删除工作区</ItemTitle>
+                <ItemTitle className="text-destructive">{t('workspace.workspaceGeneral.deleteTitle')}</ItemTitle>
                 <ItemDescription>
-                  硬删除工作区及其全部数据，操作不可恢复。
+                  {t('workspace.workspaceGeneral.deleteDesc')}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>
-                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>删除工作区</Button>
+                <Button variant="destructive" onClick={() => setDeleteOpen(true)}>{t('workspace.workspaceGeneral.deleteTitle')}</Button>
               </ItemActions>
             </Item>
           )}
@@ -171,14 +176,14 @@ export function WorkspaceGeneralPage({ exitTo = '/app' }: WorkspaceGeneralPagePr
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={handleDelete}
-        title={`删除工作区「${ws.name}」`}
+        title={t('workspace.workspaceGeneral.deleteConfirmTitle', { name: ws.name })}
         impacts={[
-          '工作区全部数据将被永久删除，且不可恢复',
-          '所有成员立即失去访问权限',
-          '未撤销的邀请与加入码同时失效',
-          '历史审计记录将保留（合规要求），但不再关联可访问的工作区',
+          t('workspace.workspaceGeneral.impactData'),
+          t('workspace.workspaceGeneral.impactMembers'),
+          t('workspace.workspaceGeneral.impactInvites'),
+          t('workspace.workspaceGeneral.impactAudit'),
         ]}
-        confirmText="永久删除"
+        confirmText={t('workspace.workspaceGeneral.deletePermanently')}
         danger
       />
     </div>

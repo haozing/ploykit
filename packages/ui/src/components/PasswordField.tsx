@@ -1,6 +1,7 @@
 
 import { useState, type ComponentProps } from 'react'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
+import { useT } from '../i18n'
 import {
   InputGroup,
   InputGroupAddon,
@@ -15,6 +16,7 @@ import {
 // （以及 form.register 返回的 name/onChange/onBlur/ref）一起经 ...props 落到
 // InputGroupInput 上——label htmlFor=id 关联不因包裹层而断。
 export function PasswordField(props: ComponentProps<'input'>) {
+  const t = useT()
   const [visible, setVisible] = useState(false)
   return (
     <InputGroup>
@@ -23,7 +25,7 @@ export function PasswordField(props: ComponentProps<'input'>) {
         <InputGroupButton
           size="icon-xs"
           variant="ghost"
-          aria-label={visible ? '隐藏密码' : '显示密码'}
+          aria-label={visible ? t('ui.password.hide') : t('ui.password.show')}
           aria-pressed={visible}
           onClick={() => setVisible((v) => !v)}
         >

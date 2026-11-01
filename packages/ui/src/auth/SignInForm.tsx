@@ -22,6 +22,7 @@
 import { Suspense, lazy, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button'
 import { Spinner } from '../components/ui/spinner'
+import { useT } from '../i18n'
 import { TurnstileWidget } from './TurnstileWidget'
 import {
   SignInCodeErrors,
@@ -104,7 +105,7 @@ export function SignInForm({
   passwordOnly = false,
   onSuccess,
   loginRedirectTarget: redirectFallback,
-  title = '登录',
+  title,
   description,
   legalNote,
   termsUrl,
@@ -114,6 +115,8 @@ export function SignInForm({
 }: SignInFormProps) {
   const signIn = useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback })
   const kit = signIn.kit
+  const t = useT() // i18n（B 方案）：默认标题等走字典，title prop 优先
+  const heading = title ?? t('auth.signIn.title')
   // email-first 里「使用密码登录」把它切到密码表单（可逆，不占首屏权重）。
   const [passwordMode, setPasswordMode] = useState(false)
 
@@ -132,7 +135,7 @@ export function SignInForm({
     <div className="space-y-4">
       {showHeading && (
         <div className="text-center">
-          <h1 className="text-2xl font-bold">{title}</h1>
+          <h1 className="text-2xl font-bold">{heading}</h1>
           {description && (
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           )}
@@ -145,7 +148,7 @@ export function SignInForm({
         <>
           <SignInOAuthBlock providers={oauthProviders} />
           {oauthProviders.length > 0 && !passwordOnly && !passwordMode && (
-            <SignInOr>或使用邮箱</SignInOr>
+            <SignInOr>{t('auth.signIn.orEmail')}</SignInOr>
           )}
         </>
       )}
@@ -164,7 +167,7 @@ export function SignInForm({
             className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
             onClick={() => setPasswordMode(false)}
           >
-            改用验证码登录
+            {t('auth.signIn.useCode')}
           </button>
         </>
       ) : (
@@ -221,7 +224,7 @@ export function SignInForm({
             className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
             onClick={() => setPasswordMode(true)}
           >
-            使用密码登录
+            {t('auth.signIn.usePassword')}
           </button>
         </>
       )}

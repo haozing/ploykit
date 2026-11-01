@@ -7,6 +7,7 @@ import { Input } from './ui/input'
 import { FieldError } from './ui/field'
 import { Label } from './ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
+import { useT, t, currentLang } from '../i18n'
 
 export interface CronValue {
   cron: string
@@ -55,12 +56,20 @@ export function timezoneOptions(): string[] {
 }
 
 
-const DOW_LABEL: Record<string, string> = {
-  '0': '周日', '1': '周一', '2': '周二', '3': '周三', '4': '周四', '5': '周五', '6': '周六', '7': '周日',
+// 翻译函数签名：useT() 的返回值与模块级 t() 均满足（describeCron 纯函数可脱离
+// React 上下文调用，默认走模块级 t，组件内传入 hook 版以随 Provider 语言切换）。
+type Translate = (key: string, vars?: Record<string, string | number>) => string
+
+// 周几文案走字典（ui.cron.dow.0..7，0/7 均为周日——cron 惯例）；缺翻译时回退
+// 原始数字段，对齐原先 DOW_LABEL[dow] ?? dow 的兜底行为。
+function dayLabel(dow: string, translate: Translate = t): string {
+  const key = `ui.cron.dow.${dow}`
+  const label = translate(key)
+  return label === key ? dow : label
 }
 
 
-export function describeCron(expr: string): string {
+export function describeCron(expr: string, translate: Translate = t): string {
   const fields = expr.trim().split(/\s+/)
   if (fields.length !== 5) return expr
   const [min, hour, dom, mon, dow] = fields
@@ -70,11 +79,11 @@ export function describeCron(expr: string): string {
   if (hour !== '*' && !intIn(hour, 0, 23)) return expr
   if (dow !== '*' && !intIn(dow, 0, 7)) return expr
   const hhmm = `${hour.padStart(2, '0')}:${min.padStart(2, '0')}`
-  if (min === '*' && hour === '*' && dom === '*' && dow === '*') return '每分钟'
-  if (hour === '*' && dom === '*' && dow === '*') return `每小时（第 ${min.padStart(2, '0')} 分）`
-  if (dom === '*' && dow === '*') return `每天 ${hhmm}`
-  if (dom === '*' && hour !== '*' && min !== '*') return `每${DOW_LABEL[dow] ?? dow} ${hhmm}`
-  return expr 
+  if (min === '*' && hour === '*' && dom === '*' && dow === '*') return translate('ui.cron.everyMinute')
+  if (hour === '*' && dom === '*' && dow === '*') return translate('ui.cron.hourlyAt', { minute: min.padStart(2, '0') })
+  if (dom === '*' && dow === '*') return translate('ui.cron.dailyAt', { time: hhmm })
+  if (dom === '*' && hour !== '*' && min !== '*') return translate('ui.cron.weeklyAt', { day: dayLabel(dow, translate), time: hhmm })
+  return expr
 }
 
 
@@ -82,7 +91,8 @@ function formatPreviewTime(iso: string, tz: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   try {
-    return new Intl.DateTimeFormat('zh-CN', {
+    // 预览时间随 UI 语言格式化（B 方案 EN 默认）：zh 走 zh-CN，其余 en-US。
+    return new Intl.DateTimeFormat(currentLang() === 'zh' ? 'zh-CN' : 'en-US', {
       timeZone: tz, dateStyle: 'medium', timeStyle: 'short',
     }).format(d)
   } catch {
@@ -100,6 +110,7 @@ export function CronInput({
   const [preview, setPreview] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const t = useT() // 组件内文案走字典（g9：ui.cron.*）；describeCron 传入以随 Provider 语言
   
   const valueRef = useRef(value)
   valueRef.current = value
@@ -127,7 +138,7 @@ export function CronInput({
       
       if (stillCurrent()) setPreview(d?.items ?? [])
     } catch (e) {
-      if (stillCurrent()) setError(apiErrorMessage(e, '预览失败，请检查表达式后重试'))
+      if (stillCurrent()) setError(apiErrorMessage(e, t('ui.cron.previewError')))
     } finally {
       
       setLoading(false)
@@ -141,7 +152,7 @@ export function CronInput({
       <div className="flex gap-2">
         <div className="min-w-0 flex-1 space-y-1">
           <Label htmlFor={`${idPrefix}-expr`}>
-            Cron 表达式
+            {t('ui.cron.expressionLabel')}
           </Label>
           <Input
             id={`${idPrefix}-expr`}
@@ -152,12 +163,12 @@ export function CronInput({
             onChange={(e) => onChange({ ...value, cron: e.target.value })}
           />
           <p className="text-xs text-muted-foreground" data-testid="cron-hint">
-            {value.cron.trim() ? describeCron(value.cron) : '五字段：分 时 日 月 周'}
+            {value.cron.trim() ? describeCron(value.cron, t) : t('ui.cron.fieldsHint')}
           </p>
         </div>
         <div className="w-48 shrink-0 space-y-1">
           <Label htmlFor={`${idPrefix}-tz`}>
-            时区
+            {t('ui.cron.timezoneLabel')}
           </Label>
           <Select
             value={value.timezone}
@@ -183,7 +194,7 @@ export function CronInput({
           disabled={disabled || loading || !value.cron.trim()}
           onClick={() => void runPreview()}
         >
-          {loading ? '预览中…' : `预览下次 ${previewCount} 次`}
+          {loading ? t('ui.cron.previewing') : t('ui.cron.previewNext', { count: previewCount })}
         </Button>
         {error && (
           <FieldError className="text-xs">{error}</FieldError>

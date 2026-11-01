@@ -89,10 +89,12 @@ describe('WorkspacesPage 套餐选项（批次 2.5 收尾）', () => {
     renderPage();
     expect(await screen.findByText('Acme')).toBeInTheDocument();
 
-    const trigger = screen.getByRole('combobox', { name: /变更 Acme 套餐/ });
+    const trigger = screen.getByRole('combobox', { name: /Change plan of Acme/ });
     fireEvent.click(trigger);
     expect(
-      await screen.findByRole('option', { name: 'Pro（新订阅享 14 天试用）' }),
+      await screen.findByRole('option', {
+        name: 'Pro (14-day trial for new subscriptions)',
+      }),
     ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Free' })).toBeInTheDocument();
   });
@@ -108,7 +110,7 @@ describe('WorkspacesPage 套餐选项（批次 2.5 收尾）', () => {
     renderPage();
     await screen.findByText('Acme');
 
-    const trigger = screen.getByRole('combobox', { name: /变更 Acme 套餐/ });
+    const trigger = screen.getByRole('combobox', { name: /Change plan of Acme/ });
     fireEvent.click(trigger);
     expect(
       await screen.findByRole('option', { name: 'pro' }),
@@ -119,10 +121,10 @@ describe('WorkspacesPage 套餐选项（批次 2.5 收尾）', () => {
     renderPage();
     await screen.findByText('Acme');
 
-    const trigger = screen.getByRole('combobox', { name: /变更 Acme 套餐/ });
+    const trigger = screen.getByRole('combobox', { name: /Change plan of Acme/ });
     fireEvent.click(trigger);
     const option = await screen.findByRole('option', {
-      name: 'Pro（新订阅享 14 天试用）',
+      name: 'Pro (14-day trial for new subscriptions)',
     });
     fireEvent.pointerDown(option, { button: 0, pointerType: 'mouse' });
     fireEvent.pointerUp(option, { button: 0, pointerType: 'mouse' });

@@ -95,25 +95,25 @@ describe('UsersPage 危险操作（P2-25）', () => {
   it('B-users-1 回归：行操作菜单可打开且不崩溃（Label 在 Group 内）', async () => {
     renderPage()
     await screen.findAllByText('user@audit.local')
-    fireEvent.click(screen.getByRole('button', { name: '操作 user@audit.local' }))
-    
-    expect(await screen.findByRole('menuitem', { name: '用户详情' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: '封禁账号' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: '模拟登录' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for user@audit.local' }))
+
+    expect(await screen.findByRole('menuitem', { name: 'User details' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Ban account' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Impersonate' })).toBeInTheDocument()
   })
 
   it('封禁：ImpactConfirmation 勾选后 PATCH status=disabled', async () => {
     renderPage()
     await screen.findAllByText('user@audit.local')
-    fireEvent.click(screen.getByRole('button', { name: '操作 user@audit.local' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '封禁账号' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for user@audit.local' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Ban account' }))
 
-    
-    const confirmBtn = await screen.findByRole('button', { name: '封禁' })
+
+    const confirmBtn = await screen.findByRole('button', { name: 'Ban' })
     expect(confirmBtn).toBeDisabled()
-    expect(screen.getByText(/其名下工作区与数据保留/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }))
-    fireEvent.click(screen.getByRole('button', { name: '封禁' }))
+    expect(screen.getByText(/workspaces and data are kept/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand and accept the impacts above/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ban' }))
 
     await waitFor(() =>
       expect(mockedPatch).toHaveBeenCalledWith('/api/admin/users/u-9/status', {
@@ -125,11 +125,11 @@ describe('UsersPage 危险操作（P2-25）', () => {
   it('授予平台管理员：confirm 确认后 PATCH admin {is_admin:true}，文案明示后果', async () => {
     renderPage()
     await screen.findAllByText('user@audit.local')
-    fireEvent.click(screen.getByRole('button', { name: '操作 user@audit.local' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '授予平台管理员' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for user@audit.local' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Grant platform admin' }))
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalled())
-    expect(confirmMock.mock.calls[0][0].description).toContain('平台管理权限')
+    expect(confirmMock.mock.calls[0][0].description).toContain('platform admin')
     await waitFor(() =>
       expect(mockedPatch).toHaveBeenCalledWith('/api/admin/users/u-9/admin', {
         is_admin: true,
@@ -141,8 +141,8 @@ describe('UsersPage 危险操作（P2-25）', () => {
     confirmMock.mockResolvedValueOnce(false)
     renderPage()
     await screen.findAllByText('user@audit.local')
-    fireEvent.click(screen.getByRole('button', { name: '操作 user@audit.local' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '授予平台管理员' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for user@audit.local' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Grant platform admin' }))
 
     await waitFor(() => expect(confirmMock).toHaveBeenCalled())
     expect(mockedPatch).not.toHaveBeenCalled()
@@ -151,11 +151,11 @@ describe('UsersPage 危险操作（P2-25）', () => {
   it('模拟登录：ImpactConfirmation 勾选后 POST impersonate → 跳 impersonatePath', async () => {
     renderPage({ impersonatePath: '/custom-app' })
     await screen.findAllByText('user@audit.local')
-    fireEvent.click(screen.getByRole('button', { name: '操作 user@audit.local' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '模拟登录' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for user@audit.local' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Impersonate' }))
 
-    const confirmBtn = await screen.findByRole('button', { name: '以该用户进入产品' })
-    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }))
+    const confirmBtn = await screen.findByRole('button', { name: 'Enter the product as this user' })
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand and accept the impacts above/ }))
     fireEvent.click(confirmBtn)
 
     await waitFor(() =>
@@ -169,9 +169,9 @@ describe('UsersPage 危险操作（P2-25）', () => {
     renderPage()
     await screen.findAllByText('admin@audit.local')
     expect(
-      screen.queryByRole('button', { name: '操作 admin@audit.local' }),
+      screen.queryByRole('button', { name: 'Actions for admin@audit.local' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '详情' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument()
   })
 
   it('平台管理员行：模拟登录入口禁用（服务端禁止互模）', async () => {
@@ -181,8 +181,8 @@ describe('UsersPage 危险操作（P2-25）', () => {
     }))
     renderPage()
     await screen.findAllByText('admin2@audit.local')
-    fireEvent.click(screen.getByRole('button', { name: '操作 admin2@audit.local' }))
-    const item = await screen.findByRole('menuitem', { name: '模拟登录' })
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for admin2@audit.local' }))
+    const item = await screen.findByRole('menuitem', { name: 'Impersonate' })
     expect(item).toHaveAttribute('aria-disabled', 'true')
   })
 })

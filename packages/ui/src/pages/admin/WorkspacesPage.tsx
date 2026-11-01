@@ -19,6 +19,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { formatDate } from '../../lib/utils';
+import { useT } from '../../i18n';
 import {
   ADMIN_PAGE_SIZE,
   adminError,
@@ -43,6 +44,7 @@ const FALLBACK_PLAN_CODES = ['free'];
 export function WorkspacesPage() {
   const api = useApi();
   const qc = useQueryClient();
+  const t = useT();
   
   const [searchParams, setSearchParams] = useSearchParamsCompat();
   const q = searchParams.get('q') ?? '';
@@ -106,8 +108,9 @@ export function WorkspacesPage() {
   
   const planLabel = (code: string) => {
     const name = planName.get(code) ?? code;
-    return planTrial.has(code)
-      ? `${name}（新订阅享 ${planTrial.get(code)} 天试用）`
+    const trialDays = planTrial.get(code);
+    return trialDays !== undefined
+      ? t('admin.workspaces.planTrialLabel', { name, days: trialDays })
       : name;
   };
 
@@ -118,14 +121,18 @@ export function WorkspacesPage() {
       }),
     onSuccess: (_d, v) => {
       toast.success(
-        `${v.ws.name} 套餐已变更为 ${planLabel(v.planCode)}`,
+        t('admin.workspaces.planChanged', {
+          workspace: v.ws.name,
+          plan: planLabel(v.planCode),
+        }),
       );
       void qc.invalidateQueries({ queryKey: ['admin', 'workspaces'] });
-      
+
       void qc.invalidateQueries({ queryKey: ['admin', 'workspace'] });
       void qc.invalidateQueries({ queryKey: ['admin', 'stats'] });
     },
-    onError: (e) => toast.error(adminError(e, '套餐变更失败')),
+    onError: (e) =>
+      toast.error(adminError(e, t('admin.workspaces.planChangeFailed'))),
   });
 
   const raw = wsQ.data?.items ?? [];
@@ -134,7 +141,7 @@ export function WorkspacesPage() {
   const columns: Column<AdminWorkspace>[] = [
     {
       key: 'name',
-      header: '工作区',
+      header: t('admin.workspaces.colWorkspace'),
       render: (ws) => (
         
         
@@ -156,7 +163,7 @@ export function WorkspacesPage() {
     },
     {
       key: 'owner_email',
-      header: '属主',
+      header: t('admin.workspaces.colOwner'),
       
       
       className: 'w-48',
@@ -181,7 +188,7 @@ export function WorkspacesPage() {
     },
     {
       key: 'plan_code',
-      header: '套餐',
+      header: t('admin.workspaces.colPlan'),
       className: 'w-44',
       render: (ws) => {
         const mutating = planM.isPending && planM.variables?.ws.id === ws.id;
@@ -199,7 +206,7 @@ export function WorkspacesPage() {
                 size="sm"
                 className="max-md:h-10"
                 disabled={mutating}
-                aria-label={`变更 ${ws.name} 套餐`}
+                aria-label={t('admin.workspaces.changePlanAria', { name: ws.name })}
               >
                 <SelectValue>{planLabel(ws.plan_code)}</SelectValue>
               </SelectTrigger>
@@ -214,7 +221,7 @@ export function WorkspacesPage() {
             {/* 非目录码：原值仍可见（Select 显示原 plan_code），打标提示 */}
             {!known && (
               <Badge variant="outline" className="text-muted-foreground">
-                未知套餐
+                {t('admin.workspaces.unknownPlan')}
               </Badge>
             )}
           </div>
@@ -223,13 +230,13 @@ export function WorkspacesPage() {
     },
     {
       key: 'member_count',
-      header: '成员数',
+      header: t('admin.workspaces.colMembers'),
       className: 'w-20',
       render: (ws) => <span className="tabular-nums">{ws.member_count}</span>,
     },
     {
       key: 'created_at',
-      header: '创建时间',
+      header: t('admin.workspaces.colCreated'),
       className: 'w-28',
       render: (ws) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -241,14 +248,14 @@ export function WorkspacesPage() {
 
   return (
     <div>
-      <PageHeader title="工作区" />
+      <PageHeader title={t('admin.workspaces.title')} />
 
       {/* B-workspaces-4：跨页找工作区不再只能逐页手翻（服务端 ilike 检索）。 */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           className="w-72"
-          placeholder="按名称 / slug 前缀搜索…"
-          aria-label="搜索工作区"
+          placeholder={t('admin.workspaces.searchPlaceholder')}
+          aria-label={t('admin.workspaces.searchAria')}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onKeyDown={(e) => {
@@ -264,14 +271,14 @@ export function WorkspacesPage() {
               applyFilter('', 1);
             }}
           >
-            清除搜索
+            {t('admin.workspaces.clearSearch')}
           </Button>
         )}
       </div>
 
       {wsQ.isError ? (
         <PageError
-          message={adminError(wsQ.error, '工作区列表加载失败')}
+          message={adminError(wsQ.error, t('admin.workspaces.loadFailed'))}
           onRetry={() => void wsQ.refetch()}
         />
       ) : (
@@ -288,9 +295,12 @@ export function WorkspacesPage() {
           }}
           empty={
             q ? (
-              <PageEmpty label="没有匹配的工作区" hint="换个关键词或清除搜索" />
+              <PageEmpty
+                label={t('admin.workspaces.emptyFilteredLabel')}
+                hint={t('admin.workspaces.emptyFilteredHint')}
+              />
             ) : (
-              <PageEmpty label="暂无工作区" />
+              <PageEmpty label={t('admin.workspaces.emptyLabel')} />
             )
           }
         />

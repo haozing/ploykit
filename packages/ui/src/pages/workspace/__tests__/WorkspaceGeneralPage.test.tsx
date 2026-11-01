@@ -59,18 +59,18 @@ beforeEach(() => {
 describe('WorkspaceGeneralPage', () => {
   it('渲染名称表单（slug 只读）与危险区', async () => {
     renderPage()
-    const nameInput = await screen.findByLabelText('工作区名称')
+    const nameInput = await screen.findByLabelText('Workspace name')
     expect(nameInput).toHaveValue('Acme')
-    expect(screen.getByLabelText('Slug（只读）')).toBeDisabled()
-    expect(screen.getByRole('button', { name: '退出工作区' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '删除工作区' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Slug (read-only)')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Leave workspace' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete workspace' })).toBeInTheDocument()
   })
 
   it('重命名提交 PATCH /api/workspaces/{id} {name}', async () => {
     renderPage()
-    const nameInput = await screen.findByLabelText('工作区名称')
+    const nameInput = await screen.findByLabelText('Workspace name')
     fireEvent.change(nameInput, { target: { value: 'Acme Renamed' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() =>
       expect(apiMocks.patch).toHaveBeenCalledWith('/api/workspaces/ws-1', { name: 'Acme Renamed' }),
@@ -78,30 +78,30 @@ describe('WorkspaceGeneralPage', () => {
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalled())
   })
 
-  it('退出工作区 409（last owner）→ 直显中文可行动文案，不再英文原文+括号补丁（B7）', async () => {
+  it('退出工作区 409（last owner）→ 直显可行动文案，不再英文原文+括号补丁（B7）', async () => {
     apiMocks.post.mockRejectedValue(
       new ApiError(409, 'E_CONFLICT', 'last owner cannot leave; transfer or delete the workspace'),
     )
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '退出工作区' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave workspace' }))
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
     const text = toastMocks.error.mock.calls[0][0]
-    expect(text).toContain('最后一个所有者不能离开工作区')
-    
-    expect(text).not.toContain('last owner')
-    
-    expect(screen.getByRole('button', { name: '保存修改' })).toBeInTheDocument()
+    expect(text).toContain('The last owner cannot leave the workspace')
+
+    expect(text).not.toContain('last owner cannot leave;')
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
   })
 
   it('删除工作区：ImpactConfirmation 确认后 DELETE /api/workspaces/{id}', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '删除工作区' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete workspace' }))
 
-    
-    expect(await screen.findByText('所有成员立即失去访问权限')).toBeInTheDocument()
+
+    expect(await screen.findByText('All members immediately lose access')).toBeInTheDocument()
     const accept = screen.getByRole('checkbox')
     fireEvent.click(accept)
-    fireEvent.click(screen.getByRole('button', { name: '永久删除' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
 
     await waitFor(() => expect(apiMocks.delete).toHaveBeenCalledWith('/api/workspaces/ws-1'))
     await waitFor(() => expect(screen.getByText('app-page')).toBeInTheDocument())
@@ -112,33 +112,33 @@ describe('WorkspaceGeneralPage', () => {
       new ApiError(409, 'E_CONFLICT', 'workspace cannot be deleted: open orders exist'),
     )
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: '删除工作区' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete workspace' }))
     fireEvent.click(screen.getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: '永久删除' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
-    
-    expect(toastMocks.error.mock.calls[0][0]).toContain('工作区暂时无法删除')
-    expect(toastMocks.error.mock.calls[0][0]).not.toContain('cannot be deleted')
+
+    expect(toastMocks.error.mock.calls[0][0]).toContain('The workspace cannot be deleted yet')
+    expect(toastMocks.error.mock.calls[0][0]).not.toContain(': open orders exist')
   })
 
   it('纯空格名称被拒（B10：trim 后非空），0 网络请求', async () => {
     renderPage()
-    const nameInput = await screen.findByLabelText('工作区名称')
+    const nameInput = await screen.findByLabelText('Workspace name')
     fireEvent.change(nameInput, { target: { value: '   ' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    
+
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
-    expect(screen.getByRole('alert')).toHaveTextContent('请输入工作区名称')
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a workspace name')
     expect(apiMocks.patch).not.toHaveBeenCalled()
   })
 
   it('首尾空白在提交前被 trim（B10：落库名称不带空白）', async () => {
     renderPage()
-    const nameInput = await screen.findByLabelText('工作区名称')
+    const nameInput = await screen.findByLabelText('Workspace name')
     fireEvent.change(nameInput, { target: { value: '  Acme Renamed  ' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() =>
       expect(apiMocks.patch).toHaveBeenCalledWith('/api/workspaces/ws-1', { name: 'Acme Renamed' }),
@@ -150,20 +150,20 @@ describe('WorkspaceGeneralPage 角色门控（IA v2 矩阵）', () => {
   it('admin：可改名，不可删除（删除卡隐藏），退出可见', async () => {
     wsMocks.role = 'admin'
     renderPage()
-    const nameInput = await screen.findByLabelText('工作区名称')
+    const nameInput = await screen.findByLabelText('Workspace name')
     expect(nameInput).toBeEnabled()
-    expect(screen.getByRole('button', { name: '保存修改' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '删除工作区' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '退出工作区' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete workspace' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Leave workspace' })).toBeInTheDocument()
   })
 
   it('member：名称只读（无保存按钮），删除卡隐藏，退出仍可见（后端兜底 last-owner）', async () => {
     wsMocks.role = 'member'
     renderPage()
-    const nameInput = await screen.findByLabelText('工作区名称')
+    const nameInput = await screen.findByLabelText('Workspace name')
     expect(nameInput).toBeDisabled()
-    expect(screen.queryByRole('button', { name: '保存修改' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '删除工作区' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '退出工作区' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete workspace' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Leave workspace' })).toBeInTheDocument()
   })
 })

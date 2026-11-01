@@ -51,40 +51,40 @@ function renderPage(props: Parameters<typeof AdminSignInPage>[0] = {}) {
 }
 
 async function submitPassword() {
-  fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'root@example.com' } })
-  fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-  fireEvent.click(screen.getByRole('button', { name: '登录' }))
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'root@example.com' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
   await waitFor(() => expect(mockedRefresh).toHaveBeenCalledTimes(1))
 }
 
 describe('AdminSignInPage 专用门形态（#31 recipe）', () => {
   it('passwordOnly 直出：无验证码 Tab/发送按钮，无 OAuth/企业登录槽', () => {
     const { container } = renderPage()
-    expect(screen.queryByRole('tab', { name: '验证码登录' })).toBeNull()
-    expect(screen.queryByRole('tab', { name: '密码登录' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '发送' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Sign in with code' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Sign in with password' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send code' })).toBeNull()
     expect(container.querySelector('a[href^="/auth/oauth/"]')).toBeNull()
     expect(container.querySelector('form[action="/auth/fed/start"]')).toBeNull()
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.getByLabelText('密码')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
 
   it('默认无「创建账号」注册入口、无「忘记密码？」（registerPath 被压掉、resetPath 默认不传）', () => {
     renderPage()
     expect(screen.queryByTestId('register-link')).toBeNull()
-    expect(screen.queryByRole('link', { name: '忘记密码？' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Forgot password?' })).toBeNull()
   })
 
   it('传入 resetPath 才渲染「忘记密码？」', () => {
     renderPage({ resetPath: '/admin/reset' })
-    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/admin/reset')
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/admin/reset')
     expect(screen.queryByTestId('register-link')).toBeNull()
   })
 
-  it('默认标题/描述为 sober 文案（管理控制台 · 仅限授权人员），可被 prop 覆盖', () => {
+  it('默认标题/描述为 sober 文案（i18n en：Admin Console · Authorized personnel only），可被 prop 覆盖', () => {
     const { rerender } = render(<AdminSignInPage />)
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('管理控制台')
-    expect(screen.getByText('仅限授权人员')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Admin Console')
+    expect(screen.getByText('Authorized personnel only')).toBeInTheDocument()
 
     rerender(<AdminSignInPage title="Ops Console" description="Staff only" />)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ops Console')

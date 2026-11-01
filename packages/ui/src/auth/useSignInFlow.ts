@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createElement, Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLocation } from '../router'
 import { useLogin } from '@ploykit/hooks'
 import { useApi } from '@ploykit/hooks'
@@ -6,7 +6,8 @@ import { useAuth } from '@ploykit/hooks'
 import { useSiteConfig } from '@ploykit/hooks'
 import { apiErrorMessage } from '../lib/api-error'
 import { postTurnstileProtected, turnstileSiteKey } from '../lib/turnstile'
-import { useKitLabels } from '../labels/kit-labels'
+import { DEFAULT_KIT_LABELS, useKitLabels, type KitLabels } from '../labels/kit-labels'
+import { useT } from '../i18n'
 import type { TurnstileWidgetHandle } from './TurnstileWidget'
 
 /**
@@ -65,8 +66,57 @@ export interface UseSignInFlowOptions {
   loginRedirectTarget?: string
 }
 
+/** kit-labels 的 signIn 系键在 i18n 字典（g7 分片）里的对应键。 */
+const SIGNIN_I18N_KEYS = {
+  signInEmailLabel: 'auth.signIn.emailLabel',
+  signInCodeLabel: 'auth.signIn.codeLabel',
+  signInPasswordLabel: 'auth.signIn.passwordLabel',
+  sendCode: 'auth.signIn.sendCode',
+  signInCodeTab: 'auth.signIn.codeTab',
+  signInPasswordTab: 'auth.signIn.passwordTab',
+  signInSubmitCode: 'auth.signIn.submit',
+  signInSubmitPassword: 'auth.signIn.submit',
+  signInForgotPassword: 'auth.signIn.forgot',
+  signInCreateAccount: 'auth.signIn.createAccount',
+} as const
+
+/**
+ * signIn 系 kit-labels 的字典解析（i18n B 方案，g7 分片）：
+ *
+ * - 宿主**显式**经 KitLabelsProvider / labels prop 覆盖的值照旧生效——判据是
+ *   与 DEFAULT_KIT_LABELS 不同（string 值比较 / 函数引用比较；无 Provider 时
+ *   useKitLabels 返回的就是 DEFAULT 本尊，函数键引用相同）。
+ * - 未覆盖的键不再用内置中文默认值，改走 t() 字典（默认 EN，zh 可选）。
+ *   kit-labels.tsx 本体不动（g10 分片同款裁定：其余组件的 kit 键不受影响）。
+ */
+export function resolveSignInKitLabels(rawKit: Required<KitLabels>, t: (key: string, vars?: Record<string, string | number>) => string): Required<KitLabels> {
+  const out: Required<KitLabels> = { ...rawKit }
+  for (const key of Object.keys(SIGNIN_I18N_KEYS) as (keyof typeof SIGNIN_I18N_KEYS)[]) {
+    if (out[key] !== DEFAULT_KIT_LABELS[key]) continue
+    out[key] = t(SIGNIN_I18N_KEYS[key])
+  }
+  if (out.resendWithCooldown === DEFAULT_KIT_LABELS.resendWithCooldown) {
+    out.resendWithCooldown = (seconds: number) => t('auth.signIn.resendIn', { seconds })
+  }
+  if (out.signInLegalNote === DEFAULT_KIT_LABELS.signInLegalNote) {
+    out.signInLegalNote = (termsUrl: string, privacyUrl: string) =>
+      createElement(
+        Fragment,
+        null,
+        t('auth.signIn.legalIntro'), ' ',
+        createElement('a', { href: termsUrl, target: '_blank', rel: 'noopener noreferrer', className: 'text-primary hover:underline' }, t('auth.signIn.legalTerms')),
+        ' ', t('auth.signIn.legalAnd'), ' ',
+        createElement('a', { href: privacyUrl, target: '_blank', rel: 'noopener noreferrer', className: 'text-primary hover:underline' }, t('auth.signIn.legalPrivacy')),
+      )
+  }
+  return out
+}
+
 export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback }: UseSignInFlowOptions) {
-  const kit = useKitLabels()
+  const rawKit = useKitLabels()
+  const t = useT()
+  // kit 覆盖优先、其余走字典（见 resolveSignInKitLabels 注释）。
+  const kit = useMemo(() => resolveSignInKitLabels(rawKit, t), [rawKit, t])
   const { submit, loading, error: codeError } = useLogin()
   const api = useApi()
   const { refresh } = useAuth()
@@ -123,7 +173,7 @@ export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback
         turnstileRef.current?.reset()
       }
     } catch (e) {
-      setSendError(apiErrorMessage(e, '验证码发送失败，请稍后重试'))
+      setSendError(apiErrorMessage(e, t('auth.signIn.sendCodeFailed')))
       if (turnstileRequired) {
         setTurnstileToken(null)
         turnstileRef.current?.reset()
@@ -148,22 +198,22 @@ export function useSignInFlow({ onSuccess, loginRedirectTarget: redirectFallback
       await refresh()
       succeed()
     } catch (err) {
-      setPwError(apiErrorMessage(err, '登录失败'))
+      setPwError(apiErrorMessage(err, t('auth.signIn.signInFailed')))
     } finally {
       setPwLoading(false)
     }
   }
 
   // 发送按钮四态文案：冷却 > 已发送 > 发送中 > 初始。三处共用（tabs 验证码
-  // 行内、email-first 首屏主按钮、email-first 行内重发），默认值与历史硬编码
-  // 逐字一致。
+  // 行内、email-first 首屏主按钮、email-first 行内重发）；冷却/初始两态经
+  // 解析后的 kit（宿主覆盖优先，否则走 g7 字典）。
   const sendButtonLabel =
     cooldown > 0
       ? kit.resendWithCooldown(cooldown)
       : codeSent
-        ? '重新发送'
+        ? t('auth.signIn.resend')
         : sending
-          ? '发送中…'
+          ? t('auth.signIn.sending')
           : kit.sendCode
 
   return {

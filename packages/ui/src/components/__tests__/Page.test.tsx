@@ -72,9 +72,9 @@ describe('Page 三态件接入 KitLabels（orkome 报告 #3：双语产品 en �
         <PageError message="加载失败" onRetry={() => {}} />
       </>,
     )
-    expect(screen.getByText('加载中…')).toBeInTheDocument()
-    expect(screen.getByText('暂无数据')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.getByText('No data yet')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
   it('KitLabelsProvider 覆盖三键：pageLoading / pageEmpty / pageRetry', () => {

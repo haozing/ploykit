@@ -68,7 +68,7 @@ function renderPage() {
 }
 
 function expandPro() {
-  fireEvent.click(screen.getByRole('button', { name: '编辑套餐 pro' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit plan pro' }));
 }
 
 beforeEach(() => {
@@ -95,9 +95,9 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     expect(screen.getByText('CNY')).toBeInTheDocument();
     expect(screen.getByText('USD')).toBeInTheDocument();
     // 折叠态：编辑表单不存在
-    expect(screen.queryByLabelText('名称')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '保存' }),
+      screen.queryByRole('button', { name: 'Save' }),
     ).not.toBeInTheDocument();
   });
 
@@ -107,15 +107,15 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     expandPro();
 
     // workspaces: -1 → Unlimited（无限）提示；price_monthly_cents → 价格（单位：分）
-    expect(await screen.findByText('Unlimited（无限）')).toBeInTheDocument();
-    expect(screen.getByText('价格（单位：分）')).toBeInTheDocument();
+    expect(await screen.findByText('Unlimited')).toBeInTheDocument();
+    expect(screen.getByText('Price (in cents)')).toBeInTheDocument();
     // workspaces 是 billing 未登记键 → 高级键弱提示
-    expect(screen.getAllByText('高级键')).toHaveLength(1);
+    expect(screen.getAllByText('Advanced key')).toHaveLength(1);
 
-    fireEvent.change(screen.getByLabelText('名称'), {
+    fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: '专业版' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(mockedPatch).toHaveBeenCalledWith('/api/admin/plans/pro', {
@@ -134,10 +134,10 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     renderPage();
     await screen.findByText('Pro');
     expandPro();
-    fireEvent.click(await screen.findByRole('button', { name: '保存' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '不存在或无权访问',
+      'Not found or no access',
     );
   });
 
@@ -153,7 +153,7 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     renderPage();
     await screen.findByText('Pro');
     expandPro();
-    fireEvent.click(await screen.findByRole('button', { name: '保存' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'currency: must be 3 uppercase letters',
@@ -165,20 +165,20 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     await screen.findByText('Pro');
     expandPro();
 
-    const keys = () => screen.getAllByLabelText('限制键名');
-    expect(await screen.findAllByLabelText('限制键名')).toHaveLength(2);
+    const keys = () => screen.getAllByLabelText('Limit key');
+    expect(await screen.findAllByLabelText('Limit key')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: '添加限制键' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add limit key' }));
     expect(keys()).toHaveLength(3);
 
     fireEvent.change(keys()[2], { target: { value: 'credits' } });
-    fireEvent.change(screen.getAllByLabelText('限制值')[2], {
+    fireEvent.change(screen.getAllByLabelText('Limit value')[2], {
       target: { value: '100' },
     });
     // workspaces + credits 两个未登记键 → 两个高级键提示
-    expect(screen.getAllByText('高级键')).toHaveLength(2);
+    expect(screen.getAllByText('Advanced key')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockedPatch).toHaveBeenCalledWith('/api/admin/plans/pro', {
         name: 'Pro',
@@ -194,21 +194,21 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     await screen.findByText('Pro');
     expandPro();
 
-    const keys = () => screen.getAllByLabelText('限制键名');
-    expect(await screen.findAllByLabelText('限制键名')).toHaveLength(2);
+    const keys = () => screen.getAllByLabelText('Limit key');
+    expect(await screen.findAllByLabelText('Limit key')).toHaveLength(2);
 
     // 误触加行再删行：整行留空不阻塞保存，也不进 body
-    fireEvent.click(screen.getByRole('button', { name: '添加限制键' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add limit key' }));
     expect(keys()).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: '删除限制 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete limit 3' }));
     expect(keys()).toHaveLength(2);
 
     fireEvent.click(
-      screen.getByRole('button', { name: '删除限制 workspaces' }),
+      screen.getByRole('button', { name: 'Delete limit workspaces' }),
     );
     expect(keys()).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockedPatch).toHaveBeenCalledWith('/api/admin/plans/pro', {
         name: 'Pro',
@@ -231,7 +231,7 @@ describe('PlansPage（UP-5 套餐编辑）', () => {
     );
     await screen.findByText('Pro');
     expandPro();
-    fireEvent.click(await screen.findByRole('button', { name: '保存' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(mockedPatch).toHaveBeenCalled());
     await waitFor(() =>

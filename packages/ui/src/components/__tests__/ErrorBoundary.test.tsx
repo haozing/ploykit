@@ -42,11 +42,11 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('正常内容')).toBeInTheDocument()
   })
 
-  it('无 fallback 时显示默认错误态（含"出错了"与重试按钮）', () => {
+  it('无 fallback 时显示默认错误态（含"Something went wrong"与重试按钮）', () => {
     shouldThrow = true
     render(<ErrorBoundary><Bomb /></ErrorBoundary>)
-    expect(screen.getByText('出错了')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
   it('componentDidCatch 将错误记入 console.error', () => {

@@ -35,6 +35,7 @@ import {
   TooltipTrigger,
 } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
+import { t, useT } from '../../i18n';
 import { adminError } from './shared';
 
 // BC-6 后台支付渠道自助配置（docs/plan-billing-channel-framework-2026-10-23.md）：
@@ -95,15 +96,17 @@ export function webhookUrl(origin: string, name: string): string {
 }
 
 // AdminSettingsPage copyCallbackUrl 同款降级策略：无 clipboard API 时
-// toast 展示完整地址（不做降级选中复制）
+// toast 展示完整地址（不做降级选中复制）。非 React 事件处理器 → 模块级 t()。
 function copyWebhookUrl(name: string, url: string) {
   if (typeof navigator.clipboard?.writeText === 'function') {
     void navigator.clipboard
       .writeText(url)
-      .then(() => toast.success(`${name} Webhook URL 已复制`))
-      .catch(() => toast.error(`复制失败，完整地址：${url}`));
+      .then(() => toast.success(t('admin.billingChannels.copied', { name })))
+      .catch(() =>
+        toast.error(t('admin.billingChannels.copyFailedFull', { url })),
+      );
   } else {
-    toast.info(`当前环境不支持自动复制，完整地址：${url}`);
+    toast.info(t('admin.billingChannels.copyUnsupported', { url }));
   }
 }
 
@@ -124,6 +127,7 @@ interface ChannelCardFormProps {
 function ChannelCardForm({ channel }: ChannelCardFormProps) {
   const api = useApi();
   const qc = useQueryClient();
+  const t = useT();
 
   const [draft, setDraft] = useState<Record<string, string>>(() =>
     hydrateDraft(channel),
@@ -164,7 +168,11 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
       fields[spec.key] = v;
     }
     if (missing.length > 0) {
-      return { error: `必填项未填写：${missing.join('、')}` };
+      return {
+        error: t('admin.billingChannels.missingRequired', {
+          fields: missing.join(t('admin.shared.listSep')),
+        }),
+      };
     }
     return { fields };
   };
@@ -178,11 +186,13 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
         { fields },
       ),
     onSuccess: () => {
-      toast.success(`渠道 ${channel.name} 已保存`);
+      toast.success(t('admin.billingChannels.saved', { name: channel.name }));
       void qc.invalidateQueries({ queryKey: BILLING_CHANNELS_QUERY_KEY });
     },
     onError: (e) =>
-      setFormError(adminError(e, `渠道 ${channel.name} 保存失败`)),
+      setFormError(
+        adminError(e, t('admin.billingChannels.saveFailed', { name: channel.name })),
+      ),
   });
 
   // 既有端点（OrdersPage 支付渠道卡同款）：成功无 body、失败 4xx/5xx 带 err
@@ -191,9 +201,13 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
       api.post('/api/admin/billing/test-connection', {
         channel: channel.name,
       }),
-    onSuccess: () => setTestMsg('连接正常'),
+    onSuccess: () => setTestMsg(t('admin.billingChannels.testOk')),
     onError: (e) =>
-      setTestMsg(`测试失败：${adminError(e, '未知错误')}`),
+      setTestMsg(
+        t('admin.billingChannels.testFailed', {
+          msg: adminError(e, t('admin.billingChannels.unknownError')),
+        }),
+      ),
   });
 
   const submit = () => {
@@ -201,7 +215,7 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
     setTestMsg(null);
     const { fields, error } = buildFields();
     if (!fields) {
-      setFormError(error ?? '表单有误');
+      setFormError(error ?? t('admin.shared.formInvalid'));
       return;
     }
     saveM.mutate(fields);
@@ -224,25 +238,32 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
         <CardAction>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {channel.configured ? (
-              <Badge>已配置</Badge>
+              <Badge>{t('admin.billingChannels.badgeConfigured')}</Badge>
             ) : (
               <Badge variant="outline" className="text-muted-foreground">
-                未配置
+                {t('admin.billingChannels.badgeNotConfigured')}
               </Badge>
             )}
             {channel.config_source === 'db' && (
-              <Badge variant="secondary">后台配置</Badge>
+              <Badge variant="secondary">
+                {t('admin.billingChannels.sourceDb')}
+              </Badge>
             )}
             {channel.config_source === 'env' && (
-              <Badge variant="outline">环境变量</Badge>
+              <Badge variant="outline">
+                {t('admin.billingChannels.sourceEnv')}
+              </Badge>
             )}
             {modeFromEnv && (
               <Badge variant="outline" className="text-muted-foreground">
-                模式：环境变量提供
+                {t('admin.billingChannels.modeFromEnv')}
               </Badge>
             )}
             {channel.webhook_configured ? (
-              <StatusBadge label="回调验签已配" tone="positive" />
+              <StatusBadge
+                label={t('admin.billingChannels.webhookSigned')}
+                tone="positive"
+              />
             ) : (
               <Tooltip>
                 <TooltipTrigger
@@ -253,10 +274,13 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
                     />
                   }
                 >
-                  <StatusBadge label="回调验签未配" tone="warning" />
+                  <StatusBadge
+                    label={t('admin.billingChannels.webhookNotSigned')}
+                    tone="warning"
+                  />
                 </TooltipTrigger>
                 <TooltipContent>
-                  未配置回调验签时，支付成功但权益不会发放
+                  {t('admin.billingChannels.webhookNotSignedTip')}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -267,11 +291,11 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
         {isTestMode && (
           <Alert role="status" variant="warning">
             <AlertDescription>
-              当前为测试模式，不会产生真实扣款。
+              {t('admin.billingChannels.testModeNotice')}
               {channel.name === 'waffo' && (
                 <>
                   {' '}
-                  测试卡号：成功 4576 7500 0000 0110 / 拒付 4576 7500 0000 0220。
+                  {t('admin.billingChannels.testCards')}
                 </>
               )}
             </AlertDescription>
@@ -279,7 +303,9 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
         )}
 
         <div>
-          <p className="text-sm font-medium">Webhook 回调地址</p>
+          <p className="text-sm font-medium">
+            {t('admin.billingChannels.webhookUrlTitle')}
+          </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <code className="min-w-0 flex-1 rounded bg-muted px-2 py-1 font-mono text-xs break-all text-muted-foreground">
               {url}
@@ -291,19 +317,25 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    aria-label={`复制 ${channel.name} Webhook URL`}
+                    aria-label={t('admin.billingChannels.copyWebhookAria', {
+                      name: channel.name,
+                    })}
                     onClick={() => copyWebhookUrl(channel.name, url)}
                   />
                 }
               >
                 <Copy size={12} aria-hidden="true" />
-                复制
+                {t('admin.billingChannels.copy')}
               </TooltipTrigger>
-              <TooltipContent>复制 {channel.name} Webhook URL</TooltipContent>
+              <TooltipContent>
+                {t('admin.billingChannels.copyWebhookAria', {
+                  name: channel.name,
+                })}
+              </TooltipContent>
             </Tooltip>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            将此 URL 粘贴到渠道后台的 Webhook 设置。
+            {t('admin.billingChannels.pasteHint')}
           </p>
         </div>
 
@@ -323,13 +355,17 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
                 const label =
                   spec.type === 'secret' &&
                   channel.values[spec.key] === SECRET_SET
-                    ? `${spec.label}（已设置）`
+                    ? t('admin.billingChannels.secretSetSuffix', {
+                        label: spec.label,
+                      })
                     : spec.label;
                 const description =
                   spec.type === 'secret'
                     ? spec.help
-                      ? `${spec.help}；留空保持不变`
-                      : '留空保持不变'
+                      ? t('admin.billingChannels.helpKeepEmpty', {
+                          help: spec.help,
+                        })
+                      : t('admin.billingChannels.keepEmpty')
                     : spec.help || undefined;
                 return (
                   <FormField
@@ -382,7 +418,8 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
 
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" size="sm" disabled={saveM.isPending}>
-              {saveM.isPending && <Spinner aria-hidden="true" />}保存
+              {saveM.isPending && <Spinner aria-hidden="true" />}
+              {t('admin.shared.save')}
             </Button>
             <Tooltip>
               {/* disabled 按钮不派发指针事件，Tooltip 的 Trigger 需包一层 span */}
@@ -397,18 +434,20 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
                     testConnM.mutate();
                   }}
                 >
-                  {testConnM.isPending ? '测试中…' : '测试连接'}
+                  {testConnM.isPending
+                    ? t('admin.billingChannels.testing')
+                    : t('admin.billingChannels.testConn')}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
                 {!channel.configured
-                  ? '渠道未配置密钥，无法测试'
-                  : '向渠道发起一次只读连通性请求'}
+                  ? t('admin.billingChannels.testDisabledTip')
+                  : t('admin.billingChannels.testReadonlyTip')}
               </TooltipContent>
             </Tooltip>
             {/* 测试连接读的是已保存配置：表单里新贴的密钥未保存时测的是旧值 */}
             <span className="text-xs text-muted-foreground">
-              测试连接使用已保存的配置；修改后请先保存再测试。
+              {t('admin.billingChannels.testSavedHint')}
             </span>
           </div>
 
@@ -430,6 +469,7 @@ function ChannelCardForm({ channel }: ChannelCardFormProps) {
 
 export function BillingChannelsSection() {
   const api = useApi();
+  const t = useT();
 
   const channelsQ = useQuery({
     queryKey: BILLING_CHANNELS_QUERY_KEY,
@@ -445,21 +485,23 @@ export function BillingChannelsSection() {
 
   return (
     <section className="mt-10">
-      <h2 className="text-base font-semibold">支付渠道</h2>
+      <h2 className="text-base font-semibold">
+        {t('admin.billingChannels.title')}
+      </h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        贴入渠道密钥并保存即可启用，无需修改环境变量或重启；密钥加密存储，保存后不再回显。
+        {t('admin.billingChannels.description')}
       </p>
       {channelsQ.isError ? (
         <PageError
-          message={adminError(channelsQ.error, '渠道配置加载失败')}
+          message={adminError(channelsQ.error, t('admin.billingChannels.loadFailed'))}
           onRetry={() => void channelsQ.refetch()}
         />
       ) : channelsQ.isPending ? (
-        <PageLoading label="加载支付渠道中…" />
+        <PageLoading label={t('admin.billingChannels.loading')} />
       ) : channels.length === 0 ? (
         <PageEmpty
-          label="暂无已注册渠道"
-          hint="渠道由框架注册后在此显示"
+          label={t('admin.billingChannels.emptyLabel')}
+          hint={t('admin.billingChannels.emptyHint')}
         />
       ) : (
         <div className="space-y-3">

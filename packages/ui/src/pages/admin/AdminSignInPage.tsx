@@ -22,6 +22,7 @@
 import { SignInForm, loginRedirectTarget } from '../../auth/SignInForm'
 import { hardNavigate } from '../../auth/hard-navigate'
 import { useLocation } from '../../router'
+import { useT } from '../../i18n'
 
 export interface AdminSignInPageProps {
   /** 登录成功后的兜底落点（深链 state.from 缺失/非法时）。默认 '/admin'。 */
@@ -30,19 +31,20 @@ export interface AdminSignInPageProps {
   /** 「忘记密码？」链接；默认不渲染（管理端重置多走带外流程），传入才显示。 */
   resetPath?: string
 
-  /** 门头标题。默认「管理控制台」。 */
+  /** 门头标题。缺省走字典 admin.signIn.defaultTitle（en 'Admin Console'）。 */
   title?: string
 
-  /** 门头副标题。默认「仅限授权人员」。 */
+  /** 门头副标题。缺省走字典 admin.signIn.defaultDescription。 */
   description?: string
 }
 
 export function AdminSignInPage({
   adminPath = '/admin',
   resetPath,
-  title = '管理控制台',
-  description = '仅限授权人员',
+  title,
+  description,
 }: AdminSignInPageProps) {
+  const t = useT()
   // 回跳目标与软导航同一守卫：AdminShell 未登录重定向带来的 state.from
   // （如 '/admin/users'）合法则原样回跳；直访问口落 adminPath。
   const from = loginRedirectTarget(
@@ -58,8 +60,8 @@ export function AdminSignInPage({
           registerPath=""
           resetPath={resetPath ?? ''}
           onSuccess={() => hardNavigate(from)}
-          title={title}
-          description={description}
+          title={title ?? t('admin.signIn.defaultTitle')}
+          description={description ?? t('admin.signIn.defaultDescription')}
         />
       </div>
     </div>

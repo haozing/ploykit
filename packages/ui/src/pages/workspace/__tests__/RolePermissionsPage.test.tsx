@@ -68,20 +68,20 @@ beforeEach(() => {
 describe('RolePermissionsPage', () => {
   it('渲染两个可配置角色与权限矩阵（member 标记已自定义）', async () => {
     renderPage()
-    expect(await screen.findByRole('heading', { name: '管理员' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /成员/ })).toBeInTheDocument()
-    expect(screen.getByText('已自定义')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Admin' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Member/ })).toBeInTheDocument()
+    expect(screen.getByText('Customized')).toBeInTheDocument()
     // catalog 权限逐项渲染（admin 卡内 + member 卡内各一份）
     expect(screen.getAllByText('roles:manage').length).toBeGreaterThanOrEqual(2)
   })
 
   it('勾选并保存 → PUT /api/workspaces/{id}/roles/{role}', async () => {
     renderPage()
-    await screen.findByText('管理员')
+    await screen.findByText('Admin')
     // admin 卡内勾选 roles:manage（第一份），保存（第一份按钮）
     const boxes = screen.getAllByRole('checkbox', { name: 'roles:manage' })
     fireEvent.click(boxes[0])
-    const save = screen.getAllByRole('button', { name: '保存修改' })[0]
+    const save = screen.getAllByRole('button', { name: 'Save changes' })[0]
     expect(save).toBeEnabled()
     fireEvent.click(save)
 
@@ -100,18 +100,18 @@ describe('RolePermissionsPage', () => {
       }),
     )
     renderPage()
-    await screen.findByText('管理员')
+    await screen.findByText('Admin')
 
     const boxes = screen.getAllByRole('checkbox', { name: 'members:read' })
     // member 卡（第二个）：取消勾选 members:read（已勾选）→ dirty
     fireEvent.click(boxes[1])
-    fireEvent.click(screen.getAllByRole('button', { name: '保存修改' })[1])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[1])
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    fireEvent.change(await screen.findByLabelText('当前密码'), {
+    fireEvent.change(await screen.findByLabelText('Current password'), {
       target: { value: 'correct horse' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '验证并继续' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }))
 
     await waitFor(() => {
       expect(apiMocks.post).toHaveBeenCalledWith('/auth/confirm-password', {
@@ -121,13 +121,13 @@ describe('RolePermissionsPage', () => {
     await waitFor(() => {
       expect(apiMocks.put).toHaveBeenCalledTimes(2)
     })
-    expect(toastMocks.success).toHaveBeenCalledWith('已验证，操作已重试')
+    expect(toastMocks.success).toHaveBeenCalledWith('Verified — action retried')
   })
 
   it('恢复默认（已自定义角色）→ DELETE 并提示', async () => {
     renderPage()
-    await screen.findByText('已自定义')
-    fireEvent.click(screen.getByRole('button', { name: '恢复默认' }))
+    await screen.findByText('Customized')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }))
     await waitFor(() => {
       expect(apiMocks.delete).toHaveBeenCalledWith('/api/workspaces/ws-1/roles/member')
     })

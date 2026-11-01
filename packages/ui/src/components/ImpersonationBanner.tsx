@@ -1,10 +1,10 @@
 import { TriangleAlert } from 'lucide-react'
 import { useAuthSafe } from '../lib/useAuthSafe'
 import { cn } from '../lib/utils'
+import { useT } from '../i18n'
 
-const DEFAULT_IMPERSONATION_BANNER_LABEL = '您正处于管理员模拟会话'
-
-export function ImpersonationBanner({ className, label = DEFAULT_IMPERSONATION_BANNER_LABEL }: { className?: string; label?: string }) {
+export function ImpersonationBanner({ className, label }: { className?: string; label?: string }) {
+  const t = useT() // 默认横幅文案走字典（g9：ui.impersonation.*），label prop 优先
   // Provider-safe：无 AuthContext 时渲染空（AppShell 不强制宿主包 PloykitProvider）。
   const auth = useAuthSafe()
   if (!auth || !auth.user?.impersonated_by) return null
@@ -19,7 +19,7 @@ export function ImpersonationBanner({ className, label = DEFAULT_IMPERSONATION_B
       )}
     >
       <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
-      <span>{label}</span>
+      <span>{label ?? t('ui.impersonation.banner')}</span>
     </div>
   )
 }

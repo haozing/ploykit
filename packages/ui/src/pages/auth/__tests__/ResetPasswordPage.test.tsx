@@ -45,10 +45,10 @@ describe('ResetPasswordPage', () => {
 
   it('有效提交 → POST /auth/reset-password {email, token, new_password}', async () => {
     const v = renderWithQuery('?email=user@example.com&token=tok-1')
-    await screen.findByText('正在为 user@example.com 设置新密码')
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: STRONG_PW } })
-    fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: STRONG_PW } })
-    fireEvent.click(screen.getByRole('button', { name: '重置密码' }))
+    await screen.findByText('Setting a new password for user@example.com')
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: STRONG_PW } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }))
 
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith('/auth/reset-password', {
@@ -62,13 +62,13 @@ describe('ResetPasswordPage', () => {
 
   it('P3-28：成功后 URL 中的 token 被清除 + 倒计时文案出现', async () => {
     const v = renderWithQuery('?email=user@example.com&token=tok-2')
-    await screen.findByText('正在为 user@example.com 设置新密码')
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: STRONG_PW } })
-    fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: STRONG_PW } })
-    fireEvent.click(screen.getByRole('button', { name: '重置密码' }))
+    await screen.findByText('Setting a new password for user@example.com')
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: STRONG_PW } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }))
 
     expect(await screen.findByTestId('reset-done')).toBeInTheDocument()
-    expect(screen.getByText(/秒后跳转登录页/)).toBeInTheDocument()
+    expect(screen.getByText(/Redirecting to the sign-in page/)).toBeInTheDocument()
     await waitFor(() =>
       expect(window.location.search).not.toContain('token'),
     )
@@ -77,25 +77,25 @@ describe('ResetPasswordPage', () => {
 
   it('P3-30：两次不一致 → 错误归因到确认字段，不发请求', async () => {
     const v = renderWithQuery('?email=user@example.com&token=tok-3')
-    await screen.findByText('正在为 user@example.com 设置新密码')
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: STRONG_PW } })
-    fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: 'Different123!' } })
-    fireEvent.click(screen.getByRole('button', { name: '重置密码' }))
+    await screen.findByText('Setting a new password for user@example.com')
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'Different123!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }))
 
-    expect(await screen.findByText('两次输入的密码不一致')).toBeInTheDocument()
+    expect(await screen.findByText('Passwords do not match')).toBeInTheDocument()
     expect(mockedPost).not.toHaveBeenCalled()
     v.restore()
   })
 
   it('P3-30：弱密码（少于三类）被前端拦截', async () => {
     const v = renderWithQuery('?email=user@example.com&token=tok-4')
-    await screen.findByText('正在为 user@example.com 设置新密码')
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: 'abcdefghijk' } })
-    fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: 'abcdefghijk' } })
-    fireEvent.click(screen.getByRole('button', { name: '重置密码' }))
+    await screen.findByText('Setting a new password for user@example.com')
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'abcdefghijk' } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'abcdefghijk' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '需包含大写/小写/数字/符号中的至少三类',
+      'Must include at least three of: uppercase, lowercase, numbers, symbols',
     )
     expect(mockedPost).not.toHaveBeenCalled()
     v.restore()
@@ -104,10 +104,10 @@ describe('ResetPasswordPage', () => {
   it('服务端失败（令牌失效）→ 表单级 alert 展示', async () => {
     mockedPost.mockRejectedValueOnce(new Error('reset token expired'))
     const v = renderWithQuery('?email=user@example.com&token=stale')
-    await screen.findByText('正在为 user@example.com 设置新密码')
-    fireEvent.change(screen.getByLabelText('新密码'), { target: { value: STRONG_PW } })
-    fireEvent.change(screen.getByLabelText('确认新密码'), { target: { value: STRONG_PW } })
-    fireEvent.click(screen.getByRole('button', { name: '重置密码' }))
+    await screen.findByText('Setting a new password for user@example.com')
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: STRONG_PW } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('reset token expired')
     v.restore()

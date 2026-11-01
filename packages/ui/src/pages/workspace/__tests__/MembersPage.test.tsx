@@ -99,20 +99,21 @@ describe('MembersPage', () => {
     renderPage()
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument()
     expect(screen.getByText('admin@example.com')).toBeInTheDocument()
-    expect(screen.getByText('所有者')).toBeInTheDocument()
-    
+    // 角色徽章 en 'Owner' 与 fixture display_name 'Owner' 同名——断言至少渲染（角色列走 ROLE_LABEL）
+    expect(screen.getAllByText('Owner').length).toBeGreaterThan(0)
+
     // 分页底栏整行由 paginationTotal 渲染为单个文本节点（kit 文案可整体覆盖），
     // 信封 total=2 体现在行文案里。
-    expect(await screen.findByText('共 2 条 · 第 1/1 页')).toBeInTheDocument()
+    expect(await screen.findByText('2 items · page 1 of 1')).toBeInTheDocument()
   })
 
   it('邀请成员：提交正确的 path 与 payload', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /邀请成员/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Invite member/ }))
 
-    const emailInput = await screen.findByLabelText('邮箱')
+    const emailInput = await screen.findByLabelText('Email')
     fireEvent.change(emailInput, { target: { value: 'new@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
 
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith(
@@ -130,17 +131,17 @@ describe('MembersPage', () => {
     renderPage()
     await screen.findByText('admin@example.com')
 
-    fireEvent.click(screen.getByRole('button', { name: /更多操作/ }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '移除成员' }))
+    fireEvent.click(screen.getByRole('button', { name: /More actions/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove member' }))
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
-    expect(toastMocks.error.mock.calls[0][0]).toContain('请先转移或删除工作区')
+    expect(toastMocks.error.mock.calls[0][0]).toContain('transfer ownership or delete the workspace first')
   })
 
   it('角色变更 Select 走 PATCH members/{userId} {role}', async () => {
     renderPage()
-    const trigger = await screen.findByRole('combobox', { name: /admin@example.com 的角色/ })
+    const trigger = await screen.findByRole('combobox', { name: /Change role for admin@example.com/ })
     fireEvent.click(trigger)
-    const option = await screen.findByRole('option', { name: '成员' })
+    const option = await screen.findByRole('option', { name: 'Member' })
 
     
     fireEvent.pointerDown(option, { button: 0, pointerType: 'mouse' })
@@ -160,16 +161,16 @@ describe('MembersPage', () => {
     renderPage()
     await screen.findByText('admin@example.com')
 
-    
-    fireEvent.click(screen.getByRole('button', { name: /更多操作/ }))
-    const transferItem = screen.getByRole('menuitem', { name: '转让所有权' })
-    expect(screen.getAllByRole('menuitem', { name: '转让所有权' })).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: /More actions/ }))
+    const transferItem = screen.getByRole('menuitem', { name: 'Transfer ownership' })
+    expect(screen.getAllByRole('menuitem', { name: 'Transfer ownership' })).toHaveLength(1)
     fireEvent.click(transferItem)
 
-    
-    expect(await screen.findByText('将所有权转让给 admin@example.com')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('checkbox', { name: '我理解并接受以上影响' }))
-    fireEvent.click(screen.getByRole('button', { name: '确认转让' }))
+
+    expect(await screen.findByText('Transfer ownership to admin@example.com')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I understand and accept the impacts above' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm transfer' }))
 
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith(
@@ -187,15 +188,15 @@ describe('MembersPage', () => {
     renderPage()
     await screen.findByText('admin@example.com')
 
-    fireEvent.click(screen.getByRole('button', { name: /更多操作/ }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '转让所有权' }))
-    fireEvent.click(await screen.findByRole('checkbox', { name: '我理解并接受以上影响' }))
-    fireEvent.click(screen.getByRole('button', { name: '确认转让' }))
+    fireEvent.click(screen.getByRole('button', { name: /More actions/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Transfer ownership' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'I understand and accept the impacts above' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm transfer' }))
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
     
     
-    expect(toastMocks.error.mock.calls[0][0]).toContain('对方已是所有者')
+    expect(toastMocks.error.mock.calls[0][0]).toContain('already an owner')
   })
 })
 
@@ -208,26 +209,26 @@ describe('MembersPage 角色门控（member 只读）', () => {
     renderPage()
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument()
 
-    expect(screen.queryByRole('button', { name: /邀请成员/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /创建加入码/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /更多操作/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '移除成员' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
-    
-    expect(screen.queryByRole('combobox', { name: /admin@example.com 的角色/ })).not.toBeInTheDocument()
-    expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /Invite member/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Create join code/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /More actions/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Remove member' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Transfer ownership' })).not.toBeInTheDocument()
+
+    expect(screen.queryByRole('combobox', { name: /Change role for admin@example.com/ })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Admin').length).toBeGreaterThan(0)
   })
 
   it('member：邀请/加入码两个 tab 无撤销按钮（只读）', async () => {
     renderPage()
     await screen.findByText('owner@example.com')
-    fireEvent.click(screen.getByRole('tab', { name: /邀请/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Invitations/ }))
     expect(await screen.findByText('new@example.com')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '撤销' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: /加入码/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Join codes/ }))
     expect(await screen.findByText(/abcd/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '撤销' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument()
   })
 })
 
@@ -240,26 +241,26 @@ describe('MembersPage 角色门控（admin 可管理但不可转让所有权）'
     renderPage()
     await screen.findByText('admin@example.com')
 
-    fireEvent.click(await screen.findByRole('button', { name: /更多操作/ }))
-    expect(screen.getByRole('menuitem', { name: '移除成员' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /More actions/ }))
+    expect(screen.getByRole('menuitem', { name: 'Remove member' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Transfer ownership' })).not.toBeInTheDocument()
   })
 })
 
 describe('MembersPage B7：邀请邮箱语义 type=email（zod 兜底保留）', () => {
   it('输入框 type=email + autoComplete；非法邮箱仍由 zod 拦截（不发请求）', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /邀请成员/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Invite member/ }))
 
-    const emailInput = await screen.findByLabelText('邮箱')
+    const emailInput = await screen.findByLabelText('Email')
     expect(emailInput).toHaveAttribute('type', 'email')
     expect(emailInput).toHaveAttribute('autocomplete', 'email')
-    
+
     expect(emailInput.closest('form')).toHaveAttribute('novalidate')
 
     fireEvent.change(emailInput, { target: { value: 'not-an-email' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
-    expect(await screen.findByText('邮箱格式不正确')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    expect(await screen.findByText('Invalid email address')).toBeInTheDocument()
     expect(apiMocks.post).not.toHaveBeenCalled()
   })
 })
@@ -284,15 +285,15 @@ describe('MembersPage B9：加入码/邀请空态 hint 说明自助路径（同�
     renderPage()
     await screen.findByText('owner@example.com')
 
-    fireEvent.click(screen.getByRole('tab', { name: /加入码/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Join codes/ }))
     expect(
-      await screen.findByText(/加入码可让多人凭码自助加入工作区/),
+      await screen.findByText(/Join codes let multiple people join the workspace on their own/),
     ).toBeInTheDocument()
 
 
-    fireEvent.click(screen.getByRole('tab', { name: /邀请/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Invitations/ }))
     expect(
-      await screen.findByText(/定向邀请按邮箱一对一送达/),
+      await screen.findByText(/Direct invitations are delivered one-to-one by email/),
     ).toBeInTheDocument()
   })
 })
@@ -315,9 +316,9 @@ describe('MembersPage K5：tab/分页状态进 URL（searchParams）', () => {
     
     expect(screen.queryByText('new@example.com')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: /邀请/ }))
+    fireEvent.click(screen.getByRole('tab', { name: /Invitations/ }))
     expect(await screen.findByText('new@example.com')).toBeInTheDocument()
-    
+
     expect(locationLog.at(-1)).toBe('/?tab=invitations')
   })
 
@@ -337,7 +338,7 @@ describe('MembersPage K5：tab/分页状态进 URL（searchParams）', () => {
     await renderPage()
     await screen.findByText('owner@example.com')
 
-    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     // 序列化器契约已由适配层修复（rawStringifySearch/rawParseSearch，
     // 数字参数不再被 JSON 引号包裹——RR 语义 ?mpage=2）。
     await waitFor(() => expect(locationLog.at(-1)).toBe('/?mpage=2'))

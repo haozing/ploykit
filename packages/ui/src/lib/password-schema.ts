@@ -1,4 +1,5 @@
 import * as z from 'zod/mini'
+import { t } from '../i18n'
 
 /**
  * 密码强度规则的唯一真源。
@@ -11,6 +12,10 @@ import * as z from 'zod/mini'
  *
  * 规则与服务端 password.go 对齐：至少 10 位、按字节计不超过 128、大写/
  * 小写/数字/符号至少占三类。
+ *
+ * 校验消息走 i18n（g8 分片 lib.password.*）：error 传函数（zod error map）
+ * 而非字符串——消息在 safeParse 时才求值，随模块级 t() 的当前语言变化
+ * （默认 en；zh 产品挂 UiLangProvider 后无需重建 schema）。
  */
 
 export function passwordKinds(pw: string): number {
@@ -23,13 +28,13 @@ export function passwordKinds(pw: string): number {
 }
 
 export const passwordSchema = z.string().check(
-  z.minLength(10, '密码至少 10 位'),
+  z.minLength(10, { error: () => t('lib.password.min') }),
   z.refine(
     (pw) => new TextEncoder().encode(pw).length <= 128,
-    '密码过长（按字节计最多 128，一个汉字占 3 字节）',
+    { error: () => t('lib.password.maxBytes') },
   ),
   z.refine(
     (pw) => passwordKinds(pw) >= 3,
-    '需包含大写/小写/数字/符号中的至少三类',
+    { error: () => t('lib.password.kinds') },
   ),
 )

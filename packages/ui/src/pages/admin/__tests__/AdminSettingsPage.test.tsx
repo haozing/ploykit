@@ -78,33 +78,33 @@ describe('AdminSettingsPage', () => {
   it('渲染各卡并按 effective 回填表单（公告预览同步）', async () => {
     renderPage();
     
-    expect(await screen.findByText('顶部公告横条')).toBeInTheDocument();
-    expect(screen.getByText('全站"维护中"提示条')).toBeInTheDocument();
-    expect(screen.getByText('注册开关与域名白名单')).toBeInTheDocument();
+    expect(await screen.findByText('Top announcement banner')).toBeInTheDocument();
+    expect(screen.getByText('Site-wide "under maintenance" banner')).toBeInTheDocument();
+    expect(screen.getByText('Signup switch and domain allowlist')).toBeInTheDocument();
     expect(
-      screen.getByText('每用户 / 每 IP 限流与豁免名单'),
+      screen.getByText('Per-user / per-IP rate limits and allowlist'),
     ).toBeInTheDocument();
-    expect(screen.getByText('SMTP 发信配置')).toBeInTheDocument();
-    expect(screen.getByText('搜索引擎站点验证')).toBeInTheDocument();
-    expect(screen.getByText('发送测试邮件')).toBeInTheDocument();
+    expect(screen.getByText('SMTP settings')).toBeInTheDocument();
+    expect(screen.getByText('Search engine site verification')).toBeInTheDocument();
+    expect(screen.getByText('Send a test email')).toBeInTheDocument();
     // 基座信封无 oauth 字段 → 登录方式卡不渲染
-    expect(screen.queryByText('OAuth 第三方登录')).not.toBeInTheDocument();
+    expect(screen.queryByText('OAuth third-party sign-in')).not.toBeInTheDocument();
     
-    expect(screen.getByLabelText('公告文本')).toHaveValue('今晚例行维护');
+    expect(screen.getByLabelText('Announcement text')).toHaveValue('今晚例行维护');
     expect(screen.getByRole('status')).toHaveTextContent('今晚例行维护');
-    expect(screen.getByText('展示中')).toBeInTheDocument();
-    expect(screen.getByText('开放注册')).toBeInTheDocument();
+    expect(screen.getByText('Showing')).toBeInTheDocument();
+    expect(screen.getByText('Open signup')).toBeInTheDocument();
     
     expect(mockedGet).toHaveBeenCalledWith('/api/admin/settings');
   });
 
   it('修改公告并保存 → PUT banner_text + banner_kind 两键', async () => {
     renderPage();
-    await screen.findByText('顶部公告横条');
-    fireEvent.change(screen.getByLabelText('公告文本'), {
+    await screen.findByText('Top announcement banner');
+    fireEvent.change(screen.getByLabelText('Announcement text'), {
       target: { value: '新公告：本周日停机' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存公告' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save announcement' }));
 
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(2));
     expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/banner_text', {
@@ -119,11 +119,11 @@ describe('AdminSettingsPage', () => {
 
   it('保存域名白名单 → PUT allowed_domains', async () => {
     renderPage();
-    await screen.findByText('注册开关与域名白名单');
-    fireEvent.change(screen.getByLabelText(/域名白名单/), {
+    await screen.findByText('Signup switch and domain allowlist');
+    fireEvent.change(screen.getByLabelText('Domain allowlist (comma-separated; empty = unrestricted)'), {
       target: { value: 'corp.com, edu.cn' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存白名单' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save allowlist' }));
 
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
     expect(mockedPut).toHaveBeenCalledWith(
@@ -140,29 +140,29 @@ describe('AdminSettingsPage', () => {
       hint: '当前为开发邮件通道（emaildev）：邮件内容已打日志，请到后端日志查看，真实邮箱不会收到',
     });
     renderPage();
-    await screen.findByText('发送测试邮件');
-    fireEvent.change(screen.getByLabelText('测试邮件收件邮箱'), {
+    await screen.findByText('Send a test email');
+    fireEvent.change(screen.getByLabelText('Test email recipient'), {
       target: { value: 'ops@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(mockedPost).toHaveBeenCalledTimes(1));
     expect(mockedPost).toHaveBeenCalledWith('/api/admin/settings/test-email', {
       to: 'ops@example.com',
     });
-    expect(await screen.findByText(/后端日志查看/)).toBeInTheDocument();
+    expect(await screen.findByText(/Dev channel \(emaildev\)/)).toBeInTheDocument();
   });
 
   it('测试邮件失败 → 展示错误结果，不静默', async () => {
     mockedPost.mockRejectedValueOnce(new Error('smtp connect refused'));
     renderPage();
-    await screen.findByText('发送测试邮件');
-    fireEvent.change(screen.getByLabelText('测试邮件收件邮箱'), {
+    await screen.findByText('Send a test email');
+    fireEvent.change(screen.getByLabelText('Test email recipient'), {
       target: { value: 'ops@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(await screen.findByText(/发送失败/)).toBeInTheDocument();
+    expect(await screen.findByText(/Send failed/)).toBeInTheDocument();
   });
 
   
@@ -178,33 +178,33 @@ describe('AdminSettingsPage', () => {
     });
     renderPage();
     expect(
-      await screen.findByText('每用户 / 每 IP 限流与豁免名单'),
+      await screen.findByText('Per-user / per-IP rate limits and allowlist'),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('每用户请求/分（0 = 关闭）')).toHaveValue('600');
+    expect(screen.getByLabelText('Requests per minute per user (0 = off)')).toHaveValue('600');
     expect(
-      screen.getByLabelText('每 IP 请求/分（认证路径；0 = 关闭）'),
+      screen.getByLabelText('Requests per minute per IP (authed routes; 0 = off)'),
     ).toHaveValue('60');
-    expect(screen.getByLabelText(/豁免名单/)).toHaveValue(
+    expect(screen.getByLabelText('Allowlist (comma-separated IPs or CIDRs; empty = none)')).toHaveValue(
       '10.0.0.5, 192.168.0.0/16',
     );
-    expect(screen.getByText('启用中')).toBeInTheDocument();
+    expect(screen.getByText('Enabled')).toBeInTheDocument();
   });
 
   it('保存限流配置 → PUT 三键（user/ip/allowlist）', async () => {
     renderPage();
-    await screen.findByText('每用户 / 每 IP 限流与豁免名单');
+    await screen.findByText('Per-user / per-IP rate limits and allowlist');
 
-    fireEvent.change(screen.getByLabelText('每用户请求/分（0 = 关闭）'), {
+    fireEvent.change(screen.getByLabelText('Requests per minute per user (0 = off)'), {
       target: { value: '600' },
     });
     fireEvent.change(
-      screen.getByLabelText('每 IP 请求/分（认证路径；0 = 关闭）'),
+      screen.getByLabelText('Requests per minute per IP (authed routes; 0 = off)'),
       { target: { value: '30' } },
     );
-    fireEvent.change(screen.getByLabelText(/豁免名单/), {
+    fireEvent.change(screen.getByLabelText('Allowlist (comma-separated IPs or CIDRs; empty = none)'), {
       target: { value: '10.0.0.5' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存限流配置' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rate limit settings' }));
 
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(3));
     expect(mockedPut).toHaveBeenCalledWith(
@@ -223,26 +223,26 @@ describe('AdminSettingsPage', () => {
 
   it('B-settings-10：限流空值/非法值 → 拒绝保存并就地提示（不再静默按 0 落库）', async () => {
     renderPage();
-    await screen.findByText('每用户 / 每 IP 限流与豁免名单');
+    await screen.findByText('Per-user / per-IP rate limits and allowlist');
 
     
-    fireEvent.change(screen.getByLabelText('每用户请求/分（0 = 关闭）'), {
+    fireEvent.change(screen.getByLabelText('Requests per minute per user (0 = off)'), {
       target: { value: '' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存限流配置' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rate limit settings' }));
 
     expect(
-      await screen.findByText('每用户限流：不能留空：填写 0 表示关闭限流'),
+      await screen.findByText('Per-user rate limit: Cannot be empty — enter 0 to disable rate limiting'),
     ).toBeInTheDocument();
     expect(mockedPut).not.toHaveBeenCalled();
 
     
-    fireEvent.change(screen.getByLabelText('每用户请求/分（0 = 关闭）'), {
+    fireEvent.change(screen.getByLabelText('Requests per minute per user (0 = off)'), {
       target: { value: 'abc' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存限流配置' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rate limit settings' }));
     expect(
-      await screen.findByText(/每用户限流：必须是 0\.\.100000 的整数/),
+      await screen.findByText(/Per-user rate limit: Must be an integer between 0 and 100000/),
     ).toBeInTheDocument();
     expect(mockedPut).not.toHaveBeenCalled();
   });
@@ -255,15 +255,15 @@ describe('AdminSettingsPage', () => {
       return {};
     });
     renderPage();
-    await screen.findByText('每用户 / 每 IP 限流与豁免名单');
+    await screen.findByText('Per-user / per-IP rate limits and allowlist');
 
-    fireEvent.click(screen.getByRole('button', { name: '保存限流配置' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save rate limit settings' }));
     await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled());
     const msg = toastMocks.error.mock.calls[0][0] as string;
-    expect(msg).toContain('部分保存');
-    expect(msg).toContain('成功 2/3');
-    expect(msg).toContain('每 IP 限流');
+    expect(msg).toContain('partially saved');
+    expect(msg).toContain('2/3');
+    expect(msg).toContain('Per-IP rate limit');
   });
 
   describe('SMTP 卡（UP-1）', () => {
@@ -284,45 +284,45 @@ describe('AdminSettingsPage', () => {
 
     it('掩码回显不回填：smtp_pass 回显 "******"，密码框保持空且 placeholder 为掩码', async () => {
       renderWithSmtp();
-      expect(await screen.findByText('SMTP 发信配置')).toBeInTheDocument();
-      expect(screen.getByLabelText('SMTP 服务器')).toHaveValue(
+      expect(await screen.findByText('SMTP settings')).toBeInTheDocument();
+      expect(screen.getByLabelText('SMTP server')).toHaveValue(
         'smtp.example.com',
       );
-      expect(screen.getByLabelText('端口（留空 = 缺省 587）')).toHaveValue(
+      expect(screen.getByLabelText('Port (blank = default 587)')).toHaveValue(
         '465',
       );
-      expect(screen.getByLabelText('SMTP 用户名')).toHaveValue('api');
-      expect(screen.getByLabelText('发件人地址')).toHaveValue(
+      expect(screen.getByLabelText('SMTP username')).toHaveValue('api');
+      expect(screen.getByLabelText('From address')).toHaveValue(
         'no-reply@example.com',
       );
-      const pass = screen.getByLabelText('SMTP 密码（留空 = 不修改）');
+      const pass = screen.getByLabelText('SMTP password (blank = unchanged)');
       expect(pass).toHaveValue('');
       expect(pass).toHaveAttribute('placeholder', '******');
       expect(pass).toHaveAttribute('type', 'password');
       // 卡头 Badge 显示 mail_mode
-      expect(screen.getByText('SMTP 直发')).toBeInTheDocument();
+      expect(screen.getByText('SMTP direct')).toBeInTheDocument();
     });
 
     it('保存 → PUT 5 键（密码原文只在用户主动输入时提交）', async () => {
       renderWithSmtp();
-      await screen.findByText('SMTP 发信配置');
+      await screen.findByText('SMTP settings');
 
-      fireEvent.change(screen.getByLabelText('SMTP 服务器'), {
+      fireEvent.change(screen.getByLabelText('SMTP server'), {
         target: { value: 'smtp2.example.com' },
       });
-      fireEvent.change(screen.getByLabelText('端口（留空 = 缺省 587）'), {
+      fireEvent.change(screen.getByLabelText('Port (blank = default 587)'), {
         target: { value: '587' },
       });
-      fireEvent.change(screen.getByLabelText('SMTP 用户名'), {
+      fireEvent.change(screen.getByLabelText('SMTP username'), {
         target: { value: 'api2' },
       });
-      fireEvent.change(screen.getByLabelText('SMTP 密码（留空 = 不修改）'), {
+      fireEvent.change(screen.getByLabelText('SMTP password (blank = unchanged)'), {
         target: { value: 's3cret' },
       });
-      fireEvent.change(screen.getByLabelText('发件人地址'), {
+      fireEvent.change(screen.getByLabelText('From address'), {
         target: { value: 'noreply@example.com' },
       });
-      fireEvent.click(screen.getByRole('button', { name: '保存 SMTP 配置' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save SMTP settings' }));
 
       await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(5));
       expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/smtp_host', {
@@ -344,10 +344,10 @@ describe('AdminSettingsPage', () => {
 
     it('空 pass 跳过提交：密码留空保存 → 只 PUT 其余 4 键，绝不提交空/掩码密码', async () => {
       renderWithSmtp();
-      await screen.findByText('SMTP 发信配置');
+      await screen.findByText('SMTP settings');
 
       // 不动密码框（state 恒空），直接保存其余四键
-      fireEvent.click(screen.getByRole('button', { name: '保存 SMTP 配置' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save SMTP settings' }));
 
       await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(4));
       expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/smtp_host', {
@@ -374,21 +374,21 @@ describe('AdminSettingsPage', () => {
       });
       renderPage();
       expect(
-        await screen.findByText('搜索引擎站点验证'),
+        await screen.findByText('Search engine site verification'),
       ).toBeInTheDocument();
-      expect(screen.getByText('未配置')).toBeInTheDocument();
+      expect(screen.getByText('Not configured')).toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText(/验证标记/), {
+      fireEvent.change(screen.getByLabelText(/Verification tag/), {
         target: {
           value:
             '<meta name="google-site-verification" content="abc123XYZ" />',
         },
       });
       // 有非空值即点亮"已注入"（同公告卡"展示中"的即时徽章逻辑）
-      expect(screen.getByText('已注入')).toBeInTheDocument();
+      expect(screen.getByText('Injected')).toBeInTheDocument();
 
       fireEvent.click(
-        screen.getByRole('button', { name: '保存验证配置' }),
+        screen.getByRole('button', { name: 'Save verification settings' }),
       );
       await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
       expect(mockedPut).toHaveBeenCalledWith(
@@ -416,7 +416,7 @@ describe('AdminSettingsPage', () => {
       mockedGet.mockResolvedValueOnce({ ...ENVELOPE, oauth: OAUTH });
       renderPage();
       expect(
-        await screen.findByText('OAuth 第三方登录'),
+        await screen.findByText('OAuth third-party sign-in'),
       ).toBeInTheDocument();
       expect(screen.getByText('google')).toBeInTheDocument();
       expect(screen.getByText('github')).toBeInTheDocument();
@@ -424,10 +424,10 @@ describe('AdminSettingsPage', () => {
         screen.getByText('https://example.com/auth/oauth/google/callback'),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: '复制 google 回调地址' }),
+        screen.getByRole('button', { name: 'Copy google callback URL' }),
       ).toBeInTheDocument();
       expect(
-        screen.getByText(/回调地址按请求 Host 实时生成/),
+        screen.getByText(/Callback URLs are generated from the request Host/),
       ).toBeInTheDocument();
       expect(screen.getByText(/X-Forwarded-Proto/)).toBeInTheDocument();
     });
@@ -440,9 +440,9 @@ describe('AdminSettingsPage', () => {
         oauth: [OAUTH[0]],
       });
       renderPage();
-      await screen.findByText('OAuth 第三方登录');
+      await screen.findByText('OAuth third-party sign-in');
       fireEvent.click(
-        screen.getByRole('button', { name: '复制 google 回调地址' }),
+        screen.getByRole('button', { name: 'Copy google callback URL' }),
       );
       await waitFor(() =>
         expect(writeText).toHaveBeenCalledWith(
@@ -451,7 +451,7 @@ describe('AdminSettingsPage', () => {
       );
       await waitFor(() =>
         expect(toastMocks.success).toHaveBeenCalledWith(
-          'google 回调地址已复制',
+          'google callback URL copied',
         ),
       );
       vi.unstubAllGlobals();
@@ -460,19 +460,19 @@ describe('AdminSettingsPage', () => {
     it('空数组 → 渲染空态提示（用 GOOGLE/GITHUB_CLIENT_ID/SECRET 环境变量启用）', async () => {
       mockedGet.mockResolvedValueOnce({ ...ENVELOPE, oauth: [] });
       renderPage();
-      await screen.findByText('OAuth 第三方登录');
-      expect(screen.getByText('未启用')).toBeInTheDocument();
+      await screen.findByText('OAuth third-party sign-in');
+      expect(screen.getByText('Not enabled')).toBeInTheDocument();
       expect(screen.getByText(/GOOGLE_CLIENT_ID/)).toBeInTheDocument();
       expect(screen.getByText(/GITHUB_CLIENT_ID/)).toBeInTheDocument();
     });
 
     it('信封无 oauth 字段 → 整卡不渲染（后端未接线时静默降级）', async () => {
       renderPage();
-      await screen.findByText('顶部公告横条');
-      expect(screen.queryByText('OAuth 第三方登录')).not.toBeInTheDocument();
-      expect(screen.queryByText('登录方式')).not.toBeInTheDocument();
+      await screen.findByText('Top announcement banner');
+      expect(screen.queryByText('OAuth third-party sign-in')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sign-in methods')).not.toBeInTheDocument();
       expect(
-        screen.queryByRole('button', { name: /复制.*回调地址/ }),
+        screen.queryByRole('button', { name: /Copy .* callback URL/ }),
       ).not.toBeInTheDocument();
     });
   });
@@ -495,12 +495,12 @@ describe('AdminSettingsPage', () => {
     it('注册键渲染为通用卡：敏感键掩码语义 + 普通键回填，内建键不进通用卡', async () => {
       mockedGet.mockResolvedValueOnce(EXTRA_ENVELOPE);
       renderPage();
-      expect(await screen.findByText('产品接入的配置键')).toBeInTheDocument();
+      expect(await screen.findByText('Product-registered settings')).toBeInTheDocument();
 
       const apiKey = screen.getByLabelText('resend_api_key');
       expect(apiKey).toHaveAttribute(
         'placeholder',
-        '已配置（输入新值以更换，留空 = 不修改）',
+        'Configured (type a new value to replace it; blank = unchanged)',
       );
       expect(apiKey).toHaveAttribute('type', 'password');
       expect(apiKey).toHaveValue('');
@@ -515,7 +515,7 @@ describe('AdminSettingsPage', () => {
       // 描述文案来自信封 descriptions
       expect(screen.getByText('Resend 发件人地址')).toBeInTheDocument();
       // 内建键绝不进通用卡（各有专属卡，此处按专属卡文案断言）
-      expect(screen.getByLabelText('SMTP 服务器')).toBeInTheDocument();
+      expect(screen.getByLabelText('SMTP server')).toBeInTheDocument();
       expect(screen.queryByLabelText('banner_text')).not.toBeInTheDocument();
     });
 
@@ -524,11 +524,11 @@ describe('AdminSettingsPage', () => {
       // 用持续 mock 而非 Once
       mockedGet.mockResolvedValue(EXTRA_ENVELOPE);
       renderPage();
-      await screen.findByText('产品接入的配置键');
+      await screen.findByText('Product-registered settings');
 
       // 未编辑任何键 → 按钮禁用，点不出任何 PUT（旧实现会把全部非敏感
       // 键水合值原样 PUT 回库，把 env 兜底值冻结进表）
-      const saveBtn = screen.getByRole('button', { name: '保存扩展配置' });
+      const saveBtn = screen.getByRole('button', { name: 'Save extension settings' });
       expect(saveBtn).toBeDisabled();
       fireEvent.click(saveBtn);
       expect(mockedPut).not.toHaveBeenCalled();
@@ -572,14 +572,14 @@ describe('AdminSettingsPage', () => {
     it('保存（dirty 语义）：非敏感键清空 = 显式停用，空串必须提交', async () => {
       mockedGet.mockResolvedValue(EXTRA_ENVELOPE);
       renderPage();
-      await screen.findByText('产品接入的配置键');
+      await screen.findByText('Product-registered settings');
 
       // 清空已配置的非敏感键 → dirty + 空串 → 提交空串（后台停用路径，
       // 如 oauth_google_client_id 清空即下线 provider）
       fireEvent.change(screen.getByLabelText('resend_from'), {
         target: { value: '' },
       });
-      fireEvent.click(screen.getByRole('button', { name: '保存扩展配置' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save extension settings' }));
       await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
       expect(mockedPut).toHaveBeenCalledWith('/api/admin/settings/resend_from', {
         value: '',
@@ -597,8 +597,8 @@ describe('AdminSettingsPage', () => {
           </AdminSettingsPage>
         </QueryClientProvider>,
       );
-      await screen.findByText('顶部公告横条');
-      expect(screen.queryByText('产品接入的配置键')).not.toBeInTheDocument();
+      await screen.findByText('Top announcement banner');
+      expect(screen.queryByText('Product-registered settings')).not.toBeInTheDocument();
       expect(screen.getByTestId('product-card')).toBeInTheDocument();
       // children 出现在页面根节点的最后一个位置（框架卡之后）
       const pageRoot = container.firstChild as HTMLElement;

@@ -1,5 +1,6 @@
 
 import { Link } from '../router'
+import { useT } from '../i18n'
 
 export interface Feature { icon: string; title: string; desc: string }
 export interface Plan {
@@ -28,6 +29,7 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
    */
   navLinks?: LandingNavLink[]
 }) {
+  const t = useT() // i18n（B 方案）：落地页固定文案走字典，内容型 props（tagline/features 等）归产品
   return (
     <div className="min-h-screen bg-card">
       <header className="border-b border-border">
@@ -44,10 +46,10 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
               </a>
             ))}
             <Link to={loginPath} className="px-4 py-2 text-sm font-medium text-foreground rounded-lg hover:bg-muted">
-              登录
+              {t('landing.signIn')}
             </Link>
             <Link to={registerPath} className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/80">
-              免费注册
+              {t('landing.signUpFree')}
             </Link>
           </div>
         </div>
@@ -57,13 +59,13 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
         <h1 className="text-5xl font-bold text-foreground tracking-tight">{tagline}</h1>
         <p className="mt-4 text-xl text-muted-foreground max-w-2xl mx-auto">{description}</p>
         <Link to={registerPath} className="mt-8 inline-block px-6 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/80 text-lg">
-          免费开始
+          {t('landing.getStarted')}
         </Link>
       </section>
 
       <section className="bg-muted py-16">
         <div className="max-w-6xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-foreground mb-12">核心功能</h2>
+          <h2 className="text-3xl font-bold text-center text-foreground mb-12">{t('landing.featuresTitle')}</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {features.map((f, i) => (
               <div key={`${i}-${f.title}`} className="p-6 bg-card rounded-xl border border-border">
@@ -78,15 +80,15 @@ export function LandingPage({ brand, tagline, description, features, plans, regi
 
       <section className="py-16">
         <div className="max-w-6xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-foreground mb-12">定价</h2>
+          <h2 className="text-3xl font-bold text-center text-foreground mb-12">{t('landing.pricingTitle')}</h2>
           <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {plans.map((p, i) => (
               <div key={`${i}-${p.name}`} className={`p-8 bg-card rounded-xl ${p.recommended ? 'border-2 border-primary relative' : 'border border-border'}`}>
                 {p.recommended && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">推荐</span>
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded-full">{t('landing.recommended')}</span>
                 )}
                 <h3 className="text-lg font-semibold text-foreground">{p.name}</h3>
-                <p className="mt-1 text-3xl font-bold text-foreground">{p.price}<span className="text-sm text-muted-foreground">{p.period ?? '/月'}</span></p>
+                <p className="mt-1 text-3xl font-bold text-foreground">{p.price}<span className="text-sm text-muted-foreground">{p.period ?? t('landing.perMonth')}</span></p>
                 <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
                   {p.features.map((f, j) => <li key={`${j}-${f}`}>✓ {f}</li>)}
                 </ul>

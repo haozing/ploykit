@@ -23,7 +23,7 @@ describe('SiteBannerLayer', () => {
       banner_kind: 'info',
     }
     render(<SiteBannerLayer />)
-    expect(screen.getByText(/维护中：系统维护中/)).toBeInTheDocument()
+    expect(screen.getByText(/Maintenance in progress/)).toBeInTheDocument()
     expect(screen.getByText('今晚 22:00 例行维护')).toBeInTheDocument()
   })
 
@@ -39,6 +39,6 @@ describe('SiteBannerLayer', () => {
     mocked.data = { maintenance_mode: '0', banner_text: '紧急公告', banner_kind: 'warn' }
     render(<SiteBannerLayer />)
     expect(screen.getByText('紧急公告')).toBeInTheDocument()
-    expect(screen.queryByText(/维护中/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Maintenance in progress/)).not.toBeInTheDocument()
   })
 })

@@ -64,20 +64,20 @@ describe('WorkspaceAuditPage', () => {
   it('渲染过滤行与审计表（时间/操作者/动作/资源）', async () => {
     stubAudit()
     renderPage()
-    expect(screen.getByText('审计日志')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /查询/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /导出 CSV/ })).toBeInTheDocument()
+    expect(screen.getByText('Audit log')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Search/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Export CSV/ })).toBeInTheDocument()
     expect(screen.getByText('alice@example.com')).toBeInTheDocument()
     expect(screen.getByText('workspace.rename')).toBeInTheDocument()
 
     expect(
       screen.getByText((_, el) =>
         el?.getAttribute('data-slot') === 'data-table-pagination' &&
-        /共\s*2\s*条\s*·\s*第\s*1\/1\s*页/.test(el.textContent ?? ''),
+        /2\s*items\s*·\s*page\s*1\s*of\s*1/.test(el.textContent ?? ''),
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
   })
 
   it('过滤条件随“查询”提交（日期补 RFC3339 边界），offset 归零', async () => {
@@ -86,10 +86,10 @@ describe('WorkspaceAuditPage', () => {
     }))
     renderPage()
 
-    fireEvent.change(screen.getByPlaceholderText('如 workspace.rename'), { target: { value: 'workspace.rename' } })
-    fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-10-01' } })
-    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-10-05' } })
-    fireEvent.click(screen.getByRole('button', { name: /查询/ }))
+    fireEvent.change(screen.getByPlaceholderText('e.g. workspace.rename'), { target: { value: 'workspace.rename' } })
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-10-01' } })
+    fireEvent.change(screen.getByLabelText('To date'), { target: { value: '2026-10-05' } })
+    fireEvent.click(screen.getByRole('button', { name: /Search/ }))
 
     await waitFor(() => expect(auditMocks.useAudit).toHaveBeenCalled())
     const lastCall = auditMocks.useAudit.mock.calls.at(-1)
@@ -105,18 +105,18 @@ describe('WorkspaceAuditPage', () => {
     const { rerender } = await renderPage()
     stubAudit({ loading: true, items: [] })
     rerender(<WorkspaceAuditPage />)
-    expect(screen.getByText('加载审计日志…')).toBeInTheDocument()
+    expect(screen.getByText('Loading audit log…')).toBeInTheDocument()
 
     stubAudit({ loading: false, items: [], error: new Error('boom') })
     rerender(<WorkspaceAuditPage />)
     expect(screen.getByText('boom')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
   it('导出 CSV 调用 exportAuditCsv（当前过滤条件）', async () => {
     stubAudit()
     renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /导出 CSV/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Export CSV/ }))
     await waitFor(() => expect(auditMocks.exportAuditCsv).toHaveBeenCalledTimes(1))
     expect(toastMocks.success).toHaveBeenCalled()
   })

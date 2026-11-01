@@ -9,6 +9,7 @@ import { Checkbox } from './ui/checkbox'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from './ui/input-group'
 import { Spinner } from './ui/spinner'
 import { useKitLabels } from '../labels/kit-labels'
+import { useT } from '../i18n'
 
 export function SecretModal({ open, onOpenChange, secretName, secretValue, title }: {
   open: boolean
@@ -22,6 +23,7 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
   title?: string
 }) {
   const L = useKitLabels()
+  const t = useT()
   // 数组归一化：单值与 [单值] 走同一条渲染/复制路径；join('\n') 把复制目标统一成纯文本（单值 join 后仍是原字符串，行为不变）。
   const values = Array.isArray(secretValue) ? secretValue : [secretValue]
   // 状态重置的依赖取内容签名而非引用——父组件内联字面量数组每次渲染都是新引用，
@@ -72,9 +74,9 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
     <Dialog open={open} onOpenChange={(o) => confirmed && onOpenChange(o)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{title ?? `${secretName} 创建成功`}</DialogTitle>
+          <DialogTitle>{title ?? t('ui.secret.createdTitle', { name: secretName })}</DialogTitle>
           <DialogDescription>
-            此密钥只显示一次，关闭后无法再次查看。请立即保存到安全的地方。
+            {t('ui.secret.description')}
           </DialogDescription>
         </DialogHeader>
         {/* 密文经 InputGroupInput 只读展示（mono 字体，可框内滚动/选中复制）；
@@ -86,13 +88,13 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
             <InputGroupInput
               readOnly
               value={values[0]}
-              aria-label="密钥（只显示一次）"
+              aria-label={t('ui.secret.ariaOnce')}
               className="font-mono text-sm"
             />
             <InputGroupAddon align="inline-end">
               <InputGroupButton onClick={copy}>
                 {copied ? <CheckIcon /> : <CopyIcon />}
-                {copied ? '已复制' : copyFailed ? '复制失败，请手动复制' : '复制'}
+                {copied ? t('ui.secret.copied') : copyFailed ? t('ui.secret.copyFailed') : t('ui.secret.copy')}
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
@@ -103,20 +105,20 @@ export function SecretModal({ open, onOpenChange, secretName, secretValue, title
                 <InputGroupInput
                   readOnly
                   value={value}
-                  aria-label={`密钥 ${index + 1}（共 ${values.length} 项，只显示一次）`}
+                  aria-label={t('ui.secret.itemAria', { index: index + 1, total: values.length })}
                   className="font-mono text-sm"
                 />
               </InputGroup>
             ))}
             <InputGroupButton onClick={copy} className="self-start">
               {copied ? <CheckIcon /> : <CopyIcon />}
-              {copied ? '已复制全部' : copyFailed ? '复制失败，请手动复制' : '复制全部'}
+              {copied ? t('ui.secret.copiedAll') : copyFailed ? t('ui.secret.copyFailed') : t('ui.secret.copyAll')}
             </InputGroupButton>
           </div>
         )}
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={confirmed} onCheckedChange={setConfirmed} />
-          我已将密钥保存到安全的地方
+          {t('ui.secret.confirmSavedLabel')}
         </label>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} disabled={!confirmed}>
@@ -141,6 +143,7 @@ export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impac
   /** 请求进行中：确认按钮 disabled 且文案前加 Spinner（confirmText 原样保留）；不传/false 时行为完全不变。 */
   pending?: boolean
 }) {
+  const t = useT()
   const [checked, setChecked] = useState(false)
 
   return (
@@ -148,7 +151,7 @@ export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impac
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>此操作将产生以下影响：</DialogDescription>
+          <DialogDescription>{t('ui.secret.impactsDescription')}</DialogDescription>
         </DialogHeader>
         {/* max-h + overflow：影响项过多时列表内部滚动，弹窗整体不被撑出视口 */}
         <ul className="max-h-48 space-y-1.5 overflow-y-auto">
@@ -160,17 +163,17 @@ export function ImpactConfirmation({ open, onConfirm, onOpenChange, title, impac
         </ul>
         <label className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
           <Checkbox checked={checked} onCheckedChange={setChecked} />
-          我理解并接受以上影响
+          {t('ui.secret.acceptImpacts')}
         </label>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('ui.secret.cancel')}</Button>
           <Button
             variant={danger ? 'destructive' : 'default'}
             disabled={!checked || pending}
             onClick={() => { onConfirm(); onOpenChange(false) }}
           >
             {pending && <Spinner aria-hidden="true" />}
-            {confirmText ?? '确认执行'}
+            {confirmText ?? t('ui.secret.confirmExecute')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type APINotification, type components } from '@ploykit/client'
 import { queryKeys } from '@ploykit/hooks'
 import { cn, formatDateTime } from '../lib/utils'
+import { useT } from '../i18n'
 
 
 type Notification = APINotification
 
 export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) => void }) {
+  const t = useT() // 面板文案走字典（g9：ui.notificationBell.*）
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
@@ -61,7 +63,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
         
         className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        aria-label="通知"
+        aria-label={t('ui.notificationBell.notifications')}
         aria-haspopup="true"
         aria-expanded={open}
       >
@@ -83,26 +85,26 @@ export function NotificationBell({ onNavigate }: { onNavigate?: (link: string) =
         <div
           className="absolute right-0 mt-2 w-80 bg-popover rounded-lg shadow-lg border z-50"
           role="dialog"
-          aria-label="通知列表"
+          aria-label={t('ui.notificationBell.listAria')}
           onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="text-sm font-semibold">通知</span>
+            <span className="text-sm font-semibold">{t('ui.notificationBell.notifications')}</span>
             {unread > 0 && (
               <button
                 onClick={() => markAllReadM.mutate()}
                 disabled={markAllReadM.isPending}
                 className="text-xs text-primary hover:underline disabled:opacity-50
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-              >全部已读</button>
+              >{t('ui.notificationBell.markAllRead')}</button>
             )}
           </div>
           <ul className="max-h-80 overflow-y-auto list-none p-0 m-0" data-slot="notification-list">
             {listQ.isPending ? (
-              
-              <li className="py-8 text-center text-sm text-muted-foreground" aria-live="polite">加载中…</li>
+
+              <li className="py-8 text-center text-sm text-muted-foreground" aria-live="polite">{t('ui.notificationBell.loading')}</li>
             ) : notifications.length === 0 ? (
-              <li className="py-8 text-center text-sm text-muted-foreground">暂无通知</li>
+              <li className="py-8 text-center text-sm text-muted-foreground">{t('ui.notificationBell.empty')}</li>
             ) : notifications.map((n) => (
               <li key={n.id} className="border-b last:border-0">
                 {/* P2-19：条目是可操作元素——button 语义（Tab 可达、Enter 可触发）， */}

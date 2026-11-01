@@ -28,6 +28,7 @@ import {
 } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
+import { useT } from '../../i18n';
 import { apiErrorMessage } from '../../lib/api-error';
 import { formatDate, formatDateTime, shortID } from '../../lib/utils';
 import { adminError } from './shared';
@@ -50,9 +51,6 @@ interface WsDetail extends AdminWorkspace {
 
 const ROLE_OPTIONS = ['owner', 'admin', 'member'];
 
-
-const QUOTA_KEY_HINT = '如 tasks_monthly';
-
 export function WorkspaceDetailPage() {
   const { id = '' } = useParams();
   const api = useApi();
@@ -60,6 +58,7 @@ export function WorkspaceDetailPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const t = useT(); // i18n（g3 分片）：用户可见文案走字典，zh=原文
   const [confirmSlug, setConfirmSlug] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   
@@ -91,20 +90,20 @@ export function WorkspaceDetailPage() {
         role: v.role,
       }),
     onSuccess: (_d, v) => {
-      toast.success(`${v.email} 角色已变更为 ${v.role}`);
+      toast.success(t('admin.workspaceDetail.toast.roleChanged', { email: v.email, role: v.role }));
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '角色变更失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.workspaceDetail.toast.roleChangeFailed'))),
   });
 
   const removeM = useMutation({
     mutationFn: (v: { uid: string; email: string }) =>
       api.delete(`/api/admin/workspaces/${id}/members/${v.uid}`),
     onSuccess: (_d, v) => {
-      toast.success(`${v.email} 已移出工作区`);
+      toast.success(t('admin.workspaceDetail.toast.memberRemoved', { email: v.email }));
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '移除成员失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.workspaceDetail.toast.memberRemoveFailed'))),
   });
 
   
@@ -122,14 +121,14 @@ export function WorkspaceDetailPage() {
         amount: v.amount,
       }),
     onSuccess: () => {
-      toast.success('配额已授予（加成额度立即生效）');
+      toast.success(t('admin.workspaceDetail.toast.quotaGranted'));
       setQuotaKey('');
       setQuotaReason('');
       setQuotaRef('');
       setQuotaAmount('');
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '配额授予失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.workspaceDetail.toast.quotaGrantFailed'))),
   });
 
   
@@ -139,11 +138,11 @@ export function WorkspaceDetailPage() {
         `/api/admin/workspaces/${id}?confirm=${encodeURIComponent(slug)}`,
       ),
     onSuccess: () => {
-      toast.success('工作区已删除');
+      toast.success(t('admin.workspaceDetail.toast.deleted'));
       void qc.invalidateQueries({ queryKey: ['admin', 'workspaces'] });
       navigate('/admin/workspaces');
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '删除失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.workspaceDetail.toast.deleteFailed'))),
   });
 
   
@@ -152,11 +151,11 @@ export function WorkspaceDetailPage() {
     mutationFn: () =>
       api.post(`/api/admin/workspaces/${id}/cancel-subscription`),
     onSuccess: () => {
-      toast.success('订阅已取消，工作区已降级为 free');
+      toast.success(t('admin.workspaceDetail.toast.subCanceled'));
       setCancelSubOpen(false);
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '取消订阅失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.workspaceDetail.toast.subCancelFailed'))),
   });
 
   
@@ -167,11 +166,11 @@ export function WorkspaceDetailPage() {
         user_id: m.user_id,
       }),
     onSuccess: (_d, m) => {
-      toast.success(`所有权已转让给 ${m.email}（原 owner 已降为 member）`);
+      toast.success(t('admin.workspaceDetail.toast.ownershipTransferred', { email: m.email }));
       setTransferTarget(null);
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '所有权转让失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.workspaceDetail.toast.ownershipTransferFailed'))),
   });
 
   const onGrant = () => {
@@ -182,7 +181,7 @@ export function WorkspaceDetailPage() {
       !Number.isInteger(amount) ||
       amount <= 0
     ) {
-      toast.error('请填写配额键、原因与正整数额度');
+      toast.error(t('admin.workspaceDetail.toast.quotaInvalid'));
       return;
     }
     grantM.mutate({
@@ -195,9 +194,9 @@ export function WorkspaceDetailPage() {
 
   const onRemoveMember = async (m: WsMemberRow) => {
     const ok = await confirm({
-      title: '移除成员',
-      description: `将把 ${m.email} 移出本工作区（${m.role}）。最后一个 owner 受保护，无法移除。`,
-      confirmText: '移除',
+      title: t('admin.workspaceDetail.removeMember.title'),
+      description: t('admin.workspaceDetail.removeMember.desc', { email: m.email, role: m.role }),
+      confirmText: t('admin.workspaceDetail.removeMember.confirm'),
       danger: true,
     });
     if (ok) removeM.mutate({ uid: m.user_id, email: m.email });
@@ -206,9 +205,9 @@ export function WorkspaceDetailPage() {
   if (detailQ.isError) {
     return (
       <div>
-        <PageHeader title="工作区详情" />
+        <PageHeader title={t('admin.workspaceDetail.title')} />
         <PageError
-          message={adminError(detailQ.error, '工作区详情加载失败')}
+          message={adminError(detailQ.error, t('admin.workspaceDetail.loadFailed'))}
           onRetry={() => void detailQ.refetch()}
         />
       </div>
@@ -221,7 +220,7 @@ export function WorkspaceDetailPage() {
   const memberColumns: Column<WsMemberRow>[] = [
     {
       key: 'email',
-      header: '成员',
+      header: t('admin.workspaceDetail.memberCol.member'),
       render: (m) => (
         <div className="min-w-0">
           <p className="truncate font-medium">{m.email}</p>
@@ -233,7 +232,7 @@ export function WorkspaceDetailPage() {
     },
     {
       key: 'role',
-      header: '角色',
+      header: t('admin.workspaceDetail.memberCol.role'),
       className: 'w-40',
       render: (m) => {
         const mutating = roleM.isPending && roleM.variables?.uid === m.user_id;
@@ -248,7 +247,7 @@ export function WorkspaceDetailPage() {
             <SelectTrigger
               size="sm"
               disabled={mutating}
-              aria-label={`变更 ${m.email} 角色`}
+              aria-label={t('admin.workspaceDetail.memberCol.changeRoleAria', { email: m.email })}
             >
               <SelectValue>{m.role}</SelectValue>
             </SelectTrigger>
@@ -265,7 +264,7 @@ export function WorkspaceDetailPage() {
     },
     {
       key: 'created_at',
-      header: '加入时间',
+      header: t('admin.workspaceDetail.memberCol.joinedAt'),
       className: 'w-28',
       render: (m) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -275,7 +274,7 @@ export function WorkspaceDetailPage() {
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.workspaceDetail.memberCol.actions'),
       className: 'w-44',
       render: (m) => {
         
@@ -296,10 +295,10 @@ export function WorkspaceDetailPage() {
                     />
                   }
                 >
-                  转让所有权
+                  {t('admin.workspaceDetail.actions.transferOwnership')}
                 </TooltipTrigger>
                 <TooltipContent>
-                  目标将成为所有者，你将降为普通成员
+                  {t('admin.workspaceDetail.actions.transferHint')}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -309,7 +308,7 @@ export function WorkspaceDetailPage() {
               disabled={removeM.isPending}
               onClick={() => void onRemoveMember(m)}
             >
-              移除
+              {t('admin.workspaceDetail.actions.remove')}
             </Button>
           </div>
         );
@@ -320,11 +319,11 @@ export function WorkspaceDetailPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={ws ? ws.name : '工作区详情'}
+        title={ws ? ws.name : t('admin.workspaceDetail.title')}
         description={
           ws
-            ? `${ws.slug} · 工作区 ID ${shortID(ws.id)}`
-            : '基础信息 + 成员表 + 配额调整'
+            ? t('admin.workspaceDetail.descSlug', { slug: ws.slug, id: shortID(ws.id) })
+            : t('admin.workspaceDetail.descFallback')
         }
         actions={
           <Button
@@ -333,42 +332,42 @@ export function WorkspaceDetailPage() {
             render={<Link to="/admin/workspaces" />}
           >
             <ArrowLeft aria-hidden="true" />
-            返回工作区列表
+            {t('admin.workspaceDetail.backToList')}
           </Button>
         }
       />
 
-      {detailQ.isPending && <PageLoading label="加载工作区详情中…" />}
+      {detailQ.isPending && <PageLoading label={t('admin.workspaceDetail.loading')} />}
 
       {ws && (
         <>
           <SettingsCard
-            title="基础信息"
-            description="工作区档案"
+            title={t('admin.workspaceDetail.basicInfo.title')}
+            description={t('admin.workspaceDetail.basicInfo.desc')}
           >
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <p>
-                <span className="text-muted-foreground">标识（slug）：</span>
+                <span className="text-muted-foreground">{t('admin.workspaceDetail.basicInfo.slugLabel')}</span>
                 <span className="font-mono">{ws.slug}</span>
               </p>
               <p className="flex items-center gap-2">
-                <span className="text-muted-foreground">套餐：</span>
+                <span className="text-muted-foreground">{t('admin.workspaceDetail.basicInfo.planLabel')}</span>
                 <Badge variant="outline">{ws.plan_code}</Badge>
               </p>
               <p>
-                <span className="text-muted-foreground">成员数：</span>
+                <span className="text-muted-foreground">{t('admin.workspaceDetail.basicInfo.memberCountLabel')}</span>
                 <span className="tabular-nums">{ws.member_count}</span>
               </p>
               <p>
-                <span className="text-muted-foreground">创建时间：</span>
+                <span className="text-muted-foreground">{t('admin.workspaceDetail.basicInfo.createdAtLabel')}</span>
                 {formatDateTime(ws.created_at)}
               </p>
             </div>
           </SettingsCard>
 
           <SettingsCard
-            title="订阅"
-            description="当前套餐与订阅取消；取消后立即降级为免费，不发退款。"
+            title={t('admin.workspaceDetail.sub.title')}
+            description={t('admin.workspaceDetail.sub.desc')}
             cta={
               ws.plan_code === 'free' ? (
                 <Tooltip>
@@ -376,10 +375,10 @@ export function WorkspaceDetailPage() {
                       Trigger 包 span 承接 hover/聚焦展示 Tooltip */}
                   <TooltipTrigger render={<span tabIndex={0} className="inline-flex" />}>
                     <Button variant="destructive" disabled>
-                      {cancelSubM.isPending ? '取消中…' : '取消订阅'}
+                      {cancelSubM.isPending ? t('admin.workspaceDetail.sub.canceling') : t('admin.workspaceDetail.sub.cancel')}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>当前已是 free，无可取消订阅</TooltipContent>
+                  <TooltipContent>{t('admin.workspaceDetail.sub.freeHint')}</TooltipContent>
                 </Tooltip>
               ) : (
                 <Button
@@ -387,31 +386,31 @@ export function WorkspaceDetailPage() {
                   disabled={cancelSubM.isPending}
                   onClick={() => setCancelSubOpen(true)}
                 >
-                  {cancelSubM.isPending ? '取消中…' : '取消订阅'}
+                  {cancelSubM.isPending ? t('admin.workspaceDetail.sub.canceling') : t('admin.workspaceDetail.sub.cancel')}
                 </Button>
               )
             }
           >
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
               <p className="flex items-center gap-2">
-                <span className="text-muted-foreground">当前套餐：</span>
+                <span className="text-muted-foreground">{t('admin.workspaceDetail.sub.currentPlanLabel')}</span>
                 <Badge variant="outline">{ws.plan_code}</Badge>
               </p>
               <p className="flex items-center gap-2">
-                <span className="text-muted-foreground">订阅状态：</span>
+                <span className="text-muted-foreground">{t('admin.workspaceDetail.sub.statusLabel')}</span>
                 {ws.plan_code === 'free' ? (
                   <Badge variant="outline" className="text-muted-foreground">
-                    未订阅
+                    {t('admin.workspaceDetail.sub.notSubscribed')}
                   </Badge>
                 ) : (
-                  <Badge variant="outline">订阅中</Badge>
+                  <Badge variant="outline">{t('admin.workspaceDetail.sub.subscribed')}</Badge>
                 )}
               </p>
             </div>
           </SettingsCard>
 
           <SettingsCard
-            title={`成员（${ws.members.length}）`}
+            title={t('admin.workspaceDetail.membersCard.title', { count: ws.members.length })}
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -420,56 +419,56 @@ export function WorkspaceDetailPage() {
                 rows={ws.members}
                 rowKey={(m) => m.user_id}
                 loading={detailQ.isPending}
-                empty={<PageEmpty label="暂无成员" />}
+                empty={<PageEmpty label={t('admin.workspaceDetail.membersCard.empty')} />}
               />
             </div>
           </SettingsCard>
 
           <SettingsCard
-            title="配额调整"
+            title={t('admin.workspaceDetail.quota.title')}
             cta={
               <Button onClick={onGrant} disabled={grantM.isPending}>
-                {grantM.isPending ? '授予中…' : '授予配额'}
+                {grantM.isPending ? t('admin.workspaceDetail.quota.granting') : t('admin.workspaceDetail.quota.grant')}
               </Button>
             }
           >
             <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
-              <FormField label="配额键（key）" htmlFor="quota-key">
+              <FormField label={t('admin.workspaceDetail.quota.keyLabel')} htmlFor="quota-key">
                 <Input
                   id="quota-key"
                   className="font-mono"
-                  placeholder={QUOTA_KEY_HINT}
+                  placeholder={t('admin.workspaceDetail.quota.keyPlaceholder')}
                   value={quotaKey}
                   onChange={(e) => setQuotaKey(e.target.value)}
                 />
               </FormField>
-              <FormField label="额度（amount，正整数）" htmlFor="quota-amount">
+              <FormField label={t('admin.workspaceDetail.quota.amountLabel')} htmlFor="quota-amount">
                 <Input
                   id="quota-amount"
                   type="number"
                   min={1}
                   step={1}
-                  placeholder="如 100"
+                  placeholder={t('admin.workspaceDetail.quota.amountPlaceholder')}
                   value={quotaAmount}
                   onChange={(e) => setQuotaAmount(e.target.value)}
                 />
               </FormField>
-              <FormField label="原因（reason，必填）" htmlFor="quota-reason">
+              <FormField label={t('admin.workspaceDetail.quota.reasonLabel')} htmlFor="quota-reason">
                 <Input
                   id="quota-reason"
-                  placeholder="如 客户补偿 / 活动赠送"
+                  placeholder={t('admin.workspaceDetail.quota.reasonPlaceholder')}
                   value={quotaReason}
                   onChange={(e) => setQuotaReason(e.target.value)}
                 />
               </FormField>
               <FormField
-                label="引用（ref，可选；参与幂等键）"
+                label={t('admin.workspaceDetail.quota.refLabel')}
                 htmlFor="quota-ref"
               >
                 <Input
                   id="quota-ref"
                   className="font-mono"
-                  placeholder="如 ticket-1234"
+                  placeholder={t('admin.workspaceDetail.quota.refPlaceholder')}
                   value={quotaRef}
                   onChange={(e) => setQuotaRef(e.target.value)}
                 />
@@ -479,27 +478,27 @@ export function WorkspaceDetailPage() {
 
           <SettingsCard
             danger
-            title="删除工作区"
-            description="不可逆级联删除：成员与资源随工作区一并销毁，无法恢复"
+            title={t('admin.workspaceDetail.delete.title')}
+            description={t('admin.workspaceDetail.delete.desc')}
             cta={
               <Button
                 variant="destructive"
                 disabled={!slugReadyToDelete || deleteM.isPending}
                 onClick={() => setDeleteOpen(true)}
               >
-                {deleteM.isPending ? '删除中…' : '删除工作区'}
+                {deleteM.isPending ? t('admin.workspaceDetail.delete.deleting') : t('admin.workspaceDetail.delete.title')}
               </Button>
             }
           >
             <div className="max-w-xl space-y-2">
               <p className="text-sm text-muted-foreground">
-                输入工作区 slug {ws.slug} 以确认删除。
+                {t('admin.workspaceDetail.delete.confirmInputHint', { slug: ws.slug })}
               </p>
               <Input
                 placeholder={ws.slug}
                 value={confirmSlug}
                 onChange={(e) => setConfirmSlug(e.target.value)}
-                aria-label="输入工作区 slug 以确认删除"
+                aria-label={t('admin.workspaceDetail.delete.inputAria')}
               />
             </div>
           </SettingsCard>
@@ -509,12 +508,12 @@ export function WorkspaceDetailPage() {
             open={deleteOpen}
             onOpenChange={setDeleteOpen}
             onConfirm={() => deleteM.mutate(ws.slug)}
-            title={`删除工作区 ${ws.name}`}
-            confirmText="永久删除"
+            title={t('admin.workspaceDetail.delete.dialogTitle', { name: ws.name })}
+            confirmText={t('admin.workspaceDetail.delete.confirmText')}
             danger
             impacts={[
-              '工作区及其全部业务数据被级联删除，不可恢复',
-              '全部成员关系解除，成员不再能访问该工作区'
+              t('admin.workspaceDetail.delete.impact1'),
+              t('admin.workspaceDetail.delete.impact2')
             ]}
           />
 
@@ -523,13 +522,13 @@ export function WorkspaceDetailPage() {
             open={cancelSubOpen}
             onOpenChange={setCancelSubOpen}
             onConfirm={() => cancelSubM.mutate()}
-            title={`取消工作区 ${ws.name} 的订阅`}
-            confirmText="立即取消订阅"
+            title={t('admin.workspaceDetail.cancelSub.dialogTitle', { name: ws.name })}
+            confirmText={t('admin.workspaceDetail.cancelSub.confirmText')}
             danger
             impacts={[
-              '工作区立即降级为 free 套餐，配额随之收缩',
-              '渠道侧订阅同步取消（Stripe 停止后续扣款）；渠道取消失败时本地状态保持不变',
-              '本操作不发退款（退款属后续批次），操作记入平台审计日志',
+              t('admin.workspaceDetail.cancelSub.impact1'),
+              t('admin.workspaceDetail.cancelSub.impact2'),
+              t('admin.workspaceDetail.cancelSub.impact3'),
             ]}
           />
 
@@ -542,20 +541,28 @@ export function WorkspaceDetailPage() {
                 if (!o) setTransferTarget(null);
               }}
               onConfirm={() => transferM.mutate(transferTarget)}
-              title={`将 ${ws.name} 的所有权转让给 ${transferTarget.email}`}
-              confirmText="确认转让"
+              title={t('admin.workspaceDetail.transfer.dialogTitle', {
+                name: ws.name,
+                email: transferTarget.email,
+              })}
+              confirmText={t('admin.workspaceDetail.transfer.confirmText')}
               impacts={[
                 ws.members.filter((m) => m.role === 'owner').length > 1
-                  ? `当前 owner（${ws.members
-                      .filter((m) => m.role === 'owner')
-                      .map((m) => m.email)
-                      .join(
-                        '、',
-                      )}）中最早加入者将降为普通成员，不再保有工作区最高权限`
-                  : `当前 owner ${
-                      ws.members.find((m) => m.role === 'owner')?.email ?? '—'
-                    } 将降为普通成员，不再保有工作区最高权限`,
-                `${transferTarget.email} 将成为新所有者，工作区始终保有所有者`
+                  ? t('admin.workspaceDetail.transfer.impactMultiOwner', {
+                      owners: ws.members
+                        .filter((m) => m.role === 'owner')
+                        .map((m) => m.email)
+                        .join(
+                          t('admin.workspaceDetail.transfer.ownerSeparator'),
+                        ),
+                    })
+                  : t('admin.workspaceDetail.transfer.impactSingleOwner', {
+                      email:
+                        ws.members.find((m) => m.role === 'owner')?.email ?? '—',
+                    }),
+                t('admin.workspaceDetail.transfer.impactNewOwner', {
+                  email: transferTarget.email,
+                })
               ]}
             />
           )}

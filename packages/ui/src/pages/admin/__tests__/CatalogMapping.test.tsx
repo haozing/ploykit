@@ -141,20 +141,20 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
   it('目录型渠道 × 套餐 × 周期全组合：已同步/价格待同步/未注册三种状态', async () => {
     renderSection();
 
-    expect(await screen.findByText('渠道商品映射')).toBeInTheDocument();
+    expect(await screen.findByText('Channel product mapping')).toBeInTheDocument();
 
     // pro/月：渠道价 990 = 套餐价 990 → 已同步
-    expect(screen.getByText('已同步')).toBeInTheDocument();
+    expect(screen.getByText('Synced')).toBeInTheDocument();
     // pro/年：渠道价 9900 ≠ 套餐价 6990（join plans 算）→ 价格待同步 + 目标价展示
-    expect(screen.getByText('价格待同步')).toBeInTheDocument();
-    expect(screen.getByText(/→ 目标 ¥69\.90/)).toBeInTheDocument();
+    expect(screen.getByText('Price pending sync')).toBeInTheDocument();
+    expect(screen.getByText(/→ target ¥69\.90/)).toBeInTheDocument();
     expect(screen.getByText('¥99.00')).toBeInTheDocument();
     // free/月、free/年：无 row → 未注册行
-    expect(screen.getAllByText('未注册')).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: '注册' })).toHaveLength(2);
+    expect(screen.getAllByText('Not registered')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Register' })).toHaveLength(2);
     // 已注册行给"同步价格"按钮（2 行）
     expect(
-      screen.getAllByRole('button', { name: '同步价格' }),
+      screen.getAllByRole('button', { name: 'Sync price' }),
     ).toHaveLength(2);
     // stripe（非目录型）不参与映射；waffo 4 行（2 套餐 × 2 周期）
     expect(screen.queryByText('stripe')).not.toBeInTheDocument();
@@ -163,10 +163,10 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
 
   it('未注册行点注册 → POST register-product（plan_code + interval）', async () => {
     renderSection();
-    await screen.findByText('渠道商品映射');
+    await screen.findByText('Channel product mapping');
 
-    const freeMonthly = rowWith(['Free', '每月']);
-    fireEvent.click(within(freeMonthly).getByRole('button', { name: '注册' }));
+    const freeMonthly = rowWith(['Free', 'Monthly']);
+    fireEvent.click(within(freeMonthly).getByRole('button', { name: 'Register' }));
 
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith(
@@ -175,17 +175,17 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
       ),
     );
     expect(toastMocks.success).toHaveBeenCalledWith(
-      '已注册 waffo · free（每月）商品',
+      'Product registered: waffo · free (Monthly)',
     );
   });
 
   it('待同步行点同步价格 → POST sync-price', async () => {
     renderSection();
-    await screen.findByText('渠道商品映射');
+    await screen.findByText('Channel product mapping');
 
     const yearly = rowWith(['PROD_Y']);
     fireEvent.click(
-      within(yearly).getByRole('button', { name: '同步价格' }),
+      within(yearly).getByRole('button', { name: 'Sync price' }),
     );
 
     await waitFor(() =>
@@ -195,7 +195,7 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
       ),
     );
     expect(toastMocks.success).toHaveBeenCalledWith(
-      '已同步 waffo · pro（每年）价格',
+      'Price synced: waffo · pro (Yearly)',
     );
   });
 
@@ -213,7 +213,7 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
     await waitFor(() =>
       expect(mockedGet).toHaveBeenCalledWith('/api/admin/billing/catalog'),
     );
-    expect(screen.queryByText('渠道商品映射')).not.toBeInTheDocument();
+    expect(screen.queryByText('Channel product mapping')).not.toBeInTheDocument();
     expect(container.querySelector('section')).toBeNull();
   });
 
@@ -237,55 +237,55 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
       () => new Promise((resolve) => resolvers.push(resolve)),
     );
     renderSection();
-    await screen.findByText('渠道商品映射');
+    await screen.findByText('Channel product mapping');
 
     // 行 A：free/每月 注册（挂起）→ 该行按钮禁用
     fireEvent.click(
-      within(rowWith(['Free', '每月'])).getByRole('button', { name: '注册' }),
+      within(rowWith(['Free', 'Monthly'])).getByRole('button', { name: 'Register' }),
     );
     expect(
-      await within(rowWith(['Free', '每月'])).findByRole('button', {
-        name: '注册中…',
+      await within(rowWith(['Free', 'Monthly'])).findByRole('button', {
+        name: 'Registering…',
       }),
     ).toBeDisabled();
 
     // 行 B：free/每年 独立可点（单实例 variables 漏判回归）
-    const bBtn = within(rowWith(['Free', '每年'])).getByRole('button', {
-      name: '注册',
+    const bBtn = within(rowWith(['Free', 'Yearly'])).getByRole('button', {
+      name: 'Register',
     });
     expect(bBtn).toBeEnabled();
     fireEvent.click(bBtn);
     expect(
-      await within(rowWith(['Free', '每年'])).findByRole('button', {
-        name: '注册中…',
+      await within(rowWith(['Free', 'Yearly'])).findByRole('button', {
+        name: 'Registering…',
       }),
     ).toBeDisabled();
 
     // 行 C：registerM 两行在途时再点 syncM——旧实现只查一个 mutation，
     // sync 行不被跟踪（漏判回归）
     fireEvent.click(
-      within(rowWith(['PROD_Y'])).getByRole('button', { name: '同步价格' }),
+      within(rowWith(['PROD_Y'])).getByRole('button', { name: 'Sync price' }),
     );
     expect(
       await within(rowWith(['PROD_Y'])).findByRole('button', {
-        name: '同步中…',
+        name: 'Syncing…',
       }),
     ).toBeDisabled();
 
     // 行 A 结算 → 恢复可点；行 B/C 仍在途
     resolvers[0]({});
     expect(
-      await within(rowWith(['Free', '每月'])).findByRole('button', {
-        name: '注册',
+      await within(rowWith(['Free', 'Monthly'])).findByRole('button', {
+        name: 'Register',
       }),
     ).toBeEnabled();
     expect(
-      within(rowWith(['Free', '每年'])).getByRole('button', {
-        name: '注册中…',
+      within(rowWith(['Free', 'Yearly'])).getByRole('button', {
+        name: 'Registering…',
       }),
     ).toBeDisabled();
     expect(
-      within(rowWith(['PROD_Y'])).getByRole('button', { name: '同步中…' }),
+      within(rowWith(['PROD_Y'])).getByRole('button', { name: 'Syncing…' }),
     ).toBeDisabled();
   });
 
@@ -321,7 +321,7 @@ describe('CatalogMapping（BC-7 渠道商品映射）', () => {
 
     // 同步价 9000 原样展示（JPY 金额即最小单位）；目标价 9800 不显示成 98.00
     expect(await screen.findByText('JPY 9,000')).toBeInTheDocument();
-    expect(screen.getByText(/→ 目标 JPY 9,800/)).toBeInTheDocument();
-    expect(screen.getByText('价格待同步')).toBeInTheDocument();
+    expect(screen.getByText(/→ target JPY 9,800/)).toBeInTheDocument();
+    expect(screen.getByText('Price pending sync')).toBeInTheDocument();
   });
 });

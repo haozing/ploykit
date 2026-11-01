@@ -48,6 +48,7 @@ import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { formatDateTime } from '../../lib/utils';
 import { adminError } from './shared';
+import { useT } from '../../i18n';
 
 type AdminStats = components['schemas']['AdminStats'];
 type AnalyticsRow = components['schemas']['AnalyticsSummaryRow'];
@@ -67,13 +68,8 @@ interface RecentEventRow {
 const DAY_OPTIONS = [7, 14, 30, 90];
 const RECENT_LIMIT = 20;
 
-
-const STATS_CALIBER: Record<string, string> = {
-  总用户: '全部注册用户（含已封禁）',
-  活跃用户: '状态为「生效中」的用户数（非登录活跃度）',
-  付费工作区: '当前套餐不是免费套餐的工作区数',
-  // 近 30 天新增用户的口径含动态数值（近 7 天人数），随 stats 元组逐卡下发
-};
+// 统计卡口径 i18n key（原 zh 字面量 map，B 方案 i18n 后改为 key → 字典翻译；
+// 近 30 天新增用户的口径含动态数值（近 7 天人数），随 stats 元组逐卡下发）
 
 
 function EventTypeCode({ type }: { type: string }) {
@@ -94,35 +90,9 @@ function EventTypeCode({ type }: { type: string }) {
   );
 }
 
-const analyticsColumns: Column<AnalyticsRow>[] = [
-  {
-    key: 'event_type',
-    header: '事件类型',
-    render: (r) => <EventTypeCode type={r.event_type} />,
-  },
-  {
-    key: 'count',
-    header: '次数',
-    className: 'w-24 text-right',
-    render: (r) => (
-      <span className="font-medium tabular-nums">
-        {r.count.toLocaleString()}
-      </span>
-    ),
-  },
-  {
-    key: 'last_at',
-    header: '最近发生',
-    className: 'w-44',
-    render: (r) => (
-      <span className="whitespace-nowrap text-muted-foreground">
-        {formatDateTime(r.last_at)}
-      </span>
-    ),
-  },
-];
-
+// 事件汇总表列定义已移入组件（i18n：表头走组件级 t()，随 Provider 语言切换）
 export function OverviewPage() {
+  const t = useT();
   const api = useApi();
   const { hash } = useLocation();
   
@@ -168,19 +138,19 @@ export function OverviewPage() {
         },
       ),
     onSuccess: (r) => {
-      
-      
+
+
       if (typeof r?.sent === 'number') {
-        const failedSuffix =
+        toast.success(
           typeof r.failed === 'number' && r.failed > 0
-            ? `，失败 ${r.failed}`
-            : '';
-        toast.success(`公告已发送：成功 ${r.sent}${failedSuffix}`);
+            ? t('admin.overview.announceSentSome', { sent: r.sent, failed: r.failed })
+            : t('admin.overview.announceSent', { sent: r.sent }),
+        );
       } else if (target === 'user') {
-        toast.success('公告已发送给指定用户');
+        toast.success(t('admin.overview.announceSentUser'));
       } else {
-        
-        toast.success('公告已发送给全部活跃用户，发送明细可在「审计」页查看');
+
+        toast.success(t('admin.overview.announceSentAll'));
       }
       setAnnounceOpen(false);
       setTitle('');
@@ -188,7 +158,7 @@ export function OverviewPage() {
       setLink('');
       setTargetUser('');
     },
-    onError: (e) => toast.error(adminError(e, '公告发送失败')),
+    onError: (e) => toast.error(adminError(e, t('admin.overview.announceSendFailed'))),
   });
 
   const statsQ = useQuery({
@@ -224,12 +194,12 @@ export function OverviewPage() {
   const recentColumns: Column<RecentEventRow>[] = [
     {
       key: 'event_type',
-      header: '事件类型',
+      header: t('admin.overview.colEventType'),
       render: (r) => <EventTypeCode type={r.event_type} />,
     },
     {
       key: 'entity',
-      header: '对象',
+      header: t('admin.overview.colEntity'),
       render: (r) =>
         r.entity_type || r.entity_id ? (
           <Tooltip>
@@ -253,7 +223,7 @@ export function OverviewPage() {
     },
     {
       key: 'workspace_id',
-      header: '工作区',
+      header: t('admin.overview.colWorkspace'),
       className: 'w-32',
       render: (r) =>
         r.workspace_id ? (
@@ -279,18 +249,18 @@ export function OverviewPage() {
                     variant="ghost"
                     size="sm"
                     className="size-6 p-0 text-muted-foreground"
-                    aria-label={`复制工作区 ID ${r.workspace_id}`}
+                    aria-label={t('admin.overview.copyWsIdAria', { id: r.workspace_id })}
                     onClick={() => {
                       const full = r.workspace_id ?? '';
                       if (typeof navigator.clipboard?.writeText === 'function') {
                         void navigator.clipboard
                           .writeText(full)
-                          .then(() => toast.success('工作区 ID 已复制'))
+                          .then(() => toast.success(t('admin.overview.wsIdCopied')))
                           .catch(() =>
-                            toast.error(`复制失败，完整 ID：${full}`),
+                            toast.error(t('admin.overview.copyFailedFull', { value: full })),
                           );
                       } else {
-                        toast.info(`当前环境不支持自动复制，完整 ID：${full}`);
+                        toast.info(t('admin.overview.copyUnsupported', { value: full }));
                       }
                     }}
                   />
@@ -298,20 +268,53 @@ export function OverviewPage() {
               >
                 <Copy size={12} aria-hidden="true" />
               </TooltipTrigger>
-              <TooltipContent>复制完整 ID：{r.workspace_id}</TooltipContent>
+              <TooltipContent>
+                {t('admin.overview.copyFullIdTip', { id: r.workspace_id })}
+              </TooltipContent>
             </Tooltip>
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground">平台</span>
+          <span className="text-xs text-muted-foreground">
+            {t('admin.overview.workspacePlatform')}
+          </span>
         ),
     },
     {
       key: 'created_at',
-      header: '时间',
+      header: t('admin.overview.colTime'),
       className: 'w-44',
       render: (r) => (
         <span className="whitespace-nowrap text-muted-foreground">
           {formatDateTime(r.created_at)}
+        </span>
+      ),
+    },
+  ];
+
+  // 事件汇总表列（i18n：表头走组件级 t()）
+  const analyticsColumns: Column<AnalyticsRow>[] = [
+    {
+      key: 'event_type',
+      header: t('admin.overview.colEventType'),
+      render: (r) => <EventTypeCode type={r.event_type} />,
+    },
+    {
+      key: 'count',
+      header: t('admin.overview.colCount'),
+      className: 'w-24 text-right',
+      render: (r) => (
+        <span className="font-medium tabular-nums">
+          {r.count.toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      key: 'last_at',
+      header: t('admin.overview.colLastAt'),
+      className: 'w-44',
+      render: (r) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {formatDateTime(r.last_at)}
         </span>
       ),
     },
@@ -328,17 +331,19 @@ export function OverviewPage() {
   }, [hash]);
 
   // 统计卡收敛（方案 A）：近 7 天 ⊂ 近 30 天，删除 7 天卡，
-  // 7 天数值并入 30 天卡的口径 tooltip（第三元为逐卡口径，缺省回退 STATS_CALIBER）
+  // 7 天数值并入 30 天卡的口径 tooltip（第三元为逐卡已翻译口径，无则无 tooltip）
   const stats: [string, number, string?][] = statsQ.data
     ? [
-        ['总用户', statsQ.data.total_users],
-        ['活跃用户', statsQ.data.active_users],
-        ['工作区', statsQ.data.total_workspaces],
-        ['付费工作区', statsQ.data.paid_workspaces],
+        ['admin.overview.statTotalUsers', statsQ.data.total_users, t('admin.overview.caliberTotalUsers')],
+        ['admin.overview.statActiveUsers', statsQ.data.active_users, t('admin.overview.caliberActiveUsers')],
+        ['admin.overview.statWorkspaces', statsQ.data.total_workspaces],
+        ['admin.overview.statPaidWorkspaces', statsQ.data.paid_workspaces, t('admin.overview.caliberPaidWorkspaces')],
         [
-          '近 30 天新增用户',
+          'admin.overview.statNewUsers30d',
           statsQ.data.new_users_30d,
-          `最近 30 天内注册的用户数；其中近 7 天 ${statsQ.data.new_users_7d.toLocaleString()} 人`,
+          t('admin.overview.caliberNewUsers30d', {
+            n7d: statsQ.data.new_users_7d.toLocaleString(),
+          }),
         ],
       ]
     : [];
@@ -346,29 +351,28 @@ export function OverviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="概览"
+        title={t('admin.overview.pageTitle')}
         actions={
           <Button onClick={() => setAnnounceOpen(true)}>
-            <Megaphone /> 发布公告
+            <Megaphone /> {t('admin.overview.announceBtn')}
           </Button>
         }
       />
 
-      {statsQ.isPending && <PageLoading label="加载指标中…" />}
+      {statsQ.isPending && <PageLoading label={t('admin.overview.loadingStats')} />}
       {statsQ.isError && (
         <PageError
-          message={adminError(statsQ.error, '指标加载失败')}
+          message={adminError(statsQ.error, t('admin.overview.statsLoadFailed'))}
           onRetry={() => void statsQ.refetch()}
         />
       )}
       {statsQ.isSuccess && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {stats.map(([label, value, caliber]) => {
-            const tip = caliber ?? STATS_CALIBER[label];
+          {stats.map(([labelKey, value, tip]) => {
             return (
-              <Card key={label} size="sm">
+              <Card key={labelKey} size="sm">
                 <CardHeader>
-                  <CardDescription>{label}</CardDescription>
+                  <CardDescription>{t(labelKey)}</CardDescription>
                   {/* 口径说明经 Tooltip 悬停/聚焦查看（UsagePage 先例：CardTitle 无
                       render 通道，Tooltip 套外层、Trigger render 成 span 包标题文本；
                       tabIndex 保键盘可达） */}
@@ -399,7 +403,7 @@ export function OverviewPage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            <h2 className="font-medium">最近事件</h2>
+            <h2 className="font-medium">{t('admin.overview.recentTitle')}</h2>
           </CardTitle>
           <CardAction>
             <Select
@@ -410,11 +414,11 @@ export function OverviewPage() {
                 updateParams({ type: next });
               }}
             >
-              <SelectTrigger size="sm" aria-label="按事件类型筛选最近事件">
-                <SelectValue>{recentType || '全部类型'}</SelectValue>
+              <SelectTrigger size="sm" aria-label={t('admin.overview.recentTypeAria')}>
+                <SelectValue>{recentType || t('admin.overview.allTypes')}</SelectValue>
               </SelectTrigger>
               <SelectContent align="end">
-                <SelectItem value="all">全部类型</SelectItem>
+                <SelectItem value="all">{t('admin.overview.allTypes')}</SelectItem>
                 {knownTypes.map((t) => (
                   <SelectItem key={t} value={t}>
                     {t}
@@ -427,13 +431,15 @@ export function OverviewPage() {
         <div className="px-6">
           {recentQ.isError ? (
             <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-              最近事件加载失败（{apiErrorMessage(recentQ.error, '未知错误')}）
+              {t('admin.overview.recentLoadFailed', {
+                reason: apiErrorMessage(recentQ.error, t('admin.overview.unknownError')),
+              })}
               <Button
                 variant="link"
                 size="sm"
                 onClick={() => void recentQ.refetch()}
               >
-                重试
+                {t('admin.overview.retry')}
               </Button>
             </p>
           ) : (
@@ -445,13 +451,13 @@ export function OverviewPage() {
               empty={
                 recentType ? (
                   <PageEmpty
-                    label={`最近没有「${recentType}」事件`}
-                    hint="清除类型过滤可查看全部事件"
+                    label={t('admin.overview.recentEmptyFiltered', { type: recentType })}
+                    hint={t('admin.overview.recentEmptyFilteredHint')}
                   />
                 ) : (
                   <PageEmpty
-                    label="暂无事件"
-                    hint="工作区内产生业务事件后会出现在这里"
+                    label={t('admin.overview.noEvents')}
+                    hint={t('admin.overview.noEventsHint')}
                   />
                 )
               }
@@ -464,7 +470,7 @@ export function OverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <h2 className="font-medium">事件汇总</h2>
+              <h2 className="font-medium">{t('admin.overview.summaryTitle')}</h2>
             </CardTitle>
             <CardAction>
               <Select
@@ -476,13 +482,13 @@ export function OverviewPage() {
                   }
                 }}
               >
-                <SelectTrigger size="sm" aria-label="统计时间范围">
-                  <SelectValue>近 {days} 天</SelectValue>
+                <SelectTrigger size="sm" aria-label={t('admin.overview.rangeAria')}>
+                  <SelectValue>{t('admin.overview.lastNDays', { days })}</SelectValue>
                 </SelectTrigger>
                 <SelectContent align="end">
                   {DAY_OPTIONS.map((d) => (
                     <SelectItem key={d} value={d}>
-                      近 {d} 天
+                      {t('admin.overview.lastNDays', { days: d })}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -492,14 +498,15 @@ export function OverviewPage() {
           <div className="px-6">
             {analyticsQ.isError ? (
               <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-                事件汇总加载失败（
-                {apiErrorMessage(analyticsQ.error, '未知错误')}）
+                {t('admin.overview.summaryLoadFailed', {
+                  reason: apiErrorMessage(analyticsQ.error, t('admin.overview.unknownError')),
+                })}
                 <Button
                   variant="link"
                   size="sm"
                   onClick={() => void analyticsQ.refetch()}
                 >
-                  重试
+                  {t('admin.overview.retry')}
                 </Button>
               </p>
             ) : (
@@ -510,8 +517,8 @@ export function OverviewPage() {
                 loading={analyticsQ.isPending}
                 empty={
                   <PageEmpty
-                    label="暂无事件"
-                    hint="用户开始使用产品后，事件会出现在这里；若产品已运行仍为空，通常是事件上报未接入"
+                    label={t('admin.overview.noEvents')}
+                    hint={t('admin.overview.noEventsAnalyticsHint')}
                   />
                 }
               />
@@ -525,63 +532,64 @@ export function OverviewPage() {
       <Dialog open={announceOpen} onOpenChange={setAnnounceOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>发布公告</DialogTitle>
+            <DialogTitle>{t('admin.overview.announceBtn')}</DialogTitle>
             <DialogDescription>
-              以站内通知发送。「全部活跃用户」单次上限 1000
-              人；同标题同日只发一次（重复发送自动跳过）。
+              {t('admin.overview.announceDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <FormField label="收件范围" htmlFor="announce-target">
+            <FormField label={t('admin.overview.targetLabel')} htmlFor="announce-target">
               <Select
                 value={target}
                 onValueChange={(v) => {
                   if (v === 'user' || v === 'all') setTarget(v);
                 }}
               >
-                <SelectTrigger id="announce-target" aria-label="收件范围">
+                <SelectTrigger id="announce-target" aria-label={t('admin.overview.targetLabel')}>
                   <SelectValue>
-                    {target === 'all' ? '全部活跃用户' : '指定用户'}
+                    {target === 'all'
+                      ? t('admin.overview.targetAll')
+                      : t('admin.overview.targetUser')}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent align="start">
-                  <SelectItem value="all">全部活跃用户</SelectItem>
-                  <SelectItem value="user">指定用户</SelectItem>
+                  <SelectItem value="all">{t('admin.overview.targetAll')}</SelectItem>
+                  <SelectItem value="user">{t('admin.overview.targetUser')}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
             {target === 'user' && (
-              <FormField label="用户 ID（必填）" htmlFor="announce-user">
+              <FormField label={t('admin.overview.userIdLabel')} htmlFor="announce-user">
                 <Input
                   id="announce-user"
                   className="font-mono"
-                  placeholder="粘贴完整用户 ID（可从用户详情页获取）"
+                  placeholder={t('admin.overview.userIdPh')}
                   value={targetUser}
                   onChange={(e) => setTargetUser(e.target.value)}
                 />
               </FormField>
             )}
-            <FormField label="标题（必填）" htmlFor="announce-title">
+            <FormField label={t('admin.overview.titleLabel')} htmlFor="announce-title">
               <Input
                 id="announce-title"
-                placeholder="如：今晚 22:00 例行维护"
+                placeholder={t('admin.overview.titlePh')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </FormField>
-            <FormField label="正文（必填）" htmlFor="announce-body">
+            <FormField label={t('admin.overview.bodyLabel')} htmlFor="announce-body">
               <Textarea
                 id="announce-body"
                 className="min-h-24"
-                placeholder="如：维护期间系统将短暂不可用，请提前保存工作"
+                placeholder={t('admin.overview.bodyPh')}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
               />
             </FormField>
-            <FormField label="跳转链接（可选）" htmlFor="announce-link">
+            <FormField label={t('admin.overview.linkLabel')} htmlFor="announce-link">
               <Input
                 id="announce-link"
-                placeholder="https://… 或站内页面路径；填写后通知可点击跳转"
+                placeholder={t('admin.overview.linkPh')}
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
               />
@@ -589,7 +597,7 @@ export function OverviewPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAnnounceOpen(false)}>
-              取消
+              {t('admin.overview.cancel')}
             </Button>
             <Button
               disabled={
@@ -603,10 +611,10 @@ export function OverviewPage() {
               {notifyM.isPending ? (
                 <>
                   <Spinner aria-hidden="true" />
-                  发送
+                  {t('admin.overview.send')}
                 </>
               ) : (
-                '发送'
+                t('admin.overview.send')
               )}
             </Button>
           </DialogFooter>

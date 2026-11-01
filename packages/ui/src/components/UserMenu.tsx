@@ -8,6 +8,7 @@ import {
 } from './ui/dropdown-menu'
 import { useAuthSafe } from '../lib/useAuthSafe'
 import { applyKitLabelOverrides, useKitLabels } from '../labels/kit-labels'
+import { t, useT } from '../i18n'
 import {
   permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe, type Perm,
 } from '../lib/useWorkspaceRoleSafe'
@@ -27,8 +28,9 @@ export interface UserMenuExtraItem {
   permKey?: string
 }
 
-/** Optional copy overrides — defaults are the built-in Chinese labels. No i18n
- *  system is imposed; consumers wire their own translation function. */
+/** Optional copy overrides — defaults come from the i18n dictionary (en by
+ *  default, zh optional). No i18n system is imposed on consumers; they wire
+ *  their own translation function. */
 export interface UserMenuLabels {
   accountSettings?: string
   logout?: string
@@ -36,11 +38,13 @@ export interface UserMenuLabels {
   logoutFailedToast?: string
 }
 
+// 兼容性导出（包内已无消费方，组件实际走 kit-labels 覆盖链）：值取 i18n 字典
+// 默认语言（模块加载时取值，'en'）。运行时渲染请依赖 useT/KitLabelsProvider。
 export const DEFAULT_USER_MENU_LABELS = {
-  accountSettings: '账户设置',
-  logout: '退出登录',
-  userMenuAria: '用户菜单',
-  logoutFailedToast: '退出登录失败，请稍后在登录页重试',
+  accountSettings: t('ui.userMenu.accountSettings'),
+  logout: t('ui.userMenu.logout'),
+  userMenuAria: t('ui.userMenu.userMenuAria'),
+  logoutFailedToast: t('ui.userMenu.logoutFailedToast'),
 } satisfies Required<UserMenuLabels>
 
 export interface UserMenuProps {
@@ -74,6 +78,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
   // 一致）即三层回退；向后兼容：既有 labels prop 消费方行为不变。
   const kit = useKitLabels()
   const L = applyKitLabelOverrides(kit, labels)
+  const t = useT()
   if (!auth) return null
   const { user, logout } = auth
 
@@ -109,13 +114,13 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
           {user?.avatar_url ? <AvatarImage src={user.avatar_url} alt={name} /> : null}
           <AvatarFallback>{initialsOf(user?.display_name ?? '', email)}</AvatarFallback>
         </Avatar>
-        <span className="hidden max-w-40 truncate md:inline">{name || '未登录'}</span>
+        <span className="hidden max-w-40 truncate md:inline">{name || t('ui.userMenu.signedOut')}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="p-0 font-normal">
             <div className="flex flex-col px-2 py-1.5">
-              <span className="truncate text-sm font-medium text-foreground">{name || '未登录'}</span>
+              <span className="truncate text-sm font-medium text-foreground">{name || t('ui.userMenu.signedOut')}</span>
               <span className="truncate text-xs text-muted-foreground">{email}</span>
             </div>
           </DropdownMenuLabel>
@@ -126,7 +131,7 @@ export function UserMenu({ items = [], logoutRedirect = '/login', labels }: User
         </DropdownMenuItem>
         {user?.is_platform_admin && (
           <DropdownMenuItem onClick={() => navigate('/admin')}>
-            <ShieldCheck /> 管理控制台
+            <ShieldCheck /> {t('ui.userMenu.adminConsole')}
           </DropdownMenuItem>
         )}
         {visibleItems.length > 0 && <DropdownMenuSeparator />}

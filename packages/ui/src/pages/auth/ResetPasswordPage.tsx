@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Spinner } from '../../components/ui/spinner'
 import { usePasswordReset } from '@ploykit/hooks'
 import { passwordSchema } from '../../lib/password-schema'
+import { useT } from '../../i18n'
 
 export interface ResetPasswordPageProps {
   
@@ -24,10 +25,13 @@ const REDIRECT_DELAY_MS = 3000
 
 export function ResetPasswordPage({
   onDone,
-  title = '设置新密码',
-  successHint = '密码已重置，全部旧会话已失效。',
+  title,
+  successHint,
 }: ResetPasswordPageProps) {
   const { reset } = usePasswordReset()
+  const t = useT() // i18n（B 方案）：默认标题/成功文案走字典，title/successHint prop 优先
+  const pageTitle = title ?? t('auth.reset.title')
+  const successHintText = successHint ?? t('auth.reset.successHint')
   
   const [params, setParams] = useState<URLSearchParams | null>(null)
   const email = params?.get('email') ?? ''
@@ -70,14 +74,14 @@ export function ResetPasswordPage({
     setServerError(null)
     if (!password || !confirm) return
     if (password !== confirm) {
-      
-      setConfirmError('两次输入的密码不一致')
+
+      setConfirmError(t('auth.reset.mismatch'))
       return
     }
-    
+
     const pwCheck = passwordSchema.safeParse(password)
     if (!pwCheck.success) {
-      setServerError(pwCheck.error.issues[0]?.message ?? '密码不符合要求')
+      setServerError(pwCheck.error.issues[0]?.message ?? t('auth.reset.weak'))
       return
     }
     setLoading(true)
@@ -85,7 +89,7 @@ export function ResetPasswordPage({
       await reset(email, token, password)
       setDone(true)
     } catch (err) {
-      setServerError(err instanceof Error ? err.message : '重置失败，链接可能已失效')
+      setServerError(err instanceof Error ? err.message : t('auth.reset.failed'))
     } finally {
       setLoading(false)
     }
@@ -95,42 +99,42 @@ export function ResetPasswordPage({
     <AuthShell>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
         </div>
 
         {done ? (
           <div className="space-y-2 text-center" data-testid="reset-done">
-            <p className="text-sm text-(--success)">{successHint}</p>
+            <p className="text-sm text-(--success)">{successHintText}</p>
             <p className="text-sm text-muted-foreground">
-              {countdown > 0 ? `${countdown} 秒后跳转登录页…` : '正在跳转…'}
+              {countdown > 0 ? t('auth.reset.redirectIn', { seconds: countdown }) : t('auth.reset.redirecting')}
             </p>
           </div>
         ) : params === null ? (
-          
-          <p className="text-center text-sm text-muted-foreground">正在打开链接…</p>
+
+          <p className="text-center text-sm text-muted-foreground">{t('auth.reset.opening')}</p>
         ) : !email || !token ? (
           <Alert variant="destructive" data-testid="reset-invalid">
             <AlertDescription>
-              链接无效：缺少邮箱或令牌参数，请从邮件中的链接进入。
+              {t('auth.reset.invalidLink')}
             </AlertDescription>
           </Alert>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">正在为 {email} 设置新密码</p>
+            <p className="text-sm text-muted-foreground">{t('auth.reset.settingFor', { email })}</p>
 
-            <FormField label="新密码" htmlFor="reset-new">
+            <FormField label={t('auth.reset.newLabel')} htmlFor="reset-new">
               <PasswordField
                 id="reset-new"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="至少 10 位，含三类字符"
+                placeholder={t('auth.reset.newPlaceholder')}
                 autoComplete="new-password"
                 required
               />
             </FormField>
 
             <FormField
-              label="确认新密码"
+              label={t('auth.reset.confirmLabel')}
               error={confirmError ?? undefined}
               htmlFor="reset-confirm"
             >
@@ -138,7 +142,7 @@ export function ResetPasswordPage({
                 id="reset-confirm"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                placeholder="再输入一次"
+                placeholder={t('auth.reset.confirmPlaceholder')}
                 autoComplete="new-password"
                 required
               />
@@ -154,10 +158,10 @@ export function ResetPasswordPage({
               {loading ? (
                 <>
                   <Spinner aria-hidden="true" />
-                  提交中…
+                  {t('auth.reset.submitting')}
                 </>
               ) : (
-                '重置密码'
+                t('auth.reset.submit')
               )}
             </Button>
           </>

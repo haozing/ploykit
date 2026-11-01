@@ -40,7 +40,7 @@ describe('DataTable', () => {
 
   it('空 rows 且无 empty 时回退 PageEmpty 默认占位', () => {
     render(<DataTable columns={columns} rows={[]} rowKey={(r) => r.id} />)
-    expect(screen.getByText('暂无数据')).toBeInTheDocument()
+    expect(screen.getByText('No data yet')).toBeInTheDocument()
   })
 
   it('传入 pagination 渲染底栏文案，且边界页禁用对应按钮', () => {
@@ -55,9 +55,9 @@ describe('DataTable', () => {
     )
     // 分页行经 paginationTotal 函数键渲染为单个文本节点（文案可整体覆盖，
     // 见 labels/kit-labels）——整行匹配而非拆散的 span 断言。
-    expect(screen.getByText('共 42 条 · 第 2/3 页')).toBeInTheDocument()
-    const prev = screen.getByRole('button', { name: '上一页' })
-    const next = screen.getByRole('button', { name: '下一页' })
+    expect(screen.getByText('42 items · page 2 of 3')).toBeInTheDocument()
+    const prev = screen.getByRole('button', { name: 'Previous page' })
+    const next = screen.getByRole('button', { name: 'Next page' })
     expect(prev).toBeEnabled()
     expect(next).toBeEnabled()
     fireEvent.click(next)
@@ -75,9 +75,9 @@ describe('DataTable', () => {
         pagination={{ page: 1, pageSize: 20, total: 42, onPageChange: () => {} }}
       />,
     )
-    expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '下一页' })).toBeEnabled()
-    expect(screen.getByText('共 42 条 · 第 1/3 页')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled()
+    expect(screen.getByText('42 items · page 1 of 3')).toBeInTheDocument()
     first.unmount()
 
     render(
@@ -88,9 +88,9 @@ describe('DataTable', () => {
         pagination={{ page: 3, pageSize: 20, total: 42, onPageChange: () => {} }}
       />,
     )
-    expect(screen.getByRole('button', { name: '上一页' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled()
-    expect(screen.getByText('共 42 条 · 第 3/3 页')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
+    expect(screen.getByText('42 items · page 3 of 3')).toBeInTheDocument()
   })
 
   it('空 rows 时不渲染分页底栏（空态行为不受 pagination 影响）', () => {
@@ -102,8 +102,8 @@ describe('DataTable', () => {
         pagination={{ page: 1, pageSize: 20, total: 0, onPageChange: () => {} }}
       />,
     )
-    expect(screen.getByText('暂无数据')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '下一页' })).not.toBeInTheDocument()
+    expect(screen.getByText('No data yet')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next page' })).not.toBeInTheDocument()
   })
 
   it('P3-10：stale page（有 total 的空页）不整表换空态——空表体+分页栏，保住"上一页"出口', () => {
@@ -117,11 +117,11 @@ describe('DataTable', () => {
         pagination={{ page: 5, pageSize: 20, total: 42, onPageChange: () => {} }}
       />,
     )
-    expect(screen.queryByText('暂无数据')).not.toBeInTheDocument()
-    expect(screen.getByText('本页没有数据，可返回上一页')).toBeInTheDocument()
+    expect(screen.queryByText('No data yet')).not.toBeInTheDocument()
+    expect(screen.getByText('No data on this page. Go back to the previous page')).toBeInTheDocument()
 
-    expect(screen.getByRole('button', { name: '上一页' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
   })
 
   it('rowKey 回调收到行下标（第二参数），可用于同 code 多行的唯一 key', () => {
@@ -223,7 +223,7 @@ describe('DataTable', () => {
         }}
       />,
     )
-    const select = screen.getByRole('combobox', { name: '每页条数' })
+    const select = screen.getByRole('combobox', { name: 'Rows per page' })
     expect(select).toHaveValue('20')
     fireEvent.change(select, { target: { value: '50' } })
     expect(onPageSizeChange).toHaveBeenCalledWith(50)
@@ -238,7 +238,7 @@ describe('DataTable', () => {
         pagination={{ page: 1, pageSize: 20, total: 42, onPageChange: () => {} }}
       />,
     )
-    expect(screen.queryByRole('combobox', { name: '每页条数' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Rows per page' })).not.toBeInTheDocument()
   })
 
   it('pageSizeOptions 缺省时回退默认候选 [10,20,50,100]', () => {
@@ -256,7 +256,7 @@ describe('DataTable', () => {
         }}
       />,
     )
-    const select = screen.getByRole('combobox', { name: '每页条数' })
+    const select = screen.getByRole('combobox', { name: 'Rows per page' })
     expect(select.querySelectorAll('option')).toHaveLength(4)
   })
 })

@@ -13,6 +13,7 @@ import {
 } from '../../components/ui/item'
 import { Spinner } from '../../components/ui/spinner'
 import { formatDate } from '../../lib/utils'
+import { useT } from '../../i18n'
 
 /**
  * LegalAndPrivacySection —— 账号设置页的可选"法务与隐私"区块
@@ -60,15 +61,16 @@ export interface LegalAndPrivacySectionProps {
 }
 
 // 确认弹窗文案三分流（LC-4）：口径与 Caps 时序一一对应，逗号分隔的短句
-// 是对外承诺文案——改动前先对齐计划 §6 LC-4 的裁定。
-function cancelTimingCopy(sub: LegalAndPrivacySubscription): string {
-  if (sub.cancelTiming === 'immediate') return '立即取消,权益马上结束'
+// 是对外承诺文案——改动前先对齐计划 §6 LC-4 的裁定。i18n（B 方案）：经
+// g7 分片 account.legal.* 取字典。
+function cancelTimingCopy(sub: LegalAndPrivacySubscription, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (sub.cancelTiming === 'immediate') return t('account.legal.timingImmediate')
   if (sub.cancelTiming === 'period_end') {
     return sub.renewsAt
-      ? `取消生效,权益保留至 ${formatDate(sub.renewsAt)}`
-      : '取消生效,权益保留至本期结束'
+      ? t('account.legal.timingPeriodEnd', { date: formatDate(sub.renewsAt) })
+      : t('account.legal.timingPeriodEndFallback')
   }
-  return '已受理,我们将完成取消'
+  return t('account.legal.timingUnknown')
 }
 
 export function LegalAndPrivacySection({
@@ -79,6 +81,7 @@ export function LegalAndPrivacySection({
   error = null,
 }: LegalAndPrivacySectionProps) {
   const confirm = useConfirm()
+  const t = useT() // i18n（B 方案）：区块文案走字典（g7 分片 account.legal.*）
 
   // 零可见复杂度裁定（§9）：无订阅快照也无导出入口时整块不渲染。
   // busy/error 是动作的伴生状态，无动作即无可呈现内容。
@@ -89,9 +92,9 @@ export function LegalAndPrivacySection({
   const handleCancelClick = () => {
     if (!subscription) return
     void confirm({
-      title: '取消订阅',
-      description: cancelTimingCopy(subscription),
-      confirmText: '确认取消',
+      title: t('account.legal.cancel'),
+      description: cancelTimingCopy(subscription, t),
+      confirmText: t('account.legal.confirmCancel'),
       danger: true,
     }).then((ok) => {
       if (ok) onCancelSubscription?.()
@@ -100,8 +103,8 @@ export function LegalAndPrivacySection({
 
   return (
     <SettingsCard
-      title="法务与隐私"
-      description="数据导出与订阅取消的自助入口。"
+      title={t('account.legal.title')}
+      description={t('account.legal.desc')}
     >
       <div className="space-y-3">
         {error && (
@@ -113,9 +116,9 @@ export function LegalAndPrivacySection({
         {onExportData && (
           <Item variant="outline">
             <ItemContent className="min-w-0">
-              <ItemTitle>我的数据</ItemTitle>
+              <ItemTitle>{t('account.legal.myData')}</ItemTitle>
               <ItemDescription>
-                导出账号关联数据（JSON）：身份资料、订阅与权益记录等。
+                {t('account.legal.exportDesc')}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -126,7 +129,7 @@ export function LegalAndPrivacySection({
                 onClick={onExportData}
               >
                 {busy && <Spinner aria-hidden="true" />}
-                Export my data (JSON)
+                {t('account.legal.export')}
               </Button>
             </ItemActions>
           </Item>
@@ -135,11 +138,11 @@ export function LegalAndPrivacySection({
         {subscription && (
           <Item variant="outline">
             <ItemContent className="min-w-0">
-              <ItemTitle>订阅</ItemTitle>
+              <ItemTitle>{t('account.legal.subscription')}</ItemTitle>
               <ItemDescription data-testid="legal-subscription">
                 {subscription.plan}
                 {subscription.renewsAt &&
-                  ` · 下次续费 ${formatDate(subscription.renewsAt)}`}
+                  t('account.legal.renewsOn', { date: formatDate(subscription.renewsAt) })}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
@@ -148,10 +151,10 @@ export function LegalAndPrivacySection({
                 // 结果/outcome 由调用方经 error/外部状态如实告知）
                 onCancelSubscription ? (
                   <Button variant="outline" size="sm" disabled>
-                    取消已受理
+                    {t('account.legal.cancelRequested')}
                   </Button>
                 ) : (
-                  <StatusBadge label="取消已受理" tone="neutral" />
+                  <StatusBadge label={t('account.legal.cancelRequested')} tone="neutral" />
                 )
               ) : (
                 onCancelSubscription && (
@@ -162,7 +165,7 @@ export function LegalAndPrivacySection({
                     onClick={handleCancelClick}
                   >
                     {busy && <Spinner aria-hidden="true" />}
-                    取消订阅
+                    {t('account.legal.cancel')}
                   </Button>
                 )
               )}

@@ -38,6 +38,7 @@ import {
 } from '../../components/ui/select';
 import { useApi } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
+import { useT } from '../../i18n';
 import { formatDate, formatDateTime } from '../../lib/utils';
 import {
   ADMIN_PAGE_SIZE,
@@ -49,9 +50,10 @@ import {
 type AdminUser = components['schemas']['AdminUser'];
 
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'active', label: '生效中' },
-  { value: 'disabled', label: '已封禁' },
+// 状态过滤选项：label 走 i18n 字典（g2 分片），组件内按 labelKey 取文案。
+const STATUS_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: 'active', labelKey: 'admin.users.statusActive' },
+  { value: 'disabled', labelKey: 'admin.users.statusBanned' },
 ];
 
 type RowAction =
@@ -70,6 +72,8 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const me = useAuth().user;
+  const t = useT();
+  const statusOptions = STATUS_OPTIONS.map((s) => ({ value: s.value, label: t(s.labelKey) }));
   
   
   const [searchParams, setSearchParams] = useSearchParamsCompat();
@@ -97,11 +101,11 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
 
   
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const next = searchInput.trim();
       if (next !== q) applyFilter(next, status, 1);
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
@@ -125,12 +129,14 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
       api.patch(`/api/admin/users/${v.user.id}/status`, { status: v.status }),
     onSuccess: (_d, v) => {
       toast.success(
-        `${v.user.email} 已${v.status === 'disabled' ? '封禁' : '解封'}`,
+        v.status === 'disabled'
+          ? t('admin.users.banToast', { email: v.user.email })
+          : t('admin.users.unbanToast', { email: v.user.email }),
       );
       setAction(null);
       void invalidate();
     },
-    onError: (e) => toast.error(adminError(e, '操作失败')),
+    onError: (e) => toast.error(adminError(e, t('admin.users.actionFailed'))),
   });
 
   const adminFlagM = useMutation({
@@ -138,11 +144,13 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
       api.patch(`/api/admin/users/${v.user.id}/admin`, { is_admin: v.isAdmin }),
     onSuccess: (_d, v) => {
       toast.success(
-        `${v.user.email} ${v.isAdmin ? '已授予' : '已撤销'}平台管理员`,
+        v.isAdmin
+          ? t('admin.users.grantAdminToast', { email: v.user.email })
+          : t('admin.users.revokeAdminToast', { email: v.user.email }),
       );
       void invalidate();
     },
-    onError: (e) => toast.error(adminError(e, '操作失败')),
+    onError: (e) => toast.error(adminError(e, t('admin.users.actionFailed'))),
   });
 
   
@@ -153,7 +161,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
       window.location.href = impersonatePath;
     },
     onError: (e) => {
-      toast.error(adminError(e, '模拟登录失败'));
+      toast.error(adminError(e, t('admin.users.impersonateFailed')));
       setAction(null);
     },
   });
@@ -161,11 +169,13 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
   const onToggleAdmin = async (user: AdminUser) => {
     const revoke = user.is_platform_admin;
     const ok = await confirm({
-      title: revoke ? '撤销平台管理员' : '授予平台管理员',
+      title: revoke ? t('admin.users.revokeAdmin') : t('admin.users.grantAdmin'),
       description: revoke
-        ? `${user.email} 将失去平台管理权限（管理控制台入口随之消失）。`
-        : `${user.email} 将获得平台管理权限，可进入管理控制台操作平台全部数据。`,
-      confirmText: revoke ? '撤销管理员' : '授予管理员',
+        ? t('admin.users.revokeAdminDesc', { email: user.email })
+        : t('admin.users.grantAdminDesc', { email: user.email }),
+      confirmText: revoke
+        ? t('admin.users.revokeAdminConfirm')
+        : t('admin.users.grantAdminConfirm'),
       danger: revoke,
     });
     if (ok) adminFlagM.mutate({ user, isAdmin: !revoke });
@@ -180,14 +190,14 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
   const columns: Column<AdminUser>[] = [
     {
       key: 'email',
-      header: '用户',
+      header: t('admin.users.colUser'),
       render: (u) => (
         <div className="min-w-0">
           <p className="truncate font-medium">
             {u.email}
             {u.is_platform_admin && (
               <Badge variant="secondary" className="ml-2">
-                平台管理员
+                {t('admin.users.platformAdminBadge')}
               </Badge>
             )}
           </p>
@@ -199,26 +209,26 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('admin.users.colStatus'),
       className: 'w-24',
       render: (u) => <StatusBadge status={u.status} />,
     },
     {
       key: 'email_verified',
-      header: '邮箱验证',
+      header: t('admin.users.colEmailVerified'),
       className: 'w-24',
       render: (u) =>
         u.email_verified ? (
-          <Badge variant="outline">已验证</Badge>
+          <Badge variant="outline">{t('admin.users.verifiedBadge')}</Badge>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
-            未验证
+            {t('admin.users.unverifiedBadge')}
           </Badge>
         ),
     },
     {
       key: 'created_at',
-      header: '注册时间',
+      header: t('admin.users.colCreatedAt'),
       className: 'w-28',
       render: (u) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -228,20 +238,20 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
     },
     {
       key: 'last_login_at',
-      header: '最近登录',
+      header: t('admin.users.colLastLogin'),
       className: 'w-44',
       render: (u) => (
         <span className="whitespace-nowrap text-muted-foreground">
-          {u.last_login_at ? formatDateTime(u.last_login_at) : '从未登录'}
+          {u.last_login_at ? formatDateTime(u.last_login_at) : t('admin.users.neverSignedIn')}
         </span>
       ),
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.users.colActions'),
       className: 'w-16',
       render: (u) => {
-        
+
         if (me?.id === u.id) {
           return (
             <Button
@@ -249,7 +259,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
               size="sm"
               onClick={() => navigate(`/admin/users/${u.id}`)}
             >
-              <UserRoundSearch /> 详情
+              <UserRoundSearch /> {t('admin.users.detailsBtn')}
             </Button>
           );
         }
@@ -262,7 +272,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label={`操作 ${u.email}`}
+                  aria-label={t('admin.users.rowActionsAria', { email: u.email })}
                 />
               }
             >
@@ -280,7 +290,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
               <DropdownMenuItem
                 onClick={() => navigate(`/admin/users/${u.id}`)}
               >
-                <UserRoundSearch /> 用户详情
+                <UserRoundSearch /> {t('admin.users.menuUserDetail')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {u.status === 'active' ? (
@@ -288,18 +298,18 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
                   variant="destructive"
                   onClick={() => setAction({ kind: 'disable', user: u })}
                 >
-                  <ShieldOff /> 封禁账号
+                  <ShieldOff /> {t('admin.users.menuBan')}
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem
                   onClick={() => setAction({ kind: 'enable', user: u })}
                 >
-                  <ShieldCheck /> 解封账号
+                  <ShieldCheck /> {t('admin.users.menuUnban')}
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => void onToggleAdmin(u)}>
                 <UserCog />{' '}
-                {u.is_platform_admin ? '撤销平台管理员' : '授予平台管理员'}
+                {u.is_platform_admin ? t('admin.users.revokeAdmin') : t('admin.users.grantAdmin')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {/* 管理员互模被服务端禁止（防权限逃逸），行内禁用入口 */}
@@ -307,7 +317,7 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
                 disabled={u.is_platform_admin}
                 onClick={() => setAction({ kind: 'impersonate', user: u })}
               >
-                <LogIn /> 模拟登录
+                <LogIn /> {t('admin.users.menuImpersonate')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -318,13 +328,13 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
 
   return (
     <div>
-      <PageHeader title="用户" />
+      <PageHeader title={t('admin.users.title')} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           className="w-72"
-          placeholder="按邮箱前缀 / 昵称搜索…"
-          aria-label="搜索用户"
+          placeholder={t('admin.users.searchPlaceholder')}
+          aria-label={t('admin.users.searchAria')}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onKeyDown={(e) => {
@@ -339,17 +349,17 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
             applyFilter(q, next, 1);
           }}
         >
-          <SelectTrigger size="sm" className="w-44" aria-label="按状态过滤">
+          <SelectTrigger size="sm" className="w-44" aria-label={t('admin.users.filterStatusAria')}>
             <SelectValue>
               {status
-                ? (STATUS_OPTIONS.find((s) => s.value === status)?.label ??
+                ? (statusOptions.find((s) => s.value === status)?.label ??
                   status)
-                : '全部状态'}
+                : t('admin.users.allStatuses')}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
-            <SelectItem value="all">全部状态</SelectItem>
-            {STATUS_OPTIONS.map((s) => (
+            <SelectItem value="all">{t('admin.users.allStatuses')}</SelectItem>
+            {statusOptions.map((s) => (
               <SelectItem key={s.value} value={s.value}>
                 {s.label}
               </SelectItem>
@@ -366,14 +376,14 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
               applyFilter('', '', 1);
             }}
           >
-            清除过滤
+            {t('admin.users.clearFilters')}
           </Button>
         )}
       </div>
 
       {usersQ.isError ? (
         <PageError
-          message={adminError(usersQ.error, '用户列表加载失败')}
+          message={adminError(usersQ.error, t('admin.users.loadFailed'))}
           onRetry={() => void usersQ.refetch()}
         />
       ) : (
@@ -391,22 +401,25 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
           empty={
             pastEnd ? (
               <div className="flex flex-col items-center gap-2">
-                <PageEmpty label="没有更多用户了" hint="当前页数据可能已被删除" />
+                <PageEmpty
+                  label={t('admin.users.emptyPastEnd')}
+                  hint={t('admin.users.emptyPastEndHint')}
+                />
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => applyFilter(q, status, 1)}
                 >
-                  返回第一页
+                  {t('admin.users.backToFirstPage')}
                 </Button>
               </div>
             ) : filtered ? (
               <PageEmpty
-                label="没有匹配用户"
-                hint="换个关键词、放宽状态条件或清除过滤"
+                label={t('admin.users.emptyNoMatch')}
+                hint={t('admin.users.emptyNoMatchHint')}
               />
             ) : (
-              <PageEmpty label="暂无用户" />
+              <PageEmpty label={t('admin.users.emptyNoUsers')} />
             )
           }
         />
@@ -418,21 +431,21 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
         onOpenChange={(o) => !o && setAction(null)}
         title={
           action?.kind === 'disable'
-            ? `封禁 ${action.user.email}`
+            ? t('admin.users.banTitle', { email: action.user.email })
             : action?.kind === 'enable'
-              ? `解封 ${action.user.email}`
+              ? t('admin.users.unbanTitle', { email: action.user.email })
               : ''
         }
         danger={action?.kind === 'disable'}
-        confirmText={action?.kind === 'disable' ? '封禁' : '解封'}
+        confirmText={action?.kind === 'disable' ? t('admin.users.banConfirm') : t('admin.users.unbanConfirm')}
         impacts={
           action?.kind === 'disable'
             ? [
-                '该用户将无法通过邮箱密码与 OAuth 登录',
-                '其名下工作区与数据保留，不受影响',
-                '操作将记入平台审计日志',
+                t('admin.users.impactBanLogin'),
+                t('admin.users.impactDataKept'),
+                t('admin.users.impactAuditLog'),
               ]
-            : ['该用户恢复登录能力', '操作将记入平台审计日志']
+            : [t('admin.users.impactUnbanLogin'), t('admin.users.impactAuditLog')]
         }
         onConfirm={() => {
           if (action) {
@@ -449,14 +462,16 @@ export function UsersPage({ impersonatePath = '/app' }: UsersPageProps = {}) {
         open={action?.kind === 'impersonate'}
         onOpenChange={(o) => !o && setAction(null)}
         title={
-          action?.kind === 'impersonate' ? `模拟登录 ${action.user.email}` : ''
+          action?.kind === 'impersonate'
+            ? t('admin.users.impersonateTitle', { email: action.user.email })
+            : ''
         }
-        confirmText="以该用户进入产品"
+        confirmText={t('admin.users.impersonateConfirm')}
         pending={impersonateM.isPending}
         impacts={[
-          '浏览器将以该用户身份进入产品（/app）',
-          '当前管理员会话被替换，退出登录后需重新登录管理员账号',
-          '审计将记录 admin.impersonate，操作可追溯',
+          t('admin.users.impactImpersonateBrowser'),
+          t('admin.users.impactImpersonateSession'),
+          t('admin.users.impactImpersonateAudit'),
         ]}
         onConfirm={() => {
           if (action?.kind === 'impersonate') impersonateM.mutate(action.user);

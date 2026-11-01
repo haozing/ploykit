@@ -71,16 +71,16 @@ describe('InviteAcceptPage', () => {
   it('只列 pending 邀请（工作区名 / 角色徽标 / 过期时间）', async () => {
     await renderPage()
     expect(screen.getByText('Beta Team')).toBeInTheDocument()
-    expect(screen.getByText('管理员')).toBeInTheDocument()
+    expect(screen.getByText('Admin')).toBeInTheDocument()
     expect(screen.queryByText('Old Team')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /接受/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /拒绝/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Accept/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Decline/ })).toBeInTheDocument()
   })
 
   it('接受 → POST accept（hook 内部失效 workspaceList）+ onAccepted 回调', async () => {
     const onAccepted = vi.fn()
     await renderPage({ onAccepted })
-    fireEvent.click(screen.getByRole('button', { name: /接受/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Accept/ }))
     await waitFor(() => expect(invMocks.accept.mutateAsync).toHaveBeenCalledWith('inv-1'))
     await waitFor(() => expect(onAccepted).toHaveBeenCalledWith('ws-9'))
     expect(screen.queryByText('app-page')).not.toBeInTheDocument() 
@@ -88,14 +88,14 @@ describe('InviteAcceptPage', () => {
 
   it('无 onAccepted 时默认跳 /app', async () => {
     await renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /接受/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Accept/ }))
     await waitFor(() => expect(screen.getByText('app-page')).toBeInTheDocument())
   })
 
   it('拒绝 → decline.mutateAsync(id)，不跳转', async () => {
     await renderPage()
-    fireEvent.click(screen.getByRole('button', { name: /拒绝/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Decline/ }))
     await waitFor(() => expect(invMocks.decline.mutateAsync).toHaveBeenCalledWith('inv-1'))
-    expect(toastMocks.success).toHaveBeenCalledWith('已拒绝「Beta Team」的邀请')
+    expect(toastMocks.success).toHaveBeenCalledWith('Declined the invitation to "Beta Team"')
   })
 })

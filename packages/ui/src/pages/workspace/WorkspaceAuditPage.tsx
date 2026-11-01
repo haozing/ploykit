@@ -17,6 +17,7 @@ import {
 } from '@ploykit/hooks'
 import { formatDateTime } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
+import { useT } from '../../i18n'
 
 const PAGE_SIZE = 20
 
@@ -81,6 +82,7 @@ function toFilters(d: FilterDraft): AuditFilters {
 export interface WorkspaceAuditPageProps {}
 
 export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
+  const t = useT()
   const [searchParams, setSearchParams] = useSearchParamsCompat()
   
   const [draft, setDraft] = useState<FilterDraft>(() => draftFromParams(searchParams))
@@ -96,9 +98,9 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
   const { wsId, items, total, loading, error, refetch } = useAudit(applied, PAGE_SIZE, offset)
 
   const apply = () => {
-    
+
     if (draft.from && draft.to && draft.from > draft.to) {
-      setRangeError('起始日期不能晚于结束日期')
+      setRangeError(t('workspace.workspaceAudit.rangeError'))
       return
     }
     setRangeError(null)
@@ -112,19 +114,19 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
   const exportCsv = async () => {
     try {
       await exportAuditCsv(applied)
-      toast.success('CSV 导出已开始下载')
+      toast.success(t('workspace.workspaceAudit.exportStarted'))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '导出失败'))
+      toast.error(apiErrorMessage(e, t('workspace.workspaceAudit.exportFailed')))
     }
   }
 
   const columns: Column<PKAuditEvent>[] = [
     {
-      key: 'created_at', header: '时间', className: 'w-[16%]',
+      key: 'created_at', header: t('workspace.workspaceAudit.colTime'), className: 'w-[16%]',
       render: (e) => <span className="whitespace-nowrap text-muted-foreground">{formatDateTime(e.created_at)}</span>,
     },
     {
-      key: 'actor', header: '操作者', className: 'w-[20%]',
+      key: 'actor', header: t('workspace.workspaceAudit.colActor'), className: 'w-[20%]',
       render: (e) => {
         const email = typeof e.actor_snapshot?.email === 'string' ? e.actor_snapshot.email : ''
         return (
@@ -136,11 +138,11 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
       },
     },
     {
-      key: 'action', header: '动作', className: 'w-[22%]',
+      key: 'action', header: t('workspace.workspaceAudit.colAction'), className: 'w-[22%]',
       render: (e) => <Badge variant="outline" className="font-mono">{e.action}</Badge>,
     },
     {
-      key: 'resource', header: '资源', className: 'w-[42%]',
+      key: 'resource', header: t('workspace.workspaceAudit.colResource'), className: 'w-[42%]',
       render: (e) => (
         <div className="min-w-0">
           <p className="truncate">{e.resource_type}</p>
@@ -153,28 +155,28 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="审计日志" />
-        <PageEmpty label="请先创建并选择一个工作区" />
+        <PageHeader title={t('workspace.workspaceAudit.title')} />
+        <PageEmpty label={t('workspace.workspaceAudit.emptyNoWs')} />
       </div>
     )
   }
 
   return (
     <div>
-      <PageHeader title="审计日志" />
+      <PageHeader title={t('workspace.workspaceAudit.title')} />
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <Field className="w-44 gap-1">
-          <FieldLabel htmlFor="audit-filter-action">动作</FieldLabel>
+          <FieldLabel htmlFor="audit-filter-action">{t('workspace.workspaceAudit.filterAction')}</FieldLabel>
           <Input
             id="audit-filter-action"
-            placeholder="如 workspace.rename"
+            placeholder={t('workspace.workspaceAudit.filterActionPh')}
             value={draft.action}
             onChange={(e) => setDraft((d) => ({ ...d, action: e.target.value }))}
           />
         </Field>
         <Field className="w-52 gap-1">
-          <FieldLabel htmlFor="audit-filter-actor-id">操作者 ID</FieldLabel>
+          <FieldLabel htmlFor="audit-filter-actor-id">{t('workspace.workspaceAudit.filterActorId')}</FieldLabel>
           <Input
             id="audit-filter-actor-id"
             placeholder="actor uuid"
@@ -183,16 +185,16 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
           />
         </Field>
         <Field className="w-40 gap-1">
-          <FieldLabel htmlFor="audit-filter-resource-type">资源类型</FieldLabel>
+          <FieldLabel htmlFor="audit-filter-resource-type">{t('workspace.workspaceAudit.filterResourceType')}</FieldLabel>
           <Input
             id="audit-filter-resource-type"
-            placeholder="如 workspace"
+            placeholder={t('workspace.workspaceAudit.filterResourcePh')}
             value={draft.resourceType}
             onChange={(e) => setDraft((d) => ({ ...d, resourceType: e.target.value }))}
           />
         </Field>
         <Field className="w-40 gap-1">
-          <FieldLabel htmlFor="audit-filter-from">开始日期</FieldLabel>
+          <FieldLabel htmlFor="audit-filter-from">{t('workspace.workspaceAudit.filterFrom')}</FieldLabel>
           <DatePicker
             id="audit-filter-from"
             value={parseYMD(draft.from)}
@@ -200,7 +202,7 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
           />
         </Field>
         <Field className="w-40 gap-1">
-          <FieldLabel htmlFor="audit-filter-to">结束日期</FieldLabel>
+          <FieldLabel htmlFor="audit-filter-to">{t('workspace.workspaceAudit.filterTo')}</FieldLabel>
           <DatePicker
             id="audit-filter-to"
             value={parseYMD(draft.to)}
@@ -208,10 +210,10 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
           />
         </Field>
         <Button onClick={apply}>
-          <Search /> 查询
+          <Search /> {t('workspace.workspaceAudit.search')}
         </Button>
         <Button variant="outline" onClick={exportCsv}>
-          <Download /> 导出 CSV
+          <Download /> {t('workspace.workspaceAudit.exportCsv')}
         </Button>
       </div>
 
@@ -223,16 +225,16 @@ export function WorkspaceAuditPage(_props: WorkspaceAuditPageProps = {}) {
       )}
 
       {loading ? (
-        <PageLoading label="加载审计日志…" />
+        <PageLoading label={t('workspace.workspaceAudit.loading')} />
       ) : error ? (
-        <PageError message={apiErrorMessage(error, '审计日志加载失败')} onRetry={() => refetch()} />
+        <PageError message={apiErrorMessage(error, t('workspace.workspaceAudit.loadFailed'))} onRetry={() => refetch()} />
       ) : (
         <>
           <DataTable
             columns={columns}
             rows={items}
             rowKey={(e) => e.id}
-            empty={<PageEmpty label="暂无审计记录" hint="调整过滤条件或触发一些操作后再来" />}
+            empty={<PageEmpty label={t('workspace.workspaceAudit.empty')} hint={t('workspace.workspaceAudit.emptyHint')} />}
             pagination={{
               page: Math.floor(offset / PAGE_SIZE) + 1,
               pageSize: PAGE_SIZE,

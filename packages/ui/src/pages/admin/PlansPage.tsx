@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
 } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
+import { useT } from '../../i18n';
 import { adminError } from './shared';
 import { BillingChannelsSection } from './BillingChannelsSection';
 import { BILLING_CATALOG_QUERY_KEY, CatalogMapping } from './CatalogMapping';
@@ -99,29 +100,34 @@ function draftFrom(plan: AdminPlanView): PlanDraft {
   };
 }
 
+// 纯校验函数：错误文案走字典（t 由调用方传入，保持模块级函数可测）
 function buildBody(
   d: PlanDraft,
+  t: (key: string, vars?: Record<string, string | number>) => string,
 ): { body?: PlanUpdateBody; error?: string } {
   const name = d.name.trim();
-  if (!name) return { error: '名称不能为空' };
+  if (!name) return { error: t('admin.plans.errNameRequired') };
   if (!CURRENCY_RE.test(d.currency.trim()))
-    return { error: '币种需为 3 位大写字母（如 USD）' };
+    return { error: t('admin.plans.errCurrency') };
   const sortNo = d.sortNo.trim();
-  if (!INT_RE.test(sortNo)) return { error: '排序需为整数' };
+  if (!INT_RE.test(sortNo)) return { error: t('admin.plans.errSortInt') };
   const limits: Record<string, number> = {};
   for (const row of d.limits) {
     const k = row.key.trim();
     const v = row.value.trim();
     // 整行留空的行忽略（误触加行不阻塞保存）
     if (!k && !v) continue;
-    if (!k) return { error: '存在未填写键名的限制行' };
+    if (!k) return { error: t('admin.plans.errLimitKeyMissing') };
     if (!LIMIT_KEY_RE.test(k))
       return {
-        error: `限制键 ${k} 格式有误：小写字母开头，仅小写字母/数字/下划线`,
+        error: t('admin.plans.errLimitKeyFormat', { key: k }),
       };
-    if (k in limits) return { error: `限制键 ${k} 重复` };
+    if (k in limits)
+      return { error: t('admin.plans.errLimitKeyDup', { key: k }) };
     if (!INT_RE.test(v))
-      return { error: `限制 ${k} 的值需为整数（${UNLIMITED} 表示无限）` };
+      return {
+        error: t('admin.plans.errLimitValueInt', { key: k, unlimited: UNLIMITED }),
+      };
     limits[k] = Number(v);
   }
   return { body: { name, currency: d.currency.trim(), sort_no: Number(sortNo), limits } };
@@ -137,6 +143,7 @@ interface PlanCardProps {
 }
 
 function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardProps) {
+  const t = useT();
   const [draft, setDraft] = useState<PlanDraft>(() => draftFrom(plan));
   const [customCurrency, setCustomCurrency] = useState(
     !COMMON_CURRENCIES.includes(plan.currency),
@@ -169,9 +176,9 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
 
   const submit = () => {
     setFormError(null);
-    const { body, error } = buildBody(draft);
+    const { body, error } = buildBody(draft, t);
     if (!body) {
-      setFormError(error ?? '表单有误');
+      setFormError(error ?? t('admin.shared.formInvalid'));
       return;
     }
     onSave(plan.code, body);
@@ -185,7 +192,7 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        aria-label={`编辑套餐 ${plan.code}`}
+        aria-label={t('admin.plans.editAria', { code: plan.code })}
         className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-muted/40"
       >
         {open ? (
@@ -202,20 +209,22 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
               {plan.code}
             </code>
           </TooltipTrigger>
-          <TooltipContent>套餐代码不可修改</TooltipContent>
+          <TooltipContent>{t('admin.plans.codeTooltip')}</TooltipContent>
         </Tooltip>
         <Badge variant="outline">{plan.currency}</Badge>
-        <span className="text-xs text-muted-foreground">排序 {plan.sort_no}</span>
+        <span className="text-xs text-muted-foreground">
+          {t('admin.plans.sortMeta', { no: plan.sort_no })}
+        </span>
         {plan.trial_days > 0 && (
           <span className="text-xs text-muted-foreground">
-            试用 {plan.trial_days} 天
+            {t('admin.plans.trialMeta', { days: plan.trial_days })}
           </span>
         )}
         <span className="text-xs text-muted-foreground">
-          {limitCount} 项限制
+          {t('admin.plans.limitCountMeta', { count: limitCount })}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">
-          {open ? '收起' : '展开编辑'}
+          {open ? t('admin.plans.collapse') : t('admin.plans.expand')}
         </span>
       </button>
 
@@ -228,7 +237,10 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
           }}
         >
           <div className="grid gap-4 sm:grid-cols-3">
-            <FormField label="名称" htmlFor={`plans-name-${plan.code}`}>
+            <FormField
+              label={t('admin.plans.nameLabel')}
+              htmlFor={`plans-name-${plan.code}`}
+            >
               <Input
                 id={`plans-name-${plan.code}`}
                 value={draft.name}
@@ -238,8 +250,8 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
               />
             </FormField>
             <FormField
-              label="币种"
-              description="3 位大写字母；常用币种可选，也可自由输入"
+              label={t('admin.plans.currencyLabel')}
+              description={t('admin.plans.currencyDesc')}
             >
               <Select
                 value={customCurrency ? 'custom' : draft.currency}
@@ -252,7 +264,10 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
                   }
                 }}
               >
-                <SelectTrigger aria-label="币种" size="sm">
+                <SelectTrigger
+                  aria-label={t('admin.plans.currencyLabel')}
+                  size="sm"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent align="start">
@@ -261,14 +276,16 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
                       {c}
                     </SelectItem>
                   ))}
-                  <SelectItem value="custom">自定义…</SelectItem>
+                  <SelectItem value="custom">
+                    {t('admin.plans.currencyCustom')}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {customCurrency && (
                 <Input
                   className="mt-2 font-mono"
-                  aria-label="自定义币种"
-                  placeholder="如 JPY"
+                  aria-label={t('admin.plans.currencyCustomAria')}
+                  placeholder={t('admin.plans.currencyPlaceholder')}
                   value={draft.currency}
                   onChange={(e) =>
                     setDraft((d) => ({
@@ -283,9 +300,9 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
               )}
             </FormField>
             <FormField
-              label="排序"
+              label={t('admin.plans.sortLabel')}
               htmlFor={`plans-sort-${plan.code}`}
-              description="展示顺序（任意整数）"
+              description={t('admin.plans.sortDesc')}
             >
               {/* B-settings-10 同款处置：text + inputMode（type=number 对垃圾
                   字符静默置空）；非法值保存前拒绝并就地提示 */}
@@ -303,18 +320,19 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
 
           <div className="mt-6">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium">限制（limits）</p>
+              <p className="text-sm font-medium">{t('admin.plans.limitsTitle')}</p>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={addRow}
               >
-                <Plus size={14} aria-hidden="true" /> 添加限制键
+                <Plus size={14} aria-hidden="true" />{' '}
+                {t('admin.plans.addLimitKey')}
               </Button>
             </div>
             <p className="mb-2 text-xs text-muted-foreground">
-              值为整数，{UNLIMITED} 表示无限（Unlimited）；键名小写字母开头，仅小写字母/数字/下划线。未知键原样保存（高级键，服务端放行）。
+              {t('admin.plans.limitsHint', { unlimited: UNLIMITED })}
             </p>
             <div className="space-y-2">
               {draft.limits.map((row, i) => {
@@ -325,24 +343,26 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
                 return (
                   <div key={i} className="flex flex-wrap items-center gap-2">
                     <Input
-                      aria-label="限制键名"
+                      aria-label={t('admin.plans.limitKeyAria')}
                       className="w-48 font-mono"
-                      placeholder="键名，如 credits"
+                      placeholder={t('admin.plans.limitKeyPlaceholder')}
                       value={row.key}
                       onChange={(e) => setRow(i, { key: e.target.value })}
                     />
                     <Input
-                      aria-label="限制值"
+                      aria-label={t('admin.plans.limitValueAria')}
                       type="text"
                       inputMode="numeric"
                       className="w-36"
-                      placeholder={`整数；${UNLIMITED} = 无限`}
+                      placeholder={t('admin.plans.limitValuePlaceholder', {
+                        unlimited: UNLIMITED,
+                      })}
                       value={row.value}
                       onChange={(e) => setRow(i, { value: e.target.value })}
                     />
                     {knownPrice && (
                       <span className="text-xs text-muted-foreground">
-                        价格（单位：分）
+                        {t('admin.plans.priceHint')}
                       </span>
                     )}
                     {unknownKey && (
@@ -353,17 +373,17 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
                           }
                         >
                           <Badge variant="outline" className="text-muted-foreground">
-                            高级键
+                            {t('admin.plans.advancedKey')}
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent>
-                          billing 不认识的高级键：原样保存，服务端放行
+                          {t('admin.plans.advancedKeyTip')}
                         </TooltipContent>
                       </Tooltip>
                     )}
                     {unlimited && (
                       <span className="text-xs font-medium text-muted-foreground">
-                        Unlimited（无限）
+                        {t('admin.plans.unlimitedBadge')}
                       </span>
                     )}
                     <span className="flex-1" />
@@ -371,17 +391,19 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label={`删除限制 ${key || i + 1}`}
+                      aria-label={t('admin.plans.deleteLimitAria', {
+                        name: key || i + 1,
+                      })}
                       onClick={() => removeRow(i)}
                     >
-                      删除
+                      {t('admin.plans.deleteRow')}
                     </Button>
                   </div>
                 );
               })}
               {draft.limits.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  暂无限制键（limits 为空对象）
+                  {t('admin.plans.noLimits')}
                 </p>
               )}
             </div>
@@ -389,9 +411,10 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {/* 保存中文案恒定（ProfileSettingsPage 先例：aria-hidden Spinner 不进可及名，
-                按钮可访问名保持「保存」，测试与读屏稳定） */}
+                按钮可访问名保持字典值，测试与读屏稳定） */}
             <Button type="submit" size="sm" disabled={saving}>
-              {saving && <Spinner aria-hidden="true" />}保存
+              {saving && <Spinner aria-hidden="true" />}
+              {t('admin.shared.save')}
             </Button>
             {shownError && (
               <Alert variant="destructive">
@@ -408,6 +431,7 @@ function PlanCard({ plan, open, saving, apiError, onToggle, onSave }: PlanCardPr
 export function PlansPage() {
   const api = useApi();
   const qc = useQueryClient();
+  const t = useT();
 
   const [openCodes, setOpenCodes] = useState<Set<string>>(() => new Set());
   const toggle = (code: string) =>
@@ -433,7 +457,7 @@ export function PlansPage() {
         v.body,
       ),
     onSuccess: (_d, v) => {
-      toast.success(`套餐 ${v.code} 已保存`);
+      toast.success(t('admin.plans.saved', { code: v.code }));
       setCardErrors((prev) => {
         if (!(v.code in prev)) return prev;
         const next = { ...prev };
@@ -449,7 +473,10 @@ export function PlansPage() {
     onError: (e, v) =>
       setCardErrors((prev) => ({
         ...prev,
-        [v.code]: adminError(e, `套餐 ${v.code} 保存失败`),
+        [v.code]: adminError(
+          e,
+          t('admin.plans.saveFailed', { code: v.code }),
+        ),
       })),
   });
 
@@ -460,21 +487,21 @@ export function PlansPage() {
   return (
     <div>
       <PageHeader
-        title="套餐"
-        description="编辑套餐与配额。已创建订单不受影响。"
+        title={t('admin.plans.title')}
+        description={t('admin.plans.description')}
       />
 
       {plansQ.isError ? (
         <PageError
-          message={adminError(plansQ.error, '套餐列表加载失败')}
+          message={adminError(plansQ.error, t('admin.plans.loadFailed'))}
           onRetry={() => void plansQ.refetch()}
         />
       ) : plansQ.isPending ? (
-        <PageLoading label="加载套餐中…" />
+        <PageLoading label={t('admin.plans.loading')} />
       ) : plans.length === 0 ? (
         <PageEmpty
-          label="暂无套餐"
-          hint="套餐由计费种子数据创建；此页编辑已存在的套餐"
+          label={t('admin.plans.emptyLabel')}
+          hint={t('admin.plans.emptyHint')}
         />
       ) : (
         <ul className="space-y-3">

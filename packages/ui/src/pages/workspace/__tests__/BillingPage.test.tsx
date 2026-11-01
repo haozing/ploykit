@@ -105,24 +105,25 @@ beforeEach(() => {
 describe('BillingPage', () => {
   it('渲染当前套餐卡、套餐卡与订单表', async () => {
     await renderPage()
-    expect(screen.getByText('当前套餐')).toBeInTheDocument()
-    expect(screen.getByText(/共 2 笔订单（待处理 1 笔）/)).toBeInTheDocument()
-    expect(screen.getByText('Free')).toBeInTheDocument()
+    expect(screen.getByText('Current subscription')).toBeInTheDocument()
+    expect(screen.getByText(/, 2 orders in total \(1 pending\)\./)).toBeInTheDocument()
+    // Free 档价格 0 → 价格位也渲染 'Free'（与套餐名同词，断言计数不断言唯一）
+    expect(screen.getAllByText('Free').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('Pro')).toBeInTheDocument()
-    
+
     expect(screen.getAllByText('¥9.90').length).toBe(1)
     expect(screen.getByText(/USD 9\.90/)).toBeInTheDocument()
     expect(screen.getByText(/USD 49\.00/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '当前计划' })).toBeDisabled()
-    
+    expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
+
     expect(screen.getAllByText('pro').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
   })
 
   it('B9：价格单位"/月"两侧空格平衡（此前"¥999/月"失衡）', async () => {
     await renderPage()
     expect(
-      screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === ' / 月'),
+      screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === ' / month'),
     ).toBeInTheDocument()
   })
 
@@ -132,10 +133,10 @@ describe('BillingPage', () => {
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('网络连接失败')
-    expect(screen.queryByText('选择套餐')).not.toBeInTheDocument()
-    
-    expect(screen.queryByText('暂无订单')).not.toBeInTheDocument()
-    expect(screen.queryByText(/共 \d+ 笔订单/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose a plan')).not.toBeInTheDocument()
+
+    expect(screen.queryByText('No orders yet')).not.toBeInTheDocument()
+    expect(screen.queryByText(/\d+ orders in total/)).not.toBeInTheDocument()
   })
 
   it('P2-6 补强：仅套餐失败（订阅正常）→ 仍进错误态，不按空套餐渲染', async () => {
@@ -146,12 +147,12 @@ describe('BillingPage', () => {
     await renderPage()
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('套餐接口 500')
-    expect(screen.queryByText('选择套餐')).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose a plan')).not.toBeInTheDocument()
   })
 
   it('升级 CTA 提交 POST /api/billing/checkout 并跳转 action_url', async () => {
     await renderPage()
-    fireEvent.click(screen.getByRole('button', { name: '升级' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }))
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/billing/checkout', {
         plan_code: 'pro', interval: 'monthly', channel: 'stripe',
@@ -162,15 +163,15 @@ describe('BillingPage', () => {
   it('B7：Stripe 专属跳回文案仅在 Stripe 渠道下显示', async () => {
     await renderPage()
     expect(
-      screen.getByText('升级立即生效；Stripe 结账完成后自动跳回。'),
+      screen.getByText('Upgrades take effect immediately; you will be redirected back once Stripe checkout completes.'),
     ).toBeInTheDocument()
   })
 
   it('interval 切换到按年 → 价格取 price_yearly_cents', async () => {
     await renderPage()
-    fireEvent.click(screen.getByRole('button', { name: '按年' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yearly' }))
     await waitFor(() => expect(screen.getByText('¥99.00')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: '升级' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }))
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith(
         '/api/billing/checkout',
@@ -182,7 +183,7 @@ describe('BillingPage', () => {
   it('B6：周期选择写入 URL searchParams', async () => {
     await renderPage('/billing')
     expect(screen.getByTestId('search-params').textContent).toBe('')
-    fireEvent.click(screen.getByRole('button', { name: '按年' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yearly' }))
     await waitFor(() =>
       expect(screen.getByTestId('search-params').textContent).toBe('interval=yearly'),
     )
@@ -191,8 +192,8 @@ describe('BillingPage', () => {
   it('B6：渠道选择写入 URL searchParams', async () => {
     clientGet.mockResolvedValue({ billing_channels: ['stripe', 'alipay', 'manual'] })
     await renderPage('/billing')
-    fireEvent.click(await screen.findByRole('combobox', { name: '支付渠道' }))
-    const option = await screen.findByRole('option', { name: '支付宝' })
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Payment channel' }))
+    const option = await screen.findByRole('option', { name: 'Alipay' })
     fireEvent.pointerDown(option, { button: 0, pointerType: 'mouse' })
     fireEvent.pointerUp(option, { button: 0, pointerType: 'mouse' })
     fireEvent.click(option)
@@ -205,7 +206,7 @@ describe('BillingPage', () => {
     clientGet.mockResolvedValue({ billing_channels: ['stripe', 'manual'] })
     await renderPage('/billing?interval=yearly&channel=manual')
     await waitFor(() => expect(screen.getByText('¥99.00')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: '升级' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }))
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/billing/checkout', {
         plan_code: 'pro', interval: 'yearly', channel: 'manual',
@@ -213,11 +214,11 @@ describe('BillingPage', () => {
     )
   })
 
-  it('取消 pending 订单 → POST orders/{id}/cancel；B8：确认框周期用中文、术语"待处理"', async () => {
+  it('取消 pending 订单 → POST orders/{id}/cancel；B8：确认框周期文案、术语"待处理"', async () => {
     await renderPage()
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(confirmSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ description: '取消 pro（按年）的待处理订单？' }),
+      expect.objectContaining({ description: 'Cancel the pending order for pro (Yearly)?' }),
     )
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/billing/orders/o-1/cancel'),
@@ -227,8 +228,8 @@ describe('BillingPage', () => {
 
   it('B8：订单卡文案与徽章术语统一（"待处理"），不再"待支付"', async () => {
     await renderPage()
-    expect(screen.getByText(/待处理 1 笔/)).toBeInTheDocument()
-    expect(screen.queryByText(/待支付/)).not.toBeInTheDocument()
+    expect(screen.getByText(/\(1 pending\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/awaiting payment/)).not.toBeInTheDocument()
   })
 })
 
@@ -241,7 +242,7 @@ describe('BillingPage UP-8：one_time 套餐过滤（D4 price-key capability，�
       { code: 'bundle_200', name: 'Bundle 200', limits: { tasks_monthly: 200, price_one_time_cents: 1990 }, sort_no: 3 },
       packOnly,
     ])
-    expect(screen.getByText('Free')).toBeInTheDocument()
+    expect(screen.getAllByText('Free').length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByText('积分包 100')).not.toBeInTheDocument()
     expect(screen.queryByText('Bundle 200')).not.toBeInTheDocument()
   })
@@ -252,12 +253,12 @@ describe('BillingPage UP-8：one_time 套餐过滤（D4 price-key capability，�
     ])
     expect(screen.getByText('Pro')).toBeInTheDocument()
     expect(screen.getByText('¥9.90')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '升级' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Upgrade' })).toBeEnabled()
   })
 
   it('全部 plan 被过滤（仅 one_time 包）→ 空态成立', async () => {
     await renderPage('/billing', [packOnly])
-    expect(screen.getByText('暂无可订阅套餐')).toBeInTheDocument()
+    expect(screen.getByText('No subscribable plans yet')).toBeInTheDocument()
     expect(screen.queryByText('积分包 100')).not.toBeInTheDocument()
   })
 
@@ -275,20 +276,20 @@ describe('BillingPage B1/G4：manual 渠道接线（渠道表动态生成）', (
     clientGet.mockResolvedValue({ billing_channels: ['manual'] })
     await renderPage()
 
-    
-    
-    await screen.findByText('升级立即生效；下单后请联系管理员完成线下转账，订单在管理员核销后生效。')
-    expect(screen.queryByText(/Stripe 结账完成后自动跳回/)).not.toBeInTheDocument()
 
-    const trigger = screen.getByRole('combobox', { name: '支付渠道' })
-    expect(trigger).toHaveTextContent('线下转账（管理员核销）')
+
+    await screen.findByText('Upgrades take effect immediately; after placing the order, contact the admin to complete the offline transfer. The order takes effect once the admin verifies it.')
+    expect(screen.queryByText(/redirected back once Stripe checkout/)).not.toBeInTheDocument()
+
+    const trigger = screen.getByRole('combobox', { name: 'Payment channel' })
+    expect(trigger).toHaveTextContent('Offline transfer (verified by admin)')
     fireEvent.click(trigger)
-    expect(await screen.findByRole('option', { name: '线下转账（管理员核销）' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Stripe（银行卡）' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: '支付宝' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: '微信支付' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Offline transfer (verified by admin)' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Stripe (card)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Alipay' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'WeChat Pay' })).not.toBeInTheDocument()
 
-    const upgrade = screen.getByRole('button', { name: '升级' })
+    const upgrade = screen.getByRole('button', { name: 'Upgrade' })
     expect(upgrade).toBeEnabled()
     fireEvent.click(upgrade)
     await waitFor(() =>
@@ -301,8 +302,8 @@ describe('BillingPage B1/G4：manual 渠道接线（渠道表动态生成）', (
   it('未知渠道码回退为码本身展示（自定义渠道可选）', async () => {
     clientGet.mockResolvedValue({ billing_channels: ['manual', 'paypal'] })
     await renderPage()
-    fireEvent.click(await screen.findByRole('combobox', { name: '支付渠道' }))
-    expect(await screen.findByRole('option', { name: '线下转账（管理员核销）' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Payment channel' }))
+    expect(await screen.findByRole('option', { name: 'Offline transfer (verified by admin)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'paypal' })).toBeInTheDocument()
   })
 
@@ -311,13 +312,13 @@ describe('BillingPage B1/G4：manual 渠道接线（渠道表动态生成）', (
     apiMocks.post.mockResolvedValue({ action_url: '' })
     await renderPage()
 
-    
-    await screen.findByText('升级立即生效；下单后请联系管理员完成线下转账，订单在管理员核销后生效。')
-    fireEvent.click(screen.getByRole('button', { name: '升级' }))
+
+    await screen.findByText('Upgrades take effect immediately; after placing the order, contact the admin to complete the offline transfer. The order takes effect once the admin verifies it.')
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }))
     // 线下支付指引由 stock Alert 渲染（role="alert"，非原手写 role="note"）
     const note = await screen.findByRole('alert')
-    expect(note).toHaveTextContent('已创建 Pro 订单（待处理）：下单后请联系管理员完成支付，订单在管理员核销后生效。')
-    expect(toastMocks.success).toHaveBeenCalledWith('订单已创建，请联系管理员完成支付')
+    expect(note).toHaveTextContent('Created order for Pro (pending): contact the admin to complete the payment; the order takes effect after the admin verifies it.')
+    expect(toastMocks.success).toHaveBeenCalledWith('Order created; please contact the admin to complete the payment')
     expect(toastMocks.error).not.toHaveBeenCalled()
     // manual 有 InfoURL 时 action_url 非空 → 正常跳转指引页（主链路测试已覆盖跳转分支）
   })
@@ -326,20 +327,20 @@ describe('BillingPage B1/G4：manual 渠道接线（渠道表动态生成）', (
     clientGet.mockResolvedValue({ billing_channels: [] })
     await renderPage()
 
-    const upgrade = await screen.findByRole('button', { name: '升级' })
+    const upgrade = await screen.findByRole('button', { name: 'Upgrade' })
     await waitFor(() => expect(upgrade).toBeDisabled())
-    expect(screen.getByText('暂不可升级：站点未配置任何支付渠道，请联系管理员。')).toBeInTheDocument()
-    expect(screen.queryByText(/请切换支付渠道/)).not.toBeInTheDocument()
+    expect(screen.getByText('Upgrade unavailable: no payment channels are configured on this site. Please contact the admin.')).toBeInTheDocument()
+    expect(screen.queryByText(/switch to another payment channel/)).not.toBeInTheDocument()
   })
 
   it('/config 失败 → 不放大为整页错误：渠道表回退已知全集不设限', async () => {
     clientGet.mockRejectedValue(new Error('config down'))
     await renderPage()
 
-    expect(await screen.findByRole('button', { name: '升级' })).toBeEnabled()
-    fireEvent.click(screen.getByRole('combobox', { name: '支付渠道' }))
-    expect(await screen.findByRole('option', { name: '线下转账（管理员核销）' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Stripe（银行卡）' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Upgrade' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('combobox', { name: 'Payment channel' }))
+    expect(await screen.findByRole('option', { name: 'Offline transfer (verified by admin)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Stripe (card)' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

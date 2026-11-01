@@ -89,7 +89,7 @@ beforeEach(() => {
 describe('OverviewPage 活动流（批次 3.3）', () => {
   it('渲染最近事件卡片：20 条倒序列表（limit=20 默认）', async () => {
     renderPage();
-    expect(await screen.findByText('最近事件')).toBeInTheDocument();
+    expect(await screen.findByText('Recent events')).toBeInTheDocument();
     
     expect(await screen.findByText('task tk-0')).toBeInTheDocument();
     expect(screen.getByText('task tk-19')).toBeInTheDocument();
@@ -100,10 +100,10 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
 
   it('type 过滤：选项来自汇总表类型并集，选中后 query 带 &type= 并重拉', async () => {
     renderPage();
-    await screen.findByText('最近事件');
+    await screen.findByText('Recent events');
 
     const trigger = screen.getByRole('combobox', {
-      name: '按事件类型筛选最近事件',
+      name: 'Filter recent events by event type',
     });
     fireEvent.click(trigger);
     const option = await screen.findByRole('option', {
@@ -124,11 +124,11 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
 
   it('B4：切换统计时间范围后，活动流类型过滤不被重置（选项跨范围累积）', async () => {
     renderPage();
-    await screen.findByText('最近事件');
+    await screen.findByText('Recent events');
 
     
     const typeTrigger = screen.getByRole('combobox', {
-      name: '按事件类型筛选最近事件',
+      name: 'Filter recent events by event type',
     });
     fireEvent.click(typeTrigger);
     const option = await screen.findByRole('option', {
@@ -145,9 +145,9 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
 
     
     
-    const rangeTrigger = screen.getByRole('combobox', { name: '统计时间范围' });
+    const rangeTrigger = screen.getByRole('combobox', { name: 'Statistics time range' });
     fireEvent.click(rangeTrigger);
-    const range30 = await screen.findByRole('option', { name: '近 30 天' });
+    const range30 = await screen.findByRole('option', { name: 'Last 30 days' });
     fireEvent.pointerDown(range30, { button: 0, pointerType: 'mouse' });
     fireEvent.pointerUp(range30, { button: 0, pointerType: 'mouse' });
     fireEvent.click(range30);
@@ -164,14 +164,14 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
     expect(recentCalls.length).toBe(2); 
     expect(recentCalls[1]).toContain('type=checkout_started');
     expect(
-      screen.getByRole('combobox', { name: '按事件类型筛选最近事件' }),
+      screen.getByRole('combobox', { name: 'Filter recent events by event type' }),
     ).toHaveTextContent('checkout_started');
   });
 
   it('B8：带 days/type 参数渲染时按 URL 初始化过滤', async () => {
     paramsState.params = new URLSearchParams('days=30&type=task_created');
     renderPage();
-    await screen.findByText('最近事件');
+    await screen.findByText('Recent events');
     expect(mockedGet).toHaveBeenCalledWith('/api/admin/analytics?days=30');
     await waitFor(() =>
       expect(mockedGet).toHaveBeenCalledWith(
@@ -194,7 +194,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
       ).toBeTruthy(),
     );
     
-    expect(await screen.findByText('暂无事件')).toBeInTheDocument();
+    expect(await screen.findByText('No events yet')).toBeInTheDocument();
   });
 
   it('加载失败 → 错误行内展示 + 重试入口', async () => {
@@ -207,7 +207,7 @@ describe('OverviewPage 活动流（批次 3.3）', () => {
       throw new Error('unexpected GET ' + path);
     });
     renderPage();
-    expect(await screen.findByText(/最近事件加载失败/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
+    expect(await screen.findByText(/Failed to load recent events/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 });

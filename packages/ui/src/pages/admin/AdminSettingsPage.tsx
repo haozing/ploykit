@@ -41,6 +41,9 @@ import { useApi } from '@ploykit/hooks';
 import { SiteBanner } from '../../components/SiteBanner';
 import { SITE_CONFIG_QUERY_KEY } from '@ploykit/hooks';
 import { adminError } from './shared';
+// i18n（B 方案）：组件内 useT()；模块级函数（parseRateLimit/copyCallbackUrl 等
+// 非 React 调用点）用同名模块级 t()，随 Provider 的 setUiLang 对齐
+import { t, useT } from '../../i18n';
 
 
 interface OAuthProviderInfo {
@@ -111,11 +114,11 @@ function parseRateLimit(
 ): { ok: true; v: string } | { ok: false; msg: string } {
   const s = raw.trim();
   if (s === '') {
-    return { ok: false, msg: '不能留空：填写 0 表示关闭限流' };
+    return { ok: false, msg: t('admin.settings.rlErrEmpty') };
   }
   const n = Number(s);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 100000) {
-    return { ok: false, msg: '必须是 0..100000 的整数（0 = 关闭限流）' };
+    return { ok: false, msg: t('admin.settings.rlErrRange') };
   }
   return { ok: true, v: s };
 }
@@ -131,7 +134,7 @@ function parseSmtpPort(
   }
   const n = Number(s);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 65535) {
-    return { ok: false, msg: '必须是 1..65535 的整数（留空 = 用缺省 587）' };
+    return { ok: false, msg: t('admin.settings.smtpPortErrRange') };
   }
   return { ok: true, v: s };
 }
@@ -159,10 +162,10 @@ function copyCallbackUrl(name: string, url: string) {
   if (typeof navigator.clipboard?.writeText === 'function') {
     void navigator.clipboard
       .writeText(url)
-      .then(() => toast.success(`${name} 回调地址已复制`))
-      .catch(() => toast.error(`复制失败，完整地址：${url}`));
+      .then(() => toast.success(t('admin.settings.oauthCallbackCopied', { name })))
+      .catch(() => toast.error(t('admin.settings.oauthCopyFailed', { url })));
   } else {
-    toast.info(`当前环境不支持自动复制，完整地址：${url}`);
+    toast.info(t('admin.settings.oauthCopyUnsupported', { url }));
   }
 }
 
@@ -173,6 +176,7 @@ function copyCallbackUrl(name: string, url: string) {
 // as a generic card from the same list envelope — no product endpoints, no
 // product page code.
 export function AdminSettingsPage({ children }: { children?: ReactNode }) {
+  const t = useT();
   const api = useApi();
   const qc = useQueryClient();
 
@@ -281,15 +285,21 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
       toast.success(successMsg);
       return;
     }
-    const failedLabel = failed.map((f) => f.label).join('、');
-    const reason = adminError(failed[0].err, '保存失败');
+    const failedLabel = failed.map((f) => f.label).join(t('admin.settings.labelSep'));
+    const reason = adminError(failed[0].err, t('admin.settings.errSaveFailed'));
     if (okCount > 0) {
       toast.error(
-        `${what}部分保存：成功 ${okCount}/${results.length} 项已生效；失败项（${failedLabel}）原因：${reason}`,
+        t('admin.settings.partialSaveToast', {
+          what,
+          ok: okCount,
+          total: results.length,
+          failed: failedLabel,
+          reason,
+        }),
         { duration: ERROR_TOAST_MS },
       );
     } else {
-      toast.error(`${what}保存失败（${failedLabel}）：${reason}`, {
+      toast.error(t('admin.settings.saveFailedToast', { what, failed: failedLabel, reason }), {
         duration: ERROR_TOAST_MS,
       });
     }
@@ -301,100 +311,100 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
     mutationFn: (p: { key: string; value: string; label: string }) =>
       api.put(`/api/admin/settings/${p.key}`, { value: p.value }),
     onSuccess: (_r, p) => {
-      toast.success(`${p.label}已保存`);
+      toast.success(t('admin.settings.keySaved', { label: p.label }));
       afterSave();
     },
     onError: (e, p) => {
-      toast.error(adminError(e, `${p.label}保存失败`), {
-        duration: ERROR_TOAST_MS,
-      });
-      void rollbackToServer(); 
-    },
-  });
-
-  
-  const bannerM = useMutation({
-    mutationFn: () =>
-      putKeys(api, [
-        { key: 'banner_text', label: '公告文本', value: bannerText },
-        { key: 'banner_kind', label: '公告样式', value: bannerKind },
-      ]),
-    onSuccess: (results) =>
-      reportKeySaves(results, '公告已保存', '公告'),
-  });
-
-  
-  const domainsM = useMutation({
-    mutationFn: () =>
-      api.put('/api/admin/settings/allowed_domains', { value: domains.trim() }),
-    onSuccess: () => {
-      toast.success('域名白名单已保存');
-      afterSave();
-    },
-    onError: (e) => {
-      toast.error(adminError(e, '域名白名单保存失败'), {
+      toast.error(adminError(e, t('admin.settings.keySaveFailed', { label: p.label })), {
         duration: ERROR_TOAST_MS,
       });
       void rollbackToServer();
     },
   });
 
-  
+
+  const bannerM = useMutation({
+    mutationFn: () =>
+      putKeys(api, [
+        { key: 'banner_text', label: t('admin.settings.lblBannerText'), value: bannerText },
+        { key: 'banner_kind', label: t('admin.settings.lblBannerKind'), value: bannerKind },
+      ]),
+    onSuccess: (results) =>
+      reportKeySaves(results, t('admin.settings.bannerSaved'), t('admin.settings.whatBanner')),
+  });
+
+
+  const domainsM = useMutation({
+    mutationFn: () =>
+      api.put('/api/admin/settings/allowed_domains', { value: domains.trim() }),
+    onSuccess: () => {
+      toast.success(t('admin.settings.domainsSaved'));
+      afterSave();
+    },
+    onError: (e) => {
+      toast.error(adminError(e, t('admin.settings.domainsSaveFailed')), {
+        duration: ERROR_TOAST_MS,
+      });
+      void rollbackToServer();
+    },
+  });
+
+
   const rateLimitM = useMutation({
     mutationFn: async () => {
       const perUser = parseRateLimit(rlPerUser);
       const perIP = parseRateLimit(rlPerIP);
-      if (!perUser.ok) throw new Error(`每用户限流：${perUser.msg}`);
-      if (!perIP.ok) throw new Error(`每 IP 限流：${perIP.msg}`);
+      if (!perUser.ok) throw new Error(t('admin.settings.rlErrPerUser', { msg: perUser.msg }));
+      if (!perIP.ok) throw new Error(t('admin.settings.rlErrPerIp', { msg: perIP.msg }));
       setRlError(null);
       return putKeys(api, [
         {
           key: 'rate_limit_per_user_per_min',
-          label: '每用户限流',
+          label: t('admin.settings.lblRlPerUser'),
           value: perUser.v,
         },
-        { key: 'rate_limit_per_ip_per_min', label: '每 IP 限流', value: perIP.v },
-        { key: 'rate_limit_allowlist', label: '豁免名单', value: rlAllowlist.trim() },
+        { key: 'rate_limit_per_ip_per_min', label: t('admin.settings.lblRlPerIp'), value: perIP.v },
+        { key: 'rate_limit_allowlist', label: t('admin.settings.lblRlAllowlist'), value: rlAllowlist.trim() },
       ]);
     },
     onSuccess: (results) =>
-      reportKeySaves(results, '限流配置已保存（重启后生效）', '限流配置'),
+      reportKeySaves(results, t('admin.settings.rlSaved'), t('admin.settings.whatRl')),
     onError: (e) => {
-      const msg = e instanceof Error ? e.message : '限流配置保存失败';
+      const msg = e instanceof Error ? e.message : t('admin.settings.rlSaveFailed');
       setRlError(msg);
       toast.error(msg, { duration: ERROR_TOAST_MS });
     },
   });
 
-  
+
   // SMTP 发信配置（UP-1）：五键批量提交；smtp_pass 留空（含掩码未动）时
   // 从提交列表剔除，绝不把空值/掩码落库
   const smtpM = useMutation({
     mutationFn: async () => {
       const port = parseSmtpPort(smtpPort);
-      if (!port.ok) throw new Error(`SMTP 端口：${port.msg}`);
+      if (!port.ok) throw new Error(t('admin.settings.smtpPortErr', { msg: port.msg }));
       setSmtpError(null);
       const entries: { key: string; label: string; value: string }[] = [
-        { key: 'smtp_host', label: 'SMTP 主机', value: smtpHost.trim() },
-        { key: 'smtp_port', label: 'SMTP 端口', value: port.v },
-        { key: 'smtp_user', label: 'SMTP 用户名', value: smtpUser.trim() },
+        { key: 'smtp_host', label: t('admin.settings.lblSmtpHost'), value: smtpHost.trim() },
+        { key: 'smtp_port', label: t('admin.settings.lblSmtpPort'), value: port.v },
+        { key: 'smtp_user', label: t('admin.settings.lblSmtpUser'), value: smtpUser.trim() },
         ...(smtpPass !== ''
-          ? [{ key: 'smtp_pass', label: 'SMTP 密码', value: smtpPass }]
+          ? [{ key: 'smtp_pass', label: t('admin.settings.lblSmtpPass'), value: smtpPass }]
           : []),
-        { key: 'smtp_from', label: '发件人地址', value: smtpFrom.trim() },
+        { key: 'smtp_from', label: t('admin.settings.lblSmtpFrom'), value: smtpFrom.trim() },
       ];
       return putKeys(api, entries);
     },
     onSuccess: (results) =>
-      reportKeySaves(results, 'SMTP 配置已保存', 'SMTP 配置'),
+      reportKeySaves(results, t('admin.settings.smtpSaved'), t('admin.settings.whatSmtp')),
     onError: (e) => {
-      const msg = e instanceof Error ? e.message : 'SMTP 配置保存失败';
+      const msg = e instanceof Error ? e.message : t('admin.settings.smtpSaveFailed');
       setSmtpError(msg);
       toast.error(msg, { duration: ERROR_TOAST_MS });
     },
   });
 
-  
+
   // 站长验证（UP-2）：原样提交，后端归一为 name|content 存储（400 = 校验拒绝）
   const verifyM = useMutation({
     mutationFn: () =>
@@ -402,11 +412,11 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
         value: verifyMeta.trim(),
       }),
     onSuccess: () => {
-      toast.success('站长验证配置已保存');
+      toast.success(t('admin.settings.siteVerifySaved'));
       afterSave();
     },
     onError: (e) => {
-      toast.error(adminError(e, '站长验证配置保存失败'), {
+      toast.error(adminError(e, t('admin.settings.siteVerifySaveFailed')), {
         duration: ERROR_TOAST_MS,
       });
       void rollbackToServer();
@@ -448,10 +458,10 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
         }
         return next;
       });
-      reportKeySaves(results, '扩展配置已保存', '扩展配置');
+      reportKeySaves(results, t('admin.settings.extraSaved'), t('admin.settings.lblExtra'));
     },
     onError: (e) => {
-      toast.error(adminError(e, '扩展配置保存失败'), {
+      toast.error(adminError(e, t('admin.settings.extraSaveFailed')), {
         duration: ERROR_TOAST_MS,
       });
       setExtraDirty({});
@@ -469,20 +479,23 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
     onSuccess: (r) => {
       setTestMsg(
         r?.mode === 'dev'
-          ? `开发通道（emaildev）：${r.hint ?? '邮件内容已打日志，请到后端日志查看'}`
-          : '测试邮件已发出，请到收件箱（含垃圾箱）确认',
+          ? t('admin.settings.devChannelToast', {
+              hint: r.hint ?? t('admin.settings.devChannelHintDefault'),
+            })
+          : t('admin.settings.testEmailSent'),
       );
     },
-    onError: (e) => setTestMsg(`发送失败：${adminError(e, '未知错误')}`),
+    onError: (e) =>
+      setTestMsg(t('admin.settings.testEmailFailed', { reason: adminError(e, t('admin.settings.unknownError')) })),
   });
 
   if (settingsQ.isPending) {
-    return <PageLoading label="加载设置中…" />;
+    return <PageLoading label={t('admin.settings.loading')} />;
   }
   if (settingsQ.isError) {
     return (
       <PageError
-        message={adminError(settingsQ.error, '设置加载失败')}
+        message={adminError(settingsQ.error, t('admin.settings.loadFailed'))}
         onRetry={() => void settingsQ.refetch()}
       />
     );
@@ -492,16 +505,16 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="系统" />
+      <PageHeader title={t('admin.settings.pageTitle')} />
 
       {/* ① 站点公告 */}
       <Card>
         <CardHeader>
-          <CardDescription>站点公告</CardDescription>
-          <CardTitle>顶部公告横条</CardTitle>
+          <CardDescription>{t('admin.settings.bannerCardDesc')}</CardDescription>
+          <CardTitle>{t('admin.settings.bannerCardTitle')}</CardTitle>
           <CardAction>
             <Badge variant={bannerText.trim() ? 'secondary' : 'outline'}>
-              {bannerText.trim() ? '展示中' : '未展示'}
+              {bannerText.trim() ? t('admin.settings.badgeShowing') : t('admin.settings.badgeHidden')}
             </Badge>
           </CardAction>
         </CardHeader>
@@ -510,18 +523,18 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
           <div className="rounded-lg border border-dashed">
             <SiteBanner text={bannerText} kind={bannerKind} />
           </div>
-          <FormField label="公告文本" htmlFor="banner-text">
+          <FormField label={t('admin.settings.lblBannerText')} htmlFor="banner-text">
             {/* stock Textarea：min-h-16/w-full 由组件 token 自带，
                 FormField 注入的 aria-invalid 变体从此生效 */}
             <Textarea
               id="banner-text"
-              placeholder="如：今晚 22:00–23:00 例行维护，期间可能短暂不可用"
+              placeholder={t('admin.settings.bannerTextPh')}
               maxLength={500}
               value={bannerText}
               onChange={(e) => setBannerText(e.target.value)}
             />
           </FormField>
-          <FormField label="样式" htmlFor="banner-kind">
+          <FormField label={t('admin.settings.lblStyle')} htmlFor="banner-kind">
             <Select
               value={bannerKind}
               onValueChange={(v) =>
@@ -531,16 +544,18 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               <SelectTrigger
                 id="banner-kind"
                 size="sm"
-                aria-label="公告样式"
+                aria-label={t('admin.settings.lblBannerKind')}
                 className="w-40"
               >
                 <SelectValue>
-                  {bannerKind === 'warn' ? '警示（橙红）' : '信息（蓝）'}
+                  {bannerKind === 'warn'
+                    ? t('admin.settings.kindWarn')
+                    : t('admin.settings.kindInfo')}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="info">信息（蓝）</SelectItem>
-                <SelectItem value="warn">警示（橙红）</SelectItem>
+                <SelectItem value="info">{t('admin.settings.kindInfo')}</SelectItem>
+                <SelectItem value="warn">{t('admin.settings.kindWarn')}</SelectItem>
               </SelectContent>
             </Select>
           </FormField>
@@ -550,7 +565,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               disabled={bannerM.isPending || !hydrated}
               onClick={() => bannerM.mutate()}
             >
-              {bannerM.isPending ? '保存中…' : '保存公告'}
+              {bannerM.isPending ? t('admin.settings.saving') : t('admin.settings.saveBanner')}
             </Button>
           </div>
         </CardContent>
@@ -559,73 +574,77 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
       {/* ② 维护模式（B-settings-7：补状态徽章，与公告/注册/限流卡形态一致） */}
       <Card>
         <CardHeader>
-          <CardDescription>维护模式</CardDescription>
-          <CardTitle>全站"维护中"提示条</CardTitle>
+          <CardDescription>{t('admin.settings.lblMaintenance')}</CardDescription>
+          <CardTitle>{t('admin.settings.maintenanceCardTitle')}</CardTitle>
           <CardAction>
             <div className="flex items-center gap-2">
               <Badge variant={maintenance ? 'destructive' : 'outline'}>
-                {maintenance ? '维护中' : '正常运行'}
+                {maintenance
+                  ? t('admin.settings.badgeMaintOn')
+                  : t('admin.settings.badgeRunning')}
               </Badge>
               <Switch
                 checked={maintenance}
                 onCheckedChange={(v) => {
-                  
+
                   if (saveM.isPending) return;
                   setMaintenance(v);
                   saveM.mutate({
                     key: 'maintenance_mode',
                     value: v ? '1' : '0',
-                    label: '维护模式',
+                    label: t('admin.settings.lblMaintenance'),
                   });
                 }}
-                aria-label="维护模式开关"
+                aria-label={t('admin.settings.maintenanceSwitchAria')}
               />
             </div>
           </CardAction>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">仅提示，不阻断请求。</p>
+          <p className="text-sm text-muted-foreground">{t('admin.settings.maintenanceHint')}</p>
         </CardContent>
       </Card>
 
       {/* ③ 注册管控 */}
       <Card>
         <CardHeader>
-          <CardDescription>注册管控</CardDescription>
-          <CardTitle>注册开关与域名白名单</CardTitle>
+          <CardDescription>{t('admin.settings.signupCardDesc')}</CardDescription>
+          <CardTitle>{t('admin.settings.signupCardTitle')}</CardTitle>
           <CardAction>
             <Switch
               checked={allowSignup}
               onCheckedChange={(v) => {
-                
+
                 if (saveM.isPending) return;
                 setAllowSignup(v);
                 saveM.mutate({
                   key: 'allow_signup',
                   value: v ? '1' : '0',
-                  label: '注册开关',
+                  label: t('admin.settings.lblSignup'),
                 });
               }}
-              aria-label="开放注册开关"
+              aria-label={t('admin.settings.signupSwitchAria')}
             />
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            关闭 = 邀请制，仅白名单内邮箱可注册。
+            {t('admin.settings.signupHint')}
           </p>
           <div className="flex items-center gap-2 text-sm">
             <Badge variant={allowSignup ? 'secondary' : 'destructive'}>
-              {allowSignup ? '开放注册' : '邀请制'}
+              {allowSignup
+                ? t('admin.settings.badgeOpenSignup')
+                : t('admin.settings.badgeInviteOnly')}
             </Badge>
           </div>
           <FormField
-            label="域名白名单（逗号分隔，空 = 不限）"
+            label={t('admin.settings.lblDomains')}
             htmlFor="allowed-domains"
           >
             <Input
               id="allowed-domains"
-              placeholder="如：corp.com, edu.cn"
+              placeholder={t('admin.settings.domainsPh')}
               value={domains}
               onChange={(e) => setDomains(e.target.value)}
             />
@@ -637,7 +656,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               disabled={domainsM.isPending || !hydrated}
               onClick={() => domainsM.mutate()}
             >
-              {domainsM.isPending ? '保存中…' : '保存白名单'}
+              {domainsM.isPending ? t('admin.settings.saving') : t('admin.settings.saveDomains')}
             </Button>
           </div>
         </CardContent>
@@ -645,72 +664,74 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
 
       <Card>
         <CardHeader>
-          <CardDescription>API 限流</CardDescription>
-          <CardTitle>每用户 / 每 IP 限流与豁免名单</CardTitle>
+          <CardDescription>{t('admin.settings.rlCardDesc')}</CardDescription>
+          <CardTitle>{t('admin.settings.rlCardTitle')}</CardTitle>
           <CardAction>
             <Badge
               variant={
                 rlPerUser !== '0' || rlPerIP !== '0' ? 'secondary' : 'outline'
               }
             >
-              {rlPerUser !== '0' || rlPerIP !== '0' ? '启用中' : '按缺省'}
+              {rlPerUser !== '0' || rlPerIP !== '0'
+                ? t('admin.settings.badgeEnabled')
+                : t('admin.settings.badgeDefaults')}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            0 = 关闭；修改后需重启生效。
+            {t('admin.settings.rlHint')}
           </p>
           <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
             {/* B-settings-10：text + inputMode（type=number 对垃圾字符静默置空，
                 会被当成留空→0=关闭限流落库）；空值/非法值保存前拒绝并就地提示 */}
             <FormField
-              label="每用户请求/分（0 = 关闭）"
+              label={t('admin.settings.lblRlPerUserField')}
               htmlFor="rl-per-user"
               error={
-                rlError?.startsWith('每用户') ? rlError : undefined
+                rlError?.startsWith(t('admin.settings.lblRlPerUser')) ? rlError : undefined
               }
             >
               <Input
                 id="rl-per-user"
                 type="text"
                 inputMode="numeric"
-                placeholder="如 600；0 = 关闭"
+                placeholder={t('admin.settings.rlPerUserPh')}
                 value={rlPerUser}
                 onChange={(e) => {
                   setRlPerUser(e.target.value);
-                  if (rlError?.startsWith('每用户')) setRlError(null);
+                  if (rlError?.startsWith(t('admin.settings.lblRlPerUser'))) setRlError(null);
                 }}
-                aria-invalid={rlError?.startsWith('每用户') ? true : undefined}
+                aria-invalid={rlError?.startsWith(t('admin.settings.lblRlPerUser')) ? true : undefined}
               />
             </FormField>
             <FormField
-              label="每 IP 请求/分（认证路径；0 = 关闭）"
+              label={t('admin.settings.lblRlPerIpField')}
               htmlFor="rl-per-ip"
-              error={rlError?.startsWith('每 IP') ? rlError : undefined}
+              error={rlError?.startsWith(t('admin.settings.lblRlPerIp')) ? rlError : undefined}
             >
               <Input
                 id="rl-per-ip"
                 type="text"
                 inputMode="numeric"
-                placeholder="缺省 30；0 = 关闭"
+                placeholder={t('admin.settings.rlPerIpPh')}
                 value={rlPerIP}
                 onChange={(e) => {
                   setRlPerIP(e.target.value);
-                  if (rlError?.startsWith('每 IP')) setRlError(null);
+                  if (rlError?.startsWith(t('admin.settings.lblRlPerIp'))) setRlError(null);
                 }}
-                aria-invalid={rlError?.startsWith('每 IP') ? true : undefined}
+                aria-invalid={rlError?.startsWith(t('admin.settings.lblRlPerIp')) ? true : undefined}
               />
             </FormField>
           </div>
           <FormField
-            label="豁免名单（逗号分隔 IP 或 CIDR，空 = 无豁免）"
+            label={t('admin.settings.lblRlAllowlistField')}
             htmlFor="rl-allowlist"
           >
             <Input
               id="rl-allowlist"
               className="font-mono"
-              placeholder="如 10.0.0.5, 192.168.0.0/16"
+              placeholder={t('admin.settings.rlAllowlistPh')}
               value={rlAllowlist}
               onChange={(e) => setRlAllowlist(e.target.value)}
             />
@@ -722,7 +743,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               disabled={rateLimitM.isPending || !hydrated}
               onClick={() => rateLimitM.mutate()}
             >
-              {rateLimitM.isPending ? '保存中…' : '保存限流配置'}
+              {rateLimitM.isPending ? t('admin.settings.saving') : t('admin.settings.saveRl')}
             </Button>
           </div>
         </CardContent>
@@ -731,35 +752,35 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
       {/* SMTP 发信配置（UP-1）：形态对齐限流卡；smtp_pass 掩码不回填、留空跳过提交 */}
       <Card>
         <CardHeader>
-          <CardDescription>发信通道</CardDescription>
-          <CardTitle>SMTP 发信配置</CardTitle>
+          <CardDescription>{t('admin.settings.smtpCardDesc')}</CardDescription>
+          <CardTitle>{t('admin.settings.smtpCardTitle')}</CardTitle>
           <CardAction>
             <Badge variant={mailMode === 'smtp' ? 'secondary' : 'outline'}>
               {mailMode === 'smtp'
-                ? 'SMTP 直发'
+                ? t('admin.settings.badgeSmtpDirect')
                 : mailMode === 'dev'
-                  ? '开发通道'
-                  : '未接入'}
+                  ? t('admin.settings.badgeDevChannel')
+                  : t('admin.settings.badgeMailNone')}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            配置后即时生效；密码不回显，留空表示不修改。
+            {t('admin.settings.smtpHint')}
           </p>
           <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
-            <FormField label="SMTP 服务器" htmlFor="smtp-host">
+            <FormField label={t('admin.settings.lblSmtpHostField')} htmlFor="smtp-host">
               <Input
                 id="smtp-host"
-                placeholder="如 smtp.example.com；留空 = 开发通道"
+                placeholder={t('admin.settings.smtpHostPh')}
                 value={smtpHost}
                 onChange={(e) => setSmtpHost(e.target.value)}
               />
             </FormField>
             <FormField
-              label="端口（留空 = 缺省 587）"
+              label={t('admin.settings.lblSmtpPortField')}
               htmlFor="smtp-port"
-              error={smtpError?.startsWith('SMTP 端口') ? smtpError : undefined}
+              error={smtpError?.startsWith(t('admin.settings.lblSmtpPort')) ? smtpError : undefined}
             >
               {/* 与限流卡同款处置：text + inputMode（type=number 对垃圾字符静默置空）；
                   非法端口保存前拒绝并就地提示 */}
@@ -767,27 +788,27 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                 id="smtp-port"
                 type="text"
                 inputMode="numeric"
-                placeholder="缺省 587"
+                placeholder={t('admin.settings.smtpPortPh')}
                 value={smtpPort}
                 onChange={(e) => {
                   setSmtpPort(e.target.value);
-                  if (smtpError?.startsWith('SMTP 端口')) setSmtpError(null);
+                  if (smtpError?.startsWith(t('admin.settings.lblSmtpPort'))) setSmtpError(null);
                 }}
                 aria-invalid={
-                  smtpError?.startsWith('SMTP 端口') ? true : undefined
+                  smtpError?.startsWith(t('admin.settings.lblSmtpPort')) ? true : undefined
                 }
               />
             </FormField>
-            <FormField label="SMTP 用户名" htmlFor="smtp-user">
+            <FormField label={t('admin.settings.lblSmtpUser')} htmlFor="smtp-user">
               <Input
                 id="smtp-user"
                 className="font-mono"
-                placeholder="如 no-reply@example.com"
+                placeholder={t('admin.settings.smtpEmailPh')}
                 value={smtpUser}
                 onChange={(e) => setSmtpUser(e.target.value)}
               />
             </FormField>
-            <FormField label="SMTP 密码（留空 = 不修改）" htmlFor="smtp-pass">
+            <FormField label={t('admin.settings.lblSmtpPassField')} htmlFor="smtp-pass">
               <Input
                 id="smtp-pass"
                 type="password"
@@ -797,11 +818,11 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                 onChange={(e) => setSmtpPass(e.target.value)}
               />
             </FormField>
-            <FormField label="发件人地址" htmlFor="smtp-from">
+            <FormField label={t('admin.settings.lblSmtpFrom')} htmlFor="smtp-from">
               <Input
                 id="smtp-from"
                 type="email"
-                placeholder="如 no-reply@example.com"
+                placeholder={t('admin.settings.smtpEmailPh')}
                 value={smtpFrom}
                 onChange={(e) => setSmtpFrom(e.target.value)}
               />
@@ -814,7 +835,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               disabled={smtpM.isPending || !hydrated}
               onClick={() => smtpM.mutate()}
             >
-              {smtpM.isPending ? '保存中…' : '保存 SMTP 配置'}
+              {smtpM.isPending ? t('admin.settings.saving') : t('admin.settings.saveSmtp')}
             </Button>
           </div>
         </CardContent>
@@ -823,20 +844,20 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
       {/* ⑤ 测试邮件（P2-14：去产品指代——框架文案不点名 example 接线） */}
       <Card>
         <CardHeader>
-          <CardDescription>邮件通道</CardDescription>
-          <CardTitle>发送测试邮件</CardTitle>
+          <CardDescription>{t('admin.settings.testCardDesc')}</CardDescription>
+          <CardTitle>{t('admin.settings.testCardTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* SecuritySettingsPage PasswordField 同款结构：FormField 提供可见
               label，id 手动落到 InputGroupInput 上——label htmlFor 关联不因
               包裹层而断；本处无 error/description/required，FormField 不触发
               cloneElement 注入，aria 属性不受包裹层影响 */}
-          <FormField label="测试邮件收件邮箱" htmlFor="test-email-to">
+          <FormField label={t('admin.settings.lblTestTo')} htmlFor="test-email-to">
             <InputGroup className="max-w-md">
               <InputGroupInput
                 id="test-email-to"
                 type="email"
-                placeholder="收件邮箱，如 ops@example.com"
+                placeholder={t('admin.settings.testToPh')}
                 value={testTo}
                 onChange={(e) => setTestTo(e.target.value)}
               />
@@ -848,7 +869,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                     testEmailM.mutate();
                   }}
                 >
-                  {testEmailM.isPending ? '发送中…' : '发送'}
+                  {testEmailM.isPending ? t('admin.settings.sending') : t('admin.settings.send')}
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
@@ -867,27 +888,27 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
           注入由站点侧中间件完成，用户输入的 HTML 片段永不回显 */}
       <Card>
         <CardHeader>
-          <CardDescription>站长验证</CardDescription>
-          <CardTitle>搜索引擎站点验证</CardTitle>
+          <CardDescription>{t('admin.settings.verifyCardDesc')}</CardDescription>
+          <CardTitle>{t('admin.settings.verifyCardTitle')}</CardTitle>
           <CardAction>
             <Badge variant={verifyMeta.trim() ? 'secondary' : 'outline'}>
-              {verifyMeta.trim() ? '已注入' : '未配置'}
+              {verifyMeta.trim()
+                ? t('admin.settings.badgeInjected')
+                : t('admin.settings.badgeNotConfigured')}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            完整 meta 标签或 name|content 对；清空即移除，原文不回显。
+            {t('admin.settings.verifyHint')}
           </p>
           <FormField
-            label="验证标记（完整 meta 标签或 name|content 对）"
+            label={t('admin.settings.lblVerifyMeta')}
             htmlFor="site-verification-meta"
           >
             <Textarea
               id="site-verification-meta"
-              placeholder={
-                '<meta name="google-site-verification" content="abc123XYZ" /> 或 google-site-verification|abc123XYZ'
-              }
+              placeholder={t('admin.settings.verifyMetaPh')}
               value={verifyMeta}
               onChange={(e) => setVerifyMeta(e.target.value)}
             />
@@ -899,7 +920,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
               disabled={verifyM.isPending || !hydrated}
               onClick={() => verifyM.mutate()}
             >
-              {verifyM.isPending ? '保存中…' : '保存验证配置'}
+              {verifyM.isPending ? t('admin.settings.saving') : t('admin.settings.saveVerify')}
             </Button>
           </div>
         </CardContent>
@@ -909,23 +930,23 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
       {oauth && (
         <Card>
           <CardHeader>
-            <CardDescription>登录方式</CardDescription>
-            <CardTitle>OAuth 第三方登录</CardTitle>
+            <CardDescription>{t('admin.settings.oauthCardDesc')}</CardDescription>
+            <CardTitle>{t('admin.settings.oauthCardTitle')}</CardTitle>
             <CardAction>
               <Badge variant={oauth.length > 0 ? 'secondary' : 'outline'}>
-                {oauth.length > 0 ? `已启用 ${oauth.length} 个` : '未启用'}
+                {oauth.length > 0
+                  ? t('admin.settings.oauthBadgeOn', { count: oauth.length })
+                  : t('admin.settings.badgeNotEnabled')}
               </Badge>
             </CardAction>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              回调地址按请求 Host 实时生成；反向代理需转发 Host 与
-              X-Forwarded-Proto，否则登录报 redirect_uri_mismatch。
+              {t('admin.settings.oauthHint')}
             </p>
             {oauth.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                设置 GOOGLE_CLIENT_ID / GOOGLE_SECRET、GITHUB_CLIENT_ID /
-                GITHUB_SECRET 环境变量并重启后在此显示。
+                {t('admin.settings.oauthEmpty')}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -947,7 +968,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                             variant="ghost"
                             size="sm"
                             className="size-6 shrink-0 p-0 text-muted-foreground"
-                            aria-label={`复制 ${p.name} 回调地址`}
+                            aria-label={t('admin.settings.oauthCopyAria', { name: p.name })}
                             onClick={() =>
                               copyCallbackUrl(p.name, p.callback_url)
                             }
@@ -956,7 +977,9 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                       >
                         <Copy size={12} aria-hidden="true" />
                       </TooltipTrigger>
-                      <TooltipContent>复制 {p.name} 回调地址</TooltipContent>
+                      <TooltipContent>
+                        {t('admin.settings.oauthCopyAria', { name: p.name })}
+                      </TooltipContent>
                     </Tooltip>
                   </li>
                 ))}
@@ -972,8 +995,8 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
       {extraKeys.length > 0 && (
         <Card>
           <CardHeader>
-            <CardDescription>扩展配置</CardDescription>
-            <CardTitle>产品接入的配置键</CardTitle>
+            <CardDescription>{t('admin.settings.lblExtra')}</CardDescription>
+            <CardTitle>{t('admin.settings.extraCardTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {extraKeys.map((k) => {
@@ -994,8 +1017,8 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                     placeholder={
                       masked
                         ? eff?.[k]
-                          ? '已配置（输入新值以更换，留空 = 不修改）'
-                          : '未配置'
+                          ? t('admin.settings.extraMaskedPh')
+                          : t('admin.settings.badgeNotConfigured')
                         : ''
                     }
                     autoComplete={masked ? 'new-password' : 'off'}
@@ -1018,7 +1041,7 @@ export function AdminSettingsPage({ children }: { children?: ReactNode }) {
                 disabled={extraM.isPending || !extraHydrated || extraDirtyCount === 0}
                 onClick={() => extraM.mutate()}
               >
-                {extraM.isPending ? '保存中…' : '保存扩展配置'}
+                {extraM.isPending ? t('admin.settings.saving') : t('admin.settings.saveExtra')}
               </Button>
             </div>
           </CardContent>

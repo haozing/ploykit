@@ -9,6 +9,7 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
 } from './ui/sidebar'
 import { useAuthSafe } from '../lib/useAuthSafe'
+import { useT } from '../i18n'
 import {
   permissionVisible, useIsPlatformAdminSafe, useWorkspaceRoleSafe,
 } from '../lib/useWorkspaceRoleSafe'
@@ -41,6 +42,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
   // 文案解析顺序：prop > KitLabelsProvider > 内置默认（与 UserMenu 同款合并）。
   const kit = useKitLabels()
   const L = applyKitLabelOverrides(kit, labels)
+  const t = useT()
   if (!auth) return null
   const { user, logout } = auth
 
@@ -79,7 +81,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
               <AvatarFallback className="rounded-lg">{initialsOf(user?.display_name ?? '', email)}</AvatarFallback>
             </Avatar>
             <span className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{name || '未登录'}</span>
+              <span className="truncate font-medium">{name || t('ui.sidebarUser.signedOut')}</span>
               <span className="truncate text-xs">{email}</span>
             </span>
             <ChevronsUpDown className="ml-auto size-4" />
@@ -98,7 +100,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
                     <AvatarFallback className="rounded-lg">{initialsOf(user?.display_name ?? '', email)}</AvatarFallback>
                   </Avatar>
                   <span className="grid flex-1 text-left leading-tight">
-                    <span className="truncate font-medium">{name || '未登录'}</span>
+                    <span className="truncate font-medium">{name || t('ui.sidebarUser.signedOut')}</span>
                     <span className="truncate text-xs">{email}</span>
                   </span>
                 </div>
@@ -123,7 +125,7 @@ export function SidebarUserMenu({ items = [], logoutRedirect = '/login', labels 
             {user?.is_platform_admin && (
               <DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => navigate('/admin')}>
-                  <ShieldCheck /> 管理控制台
+                  <ShieldCheck /> {t('ui.sidebarUser.adminConsole')}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             )}

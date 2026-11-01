@@ -1,6 +1,7 @@
 
 import { ApiError } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
+import { t } from '../../i18n';
 
 
 export const ADMIN_PAGE_SIZE = 20;
@@ -8,7 +9,7 @@ export const ADMIN_PAGE_SIZE = 20;
 
 export function adminError(err: unknown, fallback: string): string {
   if (err instanceof ApiError && err.status === 403) {
-    return '需要平台管理员权限（当前账号无权访问管理控制台）';
+    return t('admin.shared.forbidden');
   }
   return apiErrorMessage(err, fallback);
 }

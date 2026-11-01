@@ -110,11 +110,11 @@ beforeEach(() => {
 });
 
 describe('OrdersPage 标记已付（批次 2.8）', () => {
-  it('仅 pending+manual 行出现"标记已付"（stripe/已付行不出现）', async () => {
+  it('仅 pending+manual 行出现"Mark as paid"（stripe/已付行不出现）', async () => {
     renderPage();
     expect(await screen.findAllByText('Acme')).toBeTruthy();
     expect(
-      await waitFor(() => screen.getAllByRole('button', { name: '标记已付' })),
+      await waitFor(() => screen.getAllByRole('button', { name: 'Mark as paid' })),
     ).toHaveLength(1);
   });
 
@@ -122,7 +122,7 @@ describe('OrdersPage 标记已付（批次 2.8）', () => {
     renderPage();
     await screen.findAllByText('Acme');
 
-    fireEvent.click(screen.getByRole('button', { name: '标记已付' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() =>
       
       expect(mockedPost).toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('OrdersPage 标记已付（批次 2.8）', () => {
     renderPage();
     await screen.findAllByText('Acme');
 
-    fireEvent.click(screen.getByRole('button', { name: '标记已付' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled());
     expect(toastMocks.error.mock.calls[0][0]).toContain('order is not pending');
   });
@@ -160,8 +160,8 @@ describe('OrdersPage 标记已付（批次 2.8）', () => {
     renderPage();
     await screen.findAllByText('Acme');
 
-    
-    fireEvent.click(screen.getByRole('button', { name: '触发超额出账' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger overage billing' }));
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith(
         '/api/admin/billing/run-overage',
@@ -175,7 +175,7 @@ describe('OrdersPage 标记已付（批次 2.8）', () => {
     renderPage();
     await screen.findAllByText('Acme');
 
-    fireEvent.click(screen.getByRole('button', { name: '触发到期降级' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger expiry downgrade' }));
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith(
         '/api/admin/billing/run-expiry',
@@ -184,13 +184,13 @@ describe('OrdersPage 标记已付（批次 2.8）', () => {
     );
   });
 
-  it('B-orders-3：状态筛选选项为中文标签（refunded=已退款），选中后 query 带 status', async () => {
+  it('B-orders-3：状态筛选选项为字典标签（i18n en 默认，refunded=Refunded），选中后 query 带 status', async () => {
     renderPage();
     await screen.findAllByText('Acme');
 
-    const trigger = screen.getByRole('combobox', { name: '按订单状态过滤' });
+    const trigger = screen.getByRole('combobox', { name: 'Filter by order status' });
     fireEvent.click(trigger);
-    const option = await screen.findByRole('option', { name: '已退款' });
+    const option = await screen.findByRole('option', { name: 'Refunded' });
     fireEvent.pointerDown(option, { button: 0, pointerType: 'mouse' });
     fireEvent.pointerUp(option, { button: 0, pointerType: 'mouse' });
     fireEvent.click(option);

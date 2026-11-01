@@ -18,6 +18,7 @@ import { Input } from '../../components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip';
 import { useApi, ApiError } from '@ploykit/hooks';
 import { useAuth } from '@ploykit/hooks';
+import { useT } from '../../i18n';
 import { apiErrorMessage } from '../../lib/api-error';
 import { formatDate, formatDateTime, shortID } from '../../lib/utils';
 import { adminError } from './shared';
@@ -64,12 +65,15 @@ interface AdminUserDetail {
 }
 
 
-function resendErrorMessage(err: unknown): string {
+// t 由组件注入（useT()）：模块级函数不能拿 hook，文案走 g2 字典。
+type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+
+function resendErrorMessage(err: unknown, t: TranslateFn): string {
   if (err instanceof ApiError) {
-    if (err.status === 409) return '该用户邮箱已验证，无需重发';
-    if (err.status === 429) return '发送冷却中，请约 1 分钟后再试';
+    if (err.status === 409) return t('admin.userDetail.resendAlreadyVerified');
+    if (err.status === 429) return t('admin.userDetail.resendCooldown');
   }
-  return apiErrorMessage(err, '验证邮件发送失败');
+  return apiErrorMessage(err, t('admin.userDetail.resendFailed'));
 }
 
 export function UserDetailPage() {
@@ -79,6 +83,7 @@ export function UserDetailPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const me = useAuth().user;
+  const t = useT();
   const [confirmEmail, setConfirmEmail] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [kickOpen, setKickOpen] = useState(false);
@@ -99,63 +104,63 @@ export function UserDetailPage() {
   const kickM = useMutation({
     mutationFn: () => api.post(`/api/admin/users/${id}/kick`),
     onSuccess: () => {
-      toast.success('已吊销该用户全部在途会话');
+      toast.success(t('admin.userDetail.kickSuccess'));
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '踢下线失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.userDetail.kickFailed'))),
   });
 
   const revokeSessionM = useMutation({
     mutationFn: (sid: string) =>
       api.post(`/api/admin/users/${id}/sessions/${sid}/revoke`),
     onSuccess: () => {
-      toast.success('会话已吊销');
+      toast.success(t('admin.userDetail.sessionRevoked'));
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '会话吊销失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.userDetail.sessionRevokeFailed'))),
   });
 
   const resetPwdM = useMutation({
     mutationFn: () => api.post(`/api/admin/users/${id}/password-reset`),
-    onSuccess: () => toast.success('重置邮件已发送'),
-    onError: (e) => toast.error(apiErrorMessage(e, '重置邮件发送失败')),
+    onSuccess: () => toast.success(t('admin.userDetail.resetSent')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.userDetail.resetSendFailed'))),
   });
 
   const resendM = useMutation({
     mutationFn: () => api.post(`/api/admin/users/${id}/resend-verification`),
-    onSuccess: () => toast.success('验证邮件已发送'),
-    onError: (e) => toast.error(resendErrorMessage(e)),
+    onSuccess: () => toast.success(t('admin.userDetail.resendSent')),
+    onError: (e) => toast.error(resendErrorMessage(e, t)),
   });
 
   const markVerifiedM = useMutation({
     mutationFn: () => api.post(`/api/admin/users/${id}/mark-verified`),
     onSuccess: () => {
-      toast.success('已标记邮箱已验证');
+      toast.success(t('admin.userDetail.markVerifiedDone'));
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '标记失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.userDetail.markVerifiedFailed'))),
   });
 
   const revokePatM = useMutation({
     mutationFn: (patID: string) =>
       api.post(`/api/admin/users/${id}/pats/${patID}/revoke`),
     onSuccess: () => {
-      toast.success('令牌已吊销');
+      toast.success(t('admin.userDetail.tokenRevoked'));
       invalidate();
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '令牌吊销失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.userDetail.tokenRevokeFailed'))),
   });
 
-  
+
   const deleteM = useMutation({
     mutationFn: (email: string) =>
       api.delete(`/api/admin/users/${id}?confirm=${encodeURIComponent(email)}`),
     onSuccess: () => {
-      toast.success('账号已删除（软删）');
+      toast.success(t('admin.userDetail.deleteSuccess'));
       void qc.invalidateQueries({ queryKey: ['admin', 'users'] });
       navigate('/admin/users');
     },
-    onError: (e) => toast.error(apiErrorMessage(e, '删除失败')),
+    onError: (e) => toast.error(apiErrorMessage(e, t('admin.userDetail.deleteFailed'))),
   });
 
   
@@ -172,9 +177,9 @@ export function UserDetailPage() {
       a.download = `userdata-${id}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('用户数据导出已开始下载');
+      toast.success(t('admin.userDetail.exportStarted'));
     } catch (e) {
-      toast.error(apiErrorMessage(e, '导出失败'));
+      toast.error(apiErrorMessage(e, t('admin.userDetail.exportFailed')));
     } finally {
       setExporting(false);
     }
@@ -182,9 +187,11 @@ export function UserDetailPage() {
 
   const onRevokeSession = async (s: AdminUserSession) => {
     const ok = await confirm({
-      title: '吊销会话',
-      description: `将吊销该设备会话（${s.device || shortID(s.id)}），该设备需要重新登录。`,
-      confirmText: '吊销',
+      title: t('admin.userDetail.revokeSessionTitle'),
+      description: t('admin.userDetail.revokeSessionDesc', {
+        device: s.device || shortID(s.id),
+      }),
+      confirmText: t('admin.userDetail.revoke'),
       danger: true,
     });
     if (ok) revokeSessionM.mutate(s.id);
@@ -192,9 +199,9 @@ export function UserDetailPage() {
 
   const onRevokePat = async (p: AdminPATRow) => {
     const ok = await confirm({
-      title: '吊销访问令牌',
-      description: `将吊销「${p.name}」，使用该令牌的集成立即失效。`,
-      confirmText: '吊销',
+      title: t('admin.userDetail.revokePatTitle'),
+      description: t('admin.userDetail.revokePatDesc', { name: p.name }),
+      confirmText: t('admin.userDetail.revoke'),
       danger: true,
     });
     if (ok) revokePatM.mutate(p.id);
@@ -203,9 +210,9 @@ export function UserDetailPage() {
   if (detailQ.isError) {
     return (
       <div>
-        <PageHeader title="用户详情" />
+        <PageHeader title={t('admin.userDetail.title')} />
         <PageError
-          message={adminError(detailQ.error, '用户详情加载失败')}
+          message={adminError(detailQ.error, t('admin.userDetail.loadFailed'))}
           onRetry={() => void detailQ.refetch()}
         />
       </div>
@@ -217,9 +224,9 @@ export function UserDetailPage() {
   const isSelf = !!u && me?.id === u.id;
   
   const deleteBlockedReason = isSelf
-    ? '不能删除当前登录的管理员账号自己'
+    ? t('admin.userDetail.deleteBlockedSelf')
     : u?.is_platform_admin
-      ? '不能删除另一位平台管理员（admin-on-admin 禁止）'
+      ? t('admin.userDetail.deleteBlockedAdmin')
       : '';
   const emailReadyToDelete =
     !!u && confirmEmail.trim().toLowerCase() === u.email.toLowerCase();
@@ -227,10 +234,12 @@ export function UserDetailPage() {
   const sessionColumns: Column<AdminUserSession>[] = [
     {
       key: 'device',
-      header: '设备',
+      header: t('admin.userDetail.colDevice'),
       render: (s) => (
         <div className="min-w-0">
-          <p className="truncate">{s.device || '未知设备'}</p>
+          <p className="truncate">
+            {s.device || t('admin.userDetail.unknownDevice')}
+          </p>
           <p className="truncate font-mono text-xs text-muted-foreground">
             {s.ip_hash ? (
               <Tooltip>
@@ -248,7 +257,7 @@ export function UserDetailPage() {
     },
     {
       key: 'last_seen_at',
-      header: '最近活跃',
+      header: t('admin.userDetail.colLastActive'),
       className: 'w-44',
       render: (s) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -258,7 +267,7 @@ export function UserDetailPage() {
     },
     {
       key: 'expires_at',
-      header: '过期时间',
+      header: t('admin.userDetail.colExpires'),
       className: 'w-44',
       render: (s) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -268,7 +277,7 @@ export function UserDetailPage() {
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.userDetail.colActions'),
       className: 'w-20',
       render: (s) => (
         <Button
@@ -277,7 +286,7 @@ export function UserDetailPage() {
           disabled={revokeSessionM.isPending}
           onClick={() => void onRevokeSession(s)}
         >
-          吊销
+          {t('admin.userDetail.revoke')}
         </Button>
       ),
     },
@@ -286,14 +295,14 @@ export function UserDetailPage() {
   const patColumns: Column<AdminPATRow>[] = [
     {
       key: 'name',
-      header: '令牌',
+      header: t('admin.userDetail.colToken'),
       render: (p) => (
         <div className="min-w-0">
           <p className="truncate font-medium">
             {p.name}
             {p.revoked_at && (
               <Badge variant="outline" className="ml-2 text-muted-foreground">
-                已吊销
+                {t('admin.userDetail.revokedBadge')}
               </Badge>
             )}
           </p>
@@ -305,7 +314,7 @@ export function UserDetailPage() {
     },
     {
       key: 'created_at',
-      header: '创建时间',
+      header: t('admin.userDetail.colCreatedAt'),
       className: 'w-28',
       render: (p) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -315,27 +324,29 @@ export function UserDetailPage() {
     },
     {
       key: 'last_used_at',
-      header: '最近使用',
+      header: t('admin.userDetail.colLastUsed'),
       className: 'w-44',
       render: (p) => (
         <span className="whitespace-nowrap text-muted-foreground">
-          {p.last_used_at ? formatDateTime(p.last_used_at) : '从未使用'}
+          {p.last_used_at
+            ? formatDateTime(p.last_used_at)
+            : t('admin.userDetail.neverUsed')}
         </span>
       ),
     },
     {
       key: 'expires_at',
-      header: '过期时间',
+      header: t('admin.userDetail.colExpires'),
       className: 'w-28',
       render: (p) => (
         <span className="whitespace-nowrap text-muted-foreground">
-          {p.expires_at ? formatDate(p.expires_at) : '永不过期'}
+          {p.expires_at ? formatDate(p.expires_at) : t('admin.userDetail.neverExpires')}
         </span>
       ),
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.userDetail.colActions'),
       className: 'w-20',
       render: (p) =>
         p.revoked_at ? (
@@ -347,7 +358,7 @@ export function UserDetailPage() {
             disabled={revokePatM.isPending}
             onClick={() => void onRevokePat(p)}
           >
-            吊销
+            {t('admin.userDetail.revoke')}
           </Button>
         ),
     },
@@ -356,7 +367,7 @@ export function UserDetailPage() {
   const wsColumns: Column<AdminUserWorkspaceRow>[] = [
     {
       key: 'name',
-      header: '工作区',
+      header: t('admin.userDetail.colWorkspace'),
       render: (w) => (
         <div className="min-w-0">
           <p className="truncate font-medium">{w.name}</p>
@@ -368,13 +379,13 @@ export function UserDetailPage() {
     },
     {
       key: 'role',
-      header: '角色',
+      header: t('admin.userDetail.colRole'),
       className: 'w-24',
       render: (w) => <StatusBadge status={w.role} />,
     },
     {
       key: 'created_at',
-      header: '加入时间',
+      header: t('admin.userDetail.colJoinedAt'),
       className: 'w-28',
       render: (w) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -387,11 +398,14 @@ export function UserDetailPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={u ? u.email : '用户详情'}
+        title={u ? u.email : t('admin.userDetail.title')}
         description={
           u
-            ? `${u.display_name || '未设置昵称'} · 用户 ID ${shortID(u.id)}`
-            : '用户资料与会话 / 令牌 / 工作区聚合视图'
+            ? t('admin.userDetail.headerDesc', {
+                name: u.display_name || t('admin.userDetail.noDisplayName'),
+                id: shortID(u.id),
+              })
+            : t('admin.userDetail.headerDescFallback')
         }
         actions={
           <>
@@ -404,12 +418,12 @@ export function UserDetailPage() {
                   disabled={exporting || !u}
                   onClick={() => void onExportData()}
                 >
-                  <Download /> {exporting ? '导出中…' : '导出数据'}
+                  <Download />{' '}
+                  {exporting ? t('admin.userDetail.exporting') : t('admin.userDetail.exportData')}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                GDPR 用户数据导出（资料 / 成员关系 / 在途会话元数据 / PAT 元数据 /
-                最近审计事件）
+                {t('admin.userDetail.exportTooltip')}
               </TooltipContent>
             </Tooltip>
             <Link
@@ -417,58 +431,60 @@ export function UserDetailPage() {
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowLeft size={15} className="mr-1 inline" aria-hidden="true" />
-              返回用户列表
+              {t('admin.userDetail.backToList')}
             </Link>
           </>
         }
       />
 
-      {detailQ.isPending && <PageLoading label="加载用户详情中…" />}
+      {detailQ.isPending && <PageLoading label={t('admin.userDetail.loading')} />}
 
       {u && (
         <>
           <SettingsCard
-            title="账号资料与安全操作"
+            title={t('admin.userDetail.securityCardTitle')}
             cta={
               <Button
                 variant="destructive"
                 onClick={() => setKickOpen(true)}
                 disabled={kickM.isPending}
               >
-                {kickM.isPending ? '踢下线中…' : '踢下线'}
+                {kickM.isPending ? t('admin.userDetail.kicking') : t('admin.userDetail.kick')}
               </Button>
             }
           >
             <div className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <p className="flex items-center gap-2">
-                <span className="text-muted-foreground">状态：</span>
+                <span className="text-muted-foreground">{t('admin.userDetail.fieldStatus')}</span>
                 <StatusBadge status={u.status} />
               </p>
               <p className="flex items-center gap-2">
-                <span className="text-muted-foreground">邮箱验证：</span>
+                <span className="text-muted-foreground">{t('admin.userDetail.fieldEmailVerified')}</span>
                 {u.email_verified ? (
-                  <Badge variant="outline">已验证</Badge>
+                  <Badge variant="outline">{t('admin.userDetail.verifiedBadge')}</Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground">
-                    未验证
+                    {t('admin.userDetail.unverifiedBadge')}
                   </Badge>
                 )}
               </p>
               <p className="flex items-center gap-2">
-                <span className="text-muted-foreground">平台管理员：</span>
+                <span className="text-muted-foreground">{t('admin.userDetail.fieldPlatformAdmin')}</span>
                 {u.is_platform_admin ? (
-                  <Badge variant="secondary">是</Badge>
+                  <Badge variant="secondary">{t('admin.userDetail.yes')}</Badge>
                 ) : (
-                  <span>否</span>
+                  <span>{t('admin.userDetail.no')}</span>
                 )}
               </p>
               <p>
-                <span className="text-muted-foreground">注册时间：</span>
+                <span className="text-muted-foreground">{t('admin.userDetail.fieldCreatedAt')}</span>
                 {formatDateTime(u.created_at)}
               </p>
               <p>
-                <span className="text-muted-foreground">最近登录：</span>
-                {u.last_login_at ? formatDateTime(u.last_login_at) : '从未登录'}
+                <span className="text-muted-foreground">{t('admin.userDetail.fieldLastLogin')}</span>
+                {u.last_login_at
+                  ? formatDateTime(u.last_login_at)
+                  : t('admin.userDetail.neverSignedIn')}
               </p>
             </div>
             <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
@@ -478,14 +494,14 @@ export function UserDetailPage() {
                 disabled={resetPwdM.isPending}
                 onClick={async () => {
                   const ok = await confirm({
-                    title: '发送密码重置邮件',
-                    description: `将向 ${u.email} 发送密码重置邮件（走用户自助重置链路，不直接改密码）。`,
-                    confirmText: '发送邮件',
+                    title: t('admin.userDetail.sendResetTitle'),
+                    description: t('admin.userDetail.sendResetDesc', { email: u.email }),
+                    confirmText: t('admin.userDetail.sendEmail'),
                   });
                   if (ok) resetPwdM.mutate();
                 }}
               >
-                {resetPwdM.isPending ? '发送中…' : '重置密码'}
+                {resetPwdM.isPending ? t('admin.userDetail.sending') : t('admin.userDetail.resetPassword')}
               </Button>
               <Button
                 variant="outline"
@@ -493,14 +509,14 @@ export function UserDetailPage() {
                 disabled={resendM.isPending || u.email_verified}
                 onClick={async () => {
                   const ok = await confirm({
-                    title: '重发验证邮件',
-                    description: `将向 ${u.email} 补发邮箱验证邮件（1 分钟冷却）。`,
-                    confirmText: '发送邮件',
+                    title: t('admin.userDetail.resendTitle'),
+                    description: t('admin.userDetail.resendDesc', { email: u.email }),
+                    confirmText: t('admin.userDetail.sendEmail'),
                   });
                   if (ok) resendM.mutate();
                 }}
               >
-                {resendM.isPending ? '发送中…' : '重发验证'}
+                {resendM.isPending ? t('admin.userDetail.sending') : t('admin.userDetail.resend')}
               </Button>
               <Button
                 variant="outline"
@@ -508,21 +524,22 @@ export function UserDetailPage() {
                 disabled={markVerifiedM.isPending || u.email_verified}
                 onClick={async () => {
                   const ok = await confirm({
-                    title: '标记邮箱已验证',
-                    description:
-                      '邮件链路不可达时的兜底：直接把该邮箱标记为已验证（幂等）。',
-                    confirmText: '标记已验证',
+                    title: t('admin.userDetail.markVerifiedTitle'),
+                    description: t('admin.userDetail.markVerifiedDesc'),
+                    confirmText: t('admin.userDetail.markVerified'),
                   });
                   if (ok) markVerifiedM.mutate();
                 }}
               >
-                {markVerifiedM.isPending ? '标记中…' : '标记已验证'}
+                {markVerifiedM.isPending ? t('admin.userDetail.marking') : t('admin.userDetail.markVerified')}
               </Button>
             </div>
           </SettingsCard>
 
           <SettingsCard
-            title={`在途会话（${d?.sessions.length ?? 0}）`}
+            title={t('admin.userDetail.sessionsCardTitle', {
+              count: d?.sessions.length ?? 0,
+            })}
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -533,8 +550,8 @@ export function UserDetailPage() {
                 loading={detailQ.isPending}
                 empty={
                   <PageEmpty
-                    label="没有在途会话"
-                    hint="该用户当前没有任何活跃登录（或已被踢下线）"
+                    label={t('admin.userDetail.noSessions')}
+                    hint={t('admin.userDetail.noSessionsHint')}
                   />
                 }
               />
@@ -542,7 +559,9 @@ export function UserDetailPage() {
           </SettingsCard>
 
           <SettingsCard
-            title={`访问令牌 PAT（${d?.pats.length ?? 0}）`}
+            title={t('admin.userDetail.patsCardTitle', {
+              count: d?.pats.length ?? 0,
+            })}
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -551,13 +570,15 @@ export function UserDetailPage() {
                 rows={d?.pats ?? []}
                 rowKey={(p) => p.id}
                 loading={detailQ.isPending}
-                empty={<PageEmpty label="暂无访问令牌" />}
+                empty={<PageEmpty label={t('admin.userDetail.noPats')} />}
               />
             </div>
           </SettingsCard>
 
           <SettingsCard
-            title={`所属工作区（${d?.workspaces.length ?? 0}）`}
+            title={t('admin.userDetail.workspacesCardTitle', {
+              count: d?.workspaces.length ?? 0,
+            })}
             bodyClassName="p-0"
           >
             <div className="px-6 pb-6">
@@ -568,8 +589,8 @@ export function UserDetailPage() {
                 loading={detailQ.isPending}
                 empty={
                   <PageEmpty
-                    label="不属于任何工作区"
-                    hint="工作区列表器未接线时也显示为空"
+                    label={t('admin.userDetail.noWorkspaces')}
+                    hint={t('admin.userDetail.noWorkspacesHint')}
                   />
                 }
               />
@@ -578,8 +599,8 @@ export function UserDetailPage() {
 
           <SettingsCard
             danger
-            title="删除账号"
-            description="删除后不可恢复，该邮箱将被改写以供重新注册"
+            title={t('admin.userDetail.deleteAccount')}
+            description={t('admin.userDetail.deleteCardDesc')}
             cta={
               <Button
                 variant="destructive"
@@ -590,25 +611,27 @@ export function UserDetailPage() {
                 }
                 onClick={() => setDeleteOpen(true)}
               >
-                {deleteM.isPending ? '删除中…' : '删除账号'}
+                {deleteM.isPending ? t('admin.userDetail.deleting') : t('admin.userDetail.deleteAccount')}
               </Button>
             }
           >
             <div className="max-w-xl space-y-2">
               {deleteBlockedReason ? (
                 <p className="text-sm text-muted-foreground">
-                  {deleteBlockedReason}，无法在此删除。
+                  {t('admin.userDetail.deleteBlockedNotice', {
+                    reason: deleteBlockedReason,
+                  })}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  输入目标邮箱 {u.email} 以确认删除。
+                  {t('admin.userDetail.typeEmailToDelete', { email: u.email })}
                 </p>
               )}
               <Input
                 placeholder={u.email}
                 value={confirmEmail}
                 onChange={(e) => setConfirmEmail(e.target.value)}
-                aria-label="输入目标邮箱以确认删除"
+                aria-label={t('admin.userDetail.confirmEmailAria')}
                 disabled={!!deleteBlockedReason}
               />
             </div>
@@ -619,13 +642,13 @@ export function UserDetailPage() {
             open={deleteOpen}
             onOpenChange={setDeleteOpen}
             onConfirm={() => deleteM.mutate(u.email)}
-            title={`删除账号 ${u.email}`}
-            confirmText="永久删除"
+            title={t('admin.userDetail.deleteTitle', { email: u.email })}
+            confirmText={t('admin.userDetail.deletePermanently')}
             danger
             impacts={[
-              '账号将被删除，邮箱将被改写以供重新注册，操作不可恢复',
-              '该用户全部在途会话与个人访问令牌（PAT）立即吊销',
-              '名下工作区与业务数据保留，操作记入平台审计日志',
+              t('admin.userDetail.impactDelete1'),
+              t('admin.userDetail.impactDelete2'),
+              t('admin.userDetail.impactDelete3'),
             ]}
           />
 
@@ -634,13 +657,13 @@ export function UserDetailPage() {
             open={kickOpen}
             onOpenChange={setKickOpen}
             onConfirm={() => kickM.mutate()}
-            title={`踢下线 ${u.email}`}
-            confirmText="踢下线"
+            title={t('admin.userDetail.kickTitle', { email: u.email })}
+            confirmText={t('admin.userDetail.kick')}
             danger
             impacts={[
-              '该用户全部在途会话立即吊销，所有设备需重新登录',
-              '账号状态不变（不是封禁），重新登录即可恢复',
-              '操作将记入平台审计日志（admin.user_kick）',
+              t('admin.userDetail.impactKickSessions'),
+              t('admin.userDetail.impactKickNotBan'),
+              t('admin.userDetail.impactKickAudit'),
             ]}
           />
         </>

@@ -34,6 +34,7 @@ import { queryKeys } from '@ploykit/hooks'
 import { formatDateTime } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
 import { roleSatisfies } from '@ploykit/hooks'
+import { useT, t as moduleT } from '../../i18n'
 
 
 
@@ -43,19 +44,21 @@ type EventMeta = components['schemas']['WebhookEventItem']
 type RotateSecretResponse = components['schemas']['RotateWebhookSecretResponse']
 
 export const createSchema = z.object({
-  
+
   url: z.string().check(
-    z.url('请输入合法的回调 URL（如 https://example.com/webhook）'),
-    z.refine((v) => v.startsWith('https://'), '回调地址必须使用 https（明文 http 会被服务端拒绝）'),
+    // g6 i18n：校验文案经模块级 t() 在校验时解析（error 回调惰性求值，随 setUiLang 变化）
+    z.url({ error: () => moduleT('workspace.webhooks.urlInvalid') }),
+    z.refine((v) => v.startsWith('https://'), { error: () => moduleT('workspace.webhooks.urlHttps') }),
   ),
   description: z.string(),
-  events: z.array(z.string()).check(z.minLength(1, '至少订阅一个事件类型')),
+  events: z.array(z.string()).check(z.minLength(1, { error: () => moduleT('workspace.webhooks.eventsMin') })),
 })
 type CreateForm = z.infer<typeof createSchema>
 
 export interface WebhooksPageProps {}
 
 export function WebhooksPage(_props: WebhooksPageProps = {}) {
+  const t = useT()
   const { current } = useWorkspace()
   const api = useApi()
   const confirm = useConfirm()
@@ -101,55 +104,55 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
   const toggle = useMutation({
     mutationFn: (s: Subscription) =>
       api.patch<Subscription>(`${base}/subscriptions/${s.id}`, { is_active: !s.is_active }),
-    onSuccess: async () => { toast.success('状态已更新'); await invalidate() },
-    onError: (e) => onError(e, '操作失败'),
+    onSuccess: async () => { toast.success(t('workspace.webhooks.toggleOk')); await invalidate() },
+    onError: (e) => onError(e, t('workspace.webhooks.opFailed')),
   })
 
   const ping = useMutation({
     mutationFn: (id: string) => api.post(`${base}/subscriptions/${id}/ping`),
-    onSuccess: async () => { toast.success('Ping 已入队，结果见投递记录'); await invalidate() },
-    onError: (e) => onError(e, 'Ping 失败'),
+    onSuccess: async () => { toast.success(t('workspace.webhooks.pingOk')); await invalidate() },
+    onError: (e) => onError(e, t('workspace.webhooks.pingFailed')),
   })
 
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`${base}/subscriptions/${id}`),
-    onSuccess: async () => { toast.success('订阅已删除'); await invalidate() },
-    onError: (e) => onError(e, '删除失败'),
+    onSuccess: async () => { toast.success(t('workspace.webhooks.removed')); await invalidate() },
+    onError: (e) => onError(e, t('workspace.webhooks.deleteFailed')),
   })
 
   const redeliver = useMutation({
     mutationFn: (id: string) => api.post<Delivery>(`${base}/deliveries/${id}/redeliver`),
-    onSuccess: async () => { toast.success('已重新入队投递'); await invalidate() },
-    onError: (e) => onError(e, '重新投递失败'),
+    onSuccess: async () => { toast.success(t('workspace.webhooks.redeliverOk')); await invalidate() },
+    onError: (e) => onError(e, t('workspace.webhooks.redeliverFailed')),
   })
 
-  
+
   const create = useMutation({
     mutationFn: (values: CreateForm) =>
       api.post<{ subscription: Subscription; secret: string }>(`${base}/subscriptions`, values),
     onSuccess: async (data) => {
-      toast.success('订阅已创建')
+      toast.success(t('workspace.webhooks.created'))
       setSecretTitle(undefined)
       setSecret(data.secret)
       await invalidate()
     },
-    onError: (e) => onError(e, '创建失败'),
-  })
+    onError: (e) => onError(e, t('workspace.webhooks.createFailed')),
+  });
 
-  
-  
-  
-  
+
+
+
+
   const rotate = useMutation({
     mutationFn: (id: string) =>
       api.post<RotateSecretResponse>(`${base}/subscriptions/${id}/rotate-secret`),
     onSuccess: async (data) => {
-      toast.success('密钥已轮换')
-      setSecretTitle('Webhook 签名密钥轮换成功')
+      toast.success(t('workspace.webhooks.rotated'))
+      setSecretTitle(t('workspace.webhooks.rotatedTitle'))
       setSecret(data.secret)
       await invalidate()
     },
-    onError: (e) => onError(e, '轮换密钥失败'),
+    onError: (e) => onError(e, t('workspace.webhooks.rotateFailed')),
   })
 
   
@@ -205,7 +208,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
   const onRedeliverLatest = async (s: Subscription) => {
     const latest = latestBySub.get(s.id)
     if (!latest) {
-      toast.info('该订阅暂无投递记录，可先发送 Ping')
+      toast.info(t('workspace.webhooks.noDeliveriesInfo'))
       return
     }
     await redeliver.mutateAsync(latest.id).catch(() => {})
@@ -213,19 +216,19 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
 
   const onRemove = async (s: Subscription) => {
     if (!(await confirm({
-      title: '删除订阅',
-      description: `确定删除 ${s.url} 吗？该操作不可恢复。`,
-      confirmText: '删除', danger: true,
+      title: t('workspace.webhooks.deleteTitle'),
+      description: t('workspace.webhooks.deleteDesc', { url: s.url }),
+      confirmText: t('workspace.webhooks.deleteConfirm'), danger: true,
     }))) return
     remove.mutate(s.id)
   }
 
-  
+
   const onRotate = async (s: Subscription) => {
     if (!(await confirm({
-      title: '轮换签名密钥',
-      description: `确定轮换 ${s.url} 的签名密钥吗？新密钥仅显示一次；旧密钥在 24h 宽限期内继续有效（期间投递同时携带新/旧双签名），之后仅新密钥可用。`,
-      confirmText: '轮换',
+      title: t('workspace.webhooks.rotateTitle'),
+      description: t('workspace.webhooks.rotateDesc', { url: s.url }),
+      confirmText: t('workspace.webhooks.rotateConfirm'),
     }))) return
     rotate.mutate(s.id)
   }
@@ -234,7 +237,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
 
   const subColumns: Column<Subscription>[] = [
     {
-      key: 'url', header: '回调地址',
+      key: 'url', header: t('workspace.webhooks.colEndpoint'),
       render: (s) => (
         <div className="min-w-0 max-w-xs">
           <p className="truncate font-medium">{s.url}</p>
@@ -243,7 +246,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       ),
     },
     {
-      key: 'events', header: '事件类型',
+      key: 'events', header: t('workspace.webhooks.colEvents'),
       render: (s) => (
         <div className="flex max-w-xs flex-wrap gap-1">
           {s.event_types.map((t) => (
@@ -253,22 +256,26 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       ),
     },
     {
-      key: 'is_active', header: '启用',
-      
+      key: 'is_active', header: t('workspace.webhooks.colActive'),
+
       render: (s) =>
         canManage ? (
           <Switch
             checked={s.is_active}
             disabled={toggle.isPending}
             onCheckedChange={() => toggle.mutate(s)}
-            aria-label={`${s.is_active ? '暂停' : '恢复'}订阅 ${s.url}`}
+            aria-label={s.is_active
+              ? t('workspace.webhooks.pauseSub', { url: s.url })
+              : t('workspace.webhooks.resumeSub', { url: s.url })}
           />
         ) : (
-          <span className="text-xs text-muted-foreground">{s.is_active ? '已启用' : '已暂停'}</span>
+          <span className="text-xs text-muted-foreground">
+            {s.is_active ? t('workspace.webhooks.activeOn') : t('workspace.webhooks.activeOff')}
+          </span>
         ),
     },
     {
-      key: 'latest', header: '最近投递',
+      key: 'latest', header: t('workspace.webhooks.colLatest'),
       render: (s) => {
         const d = latestBySub.get(s.id)
         return d ? (
@@ -280,7 +287,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       },
     },
     {
-      key: 'attempts', header: '尝试',
+      key: 'attempts', header: t('workspace.webhooks.colAttempts'),
       render: (s) => {
         const d = latestBySub.get(s.id)
         return <span className="tabular-nums">{d ? d.attempts : 0}</span>
@@ -288,21 +295,21 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
     },
     {
       key: 'actions', header: '', className: 'w-10',
-      
-      
+
+
       render: (s) =>
         canManage ? (
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" aria-label={`订阅 ${s.url} 的操作`} />}
+              render={<Button variant="ghost" size="icon" aria-label={t('workspace.webhooks.actionsAria', { url: s.url })} />}
             >
               <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => ping.mutate(s.id)}>发送 Ping</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onRedeliverLatest(s)}>重投最近一条</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onRotate(s)}>轮换密钥</DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onClick={() => onRemove(s)}>删除</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => ping.mutate(s.id)}>{t('workspace.webhooks.sendPing')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onRedeliverLatest(s)}>{t('workspace.webhooks.redeliverLatest')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onRotate(s)}>{t('workspace.webhooks.rotateSecret')}</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => onRemove(s)}>{t('workspace.webhooks.deleteConfirm')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null,
@@ -311,7 +318,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
 
   const deliveryColumns: Column<Delivery>[] = [
     {
-      key: 'event', header: '事件',
+      key: 'event', header: t('workspace.webhooks.colEvent'),
       render: (d) => (
         <div className="min-w-0">
           <p className="font-medium">{d.event_type}</p>
@@ -320,8 +327,8 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       ),
     },
     {
-      
-      key: 'subscription', header: '归属订阅',
+
+      key: 'subscription', header: t('workspace.webhooks.colSubscription'),
       render: (d) => {
         const sub = subById.get(d.subscription_id)
         if (sub) {
@@ -335,13 +342,13 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
           )
         }
         return subsQ.isSuccess ? (
-          <Badge variant="outline" className="text-muted-foreground">已删除订阅</Badge>
+          <Badge variant="outline" className="text-muted-foreground">{t('workspace.webhooks.deletedSub')}</Badge>
         ) : <span className="text-muted-foreground">—</span>
       },
     },
-    { key: 'status', header: '状态', render: (d) => <StatusBadge status={d.status} /> },
+    { key: 'status', header: t('workspace.webhooks.colStatus'), render: (d) => <StatusBadge status={d.status} /> },
     {
-      key: 'attempts', header: '尝试',
+      key: 'attempts', header: t('workspace.webhooks.colAttempts'),
       render: (d) => (
         <span className="tabular-nums">
           {d.attempts}
@@ -350,7 +357,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       ),
     },
     {
-      key: 'last_error', header: '最后错误',
+      key: 'last_error', header: t('workspace.webhooks.colLastError'),
       render: (d) =>
         d.last_error ? (
           <Tooltip>
@@ -362,16 +369,16 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
         ) : <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'created_at', header: '时间',
+      key: 'created_at', header: t('workspace.webhooks.colTime'),
       render: (d) => <span className="whitespace-nowrap text-muted-foreground">{formatDateTime(d.created_at)}</span>,
     },
     {
-      key: 'actions', header: '操作', className: 'text-right',
-      
+      key: 'actions', header: t('workspace.webhooks.colActions'), className: 'text-right',
+
       render: (d) =>
         canManage ? (
           <Button size="sm" variant="outline" disabled={redeliver.isPending} onClick={() => redeliver.mutate(d.id)}>
-            重新投递
+            {t('workspace.webhooks.redeliver')}
           </Button>
         ) : null,
     },
@@ -382,8 +389,8 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="Webhooks" />
-        <PageEmpty label="请先创建并选择一个工作区" />
+        <PageHeader title={t('workspace.webhooks.title')} />
+        <PageEmpty label={t('workspace.webhooks.emptyNoWs')} />
       </div>
     )
   }
@@ -391,42 +398,42 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
   return (
     <div>
       <PageHeader
-        title="Webhooks"
-        actions={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus /> 创建订阅</Button> : undefined}
+        title={t('workspace.webhooks.title')}
+        actions={canManage ? <Button onClick={() => setCreateOpen(true)}><Plus /> {t('workspace.webhooks.createSubscription')}</Button> : undefined}
       />
 
       <Tabs defaultValue="subscriptions">
         <TabsList>
-          <TabsTrigger value="subscriptions">订阅</TabsTrigger>
-          <TabsTrigger value="deliveries">投递记录</TabsTrigger>
+          <TabsTrigger value="subscriptions">{t('workspace.webhooks.tabSubscriptions')}</TabsTrigger>
+          <TabsTrigger value="deliveries">{t('workspace.webhooks.tabDeliveries')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="subscriptions" className="mt-4 space-y-4">
           {subsQ.isError ? (
-            <PageError message={apiErrorMessage(subsQ.error, '订阅列表加载失败')} onRetry={() => subsQ.refetch()} />
+            <PageError message={apiErrorMessage(subsQ.error, t('workspace.webhooks.subsLoadFailed'))} onRetry={() => subsQ.refetch()} />
           ) : subsQ.isPending ? (
-            <PageLoading label="加载订阅…" />
+            <PageLoading label={t('workspace.webhooks.loadingSubs')} />
           ) : (
             <DataTable
               columns={subColumns}
               rows={subsQ.data?.items ?? []}
               rowKey={(s) => s.id}
-              empty={<PageEmpty label="暂无订阅" hint="创建订阅后，工作区事件会推送到你配置的地址" />}
+              empty={<PageEmpty label={t('workspace.webhooks.noSubs')} hint={t('workspace.webhooks.noSubsHint')} />}
             />
           )}
         </TabsContent>
 
         <TabsContent value="deliveries" className="mt-4">
           {deliveriesQ.isError ? (
-            <PageError message={apiErrorMessage(deliveriesQ.error, '投递记录加载失败')} onRetry={() => deliveriesQ.refetch()} />
+            <PageError message={apiErrorMessage(deliveriesQ.error, t('workspace.webhooks.deliveriesLoadFailed'))} onRetry={() => deliveriesQ.refetch()} />
           ) : deliveriesQ.isPending ? (
-            <PageLoading label="加载投递记录…" />
+            <PageLoading label={t('workspace.webhooks.loadingDeliveries')} />
           ) : (
             <DataTable
               columns={deliveryColumns}
               rows={deliveriesQ.data?.items ?? []}
               rowKey={(d) => d.id}
-              empty={<PageEmpty label="暂无投递" hint="触发事件或发送 Ping 后生成" />}
+              empty={<PageEmpty label={t('workspace.webhooks.noDeliveries')} hint={t('workspace.webhooks.noDeliveriesHint')} />}
             />
           )}
         </TabsContent>
@@ -436,28 +443,28 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>创建订阅</DialogTitle>
+            <DialogTitle>{t('workspace.webhooks.createSubscription')}</DialogTitle>
             <DialogDescription>
-              事件将以 HMAC 签名投递到回调地址；签名密钥在创建后仅展示一次。
+              {t('workspace.webhooks.dialogDesc')}
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitCreate}>
-            <FormField label="回调 URL" error={form.formState.errors.url?.message} htmlFor="whk-url">
+            <FormField label={t('workspace.webhooks.urlLabel')} error={form.formState.errors.url?.message} htmlFor="whk-url">
               <Input id="whk-url" placeholder="https://example.com/webhook" {...form.register('url')} />
             </FormField>
-            <FormField label="备注（可选）" error={form.formState.errors.description?.message} htmlFor="whk-desc">
-              <Input id="whk-desc" placeholder="用途说明，便于识别" {...form.register('description')} />
+            <FormField label={t('workspace.webhooks.descLabel')} error={form.formState.errors.description?.message} htmlFor="whk-desc">
+              <Input id="whk-desc" placeholder={t('workspace.webhooks.descPlaceholder')} {...form.register('description')} />
             </FormField>
-            <FormField label="事件类型" error={form.formState.errors.events?.message}>
+            <FormField label={t('workspace.webhooks.eventsLabel')} error={form.formState.errors.events?.message}>
               <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border p-3">
                 {(eventsQ.data?.items ?? []).map((ev) => {
-                  
-                  
-                  
-                  
-                  
-                  
-                  
+
+
+
+
+
+
+
                   const cbId = `whk-evt-${ev.type.replace(/[^a-zA-Z0-9-]/g, '-')}`
                   const checked = selectedEvents.includes(ev.type)
                   return (
@@ -486,15 +493,17 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
                 {eventsQ.isPending && (
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Spinner className="size-3" />
-                    加载事件目录…
+                    {t('workspace.webhooks.loadingEvents')}
                   </p>
                 )}
               </div>
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{t('workspace.webhooks.cancel')}</Button>
               <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? (<><Spinner aria-hidden="true" />创建中…</>) : '创建订阅'}
+                {create.isPending
+                  ? (<><Spinner aria-hidden="true" />{t('workspace.webhooks.creating')}</>)
+                  : t('workspace.webhooks.createSubscription')}
               </Button>
             </DialogFooter>
           </form>
@@ -505,7 +514,7 @@ export function WebhooksPage(_props: WebhooksPageProps = {}) {
       <SecretModal
         open={secret !== null}
         onOpenChange={(o) => !o && closeSecret()}
-        secretName="Webhook 签名密钥"
+        secretName={t('workspace.webhooks.secretName')}
         secretValue={secret ?? ''}
         title={secretTitle}
       />

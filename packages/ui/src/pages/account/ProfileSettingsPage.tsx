@@ -13,6 +13,7 @@ import { Spinner } from '../../components/ui/spinner'
 import { ImpactConfirmation } from '../../components/SecretModal'
 import { toast } from '../../components/toast'
 import { apiErrorMessage } from '../../lib/api-error'
+import { useT, t as tt } from '../../i18n'
 import { useApi } from '@ploykit/hooks'
 import { useAuth } from '@ploykit/hooks'
 import { useZodForm } from '@ploykit/hooks'
@@ -20,16 +21,18 @@ import type { PKUser } from '@ploykit/hooks'
 
 
 
+// 校验文案经 error map 惰性取字典（i18n B 方案）：解析时才调 t，语言随
+// Provider 切换即时生效；纯函数测试（无 Provider）拿 en 默认。
 export const profileSchema = z.object({
   display_name: z.string().check(
     z.trim(),
-    z.minLength(1, '请输入昵称'),
-    z.maxLength(100, '昵称最多 100 字符'),
+    z.minLength(1, { error: () => tt('account.profile.nameRequired') }),
+    z.maxLength(100, { error: () => tt('account.profile.nameTooLong') }),
   ),
-  
+
   avatar_url: z.string().check(
-    z.refine((v) => v === '' || /^https?:\/\//.test(v), '头像链接需以 http(s):// 开头'),
-    z.refine((v) => v === '' || v.length <= 2048, '头像链接最多 2048 字符'),
+    z.refine((v) => v === '' || /^https?:\/\//.test(v), { error: () => tt('account.profile.avatarScheme') }),
+    z.refine((v) => v === '' || v.length <= 2048, { error: () => tt('account.profile.avatarTooLong') }),
   ),
 })
 type ProfileForm = z.infer<typeof profileSchema>
@@ -42,6 +45,7 @@ export interface ProfileSettingsPageProps {
 export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
   const { user, loading, refresh, logout } = useAuth()
   const api = useApi()
+  const t = useT() // i18n（B 方案）：页面文案走字典（g7 分片 account.profile.*）
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -55,9 +59,9 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
       : undefined, // 用户数据到达后同步进表单（保留已输入内容的 RHF 回退语义）
   })
 
-  if (loading) return <PageLoading label="加载账号信息…" />
+  if (loading) return <PageLoading label={t('account.profile.loading')} />
   if (!user) {
-    return <PageError message="未登录或会话已过期，请重新登录" onRetry={() => refresh()} />
+    return <PageError message={t('account.profile.loadFailed')} onRetry={() => refresh()} />
   }
 
   const handleSave = form.handleSubmit(async (values) => {
@@ -67,11 +71,11 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
         display_name: values.display_name,
         avatar_url: values.avatar_url,
       })
-      await refresh() 
-      toast.success('资料已更新')
+      await refresh()
+      toast.success(t('account.profile.savedToast'))
     } catch (e) {
-      
-      toast.error(apiErrorMessage(e, '保存失败'))
+
+      toast.error(apiErrorMessage(e, t('account.profile.saveFailed')))
     } finally {
       setSaving(false)
     }
@@ -80,10 +84,10 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
   const handleResend = async () => {
     setSending(true)
     try {
-      await api.post('/auth/send-verification') 
-      toast.success('验证邮件已发送，请查收')
+      await api.post('/auth/send-verification')
+      toast.success(t('account.profile.resendOk'))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '发送失败'))
+      toast.error(apiErrorMessage(e, t('account.profile.resendFailed')))
     } finally {
       setSending(false)
     }
@@ -92,14 +96,14 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      await api.delete('/auth/me') 
+      await api.delete('/auth/me')
       if (onDeleted) onDeleted()
       else {
         await logout()
         window.location.href = '/login'
       }
     } catch (e) {
-      toast.error(apiErrorMessage(e, '删除失败'))
+      toast.error(apiErrorMessage(e, t('account.profile.deleteFailed')))
     } finally {
       setDeleting(false)
     }
@@ -107,23 +111,23 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
 
   return (
     <div>
-      <PageHeader title="个人资料" />
+      <PageHeader title={t('account.profile.title')} />
 
       <SettingsCard
-        title="基本资料"
-        cta={<Button type="submit" form="profile-form" disabled={saving}>{saving ? (<><Spinner aria-hidden="true" />保存中…</>) : '保存'}</Button>}
+        title={t('account.profile.basic')}
+        cta={<Button type="submit" form="profile-form" disabled={saving}>{saving ? (<><Spinner aria-hidden="true" />{t('account.profile.saving')}</>) : t('account.profile.save')}</Button>}
       >
         <form id="profile-form" onSubmit={handleSave} className="max-w-xl space-y-4">
           <FormField
-            label="昵称" required
+            label={t('account.profile.nameLabel')} required
             error={form.formState.errors.display_name?.message} htmlFor="profile-name"
           >
-            <Input id="profile-name" maxLength={100} placeholder="怎么称呼你" {...form.register('display_name')} />
+            <Input id="profile-name" maxLength={100} placeholder={t('account.profile.namePlaceholder')} {...form.register('display_name')} />
           </FormField>
           <FormField
-            label="头像链接（可选）"
+            label={t('account.profile.avatarLabel')}
             error={form.formState.errors.avatar_url?.message} htmlFor="profile-avatar"
-            description="填写以 https:// 开头的图片地址；部分网站限制外链，图片无法加载时将显示默认头像"
+            description={t('account.profile.avatarHint')}
           >
             <Input id="profile-avatar" maxLength={2048} placeholder="https://…" {...form.register('avatar_url')} />
           </FormField>
@@ -131,17 +135,17 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
 
         <Item variant="outline" className="mt-6">
           <ItemContent className="min-w-0">
-            <ItemTitle>登录邮箱</ItemTitle>
+            <ItemTitle>{t('account.profile.emailTitle')}</ItemTitle>
             <ItemDescription className="truncate" data-testid="profile-email">
               {user.email}
             </ItemDescription>
             {/* B3：只读现实如实说明——此前页头承诺"管理登录邮箱"却无修改入口 */}
-            <ItemDescription className="text-xs">用于登录与接收通知，暂无法在此修改</ItemDescription>
+            <ItemDescription className="text-xs">{t('account.profile.emailNote')}</ItemDescription>
           </ItemContent>
           {user.email_verified && (
             <ItemActions>
               <Badge variant="secondary" className="bg-(--success)/10 text-(--success) border-(--success)/30">
-                已验证
+                {t('account.profile.verified')}
               </Badge>
             </ItemActions>
           )}
@@ -149,10 +153,10 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
 
         {!user.email_verified && (
           <Alert className="mt-2 border-(--warning)/40 bg-(--warning)/15">
-            <AlertDescription className="text-(--warning)/90">登录邮箱尚未验证</AlertDescription>
+            <AlertDescription className="text-(--warning)/90">{t('account.profile.unverified')}</AlertDescription>
             <AlertAction>
               <Button variant="outline" size="sm" onClick={handleResend} disabled={sending}>
-                {sending ? (<><Spinner aria-hidden="true" />发送中…</>) : '重新发送验证邮件'}
+                {sending ? (<><Spinner aria-hidden="true" />{t('account.profile.resending')}</>) : t('account.profile.resend')}
               </Button>
             </AlertAction>
           </Alert>
@@ -160,13 +164,13 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
       </SettingsCard>
 
       <SettingsCard
-        danger title="删除账号" description="删除后账号将被停用，所有数据无法恢复"
+        danger title={t('account.profile.deleteTitle')} description={t('account.profile.deleteDesc')}
         cta={
           <Button
             variant="destructive" disabled={deleting}
             onClick={() => setConfirmOpen(true)}
           >
-            删除账号
+            {t('account.profile.deleteTitle')}
           </Button>
         }
       >
@@ -177,13 +181,13 @@ export function ProfileSettingsPage({ onDeleted }: ProfileSettingsPageProps) {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         onConfirm={handleDelete}
-        title="确认删除账号？"
-        confirmText="永久删除"
+        title={t('account.profile.deleteConfirmTitle')}
+        confirmText={t('account.profile.deleteConfirm')}
         danger
         impacts={[
-          '账号将被删除，该邮箱之后可用于重新注册',
-          '所有登录会话立即失效，全部个人访问令牌（PAT）被吊销',
-          '昵称、头像等账号资料将被清空',
+          t('account.profile.impactData'),
+          t('account.profile.impactSessions'),
+          t('account.profile.impactProfile'),
         ]}
       />
     </div>

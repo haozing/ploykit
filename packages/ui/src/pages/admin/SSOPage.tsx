@@ -13,6 +13,7 @@ import {
 } from '../../components/ui/tooltip';
 import { useApi } from '@ploykit/hooks';
 import { formatDateTime } from '../../lib/utils';
+import { useT } from '../../i18n';
 import { ADMIN_PAGE_SIZE, adminError } from './shared';
 
 
@@ -30,6 +31,7 @@ interface SSOProviderRow {
 
 export function SSOPage() {
   const api = useApi();
+  const t = useT();
   const listQ = useQuery({
     queryKey: ['admin', 'sso'],
     queryFn: () => api.get<SSOProviderRow[]>('/api/admin/sso'),
@@ -44,7 +46,7 @@ export function SSOPage() {
   const columns: Column<SSOProviderRow>[] = [
     {
       key: 'workspace',
-      header: '工作区',
+      header: t('admin.sso.colWorkspace'),
       render: (s) => (
         
         
@@ -63,7 +65,7 @@ export function SSOPage() {
               >
                 {s.workspace_name || '—'}
               </TooltipTrigger>
-              <TooltipContent>前往该工作区的管理详情页</TooltipContent>
+              <TooltipContent>{t('admin.sso.goWorkspaceTip')}</TooltipContent>
             </Tooltip>
           </p>
           <p className="truncate font-mono text-xs text-muted-foreground">
@@ -106,37 +108,36 @@ export function SSOPage() {
       render: (s) =>
         s.secret_sealed ? (
           <Badge variant="outline" className="text-muted-foreground">
-            已加密
+            {t('admin.sso.sealed')}
           </Badge>
         ) : (
-          
+
           <div className="min-w-0">
-            <Badge variant="destructive">明文</Badge>
+            <Badge variant="destructive">{t('admin.sso.plaintext')}</Badge>
             {/* 长说明换 Tooltip：常显指引「需重新保存以加密」保持不动（B-sso-2） */}
             <p className="mt-1 max-w-[12rem] truncate text-xs text-destructive">
               <Tooltip>
                 <TooltipTrigger render={<span tabIndex={0} className="cursor-help" />}>
-                  需重新保存以加密
+                  {t('admin.sso.reencryptHint')}
                 </TooltipTrigger>
-                <TooltipContent>
-                  存量明文（迁移 016 时代写入）：部署配置 PLOYKIT_SEAL_KEY
-                  后，到该工作区自助面重新保存一次即可加密
-                </TooltipContent>
+                <TooltipContent>{t('admin.sso.reencryptTip')}</TooltipContent>
               </Tooltip>
             </p>
           </div>
         ),
     },
     {
-      
+
       key: 'created_at',
-      header: '配置 / 更新时间',
+      header: t('admin.sso.colTime'),
       className: 'w-44',
       render: (s) => (
         <div className="whitespace-nowrap text-muted-foreground">
           <p>{formatDateTime(s.created_at)}</p>
           {s.updated_at !== s.created_at && (
-            <p className="text-xs">更新 {formatDateTime(s.updated_at)}</p>
+            <p className="text-xs">
+              {t('admin.sso.updatedAt', { time: formatDateTime(s.updated_at) })}
+            </p>
           )}
         </div>
       ),
@@ -147,15 +148,15 @@ export function SSOPage() {
     <div>
       <PageHeader
         title="SSO"
-        description="各工作区的联邦 SSO（OIDC）配置一览（只读）"
+        description={t('admin.sso.description')}
       />
       <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-        配置由各工作区自助管理，此处只读；client_secret 已加密存储。
+        {t('admin.sso.intro')}
       </p>
 
       {listQ.isError ? (
         <PageError
-          message={adminError(listQ.error, 'SSO 概览加载失败')}
+          message={adminError(listQ.error, t('admin.sso.loadFailed'))}
           onRetry={() => void listQ.refetch()}
         />
       ) : (
@@ -173,15 +174,18 @@ export function SSOPage() {
           empty={
             pastEnd ? (
               <div className="flex flex-col items-center gap-2">
-                <PageEmpty label="没有更多配置了" hint="当前页数据可能已被删除" />
+                <PageEmpty
+                  label={t('admin.sso.pastEndLabel')}
+                  hint={t('admin.sso.pastEndHint')}
+                />
                 <Button variant="outline" size="sm" onClick={() => setPage(1)}>
-                  返回第一页
+                  {t('admin.sso.backToFirst')}
                 </Button>
               </div>
             ) : (
               <PageEmpty
-                label="无工作区配置联邦 SSO"
-                hint="工作区在自助面配置企业 IdP 后会在此出现"
+                label={t('admin.sso.emptyLabel')}
+                hint={t('admin.sso.emptyHint')}
               />
             )
           }

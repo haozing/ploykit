@@ -14,7 +14,7 @@ describe('SearchSelect', () => {
     render(<SearchSelect options={options} value={null} onChange={() => {}} triggerAriaLabel="名单组" />)
     const trigger = screen.getByRole('combobox', { name: '名单组' })
     expect(trigger).toBeInTheDocument()
-    expect(trigger).toHaveTextContent('请选择')
+    expect(trigger).toHaveTextContent('Select…')
   })
 
   it('受控 value 回显对应 label（未匹配时显示占位）', () => {
@@ -23,7 +23,7 @@ describe('SearchSelect', () => {
     )
     expect(screen.getByRole('combobox', { name: '组' })).toHaveTextContent('乙组')
     rerender(<SearchSelect options={options} value={null} onChange={() => {}} triggerAriaLabel="组" />)
-    expect(screen.getByRole('combobox', { name: '组' })).toHaveTextContent('请选择')
+    expect(screen.getByRole('combobox', { name: '组' })).toHaveTextContent('Select…')
   })
 
   it('点击触发按钮展开选项，点选回调原始 value', async () => {
@@ -52,7 +52,7 @@ describe('SearchSelect', () => {
     render(
       <SearchSelect options={options} value="a" onChange={onChange} clearable triggerAriaLabel="组" />,
     )
-    const clear = screen.getByRole('button', { name: '清除选择' })
+    const clear = screen.getByRole('button', { name: 'Clear selection' })
     fireEvent.click(clear)
     expect(onChange).toHaveBeenCalledWith(null)
   })
@@ -67,7 +67,7 @@ describe('SearchSelect', () => {
       <SearchSelect options={options} value={null} onChange={() => {}} searchable triggerAriaLabel="组" />,
     )
     fireEvent.click(screen.getByRole('combobox', { name: '组' }))
-    const input = await screen.findByPlaceholderText('搜索…')
+    const input = await screen.findByPlaceholderText('Search…')
     fireEvent.change(input, { target: { value: '丙' } })
     await waitFor(() => {
       expect(screen.queryByRole('option', { name: '甲组' })).not.toBeInTheDocument()
@@ -87,7 +87,7 @@ describe('SearchSelect', () => {
       />,
     )
     fireEvent.click(screen.getByRole('combobox', { name: '组' }))
-    const input = await screen.findByPlaceholderText('搜索…')
+    const input = await screen.findByPlaceholderText('Search…')
     fireEvent.change(input, { target: { value: 'zzz' } })
     expect(await screen.findByText('没有这个组')).toBeInTheDocument()
   })

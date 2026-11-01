@@ -28,9 +28,11 @@ import {
   SidebarProvider, SidebarRail, SidebarTrigger,
 } from '../../components/ui/sidebar';
 import { useAuth } from '@ploykit/hooks';
+import { useT } from '../../i18n';
 
 interface AdminNavItem {
   to: string;
+  /** i18n key（admin.shell.nav.*），渲染时经 t() 解析 */
   label: string;
   icon: ReactNode;
 }
@@ -38,49 +40,49 @@ interface AdminNavItem {
 const NAV: AdminNavItem[] = [
   {
     to: '/admin/overview',
-    label: '概览',
+    label: 'admin.shell.nav.overview',
     icon: <LayoutDashboard size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/users',
-    label: '用户',
+    label: 'admin.shell.nav.users',
     icon: <Users size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/workspaces',
-    label: '工作区',
+    label: 'admin.shell.nav.workspaces',
     icon: <Building2 size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/plans',
-    label: '套餐',
+    label: 'admin.shell.nav.plans',
     icon: <CreditCard size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/orders',
-    label: '订单',
+    label: 'admin.shell.nav.orders',
     icon: <Receipt size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/webhook-deliveries',
-    label: 'Webhooks',
+    label: 'admin.shell.nav.webhooks',
     icon: <Webhook size={16} aria-hidden="true" />,
   },
 
   {
     to: '/admin/sso',
-    label: 'SSO',
+    label: 'admin.shell.nav.sso',
     icon: <KeyRound size={16} aria-hidden="true" />,
   },
   {
     to: '/admin/audit',
-    label: '审计',
+    label: 'admin.shell.nav.audit',
     icon: <ScrollText size={16} aria-hidden="true" />,
   },
 
   {
     to: '/admin/settings',
-    label: '系统',
+    label: 'admin.shell.nav.settings',
     icon: <Settings size={16} aria-hidden="true" />,
   },
 ];
@@ -109,6 +111,7 @@ export function AdminShell({
   const { user, loading } = useAuth();
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
+  const t = useT();
 
   // 未登录重定向：旧实现用 react-router 的 <Navigate replace state>；
   // 适配层未导出 <Navigate>，改用 useNavigate 副作用等价表达
@@ -144,7 +147,7 @@ export function AdminShell({
               <ShieldCheck size={16} aria-hidden="true" />
             </span>
             <span className="text-sm font-semibold text-foreground group-data-[collapsible=icon]:hidden">
-              管理控制台
+              {t('admin.shell.brand')}
             </span>
           </div>
         </SidebarHeader>
@@ -159,11 +162,11 @@ export function AdminShell({
                       <SidebarMenuButton
                         isActive={active}
                         aria-current={active ? 'page' : undefined}
-                        tooltip={item.label}
+                        tooltip={t(item.label)}
                         render={<Link to={item.to} />}
                       >
                         {item.icon}
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{t(item.label)}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -192,7 +195,7 @@ export function AdminShell({
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage>{activeItem.label}</BreadcrumbPage>
+                    <BreadcrumbPage>{t(activeItem.label)}</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>

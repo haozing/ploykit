@@ -50,7 +50,7 @@ describe('ConfirmProvider 内 useConfirm 的确认/取消契约', { timeout: 15_
     fireEvent.click(screen.getByRole('button', { name: '发起确认' }))
     expect(await screen.findByText('重置 API Key', undefined, { timeout: 10_000 })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '确认' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(resolved).toHaveBeenCalledWith(true))
   })
 
@@ -77,7 +77,7 @@ describe('ConfirmProvider 内 useConfirm 的确认/取消契约', { timeout: 15_
     fireEvent.click(screen.getByRole('button', { name: '发起确认' }))
     expect(await screen.findByText('危险操作', undefined, { timeout: 10_000 })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(resolved).toHaveBeenCalledWith(false))
   })
 })
@@ -111,7 +111,7 @@ describe('AppProviders（PloykitProvider > ConfirmProvider > Toaster 一步到�
     fireEvent.click(screen.getByRole('button', { name: '发起确认' }))
     expect(await screen.findByText('删除工作区', undefined, { timeout: 10_000 })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '确认' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(resolved).toHaveBeenCalledWith(true))
 
     fetchSpy.mockRestore()
@@ -149,7 +149,7 @@ describe('ConfirmProvider 并发 confirm()', () => {
     await waitFor(() => expect(first).toHaveBeenCalledWith(false))
     expect(await screen.findByText('第二个', undefined, { timeout: 10_000 })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '确认' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(second).toHaveBeenCalledWith(true))
   })
 })

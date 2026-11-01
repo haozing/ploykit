@@ -98,39 +98,39 @@ describe('UserMenu', () => {
 
   it('渲染头像 initials fallback', async () => {
     await renderAt('/app')
-    expect(screen.getByRole('button', { name: '用户菜单' })).toHaveTextContent('A')
+    expect(screen.getByRole('button', { name: 'User menu' })).toHaveTextContent('A')
   })
 
   it('默认项：账户设置（→/account/profile）；普通用户无管理控制台', async () => {
     await renderAt('/app')
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
     expect(await screen.findByRole('menu')).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: '账户设置' })).toBeVisible()
-    expect(screen.queryByRole('menuitem', { name: '管理控制台' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Account settings' })).toBeVisible()
+    expect(screen.queryByRole('menuitem', { name: 'Admin console' })).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: '个人设置' })).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: '通知偏好' })).not.toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: '退出登录' })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeVisible()
   })
 
   it('账户设置点击跳 /account/profile', async () => {
     await renderAt('/app')
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '账户设置' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Account settings' }))
     await waitFor(() => expect(screen.getByText('account-profile-page')).toBeInTheDocument())
   })
 
   it('is_platform_admin：出现管理控制台（→/admin）', async () => {
     mocks.isPlatformAdmin = true
     await renderAt('/app')
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '管理控制台' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Admin console' }))
     await waitFor(() => expect(screen.getByText('admin-page')).toBeInTheDocument())
   })
 
   it('退出登录调用 logout 并跳 /login', async () => {
     await renderAt('/app')
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '退出登录' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(screen.getByText('login-page')).toBeInTheDocument())
   })
@@ -138,45 +138,45 @@ describe('UserMenu', () => {
   it('P3-11：logout 抛错不困死用户——toast 提示失败仍照常跳转登录页', async () => {
     logout.mockRejectedValueOnce(new Error('network down'))
     await renderAt('/app')
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '退出登录' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
     
-    expect(await screen.findByText('退出登录失败，请稍后在登录页重试')).toBeInTheDocument()
+    expect(await screen.findByText('Failed to sign out. Please try again on the sign-in page later')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('login-page')).toBeInTheDocument())
   })
 
   it('无 Provider（useAuth 抛错）：渲染空，不抛错（AppShell 不强制 Provider）', async () => {
     mocks.noProvider = true
     const { container } = await renderAt('/app')
-    expect(screen.queryByRole('button', { name: '用户菜单' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'User menu' })).not.toBeInTheDocument()
     expect(container.querySelector('[data-slot="dropdown-menu-trigger"]')).not.toBeInTheDocument()
   })
 
-  it('labels 覆盖：自定义文案替换默认中文（菜单项 / aria-label / 失败 toast）', async () => {
+  it('labels 覆盖：自定义文案替换默认英文（菜单项 / aria-label / 失败 toast）', async () => {
     render(
       <RouterTestHarness initialEntries={['/app']}>
         <UserMenu
           labels={{
-            accountSettings: 'Account settings',
-            logout: 'Sign out',
-            userMenuAria: 'User menu',
-            logoutFailedToast: 'Sign-out failed',
+            accountSettings: 'Custom account',
+            logout: 'Custom sign out',
+            userMenuAria: 'Custom user menu',
+            logoutFailedToast: 'Custom sign-out failed',
           }}
         />
         <Toaster />
       </RouterTestHarness>,
     )
     await act(async () => {})
-    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
-    expect(await screen.findByRole('menuitem', { name: 'Account settings' })).toBeVisible()
-    expect(screen.queryByRole('menuitem', { name: '账户设置' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '退出登录' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Custom user menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Custom account' })).toBeVisible()
+    expect(screen.queryByRole('menuitem', { name: 'Account settings' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument()
 
     logout.mockRejectedValueOnce(new Error('network down'))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Custom sign out' }))
     // sonner 的 toast store 是模块级全局、跨用例保留，故只断言覆盖文案上屏，
     // 不断言默认文案缺席。
-    expect(await screen.findByText('Sign-out failed')).toBeInTheDocument()
+    expect(await screen.findByText('Custom sign-out failed')).toBeInTheDocument()
   })
 })
 
@@ -196,7 +196,7 @@ describe('UserMenu 面板条目权限过滤（perm / permKey）', () => {
       </RouterTestHarness>,
     )
     await act(async () => {})
-    fireEvent.click(screen.getByRole('button', { name: '用户菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
     await screen.findByRole('menu')
     return result
   }

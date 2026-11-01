@@ -45,11 +45,11 @@ describe('LandingPage', () => {
 
   it('登录/注册 CTA 指向可配路径', async () => {
     await renderPage()
-    expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
       'href',
       '/login',
     )
-    const register = screen.getAllByRole('link', { name: /免费注册|免费开始/ })
+    const register = screen.getAllByRole('link', { name: /Sign up free|Get started free/ })
     for (const link of register) {
       expect(link).toHaveAttribute('href', '/register')
     }
@@ -57,6 +57,6 @@ describe('LandingPage', () => {
 
   it('推荐档位带"推荐"标记', async () => {
     await renderPage()
-    expect(screen.getByText('推荐')).toBeInTheDocument()
+    expect(screen.getByText('Recommended')).toBeInTheDocument()
   })
 })

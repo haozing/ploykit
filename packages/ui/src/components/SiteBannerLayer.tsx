@@ -1,22 +1,24 @@
 
 import { SiteBanner } from './SiteBanner';
 import { useSiteConfig } from '@ploykit/hooks';
+import { useT } from '../i18n';
 
 export interface SiteBannerLayerProps {
-  
+
   maintenanceText?: string;
 }
 
 export function SiteBannerLayer({
   maintenanceText,
 }: SiteBannerLayerProps = {}) {
+  const t = useT();
   const { data } = useSiteConfig();
   if (!data) return null;
   return (
     <>
       {data.maintenance_mode === '1' && (
         <SiteBanner
-          text={maintenanceText ?? '维护中：系统维护中，功能可能出现短暂不可用'}
+          text={maintenanceText ?? t('ui.siteBanner.maintenance')}
           kind="warn"
         />
       )}

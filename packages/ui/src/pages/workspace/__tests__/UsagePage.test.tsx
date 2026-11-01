@@ -6,7 +6,7 @@ import { UsagePage } from '../UsagePage'
 
 // RouterTestHarness 底下的 tanstack RouterProvider 首帧为 pending（初始 load 异步完成）——
 // 渲染后统一 flush 一次再断言。
-const flush = () => waitFor(() => expect(screen.queryAllByText('任务数（本月）').length).toBeGreaterThan(0))
+const flush = () => waitFor(() => expect(screen.queryAllByText('Tasks (this month)').length).toBeGreaterThan(0))
 
 const usageMocks = vi.hoisted(() => ({ useUsage: vi.fn() }))
 vi.mock('../../../../../hooks/src/hooks/useUsage', () => ({ useUsage: usageMocks.useUsage }))
@@ -49,7 +49,7 @@ describe('UsagePage', () => {
       wsId: 'ws-1', usage: null, loading: true, error: null, refetch: vi.fn(),
     })
     render(<UsagePage />)
-    expect(screen.getByText('加载用量数据…')).toBeInTheDocument()
+    expect(screen.getByText('Loading usage data…')).toBeInTheDocument()
   })
 
   it('按维度渲染卡片：used/limit 进度，limit=-1 显示“不限量”', async () => {
@@ -64,13 +64,12 @@ describe('UsagePage', () => {
     await flush()
 
     
-    expect(screen.getAllByText('任务数（本月）').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Tasks (this month)').length).toBeGreaterThanOrEqual(1)
     
     expect(screen.getByText(/250 \/ 1,000/)).toBeInTheDocument()
     expect(screen.getAllByRole('progressbar')).toHaveLength(2)
 
-    
-    expect(screen.getByText('不限量')).toBeInTheDocument()
+    expect(screen.getByText('Unlimited')).toBeInTheDocument()
     expect(screen.getByText(/3 \/ ∞/)).toBeInTheDocument()
 
     
@@ -95,11 +94,11 @@ describe('UsagePage', () => {
 
 
     // 卡题文本由 Tooltip 触发器 span 包住（收起时 portal 不挂载，原始键不进正文）
-    const titleTrigger = screen.getAllByText('任务数（本月）')[0]
+    const titleTrigger = screen.getAllByText('Tasks (this month)')[0]
     expect(titleTrigger).toHaveAttribute('data-slot', 'tooltip-trigger')
     const card = titleTrigger.closest('div[data-slot="card"]')
     expect(card).toBeTruthy()
-    expect(within(card as HTMLElement).getAllByText('任务数（本月）').length).toBeGreaterThanOrEqual(2)
+    expect(within(card as HTMLElement).getAllByText('Tasks (this month)').length).toBeGreaterThanOrEqual(2)
 
     // 聚焦触发器（键盘可达）→ Tooltip 经 portal 显示原始 API 键
     fireEvent.focus(titleTrigger)
@@ -149,14 +148,14 @@ describe('UsagePage', () => {
     )
     // flush 谓词盯的是“任务数（本月）”卡片，本用例只有 workspaces 维度——
     // 改盯页面标题等首帧上屏。
-    await waitFor(() => expect(screen.getByText('用量')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Usage')).toBeInTheDocument())
 
-    expect(screen.getByText('已用尽')).toBeInTheDocument()
-    expect(screen.getByText(/已用尽，可升级套餐提高上限/)).toBeInTheDocument()
-    expect(screen.queryByText(/超额操作将被拒绝/)).not.toBeInTheDocument()
+    expect(screen.getByText('Used up')).toBeInTheDocument()
+    expect(screen.getByText(/used up\. Upgrade your plan to raise the limit/)).toBeInTheDocument()
+    expect(screen.queryByText(/will be rejected/)).not.toBeInTheDocument()
 
-    
-    const link = screen.getByRole('link', { name: '升级套餐' })
+
+    const link = screen.getByRole('link', { name: 'Upgrade plan' })
     expect(link.getAttribute('href')).toBe('/settings/workspace/billing')
     expect(link.className).toContain('py-1.5')
     expect(link.className).toContain('-my-1.5')
@@ -168,8 +167,8 @@ describe('UsagePage', () => {
     })
     render(<UsagePage />)
 
-    expect(screen.queryByText(/预留中/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/预留明细/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reserved/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reserved details/)).not.toBeInTheDocument()
     expect(screen.getByText(/250 \/ 1,000/)).toBeInTheDocument()
   })
 
@@ -185,15 +184,14 @@ describe('UsagePage', () => {
     await flush()
 
     
-    const card = screen.getAllByText('任务数（本月）')[0].closest('div[data-slot="card"]')
+    const card = screen.getAllByText('Tasks (this month)')[0].closest('div[data-slot="card"]')
     expect(card).toBeTruthy()
     const scope = within(card as HTMLElement)
 
-    
     expect(scope.getByText(/250/)).toBeInTheDocument()
     expect(scope.getByText(/120/)).toBeInTheDocument()
     expect(scope.getByText(/1,000/)).toBeInTheDocument()
-    expect(scope.getAllByText(/预留中/).length).toBeGreaterThan(0)
+    expect(scope.getAllByText(/Reserved/).length).toBeGreaterThan(0)
 
     
     expect(scope.getAllByRole('progressbar')).toHaveLength(1)
@@ -201,7 +199,7 @@ describe('UsagePage', () => {
     expect(scope.getByTestId('progress-indicator-reserved')).toBeInTheDocument()
 
     
-    const seats = screen.getAllByText('成员席位')[0].closest('div[data-slot="card"]')
+    const seats = screen.getAllByText('Seats')[0].closest('div[data-slot="card"]')
     expect(within(seats as HTMLElement).queryByTestId('progress-indicator-reserved')).not.toBeInTheDocument()
   })
 
@@ -211,18 +209,18 @@ describe('UsagePage', () => {
     })
     render(<UsagePage />)
 
-    const summary = screen.getByText('预留明细（2 笔）')
+    const summary = screen.getByText('Reserved details (2)')
     const details = summary.closest('details') as HTMLDetailsElement
     expect(details).toBeTruthy()
     expect(details.open).toBe(false)
 
-    
+
     expect(screen.getByText('80')).toBeInTheDocument()
     expect(screen.getByText('40')).toBeInTheDocument()
     expect(screen.getByText('2026-10-07 12:34')).toBeInTheDocument()
     expect(screen.getByText('2026-10-07 09:00')).toBeInTheDocument()
-    
-    expect(screen.getAllByText('预留中').length).toBeGreaterThanOrEqual(2)
+
+    expect(screen.getAllByText('Reserved').length).toBeGreaterThanOrEqual(2)
 
     fireEvent.click(summary)
     expect(details.open).toBe(true)
@@ -233,6 +231,6 @@ describe('UsagePage', () => {
       wsId: '', usage: null, loading: false, error: null, refetch: vi.fn(),
     })
     render(<UsagePage />)
-    expect(screen.getByText('请先创建并选择一个工作区')).toBeInTheDocument()
+    expect(screen.getByText('Create and select a workspace first')).toBeInTheDocument()
   })
 })

@@ -84,11 +84,11 @@ describe('SSOPage', () => {
     expect(screen.getAllByText('acme-client')[0]).toBeInTheDocument();
     expect(screen.getAllByText('acme-client')[0]).toHaveAttribute('tabindex', '0');
 
-    expect(screen.getByText('已加密')).toBeInTheDocument();
-    expect(screen.getByText('明文')).toBeInTheDocument();
-    
+    expect(screen.getByText('Encrypted')).toBeInTheDocument();
+    expect(screen.getByText('Plaintext')).toBeInTheDocument();
+
     expect(
-      screen.getByText(/配置由各工作区自助管理，此处只读/),
+      screen.getByText(/Configuration is self-managed by each workspace/),
     ).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledWith('/api/admin/sso');
   });
@@ -105,7 +105,7 @@ describe('SSOPage', () => {
     mockedGet.mockResolvedValue(ROWS);
     renderPage();
 
-    expect(await screen.findByText('需重新保存以加密')).toBeInTheDocument();
+    expect(await screen.findByText('Re-save to encrypt')).toBeInTheDocument();
   });
 
   it('B-sso-7：配置/更新时间双值常显（updated != created 时显示更新行）', async () => {
@@ -113,16 +113,18 @@ describe('SSOPage', () => {
     renderPage();
 
     await screen.findByText('Acme');
-    
-    expect(screen.getByText(/更新 /)).toBeInTheDocument();
-    expect(screen.getByText('配置 / 更新时间')).toBeInTheDocument();
+
+    expect(screen.getByText(/Updated /)).toBeInTheDocument();
+    expect(screen.getByText('Configured / updated')).toBeInTheDocument();
   });
 
   it('空列表 → 空态"无工作区配置联邦 SSO"', async () => {
     mockedGet.mockResolvedValue([]);
     renderPage();
 
-    expect(await screen.findByText('无工作区配置联邦 SSO')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No workspaces configured federated SSO'),
+    ).toBeInTheDocument();
   });
 
   it('加载失败 → 错误态可重试（不渲染表格行）', async () => {
@@ -130,7 +132,7 @@ describe('SSOPage', () => {
     renderPage();
 
     expect(
-      await screen.findByRole('button', { name: '重试' }),
+      await screen.findByRole('button', { name: 'Retry' }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Acme')).not.toBeInTheDocument();
   });

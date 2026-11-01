@@ -81,13 +81,13 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
     renderPage()
     expect(await screen.findByText('https://example.com/hook')).toBeInTheDocument()
     expect(screen.getByText('task.created')).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: /暂停订阅/ })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByText('已投递')).toBeInTheDocument() 
+    expect(screen.getByRole('switch', { name: /Pause subscription/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Delivered')).toBeInTheDocument()
   })
 
   it('Switch 暂停订阅 → PATCH subscriptions/{id} {is_active:false}', async () => {
     renderPage()
-    const sw = await screen.findByRole('switch', { name: /暂停订阅/ })
+    const sw = await screen.findByRole('switch', { name: /Pause subscription/ })
     fireEvent.click(sw)
     await waitFor(() =>
       expect(apiMocks.patch).toHaveBeenCalledWith(
@@ -99,8 +99,8 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
 
   it('行操作菜单：删除（destructive）→ DELETE subscriptions/{id}', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /example.com\/hook 的操作/ }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Actions for subscription/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }))
     await waitFor(() =>
       expect(apiMocks.delete).toHaveBeenCalledWith(
         '/api/workspaces/ws-1/webhooks/subscriptions/sub-1',
@@ -112,15 +112,15 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
   it('创建订阅：提交正确 payload，secret 走 SecretModal 一次性展示', async () => {
     apiMocks.post.mockResolvedValue({ subscription, secret: 'whsec_abc123' })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /创建订阅/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Create subscription/ }))
 
-    fireEvent.change(await screen.findByLabelText('回调 URL'), {
+    fireEvent.change(await screen.findByLabelText('Endpoint URL'), {
       target: { value: 'https://example.com/hook' },
     })
-    
+
     const checkbox = screen.getByRole('checkbox', { name: /task\.created/ })
     fireEvent.click(checkbox)
-    fireEvent.click(screen.getByRole('button', { name: '创建订阅' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create subscription' }))
 
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/workspaces/ws-1/webhooks/subscriptions', {
@@ -129,16 +129,16 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
         events: ['task.created'],
       }),
     )
-    
+
     await waitFor(() => expect(screen.getByDisplayValue('whsec_abc123')).toBeInTheDocument())
   })
 
   it('投递记录页签：状态 Badge + 重投 POST deliveries/{id}/redeliver', async () => {
     apiMocks.post.mockResolvedValue({ ...delivery, id: 'dlv-2', event_id: 'evt-2' })
     renderPage()
-    fireEvent.click(await screen.findByRole('tab', { name: /投递记录/ }))
+    fireEvent.click(await screen.findByRole('tab', { name: /Deliveries/ }))
 
-    fireEvent.click(await screen.findByRole('button', { name: '重新投递' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Redeliver' }))
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith(
         '/api/workspaces/ws-1/webhooks/deliveries/dlv-1/redeliver',
@@ -147,7 +147,7 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalled())
   })
 
-  
+
 
   it('轮换密钥：确认弹窗明示 24h 宽限双签名，POST rotate-secret，新明文走 SecretModal 一次性展示', async () => {
     apiMocks.post.mockImplementation(async (path: string) => {
@@ -155,69 +155,69 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
       return {}
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /example.com\/hook 的操作/ }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '轮换密钥' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Actions for subscription/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rotate secret' }))
 
-    
+
     await waitFor(() => expect(confirmMock.calls.length).toBeGreaterThan(0))
-    expect(confirmMock.calls[0].description).toContain('24h 宽限期')
-    expect(confirmMock.calls[0].description).toContain('双签名')
+    expect(confirmMock.calls[0].description).toContain('24h grace period')
+    expect(confirmMock.calls[0].description).toContain('both old/new signatures')
 
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith(
         '/api/workspaces/ws-1/webhooks/subscriptions/sub-1/rotate-secret',
       ),
     )
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('密钥已轮换'))
-    
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith('Signing secret rotated'))
+
     expect(await screen.findByDisplayValue('whk_rotated_new')).toBeInTheDocument()
-    expect(screen.getByText('Webhook 签名密钥轮换成功')).toBeInTheDocument()
+    expect(screen.getByText('Webhook signing secret rotated')).toBeInTheDocument()
   })
 
   it('P2-5：member 不渲染任何写入口（创建/Switch/行菜单/重投），只读浏览', async () => {
     wsMock.current = { ...wsMock.current, role: 'member' }
     renderPage()
 
-    
-    expect(await screen.findByText('已启用')).toBeInTheDocument()
-    
-    expect(screen.queryByRole('button', { name: /创建订阅/ })).not.toBeInTheDocument()
+
+    expect(await screen.findByText('Active')).toBeInTheDocument()
+
+    expect(screen.queryByRole('button', { name: /Create subscription/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('switch')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /example.com\/hook 的操作/ })).not.toBeInTheDocument()
-    
-    fireEvent.click(await screen.findByRole('tab', { name: '投递记录' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: '重新投递' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Actions for subscription/ })).not.toBeInTheDocument()
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Deliveries' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Redeliver' })).not.toBeInTheDocument())
   })
 
   it('轮换密钥失败 → toast.error，不弹 SecretModal', async () => {
     apiMocks.post.mockRejectedValue(new Error('boom'))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /example.com\/hook 的操作/ }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '轮换密钥' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Actions for subscription/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rotate secret' }))
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalled())
     expect(screen.queryByDisplayValue(/whk_/)).not.toBeInTheDocument()
   })
 
-  
+
 
   it('B3：点击事件目录 label 文本区可切换选中（恰好一次，不双发）', async () => {
     apiMocks.post.mockResolvedValue({ subscription, secret: 'whsec_abc123' })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /创建订阅/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Create subscription/ }))
 
-    fireEvent.change(await screen.findByLabelText('回调 URL'), {
+    fireEvent.change(await screen.findByLabelText('Endpoint URL'), {
       target: { value: 'https://example.com/hook' },
     })
-    
+
     fireEvent.click(await screen.findByText('任务创建'))
-    fireEvent.click(screen.getByRole('button', { name: '创建订阅' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create subscription' }))
 
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/workspaces/ws-1/webhooks/subscriptions', {
         url: 'https://example.com/hook',
         description: '',
-        
+
         events: ['task.created'],
       }),
     )
@@ -226,14 +226,14 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
   it('B3：直接点方块本体仍单次切换（label 接管处理不与 Checkbox 自身双发）', async () => {
     apiMocks.post.mockResolvedValue({ subscription, secret: 'whsec_abc123' })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /创建订阅/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Create subscription/ }))
 
-    fireEvent.change(await screen.findByLabelText('回调 URL'), {
+    fireEvent.change(await screen.findByLabelText('Endpoint URL'), {
       target: { value: 'https://example.com/hook' },
     })
     fireEvent.click(screen.getByRole('checkbox', { name: /task\.created/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /task\.deleted/ }))
-    fireEvent.click(screen.getByRole('button', { name: '创建订阅' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create subscription' }))
 
     await waitFor(() =>
       expect(apiMocks.post).toHaveBeenCalledWith('/api/workspaces/ws-1/webhooks/subscriptions', {
@@ -244,14 +244,14 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
     )
   })
 
-  
+
 
   it('B5：投递记录 15s 轮询（页面可见时自动 refetch，进度无需手动刷新）', async () => {
-    
+
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       renderPage()
-      await screen.findByText('已投递') 
+      await screen.findByText('Delivered')
       const deliveriesCalls = () =>
         apiMocks.get.mock.calls.filter(([p]: [string]) => p.includes('/deliveries')).length
       const before = deliveriesCalls()
@@ -259,14 +259,14 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(15_000)
       })
-      
+
       expect(deliveriesCalls()).toBeGreaterThan(before)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  
+
 
   it('B8：订阅已删的投递行标注"已删除订阅"，命中行显示归属 URL', async () => {
     apiMocks.get.mockImplementation(async (path: string) => {
@@ -285,11 +285,11 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
       throw new Error('unexpected GET ' + path)
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('tab', { name: /投递记录/ }))
+    fireEvent.click(await screen.findByRole('tab', { name: /Deliveries/ }))
 
     await screen.findByText('evt-2')
-    expect(screen.getByText('已删除订阅')).toBeInTheDocument()
-    
+    expect(screen.getByText('Deleted subscription')).toBeInTheDocument()
+
     expect(screen.getAllByText('https://example.com/hook').length).toBeGreaterThan(0)
   })
 
@@ -301,9 +301,9 @@ describe('WebhooksPage（从 example 提升进框架）', () => {
       throw new Error('unexpected GET ' + path)
     })
     renderPage()
-    fireEvent.click(await screen.findByRole('tab', { name: /投递记录/ }))
+    fireEvent.click(await screen.findByRole('tab', { name: /Deliveries/ }))
 
     await screen.findByText('evt-1')
-    expect(screen.queryByText('已删除订阅')).not.toBeInTheDocument()
+    expect(screen.queryByText('Deleted subscription')).not.toBeInTheDocument()
   })
 })

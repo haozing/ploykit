@@ -73,7 +73,7 @@ describe('NotificationBell', () => {
     
     await waitFor(() => expect(countCalls('/api/notifications/badge')).toBe(2))
     
-    expect(screen.getByRole('button', { name: '通知' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument()
     expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 
@@ -91,7 +91,7 @@ describe('NotificationBell', () => {
     
     await waitFor(() => expect(countCalls('/api/notifications?')).toBe(0))
 
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     expect(await screen.findByText('用量接近上限')).toBeInTheDocument()
     expect(screen.getByText('已读的历史通知')).toBeInTheDocument()
     expect(mockedGet).toHaveBeenCalledWith('/api/notifications?limit=8')
@@ -100,7 +100,7 @@ describe('NotificationBell', () => {
   it('单条已读：POST /:id/read 成功后按前缀失效 badge（立即重拉）与 list（重开面板时重拉）', async () => {
     mockedGet.mockImplementation(dispatchGet(2, [unreadItem]))
     renderBell()
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     await screen.findByText('用量接近上限')
     const badgeCallsBefore = countCalls('/api/notifications/badge')
     const listCallsBefore = countCalls('/api/notifications?')
@@ -116,7 +116,7 @@ describe('NotificationBell', () => {
     expect(mockedPost).not.toHaveBeenCalledWith('/api/notifications/read-all')
 
     
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     await waitFor(() => {
       expect(countCalls('/api/notifications?')).toBeGreaterThan(listCallsBefore)
     }, { timeout: 2000 })
@@ -125,8 +125,8 @@ describe('NotificationBell', () => {
   it('全部已读：POST /read-all 并失效查询', async () => {
     mockedGet.mockImplementation(dispatchGet(2, [unreadItem, readItem]))
     renderBell()
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
-    fireEvent.click(await screen.findByText('全部已读'))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    fireEvent.click(await screen.findByText('Mark all as read'))
 
     await waitFor(() => expect(mockedPost).toHaveBeenCalledWith('/api/notifications/read-all'))
     await waitFor(() => {
@@ -137,14 +137,14 @@ describe('NotificationBell', () => {
   it('外点关闭：面板外 mousedown 关闭下拉', async () => {
     mockedGet.mockImplementation(dispatchGet(1, [unreadItem]))
     renderBell()
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     await screen.findByText('用量接近上限')
 
     fireEvent.mouseDown(document.body)
     expect(screen.queryByText('用量接近上限')).not.toBeInTheDocument()
 
     
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     await screen.findByText('用量接近上限')
     fireEvent.mouseDown(screen.getByText('用量接近上限'))
     expect(screen.getByText('用量接近上限')).toBeInTheDocument()
@@ -154,7 +154,7 @@ describe('NotificationBell', () => {
     mockedGet.mockImplementation(dispatchGet(1, [unreadItem]))
     const onNavigate = vi.fn()
     renderBell(onNavigate)
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     fireEvent.click(await screen.findByText('用量接近上限'))
 
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('/settings/workspace/usage'))
@@ -165,7 +165,7 @@ describe('NotificationBell', () => {
     mockedGet.mockImplementation(dispatchGet(1, [{ ...unreadItem, link: null }]))
     const onNavigate = vi.fn()
     renderBell(onNavigate)
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     fireEvent.click(await screen.findByText('用量接近上限'))
 
     await waitFor(() => expect(mockedPost).toHaveBeenCalledWith('/api/notifications/n-1/read'))
@@ -174,7 +174,7 @@ describe('NotificationBell', () => {
 })
 
 describe('P2-7/P2-19：加载态与键盘化', () => {
-  it('P2-7：列表加载中显示"加载中…"而非"暂无通知"空态', async () => {
+  it('P2-7：列表加载中显示"Loading…"而非"No notifications"空态', async () => {
     let resolveList!: (v: N[]) => void
     mockedGet.mockImplementation((url: string) => {
       if (url === '/api/notifications/badge') return Promise.resolve({ count: 0 })
@@ -182,18 +182,18 @@ describe('P2-7/P2-19：加载态与键盘化', () => {
       return Promise.reject(new Error(`unexpected GET ${url}`))
     })
     renderBell()
-    fireEvent.click(screen.getByRole('button', { name: '通知' }))
-    expect(await screen.findByText('加载中…')).toBeInTheDocument()
-    expect(screen.queryByText('暂无通知')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    expect(await screen.findByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('No notifications')).not.toBeInTheDocument()
 
     resolveList([])
-    await waitFor(() => expect(screen.getByText('暂无通知')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('No notifications')).toBeInTheDocument())
   })
 
   it('P2-19：条目为 button（Tab/Enter 可操作）；触发钮带 aria-haspopup/expanded', async () => {
     mockedGet.mockImplementation(dispatchGet(1, [unreadItem]))
     renderBell()
-    const trigger = screen.getByRole('button', { name: '通知' })
+    const trigger = screen.getByRole('button', { name: 'Notifications' })
     expect(trigger).toHaveAttribute('aria-haspopup', 'true')
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
 

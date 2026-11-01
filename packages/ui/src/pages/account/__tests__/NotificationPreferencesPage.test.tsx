@@ -34,22 +34,22 @@ describe('NotificationPreferencesPage', () => {
   it('loading 时渲染加载态', () => {
     mocks.loading = true
     render(<NotificationPreferencesPage />)
-    expect(screen.getByText('加载中…')).toBeInTheDocument()
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
   it('error 时渲染错误重试', () => {
     mocks.error = new Error('boom')
     render(<NotificationPreferencesPage />)
     expect(screen.getByText('boom')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
   it('无 types prop 时以 API 行生成清单（值取行内字段）', () => {
     mocks.prefs = [pref({ notification_type: 'workspace.invited', email_enabled: false })]
     render(<NotificationPreferencesPage />)
     expect(screen.getByText('workspace.invited')).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: '邮件（workspace.invited）' })).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByRole('switch', { name: '站内（workspace.invited）' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: /Email\s*\(workspace\.invited\)/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('switch', { name: /In-app\s*\(workspace\.invited\)/ })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('types prop 清单 × 缺行 = 双渠道默认开启', () => {
@@ -63,14 +63,14 @@ describe('NotificationPreferencesPage', () => {
     )
     expect(screen.getByText('工作区邀请')).toBeInTheDocument()
     expect(screen.getByText('被邀请加入工作区时')).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: '站内（工作区邀请）' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('switch', { name: '邮件（工作区邀请）' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: /In-app\s*\(工作区邀请\)/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('switch', { name: /Email\s*\(工作区邀请\)/ })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('切换站内开关 → setPref(type, {in_app_enabled:false})', async () => {
     mocks.prefs = [pref()]
     render(<NotificationPreferencesPage />)
-    fireEvent.click(screen.getByRole('switch', { name: '站内（workspace.invited）' }))
+    fireEvent.click(screen.getByRole('switch', { name: /In-app\s*\(workspace\.invited\)/ }))
     await waitFor(() =>
       expect(mocks.setPref).toHaveBeenCalledWith('workspace.invited', { in_app_enabled: false }),
     )
@@ -78,7 +78,7 @@ describe('NotificationPreferencesPage', () => {
 
   it('空清单渲染空态', () => {
     render(<NotificationPreferencesPage types={[]} />)
-    expect(screen.getByText('暂无可配置的通知类型')).toBeInTheDocument()
+    expect(screen.getByText('No configurable notification types')).toBeInTheDocument()
   })
 
   
@@ -88,14 +88,14 @@ describe('NotificationPreferencesPage', () => {
       <NotificationPreferencesPage emailChannelNote="当前环境未接邮件发送（偏好仍会保存）" />,
     )
     expect(
-      screen.getByText('邮件渠道：当前环境未接邮件发送（偏好仍会保存）'),
+      screen.getByText('Email channel: 当前环境未接邮件发送（偏好仍会保存）'),
     ).toBeInTheDocument()
   })
 
   it('emailChannelNote 缺省不渲染说明行（默认假定渠道可用）', () => {
     mocks.prefs = [pref()]
     render(<NotificationPreferencesPage />)
-    expect(screen.queryByText(/^邮件渠道：/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Email channel:/)).not.toBeInTheDocument()
   })
 
   
@@ -105,10 +105,10 @@ describe('NotificationPreferencesPage', () => {
   it('渠道文字是 label：htmlFor 落到内部 checkbox，开关名经 aria-labelledby 关联', () => {
     mocks.prefs = [pref()]
     render(<NotificationPreferencesPage />)
-    const inAppSwitch = screen.getByRole('switch', { name: '站内（workspace.invited）' })
-    const emailSwitch = screen.getByRole('switch', { name: '邮件（workspace.invited）' })
-    const inAppLabel = screen.getByText(/^站内/, { selector: 'label' })
-    const emailLabel = screen.getByText(/^邮件/, { selector: 'label' })
+    const inAppSwitch = screen.getByRole('switch', { name: /In-app\s*\(workspace\.invited\)/ })
+    const emailSwitch = screen.getByRole('switch', { name: /Email\s*\(workspace\.invited\)/ })
+    const inAppLabel = screen.getByText(/^In-app/, { selector: 'label' })
+    const emailLabel = screen.getByText(/^Email/, { selector: 'label' })
 
     expect(inAppLabel).toHaveAttribute('for')
     expect(emailLabel).toHaveAttribute('for')
@@ -127,7 +127,7 @@ describe('NotificationPreferencesPage', () => {
   it('点击"邮件"文字 → 触发对应开关切换（label 关联可达）', async () => {
     mocks.prefs = [pref()]
     render(<NotificationPreferencesPage />)
-    fireEvent.click(screen.getByText(/^邮件/, { selector: 'label' }))
+    fireEvent.click(screen.getByText(/^Email/, { selector: 'label' }))
     await waitFor(() =>
       expect(mocks.setPref).toHaveBeenCalledWith('workspace.invited', { email_enabled: false }),
     )
@@ -137,13 +137,13 @@ describe('NotificationPreferencesPage', () => {
   it('siteName 传入时挂"通知偏好 · <产品名>"式页题', () => {
     mocks.prefs = [pref()]
     render(<NotificationPreferencesPage siteName="MyProduct" />)
-    expect(document.title).toBe('通知偏好 · MyProduct')
+    expect(document.title).toBe('Notification preferences · MyProduct')
   })
 
   it('siteName 缺省只挂页题；自定义 title prop 同样生效', () => {
     mocks.prefs = [pref()]
     const { rerender } = render(<NotificationPreferencesPage />)
-    expect(document.title).toBe('通知偏好')
+    expect(document.title).toBe('Notification preferences')
     rerender(<NotificationPreferencesPage title="通知设置" siteName="MyProduct" />)
     expect(document.title).toBe('通知设置 · MyProduct')
   })

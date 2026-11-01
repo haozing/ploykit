@@ -1,6 +1,7 @@
 
 import type { ComponentProps } from 'react'
 import { Toaster as SonnerToaster, toast as sonnerToast } from 'sonner'
+import { useT } from '../i18n'
 
 
 
@@ -19,5 +20,7 @@ export const toast: SonnerToast = Object.assign(sonnerToast, {
 })
 
 export function Toaster(props: ComponentProps<typeof SonnerToaster>) {
-  return <SonnerToaster richColors position="top-right" containerAriaLabel="通知" {...props} />
+  // 通知区 aria-label 走 i18n 字典（默认 en）；{...props} 在后，宿主仍可覆盖。
+  const t = useT()
+  return <SonnerToaster richColors position="top-right" containerAriaLabel={t('ui.toast.containerAria')} {...props} />
 }

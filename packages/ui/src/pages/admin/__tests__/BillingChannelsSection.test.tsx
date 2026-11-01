@@ -129,8 +129,8 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     expect(text).toHaveValue('M_123');
     expect(text).toHaveAttribute('type', 'text');
 
-    // secret：一律空串回填 + type=password；values==="__SET__" → label 标（已设置）
-    const secret = card.getByLabelText(/^私钥（已设置）/);
+    // secret：一律空串回填 + type=password；values==="__SET__" → label 标 (set)
+    const secret = card.getByLabelText(/^私钥 \(set\)/);
     expect(secret).toHaveValue('');
     expect(secret).toHaveAttribute('type', 'password');
 
@@ -139,14 +139,14 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     const select = card.getByRole('combobox', { name: '模式' });
     expect(select).toHaveTextContent(/test|测试/);
 
-    // 徽标：已配置 / 后台配置（config_source=db）/ 回调验签已配
-    expect(card.getByText('已配置')).toBeInTheDocument();
-    expect(card.getByText('后台配置')).toBeInTheDocument();
-    expect(card.getByText('回调验签已配')).toBeInTheDocument();
+    // 徽标：已配置 / 后台配置（config_source=db）/ 回调验签已配（i18n en）
+    expect(card.getByText('Configured')).toBeInTheDocument();
+    expect(card.getByText('Console')).toBeInTheDocument();
+    expect(card.getByText('Webhook signature set')).toBeInTheDocument();
 
-    // 留空保持不变 的 secret 帮助文案
+    // 留空保持不变 的 secret 帮助文案（help 来自后端 schema，后缀走字典）
     expect(
-      card.getByText(/渠道后台下载的 PEM 私钥；留空保持不变/),
+      card.getByText(/渠道后台下载的 PEM 私钥; leave blank to keep unchanged/),
     ).toBeInTheDocument();
   });
 
@@ -182,19 +182,19 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('stripe')));
 
-    expect(card.getByText('未配置')).toBeInTheDocument();
+    expect(card.getByText('Not configured')).toBeInTheDocument();
     expect(
-      card.queryByText('后台配置'),
+      card.queryByText('Console'),
     ).not.toBeInTheDocument();
     expect(
-      card.queryByText('环境变量'),
+      card.queryByText('Environment'),
     ).not.toBeInTheDocument();
-    expect(card.getByText('回调验签未配')).toBeInTheDocument();
+    expect(card.getByText('Webhook signature not set')).toBeInTheDocument();
     // 未设置（values 为空串）的 secret 不带（已设置）
     expect(card.getByLabelText(/^Secret Key/)).toBeInTheDocument();
     // 未配置 → 测试连接禁用
     expect(
-      card.getByRole('button', { name: '测试连接' }),
+      card.getByRole('button', { name: 'Test connection' }),
     ).toBeDisabled();
   });
 
@@ -212,10 +212,12 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      card.getByRole('button', { name: '复制 waffo Webhook URL' }),
+      card.getByRole('button', { name: 'Copy waffo Webhook URL' }),
     ).toBeInTheDocument();
     expect(
-      card.getByText('将此 URL 粘贴到渠道后台的 Webhook 设置。'),
+      card.getByText(
+        'Paste this URL into the Webhook settings in your channel dashboard.',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -223,7 +225,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('waffo')));
 
-    fireEvent.click(card.getByRole('button', { name: '保存' }));
+    fireEvent.click(card.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(mockedPut).toHaveBeenCalledWith(
@@ -233,7 +235,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
         },
       ),
     );
-    expect(toastMocks.success).toHaveBeenCalledWith('渠道 waffo 已保存');
+    expect(toastMocks.success).toHaveBeenCalledWith('Channel waffo saved');
   });
 
   it('保存提交体：text 改值 + secret 填新值 → 全量 fields 提交', async () => {
@@ -243,10 +245,10 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     fireEvent.change(card.getByRole('textbox', { name: '商户 ID' }), {
       target: { value: 'M_999' },
     });
-    fireEvent.change(card.getByLabelText(/^私钥（已设置）/), {
+    fireEvent.change(card.getByLabelText(/^私钥 \(set\)/), {
       target: { value: 'NEW-KEY' },
     });
-    fireEvent.click(card.getByRole('button', { name: '保存' }));
+    fireEvent.click(card.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(mockedPut).toHaveBeenCalledWith(
@@ -265,10 +267,10 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     fireEvent.change(card.getByRole('textbox', { name: '商户 ID' }), {
       target: { value: '' },
     });
-    fireEvent.click(card.getByRole('button', { name: '保存' }));
+    fireEvent.click(card.getByRole('button', { name: 'Save' }));
 
     expect(await card.findByRole('alert')).toHaveTextContent(
-      '必填项未填写：商户 ID',
+      'Required fields missing: 商户 ID',
     );
     expect(mockedPut).not.toHaveBeenCalled();
   });
@@ -311,7 +313,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     fireEvent.change(card.getByRole('textbox', { name: 'Webhook 密钥' }), {
       target: { value: 'whsec_123' },
     });
-    fireEvent.click(card.getByRole('button', { name: '保存' }));
+    fireEvent.click(card.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(mockedPut).toHaveBeenCalledWith(
@@ -321,7 +323,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
         },
       ),
     );
-    expect(toastMocks.success).toHaveBeenCalledWith('渠道 stripe 已保存');
+    expect(toastMocks.success).toHaveBeenCalledWith('Channel stripe saved');
   });
 
   it('env_provided 不含该键且非 secret __SET__ → 必填空值仍拦截', async () => {
@@ -347,10 +349,10 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('stripe')));
 
-    fireEvent.click(card.getByRole('button', { name: '保存' }));
+    fireEvent.click(card.getByRole('button', { name: 'Save' }));
 
     expect(await card.findByRole('alert')).toHaveTextContent(
-      '必填项未填写：Secret key',
+      'Required fields missing: Secret key',
     );
     expect(mockedPut).not.toHaveBeenCalled();
   });
@@ -362,7 +364,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('waffo')));
 
-    fireEvent.click(card.getByRole('button', { name: '保存' }));
+    fireEvent.click(card.getByRole('button', { name: 'Save' }));
 
     expect(await card.findByRole('alert')).toHaveTextContent(
       'unknown field: foo',
@@ -375,17 +377,17 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
 
     // 小字说明：测试的是已保存配置（未保存的新密钥测的是旧值）
     expect(
-      card.getByText(/修改后请先保存再测试/),
+      card.getByText(/save changes before testing/),
     ).toBeInTheDocument();
 
-    fireEvent.click(card.getByRole('button', { name: '测试连接' }));
+    fireEvent.click(card.getByRole('button', { name: 'Test connection' }));
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith(
         '/api/admin/billing/test-connection',
         { channel: 'waffo' },
       ),
     );
-    expect(await card.findByText('连接正常')).toBeInTheDocument();
+    expect(await card.findByText('Connection OK')).toBeInTheDocument();
   });
 
   it('测试连接失败（4xx 带 err）→ 展示失败原因', async () => {
@@ -395,9 +397,9 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('waffo')));
 
-    fireEvent.click(card.getByRole('button', { name: '测试连接' }));
+    fireEvent.click(card.getByRole('button', { name: 'Test connection' }));
 
-    expect(await card.findByText(/测试失败/)).toHaveTextContent(
+    expect(await card.findByText(/Test failed/)).toHaveTextContent(
       'invalid merchant credentials',
     );
   });
@@ -406,7 +408,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('waffo')));
     expect(
-      card.getByText(/当前为测试模式，不会产生真实扣款/),
+      card.getByText(/Test mode: no real charges/),
     ).toBeInTheDocument();
     expect(card.getByText(/4576 7500 0000 0110/)).toBeInTheDocument();
     expect(card.getByText(/4576 7500 0000 0220/)).toBeInTheDocument();
@@ -436,7 +438,7 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const paypal = within(await waitFor(() => cardOf('paypal')));
     expect(
-      paypal.getByText(/当前为测试模式，不会产生真实扣款/),
+      paypal.getByText(/Test mode: no real charges/),
     ).toBeInTheDocument();
     expect(
       paypal.queryByText(/4576 7500 0000 0110/),
@@ -456,10 +458,10 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     renderSection();
     const card = within(await waitFor(() => cardOf('stripe')));
 
-    expect(card.getByText('模式：环境变量提供')).toBeInTheDocument();
+    expect(card.getByText('Mode: provided by environment')).toBeInTheDocument();
     // DB 无值 → 不渲染测试模式提示条（不猜 env 提供的是 test 还是 prod）
     expect(
-      card.queryByText(/当前为测试模式/),
+      card.queryByText(/Test mode/),
     ).not.toBeInTheDocument();
   });
 
@@ -472,9 +474,9 @@ describe('BillingChannelsSection（BC-6 渠道配置）', () => {
     const card = within(await waitFor(() => cardOf('waffo')));
 
     expect(
-      card.queryByText('模式：环境变量提供'),
+      card.queryByText('Mode: provided by environment'),
     ).not.toBeInTheDocument();
-    expect(card.getByText(/当前为测试模式/)).toBeInTheDocument();
+    expect(card.getByText(/Test mode/)).toBeInTheDocument();
   });
 
   it('按 display_order 排序展示', async () => {

@@ -20,22 +20,26 @@ import { apiErrorMessage } from '../../lib/api-error';
 import { postTurnstileProtected, turnstileSiteKey } from '../../lib/turnstile';
 import { passwordKinds, passwordSchema } from '../../lib/password-schema';
 import { toast } from '../../components/toast';
+import { useT, t as tt } from '../../i18n';
 import type { PKUser } from '@ploykit/hooks';
 
 // 密码强度规则住在 lib/password-schema：它同时被重置密码页与设置区的
 // 改密页复用，留在本文件会把整个注册页组件连带拖进设置区的 chunk。
 export { passwordSchema };
 
+// 校验文案经 error map 惰性取字典（i18n B 方案）：解析时才调 t；纯函数测试
+// （无 Provider）拿 en 默认。password 字段的强度文案来自 lib/password-schema
+// （共享 lib，不在 g7 分片，保持原样）。
 export const registerSchema = z.object({
-  
+
   email: z.string().check(
-    z.minLength(1, '请输入邮箱'),
-    z.maxLength(254, '邮箱过长'),
-    z.email('邮箱格式不正确'),
+    z.minLength(1, { error: () => tt('auth.register.emailRequired') }),
+    z.maxLength(254, { error: () => tt('auth.register.emailTooLong') }),
+    z.email({ error: () => tt('auth.register.emailInvalid') }),
   ),
   password: passwordSchema,
-  
-  display_name: z.optional(z.string().check(z.maxLength(100, '昵称最多 100 字符'))),
+
+  display_name: z.optional(z.string().check(z.maxLength(100, { error: () => tt('auth.register.nameTooLong') }))),
 });
 
 export type RegisterForm = z.infer<typeof registerSchema>;
@@ -52,10 +56,12 @@ export interface RegisterPageProps {
 export function RegisterPage({
   onSuccess,
   loginPath = '/login',
-  title = '创建账号',
+  title,
   description,
 }: RegisterPageProps) {
   const { refresh } = useAuth();
+  const t = useT(); // i18n（B 方案）：默认标题走字典，title prop 优先
+  const pageTitle = title ?? t('auth.register.title');
 
   const { data: siteCfg } = useSiteConfig();
   const inviteOnly = siteCfg?.allow_signup === '0';
@@ -88,11 +94,11 @@ export function RegisterPage({
         turnstileToken,
       )
       await refresh();
-      toast.success('注册成功');
+      toast.success(t('auth.register.successToast'));
       if (onSuccess) onSuccess();
       else window.location.href = '/app';
     } catch (e) {
-      const msg = apiErrorMessage(e, '注册失败，请稍后重试');
+      const msg = apiErrorMessage(e, t('auth.register.failed'));
       setServerError(msg);
       toast.error(msg);
       // token 一次性：无论何种失败（含 400 E_TURNSTILE）都不复用，重置出题。
@@ -112,13 +118,13 @@ export function RegisterPage({
     <>
       {inviteOnly && (
         <div className="fixed inset-x-0 top-0 z-50 border-b border-primary/25 bg-primary/10 px-4 py-2 text-center text-sm text-primary">
-          当前为邀请制注册：仅白名单邮箱可完成注册（最终以服务端校验为准）
+          {t('auth.register.inviteOnly')}
         </div>
       )}
-      <AuthShell footer={<span>注册即代表同意我们的服务条款与隐私政策</span>}>
+      <AuthShell footer={<span>{t('auth.register.legalNote')}</span>}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-1 text-center">
-            <h1 className="text-2xl font-bold">{title}</h1>
+            <h1 className="text-2xl font-bold">{pageTitle}</h1>
             {description && (
               <p className="text-sm text-balance text-muted-foreground">
                 {description}
@@ -127,7 +133,7 @@ export function RegisterPage({
           </div>
 
           <FormField
-            label="邮箱"
+            label={t('auth.register.emailLabel')}
             error={form.formState.errors.email?.message}
             htmlFor="reg-email"
           >
@@ -141,29 +147,31 @@ export function RegisterPage({
           </FormField>
 
           <FormField
-            label="密码"
+            label={t('auth.register.passwordLabel')}
             error={form.formState.errors.password?.message}
             htmlFor="reg-password"
           >
             <PasswordField
               id="reg-password"
-              placeholder="至少 10 位，含三类字符"
+              placeholder={t('auth.register.passwordPlaceholder')}
               autoComplete="new-password"
               {...form.register('password')}
             />
             {pw.length > 0 && (
               <FieldDescription>
-                字符类别：大写 {/[A-Z]/.test(pw) ? '✓' : '—'} / 小写{' '}
-                {/[a-z]/.test(pw) ? '✓' : '—'} / 数字{' '}
-                {/[0-9]/.test(pw) ? '✓' : '—'} / 符号{' '}
-                {/[^0-9a-zA-Z]/.test(pw) ? '✓' : '—'}
-                （已满足 {kinds}/3 类）
+                {t('auth.register.kinds', {
+                  upper: /[A-Z]/.test(pw) ? '✓' : '—',
+                  lower: /[a-z]/.test(pw) ? '✓' : '—',
+                  digit: /[0-9]/.test(pw) ? '✓' : '—',
+                  symbol: /[^0-9a-zA-Z]/.test(pw) ? '✓' : '—',
+                  kinds,
+                })}
               </FieldDescription>
             )}
           </FormField>
 
           <FormField
-            label="昵称（可选）"
+            label={t('auth.register.nameLabel')}
             error={form.formState.errors.display_name?.message}
             htmlFor="reg-name"
           >
@@ -171,7 +179,7 @@ export function RegisterPage({
               id="reg-name"
               type="text"
               maxLength={100}
-              placeholder="怎么称呼你？"
+              placeholder={t('auth.register.namePlaceholder')}
               {...form.register('display_name')}
             />
           </FormField>
@@ -193,14 +201,14 @@ export function RegisterPage({
             {submitting ? (
               <>
                 <Spinner aria-hidden="true" />
-                注册中…
+                {t('auth.register.submitting')}
               </>
             ) : (
-              '创建账号'
+              t('auth.register.submit')
             )}
           </Button>
 
-          <FieldSeparator>已有账号？</FieldSeparator>
+          <FieldSeparator>{t('auth.register.hasAccount')}</FieldSeparator>
           <Button
             type="button"
             variant="outline"
@@ -208,7 +216,7 @@ export function RegisterPage({
               window.location.href = loginPath;
             }}
           >
-            登录
+            {t('auth.register.signIn')}
           </Button>
         </form>
       </AuthShell>

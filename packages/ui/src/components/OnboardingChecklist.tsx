@@ -5,6 +5,7 @@ import { cn } from '../lib/utils'
 import { Progress, ProgressLabel, ProgressValue } from './ui/progress'
 import { Button } from './ui/button'
 import { useAuth } from '@ploykit/hooks'
+import { useT } from '../i18n'
 
 export interface OnboardingItem {
   key: string
@@ -23,15 +24,17 @@ export interface OnboardingChecklistProps {
 
 const DISMISS_KEY = 'pk_onboarding_dismissed'
 
-function defaultItems(hasWorkspaces: boolean): OnboardingItem[] {
+// 默认条目文案走字典（g9：ui.onboarding.*）——由调用方（组件渲染期）传入 t。
+function defaultItems(hasWorkspaces: boolean, translate: (key: string) => string): OnboardingItem[] {
   return [
-    { key: 'create-workspace', label: '创建第一个工作区', done: hasWorkspaces },
+    { key: 'create-workspace', label: translate('ui.onboarding.createWorkspace'), done: hasWorkspaces },
   ]
 }
 
 export function OnboardingChecklist({
-  items, storageKey = DISMISS_KEY, title = '开始使用',
+  items, storageKey = DISMISS_KEY, title,
 }: OnboardingChecklistProps = {}) {
+  const t = useT() // 默认标题/进度/aria 文案走字典，title prop 优先
   const { user, workspaces } = useAuth()
   
   
@@ -45,7 +48,7 @@ export function OnboardingChecklist({
   }, [storageKey])
 
   
-  const list = items ?? (user ? defaultItems(workspaces.length > 0) : [])
+  const list = items ?? (user ? defaultItems(workspaces.length > 0, t) : [])
   if (!user || dismissed || list.length === 0) return null
 
   const doneCount = list.filter((i) => i.done).length
@@ -65,18 +68,18 @@ export function OnboardingChecklist({
     <section className="w-full rounded-xl border bg-card p-4 shadow-xs">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
+          <h3 className="text-sm font-semibold">{title ?? t('ui.onboarding.defaultTitle')}</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {allDone ? '全部完成，开始你的旅程吧！' : `已完成 ${doneCount}/${list.length} 项`}
+            {allDone ? t('ui.onboarding.allDone') : t('ui.onboarding.progressCount', { done: doneCount, total: list.length })}
           </p>
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="关闭引导清单" onClick={dismiss}>
+        <Button variant="ghost" size="icon-sm" aria-label={t('ui.onboarding.dismissAria')} onClick={dismiss}>
           <X />
         </Button>
       </div>
 
       <Progress value={pct} className="mt-3">
-        <ProgressLabel>{allDone ? '完成' : '进度'}</ProgressLabel>
+        <ProgressLabel>{allDone ? t('ui.onboarding.complete') : t('ui.onboarding.progress')}</ProgressLabel>
         <ProgressValue />
       </Progress>
 

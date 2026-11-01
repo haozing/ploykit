@@ -57,7 +57,9 @@ async function renderAt(path: string) {
       <RouteContentProbe path={path} />
     </RouterTestHarness>,
   )
-  await waitFor(() => expect(screen.queryAllByText('设置').length).toBeGreaterThan(0))
+  // RouterProvider 首帧 pending（见上注）——等壳标题上屏再返回。
+  // i18n（B 方案）：默认标题走字典 en 'Settings'；本组用例显式传 title="设置"，prop 优先。
+  await waitFor(() => expect(screen.getByText('设置')).toBeInTheDocument())
   return result
 }
 
@@ -67,7 +69,7 @@ describe('SettingsShell', () => {
   it('渲染标题/描述/全部分组与条目（URL 驱动激活态）', async () => {
     await renderAt('/settings/profile')
     
-    expect(screen.getByText('设置')).toBeInTheDocument()
+    expect(screen.getByText('设置')).toBeInTheDocument() // 显式 title prop 优先，不进字典
     expect(screen.queryByRole('heading', { name: '设置' })).not.toBeInTheDocument()
     expect(screen.getByText('desc')).toBeInTheDocument()
     expect(screen.getByText('账户')).toBeInTheDocument()
@@ -181,7 +183,8 @@ describe('SettingsShell permKey 门控（与 AppShell/UserMenu 同判据）', ()
         </SettingsShell>
       </RouterTestHarness>,
     )
-    await waitFor(() => expect(screen.queryAllByText('设置').length).toBeGreaterThan(0))
+    // 首帧 pending 同上；本组显式传 title="设置"（prop 优先，不走字典）。
+    await waitFor(() => expect(screen.getByText('设置')).toBeInTheDocument())
   }
 
   it('role_perms 已知且不含 billing:read → 计费项隐藏，其余显示', async () => {

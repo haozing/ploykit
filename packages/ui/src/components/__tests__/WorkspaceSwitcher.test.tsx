@@ -63,7 +63,7 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
 
   it('渲染当前工作区，打开菜单列出工作区与新建入口', async () => {
     await renderSwitcher()
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     expect(trigger).toHaveTextContent('Acme')
 
     
@@ -71,12 +71,12 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
 
     expect(await screen.findByRole('menu')).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /Beta/ })).toBeVisible()
-    expect(screen.getByRole('menuitem', { name: /新建工作区/ })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: /New workspace/ })).toBeVisible()
   })
 
   it('点击工作区项调用 switchTo', async () => {
     await renderSwitcher()
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     fireEvent.click(trigger)
     fireEvent.click(await screen.findByRole('menuitem', { name: /Beta/ }))
     expect(switchTo).toHaveBeenCalledWith('ws-2')
@@ -84,13 +84,13 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
 
   it('新建工作区：打开内联创建，提交调用 create(name, slug)', async () => {
     await renderSwitcher()
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
 
-    const input = await screen.findByLabelText('新工作区名称')
+    const input = await screen.findByLabelText('New workspace name')
     fireEvent.change(input, { target: { value: 'Gamma Workspace' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
     await waitFor(() => expect(create).toHaveBeenCalledWith('Gamma Workspace', 'gamma-workspace'))
   })
@@ -98,47 +98,47 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
   it('RE2-1：创建失败（配额满 402/E_QUOTA_EXCEEDED）显示中文错误与"升级套餐"指引，不再静默', async () => {
     mockError = new ApiError(402, 'E_QUOTA_EXCEEDED', 'quota exceeded for workspaces')
     await renderSwitcher()
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('配额已用尽')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Quota exhausted')
     
     
-    expect(screen.getByText(/已达当前工作区数上限/)).toBeInTheDocument()
-    const billing = screen.getByRole('link', { name: '设置→计费' })
+    expect(screen.getByText(/You've reached the workspace limit/)).toBeInTheDocument()
+    const billing = screen.getByRole('link', { name: 'Settings → Billing' })
     expect(billing).toHaveAttribute('href', '/settings/workspace/billing')
   })
 
   it('RE2-1：slug 冲突等其他失败显示中文文案，且不出现升级指引', async () => {
     mockError = new ApiError(409, 'E_CONFLICT', 'slug already taken')
     await renderSwitcher()
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('该标识已被占用，请换个工作区名称重试')
-    expect(screen.queryByRole('link', { name: '升级套餐' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('This slug is already taken. Try another workspace name')
+    expect(screen.queryByRole('link', { name: 'Settings → Billing' })).not.toBeInTheDocument()
   })
 
   it('RE2-1：创建成功（无 error）时面板内无错误提示', async () => {
     await renderSwitcher()
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
 
-    await screen.findByLabelText('新工作区名称')
+    await screen.findByLabelText('New workspace name')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   
 
   async function submitName(name: string): Promise<unknown[]> {
-    const trigger = screen.getByRole('button', { name: '切换工作区' })
+    const trigger = screen.getByRole('button', { name: 'Switch workspace' })
     fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
-    fireEvent.change(await screen.findByLabelText('新工作区名称'), { target: { value: name } })
-    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
+    fireEvent.change(await screen.findByLabelText('New workspace name'), { target: { value: name } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     return create.mock.calls[0]
   }
@@ -174,11 +174,11 @@ describe('WorkspaceSwitcher（Base UI Menu 重建）', () => {
     )
     await act(async () => {})
 
-    fireEvent.click(screen.getByRole('button', { name: '切换工作区' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /新建工作区/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New workspace/ }))
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '设置→计费' })).toHaveAttribute('href', '/acme/billing')
+    expect(screen.getByRole('link', { name: 'Settings → Billing' })).toHaveAttribute('href', '/acme/billing')
   })
 })
 

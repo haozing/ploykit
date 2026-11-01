@@ -33,12 +33,12 @@ describe('LegalAndPrivacySection', () => {
 
   it('仅订阅快照：渲染套餐信息，不渲染取消按钮与导出按钮', () => {
     renderSection({ subscription: { plan: 'Pro', renewsAt: RENEWS_AT } })
-    expect(screen.getByText('订阅')).toBeInTheDocument()
+    expect(screen.getByText('Subscription')).toBeInTheDocument()
     expect(
       screen.getByTestId('legal-subscription'),
-    ).toHaveTextContent(`Pro · 下次续费 ${formatDate(RENEWS_AT)}`)
+    ).toHaveTextContent(`Pro · Renews ${formatDate(RENEWS_AT)}`)
     expect(
-      screen.queryByRole('button', { name: '取消订阅' }),
+      screen.queryByRole('button', { name: 'Cancel subscription' }),
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Export my data (JSON)' }),
@@ -52,7 +52,7 @@ describe('LegalAndPrivacySection', () => {
       screen.getByRole('button', { name: 'Export my data (JSON)' }),
     )
     expect(onExportData).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText('订阅')).not.toBeInTheDocument()
+    expect(screen.queryByText('Subscription')).not.toBeInTheDocument()
   })
 
   it('全量 props：两区齐渲染，error 如实透出', () => {
@@ -62,8 +62,8 @@ describe('LegalAndPrivacySection', () => {
       onCancelSubscription: vi.fn(),
       error: '取消已受理，将在渠道后台人工完成',
     })
-    expect(screen.getByText('我的数据')).toBeInTheDocument()
-    expect(screen.getByText('订阅')).toBeInTheDocument()
+    expect(screen.getByText('My data')).toBeInTheDocument()
+    expect(screen.getByText('Subscription')).toBeInTheDocument()
     expect(screen.getByText('取消已受理，将在渠道后台人工完成')).toBeInTheDocument()
   })
 
@@ -74,11 +74,11 @@ describe('LegalAndPrivacySection', () => {
         subscription: { plan: 'Pro', cancelTiming: 'immediate' },
         onCancelSubscription,
       })
-      fireEvent.click(screen.getByRole('button', { name: '取消订阅' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel subscription' }))
       expect(
-        await screen.findByText('立即取消,权益马上结束'),
+        await screen.findByText('Cancel now, benefits end immediately'),
       ).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: '确认取消' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm cancellation' }))
       await waitFor(() =>
         expect(onCancelSubscription).toHaveBeenCalledTimes(1),
       )
@@ -94,16 +94,16 @@ describe('LegalAndPrivacySection', () => {
         },
         onCancelSubscription,
       })
-      fireEvent.click(screen.getByRole('button', { name: '取消订阅' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel subscription' }))
       expect(
         await screen.findByText(
-          `取消生效,权益保留至 ${formatDate(RENEWS_AT)}`,
+          `Cancellation effective, benefits retained until ${formatDate(RENEWS_AT)}`,
         ),
       ).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: '取消' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       await waitFor(() =>
         expect(
-          screen.queryByText(`取消生效,权益保留至 ${formatDate(RENEWS_AT)}`),
+          screen.queryByText(`Cancellation effective, benefits retained until ${formatDate(RENEWS_AT)}`),
         ).not.toBeInTheDocument(),
       )
       expect(onCancelSubscription).not.toHaveBeenCalled()
@@ -114,9 +114,9 @@ describe('LegalAndPrivacySection', () => {
         subscription: { plan: 'Pro', cancelTiming: '' },
         onCancelSubscription: vi.fn(),
       })
-      fireEvent.click(screen.getByRole('button', { name: '取消订阅' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel subscription' }))
       expect(
-        await screen.findByText('已受理,我们将完成取消'),
+        await screen.findByText('Request received, we will complete the cancellation'),
       ).toBeInTheDocument()
     })
   })
@@ -131,7 +131,7 @@ describe('LegalAndPrivacySection', () => {
       },
       onCancelSubscription,
     })
-    const btn = screen.getByRole('button', { name: '取消已受理' })
+    const btn = screen.getByRole('button', { name: 'Cancellation requested' })
     expect(btn).toBeDisabled()
     fireEvent.click(btn)
     expect(onCancelSubscription).not.toHaveBeenCalled()
@@ -148,7 +148,7 @@ describe('LegalAndPrivacySection', () => {
       screen.getByRole('button', { name: 'Export my data (JSON)' }),
     ).toBeDisabled()
     expect(
-      screen.getByRole('button', { name: '取消订阅' }),
+      screen.getByRole('button', { name: 'Cancel subscription' }),
     ).toBeDisabled()
   })
 })

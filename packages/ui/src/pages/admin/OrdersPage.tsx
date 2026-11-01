@@ -26,7 +26,8 @@ import {
   TabsTrigger,
 } from '../../components/ui/tabs';
 import { useApi } from '@ploykit/hooks';
-import { formatDateTime, shortID, statusLabel } from '../../lib/utils';
+import { useT } from '../../i18n';
+import { formatDateTime, shortID } from '../../lib/utils';
 import {
   ADMIN_PAGE_SIZE,
   adminError,
@@ -84,23 +85,35 @@ interface AdminBillingConfigEnvelope {
 
 const ORDER_STATUSES = ['pending', 'paid', 'failed', 'canceled', 'refunded'];
 
+// i18n（g3 分片）：订单/处理状态文案走字典（en 默认），不再依赖 lib/utils 的
+// statusLabel 中文映射；未收录状态回退原始值（与原 statusLabel 兜底一致）。
+const ORDER_STATUS_KEYS: Record<string, string> = {
+  pending: 'admin.orders.status.pending',
+  paid: 'admin.orders.status.paid',
+  failed: 'admin.orders.status.failed',
+  canceled: 'admin.orders.status.canceled',
+  refunded: 'admin.orders.status.refunded',
+};
 
-function orderStatusLabel(s: string): string {
-  if (s === 'refunded') return '已退款';
-  return statusLabel(s);
-}
-
-
-const PROCESS_STATUS_LABEL: Record<string, string> = {
-  processed: '已处理',
-  pending: '待处理',
-  error: '处理出错',
+const PROCESS_STATUS_KEYS: Record<string, string> = {
+  processed: 'admin.orders.process.processed',
+  pending: 'admin.orders.process.pending',
+  error: 'admin.orders.process.error',
 };
 
 export function OrdersPage() {
   const api = useApi();
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const t = useT();
+  const orderStatusLabel = (s: string) => {
+    const key = ORDER_STATUS_KEYS[s];
+    return key ? t(key) : s;
+  };
+  const processStatusLabel = (s: string) => {
+    const key = PROCESS_STATUS_KEYS[s];
+    return key ? t(key) : s;
+  };
   
   
   const [searchParams, setSearchParams] = useSearchParamsCompat();
@@ -149,18 +162,18 @@ export function OrdersPage() {
       api.post('/api/admin/billing/test-connection', { channel }),
     onMutate: (channel) => setTestingChannel(channel),
     onSettled: () => setTestingChannel(''),
-    onSuccess: (_d, channel) => toast.success(`${channel} 连接正常`),
+    onSuccess: (_d, channel) => toast.success(t('admin.orders.toast.connectionOk', { channel })),
     onError: (e, channel) =>
-      toast.error(adminError(e, `${channel} 连接测试失败`)),
+      toast.error(adminError(e, t('admin.orders.toast.connectionTestFailed', { channel }))),
   });
 
   const cancelM = useMutation({
     mutationFn: (o: AdminOrderRow) => api.delete(`/api/admin/orders/${o.id}`),
     onSuccess: (_d, o) => {
-      toast.success(`订单 ${shortID(o.id)} 已取消`);
+      toast.success(t('admin.orders.toast.orderCanceled', { id: shortID(o.id) }));
       void qc.invalidateQueries({ queryKey: ['admin', 'orders'] });
     },
-    onError: (e) => toast.error(adminError(e, '订单取消失败')),
+    onError: (e) => toast.error(adminError(e, t('admin.orders.toast.orderCancelFailed'))),
   });
 
   
@@ -170,10 +183,10 @@ export function OrdersPage() {
     mutationFn: (o: AdminOrderRow) =>
       api.post(`/api/admin/billing/orders/${o.id}/mark-paid`),
     onSuccess: (_d, o) => {
-      toast.success(`订单 ${shortID(o.id)} 已核销（manual 标记已付）`);
+      toast.success(t('admin.orders.toast.orderMarkedPaid', { id: shortID(o.id) }));
       void qc.invalidateQueries({ queryKey: ['admin', 'orders'] });
     },
-    onError: (e) => toast.error(adminError(e, '标记已付失败')),
+    onError: (e) => toast.error(adminError(e, t('admin.orders.toast.markPaidFailed'))),
   });
 
   
@@ -181,8 +194,8 @@ export function OrdersPage() {
     mutationFn: () =>
       api.post<{ expired: number }>('/api/admin/billing/run-expiry'),
     onSuccess: (d) =>
-      toast.success(`本轮到期降级完成：降级 ${d?.expired ?? 0} 个工作区`),
-    onError: (e) => toast.error(adminError(e, '到期降级触发失败')),
+      toast.success(t('admin.orders.toast.expiryDone', { count: d?.expired ?? 0 })),
+    onError: (e) => toast.error(adminError(e, t('admin.orders.toast.expiryFailed'))),
   });
 
   
@@ -190,15 +203,19 @@ export function OrdersPage() {
     mutationFn: () =>
       api.post<{ orders_created: number }>('/api/admin/billing/run-overage'),
     onSuccess: (d) =>
-      toast.success(`本轮超额出账完成：新建 ${d?.orders_created ?? 0} 笔订单`),
-    onError: (e) => toast.error(adminError(e, '超额出账触发失败')),
+      toast.success(t('admin.orders.toast.overageDone', { count: d?.orders_created ?? 0 })),
+    onError: (e) => toast.error(adminError(e, t('admin.orders.toast.overageFailed'))),
   });
 
   const onCancelOrder = async (o: AdminOrderRow) => {
     const ok = await confirm({
-      title: '取消订单',
-      description: `将取消 ${o.workspace_name} 的 ${formatCents(o.amount_cents, o.currency)} 订单（${shortID(o.id)}）。仅 pending 订单可取消。`,
-      confirmText: '取消订单',
+      title: t('admin.orders.cancelOrder.title'),
+      description: t('admin.orders.cancelOrder.desc', {
+        workspace: o.workspace_name,
+        amount: formatCents(o.amount_cents, o.currency),
+        id: shortID(o.id),
+      }),
+      confirmText: t('admin.orders.cancelOrder.title'),
       danger: true,
     });
     if (ok) cancelM.mutate(o);
@@ -207,9 +224,13 @@ export function OrdersPage() {
   
   const onMarkPaid = async (o: AdminOrderRow) => {
     const ok = await confirm({
-      title: '标记已付（manual 核销）',
-      description: `确认已线下收到 ${o.workspace_name} 的 ${formatCents(o.amount_cents, o.currency)}（订单 ${shortID(o.id)}，渠道 manual）？标记后 pending→paid 并发 billing.order_marked_paid 事件。`,
-      confirmText: '标记已付',
+      title: t('admin.orders.markPaid.title'),
+      description: t('admin.orders.markPaid.desc', {
+        workspace: o.workspace_name,
+        amount: formatCents(o.amount_cents, o.currency),
+        id: shortID(o.id),
+      }),
+      confirmText: t('admin.orders.markPaid.confirm'),
       danger: true,
     });
     if (ok) markPaidM.mutate(o);
@@ -219,10 +240,9 @@ export function OrdersPage() {
   
   const onRunExpiry = async () => {
     const ok = await confirm({
-      title: '触发一轮到期降级',
-      description:
-        '将立即扫描全部工作区，把订阅已到期的工作区降级为免费套餐——命中的工作区即刻失去付费能力（用户可重新购买恢复）。扫描幂等，可重复执行；操作计入平台审计日志。',
-      confirmText: '执行降级扫描',
+      title: t('admin.orders.runExpiry.title'),
+      description: t('admin.orders.runExpiry.desc'),
+      confirmText: t('admin.orders.runExpiry.confirm'),
       danger: true,
     });
     if (ok) expiryM.mutate();
@@ -230,10 +250,9 @@ export function OrdersPage() {
 
   const onRunOverage = async () => {
     const ok = await confirm({
-      title: '触发一轮超额出账',
-      description:
-        '将立即为全部超额工作区按当前用量创建计量账单订单（真实出账，用户会看到新的待支付订单）。操作幂等，可重复执行；结果计入平台审计日志。',
-      confirmText: '执行出账',
+      title: t('admin.orders.runOverage.title'),
+      description: t('admin.orders.runOverage.desc'),
+      confirmText: t('admin.orders.runOverage.confirm'),
       danger: true,
     });
     if (ok) overageM.mutate();
@@ -245,7 +264,7 @@ export function OrdersPage() {
   const orderColumns: Column<AdminOrderRow>[] = [
     {
       key: 'workspace',
-      header: '工作区',
+      header: t('admin.orders.col.workspace'),
       render: (o) => (
         
         <div className="min-w-0 max-w-[16rem]">
@@ -263,7 +282,7 @@ export function OrdersPage() {
     },
     {
       key: 'plan',
-      header: '套餐 / 周期',
+      header: t('admin.orders.col.planInterval'),
       className: 'w-32',
       render: (o) => (
         <div className="min-w-0 max-w-[12rem]">
@@ -274,7 +293,7 @@ export function OrdersPage() {
     },
     {
       key: 'amount_cents',
-      header: '金额',
+      header: t('admin.orders.col.amount'),
       className: 'w-28',
       render: (o) => (
         <span className="whitespace-nowrap font-medium tabular-nums">
@@ -284,19 +303,19 @@ export function OrdersPage() {
     },
     {
       key: 'channel',
-      header: '渠道',
+      header: t('admin.orders.col.channel'),
       className: 'w-24',
       render: (o) => <span className="text-muted-foreground">{o.channel}</span>,
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('admin.orders.col.status'),
       className: 'w-24',
-      render: (o) => <StatusBadge status={o.status} />,
+      render: (o) => <StatusBadge status={o.status} label={orderStatusLabel(o.status)} />,
     },
     {
       key: 'created_at',
-      header: '创建时间',
+      header: t('admin.orders.col.createdAt'),
       className: 'w-44',
       render: (o) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -306,7 +325,7 @@ export function OrdersPage() {
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.orders.col.actions'),
       className: 'w-36',
       render: (o) => (
         <div className="flex items-center justify-end gap-1.5">
@@ -322,11 +341,11 @@ export function OrdersPage() {
                   disabled={markPaidM.isPending}
                   onClick={() => void onMarkPaid(o)}
                 >
-                  标记已付
+                  {t('admin.orders.markPaid.confirm')}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                线下收款确认后核销：pending→paid，并发 billing.order_marked_paid 事件
+                {t('admin.orders.actions.markPaidHint')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -339,10 +358,10 @@ export function OrdersPage() {
                   disabled
                   onClick={() => void onCancelOrder(o)}
                 >
-                  取消
+                  {t('admin.orders.actions.cancel')}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>仅 pending 订单可取消</TooltipContent>
+              <TooltipContent>{t('admin.orders.actions.onlyPendingCancelable')}</TooltipContent>
             </Tooltip>
           ) : (
             <Button
@@ -351,7 +370,7 @@ export function OrdersPage() {
               disabled={cancelM.isPending}
               onClick={() => void onCancelOrder(o)}
             >
-              取消
+              {t('admin.orders.actions.cancel')}
             </Button>
           )}
         </div>
@@ -365,7 +384,7 @@ export function OrdersPage() {
   const eventColumns: Column<AdminPaymentEventRow>[] = [
     {
       key: 'channel',
-      header: '渠道 / 事件',
+      header: t('admin.orders.col.channelEvent'),
       render: (e) => (
         <div className="min-w-0 max-w-[16rem]">
           <p className="truncate">{e.channel}</p>
@@ -379,7 +398,7 @@ export function OrdersPage() {
     },
     {
       key: 'channel_event_id',
-      header: '渠道事件 ID',
+      header: t('admin.orders.col.channelEventId'),
       className: 'w-40',
       render: (e) => (
         <span className="truncate font-mono text-xs text-muted-foreground">
@@ -394,7 +413,7 @@ export function OrdersPage() {
     },
     {
       key: 'order_id',
-      header: '关联订单',
+      header: t('admin.orders.col.relatedOrder'),
       className: 'w-28',
       render: (e) =>
         e.order_id ? (
@@ -412,20 +431,20 @@ export function OrdersPage() {
     },
     {
       key: 'processed',
-      header: '处理状态',
+      header: t('admin.orders.col.processStatus'),
       className: 'w-32',
       render: (e) => {
-        const label = PROCESS_STATUS_LABEL[e.process_status] ?? e.process_status;
+        const label = processStatusLabel(e.process_status);
         return (
           <div className="flex min-w-0 items-center gap-1.5">
             {e.processed ? (
-              <Badge variant="outline">已处理</Badge>
+              <Badge variant="outline">{t('admin.orders.process.processed')}</Badge>
             ) : (
               <Badge variant="outline" className="text-muted-foreground">
-                未处理
+                {t('admin.orders.process.unprocessed')}
               </Badge>
             )}
-            {/* B-orders-12：处理状态走中文映射，不再与英文枚举原文双显 */}
+            {/* B-orders-12：处理状态走文案映射（g3 字典），不再与英文枚举原文双显 */}
             {e.process_status !== 'processed' &&
               (e.process_error ? (
                 <Tooltip>
@@ -452,7 +471,7 @@ export function OrdersPage() {
     },
     {
       key: 'created_at',
-      header: '时间',
+      header: t('admin.orders.col.time'),
       className: 'w-44',
       render: (e) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -465,7 +484,7 @@ export function OrdersPage() {
   return (
     <div>
       <PageHeader
-        title="订单"
+        title={t('admin.orders.title')}
         actions={
           <div className="flex gap-2">
             <Button
@@ -474,7 +493,7 @@ export function OrdersPage() {
               disabled={expiryM.isPending}
               onClick={() => void onRunExpiry()}
             >
-              {expiryM.isPending ? '执行中…' : '触发到期降级'}
+              {expiryM.isPending ? t('admin.orders.running') : t('admin.orders.triggerExpiry')}
             </Button>
             <Button
               variant="outline"
@@ -482,31 +501,31 @@ export function OrdersPage() {
               disabled={overageM.isPending}
               onClick={() => void onRunOverage()}
             >
-              {overageM.isPending ? '执行中…' : '触发超额出账'}
+              {overageM.isPending ? t('admin.orders.running') : t('admin.orders.triggerOverage')}
             </Button>
           </div>
         }
       />
 
-      <SettingsCard title="支付渠道">
+      <SettingsCard title={t('admin.orders.channels.title')}>
         {channelsQ.isError ? (
           <PageError
-            message={adminError(channelsQ.error, '渠道配置加载失败')}
+            message={adminError(channelsQ.error, t('admin.orders.channels.loadFailed'))}
             onRetry={() => void channelsQ.refetch()}
           />
         ) : (
           <div className="space-y-2">
-            {channelsQ.isPending && <PageLoading label="加载渠道配置中…" />}
+            {channelsQ.isPending && <PageLoading label={t('admin.orders.channels.loading')} />}
             {(channelsQ.data?.channels ?? []).map((ch) => (
               <Item key={ch.name} variant="outline">
                 <ItemContent>
                   <ItemTitle>{ch.name}</ItemTitle>
                 </ItemContent>
                 {ch.configured ? (
-                  <Badge>已配置</Badge>
+                  <Badge>{t('admin.orders.channels.configured')}</Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground">
-                    未配置
+                    {t('admin.orders.channels.notConfigured')}
                   </Badge>
                 )}
                 <Tooltip>
@@ -517,13 +536,13 @@ export function OrdersPage() {
                       {ch.key_masked}
                     </Badge>
                   </TooltipTrigger>
-                  <TooltipContent>密钥掩码（原始密钥不可见）</TooltipContent>
+                  <TooltipContent>{t('admin.orders.channels.keyMaskedHint')}</TooltipContent>
                 </Tooltip>
                 {ch.webhook_configured ? (
-                  <Badge variant="outline">webhook 已配置</Badge>
+                  <Badge variant="outline">{t('admin.orders.channels.webhookConfigured')}</Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground">
-                    webhook 未配置
+                    {t('admin.orders.channels.webhookNotConfigured')}
                   </Badge>
                 )}
                 <ItemActions>
@@ -540,15 +559,15 @@ export function OrdersPage() {
                         }
                         onClick={() => testConnM.mutate(ch.name)}
                       >
-                        {testingChannel === ch.name ? '测试中…' : '测试连接'}
+                        {testingChannel === ch.name ? t('admin.orders.channels.testing') : t('admin.orders.channels.test')}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
                       {!ch.configured
-                        ? '渠道未配置密钥，无法测试'
+                        ? t('admin.orders.channels.testHintNoKey')
                         : ch.name === 'manual'
-                          ? 'manual 为线下收款渠道，无外部服务可测试连接'
-                          : '向渠道发起一次只读连通性请求'}
+                          ? t('admin.orders.channels.testHintManual')
+                          : t('admin.orders.channels.testHintDefault')}
                     </TooltipContent>
                   </Tooltip>
                 </ItemActions>
@@ -556,7 +575,7 @@ export function OrdersPage() {
             ))}
             {!channelsQ.isPending &&
               (channelsQ.data?.channels ?? []).length === 0 && (
-                <PageEmpty label="暂无渠道" />
+                <PageEmpty label={t('admin.orders.channels.empty')} />
               )}
           </div>
         )}
@@ -564,8 +583,8 @@ export function OrdersPage() {
 
       <Tabs defaultValue="orders">
         <TabsList className="mb-4">
-          <TabsTrigger value="orders">订单</TabsTrigger>
-          <TabsTrigger value="payment-events">支付事件</TabsTrigger>
+          <TabsTrigger value="orders">{t('admin.orders.tabs.orders')}</TabsTrigger>
+          <TabsTrigger value="payment-events">{t('admin.orders.tabs.paymentEvents')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders">
@@ -581,14 +600,14 @@ export function OrdersPage() {
               <SelectTrigger
                 size="sm"
                 className="w-44"
-                aria-label="按订单状态过滤"
+                aria-label={t('admin.orders.filter.statusAria')}
               >
                 <SelectValue>
-                  {status ? orderStatusLabel(status) : '全部状态'}
+                  {status ? orderStatusLabel(status) : t('admin.orders.filter.allStatuses')}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent align="start">
-                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="all">{t('admin.orders.filter.allStatuses')}</SelectItem>
                 {ORDER_STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
                     {orderStatusLabel(s)}
@@ -599,8 +618,8 @@ export function OrdersPage() {
           </div>
           {ordersQ.isError ? (
             <PageError
-              
-              message={`${adminError(ordersQ.error, '订单列表加载失败')}；重试仍失败时，请稍后再来或联系平台管理员`}
+
+              message={`${adminError(ordersQ.error, t('admin.orders.orders.loadFailed'))}${t('admin.orders.orders.errorSuffix')}`}
               onRetry={() => void ordersQ.refetch()}
             />
           ) : (
@@ -618,13 +637,13 @@ export function OrdersPage() {
               empty={
                 status ? (
                   <PageEmpty
-                    label="没有该状态的订单"
-                    hint="换个状态或清除过滤"
+                    label={t('admin.orders.empty.filteredLabel')}
+                    hint={t('admin.orders.empty.filteredHint')}
                   />
                 ) : (
                   <PageEmpty
-                    label="暂无订单"
-                    hint="工作区完成购买后订单会出现在这里"
+                    label={t('admin.orders.empty.label')}
+                    hint={t('admin.orders.empty.hint')}
                   />
                 )
               }
@@ -635,7 +654,7 @@ export function OrdersPage() {
         <TabsContent value="payment-events">
           {eventsQ.isError ? (
             <PageError
-              message={adminError(eventsQ.error, '支付事件加载失败')}
+              message={adminError(eventsQ.error, t('admin.orders.events.loadFailed'))}
               onRetry={() => void eventsQ.refetch()}
             />
           ) : (
@@ -652,8 +671,8 @@ export function OrdersPage() {
               }}
               empty={
                 <PageEmpty
-                  label="暂无支付事件"
-                  hint="渠道回调到达后在此可见（含未消费事件）"
+                  label={t('admin.orders.events.emptyLabel')}
+                  hint={t('admin.orders.events.emptyHint')}
                 />
               }
             />

@@ -17,6 +17,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/too
 import { useApi } from '@ploykit/hooks';
 import { apiErrorMessage } from '../../lib/api-error';
 import { shortID, formatDateTime } from '../../lib/utils';
+import { useT } from '../../i18n';
 import { ADMIN_PAGE_SIZE, adminError } from './shared';
 
 type AuditEvent = components['schemas']['AuditEvent'];
@@ -110,6 +111,7 @@ function auditQueryString(
 
 export function AuditPage() {
   const api = useApi();
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParamsCompat();
   
   const [draft, setDraft] = useState<FilterDraft>(() =>
@@ -154,9 +156,9 @@ export function AuditPage() {
       a.download = `audit-admin-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('CSV 导出已开始下载');
+      toast.success(t('admin.audit.exportStarted'));
     } catch (e) {
-      toast.error(apiErrorMessage(e, '导出失败'));
+      toast.error(apiErrorMessage(e, t('admin.audit.exportFailed')));
     } finally {
       setExporting(false);
     }
@@ -172,7 +174,7 @@ export function AuditPage() {
   const columns: Column<AuditEvent>[] = [
     {
       key: 'created_at',
-      header: '时间',
+      header: t('admin.audit.colTime'),
       className: 'w-44',
       render: (e) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -182,7 +184,7 @@ export function AuditPage() {
     },
     {
       key: 'workspace',
-      header: '工作区',
+      header: t('admin.audit.colWorkspace'),
       className: 'w-28',
       render: (e) =>
         e.workspace_id ? (
@@ -195,12 +197,14 @@ export function AuditPage() {
             <TooltipContent>{e.workspace_id}</TooltipContent>
           </Tooltip>
         ) : (
-          <span className="text-xs text-muted-foreground">平台级</span>
+          <span className="text-xs text-muted-foreground">
+            {t('admin.audit.platformLevel')}
+          </span>
         ),
     },
     {
       key: 'actor',
-      header: '操作者',
+      header: t('admin.audit.colActor'),
       className: 'w-[22%]',
       render: (e) => {
         const snap = (e.actor_snapshot ?? {}) as { email?: unknown };
@@ -215,7 +219,7 @@ export function AuditPage() {
     },
     {
       key: 'action',
-      header: '动作',
+      header: t('admin.audit.colAction'),
       className: 'w-[20%]',
       render: (e) => (
         <Badge variant="outline" className="font-mono">
@@ -225,7 +229,7 @@ export function AuditPage() {
     },
     {
       key: 'resource',
-      header: '资源',
+      header: t('admin.audit.colTarget'),
       render: (e) => (
         <div className="min-w-0">
           <p className="truncate">{e.resource_type}</p>
@@ -241,11 +245,13 @@ export function AuditPage() {
 
   return (
     <div>
-      <PageHeader title="审计" />
+      <PageHeader title={t('admin.audit.title')} />
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <Field className="w-56 gap-1">
-          <FieldLabel htmlFor="admin-audit-filter-workspace">工作区 ID</FieldLabel>
+          <FieldLabel htmlFor="admin-audit-filter-workspace">
+            {t('admin.audit.filterWorkspace')}
+          </FieldLabel>
           <Input
             id="admin-audit-filter-workspace"
             className="font-mono"
@@ -255,25 +261,31 @@ export function AuditPage() {
           />
         </Field>
         <Field className="w-44 gap-1">
-          <FieldLabel htmlFor="admin-audit-filter-action">动作</FieldLabel>
+          <FieldLabel htmlFor="admin-audit-filter-action">
+            {t('admin.audit.filterAction')}
+          </FieldLabel>
           <Input
             id="admin-audit-filter-action"
-            placeholder="如 workspace.rename"
+            placeholder={t('admin.audit.actionPlaceholder')}
             value={draft.action}
             onChange={(e) => setDraft({ ...draft, action: e.target.value })}
           />
         </Field>
         <Field className="w-48 gap-1">
-          <FieldLabel htmlFor="admin-audit-filter-actor">操作者邮箱</FieldLabel>
+          <FieldLabel htmlFor="admin-audit-filter-actor">
+            {t('admin.audit.filterActorEmail')}
+          </FieldLabel>
           <Input
             id="admin-audit-filter-actor"
-            placeholder="邮箱前缀，如 alice@"
+            placeholder={t('admin.audit.actorEmailPlaceholder')}
             value={draft.actor}
             onChange={(e) => setDraft({ ...draft, actor: e.target.value })}
           />
         </Field>
         <Field className="w-52 gap-1">
-          <FieldLabel htmlFor="admin-audit-filter-actor-id">操作者 ID</FieldLabel>
+          <FieldLabel htmlFor="admin-audit-filter-actor-id">
+            {t('admin.audit.filterActorId')}
+          </FieldLabel>
           <Input
             id="admin-audit-filter-actor-id"
             className="font-mono"
@@ -283,7 +295,9 @@ export function AuditPage() {
           />
         </Field>
         <Field className="w-40 gap-1">
-          <FieldLabel htmlFor="admin-audit-filter-from">起始日期</FieldLabel>
+          <FieldLabel htmlFor="admin-audit-filter-from">
+            {t('admin.audit.filterFrom')}
+          </FieldLabel>
           <DatePicker
             id="admin-audit-filter-from"
             value={parseYMD(draft.from)}
@@ -291,7 +305,9 @@ export function AuditPage() {
           />
         </Field>
         <Field className="w-40 gap-1">
-          <FieldLabel htmlFor="admin-audit-filter-to">结束日期</FieldLabel>
+          <FieldLabel htmlFor="admin-audit-filter-to">
+            {t('admin.audit.filterTo')}
+          </FieldLabel>
           <DatePicker
             id="admin-audit-filter-to"
             value={parseYMD(draft.to)}
@@ -299,7 +315,7 @@ export function AuditPage() {
           />
         </Field>
         <Button onClick={apply}>
-          <Search /> 查询
+          <Search /> {t('admin.audit.search')}
         </Button>
         <Button
           variant="outline"
@@ -308,16 +324,17 @@ export function AuditPage() {
             setSearchParams(paramsFromDraft(emptyDraft, 1));
           }}
         >
-          重置
+          {t('admin.audit.reset')}
         </Button>
         <Button variant="outline" disabled={exporting} onClick={onExportCsv}>
-          <Download /> {exporting ? '导出中…' : '导出 CSV'}
+          <Download />{' '}
+          {exporting ? t('admin.audit.exporting') : t('admin.audit.exportCsv')}
         </Button>
       </div>
 
       {auditQ.isError ? (
         <PageError
-          message={adminError(auditQ.error, '审计日志加载失败')}
+          message={adminError(auditQ.error, t('admin.audit.loadFailed'))}
           onRetry={() => void auditQ.refetch()}
         />
       ) : (
@@ -334,8 +351,8 @@ export function AuditPage() {
           }}
           empty={
             <PageEmpty
-              label="暂无审计记录"
-              hint="调整过滤条件或触发一些操作后再来"
+              label={t('admin.audit.emptyLabel')}
+              hint={t('admin.audit.emptyHint')}
             />
           }
         />

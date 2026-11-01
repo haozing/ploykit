@@ -36,28 +36,28 @@ beforeEach(() => {
 })
 
 function fillValidForm() {
-  fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-  fireEvent.change(screen.getByLabelText('密码'), { target: { value: STRONG_PW } })
-  fireEvent.change(screen.getByLabelText('昵称（可选）'), { target: { value: '小明' } })
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: STRONG_PW } })
+  fireEvent.change(screen.getByLabelText('Display name (optional)'), { target: { value: '小明' } })
 }
 
 describe('RegisterPage', () => {
   it('渲染表单字段与"已有账号？登录"入口', () => {
     render(<RegisterPage />)
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.getByLabelText('密码')).toBeInTheDocument()
-    expect(screen.getByLabelText('昵称（可选）')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /创建账号/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByLabelText('Display name (optional)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Create account/ })).toBeInTheDocument()
   })
 
   it('弱密码（少于三类字符）被 zod 拦截，不发起请求', async () => {
     render(<RegisterPage />)
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'abcdefghijk' } }) 
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefghijk' } }) 
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
-    expect(await screen.findByText('需包含大写/小写/数字/符号中的至少三类')).toBeInTheDocument()
+    expect(await screen.findByText('Must include at least three of: uppercase, lowercase, numbers, symbols')).toBeInTheDocument()
     expect(mockedApiFetch).not.toHaveBeenCalled()
   })
 
@@ -65,7 +65,7 @@ describe('RegisterPage', () => {
     const onSuccess = vi.fn()
     render(<RegisterPage onSuccess={onSuccess} />)
     fillValidForm()
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
     await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
     expect(mockedApiFetch).toHaveBeenCalledWith('/auth/register', {
@@ -83,10 +83,10 @@ describe('RegisterPage', () => {
   it('P1-2：昵称留空 → 不发 display_name 字段（空串会被服务端 400）', async () => {
     const onSuccess = vi.fn()
     render(<RegisterPage onSuccess={onSuccess} />)
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: STRONG_PW } })
     
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
     await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
     const payload = mockedApiFetch.mock.calls[0][1].body as Record<string, unknown>
@@ -98,10 +98,10 @@ describe('RegisterPage', () => {
 
   it('P1-2：昵称纯空格 → 同样不发 display_name 字段', async () => {
     render(<RegisterPage onSuccess={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: STRONG_PW } })
-    fireEvent.change(screen.getByLabelText('昵称（可选）'), { target: { value: '   ' } })
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Display name (optional)'), { target: { value: '   ' } })
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
     await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
     const payload = mockedApiFetch.mock.calls[0][1].body as Record<string, unknown>
@@ -110,10 +110,10 @@ describe('RegisterPage', () => {
 
   it('昵称首尾空白被裁剪后再提交', async () => {
     render(<RegisterPage onSuccess={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: STRONG_PW } })
-    fireEvent.change(screen.getByLabelText('昵称（可选）'), { target: { value: '  小明  ' } })
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: STRONG_PW } })
+    fireEvent.change(screen.getByLabelText('Display name (optional)'), { target: { value: '  小明  ' } })
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
     await waitFor(() => expect(mockedApiFetch).toHaveBeenCalledTimes(1))
     expect(mockedApiFetch).toHaveBeenCalledWith('/auth/register', {
@@ -131,7 +131,7 @@ describe('RegisterPage', () => {
     const onSuccess = vi.fn()
     render(<RegisterPage onSuccess={onSuccess} />)
     fillValidForm()
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('该邮箱已被注册')
     expect(onSuccess).not.toHaveBeenCalled()
@@ -142,10 +142,10 @@ describe('RegisterPage', () => {
     const onSuccess = vi.fn()
     render(<RegisterPage onSuccess={onSuccess} />)
     fillValidForm()
-    fireEvent.click(screen.getByRole('button', { name: /创建账号/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('该邮箱已注册，可直接登录或换个邮箱重试')
+    expect(alert).toHaveTextContent('This email is already registered. Sign in directly or try another email')
     expect(alert).not.toHaveTextContent('email already registered')
     expect(onSuccess).not.toHaveBeenCalled()
   })

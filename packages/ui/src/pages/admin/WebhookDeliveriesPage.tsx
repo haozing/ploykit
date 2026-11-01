@@ -20,6 +20,7 @@ import {
 } from '../../components/ui/select';
 import { useApi } from '@ploykit/hooks';
 import { formatDateTime, shortID, statusLabel } from '../../lib/utils';
+import { useT } from '../../i18n';
 import {
   ADMIN_PAGE_SIZE,
   adminError,
@@ -55,6 +56,7 @@ const COUNT_STALE_MS = 60_000;
 export function WebhookDeliveriesPage() {
   const api = useApi();
   const qc = useQueryClient();
+  const t = useT();
   
   const [searchParams, setSearchParams] = useSearchParamsCompat();
   const statusParam = searchParams.get('status') ?? '';
@@ -108,11 +110,17 @@ export function WebhookDeliveriesPage() {
         `/api/admin/webhook-deliveries/${d.id}/redeliver`,
       ),
     onSuccess: (d2, d) => {
-      
-      toast.success(`已重新入队（新投递 ${shortID(d2?.id ?? '')}，溯源 ${d.event_id}.r）`);
+
+      toast.success(
+        t('admin.webhookDeliveries.redelivered', {
+          id: shortID(d2?.id ?? ''),
+          event: d.event_id,
+        }),
+      );
       void qc.invalidateQueries({ queryKey: ['admin', 'webhook-deliveries'] });
     },
-    onError: (e) => toast.error(adminError(e, '重投失败')),
+    onError: (e) =>
+      toast.error(adminError(e, t('admin.webhookDeliveries.redeliverFailed'))),
   });
 
   const items = listQ.data?.items ?? [];
@@ -121,7 +129,7 @@ export function WebhookDeliveriesPage() {
   const columns: Column<AdminWebhookDeliveryRow>[] = [
     {
       key: 'workspace_id',
-      header: '工作区',
+      header: t('admin.webhookDeliveries.colWorkspace'),
       className: 'w-24',
       render: (d) =>
         d.workspace_id ? (
@@ -135,13 +143,13 @@ export function WebhookDeliveriesPage() {
           </Tooltip>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
-            孤儿
+            {t('admin.webhookDeliveries.orphan')}
           </Badge>
         ),
     },
     {
       key: 'url',
-      header: '目标 URL',
+      header: t('admin.webhookDeliveries.colTargetUrl'),
       render: (d) =>
         d.url ? (
           <Tooltip>
@@ -158,13 +166,15 @@ export function WebhookDeliveriesPage() {
             <TooltipContent>{d.url}</TooltipContent>
           </Tooltip>
         ) : (
-          <span className="text-xs text-muted-foreground">（订阅已删除）</span>
+          <span className="text-xs text-muted-foreground">
+            {t('admin.webhookDeliveries.subscriptionDeleted')}
+          </span>
         ),
     },
     {
-      
+
       key: 'event_id',
-      header: '事件 ID',
+      header: t('admin.webhookDeliveries.colEventId'),
       className: 'w-32',
       render: (d) => (
         <Tooltip>
@@ -184,7 +194,7 @@ export function WebhookDeliveriesPage() {
     },
     {
       key: 'event_type',
-      header: '事件',
+      header: t('admin.webhookDeliveries.colEvent'),
       className: 'w-40',
       render: (d) => (
         <Tooltip>
@@ -204,19 +214,19 @@ export function WebhookDeliveriesPage() {
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('admin.webhookDeliveries.colStatus'),
       className: 'w-24',
       render: (d) => <StatusBadge status={d.status} />,
     },
     {
       key: 'attempts',
-      header: '尝试',
+      header: t('admin.webhookDeliveries.colAttempts'),
       className: 'w-16 text-right',
       render: (d) => <span className="tabular-nums">{d.attempts}</span>,
     },
     {
       key: 'last_status',
-      header: '最近响应',
+      header: t('admin.webhookDeliveries.colLastResponse'),
       className: 'w-32',
       render: (d) =>
         d.last_status_code ? (
@@ -252,7 +262,7 @@ export function WebhookDeliveriesPage() {
     },
     {
       key: 'created_at',
-      header: '时间',
+      header: t('admin.webhookDeliveries.colTime'),
       className: 'w-44',
       render: (d) => (
         <span className="whitespace-nowrap text-muted-foreground">
@@ -262,7 +272,7 @@ export function WebhookDeliveriesPage() {
     },
     {
       key: 'actions',
-      header: '操作',
+      header: t('admin.webhookDeliveries.colAction'),
       className: 'w-20',
       render: (d) => {
         // 行级 pending：仅禁用正在重投的行（react-query variables 记录当前 mutate 入参）
@@ -275,7 +285,7 @@ export function WebhookDeliveriesPage() {
             onClick={() => redeliverM.mutate(d)}
           >
             {redeploying && <Spinner className="size-3" aria-hidden="true" />}
-            重投
+            {t('admin.webhookDeliveries.redeliver')}
           </Button>
         );
       },
@@ -290,17 +300,23 @@ export function WebhookDeliveriesPage() {
         <Select
           value={status || 'all'}
           onValueChange={(v) => {
-            
+
             setFilter(typeof v === 'string' && v !== 'all' ? v : '', 1);
           }}
         >
-          <SelectTrigger size="sm" className="w-44" aria-label="按投递状态过滤">
+          <SelectTrigger
+            size="sm"
+            className="w-44"
+            aria-label={t('admin.webhookDeliveries.filterAria')}
+          >
             <SelectValue>
-              {status ? statusLabel(status) : '全部状态'}
+              {status ? statusLabel(status) : t('admin.webhookDeliveries.allStatuses')}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
-            <SelectItem value="all">全部状态</SelectItem>
+            <SelectItem value="all">
+              {t('admin.webhookDeliveries.allStatuses')}
+            </SelectItem>
             {DELIVERY_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {/* B-webhook-7：选项内联计数（dead (7)）给积压规模语境 */}
@@ -318,13 +334,15 @@ export function WebhookDeliveriesPage() {
           onClick={() => void listQ.refetch()}
         >
           <RefreshCw size={14} aria-hidden="true" />
-          {listQ.isFetching ? '刷新中…' : '刷新'}
+          {listQ.isFetching
+            ? t('admin.webhookDeliveries.refreshing')
+            : t('admin.webhookDeliveries.refresh')}
         </Button>
       </div>
 
       {listQ.isError ? (
         <PageError
-          message={adminError(listQ.error, '投递列表加载失败')}
+          message={adminError(listQ.error, t('admin.webhookDeliveries.loadFailed'))}
           onRetry={() => void listQ.refetch()}
         />
       ) : (
@@ -341,11 +359,14 @@ export function WebhookDeliveriesPage() {
           }}
           empty={
             status ? (
-              <PageEmpty label="没有该状态的投递" hint="换个状态或清除过滤" />
+              <PageEmpty
+                label={t('admin.webhookDeliveries.emptyFilteredLabel')}
+                hint={t('admin.webhookDeliveries.emptyFilteredHint')}
+              />
             ) : (
               <PageEmpty
-                label="暂无投递记录"
-                hint="工作区触发事件后，订阅投递会在此出现"
+                label={t('admin.webhookDeliveries.emptyLabel')}
+                hint={t('admin.webhookDeliveries.emptyHint')}
               />
             )
           }

@@ -48,30 +48,30 @@ describe('RegisterPage：非法输入由 zod 拦截，不发请求', () => {
 
   it('全空提交 → 邮箱与密码的文案都出现，且未调用 API', async () => {
     render(<RegisterPage />)
-    fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
-    expect(await screen.findByText('请输入邮箱')).toBeInTheDocument()
-    expect(await screen.findByText('密码至少 10 位')).toBeInTheDocument()
+    expect(await screen.findByText('Enter your email')).toBeInTheDocument()
+    expect(await screen.findByText('Password must be at least 10 characters')).toBeInTheDocument()
     expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('合法邮箱 + 弱密码（仅小写）→ 触发复杂度文案，且未调用 API', async () => {
     render(<RegisterPage />)
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'abcdefghij' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefghij' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(
-      await screen.findByText('需包含大写/小写/数字/符号中的至少三类'),
+      await screen.findByText('Must include at least three of: uppercase, lowercase, numbers, symbols'),
     ).toBeInTheDocument()
     expect(apiFetch).not.toHaveBeenCalled()
   })
 
   it('合法输入 → 走到 API（证明拦截没有过度）', async () => {
     render(<RegisterPage onSuccess={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'Abcdef12345!' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Abcdef12345!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     // Turnstile 接线后注册走 lib/turnstile → apiFetch（无 site key 时与
     // api.post 行为一致：同样的 POST + body，不带额外头）。

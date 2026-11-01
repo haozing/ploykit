@@ -29,7 +29,7 @@ describe('OnboardingChecklist', () => {
     expect(screen.getByText('创建工作区')).toBeInTheDocument()
     expect(screen.getByText('邀请成员')).toBeInTheDocument()
     expect(screen.getByText('50%')).toBeInTheDocument()
-    expect(screen.getByText('已完成 1/2 项')).toBeInTheDocument()
+    expect(screen.getByText('1/2 completed')).toBeInTheDocument()
   })
 
   it('点击未完成且带 onClick 的步骤触发回调；已完成项不触发', () => {
@@ -51,7 +51,7 @@ describe('OnboardingChecklist', () => {
 
   it('关闭后写入 localStorage 并不再渲染', () => {
     const { rerender } = render(<OnboardingChecklist items={[{ key: 'a', label: 'A', done: false }]} />)
-    fireEvent.click(screen.getByRole('button', { name: '关闭引导清单' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss getting started checklist' }))
     expect(localStorage.getItem('pk_onboarding_dismissed')).toBe('1')
     rerender(<OnboardingChecklist items={[{ key: 'a', label: 'A', done: false }]} />)
     expect(screen.queryByText('A')).not.toBeInTheDocument()
@@ -59,7 +59,7 @@ describe('OnboardingChecklist', () => {
 
   it('不传 items 时用上下文默认项（已有工作区 → 完成）', () => {
     render(<OnboardingChecklist />)
-    expect(screen.getByText('创建第一个工作区')).toBeInTheDocument()
+    expect(screen.getByText('Create your first workspace')).toBeInTheDocument()
     expect(screen.getByText('100%')).toBeInTheDocument()
   })
 
@@ -88,7 +88,7 @@ describe('OnboardingChecklist', () => {
     try {
       render(<OnboardingChecklist items={[{ key: 'a', label: 'A', done: false }]} />)
       expect(screen.getByText('A')).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('button', { name: '关闭引导清单' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss getting started checklist' }))
       expect(screen.queryByText('A')).not.toBeInTheDocument()
     } finally {
       Object.defineProperty(globalThis, 'localStorage', desc!)

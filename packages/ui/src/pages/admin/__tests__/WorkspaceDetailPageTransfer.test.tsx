@@ -107,23 +107,23 @@ beforeEach(() => {
 });
 
 describe('WorkspaceDetailPage · 转让所有权', () => {
-  it('member/admin 行有"转让所有权"，owner 行与自己没有', async () => {
+  it('member/admin 行有"Transfer ownership"，owner 行与自己没有', async () => {
     renderPage();
 
     await screen.findByText('alice@t.co');
-    
+
     expect(
-      within(rowOf('bob@t.co')).getByRole('button', { name: '转让所有权' }),
+      within(rowOf('bob@t.co')).getByRole('button', { name: 'Transfer ownership' }),
     ).toBeInTheDocument();
-    
+
     expect(
       within(rowOf('op@test.local')).queryByRole('button', {
-        name: '转让所有权',
+        name: 'Transfer ownership',
       }),
     ).not.toBeInTheDocument();
-    
+
     expect(
-      within(rowOf('alice@t.co')).queryByRole('button', { name: '转让所有权' }),
+      within(rowOf('alice@t.co')).queryByRole('button', { name: 'Transfer ownership' }),
     ).not.toBeInTheDocument();
   });
 
@@ -132,18 +132,20 @@ describe('WorkspaceDetailPage · 转让所有权', () => {
     await screen.findByText('bob@t.co');
 
     fireEvent.click(
-      within(rowOf('bob@t.co')).getByRole('button', { name: '转让所有权' }),
+      within(rowOf('bob@t.co')).getByRole('button', { name: 'Transfer ownership' }),
     );
 
-    
-    expect(
-      await screen.findByText('将 Acme 的所有权转让给 bob@t.co'),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/alice@t\.co 将降为普通成员/)).toBeInTheDocument();
-    expect(screen.getByText(/工作区始终保有所有者/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /我理解并接受以上影响/ }));
-    fireEvent.click(screen.getByRole('button', { name: '确认转让' }));
+    expect(
+      await screen.findByText('Transfer ownership of Acme to bob@t.co'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/alice@t\.co will be demoted to a regular member/)).toBeInTheDocument();
+    expect(screen.getByText(/the workspace always keeps an owner/)).toBeInTheDocument();
+
+    // i18n（B 方案）：断言走 en 默认字典。"我理解并接受以上影响"复选框文案属
+    // 共享 ImpactConfirmation（他方分区），按 role 取用不钉文案。
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm transfer' }));
 
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith(
@@ -160,10 +162,10 @@ describe('WorkspaceDetailPage · 转让所有权', () => {
     await screen.findByText('bob@t.co');
 
     fireEvent.click(
-      within(rowOf('bob@t.co')).getByRole('button', { name: '转让所有权' }),
+      within(rowOf('bob@t.co')).getByRole('button', { name: 'Transfer ownership' }),
     );
     expect(
-      await screen.findByRole('button', { name: '确认转让' }),
+      await screen.findByRole('button', { name: 'Confirm transfer' }),
     ).toBeDisabled();
     expect(mockedPost).not.toHaveBeenCalled();
   });

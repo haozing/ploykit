@@ -6,10 +6,10 @@ import { DatePicker } from '../DatePicker'
 describe('DatePicker', () => {
   it('空值显示占位文案，有值时回显 Y-M-D', () => {
     const { rerender } = render(<DatePicker value={null} onChange={() => {}} />)
-    expect(screen.getByText('选择日期')).toBeInTheDocument()
+    expect(screen.getByText('Pick a date')).toBeInTheDocument()
     rerender(<DatePicker value={new Date(2026, 7, 1)} onChange={() => {}} />)
     expect(screen.getByDisplayValue('2026-08-01')).toBeInTheDocument()
-    expect(screen.queryByText('选择日期')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pick a date')).not.toBeInTheDocument()
   })
 
   it('本地时区取日期，不做 UTC 偏移（8 月 1 日不退成 7 月 31 日）', () => {
@@ -42,11 +42,11 @@ describe('DatePicker', () => {
     const { rerender } = render(
       <DatePicker value={new Date(2026, 0, 15)} onChange={onChange} clearable />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '清除日期' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear date' }))
     expect(onChange).toHaveBeenCalledWith(null)
 
     rerender(<DatePicker value={null} onChange={onChange} clearable />)
-    expect(screen.queryByRole('button', { name: '清除日期' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear date' })).not.toBeInTheDocument()
   })
 
   it('min/max 以本地日历日下发到原生 input', () => {

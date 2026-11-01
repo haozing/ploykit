@@ -190,3 +190,5 @@ export type {
   AdminComplianceLegalConfig,
   AdminComplianceMissingKey,
 } from './pages/admin/AdminComplianceCard'
+
+export { UiLangProvider, useLang, useT, t, setUiLang, currentLang, translate, type Lang } from './i18n'

@@ -40,24 +40,24 @@ describe('ImpersonationBanner（ADR 0008 模拟会话横幅）', () => {
     mocks.noProvider = false
   })
 
-  it('模拟会话（impersonated_by 非空）：显示"您正处于管理员模拟会话"警示条', () => {
+  it('模拟会话（impersonated_by 非空）：显示"You are in an admin impersonation session"警示条', () => {
     mocks.user = impersonatedUser('11111111-2222-3333-4444-555555555555')
     render(<ImpersonationBanner />)
-    expect(screen.getByText('您正处于管理员模拟会话')).toBeInTheDocument()
-    expect(screen.getByText('您正处于管理员模拟会话')).toBeVisible()
+    expect(screen.getByText('You are in an admin impersonation session')).toBeInTheDocument()
+    expect(screen.getByText('You are in an admin impersonation session')).toBeVisible()
   })
 
   it('普通会话（无 impersonated_by 字段）：不渲染横幅、不留占位', () => {
     mocks.user = impersonatedUser(undefined)
     const { container } = render(<ImpersonationBanner />)
-    expect(screen.queryByText('您正处于管理员模拟会话')).not.toBeInTheDocument()
+    expect(screen.queryByText('You are in an admin impersonation session')).not.toBeInTheDocument()
     expect(container.querySelector('[data-slot="impersonation-banner"]')).not.toBeInTheDocument()
   })
 
   it('未登录（user=null）：不渲染横幅', () => {
     mocks.user = null
     render(<ImpersonationBanner />)
-    expect(screen.queryByText('您正处于管理员模拟会话')).not.toBeInTheDocument()
+    expect(screen.queryByText('You are in an admin impersonation session')).not.toBeInTheDocument()
   })
 
   it('横幅不提供退出按钮：退出由发起管理员控制（ADR 0008 裁决）', () => {
@@ -77,6 +77,6 @@ describe('ImpersonationBanner（ADR 0008 模拟会话横幅）', () => {
     mocks.user = impersonatedUser('11111111-2222-3333-4444-555555555555')
     render(<ImpersonationBanner label="Admin impersonation session" />)
     expect(screen.getByText('Admin impersonation session')).toBeVisible()
-    expect(screen.queryByText('您正处于管理员模拟会话')).not.toBeInTheDocument()
+    expect(screen.queryByText('You are in an admin impersonation session')).not.toBeInTheDocument()
   })
 })

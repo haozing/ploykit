@@ -27,9 +27,9 @@ describe('registerSchema（zod/mini 迁移后）', () => {
       const r = registerSchema.safeParse({ ...ok, email })
       return r.success ? null : r.error.issues[0]?.message
     }
-    expect(msg('')).toBe('请输入邮箱')
-    expect(msg('not-an-email')).toBe('邮箱格式不正确')
-    expect(msg('a'.repeat(250) + '@x.com')).toBe('邮箱过长')
+    expect(msg('')).toBe('Enter your email')
+    expect(msg('not-an-email')).toBe('Enter a valid email address')
+    expect(msg('a'.repeat(250) + '@x.com')).toBe('Email is too long')
   })
 
   it('密码：少于 10 位 / 类别不足 / 超过 128 字节 各自有专属文案', () => {
@@ -37,10 +37,10 @@ describe('registerSchema（zod/mini 迁移后）', () => {
       const r = registerSchema.safeParse({ ...ok, password })
       return r.success ? null : r.error.issues[0]?.message
     }
-    expect(msg('Ab1!')).toBe('密码至少 10 位')
-    expect(msg('abcdefghij')).toBe('需包含大写/小写/数字/符号中的至少三类')
+    expect(msg('Ab1!')).toBe('Password must be at least 10 characters')
+    expect(msg('abcdefghij')).toBe('Must include at least three of: uppercase, lowercase, numbers, symbols')
     // 44 个汉字 = 132 字节 > 128，但长度只有 44 字符（长度规则不会拦）
-    expect(msg('密码'.repeat(22) + 'Ab1!')).toContain('密码过长')
+    expect(msg('密码'.repeat(22) + 'Ab1!')).toContain('Password too long')
   })
 
   it('passwordSchema 独立使用时规则一致（被账号安全页复用）', () => {

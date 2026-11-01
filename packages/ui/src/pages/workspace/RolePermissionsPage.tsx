@@ -15,17 +15,19 @@ import { useRoleConfig, type PKRoleConfig } from '@ploykit/hooks'
 import { isApiError } from '@ploykit/client'
 import { apiErrorMessage } from '../../lib/api-error'
 import { ROLE_LABEL } from '../../lib/utils'
+import { useT } from '../../i18n'
 
-const DOMAIN_LABEL: Record<string, string> = {
-  workspace: '工作区',
-  members: '成员',
-  invites: '邀请',
-  roles: '角色权限',
-  billing: '计费',
-  webhooks: 'Webhooks',
-  notifications: '通知',
-  audit: '审计',
-  usage: '用量',
+// i18n（g6 分片）：权限域标签进字典，域码 → key。
+const DOMAIN_LABEL_KEY: Record<string, string> = {
+  workspace: 'workspace.rolePermissions.domainWorkspace',
+  members: 'workspace.rolePermissions.domainMembers',
+  invites: 'workspace.rolePermissions.domainInvites',
+  roles: 'workspace.rolePermissions.domainRoles',
+  billing: 'workspace.rolePermissions.domainBilling',
+  webhooks: 'workspace.rolePermissions.domainWebhooks',
+  notifications: 'workspace.rolePermissions.domainNotifications',
+  audit: 'workspace.rolePermissions.domainAudit',
+  usage: 'workspace.rolePermissions.domainUsage',
 }
 
 function domainOf(perm: string): string {
@@ -59,6 +61,7 @@ export interface RolePermissionsPageProps {
 }
 
 export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
+  const t = useT()
   const { roles, catalog, loading, error, setPerms, resetPerms } = useRoleConfig()
   const confirm = useConfirm()
 
@@ -91,7 +94,7 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
     if (!draft) return
     try {
       await setPerms.mutateAsync({ role, perms: draft.perms })
-      toast.success(`已更新${ROLE_LABEL[role] ?? role}权限`)
+      toast.success(t('workspace.rolePermissions.updatedToast', { role: ROLE_LABEL[role] ?? role }))
     } catch (err) {
       if (isReauth(err)) {
         setPendingRetry(() => () => setPerms.mutateAsync({ role, perms: draft.perms }))
@@ -104,14 +107,14 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
 
   const reset = async (role: string) => {
     const ok = await confirm({
-      title: `恢复${ROLE_LABEL[role] ?? role}默认权限？`,
-      description: '自定义权限集将被清除，该角色回到内置默认权限。',
-      confirmText: '恢复默认',
+      title: t('workspace.rolePermissions.resetTitle', { role: ROLE_LABEL[role] ?? role }),
+      description: t('workspace.rolePermissions.resetDesc'),
+      confirmText: t('workspace.rolePermissions.resetDefault'),
     })
     if (!ok) return
     try {
       await resetPerms.mutateAsync(role)
-      toast.success(`已恢复${ROLE_LABEL[role] ?? role}默认权限`)
+      toast.success(t('workspace.rolePermissions.resetToast', { role: ROLE_LABEL[role] ?? role }))
     } catch (err) {
       if (isReauth(err)) {
         setPendingRetry(() => () => resetPerms.mutateAsync(role))
@@ -122,12 +125,12 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
     }
   }
 
-  if (loading) return <PageLoading label="加载角色权限…" />
+  if (loading) return <PageLoading label={t('workspace.rolePermissions.loading')} />
   if (error) return <PageError message={apiErrorMessage(error)} />
 
   return (
     <div className="space-y-4">
-      <PageHeader title="角色权限" />
+      <PageHeader title={t('workspace.rolePermissions.title')} />
 
       {roles.map((r: PKRoleConfig) => {
         const draft = drafts[r.role]
@@ -137,7 +140,7 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
             title={
               <>
                 {ROLE_LABEL[r.role] ?? r.role}
-                {r.overridden && <Badge variant="secondary">已自定义</Badge>}
+                {r.overridden && <Badge variant="secondary">{t('workspace.rolePermissions.customized')}</Badge>}
               </>
             }
             cta={
@@ -145,7 +148,7 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
                 {r.overridden && (
                   <Button variant="outline" size="sm" onClick={() => void reset(r.role)}>
                     <RotateCcw className="size-4" />
-                    恢复默认
+                    {t('workspace.rolePermissions.resetDefault')}
                   </Button>
                 )}
                 <Button
@@ -154,7 +157,7 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
                   onClick={() => void save(r.role)}
                 >
                   <Save className="size-4" />
-                  保存修改
+                  {t('workspace.rolePermissions.saveChanges')}
                 </Button>
               </div>
             }
@@ -163,7 +166,7 @@ export function RolePermissionsPage(_props: RolePermissionsPageProps = {}) {
               {groups.map(({ domain, perms }) => (
                 <div key={domain} className="space-y-2">
                   <p className="text-sm font-medium text-muted-foreground">
-                    {DOMAIN_LABEL[domain] ?? domain}
+                    {DOMAIN_LABEL_KEY[domain] ? t(DOMAIN_LABEL_KEY[domain]) : domain}
                   </p>
                   <div className="space-y-1.5">
                     {perms.map((perm) => (

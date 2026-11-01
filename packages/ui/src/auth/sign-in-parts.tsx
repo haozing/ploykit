@@ -5,6 +5,7 @@ import { FormField } from '../components/FormField'
 import { PasswordField } from '../components/PasswordField'
 import { FieldSeparator } from '../components/ui/field'
 import { Spinner } from '../components/ui/spinner'
+import { useT } from '../i18n'
 import type { SignInFlow } from './useSignInFlow'
 
 /**
@@ -25,6 +26,7 @@ export interface OAuthProviderOption {
  * （少打一次字、少一次验证码往返），邮箱表单作为"或"之后的备选。
  */
 export function SignInOAuthBlock({ providers }: { providers: OAuthProviderOption[] }) {
+  const t = useT()
   if (providers.length === 0) return null
   return (
     <div className="space-y-2" data-testid="oauth-providers">
@@ -34,7 +36,7 @@ export function SignInOAuthBlock({ providers }: { providers: OAuthProviderOption
           href={'/auth/oauth/' + p.id + '/start'}
           className={buttonVariants({ variant: 'outline', className: 'w-full' })}
         >
-          使用 {p.label} 登录
+          {t('auth.signIn.oauthWithProvider', { provider: p.label })}
         </a>
       ))}
     </div>
@@ -43,13 +45,14 @@ export function SignInOAuthBlock({ providers }: { providers: OAuthProviderOption
 
 /** 企业 IdP 登录（折叠）。 */
 export function SignInFedLogin() {
+  const t = useT()
   return (
     <details className="pt-1" data-testid="fed-login">
-      <summary className="text-sm text-muted-foreground cursor-pointer select-none">企业登录</summary>
+      <summary className="text-sm text-muted-foreground cursor-pointer select-none">{t('auth.signIn.fedTitle')}</summary>
       <form method="get" action="/auth/fed/start" className="mt-2 space-y-2">
-        <Input type="text" name="workspace" placeholder="工作区标识（slug）" required />
+        <Input type="text" name="workspace" placeholder={t('auth.signIn.fedWorkspacePlaceholder')} required />
         <Button type="submit" className="w-full">
-          通过企业 IdP 登录
+          {t('auth.signIn.fedSubmit')}
         </Button>
       </form>
     </details>
@@ -92,6 +95,7 @@ export function SignInFooterLinks({
  * 邮箱先行形态的"使用密码登录"切换——同一份实现，行为不会分叉。
  */
 export function SignInPasswordForm({ flow }: { flow: SignInFlow }) {
+  const t = useT()
   return (
     <form onSubmit={flow.handlePasswordSubmit} className="space-y-4 pt-2">
       <FormField label={flow.kit.signInEmailLabel} htmlFor="login-pw-email">
@@ -104,7 +108,7 @@ export function SignInPasswordForm({ flow }: { flow: SignInFlow }) {
       <FormField label={flow.kit.signInPasswordLabel} htmlFor="login-pw-password">
         <PasswordField
           id="login-pw-password" value={flow.password} required
-          onChange={(e) => flow.setPassword(e.target.value)} placeholder="输入密码"
+          onChange={(e) => flow.setPassword(e.target.value)} placeholder={t('auth.signIn.passwordPlaceholder')}
           autoComplete="current-password"
         />
       </FormField>
@@ -147,12 +151,13 @@ export function SignInResendButton({ flow }: { flow: SignInFlow }) {
 
 /** 验证码字段（输入框 + 行内重发）。 */
 export function SignInCodeField({ flow }: { flow: SignInFlow }) {
+  const t = useT()
   return (
     <FormField label={flow.kit.signInCodeLabel} htmlFor="login-code">
       <div className="flex gap-2">
         <Input
           id="login-code" type="text" value={flow.code} required
-          onChange={(e) => flow.setCode(e.target.value)} placeholder="6位数字"
+          onChange={(e) => flow.setCode(e.target.value)} placeholder={t('auth.signIn.codePlaceholder')}
           maxLength={6} autoComplete="one-time-code" className="flex-1"
         />
         <SignInResendButton flow={flow} />

@@ -31,6 +31,9 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react'
 import { useSiteConfig } from '@ploykit/hooks'
 import { turnstileSiteKey } from '../lib/turnstile'
+// 非组件调用点（模块级 loadTurnstileApi 的 Error 文案经 onError 直达表单
+// 错误位）：用模块级 t（g7 分片 auth.turnstile.*），随 setUiLang 变化。
+import { t } from '../i18n'
 
 const SCRIPT_ID = 'ploykit-turnstile-api'
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
@@ -67,7 +70,7 @@ function loadTurnstileApi(): Promise<void> {
   scriptPromise = new Promise<void>((resolve, reject) => {
     if (typeof window === 'undefined') {
       scriptPromise = null
-      reject(new Error('Turnstile 仅可在浏览器环境加载'))
+      reject(new Error(t('auth.turnstile.browserOnly')))
       return
     }
     // 已就绪（同一页面会话内二次挂载）直接过闸。
@@ -86,7 +89,7 @@ function loadTurnstileApi(): Promise<void> {
         if (window.turnstile) resolve()
         else {
           scriptPromise = null
-          reject(new Error('Turnstile 脚本已加载但 window.turnstile 缺失'))
+          reject(new Error(t('auth.turnstile.missingGlobal')))
         }
       },
       { once: true },
@@ -97,7 +100,7 @@ function loadTurnstileApi(): Promise<void> {
         // 失败即作废闸门并移除残尸节点，下一次挂载重新注入（自然重试）。
         scriptPromise = null
         document.getElementById(SCRIPT_ID)?.remove()
-        reject(new Error('Turnstile 脚本加载失败（网络错误或 CSP 拦截）'))
+        reject(new Error(t('auth.turnstile.loadFailedDetail')))
       },
       { once: true },
     )
@@ -172,13 +175,13 @@ export function TurnstileWidget({
           size,
           callback: (token) => onTokenRef.current(token),
           'expired-callback': () => onExpireRef.current?.(),
-          'error-callback': (code) => onErrorRef.current?.(`人机验证异常（${code}），请重试`),
+          'error-callback': (code) => onErrorRef.current?.(t('auth.turnstile.error', { code })),
           'timeout-callback': () => onExpireRef.current?.(),
         })
       },
       (err: unknown) => {
         if (cancelled) return
-        onErrorRef.current?.(err instanceof Error ? err.message : 'Turnstile 脚本加载失败')
+        onErrorRef.current?.(err instanceof Error ? err.message : t('auth.turnstile.loadFailed'))
       },
     )
     return () => {

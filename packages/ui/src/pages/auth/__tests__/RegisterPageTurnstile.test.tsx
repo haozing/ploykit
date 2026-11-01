@@ -36,8 +36,8 @@ import { __resetTurnstileForTests } from '../../../auth/TurnstileWidget'
 
 
 function fillValidForm() {
-  fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-  fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'Abcdef12345!' } })
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Abcdef12345!' } })
 }
 
 /** 安装 window.turnstile mock 并让已注入的 api.js「加载完成」。 */
@@ -78,7 +78,7 @@ describe('RegisterPage × Turnstile：site key 缺失（未配置产品零感知
     render(<RegisterPage onSuccess={onSuccess} />)
 
     fillValidForm()
-    fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith('/auth/register', {
@@ -102,7 +102,7 @@ describe('RegisterPage × Turnstile：site key 存在', () => {
     expect(screen.getByTestId('turnstile-widget')).toBeInTheDocument()
     expect(document.getElementById('ploykit-turnstile-api')).not.toBeNull()
     fillValidForm()
-    const submit = screen.getByRole('button', { name: '创建账号' })
+    const submit = screen.getByRole('button', { name: 'Create account' })
     expect(submit).toBeDisabled()
     expect(apiFetchMock).not.toHaveBeenCalled()
 
@@ -131,19 +131,19 @@ describe('RegisterPage × Turnstile：site key 存在', () => {
     const turnstile = bootTurnstile()
     await solveChallenge(turnstile, 'tok-rejected')
     fillValidForm()
-    fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     // 错误码 → KNOWN_CODES 文案（lib/api-error 的映射表惯例）
-    expect(await screen.findByText('人机验证未通过，请重新完成验证后再试')).toBeInTheDocument()
+    expect(await screen.findByText('Human verification failed. Complete the verification again')).toBeInTheDocument()
     // token 已被消费：widget reset 重新出题，提交回到禁用态
     await waitFor(() => expect(turnstile.reset).toHaveBeenCalledTimes(1))
-    expect(screen.getByRole('button', { name: '创建账号' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled()
 
     // 重取新 token 后可再次提交（新 token，不是旧值）
     apiFetchMock.mockResolvedValue({ user: { id: 'u1' }, expires_at: '' })
     await solveChallenge(turnstile, 'tok-fresh')
-    expect(screen.getByRole('button', { name: '创建账号' })).toBeEnabled()
-    fireEvent.click(screen.getByRole('button', { name: '创建账号' }))
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenLastCalledWith('/auth/register', {
         method: 'POST',

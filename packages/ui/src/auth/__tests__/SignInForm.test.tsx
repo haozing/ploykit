@@ -72,13 +72,13 @@ describe('SignInForm flow="tabs"（老形态，显式启用）', () => {
   it('展示验证码登录 Tab，可切到密码登录并提交 /auth/login', async () => {
     renderForm({ flow: 'tabs' })
     // tabs 子模块是动态 import（不为不用它的形态付 Base UI 的字节）
-    expect(await screen.findByRole('tab', { name: '验证码登录' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: '密码登录' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: 'Sign in with code' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Sign in with password' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: '密码登录' }))
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret-password' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Sign in with password' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret-password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith('/auth/login', {
@@ -93,18 +93,18 @@ describe('SignInForm flow="tabs"（老形态，显式启用）', () => {
     const onSuccess = vi.fn()
     renderForm({ onSuccess })
 
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
     await waitFor(() =>
       expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
         method: 'POST',
         body: { email: 'user@example.com' },
       }),
     )
-    expect(await screen.findByRole('button', { name: /重发（60s）/ })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /Resend in 60s/ })).toBeDisabled()
 
-    fireEvent.change(screen.getByLabelText('验证码'), { target: { value: '123456' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.change(screen.getByLabelText('Verification code'), { target: { value: '123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(loginMock.submit).toHaveBeenCalledWith('user@example.com', '123456'))
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
   })
@@ -119,26 +119,26 @@ describe('SignInForm flow="tabs"（老形态，显式启用）', () => {
 describe('SignInForm passwordOnly', () => {
   it('无验证码 Tab/发送按钮，密码表单直出', () => {
     renderForm({ passwordOnly: true })
-    expect(screen.queryByRole('tab', { name: '验证码登录' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '发送' })).toBeNull()
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.getByLabelText('密码')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Sign in with code' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send code' })).toBeNull()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
 })
 
 describe('SignInForm email-first（渐进披露）', () => {
   it('发送成功前只有邮箱 + 发送按钮，验证码输入框不出现', () => {
     renderForm({ flow: 'email-first' })
-    expect(screen.queryByRole('tab', { name: '验证码登录' })).toBeNull()
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.queryByLabelText('验证码')).toBeNull()
-    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Sign in with code' })).toBeNull()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Verification code')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Send code' })).toBeInTheDocument()
   })
 
   it('发送成功后验证码输入框才出现，可输入并提交登录', async () => {
     renderForm({ flow: 'email-first', onSuccess: vi.fn() })
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
 
     await waitFor(() =>
       expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
@@ -146,9 +146,9 @@ describe('SignInForm email-first（渐进披露）', () => {
         body: { email: 'user@example.com' },
       }),
     )
-    const codeInput = await screen.findByLabelText('验证码')
+    const codeInput = await screen.findByLabelText('Verification code')
     fireEvent.change(codeInput, { target: { value: '654321' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => expect(loginMock.submit).toHaveBeenCalledWith('user@example.com', '654321'))
   })
@@ -158,26 +158,26 @@ describe('SignInForm 默认形态 = email-first（前台推荐）', () => {
   it('不传 flow 时首屏无 Tab、只有邮箱 + 主按钮', () => {
     renderForm({})
     expect(screen.queryByRole('tab')).toBeNull()
-    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send code' })).toBeInTheDocument()
   })
 
   it('「使用密码登录」切到密码表单，可切回验证码（不占首屏权重）', async () => {
     renderForm({})
-    expect(screen.queryByLabelText('密码')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
-    expect(await screen.findByLabelText('密码')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '改用验证码登录' }))
-    expect(await screen.findByRole('button', { name: '发送' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Password')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Use password' }))
+    expect(await screen.findByLabelText('Password')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Use a verification code instead' }))
+    expect(await screen.findByRole('button', { name: 'Send code' })).toBeInTheDocument()
   })
 
   it('密码登录经切换后仍走 POST /auth/login', async () => {
     mockedPost.mockClear()
     renderForm({})
-    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
-    fireEvent.change(await screen.findByLabelText('邮箱'), { target: { value: 'a@b.co' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'pw-123456' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use password' }))
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'a@b.co' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw-123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith('/auth/login', { email: 'a@b.co', password: 'pw-123456' }),
     )
@@ -188,29 +188,29 @@ describe('SignInForm OAuth 置于表单之上（业界惯例）', () => {
   it('providers 存在时，OAuth 块在表单之前，并有"或使用邮箱"分隔', () => {
     renderForm({ oauthProviders: [{ id: 'google', label: 'Google' }] })
     const oauth = screen.getByTestId('oauth-providers')
-    const emailInput = screen.getByLabelText('邮箱')
+    const emailInput = screen.getByLabelText('Email')
     // compareDocumentPosition: 4 = oauth 在 emailInput 之后?
     // 用 DOCUMENT_POSITION_FOLLOWING (4) 判断 emailInput 是否在 oauth 之后
     const rel = oauth.compareDocumentPosition(emailInput)
     expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText('或使用邮箱')).toBeInTheDocument()
+    expect(screen.getByText('Or continue with email')).toBeInTheDocument()
   })
 
   // email-first 没有 Tab 概念，"或使用邮箱"是给邮箱表单做分隔；切到密码表单后
   // 分隔行必须让位（否则同一句话在两个表单上方重复出现）。
   it('切到密码表单后不再显示"或使用邮箱"分隔', async () => {
     renderForm({ oauthProviders: [{ id: 'google', label: 'Google' }] })
-    expect(screen.getByText('或使用邮箱')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
-    await screen.findByLabelText('密码')
-    expect(screen.queryByText('或使用邮箱')).toBeNull()
+    expect(screen.getByText('Or continue with email')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Use password' }))
+    await screen.findByLabelText('Password')
+    expect(screen.queryByText('Or continue with email')).toBeNull()
   })
 
   // passwordOnly 是整页唯一形态，没有"邮箱表单是备选"这层语义，
   // 因此不应出现"或使用邮箱"分隔；但第三方按钮本身仍要在。
   it('passwordOnly 下不渲染"或使用邮箱"分隔，OAuth 按钮仍在', () => {
     renderForm({ passwordOnly: true, oauthProviders: [{ id: 'github', label: 'GitHub' }] })
-    expect(screen.queryByText('或使用邮箱')).toBeNull()
+    expect(screen.queryByText('Or continue with email')).toBeNull()
     expect(screen.getByRole('link', { name: /GitHub/ })).toBeInTheDocument()
   })
 })
@@ -218,16 +218,16 @@ describe('SignInForm OAuth 置于表单之上（业界惯例）', () => {
 describe('SignInForm 法律声明槽位', () => {
   it('termsUrl+privacyUrl 齐备 → 自动渲染「登录即同意 服务条款 与 隐私政策」', () => {
     renderForm({ termsUrl: 'https://e.com/terms', privacyUrl: 'https://e.com/privacy' })
-    const terms = screen.getByRole('link', { name: '服务条款' })
+    const terms = screen.getByRole('link', { name: 'Terms of Service' })
     expect(terms).toHaveAttribute('href', 'https://e.com/terms')
-    const privacy = screen.getByRole('link', { name: '隐私政策' })
+    const privacy = screen.getByRole('link', { name: 'Privacy Policy' })
     expect(privacy).toHaveAttribute('href', 'https://e.com/privacy')
-    expect(screen.getByText(/登录即同意/)).toBeInTheDocument()
+    expect(screen.getByText(/By signing in, you agree/)).toBeInTheDocument()
   })
 
   it('仅设置单个 URL → 不渲染法律行', () => {
     renderForm({ termsUrl: 'https://e.com/terms' })
-    expect(screen.queryByRole('link', { name: '服务条款' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull()
   })
 
   it('legalNote 传入即胜出（整行替换自动法律行）', () => {
@@ -237,8 +237,8 @@ describe('SignInForm 法律声明槽位', () => {
       privacyUrl: 'https://e.com/privacy',
     })
     expect(screen.getByText('自定义法律文案')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '服务条款' })).toBeNull()
-    expect(screen.queryByRole('link', { name: '隐私政策' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Privacy Policy' })).toBeNull()
   })
 })
 
@@ -280,14 +280,14 @@ describe('SignInForm × Turnstile（验证码发码路径，密码路径不挂�
 
     // widget 挂载 + api.js 注入，但用户尚未完成挑战 → 发送禁用
     expect(screen.getByTestId('turnstile-widget')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    expect(screen.getByRole('button', { name: 'Send code' })).toBeDisabled()
 
     // 挑战通过 → 解禁 → 发码带一次性 token 头
     const turnstile = bootTurnstile()
     await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
     act(() => turnstile.render.mock.calls[0][1].callback('tok-send-1'))
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
     await waitFor(() =>
       expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
         method: 'POST',
@@ -297,7 +297,7 @@ describe('SignInForm × Turnstile（验证码发码路径，密码路径不挂�
     )
     // 发码成功即消费 token：widget 重置、重发按钮回到禁用（等新挑战）
     await waitFor(() => expect(turnstile.reset).toHaveBeenCalledTimes(1))
-    expect(await screen.findByRole('button', { name: /重发（60s）/ })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /Resend in 60s/ })).toBeDisabled()
   })
 
   it('未配置 site key：无 widget、发送行为与接线前一致（不带 token 头）', async () => {
@@ -305,8 +305,8 @@ describe('SignInForm × Turnstile（验证码发码路径，密码路径不挂�
     renderForm({})
     expect(screen.queryByTestId('turnstile-widget')).toBeNull()
 
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
     await waitFor(() =>
       expect(mockedApiFetch).toHaveBeenCalledWith('/auth/send-code', {
         method: 'POST',
@@ -321,13 +321,13 @@ describe('SignInForm × Turnstile（验证码发码路径，密码路径不挂�
     renderForm({})
     expect(screen.getByTestId('turnstile-widget')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '使用密码登录' }))
-    await screen.findByLabelText('密码')
+    fireEvent.click(screen.getByRole('button', { name: 'Use password' }))
+    await screen.findByLabelText('Password')
     expect(screen.queryByTestId('turnstile-widget')).toBeNull()
 
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'a@b.co' } })
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'pw-123456' } })
-    fireEvent.click(screen.getByRole('button', { name: '登录' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.co' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw-123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await waitFor(() =>
       expect(mockedPost).toHaveBeenCalledWith('/auth/login', { email: 'a@b.co', password: 'pw-123456' }),
     )
@@ -355,7 +355,7 @@ describe('SignInForm 文案覆盖（KitLabelsProvider）', () => {
     expect(screen.getByRole('link', { name: '注册新号' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '发验证码' })).toBeInTheDocument()
     // 未覆盖键落回默认值
-    expect(screen.getByRole('tab', { name: '验证码登录' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Sign in with code' })).toBeInTheDocument()
   })
 
   it('resendWithCooldown 函数值键生效', async () => {
@@ -367,8 +367,8 @@ describe('SignInForm 文案覆盖（KitLabelsProvider）', () => {
         </KitLabelsProvider>
       ),
     )
-    fireEvent.change(screen.getByLabelText('邮箱'), { target: { value: 'user@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
     expect(await screen.findByRole('button', { name: '请等待 60 秒' })).toBeInTheDocument()
   })
 })

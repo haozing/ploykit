@@ -22,28 +22,35 @@ import {
 } from '@ploykit/hooks'
 import { formatDateTime, cn } from '../../lib/utils'
 import { apiErrorMessage } from '../../lib/api-error'
+import { useT } from '../../i18n'
 
 type Interval = 'monthly' | 'yearly'
 
-const INTERVAL_LABEL: Record<Interval, string> = { monthly: '按月', yearly: '按年' }
-const INTERVAL_UNIT: Record<Interval, string> = { monthly: '月', yearly: '年' }
-
-
-
-const CHANNEL_LABEL: Record<string, string> = {
-  stripe: 'Stripe（银行卡）',
-  alipay: '支付宝',
-  wechat: '微信支付',
-  manual: '线下转账（管理员核销）',
+// i18n（g6 分片）：标签文案进字典，码表只留 key；渠道/周期/限额取值在组件内经 t() 解析。
+const INTERVAL_LABEL_KEY: Record<Interval, string> = {
+  monthly: 'workspace.billing.intervalMonthly',
+  yearly: 'workspace.billing.intervalYearly',
 }
-const channelLabel = (code: string): string => CHANNEL_LABEL[code] ?? code
+const INTERVAL_UNIT_KEY: Record<Interval, string> = {
+  monthly: 'workspace.billing.unitMonthly',
+  yearly: 'workspace.billing.unitYearly',
+}
 
 
-const LIMIT_LABEL: Record<string, string> = {
-  tasks_monthly: '任务数 / 周期',
-  workspaces: '工作区数',
-  seats: '成员席位',
-  webhooks: 'Webhook 订阅',
+
+const CHANNEL_LABEL_KEY: Record<string, string> = {
+  stripe: 'workspace.billing.channelStripe',
+  alipay: 'workspace.billing.channelAlipay',
+  wechat: 'workspace.billing.channelWechat',
+  manual: 'workspace.billing.channelManual',
+}
+
+
+const LIMIT_LABEL_KEY: Record<string, string> = {
+  tasks_monthly: 'workspace.billing.limitTasksMonthly',
+  workspaces: 'workspace.billing.limitWorkspaces',
+  seats: 'workspace.billing.limitSeats',
+  webhooks: 'workspace.billing.limitWebhooks',
 }
 
 function priceCentsOf(plan: PKPlan, interval: Interval): number {
@@ -52,36 +59,45 @@ function priceCentsOf(plan: PKPlan, interval: Interval): number {
 }
 
 
+
+// 0 元（免费档）不在此处处理：调用点用 t('workspace.billing.freePrice') 显示"Free/免费"。
 function fmtCents(cents: number, currency?: string): string {
-  if (cents === 0) return '免费'
+  if (cents === 0) return ''
   const cur = (currency ?? 'CNY').toUpperCase()
   const symbol = cur === 'CNY' ? '¥' : `${cur} `
   return `${symbol}${(cents / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 export interface BillingPageProps {
-  
+
   channel?: string
 }
 
 export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
+  const t = useT()
   const { current } = useWorkspace()
   const { subscription, plans, loading } = useBilling()
   const api = useApi()
   const confirm = useConfirm()
   const qc = useQueryClient()
 
-  
+  const intervalLabel = (it: Interval): string => t(INTERVAL_LABEL_KEY[it])
+  const channelLabel = (code: string): string => {
+    const key = CHANNEL_LABEL_KEY[code]
+    return key ? t(key) : code
+  }
+
+
   const [searchParams, setSearchParams] = useSearchParamsCompat()
   const [interval, setInterval] = useState<Interval>(
     searchParams.get('interval') === 'yearly' ? 'yearly' : 'monthly',
   )
   const [payChannelSel, setPayChannelSel] = useState(searchParams.get('channel') ?? channel)
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null)
-  
+
   const [manualNote, setManualNote] = useState<string | null>(null)
 
-  
+
   const syncParams = (next: { interval?: Interval; channel?: string }) => {
     const p = new URLSearchParams(searchParams)
     if (next.interval) p.set('interval', next.interval)
@@ -89,17 +105,16 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
     setSearchParams(p, { replace: true })
   }
 
-  
-  
-  
-  
+
+
+
   const configQ = useSiteConfig()
   const billingChannels = configQ.data?.billing_channels
-  
-  
-  const channelOptions = billingChannels !== undefined ? billingChannels : Object.keys(CHANNEL_LABEL)
-  
-  
+
+
+  const channelOptions = billingChannels !== undefined ? billingChannels : Object.keys(CHANNEL_LABEL_KEY)
+
+
   const payChannel =
     billingChannels !== undefined && billingChannels.length > 0 && !billingChannels.includes(payChannelSel)
       ? billingChannels[0]
@@ -107,8 +122,8 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
   const noChannels = billingChannels !== undefined && billingChannels.length === 0
 
   const wsId = current?.id ?? ''
-  
-  
+
+
   const subErrQ = useQuery({
     queryKey: queryKeys.billingSubscription(wsId),
     queryFn: () => api.get<PKSubscription>('/api/billing/subscription'),
@@ -130,20 +145,20 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
     .filter((p) => p.limits.price_monthly_cents !== undefined || p.limits.price_yearly_cents !== undefined)
     .sort((a, b) => a.sort_no - b.sort_no)
 
-  
-  
+
+
   const checkoutDescription =
     payChannel === 'manual'
-      ? '升级立即生效；下单后请联系管理员完成线下转账，订单在管理员核销后生效。'
+      ? t('workspace.billing.checkoutDescManual')
       : payChannel === 'stripe'
-        ? '升级立即生效；Stripe 结账完成后自动跳回。'
-        : '升级立即生效；在所选渠道的收银台完成支付后自动生效。'
+        ? t('workspace.billing.checkoutDescStripe')
+        : t('workspace.billing.checkoutDescOther')
 
   const refreshBilling = () => qc.invalidateQueries({ queryKey: queryKeys.billing })
 
   const handleCheckout = async (plan: PKPlan) => {
     if (noChannels || (billingChannels !== undefined && billingChannels.length > 0 && !billingChannels.includes(payChannel))) {
-      toast.error('该支付渠道未配置')
+      toast.error(t('workspace.billing.channelNotConfigured'))
       return
     }
     setCheckoutPlan(plan.code)
@@ -153,52 +168,55 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
         plan_code: plan.code, interval, channel: payChannel,
       })
       if (res.action_url) {
-        
+
         window.location.href = res.action_url
       } else if (payChannel === 'manual') {
-        
-        
-        
-        setManualNote(`已创建 ${plan.name} 订单（待处理）：下单后请联系管理员完成支付，订单在管理员核销后生效。`)
-        toast.success('订单已创建，请联系管理员完成支付')
+
+
+
+        setManualNote(t('workspace.billing.orderCreatedNote', { plan: plan.name }))
+        toast.success(t('workspace.billing.orderCreatedToast'))
         await refreshBilling()
       } else {
-        toast.error('支付渠道未返回跳转地址')
+        toast.error(t('workspace.billing.noRedirect'))
       }
     } catch (e) {
-      toast.error(apiErrorMessage(e, '发起结账失败'))
+      toast.error(apiErrorMessage(e, t('workspace.billing.checkoutFailed')))
     } finally {
       setCheckoutPlan(null)
     }
   }
 
   const handleCancel = async (order: PKOrder) => {
-    
+
     if (!(await confirm({
-      title: '取消订单',
-      description: `取消 ${order.plan_code}（${INTERVAL_LABEL[order.interval as Interval] ?? order.interval}）的待处理订单？`,
-      confirmText: '取消订单', danger: true,
+      title: t('workspace.billing.cancelOrderTitle'),
+      description: t('workspace.billing.cancelOrderDesc', {
+        plan: order.plan_code,
+        interval: intervalLabel(order.interval as Interval) || order.interval,
+      }),
+      confirmText: t('workspace.billing.cancelOrderTitle'), danger: true,
     }))) return
     try {
       await api.post(`/api/billing/orders/${order.id}/cancel`)
       await refreshBilling()
-      toast.success('订单已取消')
+      toast.success(t('workspace.billing.orderCanceled'))
     } catch (e) {
-      toast.error(apiErrorMessage(e, '取消失败'))
+      toast.error(apiErrorMessage(e, t('workspace.billing.cancelFailed')))
     }
   }
 
   const orderColumns: Column<PKOrder>[] = [
-    { key: 'plan_code', header: '套餐', render: (o) => <span className="font-medium">{o.plan_code}</span> },
-    { key: 'interval', header: '周期', render: (o) => INTERVAL_LABEL[o.interval as Interval] ?? o.interval },
-    { key: 'amount_cents', header: '金额', render: (o) => fmtCents(o.amount_cents, o.currency) },
-    { key: 'status', header: '状态', render: (o) => <StatusBadge status={o.status} /> },
-    { key: 'created_at', header: '创建时间', render: (o) => <span className="text-muted-foreground">{formatDateTime(o.created_at)}</span> },
+    { key: 'plan_code', header: t('workspace.billing.colPlan'), render: (o) => <span className="font-medium">{o.plan_code}</span> },
+    { key: 'interval', header: t('workspace.billing.colInterval'), render: (o) => intervalLabel(o.interval as Interval) || o.interval },
+    { key: 'amount_cents', header: t('workspace.billing.colAmount'), render: (o) => o.amount_cents === 0 ? t('workspace.billing.freePrice') : fmtCents(o.amount_cents, o.currency) },
+    { key: 'status', header: t('workspace.billing.colStatus'), render: (o) => <StatusBadge status={o.status} /> },
+    { key: 'created_at', header: t('workspace.billing.colCreatedAt'), render: (o) => <span className="text-muted-foreground">{formatDateTime(o.created_at)}</span> },
     {
-      key: 'actions', header: '操作', className: 'text-right',
+      key: 'actions', header: t('workspace.billing.colActions'), className: 'text-right',
       render: (o) =>
         o.status === 'pending' ? (
-          <Button size="sm" variant="outline" onClick={() => handleCancel(o)}>取消</Button>
+          <Button size="sm" variant="outline" onClick={() => handleCancel(o)}>{t('workspace.billing.cancel')}</Button>
         ) : null,
     },
   ]
@@ -206,19 +224,19 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
   if (!wsId) {
     return (
       <div>
-        <PageHeader title="计费" />
-        <PageEmpty label="请先创建并选择一个工作区" />
+        <PageHeader title={t('workspace.billing.title')} />
+        <PageEmpty label={t('workspace.billing.emptyNoWs')} />
       </div>
     )
   }
-  if (loading) return <PageLoading label="加载计费信息…" />
-  
+  if (loading) return <PageLoading label={t('workspace.billing.loading')} />
+
   if (loadError) {
     return (
       <div>
-        <PageHeader title="计费" />
+        <PageHeader title={t('workspace.billing.title')} />
         <PageError
-          message={apiErrorMessage(loadError, '计费信息加载失败')}
+          message={apiErrorMessage(loadError, t('workspace.billing.loadFailed'))}
           onRetry={() => {
             void subErrQ.refetch()
             void plansErrQ.refetch()
@@ -230,24 +248,24 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
 
   return (
     <div>
-      <PageHeader title="计费" />
+      <PageHeader title={t('workspace.billing.title')} />
 
       {/* 当前套餐 */}
       <SettingsCard
-        title="当前套餐"
-        cta={<Badge variant="outline">{currentPlanCode ?? '未知'}</Badge>}
+        title={t('workspace.billing.currentPlanCard')}
+        cta={<Badge variant="outline">{currentPlanCode ?? t('workspace.billing.unknownPlan')}</Badge>}
       >
         <p className="text-sm text-muted-foreground">
-          套餐 <span className="font-medium text-foreground">{currentPlanCode ?? '—'}</span>
-          ，共 {orders.length} 笔订单（待处理 {orders.filter((o) => o.status === 'pending').length} 笔）。
+          {t('workspace.billing.summaryPlanPrefix')}<span className="font-medium text-foreground">{currentPlanCode ?? '—'}</span>
+          {t('workspace.billing.summaryOrders', { total: orders.length, pending: orders.filter((o) => o.status === 'pending').length })}
         </p>
       </SettingsCard>
 
       {/* 套餐选择 */}
-      <SettingsCard title="选择套餐" description={checkoutDescription}>
+      <SettingsCard title={t('workspace.billing.choosePlan')} description={checkoutDescription}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           {/* interval 切换 pill（formbricks 版式） */}
-          <div className="w-fit rounded-xl border bg-muted p-1" role="group" aria-label="计费周期">
+          <div className="w-fit rounded-xl border bg-muted p-1" role="group" aria-label={t('workspace.billing.billingCycleAria')}>
             {(['monthly', 'yearly'] as Interval[]).map((it) => (
               <button
                 key={it}
@@ -260,7 +278,7 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {INTERVAL_LABEL[it]}
+                {intervalLabel(it)}
               </button>
             ))}
           </div>
@@ -268,7 +286,7 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
             <Select value={payChannel} onValueChange={(v) => {
               if (typeof v === 'string') { setPayChannelSel(v); syncParams({ channel: v }) }
             }}>
-              <SelectTrigger size="sm" className="w-44" aria-label="支付渠道">
+              <SelectTrigger size="sm" className="w-44" aria-label={t('workspace.billing.channelAria')}>
                 <SelectValue>{channelLabel(payChannel)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -288,7 +306,7 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
         )}
 
         {sortedPlans.length === 0 && (
-          <PageEmpty label="暂无可订阅套餐" hint="站点尚未配置按月或按年订阅的套餐。" />
+          <PageEmpty label={t('workspace.billing.noPlans')} hint={t('workspace.billing.noPlansHint')} />
         )}
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -297,7 +315,10 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
             const price = priceCentsOf(plan, interval)
             const features = Object.entries(plan.limits)
               .filter(([k]) => !k.startsWith('price_') && k !== 'trial_days')
-              .map(([k, v]) => `${LIMIT_LABEL[k] ?? k}：${v < 0 ? '不限' : v}`)
+              .map(([k, v]) => t('workspace.billing.featureLine', {
+                label: LIMIT_LABEL_KEY[k] ? t(LIMIT_LABEL_KEY[k]) : k,
+                value: v < 0 ? t('workspace.billing.unlimited') : v,
+              }))
             return (
               <div
                 key={plan.code}
@@ -308,13 +329,13 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
               >
                 <div className="flex items-center justify-between">
                   <p className="font-semibold">{plan.name}</p>
-                  {isCurrent && <Badge>当前计划</Badge>}
+                  {isCurrent && <Badge>{t('workspace.billing.currentPlanBadge')}</Badge>}
                 </div>
                 <p className="mt-3 text-3xl font-bold tabular-nums">
-                  {fmtCents(price, plan.currency)}
+                  {price === 0 ? t('workspace.billing.freePrice') : fmtCents(price, plan.currency)}
                   {price > 0 && (
                     <span className="text-sm font-normal text-muted-foreground">
-                      {` / ${INTERVAL_UNIT[interval]}`}
+                      {` / ${t(INTERVAL_UNIT_KEY[interval])}`}
                     </span>
                   )}
                 </p>
@@ -325,21 +346,21 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
                   onClick={() => handleCheckout(plan)}
                 >
                   {isCurrent
-                    ? '当前计划'
+                    ? t('workspace.billing.currentPlanBadge')
                     : checkoutPlan === plan.code
                       ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Spinner className="size-3.5" aria-hidden="true" />
-                          跳转收银台…
+                          {t('workspace.billing.redirecting')}
                         </span>
                       )
-                      : '升级'}
+                      : t('workspace.billing.upgrade')}
                 </Button>
                 {/* F8：升级不可用原因可见化（不只 title 悬停）。B1/G4：动态渠道表下
                     仅剩"站点零渠道"一种不可用场景，文案如实、不再自相矛盾。 */}
                 {!isCurrent && noChannels && (
                   <p className="mt-2 text-xs text-muted-foreground" role="note">
-                    暂不可升级：站点未配置任何支付渠道，请联系管理员。
+                    {t('workspace.billing.upgradeUnavailable')}
                   </p>
                 )}
                 {features.length > 0 && (
@@ -358,12 +379,12 @@ export function BillingPage({ channel = 'stripe' }: BillingPageProps = {}) {
       </SettingsCard>
 
       {/* 订单 */}
-      <SettingsCard title="订单" bodyClassName="px-4 pt-4 pb-4">
+      <SettingsCard title={t('workspace.billing.ordersTitle')} bodyClassName="px-4 pt-4 pb-4">
         <DataTable
           columns={orderColumns}
           rows={orders}
           rowKey={(o) => o.id}
-          empty={<PageEmpty label="暂无订单" hint="选择套餐完成首次购买后生成" />}
+          empty={<PageEmpty label={t('workspace.billing.noOrders')} hint={t('workspace.billing.noOrdersHint')} />}
         />
       </SettingsCard>
     </div>
