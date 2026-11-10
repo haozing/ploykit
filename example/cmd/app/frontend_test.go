@@ -45,6 +45,12 @@ func TestFrontendClientRouteFallsBackToShell(t *testing.T) {
 	if !strings.Contains(resp.Body.String(), "<div id=\"root\">") {
 		t.Error("壳页应有 #root 挂载点")
 	}
+	// 壳页必须可重验证（webx.HTMLNoCache）：发版轮换 hashed chunk 后，被启发
+	// 式缓存的旧壳引用已删除的资产，首次动态 import 直接死掉。没有这条，
+	// HTMLNoCache 接线丢失时头会整体消失（回落到无缓存头）。
+	if got := resp.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("壳页应带 Cache-Control: no-cache, got %q", got)
+	}
 }
 
 // 资产清单接线（webx.AssetCacheManifest）：清单内的构建产物强缓存，清单外的

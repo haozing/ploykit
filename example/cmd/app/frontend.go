@@ -65,7 +65,14 @@ func frontendHandler() http.Handler {
 		cached = webx.AssetCache(cached)
 	}
 	fileServer := cached
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// HTMLNoCache: shells and any FileServer-served HTML revalidate (no-cache)
+	// unless they declare their own policy. A release rotates hashed asset
+	// URLs and deletes the old chunks; a heuristically cached pre-deploy shell
+	// references assets that no longer exist and dies on the first dynamic
+	// route import ("Failed to fetch dynamically imported module") until a
+	// manual hard refresh. Wrapping HERE covers every mount of frontendHandler:
+	// the direct mux fallback and the renderx SPA delegation point alike.
+	return webx.HTMLNoCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		if strings.HasPrefix(p, "/api") || strings.HasPrefix(p, "/auth") ||
 			strings.HasPrefix(p, "/webhook") || p == "/healthz" {
@@ -86,5 +93,5 @@ func frontendHandler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		data, _ := fs.ReadFile(sub, "index.html")
 		w.Write(data)
-	})
+	}))
 }

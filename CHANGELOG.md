@@ -9,6 +9,49 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.25.0] — 2026-11-10
+
+Deploy-window self-healing batch, prompted by a field incident
+(stickerscenemaker 2026-11-10, twice the same day): a redeploy rotates and
+deletes the hashed chunks while a visitor's already-loaded shell still
+references them, and the first dynamic route import dies with "Failed to
+fetch dynamically imported module" until a manual hard refresh. The two
+halves of the fix are deliberately split server-side / client-side — the
+server guarantee (documents revalidate) and the client belt (stale tabs
+reload once) each close a different gap. Go + `@ploykit/runtime` both ship
+(runtime 0.9.1 → 0.10.0).
+
+### Added
+- **webx `HTMLNoCache(next)`**: enforces the "HTML must revalidate" ruling
+  AssetCache states but never enforced — every 2xx `text/html` response
+  carrying no Cache-Control of its own gets `Cache-Control: no-cache`.
+  GET/HEAD only, 206 excluded, non-HTML untouched, and an inner handler's
+  explicit policy always wins (renderx embed tiers' `max-age=60,
+  stale-while-revalidate=300` passes through). Wired inside example's
+  `frontendHandler`, so the direct mux mount and the renderx `SPA`
+  delegation point share one policy; products mirror the same single wrap
+  (stickerscenemaker already did). Boundary: covered by
+  docs/platform-api-index.md; example asserts the shell header in
+  frontend_test.
+- **runtime `lazyPage` chunk-fetch self-heal** (`src/lazy.ts`): when a
+  route-chunk dynamic import fails with a fetch-shaped error ("Failed to
+  fetch dynamically imported module" / "Importing a module script failed." /
+  "error loading dynamically imported module" — Chrome/Safari/Firefox
+  spellings), the page reloads itself once; the fresh shell (with HTMLNoCache
+  on the server) references the new hashes and the route loads — the error
+  boundary usually never paints. Loop-guarded via a sessionStorage timestamp
+  (`ploykit:lazyPage:chunkReloadAt`) with a 10s cooldown: a second failure
+  inside the window means the origin is genuinely broken and the error is
+  handed to the boundary as before. Module-evaluation errors do not match and
+  never trigger a reload. Placed inside lazyPage (not a global
+  `vite:preloadError` listener) because every route-level dynamic import
+  funnels through it — including TanStack intent prefetch, whose swallowed
+  rejection still triggers the inner catch. SSR-safe (no-op without window).
+  Tests: new `lazy.selfheal.test.ts` (node environment; stubbed window —
+  jsdom's location is [Unforgeable] and cannot be redefined); caught a real
+  boundary bug on the way (`Number(null) === 0` is finite — the cooldown
+  check must map null to NaN or the first failure reads as "in cooldown").
+
 ## [0.24.1] — 2026-11-01
 
 Calendar-boundary test fixes (Go test files only — production code was
