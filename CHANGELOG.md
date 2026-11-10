@@ -9,6 +9,27 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.25.1] — 2026-11-10
+
+Release-mechanics fix for the aborted v0.25.0 (its tag push died in CI at
+`npm ci` before any npm publish; the Go module version may or may not have
+been recorded by proxy.golang.org — per the published-tags-are-immutable
+ruling the number is retired either way, not re-used). No production code
+changed relative to v0.25.0's tag.
+
+### Fixed
+- **workspace `^` specs must track minor bumps of sibling packages**:
+  `packages/hooks` and `example/web` declared `"@ploykit/runtime":
+  "^0.9.0"` — under 0.x semver that caret means `>=0.9.0 <0.10.0`, so the
+  runtime minor bump to 0.10.0 fell OUT of every consumer's range. npm then
+  resolved the registry copy (0.9.1) into the ideal tree instead of the
+  workspace link, and `npm ci` failed with "Missing: @ploykit/runtime@0.9.1
+  from lock file" (release workflow + verify ui job, same root cause — the
+  0.9.0 → 0.9.1 patch bump never hit this because `^0.9.0` covers 0.9.1).
+  Both specs are now `^0.10.0`; the regenerated lockfile links the workspace
+  again. **Rule for future minor bumps of `@ploykit/*`: bump the `^` spec in
+  every workspace consumer in the same change.**
+
 ## [0.25.0] — 2026-11-10
 
 Deploy-window self-healing batch, prompted by a field incident
