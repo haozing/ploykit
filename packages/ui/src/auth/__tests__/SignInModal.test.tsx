@@ -143,3 +143,26 @@ describe('SignInModal 成功语义（#24：默认整页硬跳转）', () => {
     expect(hardNavigateMock).not.toHaveBeenCalled()
   })
 })
+
+/* ==================== onRegister 弹层形态（2026-11-13） ====================
+ * 弹层场景点 "Create account" 不应整页跳走（登录弹层关闭、消费方状态丢失）。
+ * 不传 onRegister = <a href> 整页跳转现行为（独立登录/注册页零变化）。 */
+describe('SignInModal onRegister（弹层形态）', () => {
+  it('传入 onRegister：footer 变点按钮，点击触发回调且不导航', async () => {
+    const onRegister = vi.fn()
+    setup(true, { registerPath: '/register', onRegister })
+    const link = await screen.findByTestId('register-link')
+    // 按钮形态（非 <a href>）：点击不会离开当前文档
+    expect(link.tagName).toBe('BUTTON')
+    fireEvent.click(link)
+    expect(onRegister).toHaveBeenCalledTimes(1)
+    expect(hardNavigateMock).not.toHaveBeenCalled()
+  })
+
+  it('不传 onRegister：保持 <a href={registerPath}> 整页跳转现行为', async () => {
+    setup(true, { registerPath: '/register' })
+    const link = await screen.findByTestId('register-link')
+    expect(link.tagName).toBe('A')
+    expect(link).toHaveAttribute('href', '/register')
+  })
+})

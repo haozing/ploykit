@@ -29,6 +29,13 @@ export interface SignInModalProps {
 
   registerPath?: string
 
+  /**
+   * 注册回调（【2026-11-13 弹层形态】：弹层场景点 "Create account" 不应整页
+   * 跳走——登录弹层关闭、消费方状态丢失）。传入 = footer 链接变点按钮触发
+   * 本回调（注册表单/第二弹层由消费方裁决）；不传 = <a href> 整页跳转现行为。
+   */
+  onRegister?: () => void
+
   oauthProviders?: OAuthProviderOption[]
 
   /**
@@ -78,6 +85,7 @@ export interface SignInModalProps {
 export function SignInModal({
   resetPath,
   registerPath,
+  onRegister,
   oauthProviders = [],
   renderOAuth,
   enableFedLogin = false,
@@ -119,6 +127,7 @@ export function SignInModal({
         <SignInForm
           resetPath={resetPath}
           registerPath={registerPath}
+          onRegister={onRegister}
           oauthProviders={oauthProviders}
           renderOAuth={renderOAuth}
           enableFedLogin={enableFedLogin}

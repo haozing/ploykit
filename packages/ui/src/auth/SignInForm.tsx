@@ -51,6 +51,14 @@ export interface SignInFormProps {
   enableFedLogin?: boolean
 
   /**
+   * 注册回调（【2026-11-13 弹层形态】：弹层场景点 "Create account" 不应整页
+   * 跳走——登录弹层会关闭、编辑器画布状态丢失）。传入 = footer 链接变点按钮
+   * 触发本回调（注册表单/第二弹层由消费方裁决）；不传 = <a href> 整页跳转
+   * 现行为（独立登录/注册页零变化）。
+   */
+  onRegister?: () => void
+
+  /**
    * 自定义第三方登录区（ReactNode）：非空时**整块替换**默认的
    * SignInOAuthBlock（oauthProviders 数组渲染的「使用 X 登录」按钮）与
    * 其后的「或使用邮箱」分隔行——品牌化入口（官方 G/GitHub mark、英文
@@ -101,6 +109,7 @@ export function SignInForm({
   registerPath = '/register',
   oauthProviders = [],
   enableFedLogin = false,
+  onRegister,
   renderOAuth,
   passwordOnly = false,
   onSuccess,
@@ -231,7 +240,7 @@ export function SignInForm({
 
       {enableFedLogin && <SignInFedLogin />}
       <SignInLegal legal={legal} />
-      <SignInFooterLinks flow={signIn} resetPath={resetPath} registerPath={registerPath} />
+      <SignInFooterLinks flow={signIn} resetPath={resetPath} registerPath={registerPath} onRegister={onRegister} />
     </div>
   )
 }

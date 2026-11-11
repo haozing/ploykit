@@ -68,10 +68,15 @@ export function SignInFooterLinks({
   flow,
   resetPath,
   registerPath,
+  onRegister,
 }: {
   flow: SignInFlow
   resetPath?: string
   registerPath?: string
+  /** 【2026-11-13 弹层形态】注册回调：传入 = "Create account" 变点按钮触发本
+   *  回调（不导航——弹层内切换表单/再开注册弹层由消费方裁决，登录弹层不拆）；
+   *  不传 = 保持 <a href={registerPath}> 整页跳转现行为（独立登录页零变化）。 */
+  onRegister?: () => void
 }) {
   if (!resetPath && !registerPath) return null
   return (
@@ -81,10 +86,21 @@ export function SignInFooterLinks({
           {flow.kit.signInForgotPassword}
         </a>
       )}
-      {registerPath && (
-        <a href={registerPath} data-testid="register-link" className="text-primary hover:underline">
+      {registerPath && onRegister ? (
+        <button
+          type="button"
+          data-testid="register-link"
+          className="text-primary hover:underline cursor-pointer"
+          onClick={onRegister}
+        >
           {flow.kit.signInCreateAccount}
-        </a>
+        </button>
+      ) : (
+        registerPath && (
+          <a href={registerPath} data-testid="register-link" className="text-primary hover:underline">
+            {flow.kit.signInCreateAccount}
+          </a>
+        )
       )}
     </div>
   )

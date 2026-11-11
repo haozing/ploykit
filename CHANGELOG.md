@@ -9,6 +9,23 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.26.0] — 2026-11-13
+
+SignInModal register-link modal form (user feedback from stickerscenemaker:
+tapping "Create account" inside the editor's sign-in dialog hard-navigated to
+/register, closing the dialog and losing the canvas state). Go diff is empty —
+`@ploykit/ui` 2.8.0 → 2.9.0 only.
+
+### Added
+- **ui `SignInModal` / `SignInForm` `onRegister?: () => void`**: passed → the
+  footer "Create account" link becomes a button firing the callback (register
+  form / second dialog is the consumer's call — the sign-in dialog stays open);
+  omitted → the existing `<a href={registerPath}>` hard navigation, unchanged
+  for standalone login/register pages. Prop chain:
+  SignInModal → SignInForm → SignInFooterLinks. Tests: +2 (button form fires
+  the callback without navigation; default keeps the anchor).
+
+
 ## [0.25.1] — 2026-11-10
 
 Release-mechanics fix for the aborted v0.25.0 (its tag push died in CI at
