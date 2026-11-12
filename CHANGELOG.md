@@ -9,6 +9,33 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.27.0] — 2026-11-13
+
+Canonical absolutization (GEO-audit field report from stickerscenemaker: the
+AITDK GEO checker flagged every page's relative canonical as "points to a
+different URL", meaning citation credit can land on a URL that is not the
+page's). Go diff only — npm packages untouched (their last release stays
+0.26.0 / ui 2.9.0).
+
+### Changed
+- **renderx `BaseURL` absolutization now covers `link[rel=canonical]` href**:
+  with a BaseURL set (the `PUBLIC_BASE_URL` env in both wiring paths), a
+  relative canonical `/about` renders as
+  `<link rel="canonical" href="https://host/about">`. This flips the old
+  ruling ("canonical is deliberately absent — a relative canonical is
+  legal"): legal ≠ unambiguous. Google resolves a relative canonical against
+  the page URL, but third-party SEO/GEO tooling and citation-credit
+  bookkeeping key on the literal URL, so the assembly step removes the
+  relative/absolute split the same way it already does for og/twitter
+  (rendering.md §5.6.3 records the flip). Already-absolute and
+  protocol-relative values stay untouched; non-canonical links (`preload`
+  etc.) are never rewritten; an empty or malformed BaseURL remains a
+  complete no-op; client-side SPA-navigated head updates stay out of scope
+  (crawlers read the first HTML only). `absolutizeSocial` renamed to
+  `absolutizeURL` — it now handles the link shape alongside the meta shape,
+  copy-on-write contract unchanged. Products pick this up by bumping the Go
+  module; no product-side code change needed beyond the version.
+
 ## [0.26.0] — 2026-11-13
 
 SignInModal register-link modal form (user feedback from stickerscenemaker:

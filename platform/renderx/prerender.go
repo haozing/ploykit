@@ -53,8 +53,9 @@ type ViteAssets struct {
 
 	// BaseURL is the absolute http(s) origin the build is served under
 	// (usually the PUBLIC_BASE_URL env). When set, RenderOnce turns relative
-	// og:image / twitter:image / og:url values into absolute URLs; empty or
-	// malformed values disable the rewrite (no-op).
+	// og:image / twitter:image / og:url content values and relative
+	// link[rel=canonical] href values into absolute URLs; empty or malformed
+	// values disable the rewrite (no-op).
 	BaseURL string
 }
 
@@ -74,8 +75,8 @@ func (v ViteAssets) hydrateScript() string {
 // 预览（草稿渲染）、邮件合成、调试等场景直接调用即可，语义与预渲染管线
 // 完全一致（props 规范化、空输出校验、head 指令与 <title> 校验）。
 // assets.Shell / assets.BaseURL 随 assets 一起生效：壳 head 继承与
-// og:image/twitter:image/og:url 绝对化对直接调用方同样成立（壳只需解析
-// 一次挂到 assets 上，无需在每条组装路径单独接线）。
+// og:image/twitter:image/og:url/canonical 绝对化对直接调用方同样成立（壳只需
+// 解析一次挂到 assets 上，无需在每条组装路径单独接线）。
 //
 // hydrate=none 的页面不注入 props 脚本与水合入口：两者唯一的消费者都是
 // 客户端入口，没有它就没有意义——留在 HTML 里只会把 props 白发给所有人，

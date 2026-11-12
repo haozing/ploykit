@@ -388,8 +388,9 @@ func TestRenderDocumentInheritsShellHead(t *testing.T) {
 	}
 }
 
-// F-2：og:image / twitter:image / og:url 绝对化；canonical 与其它 meta 不动；
-// 已绝对/协议相对不动；BaseURL 空或非法 = no-op。
+// F-2：og:image / twitter:image / og:url / canonical href 绝对化（v0.27.0 起
+// canonical 收编——相对合法但绝对无歧义，rendering.md §5.6.3 翻案记录）；
+// 其它 meta/link 不动；已绝对/协议相对不动；BaseURL 空或非法 = no-op。
 func TestRenderDocumentAbsolutizesSocialMeta(t *testing.T) {
 	head := func() []HeadEntry {
 		return []HeadEntry{
@@ -413,8 +414,9 @@ func TestRenderDocumentAbsolutizesSocialMeta(t *testing.T) {
 				`content="https://example.test/shots/a.jpg" property="og:image"`,
 				`content="https://example.test/shots/b.jpg"`,
 				`content="https://example.test/about" property="og:url"`,
+				`href="https://example.test/about"`,
 			},
-			notWant: []string{`content="/shots/a.jpg"`, `content="shots/b.jpg"`, `content="/about"`},
+			notWant: []string{`content="/shots/a.jpg"`, `content="shots/b.jpg"`, `content="/about"`, `href="/about"`},
 		},
 		{
 			name:    "BaseURL 为空：完全 no-op",
@@ -448,11 +450,14 @@ func TestRenderDocumentAbsolutizesSocialMeta(t *testing.T) {
 		})
 	}
 
-	// 已绝对 / 协议相对不动
+	// 已绝对 / 协议相对不动（og:image 与 canonical href 同规）
 	got, err := RenderDocument(Document{
 		Head: []HeadEntry{
 			{Tag: "meta", Attrs: map[string]string{"property": "og:image", "content": "https://cdn.example/x.jpg"}},
 			{Tag: "meta", Attrs: map[string]string{"property": "og:image", "content": "//cdn.example/y.jpg"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "canonical", "href": "https://other.example/z"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "canonical", "href": "//cdn.example/w"}},
+			{Tag: "link", Attrs: map[string]string{"rel": "preload", "href": "/keep-relative.css"}},
 		},
 		BodyHTML: "<p>x</p>", BaseURL: "https://example.test",
 	})
@@ -463,12 +468,22 @@ func TestRenderDocumentAbsolutizesSocialMeta(t *testing.T) {
 		!strings.Contains(string(got), `content="//cdn.example/y.jpg"`) {
 		t.Errorf("已绝对/协议相对的 og:image 不应改写:\n%s", got)
 	}
+	if !strings.Contains(string(got), `href="https://other.example/z"`) ||
+		!strings.Contains(string(got), `href="//cdn.example/w"`) {
+		t.Errorf("已绝对/协议相对的 canonical href 不应改写:\n%s", got)
+	}
+	if strings.Contains(string(got), `href="https://example.test/keep-relative.css"`) {
+		t.Errorf("非 canonical 的 link（preload）不应改写:\n%s", got)
+	}
 
 	// 绝对化不能改调用方的 Attrs（copy-on-write）
 	entries := head()
 	_, _ = RenderDocument(Document{Head: entries, BodyHTML: "<p>x</p>", BaseURL: "https://example.test"})
 	if entries[0].Attrs["content"] != "/shots/a.jpg" {
 		t.Errorf("输入 HeadEntry 被原地改写: %v", entries[0].Attrs)
+	}
+	if entries[4].Attrs["href"] != "/about" {
+		t.Errorf("输入 canonical HeadEntry 被原地改写: %v", entries[4].Attrs)
 	}
 }
 

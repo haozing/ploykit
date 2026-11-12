@@ -44,10 +44,13 @@ type Document struct {
 	BodyAttrs map[string]string
 
 	// BaseURL, when set to an absolute http(s) origin, turns relative
-	// og:image / twitter:image / og:url content values into absolute URLs
-	// (crawlers and social scrapers require absolute URLs). Already-absolute
-	// values and every other meta/link (canonical included) are untouched,
-	// and an empty or non-absolute BaseURL disables the rewrite entirely.
+	// og:image / twitter:image / og:url content values and relative
+	// link[rel=canonical] href values into absolute URLs (social scrapers
+	// drop relative values; a relative canonical is legal, but absolute is
+	// unambiguous — third-party SEO tooling and citation credit key on the
+	// literal URL, so the assembly step removes the split). Already-absolute
+	// values and every other meta/link are untouched, and an empty or
+	// non-absolute BaseURL disables the rewrite entirely.
 	// This covers only the server-rendered first HTML; client-side head
 	// updates after SPA navigation keep whatever the page emits (deliberate
 	// boundary: crawlers read the first HTML only).
@@ -207,14 +210,14 @@ func RenderDocument(doc Document) ([]byte, error) {
 		if k, ok := headKey(e); ok && pageKeys[k] {
 			continue
 		}
-		s, err := renderHeadEntry(absolutizeSocial(e, base))
+		s, err := renderHeadEntry(absolutizeURL(e, base))
 		if err != nil {
 			return nil, err
 		}
 		buf.WriteString("  " + s + "\n")
 	}
 	for _, e := range doc.Head {
-		s, err := renderHeadEntry(absolutizeSocial(e, base))
+		s, err := renderHeadEntry(absolutizeURL(e, base))
 		if err != nil {
 			return nil, err
 		}
@@ -354,43 +357,60 @@ func normalizedBaseURL(raw string) string {
 }
 
 // socialAbsolutizeTargets are the meta keys whose content must be absolute
-// (social scrapers drop relative values); canonical is deliberately absent —
-// a relative canonical is legal.
+// (social scrapers drop relative values). link[rel=canonical] href is
+// absolutized structurally in absolutizeURL — canonical was deliberately
+// relative-only until v0.27.0 (a relative canonical is legal); the flip is
+// recorded in rendering.md §5.6.3: legal ≠ unambiguous, third-party SEO
+// tooling and citation credit both key on the literal URL.
 var socialAbsolutizeTargets = map[string]bool{
 	"og:image":      true,
 	"twitter:image": true,
 	"og:url":        true,
 }
 
-// absolutizeSocial rewrites a head entry's content attribute against base
-// when the entry is an og:image / twitter:image / og:url meta with a relative
-// value. base == "" (or an already-absolute / protocol-relative / fragment
+// absolutizeURL rewrites a URL-bearing head entry against base: og:image /
+// twitter:image / og:url meta content values and link[rel=canonical] href
+// values. base == "" (or an already-absolute / protocol-relative / fragment
 // value) returns the entry unchanged, and rewritten entries get a fresh Attrs
 // map so the caller's slices stay untouched (copy-on-write).
-func absolutizeSocial(e HeadEntry, base string) HeadEntry {
-	if base == "" || !strings.EqualFold(e.Tag, "meta") {
+func absolutizeURL(e HeadEntry, base string) HeadEntry {
+	if base == "" {
 		return e
 	}
-	key := e.Attrs["name"]
-	if key == "" {
-		key = e.Attrs["property"]
-	}
-	if !socialAbsolutizeTargets[strings.ToLower(key)] {
+	if strings.EqualFold(e.Tag, "meta") {
+		key := e.Attrs["name"]
+		if key == "" {
+			key = e.Attrs["property"]
+		}
+		if !socialAbsolutizeTargets[strings.ToLower(key)] {
+			return e
+		}
+		if content := e.Attrs["content"]; content != "" {
+			if abs := joinBaseURL(base, content); abs != content {
+				return withAttr(e, "content", abs)
+			}
+		}
 		return e
 	}
-	content := e.Attrs["content"]
-	if content == "" {
-		return e
+	if strings.EqualFold(e.Tag, "link") &&
+		strings.EqualFold(strings.TrimSpace(e.Attrs["rel"]), "canonical") {
+		if href := e.Attrs["href"]; href != "" {
+			if abs := joinBaseURL(base, href); abs != href {
+				return withAttr(e, "href", abs)
+			}
+		}
 	}
-	abs := joinBaseURL(base, content)
-	if abs == content {
-		return e
-	}
+	return e
+}
+
+// withAttr returns e with one attribute rewritten — fresh Attrs map, the
+// caller's map and slices stay untouched (copy-on-write contract).
+func withAttr(e HeadEntry, key, val string) HeadEntry {
 	attrs := make(map[string]string, len(e.Attrs))
 	for k, v := range e.Attrs {
 		attrs[k] = v
 	}
-	attrs["content"] = abs
+	attrs[key] = val
 	e.Attrs = attrs
 	return e
 }
