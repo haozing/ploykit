@@ -2,6 +2,7 @@ package webx
 
 import (
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -99,17 +100,101 @@ func CachePrefix(rules map[string]string) func(http.Handler) http.Handler {
 // expires — declare a TTL short enough to tolerate replacement instead. ttl
 // is truncated to whole seconds; ttl <= 0 yields `max-age=0` (revalidate
 // every time), never a silently longer fallback.
+//
+// Recommended combination: pair this with CachePrefixDefault so a prefix the
+// product forgets to list cannot regress a whole directory to zero caching —
+// the default covers declared file types everywhere else. Wrap the default
+// OUTSIDE this layer: `CachePrefixDefault(exts, fallbackTTL)(CachePrefixTTL(
+// paths, dirTTL)(next))`. The innermost layer that writes wins, so the prefix
+// layer claims its directories first and the extension default only fills the
+// gap; inverting the order lets the default claim every listed extension
+// first, and these prefix declarations then never apply.
 func CachePrefixTTL(paths []string, ttl time.Duration) func(http.Handler) http.Handler {
-	seconds := int64(ttl / time.Second)
-	if seconds < 0 {
-		seconds = 0 // a negative TTL must not emit an invalid negative max-age
-	}
-	value := "public, max-age=" + strconv.FormatInt(seconds, 10)
+	value := cacheControlTTL(ttl)
 	rules := make(map[string]string, len(paths))
 	for _, p := range paths {
 		rules[p] = value
 	}
 	return CachePrefix(rules)
+}
+
+// CachePrefixDefault gives extension-matched static files a fallback
+// shared-cache TTL (`public, max-age=<seconds>`) — the backstop for the
+// unhashed, replaceable files AssetCache deliberately leaves alone.
+//
+// Why it exists: CachePrefixTTL fixes the "hand-written whitelist forgot a
+// directory" failure only up to the completeness of its list. A product that
+// declares `/shots/` but forgets `/brand/` still serves a whole image
+// directory with no cache headers at all — the exact silent zero-cache the
+// prefix helper was introduced to remove (field report: 358 KiB logo
+// re-downloaded on every navigation). An extension default makes the
+// forgotten-prefix failure mode impossible for whole classes of files:
+// declare `png`, `webp`, `woff2` once and no image or font directory can
+// fall back to heuristic caching.
+//
+// Matching semantics:
+//
+//   - The extension is path.Ext(r.URL.Path), compared case-insensitively;
+//     entries may be written with or without the dot (`"png"`, `".PNG"`,
+//     `" .webp "`), empty entries are ignored. An extension-less path never
+//     matches.
+//   - GET/HEAD only; other methods pass through untouched.
+//   - 2xx only (206 excluded), and a Cache-Control already set wins — the
+//     same discipline as CachePrefix, enforced by the same writer: the inner
+//     handler's decision is more specific than an extension default.
+//   - ttl is truncated to whole seconds; ttl <= 0 yields `max-age=0`
+//     (revalidate every time), same as CachePrefixTTL.
+//   - No `immutable`: an extension says nothing about content addressing;
+//     these are exactly the files that can be replaced in place, so pick a
+//     TTL short enough to tolerate replacement.
+//
+// Pair it with an explicit prefix layer: CachePrefixTTL declares the
+// directory policies the product knows about, and this default covers the
+// ones it forgot. Wrap this layer OUTSIDE the prefix layer (see
+// CachePrefixTTL) so the more specific declaration wins.
+func CachePrefixDefault(exts []string, ttl time.Duration) func(http.Handler) http.Handler {
+	value := cacheControlTTL(ttl)
+	set := make(map[string]struct{}, len(exts))
+	for _, e := range exts {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		if !strings.HasPrefix(e, ".") {
+			e = "." + e
+		}
+		set[e] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if _, ok := set[strings.ToLower(path.Ext(r.URL.Path))]; !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			// Same status-aware writer as the prefix layers: the header is
+			// applied when the downstream status is known, never before.
+			cw := &cachePrefixWriter{ResponseWriter: w, cacheControl: value}
+			next.ServeHTTP(cw, r)
+			// A handler that returns without writing anything gets an
+			// implicit 200 from net/http; headers are still mutable here.
+			cw.finish()
+		})
+	}
+}
+
+// cacheControlTTL renders the shared-cache value both TTL helpers emit.
+// Clamping a negative TTL to 0 keeps `max-age` from going negative (which is
+// invalid) without silently lengthening the caller's choice.
+func cacheControlTTL(ttl time.Duration) string {
+	seconds := int64(ttl / time.Second)
+	if seconds < 0 {
+		seconds = 0
+	}
+	return "public, max-age=" + strconv.FormatInt(seconds, 10)
 }
 
 // cachePrefixWriter decorates the Cache-Control header once the downstream

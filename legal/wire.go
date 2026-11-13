@@ -68,8 +68,10 @@ type Module struct {
 // provisioning.PersonalWorkspace precedent): it registers the whole
 // legal_* settings key group on the store, reconciles every registered doc
 // against the legal_billing_model setting (fail-fast — call RegisterDocs
-// BEFORE Wire so the reconciliation sees them), and returns the mountable
-// pieces. A product that never calls Wire keeps today's behavior exactly.
+// BEFORE Wire so the reconciliation sees them), warns (never fails) when the
+// legal identity values behind the compliance copy are still empty
+// placeholders, and returns the mountable pieces. A product that never calls
+// Wire keeps today's behavior exactly.
 func Wire(cfg Config) (*Module, error) {
 	if cfg.Pool == nil {
 		return nil, errors.New("legal: Config.Pool is required")
@@ -87,6 +89,10 @@ func Wire(cfg Config) (*Module, error) {
 	if err := reconcileBillingModel(cfg.Store); err != nil {
 		return nil, err
 	}
+	// Non-blocking by design: an empty entity name is a legitimate pre-launch
+	// state (the admin compliance card red-lights it), so it must never refuse
+	// the boot the way the billing-model reconciliation does.
+	warnUnfilledLegalIdentity(cfg.Store, log)
 	repo := NewAcceptanceRepo(cfg.Pool)
 	m := &Module{
 		repo:          repo,
@@ -102,6 +108,50 @@ func Wire(cfg Config) (*Module, error) {
 		},
 	}
 	return m, nil
+}
+
+// warnUnfilledLegalIdentity emits ONE non-blocking startup warning when docs
+// are registered but any of the three identity values behind the compliance
+// copy (entity name, jurisdiction, contact email) is still empty.
+//
+// Why warn and not fail: unlike the billing-model reconciliation — a mismatch
+// there is a regulatory lie and refuses the boot — an empty entity name is a
+// legitimate pre-launch state: KeySpecs allows empty everywhere and the admin
+// compliance card red-lights it. But "legitimate while developing" silently
+// becomes "shipped to paying customers with an empty subject in the terms"
+// when nothing speaks up at boot (field report: /config returned
+// entity_name/jurisdiction/contact_email all empty with zero startup
+// warnings). One log line at Wire time is the loudest non-fatal signal.
+//
+// Reads use EffectiveKey, same reason as reconcileBillingModel: a single-key
+// read cannot be failed by an UNRELATED sealed key (no PLOYKIT_SEAL_KEY).
+// Even a genuine read failure only gets its own warning — this helper never
+// returns an error, so it can never fail the boot.
+func warnUnfilledLegalIdentity(store SettingsStore, log *slog.Logger) {
+	docs := RegisteredDocs()
+	if len(docs) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var missing []string
+	for _, key := range []string{KeyEntityName, KeyJurisdiction, KeyContactEmail} {
+		v, err := store.EffectiveKey(ctx, key)
+		if err != nil {
+			log.Warn("legal: startup identity check: read setting", "key", key, "err", err)
+			continue
+		}
+		if strings.TrimSpace(v) == "" {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	log.Warn("legal: identity is still empty — the compliance copy (terms/privacy) renders empty entity/jurisdiction/contact placeholders; set it via /admin settings or env before commercial launch",
+		"missing", strings.Join(missing, ","),
+		"docs", len(docs),
+	)
 }
 
 // reconcileBillingModel enforces the Waffo template's three-way billing

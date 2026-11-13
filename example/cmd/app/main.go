@@ -40,6 +40,7 @@ import (
 	auditworkers "github.com/haozing/ploykit/audit/adapters/workers"
 	"github.com/haozing/ploykit/authz"
 	authzpg "github.com/haozing/ploykit/authz/adapters/pgrepo"
+	"github.com/haozing/ploykit/billing"
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	paypal "github.com/haozing/ploykit/billing/adapters/paypal"
 	billingpg "github.com/haozing/ploykit/billing/adapters/pgrepo"
@@ -331,6 +332,16 @@ func main() {
 
 	if err := blog.Seed(ctx, pool); err != nil {
 		log.Error("blog seed", "err", err)
+		os.Exit(1)
+	}
+	// 套餐种子：声明式覆盖框架 007 的中文名/CNY 基线（英文站给英文名 + USD）。
+	// limits 故意不声明——保留 007 的 free=1/50、pro=无限 语义，后台管理员对
+	// limits 的编辑也不会被每次启动回滚（种子只改它声明过的字段）。
+	if err := billing.SeedPlans(ctx, pool, log, []billing.PlanSeed{
+		{Code: "free", Name: "Free", Currency: "USD"},
+		{Code: "pro", Name: "Pro", Currency: "USD"},
+	}); err != nil {
+		log.Error("plan seed", "err", err)
 		os.Exit(1)
 	}
 	log.Info("migrations applied")

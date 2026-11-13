@@ -231,3 +231,169 @@ func TestCachePrefixImplicit200StillDecorated(t *testing.T) {
 		t.Errorf("隐式 200 也应带 Cache-Control, got %q", got)
 	}
 }
+
+// 扩展名命中即加保底头：嵌套目录、大写扩展名、无点声明、HEAD 显式 200 都算；
+// 未命中的扩展名与无扩展名路径原样透传。
+func TestCachePrefixDefaultSetsHeaderOnExtensionMatch(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("img")) })
+	h := CachePrefixDefault([]string{".png", "webp", ".WOFF2"}, 7*24*time.Hour)(next)
+
+	for _, p := range []string{"/shots/a.png", "/brand/sub/logo.png", "/shots/b.PNG", "/x/y.WebP", "/fonts/inter.woff2"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if got := rec.Header().Get("Cache-Control"); got != "public, max-age=604800" {
+			t.Errorf("%s 扩展名命中应带保底 Cache-Control, got %q", p, got)
+		}
+		if rec.Body.String() != "img" {
+			t.Errorf("%s 下游应被调用", p)
+		}
+	}
+
+	// 显式 WriteHeader(200) 与 HEAD 同样生效
+	head := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	rec := httptest.NewRecorder()
+	CachePrefixDefault([]string{".png"}, time.Hour)(head).ServeHTTP(rec,
+		httptest.NewRequest(http.MethodHead, "/logo.png", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=3600" {
+		t.Errorf("HEAD 显式 200 应带保底 Cache-Control, got %q", got)
+	}
+
+	// 未声明的扩展名 / 无扩展名：不设头
+	for _, p := range []string{"/brand/a.jpg", "/shots/noext", "/"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if got := rec.Header().Get("Cache-Control"); got != "" {
+			t.Errorf("%s 不该被保底规则命中, got %q", p, got)
+		}
+	}
+
+	// ttl <= 0 → max-age=0（与 CachePrefixTTL 同口径：截断到秒，绝不回落更长 TTL）
+	for _, ttl := range []time.Duration{500 * time.Millisecond, 0, -time.Hour} {
+		rec = httptest.NewRecorder()
+		CachePrefixDefault([]string{".png"}, ttl)(next).ServeHTTP(rec,
+			httptest.NewRequest(http.MethodGet, "/a.png", nil))
+		if got := rec.Header().Get("Cache-Control"); got != "public, max-age=0" {
+			t.Errorf("ttl=%v 应得 max-age=0, got %q", ttl, got)
+		}
+	}
+}
+
+// 内层已设的 Cache-Control 不被覆盖：handler 的具体决策比扩展名兜底更优先。
+func TestCachePrefixDefaultDoesNotOverrideExistingHeader(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Write([]byte("x"))
+	})
+	rec := httptest.NewRecorder()
+	CachePrefixDefault([]string{".png"}, time.Hour)(next).ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/a.png", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Errorf("下游已设的 Cache-Control 不该被覆盖, got %q", got)
+	}
+}
+
+// 错误响应绝不装饰：404（文件删了/拼错）与 500 带上 max-age 后，浏览器有权
+// 把错误缓存整个 TTL；206 是部分实体，同样排除。
+func TestCachePrefixDefaultDoesNotCacheErrorResponses(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+	}{
+		{"404", http.StatusNotFound},
+		{"500", http.StatusInternalServerError},
+		{"206", http.StatusPartialContent},
+	}
+	for _, tc := range cases {
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+		})
+		rec := httptest.NewRecorder()
+		CachePrefixDefault([]string{".png"}, time.Hour)(next).ServeHTTP(rec,
+			httptest.NewRequest(http.MethodGet, "/missing.png", nil))
+		if rec.Code != tc.status {
+			t.Fatalf("%s status = %d, want %d", tc.name, rec.Code, tc.status)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "" {
+			t.Errorf("%s 不该带 Cache-Control, got %q", tc.name, got)
+		}
+	}
+
+	// http.NotFound 路径（真实 404 写法）同样不加
+	rec := httptest.NewRecorder()
+	CachePrefixDefault([]string{".png"}, time.Hour)(http.HandlerFunc(http.NotFound)).ServeHTTP(rec,
+		httptest.NewRequest(http.MethodGet, "/gone.png", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "" {
+		t.Errorf("http.NotFound 的 404 不该带 Cache-Control, got %q", got)
+	}
+}
+
+// 非 GET/HEAD 原样透传（与 CachePrefix / AssetCache 的安全方法门一致）。
+func TestCachePrefixDefaultOnlyHandlesSafeMethods(t *testing.T) {
+	var sawPost bool
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawPost = r.Method == http.MethodPost
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})
+	rec := httptest.NewRecorder()
+	CachePrefixDefault([]string{".png"}, time.Hour)(next).ServeHTTP(rec,
+		httptest.NewRequest(http.MethodPost, "/upload.png", nil))
+	if !sawPost {
+		t.Fatal("POST 应透传到下游")
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "" {
+		t.Errorf("POST 不该带 Cache-Control, got %q", got)
+	}
+}
+
+// 构造期归一：无点补点、大小写折叠、空白裁掉、空条目忽略；全部忽略时等价于
+// 不挂这层（不 panic，不设头）。
+func TestCachePrefixDefaultNormalizesExtensions(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("x")) })
+	h := CachePrefixDefault([]string{"PNG", " .WebP ", "", "  "}, time.Hour)(next)
+
+	cases := map[string]string{
+		"/a.png":  "public, max-age=3600",
+		"/a.PNG":  "public, max-age=3600",
+		"/b.webp": "public, max-age=3600",
+		"/b.txt":  "",
+		"/no-ext": "",
+	}
+	for p, want := range cases {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Errorf("%s Cache-Control = %q, want %q", p, got, want)
+		}
+	}
+
+	// 全空列表：什么都不装饰
+	for _, exts := range [][]string{nil, {"", " "}} {
+		rec := httptest.NewRecorder()
+		CachePrefixDefault(exts, time.Hour)(next).ServeHTTP(rec,
+			httptest.NewRequest(http.MethodGet, "/a.png", nil))
+		if got := rec.Header().Get("Cache-Control"); got != "" {
+			t.Errorf("空扩展名列表不该设置 Cache-Control, got %q", got)
+		}
+	}
+}
+
+// 推荐组合（文档里写死的接线顺序）：默认层在外、显式前缀在内——前缀层先写
+// 出目录策略，默认层看到已有 Cache-Control 就让位。显式前缀赢。
+func TestCachePrefixDefaultCombinedWithPrefix(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("x")) })
+	h := CachePrefixDefault([]string{".png"}, time.Hour)(
+		CachePrefixTTL([]string{"/shots/"}, 7*24*time.Hour)(next))
+
+	cases := map[string]string{
+		"/shots/a.png":    "public, max-age=604800", // 显式目录声明赢
+		"/brand/logo.png": "public, max-age=3600",   // 默认兜底
+		"/brand/logo.txt": "",                       // 两者都不命中
+	}
+	for p, want := range cases {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if got := rec.Header().Get("Cache-Control"); got != want {
+			t.Errorf("%s Cache-Control = %q, want %q", p, got, want)
+		}
+	}
+}

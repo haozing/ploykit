@@ -1,8 +1,10 @@
 package legal
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -290,8 +292,95 @@ func TestWire_BillingModelReconciliation(t *testing.T) {
 	})
 }
 
-// --- Hooks -------------------------------------------------------------------
+// --- Identity startup warning -------------------------------------------------
 
+// startupLog builds the slog handler the wiring warning is asserted against.
+func startupLog(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// 空富化（entity/jurisdiction/contact 全空）→ 一条 Warn，但不阻断 Wire。
+// 这是 field report 的核心：准备收钱的产品 /config 返回三个空串，启动期零信号。
+func TestWire_WarnsOnUnfilledLegalIdentity(t *testing.T) {
+	resetDocs(t, validDoc("tos", BillingV1Subscription))
+	var buf bytes.Buffer
+	_, err := Wire(Config{
+		Pool:  lazyPool(t),
+		Store: &fakeStore{eff: map[string]string{KeyBillingModel: BillingV1Subscription}},
+		Log:   startupLog(&buf),
+	})
+	require.NoError(t, err, "空实体信息只告警，绝不让启动失败")
+
+	out := buf.String()
+	assert.Contains(t, out, "level=WARN")
+	assert.Contains(t, out, "identity is still empty")
+	for _, key := range []string{KeyEntityName, KeyJurisdiction, KeyContactEmail} {
+		assert.Contains(t, out, key, "缺少的键应逐个点名")
+	}
+}
+
+// 部分填写同样告警，且只点名仍然空着的键。
+func TestWire_WarnsNamingOnlyTheEmptyKeys(t *testing.T) {
+	resetDocs(t, validDoc("tos", BillingV1Subscription))
+	var buf bytes.Buffer
+	_, err := Wire(Config{
+		Pool: lazyPool(t),
+		Store: &fakeStore{eff: map[string]string{
+			KeyBillingModel: BillingV1Subscription,
+			KeyEntityName:   "Acme Pte. Ltd.", // 已填 → 不该出现在 missing 列表
+		}},
+		Log: startupLog(&buf),
+	})
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "identity is still empty")
+	assert.Contains(t, out, KeyJurisdiction)
+	assert.Contains(t, out, KeyContactEmail)
+	assert.NotContains(t, out, KeyEntityName, "已填的键不该被点名")
+}
+
+// 三个身份值全填 → 无 Warn。
+func TestWire_NoWarnWhenLegalIdentityFilled(t *testing.T) {
+	resetDocs(t, validDoc("tos", BillingV1Subscription))
+	var buf bytes.Buffer
+	_, err := Wire(Config{
+		Pool: lazyPool(t),
+		Store: &fakeStore{eff: map[string]string{
+			KeyBillingModel: BillingV1Subscription,
+			KeyEntityName:   "Acme Pte. Ltd.",
+			KeyJurisdiction: "the laws of Singapore",
+			KeyContactEmail: "legal@acme.test",
+		}},
+		Log: startupLog(&buf),
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "level=WARN", "身份值齐全时不该有告警: %s", buf.String())
+}
+
+// 未注册 docs → 纯 settings 接线没有合规文案要渲染，不告警。
+func TestWire_NoIdentityWarnWithoutDocs(t *testing.T) {
+	resetDocs(t)
+	var buf bytes.Buffer
+	_, err := Wire(Config{Pool: lazyPool(t), Store: &fakeStore{}, Log: startupLog(&buf)})
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "identity is still empty", "没注册 docs 就没有占位符可空")
+}
+
+// 单键读取失败只写自己的 Warn，函数本身无返回值——再大的读故障也不能
+// 变成启动错误（EffectiveKey 的初衷：不放大无关故障）。
+func TestWarnUnfilledLegalIdentity_ReadFailureNeverFails(t *testing.T) {
+	resetDocs(t, validDoc("tos", BillingV1Subscription))
+	var buf bytes.Buffer
+	// 直接调用（不走 Wire）：Wire 的 billing-model 对账会在同一读上先行失败，
+	// 这里只钉告警函数自己的非阻塞契约。
+	warnUnfilledLegalIdentity(&fakeStore{effKeyErr: errors.New("db down")}, startupLog(&buf))
+	out := buf.String()
+	assert.Contains(t, out, "read setting")
+	assert.Contains(t, out, "db down")
+	assert.NotContains(t, out, "identity is still empty", "读失败不能被当成\"空值\"报同一条告警")
+}
+
+// --- Hooks -------------------------------------------------------------------
 func TestHooks_AfterRegister(t *testing.T) {
 	repo := newFakeRepo()
 	m := wiredForTest(t, repo, &fakeStore{eff: map[string]string{KeyBillingModel: BillingV1Subscription}}, nil)

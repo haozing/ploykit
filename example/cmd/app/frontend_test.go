@@ -107,3 +107,48 @@ func TestBuildAssetFilesMissingManifestReturnsNil(t *testing.T) {
 		t.Errorf("非法 manifest 应返回 nil, got %v", got)
 	}
 }
+
+// 扩展名兜底接线（webx.CachePrefixDefault）：不在清单里的静止资产（/brand/*.png、
+// /favicon.png）也必须有保底 Cache-Control——漏了它就是"整个品牌目录零缓存"
+// （field report: 358KiB logo 每次导航重下）。清单内资源仍必须是清单的
+// immutable 政策，不能被兜底层抢走。
+func TestFrontendExtensionFallbackCache(t *testing.T) {
+	if _, err := fs.ReadFile(frontendFS, "frontend/brand/logo-dark.png"); err != nil {
+		t.Skip("brand 资产不在 embed 内，跳过兜底接线断言")
+	}
+
+	for _, p := range []string{"/brand/logo-dark.png", "/brand/mark.png", "/favicon.png"} {
+		resp := getFrontend(t, p)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("%s 应 200, got %d", p, resp.Code)
+		}
+		want := "public, max-age=604800"
+		if got := resp.Header().Get("Cache-Control"); got != want {
+			t.Errorf("%s 应带扩展名兜底 Cache-Control %q, got %q", p, want, got)
+		}
+	}
+
+	// 清单内资源仍走 immutable（兜底层在外，内层已写的头不被覆盖）
+	sub, err := fs.Sub(frontendFS, "frontend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := buildAssetFiles(sub)
+	if len(files) == 0 {
+		t.Skip("embed 内无 .vite/manifest.json，清单优先级由构建后验证")
+	}
+	var js string
+	for _, f := range files {
+		if strings.HasSuffix(f, ".js") {
+			js = f
+			break
+		}
+	}
+	if js == "" {
+		t.Skip("manifest 内无 js 产物，immutable 优先级由其它用例覆盖")
+	}
+	resp := getFrontend(t, js)
+	if got := resp.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Errorf("清单内资源应保持 immutable, got %q", got)
+	}
+}

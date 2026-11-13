@@ -9,6 +9,63 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.28.0] — 2026-11-13
+
+Go diff only — npm packages untouched (their last release stays 0.26.0 / ui 2.9.0).
+
+### Added
+- **billing `SeedPlans` / `PlanSeed` — declarative product-side plan seeding**
+  (replaces the "every English product hand-writes UPDATE statements"
+  workaround for migration 007's Chinese/CNY baseline). 007 seeds `free`/`pro`
+  with `免费版`/`专业版` and `plan.currency` defaults to `CNY`; the migration is
+  already applied in production (it is never edited), so products now declare
+  their catalog at boot instead:
+  `billing.SeedPlans(ctx, pool, log, []billing.PlanSeed{...})`. Semantics are
+  per-field, not whole-row: `Name` / `Currency` / `SortNo` empty-or-zero →
+  the stored value is kept; `Limits` non-nil MERGES into the JSONB
+  (`{"price_monthly_cents": 9900}` keeps `tasks_monthly`/`workspaces` and any
+  admin-added keys). An existing code goes through UPDATE (idempotent by
+  construction — repeated calls converge, admin edits to undeclared fields
+  survive), a new code inserts and MUST declare a currency (otherwise the row
+  would silently inherit the CNY column default — the exact bug this API
+  removes); a lost insert race falls back to the UPDATE and converges.
+  Seeds are validated before the first query (ISO-4217 shape + the same
+  3-decimal-currency gate and limits-key regex as the admin plan editor).
+  `example/cmd/app/main.go` now wires `free`/`Pro` → `Free`/`Pro` + `USD`
+  (limits deliberately undeclared: 007's 1/50 and unlimited semantics are
+  kept, and admin limit edits are never rolled back on reboot). Tests: +5
+  (fresh-catalog seed over the 007 baseline, repeat-call idempotency, partial
+  field/limits-merge preservation, new-code-requires-currency, no-DB
+  validation; DB tests are scratch-database-gated on `TEST_DATABASE_URL`).
+- **webx `CachePrefixDefault(exts, ttl)`** — extension-based fallback cache
+  policy for the unhashed static files AssetCache deliberately leaves alone.
+  `CachePrefixTTL` only covers directories the product remembers to list, so
+  one forgotten prefix silently served a whole image directory with zero
+  cache headers (field report, stickerscenemaker: `/brand/` and
+  `/assets/works/` missing from the list → a 358 KiB logo re-downloaded on
+  every navigation). The default matches `path.Ext` case-insensitively
+  (`"png"` / `".PNG"` both accepted) and applies `public, max-age=<seconds>`
+  under the same discipline as `CachePrefix`: GET/HEAD only, 2xx only (206
+  excluded), never decorating an error response, and never overriding a
+  Cache-Control the inner handler already set. Recommended wiring is the
+  default OUTSIDE an explicit prefix layer —
+  `CachePrefixDefault(exts, fallback)(CachePrefixTTL(paths, dirTTL)(next))` —
+  so declared directories keep their longer TTL and the default only fills
+  the gap; `CachePrefixTTL`'s doc now points at the combination.
+
+### Changed
+- **legal: `Wire` warns (never fails) when the legal identity is unfilled** —
+  with docs registered, an empty `legal_entity_name` / `legal_jurisdiction` /
+  `legal_contact_email` now emits one startup `Warn` listing the missing
+  keys. Empty values stay legitimate (the admin compliance card red-lights
+  them), so unlike the billing-model reconciliation this never refuses the
+  boot; reads use `EffectiveKey` for the same reason that reconciliation
+  does (an unrelated sealed key without `PLOYKIT_SEAL_KEY` must not be
+  amplified into anything at all). Field report: `/config` served
+  `entity_name` / `jurisdiction` / `contact_email` as `""` with zero startup
+  signals — one release away from collecting money with an empty subject in
+  the terms.
+
 ## [0.27.0] — 2026-11-13
 
 Canonical absolutization (GEO-audit field report from stickerscenemaker: the

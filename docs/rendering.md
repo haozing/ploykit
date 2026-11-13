@@ -125,7 +125,11 @@ Two middlewares close it, and the choice between them matters:
 Both attach `Cache-Control: public, max-age=31536000, immutable` plus a URL-derived `ETag` and 304 handling, to 2xx responses only (a 404 on an asset path must not be cached for a year). Everything else passes through untouched:
 
 - **HTML must revalidate.** A strongly cached document survives a deploy and pins the user to a build whose asset URLs no longer exist. `renderx` already handles this with its own ETag/304 path.
-- **Unhashed files can be replaced in place** (`/favicon.png`, `/brand/logo.png`), so they get no header — that policy belongs to the product. With the manifest variant this is automatic: they are simply not in the list.
+- **Unhashed files can be replaced in place** (`/favicon.png`, `/brand/logo.png`), so they get no header — that policy belongs to the product. With the manifest variant this is automatic: they are simply not in the list. **`webx.CachePrefixTTL(paths, ttl)`** declares those policies without hand-writing a `Set("Cache-Control")` branch; **`webx.CachePrefixDefault(exts, ttl)`** is the extension-keyed backstop for the prefixes a product forgets to list. Wire both, default OUTSIDE prefix (`CachePrefixDefault(...)(CachePrefixTTL(...)(next))`) so the explicit declaration wins — the ordering trap is documented on both godocs.
+
+  **Field report (stickerscenemaker, 2026-11-13): the whitelist failure mode is real and silent.** That product declared `/templates/` and `/sprites/` yet still served `/brand/` and `/assets/works/` with **no** `Cache-Control` at all — Lighthouse measured a 358 KiB logo re-downloaded on every navigation, 600 KiB of avoidable transfer. Nothing fails, nothing logs; the files just fall back to heuristic caching. `CachePrefixDefault` now makes this class of omission impossible for whole file types.
+
+  **Also measure the payload, not just the header.** The same audit found a 512×512 RGB `mark.png` (358 KiB) rendered at 22×22, and card grids eating 1280×960 hero images at 273 px displayed width (1.3 MiB of avoidable image transfer on one page). Serve a dedicated small variant per display context (`srcset`/`sizes` for the hero, a separate `*-card.webp` for grids) and flatten flat-colour PNG icons to a palette. Cache headers make repeat visits cheap; they cannot make the first visit small.
 
 Measured after wiring: second navigation 204 KB → 15 KB (entry and all shared chunks hit cache, `transferSize === 0`), and a hard reload of an already-visited page downloads **0 KB** of JS.
 
@@ -705,7 +709,20 @@ Any assertion failing at build time → the build exits non-zero (with the page 
 
 Conclusion: hits are the norm at zero cost; a one-off miss at the hundred-millisecond scale is contained by singleflight; per-request SSR (N1) is the scenario QuickJS cannot stomach — that is exactly why it is out of scope.
 
+### 10.1 Client-side budgets the framework does not enforce (read before shipping)
+
+These three cost real measured points on a shipped product and none of them fail loudly — they are all "looks fine, scores badly" defects. Run Lighthouse against a **cold cache** (new profile or hard reload) before launch; a stale report is the most common way to chase ghosts.
+
+**Web fonts cause layout shift, and the fix must run after `vite build`.** `@fontsource-variable` ships `font-display: swap`, so the first paint uses a fallback face and the swap re-flows text. On a grid with `items-center`, a heading that loses a wrapped line drags the whole sibling column with it: stickerscenemaker measured **CLS 0.150**, with 0.114 attributed to the hero card itself rather than any text node. Preloading the two faces actually used above the fold dropped CLS to **0.015**.
+
+The ordering is the trap: the woff2 filenames carry content hashes, so they only exist after `vite build`; and `renderx` inherits the head from `dist/index.html`. Inject the `<link rel="preload" as="font" ... crossorigin>` tags **after `vite build` and before `prerender`** — one injection then reaches both the build-time HTML and runtime SSR. `web/src/shell.tsx` cannot own this (component code never sees the hash). Preload the **latin subset only**; the cyrillic/devanagari/vietnamese faces stay lazy.
+
+`platform/renderx`'s `hoistLeadingPreloads` solves a different half of the problem — it moves React 19 float's preloads from `#root` into `<head>`, i.e. it fixes *position*, not *discovery*. Font preloads from `@fontsource` are not emitted by any component, so nothing hoists them; the build step above is still required.
+
+**Responsive images are the product's job.** Neither `renderx` nor `@vitejs/plugin-react` rewrites `<img>` sources. Every image that renders smaller than ~1.5× its intrinsic width is wasted bytes on the first visit, and no cache header recovers that. Two rules that cover most cases: give each display context its own asset (a 560 px `*-card.webp` for grids rather than the 1280 px hero), and use `srcset`/`sizes` for the one or two genuinely responsive hero images.
+
 ---
+
 
 ## 11. Multi-Tenancy Considerations
 
