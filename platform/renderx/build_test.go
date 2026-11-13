@@ -52,6 +52,94 @@ func TestBuildSSRBundleRequiresEntry(t *testing.T) {
 	}
 }
 
+func TestSSRDefineMerge(t *testing.T) {
+	// 不传 Define：与历史行为逐字节一致（只含 NODE_ENV 的注入）。
+	define, err := ssrDefine(nil)
+	if err != nil {
+		t.Fatalf("ssrDefine(nil): %v", err)
+	}
+	want := map[string]string{nodeEnvDefine: `"production"`}
+	if !reflect.DeepEqual(define, want) {
+		t.Fatalf("ssrDefine(nil) = %v, want %v", define, want)
+	}
+
+	// 传产品键：合并，产品键原样保留，NODE_ENV 仍为框架注入值。
+	define, err = ssrDefine(map[string]string{"__BUILD_DATE__": `"2026-11-13"`})
+	if err != nil {
+		t.Fatalf("ssrDefine(产品键): %v", err)
+	}
+	want = map[string]string{
+		"__BUILD_DATE__": `"2026-11-13"`,
+		nodeEnvDefine:    `"production"`,
+	}
+	if !reflect.DeepEqual(define, want) {
+		t.Fatalf("ssrDefine(产品键) = %v, want %v", define, want)
+	}
+
+	// 冲突：产品键试图覆盖 NODE_ENV → 报错，不静默任选一侧。
+	if _, err := ssrDefine(map[string]string{nodeEnvDefine: `"development"`}); err == nil {
+		t.Fatal("产品键覆盖 process.env.NODE_ENV 应报错")
+	}
+}
+
+func TestBuildSSRBundleDefinesIdentifiers(t *testing.T) {
+	root := repoRoot(t)
+	nodeModules := filepath.Join(root, "example", "web", "node_modules")
+	if _, err := os.Stat(nodeModules); err != nil {
+		t.Skipf("example/web/node_modules 不存在（%s），跳过集成用例: %v", nodeModules, err)
+	}
+
+	// 最小入口：裸标识符经 define 替换后变成字符串字面量，eval 时作为
+	// 表达式求值并 JSON 序列化回来——替换没生效就是 ReferenceError。
+	entry := filepath.Join(t.TempDir(), "entry.mjs")
+	src := `
+globalThis.__ploykit_routes__ = function () {
+  return JSON.stringify([{ path: "/", pageId: "d", render: "csr" }])
+}
+globalThis.__ploykit_render__ = function () {
+  return JSON.stringify({ html: String(__BUILD_DATE__), directives: [] })
+}
+`
+	if err := os.WriteFile(entry, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := BuildSSRBundle(BuildOptions{
+		EntryPoints:   []string{entry},
+		AbsWorkingDir: filepath.Dir(entry),
+		Define:        map[string]string{"__BUILD_DATE__": `"2026-11-13"`},
+	})
+	if err != nil {
+		t.Fatalf("BuildSSRBundle(Define): %v", err)
+	}
+	// 最直接的断言：替换发生 = 产物 contains 引号包裹的字面量文本；
+	// 未替换的裸标识符会被 esbuild 原样保留为标识符（不带引号）。
+	if !strings.Contains(string(bundle), `"2026-11-13"`) {
+		t.Errorf("bundle 缺 define 替换产物 %q（裸标识符未被替换？）", `"2026-11-13"`)
+	}
+
+	// 对照：同一入口不带 Define 构建——断言裸标识符确实存活于产物，
+	// 证明上面的 contains 是 define 在起作用，而非巧合文本。
+	bare, err := BuildSSRBundle(BuildOptions{
+		EntryPoints:   []string{entry},
+		AbsWorkingDir: filepath.Dir(entry),
+	})
+	if err != nil {
+		t.Fatalf("BuildSSRBundle(不带 Define): %v", err)
+	}
+	if !strings.Contains(string(bare), "__BUILD_DATE__") {
+		t.Error("对照产物应仍含裸标识符 __BUILD_DATE__（define 未注入时的现状）")
+	}
+
+	// 冲突在 BuildSSRBundle 入口同样拦截。
+	if _, err := BuildSSRBundle(BuildOptions{
+		EntryPoints:   []string{entry},
+		AbsWorkingDir: filepath.Dir(entry),
+		Define:        map[string]string{"process.env.NODE_ENV": `"development"`},
+	}); err == nil || !strings.Contains(err.Error(), "process.env.NODE_ENV") {
+		t.Fatalf("Define 覆盖 NODE_ENV 应报错，got %v", err)
+	}
+}
+
 func TestDefaultSSRAliases(t *testing.T) {
 	webDir := filepath.Join("srv", "example", "web")
 	packagesDir := filepath.Join("srv", "packages")

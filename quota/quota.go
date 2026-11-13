@@ -199,6 +199,12 @@ func (s *Service) Grant(ctx context.Context, workspaceID, key, reason, refID str
 // here would have observed a grant that never committed. Callers that need
 // the hook side-effect must fire it themselves after their transaction
 // commits.
+//
+// Reserved key prefixes (2026-11-13 audit §3.6): the billing domain owns any
+// key starting with "price_" or "metered_" (its plan-sync writes them; see
+// isQuotaDimKey). Product-defined credit keys MUST NOT use these prefixes —
+// a collision makes the billing plan sync overwrite the product's grants
+// with plan-derived amounts. Same rule for Grant/GrantPeriodic/grantOnce.
 func (s *Service) GrantTx(ctx context.Context, tx pgx.Tx, workspaceID, key, reason, refID string, amount int, now time.Time) (bool, error) {
 	return grantOnce(ctx, tx, workspaceID, key, reason, refID, amount, now)
 }

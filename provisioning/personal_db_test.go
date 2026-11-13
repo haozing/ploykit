@@ -279,7 +279,7 @@ func TestQuotaGrantTxIdempotentPerRefID(t *testing.T) {
 
 	var wsID string
 	require.NoError(t, pg.WithService(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
-		ws, err := repo.CreatePersonalWorkspaceTx(ctx, tx, "prov-granttx-"+uuid.NewString()[:8], uid, now)
+		ws, err := repo.CreatePersonalWorkspaceTx(ctx, tx, personalSlug(uid), uid, now)
 		if err != nil {
 			return err
 		}
@@ -310,4 +310,116 @@ func TestQuotaGrantTxIdempotentPerRefID(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx,
 		`SELECT count(*) FROM quota_grant WHERE workspace_id = $1 AND counter_key = 'tasks_monthly' AND reason = 'onboarding'`, wsID).Scan(&n))
 	require.Equal(t, 2, n, "exactly one row per distinct refID")
+}
+
+// Backfill (audit §3.1): a credit key declared in Credits only AFTER the
+// workspace was provisioned must be granted on the next login — with the
+// same refID shape as the create-time grant, so the backfill is idempotent
+// (second login does not double-grant) and the ledger is indistinguishable
+// from a workspace provisioned with the full key list.
+func TestPersonalEnsureBackfillsNewlyDeclaredCreditKey(t *testing.T) {
+	pool := dbPool(t)
+	ctx := context.Background()
+	uid := seedUser(t, pool)
+
+	// Provision under the OLD key list: workspace + tasks_monthly only.
+	oldCfg, _ := testConfig(pool, Credit{Key: "tasks_monthly", Amount: 5})
+	oldHooks := PersonalWorkspace(oldCfg)
+	require.NoError(t, oldHooks.AfterRegister(ctx, uid))
+	wsID, _, found := personalWorkspaceOf(t, pool, uid)
+	require.True(t, found)
+
+	// The product releases: migration lands, Credits grows themes_monthly
+	// (the tool-site field report). Next login re-ensures under the new list.
+	newCfg, _ := testConfig(pool,
+		Credit{Key: "tasks_monthly", Amount: 5},
+		Credit{Key: "themes_monthly", Amount: 5},
+	)
+	newHooks := PersonalWorkspace(newCfg)
+	require.NoError(t, newHooks.AfterLogin(ctx, uid, "session-new-key"))
+
+	// tasks_monthly not re-granted, themes_monthly backfilled once — with
+	// the exact refID the create-time path would have used.
+	var themesGrants int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT count(*) FROM quota_grant
+		WHERE workspace_id = $1 AND counter_key = 'themes_monthly'
+		  AND reason = 'onboarding' AND ref_id = $2`,
+		wsID, wsID+":themes_monthly").Scan(&themesGrants))
+	require.Equal(t, 1, themesGrants, "missing key must be backfilled with the create-time refID")
+	n, total := countOnboardingGrants(t, pool, uid)
+	require.Equal(t, 2, n, "old key must not double-grant, new key must appear once")
+	require.EqualValues(t, 10, total)
+
+	// Second login: steady state, no further grants.
+	require.NoError(t, newHooks.AfterLogin(ctx, uid, "session-steady"))
+	require.NoError(t, newHooks.AfterRegister(ctx, uid))
+	n, total = countOnboardingGrants(t, pool, uid)
+	require.Equal(t, 2, n, "backfill must be idempotent")
+	require.EqualValues(t, 10, total)
+
+	// The backfilled grant is a REAL grant the quota formula counts: usage
+	// math sees limit 0 + grants 5 - used 0 > 0, so the capability is usable
+	// immediately (this is the 402 the field report was about).
+	st, err := newCfg.Quota.Check(ctx, wsID, "themes_monthly", time.Now().UTC())
+	require.NoError(t, err)
+	require.EqualValues(t, 5, st.Granted)
+	require.False(t, st.Exceeded(), "backfilled credit must clear the E_QUOTA_EXHAUSTED state")
+}
+
+// Backfill steady state: a workspace whose onboarding grants already cover
+// every configured key is a pure no-op — one probe query, no new grants, no
+// error.
+func TestPersonalEnsureBackfillNoopWhenAllKeysGranted(t *testing.T) {
+	pool := dbPool(t)
+	ctx := context.Background()
+	uid := seedUser(t, pool)
+
+	cfg, _ := testConfig(pool,
+		Credit{Key: "tasks_monthly", Amount: 5},
+		Credit{Key: "themes_monthly", Amount: 5},
+	)
+	hooks := PersonalWorkspace(cfg)
+	require.NoError(t, hooks.AfterRegister(ctx, uid))
+
+	for i := 0; i < 2; i++ {
+		require.NoError(t, hooks.AfterLogin(ctx, uid, fmt.Sprintf("s-%d", i)), "steady-state login %d must not error", i+1)
+	}
+	n, total := countOnboardingGrants(t, pool, uid)
+	require.Equal(t, 2, n, "no extra grants on steady-state logins")
+	require.EqualValues(t, 10, total)
+}
+
+// Backfill must not touch products running their own credit ledger: Credits
+// empty behaves byte-for-byte as before — fast path returns after the
+// workspace probe, zero quota queries, and a workspace with pre-existing
+// (product-managed) grants keeps them untouched.
+func TestPersonalEnsureBackfillSkippedWithoutCredits(t *testing.T) {
+	pool := dbPool(t)
+	ctx := context.Background()
+	uid := seedUser(t, pool)
+
+	// Provision with credits ONCE so a workspace exists, then simulate the
+	// ledger-managing product: same user, Credits empty.
+	withCredits, _ := testConfig(pool, Credit{Key: "tasks_monthly", Amount: 5})
+	require.NoError(t, PersonalWorkspace(withCredits).AfterRegister(ctx, uid))
+	_, _, found := personalWorkspaceOf(t, pool, uid)
+	require.True(t, found)
+
+	noCredits, _ := testConfig(pool)
+	hooks := PersonalWorkspace(noCredits)
+	require.NoError(t, hooks.AfterLogin(ctx, uid, "ledger-product"))
+	n, total := countOnboardingGrants(t, pool, uid)
+	require.Equal(t, 1, n, "Credits-empty ensure must not grant or revoke anything")
+	require.EqualValues(t, 5, total)
+
+	// And the same product from scratch: workspace + membership, no grants.
+	uid2 := seedUser(t, pool)
+	require.NoError(t, PersonalWorkspace(noCredits).AfterRegister(ctx, uid2))
+	_, _, found = personalWorkspaceOf(t, pool, uid2)
+	require.True(t, found)
+	require.Equal(t, 1, countOwnerMembers(t, pool, uid2))
+	n, total = countOnboardingGrants(t, pool, uid2)
+	require.Zero(t, n)
+	require.Zero(t, total)
 }

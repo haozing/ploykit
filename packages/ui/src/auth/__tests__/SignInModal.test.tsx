@@ -64,6 +64,11 @@ describe('SignInModal 开合', () => {
     const titleEl = document.body.querySelector('[data-slot="dialog-title"]')
     expect(titleEl).not.toBeNull()
     expect(titleEl).toHaveTextContent('Sign in')
+    // 防翻译扩展注入（审计 §3.5②）：弹层内容根带 translate="no"，
+    // 标题/表单/错误文案整棵子树豁免机器翻译
+    const contentEl = document.body.querySelector('[data-slot="dialog-content"]')
+    expect(contentEl).not.toBeNull()
+    expect(contentEl).toHaveAttribute('translate', 'no')
   })
 
   it('renderOAuth：非空时整块替换默认 OAuth 区（默认块与分隔行都不渲染）', async () => {

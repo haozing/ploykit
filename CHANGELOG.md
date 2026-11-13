@@ -9,7 +9,63 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
-## [0.28.0] — 2026-11-13
+## [0.29.0] — 2026-11-13
+
+Mixed release: Go + **two npm packages** (runtime 0.10.x behavior addition — no API
+change, spec-compatible patch; ui patch — one defensive attribute). Sources: the
+nine-session framework-debt audit (docs in tool-site) whose open items were re-verified
+against this tree before fixing. §3.2 of that audit (authz.Require fail-open) was found
+ALREADY FIXED by the orkome batch (E_ROLE_UNRESOLVED, 09a1e03) — no action.
+
+### Fixed
+- **provisioning: existing workspaces now receive backfill for onboarding credits
+  declared after they were created (audit §3.1, P0)** — previously a credit key added
+  to PersonalConfig.Credits after a workspace existed never reached it (fast-path
+  short-circuit), and the first use of the gated ability 402'd for every pre-existing
+  user (field report: tool-site themes_monthly, worked around product-side). `ensure()`
+  now resolves the personal workspace id on the fast path and runs
+  `backfillOnboardingCredits`: one `ref_id = ANY($keys)` query (index-only scan on
+  uq_quota_grant_dedup) diffs granted vs declared, and missing keys get the SAME
+  grant shape as first-creation (`reason='onboarding'`, refID `ws.ID+":"+key`) via
+  GrantTx — idempotent and concurrency-safe by the same unique index. Steady state is
+  2 round trips per login (workspace probe + grant set); Credits-empty products are
+  byte-identical to before (fast path returns immediately, zero extra queries). This
+  is a one-time backfill of the onboarding grant, NOT a monthly allowance — products
+  wanting periodic semantics still use GrantPeriodic (godoc spells out the
+  distinction). Note: backfill triggers on login; long-lived API-token-only
+  workspaces need a one-off script or their own lazy path.
+- **renderx: `BuildOptions.Define` — esbuild define passthrough for the SSR bundle
+  (audit §3.3, P1)** — `BuildSSRBundle` hardcoded only `process.env.NODE_ENV`, so
+  build-time constants a product injects via vite `define` (`__BUILD_DATE__` etc.)
+  surfaced as bare identifiers in the SSR bundle → ReferenceError →
+  ErrServerSuspense, sinking the whole prerender. Products had to ship codegen
+  workarounds (tool-site's write-build-date.mjs). Options.Define merges over the
+  framework baseline; attempting to override `process.env.NODE_ENV` errors (SSR is
+  production-only by construction — a product key hitting it is a miswire best
+  caught loudly). Omitted Define is byte-identical to before. Products can now keep
+  a single vite define config and pass the same map to both builders.
+- **runtime (dev-only): pageId drift between the client and SSR route tables now
+  console.errors (audit §3.5①)** — pageId derives from component names on two
+  independent builds, and a divergence (`Login` vs `RegisterPage`) silently defeated
+  the embedded-pageId fallback with zero signal. Hydration's ladder step 2 (pathname
+  lookup) now warns once in DEV when the embedded pageId is absent from the client
+  table, naming both ids and the fix. Zero production output, zero size impact.
+- **ui: SignInModal root carries `translate="no"` (audit §3.5②, defensive)** —
+  machine-translation extensions injecting DOM into the auth dialog are the prime
+  suspect of an unresolved removeChild crash (tool-site 2026-11-12, clean
+  environments never reproduce). The attribute opts the dialog subtree out of
+  translation in mainstream extensions. React 19 types accept it natively.
+
+### Docs
+- **quota: reserved key prefixes recorded on the grant APIs (audit §3.6)** —
+  `price_`/`metered_` are billing-owned (plan sync writes them); product credit keys
+  must not collide, or plan sync overwrites the product's grants. godoc on
+  GrantTx/Grant/GrantPeriodic.
+- **rendering.md §5.8: the standard solutions table for "static page + query/filter"
+  (audit §3.4)** — client interaction island vs path-segment route vs CSR page, with
+  costs and use-when columns; replaces per-product re-derivation. "Prerender N query
+  variants" explicitly rejected.
+
 
 Go diff only — npm packages untouched (their last release stays 0.26.0 / ui 2.9.0).
 

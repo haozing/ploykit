@@ -160,6 +160,12 @@ describe('hydration props resolution under a minified client bundle', () => {
   // patterns (string literals survive minification), so the minified pageId
   // mismatch no longer costs the page its props.
   it('no matchPage at all -> default matcher delivers props despite the minified pageId mismatch', async () => {
+    // This scenario is a PRODUCTION client bundle (minified); vitest's
+    // import.meta.env.DEV is true, which would trip the dev-only pageId-drift
+    // console.error below. Disable it for this production-shape test; the
+    // dev-time firing of that same assertion is covered by
+    // hydrate-pageid-drift.test.tsx.
+    vi.stubEnv('DEV', false)
     const comp = await minifiedWorkPage()
     const table = routeTable({ '/works/:slug': { component: comp, render: 'static' } }, reactRouterAssembler())
     expect(table.pages[0]?.pageId).not.toBe('work-page')
@@ -185,6 +191,7 @@ describe('hydration props resolution under a minified client bundle', () => {
     } finally {
       errSpy.mockRestore()
       window.removeEventListener('ploykit:hydration-miss', onMiss)
+      vi.unstubAllEnvs()
     }
     // The component RECEIVED the SSR props (component-observed, not just DOM).
     expect(seenMarkers()).toContain('from-ssr')

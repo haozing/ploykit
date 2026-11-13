@@ -9,9 +9,10 @@
 // with exactly one personal workspace, the owner membership, and the
 // configured onboarding credits. Idempotency is a database invariant (the
 // partial unique index uq_workspace_personal), not code discipline, and
-// every login re-ensures (one indexed lookup) so half-provisioned accounts —
-// JIT failures, crashes mid-provision, lost races — converge on the next
-// login without a retry table or a pending-flag column.
+// every login re-ensures (one indexed workspace lookup, plus one
+// credit-ledger probe when Credits is configured) so half-provisioned
+// accounts — JIT failures, crashes mid-provision, lost races — converge on
+// the next login without a retry table or a pending-flag column.
 package provisioning
 
 import (
@@ -82,10 +83,12 @@ func PersonalWorkspace(cfg PersonalConfig) identity.IdentityHooks {
 }
 
 // ensure brings the user's personal provisioning to the desired state,
-// idempotently. Fast path: one indexed EXISTS lookup. Slow path: one service
-// transaction that re-checks (two logins can race the fast path), inserts
-// workspace + owner membership + credits, and treats the unique-index
-// violations as "already provisioned".
+// idempotently. Fast path: one indexed workspace lookup; when Credits is
+// configured, one credit-ledger probe on top that backfills onboarding grants
+// for keys declared AFTER the workspace was provisioned (audit §3.1). Slow
+// path: one service transaction that re-checks (two logins can race the fast
+// path), inserts workspace + owner membership + credits, and treats the
+// unique-index violations as "already provisioned".
 func (c PersonalConfig) ensure(ctx context.Context, userID string) error {
 	if c.Pool == nil {
 		return errors.New("provisioning: PersonalConfig misconfigured: Pool is required")
@@ -98,22 +101,32 @@ func (c PersonalConfig) ensure(ctx context.Context, userID string) error {
 	}
 	log := c.logger()
 
-	provisioned, err := c.provisionedTx(ctx, c.Pool, userID)
+	wsID, err := c.personalWorkspaceTx(ctx, c.Pool, userID)
 	if err != nil {
 		return err
 	}
-	if provisioned {
-		return nil
+	if wsID != "" {
+		// Products running their own credit ledger (Credits empty) stop
+		// here — zero queries beyond the workspace probe, same as before
+		// the backfill existed.
+		if len(c.Credits) == 0 {
+			return nil
+		}
+		return c.backfillOnboardingCredits(ctx, userID, wsID)
 	}
 
 	err = pg.WithService(ctx, c.Pool, func(ctx context.Context, tx pgx.Tx) error {
 		// Re-check inside the transaction: the fast path can race a
 		// concurrent provisioning for the same user.
-		provisioned, err := c.provisionedTx(ctx, tx, userID)
+		wsID, err := c.personalWorkspaceTx(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
-		if provisioned {
+		if wsID != "" {
+			// Lost race. The winner inserted workspace AND its credits
+			// atomically, so under this binary nothing is missing; if the
+			// winner was an older binary with a shorter Credits list, the
+			// next login's fast path backfills. No work here.
 			return nil
 		}
 		now := time.Now().UTC()
@@ -143,17 +156,111 @@ func (c PersonalConfig) ensure(ctx context.Context, userID string) error {
 	return nil
 }
 
-const provisionedSQL = `SELECT EXISTS (
-	SELECT 1 FROM workspace WHERE created_by = $1 AND kind = 'personal')`
+// backfillOnboardingCredits grants the configured onboarding credits a
+// provisioned workspace is still missing — the keys that were declared in
+// PersonalConfig only AFTER the workspace was first provisioned. The
+// create-time grant fires exactly once per workspace, so without this
+// backfill a key added in a later release (field report: tool-site
+// themes_monthly, audit §3.1) never reaches existing workspaces and their
+// users hit E_QUOTA_EXHAUSTED on first use of the capability.
+//
+// Semantics are deliberately the SAME one-time onboarding grant as first
+// provisioning — reason "onboarding", refID ws.ID+":"+key, via GrantTx — so a
+// backfilled workspace is indistinguishable from one provisioned with the
+// full key list. This is NOT quota.GrantPeriodic: the onboarding grant is a
+// one-shot allowance landing in the current period, not a monthly cycle;
+// products wanting recurring allowances compose GrantPeriodic separately.
+// Like the create-time grant it goes through GrantTx, which by contract does
+// not fire the OnGrant hook (the caller may still roll back).
+//
+// Cost: this runs on the login hot path for every provisioned user when
+// Credits is configured. The steady state (nothing missing) costs exactly one
+// round trip — a single SELECT of the workspace's onboarding grants for the
+// configured refIDs, then a local diff; a write transaction opens only when a
+// backfill is actually due. Concurrent logins racing the backfill converge on
+// the uq_quota_grant_dedup unique index: GrantTx is ON CONFLICT DO NOTHING on
+// the same refID, so the loser inserts nothing and no error surfaces.
+func (c PersonalConfig) backfillOnboardingCredits(ctx context.Context, userID, wsID string) error {
+	if len(c.Credits) == 0 {
+		return nil
+	}
+	refIDs := make([]string, len(c.Credits))
+	for i, credit := range c.Credits {
+		refIDs[i] = wsID + ":" + credit.Key
+	}
+	rows, err := c.Pool.Query(ctx, `
+		SELECT counter_key FROM quota_grant
+		WHERE workspace_id = $1 AND reason = 'onboarding' AND ref_id = ANY($2)`,
+		wsID, refIDs)
+	if err != nil {
+		return err
+	}
+	granted := make(map[string]struct{}, len(c.Credits))
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			rows.Close()
+			return err
+		}
+		granted[key] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
 
-type provisionedQuerier interface {
+	var missing []Credit
+	for _, credit := range c.Credits {
+		if _, ok := granted[credit.Key]; !ok {
+			missing = append(missing, credit)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	err = pg.WithService(ctx, c.Pool, func(ctx context.Context, tx pgx.Tx) error {
+		for _, credit := range missing {
+			// Same refID as the create-time grant: uq_quota_grant_dedup
+			// makes the insert idempotent, so a concurrent backfill (or a
+			// replay of this one) is a silent no-op.
+			if _, err := c.Quota.GrantTx(ctx, tx, wsID, credit.Key, "onboarding", wsID+":"+credit.Key, credit.Amount, now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	keys := make([]string, len(missing))
+	for i, credit := range missing {
+		keys[i] = credit.Key
+	}
+	c.logger().Info("onboarding credits backfilled (key declared after provisioning)",
+		"user", userID, "workspace", wsID, "keys", keys)
+	return nil
+}
+
+// personalWorkspaceSQL resolves the user's personal workspace id. The partial
+// unique index uq_workspace_personal guarantees at most one row per user, so
+// this stays the one indexed lookup the fast path always was — it now also
+// carries the id the onboarding backfill needs.
+const personalWorkspaceSQL = `SELECT id FROM workspace
+	WHERE created_by = $1 AND kind = 'personal'`
+
+type rowQuerier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-func (c PersonalConfig) provisionedTx(ctx context.Context, q provisionedQuerier, userID string) (bool, error) {
-	var exists bool
-	err := q.QueryRow(ctx, provisionedSQL, userID).Scan(&exists)
-	return exists, err
+func (c PersonalConfig) personalWorkspaceTx(ctx context.Context, q rowQuerier, userID string) (string, error) {
+	var wsID string
+	err := q.QueryRow(ctx, personalWorkspaceSQL, userID).Scan(&wsID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return wsID, err
 }
 
 // alreadyProvisioned reports whether err is the unique-index invariant

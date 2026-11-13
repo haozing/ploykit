@@ -119,7 +119,11 @@ export function SignInModal({
       // 归一化为 (open: boolean) => void：base-ui 原语会附带 eventDetails 第二参
       onOpenChange={(o) => onOpenChange(o)}
     >
-      <DialogContent size={size}>
+      // translate="no"（审计 §3.5② 防御）：浏览器翻译扩展会往弹层 DOM 注入
+      // 节点，曾致 Send code 阶段 removeChild 异常。挂 DialogContent 根 =
+      // 标题/表单/错误文案整棵子树对机器翻译声明豁免（HTML 标准属性，
+      // Chrome/Edge 内置及主流扩展均尊重并跳过注入）。
+      <DialogContent size={size} translate="no">
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
