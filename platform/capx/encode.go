@@ -71,6 +71,11 @@ func (r *Runtime) EncodePNGStream(ctx context.Context, w io.Writer, spec FrameSp
 		"-i", "-",
 		"-c:v", "libx264",
 		"-pix_fmt", "yuv420p",
+		// Belt-and-braces for odd dimensions (audit Â§4 P10): libx264
+		// yuv420p requires even width/height; FrameSpec.Validate rejects
+		// odd specs upstream, but raw encode entry points (tests, future
+		// callers) get trunc-to-even instead of a cryptic ffmpeg failure.
+		"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
 		"-crf", strconv.Itoa(opts.CRF),
 		"-preset", opts.Preset,
 		// Pipe-safe MP4: the output here is always a stream (w is an

@@ -16,7 +16,9 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/haozing/ploykit/platform/ids"
+	"github.com/haozing/ploykit/platform/pg"
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/quota"
 )
 
 // Domain error codes (§4.6): HTTP maps them via *webx.Error; MCP tools pass
@@ -59,12 +61,12 @@ const UploadLimit = 700 << 10
 // RenderParams are the render-time overrides persisted with ir_snapshot
 // (§4.9.5): params + snapshot jointly reproduce output_key.
 type RenderParams struct {
-	FPS            int     `json:"fps,omitempty"`
-	Width          int     `json:"width,omitempty"`
-	Height         int     `json:"height,omitempty"`
-	BurnSubtitles  bool    `json:"burn_subtitles"`
-	SubtitleMode   string  `json:"subtitle_mode,omitempty"` // burn|soft|none
-	BGMVolume      float64 `json:"bgm_volume,omitempty"`
+	FPS           int     `json:"fps,omitempty"`
+	Width         int     `json:"width,omitempty"`
+	Height        int     `json:"height,omitempty"`
+	BurnSubtitles bool    `json:"burn_subtitles"`
+	SubtitleMode  string  `json:"subtitle_mode,omitempty"` // burn|soft|none
+	BGMVolume     float64 `json:"bgm_volume,omitempty"`
 }
 
 // normalize fills defaults per §4.9.5 (fps/size default to IR meta).
@@ -108,19 +110,25 @@ type Project struct {
 
 // Render is the REST-facing projection of one video_render row.
 type Render struct {
-	ID          string        `json:"id"`
-	ProjectID   string        `json:"project_id"`
-	Workspace   string        `json:"workspace_id"`
-	Status      string        `json:"status"`
-	Params      RenderParams  `json:"params"`
-	FramesDone  int           `json:"frames_done"`
-	FramesTotal int           `json:"frames_total"`
-	OutputKey   string        `json:"output_key"`
-	Error       string        `json:"error"`
-	CreatedBy   string        `json:"created_by"`
-	CreatedAt   time.Time     `json:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at"`
-	FinishedAt  *time.Time    `json:"finished_at,omitempty"`
+	ID          string       `json:"id"`
+	ProjectID   string       `json:"project_id"`
+	Workspace   string       `json:"workspace_id"`
+	Status      string       `json:"status"`
+	Params      RenderParams `json:"params"`
+	FramesDone  int          `json:"frames_done"`
+	FramesTotal int          `json:"frames_total"`
+	OutputKey   string       `json:"output_key"`
+	Error       string       `json:"error"`
+	CreatedBy   string       `json:"created_by"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	FinishedAt  *time.Time   `json:"finished_at,omitempty"`
+
+	// submissionKey/quotaPeriod serve idempotency and period-fixed release
+	// (migration 1009); not part of the API payload.
+	submissionKey string
+	quotaPeriod   string
+	releasedAt    *time.Time
 }
 
 // Render statuses (§4.9.1).
@@ -136,10 +144,10 @@ const (
 // HTTP handlers and MCP tools call the same methods; all tenancy checks,
 // optimistic locking, anchor re-resolution, audit and WS push live here.
 type ProjectService struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
 	ports Ports
-	log  *slog.Logger
-	now  func() time.Time
+	log   *slog.Logger
+	now   func() time.Time
 }
 
 func NewProjectService(pool *pgxpool.Pool, ports Ports, log *slog.Logger) *ProjectService {
@@ -682,7 +690,7 @@ func (s *ProjectService) SetAudio(ctx context.Context, p *webx.Principal, projec
 // ir_snapshot) → Enqueue → audit. Reversing any two steps breaks the
 // fail-closed property (a queued row with no quota, or spent quota with no
 // row).
-func (s *ProjectService) SubmitRender(ctx context.Context, p *webx.Principal, projectID string, params RenderParams, expectedVersion *int) (*Render, error) {
+func (s *ProjectService) SubmitRender(ctx context.Context, p *webx.Principal, projectID string, params RenderParams, expectedVersion *int, submissionKey string) (*Render, error) {
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
 		return nil, aerr
@@ -704,58 +712,79 @@ func (s *ProjectService) SubmitRender(ctx context.Context, p *webx.Principal, pr
 	}
 	params.normalize(pr.IR)
 
+	// 2. ONE transaction for the whole submission (audit Â§4 P2): quota
+	// charge (idem-keyed) + render row + river job + audit commit or roll
+	// back together â no window where quota is spent without a row,
+	// or a row exists without a charge.
+	period := quota.Period(s.now())
 	renderID := ids.NewV7().String()
-	// 2. quota consume (idempotency key = render id) BEFORE the insert; on
-	// insert failure we release (task.go:269-274 compensation shape).
-	if s.ports.Quota != nil {
-		if qerr := s.ports.Quota.ConsumeWith(ctx, p.WorkspaceID, QuotaKey, 1, s.now(), renderID); qerr != nil {
-			return nil, qerr
-		}
-	}
-	release := func() {
-		if s.ports.Quota != nil {
-			_ = s.ports.Quota.Release(ctx, p.WorkspaceID, QuotaKey, 1, s.now())
-		}
-	}
-
-	// 3. insert render row + snapshot in one tx (enqueue joins the tx).
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		release()
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	if s.ports.Quota != nil {
+		if qerr := s.ports.Quota.ConsumeWithTx(ctx, tx, p.WorkspaceID, QuotaKey, 1, s.now(), submissionKey); qerr != nil {
+			if errors.Is(qerr, quota.ErrIdemReplay) {
+				// Duplicate submission (network retry / agent double-call):
+				// return the row the first submission created instead of an
+				// error â the agent sees its render, no double charge.
+				tx.Rollback(ctx)
+				return s.renderBySubmissionKey(ctx, p.WorkspaceID, submissionKey)
+			}
+			return nil, qerr
+		}
+	}
 	var r Render
 	err = tx.QueryRow(ctx, `
-		INSERT INTO video_render (id, project_id, workspace_id, status, params, ir_snapshot, frames_total, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		INSERT INTO video_render (id, project_id, workspace_id, status, params, ir_snapshot, frames_total, created_by, submission_key, quota_period)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		RETURNING id, project_id, workspace_id, status, params, frames_done, frames_total, output_key, error,
 		          created_by, created_at, updated_at, finished_at`,
 		renderID, projectID, p.WorkspaceID, RenderQueued, mustJSON(params), irBytes(pr.IR),
-		int(pr.IR.Meta.DurationSec*float64(params.FPS)), p.UserID).
+		int(pr.IR.Meta.DurationSec*float64(params.FPS)), p.UserID, submissionKey, period).
 		Scan(&r.ID, &r.ProjectID, &r.Workspace, &r.Status, &paramsDest{&r.Params}, &r.FramesDone, &r.FramesTotal,
 			&r.OutputKey, &r.Error, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt, &r.FinishedAt)
 	if err != nil {
-		release()
+		// The (workspace_id, submission_key) unique index rejects a duplicate
+		// when quota is not wired (or key set but quota nil): same replay
+		// contract as the idem table.
+		if submissionKey != "" && pg.IsUniqueViolation(err, "uq_video_render_submission") {
+			tx.Rollback(ctx)
+			return s.renderBySubmissionKey(ctx, p.WorkspaceID, submissionKey)
+		}
 		return nil, err
 	}
 	if s.ports.Enqueue != nil {
 		if eerr := s.ports.Enqueue.InsertTx(ctx, tx, RenderArgs{RenderID: renderID},
 			&river.InsertOpts{Queue: RenderQueue}); eerr != nil {
-			release()
 			return nil, eerr
 		}
 	}
 	if s.ports.Audit != nil {
 		if aerr := s.ports.Audit.RecordTx(ctx, tx, &p.WorkspaceID, p.UserID,
 			AuditRenderCreated, "video_render", renderID,
-			map[string]any{"project_id": projectID, "origin": originOf(ctx)}); aerr != nil {
-			release()
+			map[string]any{"project_id": projectID, "origin": originOf(ctx), "idempotent": submissionKey != ""}); aerr != nil {
 			return nil, aerr
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		release()
+		return nil, err
+	}
+	return &r, nil
+}
+
+// renderBySubmissionKey loads the render a previous submission with the
+// same idempotency key created (replay path).
+func (s *ProjectService) renderBySubmissionKey(ctx context.Context, wsID, key string) (*Render, error) {
+	var r Render
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, project_id, workspace_id, status, params, frames_done, frames_total, output_key, error,
+		       created_by, created_at, updated_at, finished_at
+		FROM video_render WHERE workspace_id=$1 AND submission_key=$2`, wsID, key).
+		Scan(&r.ID, &r.ProjectID, &r.Workspace, &r.Status, &paramsDest{&r.Params}, &r.FramesDone, &r.FramesTotal,
+			&r.OutputKey, &r.Error, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt, &r.FinishedAt)
+	if err != nil {
 		return nil, err
 	}
 	return &r, nil

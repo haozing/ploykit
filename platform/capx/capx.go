@@ -99,6 +99,11 @@ type Runtime struct {
 	pool     chan *browserInstance
 	poolInit sync.Once
 
+	// sem is the hard concurrency cap (PoolSize tokens): taken before any
+	// launch or checkout, released when the instance returns. The idle pool
+	// channel recycles warm instances; this gate bounds processes.
+	sem chan struct{}
+
 	closeMu sync.Mutex
 	closed  bool
 
@@ -164,24 +169,76 @@ func (r *Runtime) Available() bool {
 // when the pool is empty and below capacity. The returned release function
 // must be called exactly once. Gating is enforced here: inert runtimes return
 // ErrNotConfigured.
+//
+// PoolSize is a HARD concurrency cap (audit §4 P9): a weighted semaphore is
+// taken before any launch/checkout, so concurrent renders can never exceed
+// PoolSize browser processes. The idle channel only recycles warm instances;
+// it does not gate anything. When all PoolSize slots are busy, acquire waits
+// on the semaphore (ctx-cancellable) instead of launching an extra process.
 func (r *Runtime) acquire(ctx context.Context) (*browserInstance, func(), error) {
 	if !r.Available() {
 		return nil, nil, ErrNotConfigured
 	}
 	r.poolInit.Do(func() {
 		r.pool = make(chan *browserInstance, r.cfg.PoolSize)
+		r.sem = make(chan struct{}, r.cfg.PoolSize)
 	})
+	// Hard cap first: block until a slot frees up (or ctx dies).
+	select {
+	case r.sem <- struct{}{}:
+	case <-ctx.Done():
+		return nil, nil, fmt.Errorf("capx: pool exhausted (PoolSize=%d): %w", r.cfg.PoolSize, ctx.Err())
+	}
+
+	inst, err := r.tryReuseOrLaunch(ctx)
+	if err != nil {
+		<-r.sem // release the slot; launch failed or ctx died
+		return nil, nil, err
+	}
+	return inst, func() {
+		r.put(inst)
+		<-r.sem
+	}, nil
+}
+
+// tryReuseOrLaunch checks out a warm instance or launches one. A raced
+// launch (two callers pass the semaphore while the pool is empty) is
+// possible and fine: put() caps the pool, extra instances close on return.
+func (r *Runtime) tryReuseOrLaunch(ctx context.Context) (*browserInstance, error) {
 	// Reuse a warm instance when one is free.
 	select {
 	case inst := <-r.pool:
-		return inst, func() { r.put(inst) }, nil
+		return inst, nil
 	default:
 	}
-	inst, err := r.launch(r)
-	if err != nil {
-		return nil, nil, err
+	// Launch under the caller's ctx so shutdown interrupts a pending launch.
+	launchDone := make(chan *browserInstance, 1)
+	launchErr := make(chan error, 1)
+	go func() {
+		inst, err := r.launch(r)
+		if err != nil {
+			launchErr <- err
+			return
+		}
+		launchDone <- inst
+	}()
+	select {
+	case inst := <-launchDone:
+		return inst, nil
+	case err := <-launchErr:
+		return nil, err
+	case <-ctx.Done():
+		// The goroutine may still complete; sink the result so the launcher
+		// goroutine never blocks, then close the instance.
+		go func() {
+			select {
+			case inst := <-launchDone:
+				inst.close()
+			case <-launchErr:
+			}
+		}()
+		return nil, ctx.Err()
 	}
-	return inst, func() { r.put(inst) }, nil
 }
 
 // put returns an instance to the pool; if the runtime is closing or the pool
@@ -304,4 +361,15 @@ func defaultChromeLocations() []string {
 	default:
 		return nil
 	}
+}
+
+// SetLauncherForTest replaces the browser-launch seam. TEST-ONLY: it exists
+// so the pool/concurrency contract is exercisable without a real Chrome;
+// production wiring must never call it.
+func (r *Runtime) SetLauncherForTest(l browserLauncher) { r.launch = l }
+
+// NewStubInstance builds a no-op browserInstance for launcher stubs in
+// tests (nothing to probe, nothing to close).
+func NewStubInstance() *browserInstance {
+	return &browserInstance{ctx: context.Background(), cancel: func() {}}
 }

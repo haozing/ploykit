@@ -1702,13 +1702,23 @@ func (a videoPublishAdapter) BroadcastEvent(ctx context.Context, event string, p
 
 type videoQuotaAdapter struct{ svc *quota.Service }
 
-func (a videoQuotaAdapter) ConsumeWith(ctx context.Context, workspaceID, key string, n int64, now time.Time, idemKey string) error {
-	_, err := a.svc.ConsumeWith(ctx, workspaceID, key, n, now, quota.ConsumeOpts{IdemKey: idemKey})
+func (a videoQuotaAdapter) ConsumeWithTx(ctx context.Context, tx pgx.Tx, workspaceID, key string, n int64, now time.Time, idemKey string) error {
+	_, err := a.svc.ConsumeWithTx(ctx, tx, workspaceID, key, n, now, quota.ConsumeOpts{IdemKey: idemKey})
 	return err
+}
+
+func (a videoQuotaAdapter) ReleaseTx(ctx context.Context, tx pgx.Tx, workspaceID, key string, n int64, period string) error {
+	return a.svc.ReleaseTx(ctx, tx, workspaceID, key, n, period)
 }
 
 func (a videoQuotaAdapter) Release(ctx context.Context, workspaceID, key string, n int64, now time.Time) error {
 	return a.svc.Release(ctx, workspaceID, key, n, now)
+}
+
+// ReleasePeriod satisfies the render worker's QuotaReleasePort: releases on
+// the consumption-time period (period-fixed release, audit §4 P3).
+func (a videoQuotaAdapter) ReleasePeriod(ctx context.Context, workspaceID, key string, n int64, period string) error {
+	return a.svc.ReleasePeriod(ctx, workspaceID, key, n, period)
 }
 
 type videoEnqueuer struct{ client *river.Client[pgx.Tx] }

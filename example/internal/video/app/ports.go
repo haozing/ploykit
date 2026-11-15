@@ -73,7 +73,15 @@ type Auditor interface {
 // for render submission, Release for failure compensation (adapter wraps
 // quota.Service).
 type QuotaPort interface {
-	ConsumeWith(ctx context.Context, workspaceID, key string, n int64, now time.Time, idemKey string) error
+	// ConsumeWithTx charges one unit inside the CALLER's transaction with a
+	// client idempotency key (audit §4 P2/P7): the charge commits atomically
+	// with the render row + river job. ErrIdemReplay = duplicate submission.
+	ConsumeWithTx(ctx context.Context, tx pgx.Tx, workspaceID, key string, n int64, now time.Time, idemKey string) error
+	// ReleaseTx releases one unit on the EXPLICIT consumption period inside
+	// the caller's transaction (audit §4 P3): month-boundary safe, and the
+	// release lands atomically with the terminal state write.
+	ReleaseTx(ctx context.Context, tx pgx.Tx, workspaceID, key string, n int64, period string) error
+	// Release is the non-transactional fallback (pure-port mode / sweep).
 	Release(ctx context.Context, workspaceID, key string, n int64, now time.Time) error
 }
 

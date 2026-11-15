@@ -196,7 +196,14 @@ func (d Deps) handleCreateRender(w http.ResponseWriter, r *http.Request, p *webx
 	if !webx.DecodeJSON(w, r, &req) {
 		return
 	}
-	render, err := d.Svc.SubmitRender(r.Context(), p, r.PathValue("id"), req.Params, req.ExpectedVersion)
+	// Idempotency-Key (audit Â§4 P7): a network retry with the same key
+	// returns the first submission's render instead of charging twice. Trim
+	// + cap length; empty = legacy fire-and-forget submission.
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(key) > 128 {
+		key = key[:128]
+	}
+	render, err := d.Svc.SubmitRender(r.Context(), p, r.PathValue("id"), req.Params, req.ExpectedVersion, key)
 	if err != nil {
 		writeSvcErr(w, err)
 		return
@@ -335,4 +342,3 @@ func contentTypeFor(key string) string {
 func writeSvcErr(w http.ResponseWriter, err error) {
 	webx.WriteErr(w, err)
 }
-

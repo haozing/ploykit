@@ -222,7 +222,7 @@ func TestIntegration_SubmitRender_GateOrder(t *testing.T) {
 
 	// Cap unwired → E_NOT_CONFIGURED before quota/render-row side effects.
 	var we *webx.Error
-	_, err = e.svc.SubmitRender(ctx, e.principal(e.wsID), pr.ID, RenderParams{}, nil)
+	_, err = e.svc.SubmitRender(ctx, e.principal(e.wsID), pr.ID, RenderParams{}, nil, "")
 	require.Error(t, err)
 	require.True(t, errorAsWebx(err, &we))
 	assert.Equal(t, "E_NOT_CONFIGURED", we.Code)

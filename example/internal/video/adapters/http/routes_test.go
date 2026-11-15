@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/authz"
-	videoapp "myproduct/internal/video/app"
 	"github.com/haozing/ploykit/platform/webx"
+	videoapp "myproduct/internal/video/app"
 )
 
 // The HTTP layer is thin: routing + membership mapping + status codes. The
@@ -147,7 +147,7 @@ func TestSubmitRender_NotConfigured_Maps503(t *testing.T) {
 	s := svc(true)
 	svc := s
 	p := principal("ws1", false)
-	_, err := svc.SubmitRender(context.Background(), p, "p1", videoapp.RenderParams{}, nil)
+	_, err := svc.SubmitRender(context.Background(), p, "p1", videoapp.RenderParams{}, nil, "")
 	require.Error(t, err)
 	var we *webx.Error
 	require.True(t, errors.As(err, &we))

@@ -30,32 +30,68 @@ func (s pgStore) fetch(ctx context.Context, id string) (renderRow, []byte, error
 	return row, row.IRSnapshot, nil
 }
 
-func (s pgStore) update(ctx context.Context, id string, status, errMsg string, framesDone int, outputKey string) error {
+// update transitions the row in one guarded statement. The bool result is
+// the one-shot release claim (audit §4 P3): it is true iff this statement
+// moved the row to failed/interrupted AND won the released_at CAS — the
+// calling attempt, and only that attempt, may release quota. A stale river
+// retry re-entering a terminal row gets (false, ErrTerminalSkip).
+func (s pgStore) update(ctx context.Context, id string, status, errMsg string, framesDone int, outputKey string) (bool, error) {
 	tag, err := s.w.deps.Pool.Exec(ctx, `
 		UPDATE video_render SET status=$2, error=$3, frames_done=$4, output_key=$5,
 		  updated_at=now(),
-		  finished_at = CASE WHEN $2 IN ('succeeded','failed') THEN now() ELSE finished_at END
+		  finished_at = CASE WHEN $2 IN ('succeeded','failed') THEN now() ELSE finished_at END,
+		  released_at = CASE WHEN $2 IN ('failed','interrupted') AND released_at IS NULL THEN now() ELSE released_at END
 		WHERE id=$1
 		  AND status IN ('queued','running','interrupted')`, id, status, errMsg, framesDone, outputKey)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if tag.RowsAffected() == 0 {
-		// The row is already terminal — a stale river attempt re-entered a
-		// finished render, or a concurrent attempt closed it. Overwriting a
-		// terminal state would resurrect finished renders (at-least-once
-		// delivery makes stale attempts normal; audit §4 P5). Callers treat
-		// ErrTerminalSkip as a no-op skip, not a failure.
-		return ErrTerminalSkip
+		// Already terminal — a stale attempt re-entered a finished render.
+		// Overwriting would resurrect finished renders (audit §4 P5).
+		return false, ErrTerminalSkip
 	}
-	return nil
+	// Release claim: this statement flipped to a release-eligible terminal
+	// state and either stamped released_at now (winner) or found it already
+	// stamped (a prior interrupted attempt of the SAME logical transition
+	// cannot happen here — the WHERE clause excludes already-terminal rows;
+	// failed-after-interrupted is the retry that converts, and the earlier
+	// interrupted attempt already released, so released_at IS NOT NULL means
+	// someone released on this row's behalf: do not release twice).
+	var claimed bool
+	err = s.w.deps.Pool.QueryRow(ctx,
+		`SELECT released_at IS NULL OR status <> 'interrupted' FROM video_render WHERE id=$1`, id).
+		Scan(&claimed)
+	if err != nil {
+		return false, err
+	}
+	if !claimed {
+		// Row was interrupted (released) earlier and has now converted to
+		// failed: the release already happened on the interrupted transition.
+		return false, nil
+	}
+	return true, nil
 }
 
+// releaseQuota performs the period-fixed compensation (audit §4 P3): the
+// release targets the consumption-time quota_period — releasing with
+// today's period across a month boundary decrements the wrong counter or
+// matches zero rows silently.
 func (s pgStore) releaseQuota(ctx context.Context, wsID, renderID string) {
-	// Quota release lives behind the app service in v1 wiring; the worker
-	// calls it through the QuotaReleaser injected on WorkerDeps (nil-safe).
+	var period *string
+	err := s.w.deps.Pool.QueryRow(ctx,
+		`SELECT quota_period FROM video_render WHERE id=$1`, renderID).
+		Scan(&period)
+	if err != nil {
+		s.w.deps.Log.Warn("video render release period read failed", "render_id", renderID, "err", err)
+		return
+	}
+	p := s.w.now().UTC().Format("2006-01")
+	if period != nil && *period != "" {
+		p = *period
+	}
 	if s.w.deps.QuotaRelease != nil {
-		if err := s.w.deps.QuotaRelease.Release(ctx, wsID, videoappQuotaKey, 1, s.w.now()); err != nil {
+		if err := s.w.deps.QuotaRelease.ReleasePeriod(ctx, wsID, videoappQuotaKey, 1, p); err != nil {
 			s.w.deps.Log.Warn("video render quota release failed", "render_id", renderID, "err", err)
 		}
 	}

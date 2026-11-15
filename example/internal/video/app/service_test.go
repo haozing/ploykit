@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/platform/webx"
+	"github.com/haozing/ploykit/quota"
 )
 
 // --- fake ports (full set) ---
@@ -47,13 +48,22 @@ type fakeQuota struct {
 	consumed []string
 	released []string
 	failKey  string
+	replay   bool // when set, ConsumeWithTx reports ErrIdemReplay
 }
 
-func (f *fakeQuota) ConsumeWith(_ context.Context, _, key string, _ int64, _ time.Time, _ string) error {
+func (f *fakeQuota) ConsumeWithTx(_ context.Context, _ pgx.Tx, _, key string, _ int64, _ time.Time, idemKey string) error {
+	if f.replay {
+		return quota.ErrIdemReplay
+	}
 	if key == f.failKey {
 		return webx.NewQuotaExceeded("monthly render quota exhausted")
 	}
-	f.consumed = append(f.consumed, key)
+	f.consumed = append(f.consumed, key+"/"+idemKey)
+	return nil
+}
+
+func (f *fakeQuota) ReleaseTx(_ context.Context, _ pgx.Tx, _, key string, _ int64, _ string) error {
+	f.released = append(f.released, key)
 	return nil
 }
 
@@ -235,7 +245,7 @@ func TestSubmitRender_GateOrder(t *testing.T) {
 		Quota:      quota,
 		Cap:        fakeCap{available: false},
 	}, testLogger())
-	_, err := svc.SubmitRender(context.Background(), principal(), "p1", RenderParams{}, nil)
+	_, err := svc.SubmitRender(context.Background(), principal(), "p1", RenderParams{}, nil, "")
 	require.Error(t, err)
 	var we *webx.Error
 	require.True(t, errorAs(err, &we))
@@ -248,7 +258,7 @@ func TestSubmitRender_GateOrder(t *testing.T) {
 		Quota:      quota,
 		Cap:        fakeCap{available: true},
 	}, testLogger())
-	_, err = denied.SubmitRender(context.Background(), principal(), "p1", RenderParams{}, nil)
+	_, err = denied.SubmitRender(context.Background(), principal(), "p1", RenderParams{}, nil, "")
 	require.Error(t, err)
 	require.True(t, errorAs(err, &we))
 	assert.Equal(t, "E_FORBIDDEN", we.Code)

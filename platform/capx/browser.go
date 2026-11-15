@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -11,8 +12,15 @@ import (
 // browserInstance is one warm headless browser process. Renders check it out
 // of the runtime pool, run their whole job on a fresh tab, and hand it back;
 // frames never start processes.
+//
+// ctx is the chromedp context that HOLDS the browser (it carries the Browser
+// value after the launcher's first Run). Every render tab derives from it, so
+// tabs reuse the warm process instead of silently spawning their own Chrome —
+// deriving from a bare allocator context makes every NewContext start a new
+// browser, and the launch-deadline ctx would kill the warm instance 20s after
+// it entered the pool (delivery-audit-video-studio §4 P9).
 type browserInstance struct {
-	ctx    context.Context // allocator/browser context; cancel stops the process
+	ctx    context.Context // browser-holding chromedp context; cancel stops the process
 	cancel context.CancelFunc
 	mu     sync.Mutex // serializes jobs on this instance
 }
@@ -28,6 +36,11 @@ func (b *browserInstance) close() {
 // defaultLauncher starts one headless Chrome-family instance with chromedp's
 // ExecAllocator and waits until the browser is up (first Run forces
 // allocation, bounded by cfg.LaunchTimeout).
+//
+// Lifecycle split (audit §4 P9): the launch timeout bounds ONLY the startup
+// Run. The instance lives on a deadline-free chain — a warm instance must
+// not die sitting in the pool, and a minutes-long render must not inherit
+// the launch deadline.
 func defaultLauncher(rt *Runtime) (*browserInstance, error) {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(rt.chromePath),
@@ -39,24 +52,31 @@ func defaultLauncher(rt *Runtime) (*browserInstance, error) {
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 
-	browserCtx, browserCancel := context.WithTimeout(allocCtx, rt.cfg.LaunchTimeout)
-	cdpCtx, _ := chromedp.NewContext(browserCtx)
-	// Force the browser process to start now; the first target would be
-	// created lazily otherwise, hiding launch failures from acquire.
-	if _, err := chromedp.Run(cdpCtx, chromedp.Func(func(_ context.Context, _ *chromedp.Target) error {
-		return nil
-	})); err != nil {
-		browserCancel()
-		allocCancel()
-		return nil, fmt.Errorf("capx: launch chrome: %w", err)
+	// Browser-holding context: after the first Run it carries the Browser
+	// value; render tabs derive from THIS and reuse the process.
+	browserCtx, _ := chromedp.NewContext(allocCtx)
+
+	// Launch deadline wraps only the startup probe: the probe runs on the
+	// deadline-free browser context inside a goroutine; the caller's launch
+	// timeout decides when to give up (and tear the instance down).
+	launchCdp, _ := chromedp.NewContext(browserCtx)
+	launchDone := make(chan error, 1)
+	go func() {
+		_, err := chromedp.Run(launchCdp, chromedp.Func(func(_ context.Context, _ *chromedp.Target) error {
+			return nil
+		}))
+		launchDone <- err
+	}()
+	select {
+	case runErr := <-launchDone:
+		if runErr != nil {
+			allocCancel()
+			return nil, fmt.Errorf("capx: launch chrome: %w", runErr)
+		}
+	case <-time.After(rt.cfg.LaunchTimeout):
+		allocCancel() // kill the half-started process
+		return nil, fmt.Errorf("capx: launch chrome: not ready within %s", rt.cfg.LaunchTimeout)
 	}
 
-	inst := &browserInstance{ctx: allocCtx, cancel: allocCancel}
-	// The instance outlives the launch deadline: swap the cancel func for
-	// one that also releases the launch-timeout cancel.
-	inst.cancel = func() {
-		browserCancel()
-		allocCancel()
-	}
-	return inst, nil
+	return &browserInstance{ctx: browserCtx, cancel: allocCancel}, nil
 }

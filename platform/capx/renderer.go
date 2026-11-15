@@ -67,11 +67,18 @@ type Frame struct {
 // error is surfaced (wrapped with the frame number) by RenderFrames.
 type FrameFunc func(ctx context.Context, f Frame) error
 
-// Validate sanity-checks a spec for rendering or encoding.
+// Validate sanity-checks a spec for rendering or encoding. Odd dimensions
+// are rejected: libx264 yuv420p requires even width/height and the encode
+// would fail on the first frame (audit Â§4 P10). Callers that accept
+// arbitrary dimensions should round to even before constructing the spec;
+// the encode pipeline additionally carries a trunc-to-even scale filter as
+// a belt-and-braces fallback.
 func (s FrameSpec) Validate() error {
 	switch {
 	case s.Width <= 0 || s.Height <= 0:
 		return errors.New("capx: FrameSpec.Width/Height must be positive")
+	case s.Width%2 != 0 || s.Height%2 != 0:
+		return fmt.Errorf("capx: FrameSpec dimensions must be even for libx264/yuv420p (got %dx%d)", s.Width, s.Height)
 	case s.FPS <= 0:
 		return errors.New("capx: FrameSpec.FPS must be positive")
 	case s.DurationFrames <= 0:

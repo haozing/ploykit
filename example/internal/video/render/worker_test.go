@@ -52,24 +52,28 @@ type rowMap = map[string]renderRow
 
 var errNotFound = pgx.ErrNoRows // matches the worker noop contract
 
-func (f *fakeStore) update(_ context.Context, id, status, errMsg string, frames int, outKey string) error {
+func (f *fakeStore) update(_ context.Context, id, status, errMsg string, frames int, outKey string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	// Mirror the real guarded UPDATE (WHERE status IN
 	// ('queued','running','interrupted')): terminal rows reject writes so the
-	// worker's terminal-skip paths are exercised in unit tests too.
+	// worker's terminal-skip paths are exercised in unit tests too. The
+	// release claim mirrors released_at CAS: true iff this write moves the
+	// row to failed/interrupted from a non-terminal state.
 	row, ok := f.rows[id]
 	if !ok {
-		return errNotFound
+		return false, errNotFound
 	}
 	if row.Status == videoapp.RenderSucceeded || row.Status == videoapp.RenderFailed {
-		return ErrTerminalSkip
+		return false, ErrTerminalSkip
 	}
 	f.updated = append(f.updated, updateCall{id: id, status: status, errMsg: errMsg, frames: frames, outKey: outKey})
+	claim := (status == videoapp.RenderFailed || status == videoapp.RenderInterrupted) &&
+		row.Status != videoapp.RenderInterrupted
 	row.Status = status
 	row.FramesDone = frames
 	f.rows[id] = row
-	return nil
+	return claim, nil
 }
 
 func (f *fakeStore) releaseQuota(_ context.Context, wsID, renderID string) {
@@ -110,6 +114,13 @@ func (f *fakeQuotaRelease) Release(_ context.Context, wsID, key string, _ int64,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.released = append(f.released, wsID+":"+key)
+	return nil
+}
+
+func (f *fakeQuotaRelease) ReleasePeriod(_ context.Context, wsID, key string, _ int64, period string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.released = append(f.released, wsID+":"+key+"@"+period)
 	return nil
 }
 

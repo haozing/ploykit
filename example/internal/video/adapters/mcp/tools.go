@@ -182,18 +182,18 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 
 	// ---- video_animate_element (video:write) ----
 	type animateIn struct {
-		ProjectID      string         `json:"project_id" jsonschema:"project id"`
-		ElementID      string         `json:"element_id" jsonschema:"element id to animate"`
-		Type           string         `json:"type" jsonschema:"animation type: move|scaleIn|rotate"`
-		From           map[string]any `json:"from,omitempty" jsonschema:"move start {x,y}"`
-		To             map[string]any `json:"to,omitempty" jsonschema:"move end {x,y}"`
-		FromValue      *float64       `json:"fromValue,omitempty" jsonschema:"scaleIn/rotate start value"`
-		ToValue        *float64       `json:"toValue,omitempty" jsonschema:"scaleIn/rotate end value"`
-		StartAnchor    string         `json:"start_anchor,omitempty" jsonschema:"anchor word text the animation starts at"`
-		Occurrence     int            `json:"occurrence,omitempty" jsonschema:"anchor occurrence (default 0)"`
-		DurationFrames int            `json:"duration_frames" jsonschema:"animation length in frames (>0)"`
-		Easing         string         `json:"easing,omitempty" jsonschema:"linear|power1.out|power2.out|power3.out|back.out|expo.out"`
-		ExpectedVersion *int          `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
+		ProjectID       string         `json:"project_id" jsonschema:"project id"`
+		ElementID       string         `json:"element_id" jsonschema:"element id to animate"`
+		Type            string         `json:"type" jsonschema:"animation type: move|scaleIn|rotate"`
+		From            map[string]any `json:"from,omitempty" jsonschema:"move start {x,y}"`
+		To              map[string]any `json:"to,omitempty" jsonschema:"move end {x,y}"`
+		FromValue       *float64       `json:"fromValue,omitempty" jsonschema:"scaleIn/rotate start value"`
+		ToValue         *float64       `json:"toValue,omitempty" jsonschema:"scaleIn/rotate end value"`
+		StartAnchor     string         `json:"start_anchor,omitempty" jsonschema:"anchor word text the animation starts at"`
+		Occurrence      int            `json:"occurrence,omitempty" jsonschema:"anchor occurrence (default 0)"`
+		DurationFrames  int            `json:"duration_frames" jsonschema:"animation length in frames (>0)"`
+		Easing          string         `json:"easing,omitempty" jsonschema:"linear|power1.out|power2.out|power3.out|back.out|expo.out"`
+		ExpectedVersion *int           `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 	}
 	mcpAdd(s, "video_animate_element",
 		"Append a start-anchored animation to an element (move/scaleIn/rotate).",
@@ -246,17 +246,18 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 
 	// ---- video_render (video:render) ----
 	type renderParams struct {
-		FPS            int     `json:"fps,omitempty" jsonschema:"output fps (default meta.fps)"`
-		Width          int     `json:"width,omitempty" jsonschema:"output width (default meta.width)"`
-		Height         int     `json:"height,omitempty" jsonschema:"output height (default meta.height)"`
-		BurnSubtitles  bool    `json:"burn_subtitles" jsonschema:"legacy flag: true = subtitle_mode burn"`
-		SubtitleMode   string  `json:"subtitle_mode,omitempty" jsonschema:"burn|soft|none (default from burn_subtitles)"`
-		BGMVolume      float64 `json:"bgm_volume,omitempty" jsonschema:"bgm volume override 0-1"`
+		FPS           int     `json:"fps,omitempty" jsonschema:"output fps (default meta.fps)"`
+		Width         int     `json:"width,omitempty" jsonschema:"output width (default meta.width)"`
+		Height        int     `json:"height,omitempty" jsonschema:"output height (default meta.height)"`
+		BurnSubtitles bool    `json:"burn_subtitles" jsonschema:"legacy flag: true = subtitle_mode burn"`
+		SubtitleMode  string  `json:"subtitle_mode,omitempty" jsonschema:"burn|soft|none (default from burn_subtitles)"`
+		BGMVolume     float64 `json:"bgm_volume,omitempty" jsonschema:"bgm volume override 0-1"`
 	}
 	type renderIn struct {
 		ProjectID       string       `json:"project_id" jsonschema:"project id"`
 		Params          renderParams `json:"params,omitempty" jsonschema:"render overrides"`
 		ExpectedVersion *int         `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
+		RequestID       string       `json:"request_id,omitempty" jsonschema:"idempotency key: retries with the same request_id return the first submission instead of charging quota twice"`
 	}
 	mcpAdd(s, "video_render",
 		"Submit a render of the project's IR snapshot. Fails with E_NOT_CONFIGURED when the render capability is offline (no quota spent), E_QUOTA_EXCEEDED when the monthly quota is out.",
@@ -266,7 +267,11 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				FPS: p.FPS, Width: p.Width, Height: p.Height,
 				BurnSubtitles: p.BurnSubtitles, SubtitleMode: p.SubtitleMode, BGMVolume: p.BGMVolume,
 			}
-			r, err := deps.Svc.SubmitRender(ctx, webx.PrincipalFrom(ctx), in.ProjectID, params, in.ExpectedVersion)
+			reqID := strings.TrimSpace(in.RequestID)
+			if len(reqID) > 128 {
+				reqID = reqID[:128]
+			}
+			r, err := deps.Svc.SubmitRender(ctx, webx.PrincipalFrom(ctx), in.ProjectID, params, in.ExpectedVersion, reqID)
 			if err != nil {
 				return nil, err
 			}

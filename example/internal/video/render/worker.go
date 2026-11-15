@@ -65,6 +65,9 @@ type WorkerDeps struct {
 // QuotaReleasePort is the failed/interrupted compensation surface.
 type QuotaReleasePort interface {
 	Release(ctx context.Context, workspaceID, key string, n int64, now time.Time) error
+	// ReleasePeriod releases on the EXPLICIT consumption period (audit Â§4 P3):
+	// month-boundary safe â releasing "now" would decrement the wrong counter.
+	ReleasePeriod(ctx context.Context, workspaceID, key string, n int64, period string) error
 }
 
 // Publisher mirrors videoapp.Publisher (same shape, local alias so fakes
@@ -121,6 +124,10 @@ type renderRow struct {
 	OutputKey   string
 	Error       string
 	CreatedBy   string
+
+	// releaseClaim is set by transition: this attempt won the one-shot
+	// quota-release CAS (audit Â§4 P3) and may perform the compensation.
+	releaseClaim bool
 }
 
 // Work runs the state machine (§4.9.1):
@@ -203,7 +210,9 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 			if terr := w.transition(compCtx, &row, videoapp.RenderInterrupted, "interrupted: "+ctx.Err().Error(), row.FramesDone); terr != nil && !errors.Is(terr, ErrTerminalSkip) {
 				w.deps.Log.Error("video render: interrupted transition failed", "render_id", row.ID, "err", terr)
 			}
-			w.releaseQuota(compCtx, &row)
+			if row.releaseClaim {
+				w.releaseQuota(compCtx, &row)
+			}
 			w.pushState(compCtx, &row, "interrupted")
 			return ctx.Err() // river retries from the deterministic snapshot
 		}
@@ -240,7 +249,9 @@ func (w *Worker) fail(ctx context.Context, row *renderRow, msg string) error {
 		}
 		w.deps.Log.Error("video render: failed transition also failed", "render_id", row.ID, "err", err)
 	}
-	w.releaseQuota(ctx, row)
+	if row.releaseClaim {
+		w.releaseQuota(ctx, row)
+	}
 	if w.deps.Audit != nil {
 		w.deps.Audit.Record(ctx, &row.WorkspaceID, row.CreatedBy,
 			videoapp.AuditRenderFailed, "video_render", row.ID,
@@ -289,7 +300,7 @@ func (w *Worker) SweepOrphans(ctx context.Context) {
 // state machine tests run against fakes.
 type rowStore interface {
 	fetch(ctx context.Context, id string) (renderRow, []byte, error)
-	update(ctx context.Context, id string, status, errMsg string, framesDone int, outputKey string) error
+	update(ctx context.Context, id string, status, errMsg string, framesDone int, outputKey string) (releaseClaim bool, err error)
 	releaseQuota(ctx context.Context, wsID, renderID string)
 }
 
@@ -331,13 +342,17 @@ func (w *Worker) transition(ctx context.Context, row *renderRow, status, errMsg 
 	if key != "" {
 		row.OutputKey = key
 	}
-	err := w.deps.store.update(ctx, row.ID, status, errMsg, framesDone, key)
+	claim, err := w.deps.store.update(ctx, row.ID, status, errMsg, framesDone, key)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// The old pgStore mapped "0 rows affected" to pgx.ErrNoRows; keep
 		// that shape distinguishable from a truly missing row at call sites.
 		return ErrTerminalSkip
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	row.releaseClaim = claim
+	return nil
 }
 
 // setProgress persists the frame counter (every ProgressEveryN frames).
