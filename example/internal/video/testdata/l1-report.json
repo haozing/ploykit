@@ -13,7 +13,7 @@
     },
     {
       "current": "(no field)",
-      "rule": "targetElementId deleted. Builder behavior: counter self-hosts \u003cdiv id=counter-\u003cfxId\u003e\u003e at canvas origin (0,0), 96px white text; highlight applies to the whole #canvas layer. NOTE: digits never appear on seeked frames due to defect D-01 (GSAP onUpdate suppression); white-on-cream color is an additional visibility defect once D-01 is fixed.",
+      "rule": "targetElementId deleted. Builder behavior: counter self-hosts \u003cdiv id=counter-\u003cfxId\u003e\u003e at canvas origin (0,0), 96px text; highlight applies to the whole #canvas layer. D-01 fixed: digits render on seeked frames (capx pause(t,false)) and counter ink is dark (#2B2118 default, fx.params.color override) instead of .el-text's white-on-cream.",
       "target": "effects[].targetElementId (counter -\u003e el_price, highlight -\u003e el_headline/el_cardA/el_cardC)"
     },
     {
@@ -49,12 +49,12 @@
   ],
   "defects": [
     {
-      "evidence": "TestProbeCounterDOMState (testdata/probe_dom_test.go, real browser): counter host div exists (id=counter-ef_sales, 96px/700/white) but textContent='' at seeks to 5s/12s/13.5s; timeline child tween present (start=11.92s, dur=1.2s, target v 8200-\u003e12600, progress 0.067 at t=12). pause(12, false) =\u003e textContent becomes '8767 件'.",
-      "fix_direction": "either capx seekTimeline pauses with suppressEvents=false (pause(t, false)), or timeline-builder.js counter writes text via tween progress in a non-event path (e.g. onUpdate rendered through gsap's render loop) — framework decision, belongs to capx+builder owners.",
-      "found": "counter renders no digits on ANY seeked frame (not a layout degradation)",
+      "evidence": "TestProbeCounterDOMState (testdata/probe_dom_test.go, real browser): pre-fix textContent='' at seeks to 5s/12s/13.5s; pause(12,false) =\u003e '8767 件'. Post-fix probe: textContent non-empty at t=12 and 13.5, empty before tween start (5s).",
+      "fix": "capx: pause(t, false) — server-side seek must fire the same callbacks as live playback. builder: counter host color = fx.params.color || '#2B2118' (dark ink default, readable on light card backgrounds); ir.go validateParams whitelists color for counter params.",
+      "found": "counter rendered no digits on ANY seeked frame (fixed in this run)",
       "id": "D-01",
-      "impact": "counter effect unusable end-to-end in render path: L1 F360/A-C01-03 fails; any MP4 rendered through capx would show an empty counter for its whole window. F449 target 'counter settles at 12,600' also void.",
-      "root_cause": "platform/capx/renderer.go seekTimeline calls tl.pause(tSec) with one argument; GSAP Timeline.pause(atTime, suppressEvents) defaults suppressEvents=true, which skips callbacks (onUpdate/onStart) during the seek render. timeline-builder.js counter effect relies solely onUpdate to write digits."
+      "root_cause": "platform/capx/renderer.go seekTimeline called tl.pause(tSec) with one argument; GSAP Timeline.pause(atTime, suppressEvents) defaults suppressEvents=true, which skips callbacks (onUpdate/onStart) during the seek render. Second half: counter host inherited .el-text's default white on light backgrounds (contrast ~1.06:1 on VS-C01 cream).",
+      "status": "fixed"
     }
   ],
   "degradations": [
@@ -62,11 +62,9 @@
     "[F077] degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)",
     "[F180] degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance",
     "[F250] degradation observed (stronger than documented): highlight paints the #canvas layer, which the full-canvas el_bg shape fully occludes — F250 target '#FFD166 lift' is INVISIBLE, not merely full-screen",
-    "[F320] degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Suppression defect aside, even the pre-tween state shows no 'from' value — GSAP tween onStart also suppressed during seeks (origin zone dark_ratio=0.0003)",
-    "[F360] KNOWN DEFECT (root-caused): counter digits absent on ALL seeked frames — capx tl.pause(t) suppresses GSAP onUpdate events (suppressEvents default true); tween object advances but textContent never updates. Probe: pause(12,false) yields '8767 件'.",
-    "[F360] counter host node exists in DOM (probe: id=counter-ef_sales, 96px/700, color rgb(255,255,255) WHITE on cream bg — style defect too) but textContent='' and rect 0x0; origin zone white_ratio=0.0000 dark_ratio=0.0003",
+    "[F320] degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Post-D-01-fix the pre-tween state renders no 'from' value either: before its start the tween is at progress 0 and GSAP has not rendered once, so textContent is still empty (probe: seek to 5s then back past start shows '8200 件' only after the tween has run once — origin zone dark_ratio=0.0003)",
     "[F396] degradation observed: CTA bar has NO text (text/textColor compound keys unconsumed) — plain orange bar; entry move completed at ~F10 (from t=0) so bar rests at y=1780",
-    "[F449] degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 243.7 stays at background level"
+    "[F449] degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 242.4 stays at background level"
   ],
   "env": {
     "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
@@ -111,9 +109,9 @@
         "word_start_sec": 8.08
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 450 frames in 47.839s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 450 frames in 53.75s",
     "golden_dir": "example/internal/video/testdata/golden/c01/",
-    "html_bytes": 88452,
+    "html_bytes": 89210,
     "ir_sha256": "078365678fcd4bf11bcede278621b5365a9301988d3aec92ade1a7afac0ea00d",
     "meta_json": "example/internal/video/testdata/golden/c01/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §3.1 §7.2",
@@ -121,7 +119,7 @@
     "timeline_id": "main"
   },
   "layer": "L1",
-  "run_id": "l1-c01-20261115-160052-7c31",
+  "run_id": "l1-c01-20261115-171839-d395",
   "samples": [
     {
       "frame": 0,
@@ -135,7 +133,7 @@
         "png_magic_ok": true,
         "title_dark_ratio": 0
       },
-      "duration_ms": 2240,
+      "duration_ms": 2029,
       "artifact": "example/internal/video/testdata/golden/c01/frame-000.png",
       "notes": [
         "degradation observed: price text and CTA bar already on screen at F0 (no element visibility windows)"
@@ -155,7 +153,7 @@
         "png_magic_ok": true,
         "title_dark_ratio": 0.0339
       },
-      "duration_ms": 3465,
+      "duration_ms": 3380,
       "artifact": "example/internal/video/testdata/golden/c01/frame-012.png",
       "notes": [
         "A-C01-01 doc target \u003e=18%: actual 3.4% — target likely calibrated for target-schema layout (fontWeight 900 / no wrap); informational, no baseline this round"
@@ -173,7 +171,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 10082,
+      "duration_ms": 10059,
       "artifact": "example/internal/video/testdata/golden/c01/frame-077.png",
       "notes": [
         "degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)"
@@ -191,7 +189,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 11396,
+      "duration_ms": 11508,
       "artifact": "example/internal/video/testdata/golden/c01/frame-090.png",
       "notes": [
         "degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)"
@@ -210,7 +208,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 20427,
+      "duration_ms": 20741,
       "artifact": "example/internal/video/testdata/golden/c01/frame-180.png",
       "notes": [
         "degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance"
@@ -228,7 +226,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 27461,
+      "duration_ms": 28238,
       "artifact": "example/internal/video/testdata/golden/c01/frame-250.png",
       "notes": [
         "degradation observed (stronger than documented): highlight paints the #canvas layer, which the full-canvas el_bg shape fully occludes — F250 target '#FFD166 lift' is INVISIBLE, not merely full-screen"
@@ -248,31 +246,26 @@
         "png_magic_ok": true,
         "price_orange_ratio": 0.0607
       },
-      "duration_ms": 34579,
+      "duration_ms": 36173,
       "artifact": "example/internal/video/testdata/golden/c01/frame-320.png",
       "notes": [
-        "degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Suppression defect aside, even the pre-tween state shows no 'from' value — GSAP tween onStart also suppressed during seeks (origin zone dark_ratio=0.0003)"
+        "degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Post-D-01-fix the pre-tween state renders no 'from' value either: before its start the tween is at progress 0 and GSAP has not rendered once, so textContent is still empty (probe: seek to 5s then back past start shows '8200 件' only after the tween has run once — origin zone dark_ratio=0.0003)"
       ]
     },
     {
       "frame": 360,
       "time_sec": 12,
-      "status": "fail",
+      "status": "ok",
       "structure_checks": {
-        "counter_digits_rendered": false,
-        "counter_origin_dark_ratio": 0.0003,
-        "counter_origin_white_ratio": 0,
+        "counter_digits_rendered": true,
+        "counter_origin_dark_ratio": 0.2303,
         "dimensions": "1080x1920",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 38557,
-      "artifact": "example/internal/video/testdata/golden/c01/frame-360.png",
-      "notes": [
-        "KNOWN DEFECT (root-caused): counter digits absent on ALL seeked frames — capx tl.pause(t) suppresses GSAP onUpdate events (suppressEvents default true); tween object advances but textContent never updates. Probe: pause(12,false) yields '8767 件'.",
-        "counter host node exists in DOM (probe: id=counter-ef_sales, 96px/700, color rgb(255,255,255) WHITE on cream bg — style defect too) but textContent='' and rect 0x0; origin zone white_ratio=0.0000 dark_ratio=0.0003"
-      ]
+      "duration_ms": 40825,
+      "artifact": "example/internal/video/testdata/golden/c01/frame-360.png"
     },
     {
       "frame": 396,
@@ -287,7 +280,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 42210,
+      "duration_ms": 45003,
       "artifact": "example/internal/video/testdata/golden/c01/frame-396.png",
       "notes": [
         "degradation observed: CTA bar has NO text (text/textColor compound keys unconsumed) — plain orange bar; entry move completed at ~F10 (from t=0) so bar rests at y=1780"
@@ -302,25 +295,25 @@
         "bar_orange_ratio": 0.9993,
         "dimensions": "1080x1920",
         "dimensions_ok": true,
-        "full_frame_mean_lum": 243.68,
+        "full_frame_mean_lum": 242.39,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 47509,
+      "duration_ms": 53082,
       "artifact": "example/internal/video/testdata/golden/c01/frame-449.png",
       "notes": [
-        "degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 243.7 stays at background level"
+        "degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 242.4 stays at background level"
       ]
     }
   ],
   "totals": {
-    "analysis_total_ms": 667,
+    "analysis_total_ms": 841,
     "frames_planned": 450,
     "frames_rendered": 450,
     "keyframes_kept": 10,
-    "render_ms_per_frame": 106.31,
-    "render_total_ms": 47839,
-    "samples_fail": 1,
-    "samples_ok": 9
+    "render_ms_per_frame": 119.44,
+    "render_total_ms": 53749,
+    "samples_fail": 0,
+    "samples_ok": 10
   }
 }

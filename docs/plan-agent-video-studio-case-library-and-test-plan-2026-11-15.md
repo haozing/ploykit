@@ -467,6 +467,8 @@
 | T-14 | 软 / 硬字幕 | ⚠️ | ⚠️（CJK 禁则/词边界折行 ⛔） | — | SRT 由 words 生成（subtitle.go:174-184）；burn 经 libass subtitles（encode.go:206-235，本机 libass 可用，§1.9 #6）；soft 未封装（render_pipeline.go:217-231）；CJK 折行缺陷 §1.4 #1-2 | 硬字幕案例可交付；软字幕轨未接通；CJK 禁则/行首标点避让不可达；字幕样式不可控（§1.5 #10）。 | mov_text 侧车封装；Render 记录 subtitleMode 到配方；字幕样式字段进 IR；soft 降级写 warnings。 |
 | T-15 | 缩略图 / 封面帧 | ✅（包内能力在位） | ⛔（firstThumb 恒 nil，服务层未接通） | 包内 ✅；产品端到端 ⛔ | `ExtractThumbnail` 已存在（encode.go:240-258）；管线 `firstThumb` 桩返回 nil（render_pipeline.go:272-277）；Render 无 thumbKey（service.go:110-124）；UI 历史表无封面列（VideoStudioPage.tsx:51-52, 397-403, 722） | capx 层能力存在；服务/装配/UI 三层未接通，v1 历史列表无封面（§1.7 ②）。 | Render 行 `thumb_key` 列 + Render 结构/响应 `thumbKey/thumbUrl`；管线调用 `ExtractThumbnail`；UI 封面列；对齐 openapi `thumb_url`（openapi.yaml:6285-6287）。 |
 
+> **[修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 X-4 / example/internal/video/testdata/spec-audit-report.json X-4）上表 T-10/T-12 行只点名 counter（自建 div 无定位）与 highlight（整层作用域）两类目标定位缺口；实测范围更大**：`timeline-builder.js:182` `var target = fx.type === 'counter' ? counterHost(fx) : canvas;`——**pulse / shake / fade 同样全部作用于 `#canvas` 整层**（5 个 effectBuilder 均无 target 概念，timeline-builder.js:79-112），非 counter 特效不存在任何元素级目标。两列档位不受影响（T-12 视觉列的 ⚠️ 本就按整层作用域计），但事实面收窄：按目标 schema 写的 `targetElementId` 型 effect（如 C06 `ef_pulse_nameA`、`ef_fade_turn`）在现实现下一律全画布生效——pulse 缩放整个画布、fade 把全画面压暗（opacity 0.8）且不复原。各案例涉及行见 §4.2.6 / §4.4.6 修正框。
+
 **矩阵外排除项（🚫v1 不做，本轮不展开）**：远程渲染集群（remote.go 仅扩展点）、视频素材剪辑拼接、AI 生成画面、多语言字幕轨、3D 模型。
 
 **案例交付分级（两列口径汇总，供后续章节排期引用）**
@@ -1467,6 +1469,7 @@
 
 #### 4.2.3 IR 规格（目标 schema）
 
+> **⚠️ [修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 M-C04-07 / example/internal/video/testdata/spec-audit-report.json M-C04-07）此 JSON 块为目标 schema 示意，不能直接提交现实现**：现实现动画必须内嵌在 `elements[].animations`（ir.go:129；timeline-builder.js:162 只遍历 `el.animations`），下列顶层 `animations[]` 数组会被 projector 整个丢弃（静默无效）；同时现 IR 无 `targetElementId`（动画随元素自带、effect 无目标概念），照抄时须删除各处 `targetElementId` 键。可运行的降级转换版本见 `example/internal/video/testdata/ir/c04.degraded.json`（过 `videoapp.Validate`，DurationFrames=1800），转换规则全录于 spec-audit-report.json X-3。下块原文保留，不改写历史。
 ```json
 {
   "schemaVersion": 1,
@@ -1509,13 +1512,26 @@
 | T-11 图表生长（逐柱 / 逐点 / 逐段） | animation `axis:vertical`、lineChart `reveal` | 现仅 `move|scaleIn|rotate`；柱用 scaleIn 近似，折线无"逐段描线"类型，只能整线淡入 | ⚠️ | 折线不能像描线一样逐段生长；三个点与连线的出现顺序不可控 |
 | T-10 数字滚动（柱顶金额、环心百分比） | `counter{from,to,suffix}` + targetElementId | counter 自建 div、无定位字段，固定左上原点 `[代码] timeline-builder.js:232-241` | ⛔ | 目标：数字贴柱顶 / 环心；现状：滚动数字全部堆在画布左上角，图表标签需另用静态 text 元素兜底 |
 | T-06 镜头平移（图表区内推进） | animation `chartGroup` move，整组位移 | 现元素独立 append，无 group 容器；只能对各图表元素分别写相同 move 轨迹 | ⚠️ | 多元素平移轨迹必须逐条复制参数；不同步时出现层间滑移；无独立"镜头"对象 |
-| T-15 封面帧选择 | `render.thumbnail.atSec` | 现 `ExtractThumbnail` 取单帧 JPEG，参数来自 render recipe `[代码] encode.go:240` | ✅ | 封面帧选取可落地；"候选帧对比"需渲染两帧人工比选，现流水线未提供候选集接口 |
 | 图表数据与渲染绑定 | `elements[].params` 内数据点 | 现 Element 类型仅 image/text/shape，无 chart 类型；数据点需在合成期算好柱高 / 扇区角度，IR 只放结果 shape | ⚠️ | 改数据要重算几何；IR 内不保留"源数据 → 图形"的映射，审计时不能从图反推口径 |
 | 元素时间区间 | `startFrame/endFrame` | 整片存在；镜 6 片尾说明卡与前面图表需靠入场动画分区，不能卸载旧图 | ⚠️ | 三图在片尾卡仍残留在 DOM，只是被新卡覆盖；叠层顺序错误时会透出旧柱边 |
 | 口播—图表节拍锚定 | effect/animation `anchor.wordId` | 现锚点按 text 解析；重复词"总量"出现三次（w02/w05/w19），靠 occurrence 区分 | ⚠️ | 改稿重排词序可能挂错 occurrence；nearest 会静默落到相邻词 `[代码] ir.go:500-575` |
 | 多 track 调度 | `tracks[]` z 层级 | 现无 trackId；图表 / 注释 / 字幕靠 DOM 顺序 | ⚠️ | 与 §4.1.4 同：轨道级重排不支持；z 值仅作字段保留 |
 | 扩展草案键（params 内）：axis、labels、pct、points、reveal、segments、shape（donut、lineChart） | 目标 schema 未定义 | 现 builder 不消费该键，无现实现替代 | ⛔ 依赖 §5.16 提案 | 现渲染会忽略这些键，画面不出现对应效果 |
 | 动画参数层级 | 目标 schema 将 from/to、easing 置于 params | 现 `ElementAnimation` 读顶层 from/to、fromValue/toValue、easing；案例 IR 已按顶层书写 | ✅ 以顶层为准 | params 内仅保留扩展键（axis、staggerFrames、reveal、path 等），不承载运动参数 |
+
+> **[修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 M-C04-04 / example/internal/video/testdata/spec-audit-report.json M-C04-04）上表行"T-15 封面帧选择"已从表中移出（其 ✅ 判定过时；为保表格完整不再以表行形式保留，原文划线存证如下）**：
+>
+> ~~| T-15 封面帧选择 | `render.thumbnail.atSec` | 现 `ExtractThumbnail` 取单帧 JPEG，参数来自 render recipe `[代码] encode.go:240` | ✅ | 封面帧选取可落地；"候选帧对比"需渲染两帧人工比选，现流水线未提供候选集接口 |~~
+>
+> 按 §8.2 两列口径重判：
+>
+> | 口径 | 判定 | 依据 |
+> |---|---|---|
+> | 结构可表达性（包内 `ExtractThumbnail` 函数） | ✅ | `platform/capx/encode.go:245-263`：函数在位，可出单帧 JPEG——但 `-ss 00:00:01` 写死，`atSec` 没有任何通路（并非"参数来自 render recipe"） |
+> | 视觉达标性（端到端管线） | ⛔ | `example/internal/video/render/render_pipeline.go:268-273`：`firstThumb` 是返回 `nil, nil` 的 stub，缩略图当前完全不产出（非致命） |
+>
+> 对本案断言的后果：§4.2.6 MP4 层"缩略图 atSec=30.0 可解码"在现实现下必然失败，须排除；帧 900 封面候选需 L1 用帧渲染器单独截取；"候选帧对比"无管线接口。
+
 #### 4.2.5 预期帧表
 
 | 帧号 | 时刻 | 期望画面状态 | 断言类型 |
@@ -1536,6 +1552,9 @@
 - A-C04-02：帧 900–1259，环图橙扇区弧长占整圆 ≈56.7%（像素采样：橙色弧段周长 / 全圆周长 ∈ [54.7%, 58.7%]）；环心数字文本宽度 ≤200px。
 - A-C04-03：折线三点在 `x 800–1240, y 360–660` 区域内；点 2（5.2%）y 位置高于点 1（3.0%）与点 3（5.0%）。
 - A-C04-04：帧 1620 起，柱图区 `x 80–760, y 300–800` 内蓝色像素占比 ≤2%（旧图被片尾卡遮挡）。
+
+> **[修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 X-4 / example/internal/video/testdata/spec-audit-report.json X-4、C04 degradations"highlight 作用于整个 #canvas"）本节特效类断言按现实现重述**：`ef_hl_growth`（highlight"产业"）在现实现下不产生字幕词内上色，而是**整个 `#canvas` 背景（`#F2F5F9`→`#F5A623`）闪现约 0.25s**（timeline-builder.js:97-100 目标为 canvas）——X-4 实测 pulse/shake/fade 与 highlight 同样全画布作用，本案 IR 若按目标 schema 补 pulse 类特效（如镜头 4 的 counter 宿主脉冲设想）也会全画布缩放。帧差断言应改为检查"全画布背景色抬升"这一实际可见差异；"字幕词变色"断言在现实现下判 ⛔（词级高亮需逐词 text 元素替代路径，§5.12）。
+
 **自动化断言（分层）**
 - IR 层：`words=20`、单调不重叠；`elements=10`、`animations=7`、`effects=3`；每条 counter 的 to 值与 §4.2.2 表内数字一致（1349084、56.7）；无 src 含 `://` / `data:`。
 - DOM 层：三柱、折线、环图节点存在；图表文本标签与 script 中数字一致；说明卡包含"国家统计局"字样。
@@ -1775,6 +1794,7 @@
 
 #### 4.4.3 IR 规格（目标 schema）
 
+> **⚠️ [修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 M-C04-07（同款差异）/ example/internal/video/testdata/spec-audit-report.json M-C04-07、X-3 ⑥）此 JSON 块为目标 schema 示意，不能直接提交现实现**：现实现动画必须内嵌在 `elements[].animations`，下列顶层 `animations[]`（an_shotA_in … an_endline_in）会被 projector 整个丢弃；照抄时须删除各处 `targetElementId` 键。可运行的降级转换版本见 `example/internal/video/testdata/ir/c06.degraded.json`（过 `videoapp.Validate`，DurationFrames=2250），转换规则全录于 spec-audit-report.json X-3。下块原文保留，不改写历史。
 ```json
 {
   "schemaVersion": 1,
@@ -1840,12 +1860,19 @@
 | 2025 | 81.00s | 结论句片尾行出现；双姓名条保持 | 视觉 |
 | 2249 | 89.96s | 画面保持；音频时长 ≥89.9s；SRT cue 数 = 11 | MP4 |
 
+> **[修正 2026-11-15 round1]（依据 example/internal/video/testdata/spec-audit-report.json M-C06-07，medium；round1 实测登记）上方帧表"帧 2025 / 81.00s 结论句 scaleIn 出现"与本文档自己的 words 表存在内部矛盾，二选一定稿（此处标注，不擅自定稿）**：§4.4.3 words 表中 S11 结论句台词"先把一件小事做到不返工"唯一入选词表的锚点词是"返工"（w19，85.2s→帧 2130）——若严格按词表锚定（an_endline_in 锚"返工"），结论句入场应在帧 2130，比帧表晚 105 帧（4.2s）；帧 2025 对应 S10"最后给同类团队一句话"起点附近，但该句无入选词表词、无可用锚。**L1 执行时按 L1 裁定采用词锚帧 2130**（与降级 IR `c06.degraded.json` 的 an_endline_in 锚一致）；要回到帧 2025 须改词表（把"先"或"一件"加入 words 表）而不是改帧表。
+
 #### 4.4.6 断言
 **关键视觉断言（可量化）**
 - A-C06-01：帧 225（B 说话），右半 `x 960–1920` 平均亮度 ≥ 左半 `x 0–960` 亮度 ×1.15；帧 450（A 说话）方向相反。压暗侧遮罩透明度 20%。
 - A-C06-02：字幕文本框 `y 950–1030` 内文字像素占比 10%–65%；中文字幕 ≤2 行、每行 ≤16 rune；行首字符不属于 `，。？！、；：`。
 - A-C06-03：姓名条 bbox：A 在 `x 60–500, y 860–910`，B 在 `x 1020–1500, y 860–910`；两条不跨中线重叠。
 - A-C06-04：中线 divider `x 958–962` 整列颜色 `#2A313B`，无画面像素穿透。
+
+> **[修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 X-4 / example/internal/video/testdata/spec-audit-report.json X-4）本节两条按目标 schema 元素级语义写的 effect 断言，在现实现下全画布生效，按原断言会误判**：
+> - `ef_pulse_nameA`（脉冲 A 姓名条，scale 1.06）：pulse 无元素目标（timeline-builder.js:182 非 counter 一律 `#canvas`），实际**整个画布缩放 1.06 倍**——A-C06-03 的姓名条 bbox 断言在该锚帧将因全画布放大而整体偏移；降级 IR（testdata/ir/c06.degraded.json）已移除该 effect。
+> - `ef_fade_turn`（压暗 B 侧至 opacity 0.8）：fade 同样作用于 `#canvas` 整层，实际是**全画面压到 0.8 透明度且不复原**（牺牲全画面），而非"B 侧遮罩 20% 压暗"——A-C06-01 的"右/左亮度 ≥1.15"方向性断言在降级渲染下不可判定；降级 IR 已移除该 effect，改靠姓名条颜色区分说话人（C06-D4）。保留 `ef_hl_turn` 的现实现表现是整屏 `#2E86DE` 底色闪现（同 §4.2.6 修正框的 highlight 口径），非字幕词变色。
+
 **自动化断言（分层）**
 - IR 层：`words=20` 单调不重叠；`elements=8`、`animations=6`、`effects=3`；软字幕 asset kind=subtitle；render.subtitle.minCueSec=1.2；11 条 cue 时间码单调递增。
 - DOM 层：两条画面 image + 两条字幕 text + 两条姓名 text 节点存在；中文文本与 script 对应句一致；英文 cue 数与中文一致。
@@ -1862,6 +1889,19 @@
 - F-C06-02：注入一条 <1.2s 的极短 cue。期望：目标 schema L0 校验拒绝或告警（`E_VIDEO_INVALID_PARAMS`）；现状代码无最短时长校验，断言需标注该缺口。
 - F-C06-03：锚定词"团队"出现三次，注入时 occurrence 缺失。期望：目标 schema 返回 `E_VIDEO_ANCHOR_AMBIGUOUS`；现状取首个匹配，可能挂错说话人侧。
 - F-C06-04：SRT assetKey 非 `video/` 前缀。期望：IR 校验拒绝（`[代码] ir.go:355-365`），返回 `E_VIDEO_INVALID_IR`。
+
+> **[修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 M-C06-01 / example/internal/video/testdata/spec-audit-report.json M-C06-01）上方 F-C06-01 的期望行为描述过时，原文划线保留如下**：
+>
+> ~~F-C06-01：注入无 libass 环境。期望：`BurnSubtitles` 返回 `ErrNoLibass`，管线降级为软字幕轨交付，不报错崩溃 `[代码] encode.go:188-238`。~~
+>
+> 按 §8.2 两列口径修正后的期望：
+>
+> | 口径 | 判定 | 依据 |
+> |---|---|---|
+> | 结构可表达性（capx 层） | ✅（能力在位） | `BurnSubtitles` 无 libass 时返回 `ErrNoLibass`（encode.go:193，现 :211-240 行号区间），调用方**可以**据此自行选择降级——单测 `TestBurnSubtitles_NoLibassDegrades` 证明哨兵在位 |
+> | 视觉达标性（管线层自动降级） | ⛔（不存在） | `example/internal/video/render/render_pipeline.go:220-223`：burn 分支把 `BurnSubtitles` 的错误（含 `ErrNoLibass`）**原样上抛为渲染失败**——"管线自动降级为软字幕轨交付、不报错崩溃"的选择逻辑在管线层不存在；soft 模式也只落盘 SRT sidecar，mov_text 封装未实现（render_pipeline.go:212 注释自承 follow-up） |
+>
+> 修正后 F-C06-01 应表述为：注入无 libass 环境，期望**渲染失败**（错误信息含 `ErrNoLibass`），而非"降级软字幕交付"；§4.4.2 字幕策略第一行"无 libass 返回 ErrNoLibass 降级为软字幕轨"同受此修正约束（现读法应为"仅返回 ErrNoLibass，降级由调用方负责，管线未做"）。
 
 #### 4.4.7 当前可实现性小结
 **结论**：分屏构图、DOM 层级、姓名条与字幕同框可落地；**双音轨、真正交叉淡化转场、软字幕轨时间轴渲染、字幕最短时长校验、行首标点 / 词中断行校验** 是阻塞项。访谈类"说话人—字幕同步"在改稿后最易错位，需靠锚点 occurrence 与帧级断言兜底。
@@ -2337,6 +2377,8 @@
 
 - 证据 `[代码]`：特效目标 `fx.type === 'counter' ? counterHost(fx) : canvas`（`timeline-builder.js:182`）；`highlight` 对目标节点做 `backgroundColor` 补间（`:95-101`）；`Effect` 无 `targetElementId` 字段（`ir.go:86-92`）。
 - 结论：逐词高亮 = 整屏底色闪现；单词/单元素的背景色、描边、放大强调在现特效体系内做不了。
+
+> **[修正 2026-11-15 round1]（依据 delivery-audit-video-studio-round1 §2.2 X-4 / example/internal/video/testdata/spec-audit-report.json X-4）本节原只点名 highlight/pulse 的整层作用域，实测确认作用域缺口为全量**：shake、fade 与 highlight/pulse 一致，同样全部作用于 `#canvas` 整层（timeline-builder.js:79-112 五个 effectBuilder 均无 target 概念；`:182` 三元表达式只有 counter 走 counterHost、其余一律 canvas）。上表两列档位维持不变；本节降级配方"特效层不可用于单元素"的结论按全量 5 类特效（pulse/counter/highlight/shake/fade）成立，其中 counter 是唯一有非 canvas 目标的类型（counterHost 自建 div），但其目标同样不可定位、不可指定元素。
 
 **2) 现 IR 降级配方与元素预算换算**
 - 替代：每个词建一个独立 `text` 元素，元素自身动画承担强调——`scaleIn` 做放大（`fromValue=1→1.15` 再回落需两条动画）、`rotate` 做倾斜、`move` 做位移。特效层的 `highlight/pulse` 不可用于单元素（pulse 同样作用于 canvas，`timeline-builder.js:182,80-84`）。
@@ -3175,6 +3217,28 @@ F-SEE-01 帧数口径已统一；NaN / 类型校验 ──→ L1 / L3 seek 输�
 这份文档当前可以支撑三件事：按 §3/§4 构造 IR（字段与锚点已校验闭合）；按 §7 的 L0/L1 立刻执行低成本测试；按 §8.2 的两列口径判断"某个效果到底算不算做出来了"。
 
 它不能支撑一件事：**宣称任何一项已经通过**。全文没有任何一条 `[实测]` 记录来自这九个案例的出片；`[实测]` 只覆盖工具链本身（测试能否跑、契约是否漂移、编码器是否拒绝奇数尺寸），不覆盖任何一个案例的画面质量。
+
+### 8.8 round1 实测差异登记（2026-11-15 第 1 批实测，Medium/Low 不逐条改正文）
+
+第 1 批实测（delivery-audit-video-studio-round1-2026-11-15.md，代码基线 HEAD `d25362e`）共产出 **16 条文档-现实差异**，全量清单（含 file:line 证据与 actual_behavior）登记在 `example/internal/video/testdata/spec-audit-report.json`（C04 8 条 + C06 8 条，另有 cross_cutting_findings X-1..X-4）。**其中 4 条 High 已按两列口径在正文修正**（M-C04-04 → §4.2.4 修正框；M-C04-07 → §4.2.3/§4.4.3 修正框；M-C06-01 → §4.4.6 修正框；X-4 → §1.8/§5.12/§4.2.6/§4.4.6 修正框）。其余 Medium/Low 不逐条改正文，在此登记入口，执行 L1/L2 前必须对照：
+
+| ID | 级别 | 一句话差异 | 正文涉及处 |
+|---|---|---|---|
+| M-C04-01 | medium | "z 值仅作字段保留"已过时：z 是活的（timeline-builder.js:66 `zIndex = 1+el.z`），本案片尾卡覆盖正依赖它 | §4.2.4 多 track 行 |
+| M-C04-02 | low | counter "固定左上"结论成立，但引用行号漂移 232-241→245-255 | §4.2.4 T-10 行 |
+| M-C04-03 | medium | nearest 静默回退结论成立，行号漂移 500-575→507-546；另 `E_VIDEO_ANCHOR_AMBIGUOUS` 错误码不存在（只有 `E_VIDEO_ANCHOR_NOT_FOUND`） | §4.2.4 锚定行、§4.2.6 F-C04-03 |
+| M-C04-05 | low | "现实现 round=1800"表述过时：帧数公式已统一为 ceil 单源（service.go:898-911）；本案数值无差 | §4.2.1 案例头 |
+| M-C04-06 | low | 错误码名实际是 `E_VIDEO_IR_INVALID`（非 `E_VIDEO_INVALID_IR`），src 校验行号漂移 355-365→365-372 | §4.2.6 F-C04-04 |
+| M-C04-08 | medium | §4.2.3 目标 IR 的 anchor `{wordId,...}` 照抄会因缺 `anchor.text` 校验失败（ir.go:260-262），须先做 wordId→{text,occurrence} 映射 | §4.2.3 |
+| M-C06-02 | low | "预览不播音频"结论成立，引用行号漂移 36-40→31-33 | §4.4.2 音频策略 |
+| M-C06-03 | medium | `E_VIDEO_ANCHOR_AMBIGUOUS` 不存在、不会 400；"取首个匹配"不准确（occurrence 越界落 same_text 最近候选） | §4.4.6 F-C06-03 |
+| M-C06-04 | low | CJK 硬切/行首标点结论成立，行号漂移；且 `isCJKPunct` 标点集已存在但未被折行引用（subtitle.go:150-156） | §4.4.4 T-01 行 |
+| M-C06-05 | low | 最短 cue 时长无校验结论成立；L0 校验应加在 SRT 生成处（BuildCues），IR 层无 cue 概念 | §4.4.4 / §4.4.6 F-C06-02 |
+| M-C06-06 | medium | Element 结构无 `params` 字段，`extra` 存在但投影仪不输出——"params 内保留扩展键"说法自相矛盾 | §4.4.4 动画参数层级行 |
+| M-C06-07 | medium | 结论句帧 2025 vs 词锚 2130 差 105 帧（文档内部矛盾）——已在 §4.4.5 帧表处加"二选一"标注（L1 按词锚 2130） | §4.4.5 帧表 |
+| M-C06-08 | low | "软字幕 asset kind=subtitle"、"11 条 cue 时间码"断言对象不存在：现 IR 无 asset 表，cue 是 SRT(words) 运行时输出，属 L0 断言 | §4.4.6 IR 层断言 |
+
+另两条 cross-cutting：X-2（ceil 单源口径，全文档"现实现 round="表述统一按此改）与 X-3（目标 schema→现实现 7 条转换规则，含 §4.2.3/§4.4.3 修正框点名的"顶层 animations 内嵌"——实测 projector 丢弃顶层动画）。两案降级 IR 已过 `videoapp.Validate`（c04.degraded.json 1800 帧 / c06.degraded.json 2250 帧），是 §4.2.3/§4.4.3 目标 schema 的可运行替代。round1 其余产出（L0/L1/L2 判定、M1 门槛、修复提交 F-DB-1/F-G3-1、缺陷 D-01）见 delivery-audit-video-studio-round1-2026-11-15.md。
 
 ## 附录 A：目标 IR 字段速查与实现映射
 

@@ -1,0 +1,546 @@
+{
+  "case": "VS-C04",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-15T17:14:43+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": [
+    "[F000] 全部元素已挂载 DOM（C04-D6 无显隐区间），最早锚点 6.2s→F186",
+    "[F180] 期望 vs 实际：帧表把生长锚写成 w05'总量'第2次出现≈6.2s→186；降级 IR 实际生长锚是'二零二二'(w05, 6.6s)→F198。锚词标注与 IR 不一致，M2 需统一口径（相机 pan 锚'总量'occ1=6.2s→F186 才与帧表一致）",
+    "[F216] 期望 vs 实际：帧表称 F216 三柱全可见（柱高比例 180:240:330）；实际仅 bar22 可见（share=0.45，b23=0.000 b24=0.000）——bar23 生长锚 8.7s→F261、bar24 锚 10.1s→F303 都未到；三柱最早同屏 ≈F327（10.9s，bar24 落定）",
+    "[F216] T-11 降级实证：整柱中心 scaleIn（transformOrigin 50% 50%）——F216 生长进行中（198+24 帧的 75%），柱底悬空 3px（bottom_row=797 vs 最终基线 800）；'自底部立起'与'柱顶 y≈620±10'检查在入场帧均不可评",
+    "[F216] counter 数字不贴柱顶（T-10 降级）：ef_bar24_cnt 自建 div 固定画布左上 (0,0)，柱顶金额标签省略",
+    "[F540] 三柱此时全部立起；camera pan（186→546，末端 -60px）进行至 98%，柱位偏左 ≈59px",
+    "[F540] 期望 vs 实际：'首点 3.0% 应在左下'不成立——9 帧后出现的也只是一块 440×300 实心蓝矩形（C04-D1 降级，无三点几何、无逐段描线），标签与纵轴刻度静态文本兜底未配置",
+    "[F540] counter ef_bar24_cnt 窗口 303–339 已过：F540 为窗口后定格态。ink=0.2329（23%）——D-01 已修（pause 双参）时这是 onUpdate 停更后的最终值定格（to=1349084 亿元 滚动完的静态尾值）；D-01 未修时应为 0",
+    "[F720] 降级（重要）：el_line 是 440×300 实心矩形 shape，非折线——三点几何完全丢失，A-C04-03 '点2(5.2%) y 高于点1/点3' 降级不适用（区域几何无点可判）",
+    "[F720] 整线 scaleIn 后无逐段生长动画（C04-D1）：'先点后线'节奏与口播 S4 不同步",
+    "[F900] 期望 vs 实际：文档选 900 为封面候选，但锚点使环 F909 才入场——封面帧取 900 得到的是'标题+三柱+实心矩形'无环画面；M2 若要环入封面需改锚词或取 F939+",
+    "[F900] highlight 窗口 909→934 此刻也未开始",
+    "[F960] D-01 状态：seekTimeline pause(t,false) 双参已落地（渲染前由并行 agent 修入）——counter onUpdate 在 seek 中触发，数字滚动可见",
+    "[F960] 降级遗留 ①：counter div 仍堆在画布 (0,0) 而非环心（T-10 定位缺陷，帧表'counter 在画布左上'预判被证实）",
+    "[F960] 降级遗留 ②：counter 96px/700 白字（projector.go .el-text.counter 默认 color:#fff）在 #F2F5F9 浅底上不可读——数字'可见'但不可'可读'（M2 需配色）",
+    "[F960] 降级遗留 ③：环形状退化为圆角方块（C04-D7）：border-radius 8px，无 56.7/43.3 扇区划分",
+    "[F1260] 期望 vs 实际（更强）：高亮在其窗口内也不可见——作用目标为 #canvas 整层（timeline-builder.js target=canvas），被全画布 el_bg #F2F5F9 完全遮挡；F916 探针证明峰值帧除环外全画布 amber≈0（C04-D8 实测强于文档'整屏闪现'——闪现根本穿不透）",
+    "[F1260] camera pan 已于 F546 结束，三柱静止在最终位 x=120/300/480（-60px 平移完成）",
+    "[F1620] A-C04-04 降级不适用（hard prompt #1）；说明卡灰色文字可见",
+    "[F1620] gray=0.0889",
+    "[F1799] BGM 淡出/loudnorm/amix 截断不属本链路（L1 still 无音轨；L2 已单独覆盖）"
+  ],
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 303,
+        "anchor_text": "二零二四",
+        "owner": "effect",
+        "owner_id": "ef_bar24_cnt",
+        "reason": "exact",
+        "word_index": 8,
+        "word_start_sec": 10.1
+      },
+      {
+        "anchor_frame_at_fps": 957,
+        "anchor_text": "五十六点七",
+        "owner": "effect",
+        "owner_id": "ef_ring_cnt",
+        "reason": "exact",
+        "word_index": 17,
+        "word_start_sec": 31.9
+      },
+      {
+        "anchor_frame_at_fps": 909,
+        "anchor_text": "产业",
+        "owner": "effect",
+        "owner_id": "ef_hl_growth",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 30.3
+      },
+      {
+        "anchor_frame_at_fps": 198,
+        "anchor_text": "二零二二",
+        "owner": "animation",
+        "owner_id": "an_bar22_grow",
+        "reason": "exact",
+        "word_index": 5,
+        "word_start_sec": 6.6
+      },
+      {
+        "anchor_frame_at_fps": 186,
+        "anchor_text": "总量",
+        "owner": "animation",
+        "owner_id": "an_camera_pan_bar22",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 6.2
+      },
+      {
+        "anchor_frame_at_fps": 261,
+        "anchor_text": "二零二三",
+        "owner": "animation",
+        "owner_id": "an_bar23_grow",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 8.7
+      },
+      {
+        "anchor_frame_at_fps": 186,
+        "anchor_text": "总量",
+        "owner": "animation",
+        "owner_id": "an_camera_pan_bar23",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 6.2
+      },
+      {
+        "anchor_frame_at_fps": 303,
+        "anchor_text": "二零二四",
+        "owner": "animation",
+        "owner_id": "an_bar24_grow",
+        "reason": "exact",
+        "word_index": 8,
+        "word_start_sec": 10.1
+      },
+      {
+        "anchor_frame_at_fps": 186,
+        "anchor_text": "总量",
+        "owner": "animation",
+        "owner_id": "an_camera_pan_bar24",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 6.2
+      },
+      {
+        "anchor_frame_at_fps": 549,
+        "anchor_text": "增速",
+        "owner": "animation",
+        "owner_id": "an_line_draw",
+        "reason": "exact",
+        "word_index": 10,
+        "word_start_sec": 18.3
+      },
+      {
+        "anchor_frame_at_fps": 909,
+        "anchor_text": "产业",
+        "owner": "animation",
+        "owner_id": "an_ring_in",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 30.3
+      },
+      {
+        "anchor_frame_at_fps": 909,
+        "anchor_text": "产业",
+        "owner": "animation",
+        "owner_id": "an_ring_num_in",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 30.3
+      },
+      {
+        "anchor_frame_at_fps": 549,
+        "anchor_text": "增速",
+        "owner": "animation",
+        "owner_id": "an_note_in",
+        "reason": "exact",
+        "word_index": 10,
+        "word_start_sec": 18.3
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1800 frames in 3m10.516s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c04.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c04/",
+    "html_bytes": 92104,
+    "ir_sha256": "9613004ca75b5881a6ead340317225bc3cb2df942de38b865f5f25d6d37b9c5a",
+    "meta_json": "example/internal/video/testdata/golden/c04/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c04-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": [
+    {
+      "frame": 1620,
+      "id": "A-C04-04",
+      "measured": "bar_zone_blue_share=0.4333 (43.3%)",
+      "reason": "无元素卸载（C04-D6）：三图常驻 DOM 至片尾，蓝色像素必然 ≫2%；断言按 spec-audit 指示标记降级不适用，实测值留档",
+      "verdict": "degraded_na"
+    }
+  ],
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 196,
+      "time_sec": 6.533333333333333,
+      "status": "probe",
+      "probe_label": "bar22-entry-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 22208
+    },
+    {
+      "frame": 198,
+      "time_sec": 6.6,
+      "status": "probe",
+      "probe_label": "bar22-entry-series",
+      "structure_checks": {
+        "bar22_first_visible_frame": 200,
+        "dimensions_ok": true,
+        "f196_blue_share": 0,
+        "f196_mae_vs_prev": 0,
+        "f198_blue_share": 0,
+        "f198_mae_vs_prev": 0,
+        "f200_blue_share": 0.0228,
+        "f200_mae_vs_prev": 3.2414,
+        "f204_blue_share": 0.1589,
+        "f204_mae_vs_prev": 17.3322,
+        "f210_blue_share": 0.3647,
+        "f210_mae_vs_prev": 26.5551,
+        "f216_blue_share": 0.451,
+        "f216_mae_vs_prev": 10.532,
+        "frames_json_claimed_entry": "186±2",
+        "png_decoded": true
+      },
+      "duration_ms": 22412
+    },
+    {
+      "frame": 200,
+      "time_sec": 6.666666666666667,
+      "status": "probe",
+      "probe_label": "bar22-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 22609
+    },
+    {
+      "frame": 204,
+      "time_sec": 6.8,
+      "status": "probe",
+      "probe_label": "bar22-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 23011
+    },
+    {
+      "frame": 210,
+      "time_sec": 7,
+      "status": "probe",
+      "probe_label": "bar22-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 23613
+    },
+    {
+      "frame": 916,
+      "time_sec": 30.533333333333335,
+      "status": "probe",
+      "probe_label": "highlight-peak-occlusion-proof",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "full_frame_amber_share_at_peak_excl_ring": 0,
+        "png_decoded": true,
+        "ring_amber_share_at_peak": 0.4124,
+        "verdict": "occluded (amber ~0 outside ring at mathematical peak 916 — canvas flash invisible behind el_bg)",
+        "window_math": "ef_hl_growth 锚 产业@30.3s→F909；上冲 0.25s(7.5f)→峰值 ≈F916.5；回落至 ≈F934。环自身从 F909 scaleIn（同为 #F5A623），全帧统计须排除环矩形"
+      },
+      "duration_ms": 95296
+    }
+  ],
+  "recipe": {
+    "duration_frames": 1800,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1080,
+    "ir_sha256": "9613004ca75b5881a6ead340317225bc3cb2df942de38b865f5f25d6d37b9c5a",
+    "ir_source_file": "example/internal/video/testdata/ir/c04.degraded.json",
+    "width": 1920
+  },
+  "run_id": "l1-04-20261115-171132-7f6b",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "ok",
+      "expect": "标题卡可见：el_title '经济总量 · 增速 · 服务业占比' scaleIn 进行中（0/24帧），背景 #F2F5F9 铺满；降级差异：柱/线/环元素已挂载 DOM（无 startFrame/endFrame 显隐区间，C04-D6），但 scale=0 占位不可见",
+      "actual": "标题卡 scale=0 未显示；柱/线/环/说明全部未显示（fromTo immediateRender 使各 scaleIn 元素在锚点前保持 from 态 scale=0）；counter host 空文本（D-01）；画面仅 el_bg #F2F5F9——符合降级预期",
+      "structure_checks": {
+        "bar22_blue_share": 0,
+        "bar23_blue_share": 0,
+        "bar24_blue_share": 0,
+        "caption_ink_share": 0,
+        "counter_origin_ink_share": 0.0003,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "line_blue_share": 0,
+        "note_gray_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "ring_amber_share": 0,
+        "title_navy_share": 0
+      },
+      "duration_ms": 2214,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-000.png",
+      "notes": [
+        "全部元素已挂载 DOM（C04-D6 无显隐区间），最早锚点 6.2s→F186"
+      ]
+    },
+    {
+      "frame": 24,
+      "time_sec": 0.8,
+      "status": "ok",
+      "expect": "标题 scaleIn 落定 scale=1；三指标标题一行可读（视觉断言 A-C04-01 前置）",
+      "actual": "标题 scaleIn 落定（24/24 帧），墨水占比 12.6%（A-C04-01 视觉断言前置）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "title_navy_share": 0.1262
+      },
+      "duration_ms": 4840,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-024.png"
+    },
+    {
+      "frame": 180,
+      "time_sec": 6,
+      "status": "mismatch",
+      "expect": "柱状图区激活：el_bar22 scaleIn 开始（锚点 w05'总量'第2次出现≈6.2s→帧186，±2 帧窗口内）；降级差异：柱为整柱 scaleIn（中心缩放），非 T-11 底部基线生长",
+      "actual": "F180 柱区无蓝色（bar22 share=0.0000）——帧表称 bar22 生长在 186±2 帧开始，实际 first-visible=帧 200",
+      "structure_checks": {
+        "bar22_blue_share": 0,
+        "bar22_first_visible_frame_probe": 200,
+        "bar_zone_blue_share": 0,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 20583,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-180.png",
+      "notes": [
+        "期望 vs 实际：帧表把生长锚写成 w05'总量'第2次出现≈6.2s→186；降级 IR 实际生长锚是'二零二二'(w05, 6.6s)→F198。锚词标注与 IR 不一致，M2 需统一口径（相机 pan 锚'总量'occ1=6.2s→F186 才与帧表一致）"
+      ]
+    },
+    {
+      "frame": 216,
+      "time_sec": 7.2,
+      "status": "mismatch",
+      "expect": "三根柱全部可见；柱高比例 ≈180:240:330（A-C04-01：柱顶 y≈620/560/470 ±10px，柱宽 120px）。降级差异：counter 数字不贴柱顶——ef_bar24_cnt 自建 div 固定画布左上原点 (0,0)，柱顶金额标签需另配静态 text（降级 IR 用整柱 scaleIn 近似，柱顶标签省略）",
+      "actual": "1/3 柱可见（bar22 share=0.45），柱底悬空=3px（中心缩放）",
+      "structure_checks": {
+        "bar22_baseline_gap_px": 3,
+        "bar22_blue_share": 0.451,
+        "bar22_bottom_row": 797,
+        "bar22_final_baseline_row": 800,
+        "bar22_top_row": 622,
+        "bar23_blue_share": 0,
+        "bar24_blue_share": 0,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 24260,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-216.png",
+      "notes": [
+        "期望 vs 实际：帧表称 F216 三柱全可见（柱高比例 180:240:330）；实际仅 bar22 可见（share=0.45，b23=0.000 b24=0.000）——bar23 生长锚 8.7s→F261、bar24 锚 10.1s→F303 都未到；三柱最早同屏 ≈F327（10.9s，bar24 落定）",
+        "T-11 降级实证：整柱中心 scaleIn（transformOrigin 50% 50%）——F216 生长进行中（198+24 帧的 75%），柱底悬空 3px（bottom_row=797 vs 最终基线 800）；'自底部立起'与'柱顶 y≈620±10'检查在入场帧均不可评",
+        "counter 数字不贴柱顶（T-10 降级）：ef_bar24_cnt 自建 div 固定画布左上 (0,0)，柱顶金额标签省略"
+      ]
+    },
+    {
+      "frame": 540,
+      "time_sec": 18,
+      "status": "mismatch",
+      "expect": "折线图区出现（锚点 w10'增速'第2次出现 18.3s→帧549）；首点 3.0% 应在左下。降级差异：无逐段描线，el_line 整体 60 帧 scaleIn 淡入；三点/连线出现顺序不可控（C04-D1）；'3.0%' '5.2%' '5.0%' 标签与纵轴刻度为静态文本兜底",
+      "actual": "F540 折线区无蓝色（share=0.0000）——帧表称折线区 18.0s 出现；实际 IR 锚'增速'occ1=18.3s→F549（差 9 帧）",
+      "structure_checks": {
+        "bar_zone_blue_share": 0.4333,
+        "counter_origin_ink_share": 0.2329,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "line_blue_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "ring_amber_share": 0
+      },
+      "duration_ms": 57061,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-540.png",
+      "notes": [
+        "三柱此时全部立起；camera pan（186→546，末端 -60px）进行至 98%，柱位偏左 ≈59px",
+        "期望 vs 实际：'首点 3.0% 应在左下'不成立——9 帧后出现的也只是一块 440×300 实心蓝矩形（C04-D1 降级，无三点几何、无逐段描线），标签与纵轴刻度静态文本兜底未配置",
+        "counter ef_bar24_cnt 窗口 303–339 已过：F540 为窗口后定格态。ink=0.2329（23%）——D-01 已修（pause 双参）时这是 onUpdate 停更后的最终值定格（to=1349084 亿元 滚动完的静态尾值）；D-01 未修时应为 0"
+      ]
+    },
+    {
+      "frame": 720,
+      "time_sec": 24,
+      "status": "ok",
+      "expect": "折线三点与连线完整可见；点2（5.2%）y 位置高于点1与点3（A-C04-03：区域 x 800–1240, y 360–660 内）。降级差异：整线 scaleIn 后不再有逐段生长动画",
+      "actual": "折线区蓝色占比 1.00——整块实心矩形可见（draw 于 F549 起 60 帧，F609 落定）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "line_blue_share": 0.9994,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 75479,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-720.png",
+      "notes": [
+        "降级（重要）：el_line 是 440×300 实心矩形 shape，非折线——三点几何完全丢失，A-C04-03 '点2(5.2%) y 高于点1/点3' 降级不适用（区域几何无点可判）",
+        "整线 scaleIn 后无逐段生长动画（C04-D1）：'先点后线'节奏与口播 S4 不同步"
+      ]
+    },
+    {
+      "frame": 900,
+      "time_sec": 30,
+      "status": "mismatch",
+      "expect": "占比环出现（锚点 w15'产业' 30.3s→帧909 ±2帧）：el_ring scaleIn 30 帧 + el_ring_num '56.7%' scaleIn 20 帧。封面帧候选（文档选 900）。降级差异：环为整圆 shape，无 56.7/43.3 扇区划分（C04-D7）——橙圆 + 灰底需素材侧预置，降级 IR 只保留单色圆",
+      "actual": "F900（文档封面候选帧）环区无橙色（share=0.0000）——IR 锚'产业'=30.3s→F909，环 scaleIn 30 帧至 F939 落定；封面候选帧不含主图",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "full_frame_amber_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "ring_amber_share": 0,
+        "ring_num_navy_share": 0
+      },
+      "duration_ms": 93642,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-900.png",
+      "notes": [
+        "期望 vs 实际：文档选 900 为封面候选，但锚点使环 F909 才入场——封面帧取 900 得到的是'标题+三柱+实心矩形'无环画面；M2 若要环入封面需改锚词或取 F939+",
+        "highlight 窗口 909→934 此刻也未开始"
+      ]
+    },
+    {
+      "frame": 960,
+      "time_sec": 32,
+      "status": "ok",
+      "expect": "环心数字 56.7% 可见；ef_ring_cnt counter 开始滚动（锚点 w17'五十六点七' 31.9s→帧957）。降级差异：counter div 在画布左上 (0,0) 而非环心，96px/700 固定样式",
+      "actual": "环可见（amber=0.98，实为 280×280 圆角方块非圆环）、静态 56.7% 环心数字可见（navy=0.088）、counter 数字可见（origin ink=0.2788）——D-01 修复已在像素层证实",
+      "structure_checks": {
+        "counter_origin_ink_share": 0.2788,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "ring_amber_share": 0.9818,
+        "ring_num_navy_share": 0.0885
+      },
+      "duration_ms": 99793,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-960.png",
+      "notes": [
+        "D-01 状态：seekTimeline pause(t,false) 双参已落地（渲染前由并行 agent 修入）——counter onUpdate 在 seek 中触发，数字滚动可见",
+        "降级遗留 ①：counter div 仍堆在画布 (0,0) 而非环心（T-10 定位缺陷，帧表'counter 在画布左上'预判被证实）",
+        "降级遗留 ②：counter 96px/700 白字（projector.go .el-text.counter 默认 color:#fff）在 #F2F5F9 浅底上不可读——数字'可见'但不可'可读'（M2 需配色）",
+        "降级遗留 ③：环形状退化为圆角方块（C04-D7）：border-radius 8px，无 56.7/43.3 扇区划分"
+      ]
+    },
+    {
+      "frame": 1260,
+      "time_sec": 42,
+      "status": "mismatch",
+      "expect": "镜5 三图同屏缩略并置：降级差异——无 group/镜头对象，60% 缩放需逐元素 move+scale 近似，降级 IR 未实现镜5 缩略（三图保持原尺寸）；结论句在字幕区由 el_caption 承载。ef_hl_growth 高亮触发：作用于整个 #canvas 背景层而非目标词（C04-D8，timeline-builder.js:97-100 高亮目标是 canvas）",
+      "actual": "三图同屏原尺寸（镜5 60% 缩略未实现，符合降级预期）；但帧表称本帧'ef_hl_growth 高亮触发'不成立——高亮锚'产业'=30.3s→F909，窗口 909–934，F1260 早已结束",
+      "structure_checks": {
+        "bar22_blue_share": 0.2424,
+        "bar23_blue_share": 0.3235,
+        "bar24_blue_share": 0.4451,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "full_frame_amber_share_excl_ring": 0,
+        "highlight_probe_f916_verdict": "occluded (amber ~0 outside ring at mathematical peak 916 — canvas flash invisible behind el_bg)",
+        "line_blue_share": 0.9994,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "ring_amber_share": 0.9818
+      },
+      "duration_ms": 134929,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-1260.png",
+      "notes": [
+        "期望 vs 实际（更强）：高亮在其窗口内也不可见——作用目标为 #canvas 整层（timeline-builder.js target=canvas），被全画布 el_bg #F2F5F9 完全遮挡；F916 探针证明峰值帧除环外全画布 amber≈0（C04-D8 实测强于文档'整屏闪现'——闪现根本穿不透）",
+        "camera pan 已于 F546 结束，三柱静止在最终位 x=120/300/480（-60px 平移完成）"
+      ]
+    },
+    {
+      "frame": 1620,
+      "time_sec": 54,
+      "status": "degraded_na",
+      "expect": "片尾说明卡覆盖。降级差异（重要）：无元素卸载——三图与标题仍在 DOM（C04-D6），仅被后 append 的 el_note 区覆盖；A-C04-04 的'柱图区蓝色像素 ≤2%'在降级渲染下会失败（柱仍可见），该断言需标记为降级不适用",
+      "actual": "柱图区蓝色 43.3%（≫2% 阈值）——'片尾说明卡覆盖'不成立：el_note 只是一条 900×40 灰字注释行（y830, z=10），不遮挡任何图（柱 z=5 只被更高 z 覆盖其自身矩形）",
+      "structure_checks": {
+        "bar_zone_blue_share": 0.4333,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "doc_assertion": "A-C04-04 柱图区蓝色像素 ≤2%",
+        "note_gray_share": 0.0889,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 171457,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-1620.png",
+      "notes": [
+        "A-C04-04 降级不适用（hard prompt #1）；说明卡灰色文字可见",
+        "gray=0.0889"
+      ]
+    },
+    {
+      "frame": 1799,
+      "time_sec": 59.96666666666667,
+      "status": "ok",
+      "expect": "尾帧：说明卡保持；DurationFrames=ceil(60×30)=1800 帧（service.go:898 单源公式，timeline-builder.js:37 同步 ceil）；MP4 时长 60.0s±0.1s；BGM 淡出不可实现（无 loop/loudnorm/淡出滤镜，amix duration=first 截断）",
+      "actual": "尾帧：说明卡保持、三图保持（无淡出）；DurationFrames=1800（ceil 单源）帧循环完整渲染",
+      "structure_checks": {
+        "bar_zone_blue_share": 0.4333,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "duration_frames_rendered": 1800,
+        "note_gray_share": 0.0889,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 189808,
+      "artifact": "example/internal/video/testdata/golden/c04/frame-1799.png",
+      "notes": [
+        "BGM 淡出/loudnorm/amix 截断不属本链路（L1 still 无音轨；L2 已单独覆盖）"
+      ]
+    }
+  ],
+  "totals": {
+    "frames_planned": 1800,
+    "frames_rendered": 1800,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 11,
+    "probe_frames_kept": 6,
+    "render_ms_per_frame": 105.84,
+    "render_total_ms": 190515,
+    "render_wall_clock": "3m11s",
+    "samples_degraded_na": 1,
+    "samples_fail": 0,
+    "samples_mismatch": 5,
+    "samples_ok": 5
+  }
+}

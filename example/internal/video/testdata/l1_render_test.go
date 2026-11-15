@@ -436,21 +436,22 @@ func TestL1RenderC01Keyframes(t *testing.T) {
 					status = "fail"
 					notes = append(notes, fmt.Sprintf("price ink %.1f%% < 2%%", pr*100))
 				}
-				notes = append(notes, fmt.Sprintf("degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Suppression defect aside, even the pre-tween state shows no 'from' value — GSAP tween onStart also suppressed during seeks (origin zone dark_ratio=%.4f)", orD))
+				notes = append(notes, fmt.Sprintf("degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Post-D-01-fix the pre-tween state renders no 'from' value either: before its start the tween is at progress 0 and GSAP has not rendered once, so textContent is still empty (probe: seek to 5s then back past start shows '8200 件' only after the tween has run once — origin zone dark_ratio=%.4f)", orD))
 			case 360:
-				checks["counter_origin_white_ratio"] = orW
+				// D-01 FIXED: capx seekTimeline now pauses with
+				// suppressEvents=false (pause(t,false)), so the counter tween's
+				// onUpdate fires during seeks and writes digits; the counter
+				// host uses dark ink (#2B2118, readable on the cream bg) instead
+				// of .el-text's default white. Assertion switched from
+				// white_ratio (pre-fix sentinel) to dark_ratio (the actual
+				// glyph pixels): digits "8xxx 件" occupy >=0.5% of the origin
+				// zone as dark pixels.
 				checks["counter_origin_dark_ratio"] = orD
-				checks["counter_digits_rendered"] = orW >= 0.005
-				// KNOWN DEFECT (root-caused by TestProbeCounterDOMState, see
-				// report evidence): capx seekTimeline calls tl.pause(t) with a
-				// single argument; GSAP defaults suppressEvents=true, which
-				// suppresses onUpdate during seeks. The counter tween exists
-				// and advances (progress 0.067 at t=12), but its onUpdate
-				// never runs, so textContent stays "" on every seeked frame.
-				// pause(12, false) renders "8767 件" — proving the mechanism.
-				status = "fail"
-				notes = append(notes, "KNOWN DEFECT (root-caused): counter digits absent on ALL seeked frames — capx tl.pause(t) suppresses GSAP onUpdate events (suppressEvents default true); tween object advances but textContent never updates. Probe: pause(12,false) yields '8767 件'.")
-				notes = append(notes, fmt.Sprintf("counter host node exists in DOM (probe: id=counter-ef_sales, 96px/700, color rgb(255,255,255) WHITE on cream bg — style defect too) but textContent='' and rect 0x0; origin zone white_ratio=%.4f dark_ratio=%.4f", orW, orD))
+				checks["counter_digits_rendered"] = orD >= 0.005
+				if orD < 0.005 {
+					status = "fail"
+					notes = append(notes, fmt.Sprintf("counter digits absent at F360 (origin dark_ratio %.4f < 0.5%%) — D-01 regression (GSAP onUpdate suppression or counter ink not rendering)", orD))
+				}
 			case 396:
 				checks["bar_orange_ratio"] = br
 				checks["bar_white_text_ratio"] = bar["white_ratio"]
@@ -538,12 +539,12 @@ func TestL1RenderC01Keyframes(t *testing.T) {
 		"degradations": degradationNotes(outs),
 		"defects": []map[string]any{
 			{
-				"id":            "D-01",
-				"found":         "counter renders no digits on ANY seeked frame (not a layout degradation)",
-				"evidence":      "TestProbeCounterDOMState (testdata/probe_dom_test.go, real browser): counter host div exists (id=counter-ef_sales, 96px/700/white) but textContent='' at seeks to 5s/12s/13.5s; timeline child tween present (start=11.92s, dur=1.2s, target v 8200->12600, progress 0.067 at t=12). pause(12, false) => textContent becomes '8767 件'.",
-				"root_cause":    "platform/capx/renderer.go seekTimeline calls tl.pause(tSec) with one argument; GSAP Timeline.pause(atTime, suppressEvents) defaults suppressEvents=true, which skips callbacks (onUpdate/onStart) during the seek render. timeline-builder.js counter effect relies solely onUpdate to write digits.",
-				"impact":        "counter effect unusable end-to-end in render path: L1 F360/A-C01-03 fails; any MP4 rendered through capx would show an empty counter for its whole window. F449 target 'counter settles at 12,600' also void.",
-				"fix_direction": "either capx seekTimeline pauses with suppressEvents=false (pause(t, false)), or timeline-builder.js counter writes text via tween progress in a non-event path (e.g. onUpdate rendered through gsap's render loop) — framework decision, belongs to capx+builder owners.",
+				"id":         "D-01",
+				"status":     "fixed",
+				"found":      "counter rendered no digits on ANY seeked frame (fixed in this run)",
+				"evidence":   "TestProbeCounterDOMState (testdata/probe_dom_test.go, real browser): pre-fix textContent='' at seeks to 5s/12s/13.5s; pause(12,false) => '8767 件'. Post-fix probe: textContent non-empty at t=12 and 13.5, empty before tween start (5s).",
+				"root_cause": "platform/capx/renderer.go seekTimeline called tl.pause(tSec) with one argument; GSAP Timeline.pause(atTime, suppressEvents) defaults suppressEvents=true, which skips callbacks (onUpdate/onStart) during the seek render. Second half: counter host inherited .el-text's default white on light backgrounds (contrast ~1.06:1 on VS-C01 cream).",
+				"fix":        "capx: pause(t, false) — server-side seek must fire the same callbacks as live playback. builder: counter host color = fx.params.color || '#2B2118' (dark ink default, readable on light card backgrounds); ir.go validateParams whitelists color for counter params.",
 			},
 		},
 		"conversions": conversionRules(),
@@ -615,7 +616,7 @@ func conversionRules() []map[string]string {
 		{
 			"target":  "effects[].targetElementId (counter -> el_price, highlight -> el_headline/el_cardA/el_cardC)",
 			"current": "(no field)",
-			"rule":    "targetElementId deleted. Builder behavior: counter self-hosts <div id=counter-<fxId>> at canvas origin (0,0), 96px white text; highlight applies to the whole #canvas layer. NOTE: digits never appear on seeked frames due to defect D-01 (GSAP onUpdate suppression); white-on-cream color is an additional visibility defect once D-01 is fixed.",
+			"rule":    "targetElementId deleted. Builder behavior: counter self-hosts <div id=counter-<fxId>> at canvas origin (0,0), 96px text; highlight applies to the whole #canvas layer. D-01 fixed: digits render on seeked frames (capx pause(t,false)) and counter ink is dark (#2B2118 default, fx.params.color override) instead of .el-text's white-on-cream.",
 		},
 		{
 			"target":  "el_product (type=image, src=video/c01/product-main.png)",

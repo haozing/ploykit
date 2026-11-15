@@ -112,7 +112,7 @@ const readyTimeout = 60 * time.Second
 
 // RenderFrames implements the per-frame capture flow of design §3.3:
 // fresh tab -> setDocumentContent -> wait player ready -> for each frame:
-// pause(t) -> double rAF flush -> Page.captureScreenshot -> onFrame.
+// pause(t, false) -> double rAF flush -> Page.captureScreenshot -> onFrame.
 func (l *LocalChromeRenderer) RenderFrames(ctx context.Context, doc Doc, spec FrameSpec, onFrame FrameFunc) error {
 	if !l.Runtime.Available() {
 		return ErrNotConfigured
@@ -260,11 +260,17 @@ func awaitReady(ctx context.Context, timeout time.Duration) error {
 // exactly two requestAnimationFrame ticks, as one awaited promise. The double
 // rAF guarantees the compositor has presented the seeked state before the
 // screenshot (design §3.3).
+//
+// pause is called with suppressEvents=false (2nd argument): GSAP defaults it
+// to true, which would skip callbacks (onUpdate/onStart) during the seek
+// render — effects that write DOM state in onUpdate (e.g. counter digits)
+// would silently produce empty frames. Server-side rendering must show the
+// same state a live playback would: every frame fires its callbacks (D-01).
 func seekTimeline(ctx context.Context, timelineID string, tSec float64) error {
 	expr := `(function(){
   var tl = window.__timelines && window.__timelines["` + jsEscape(timelineID) + `"];
   if (!tl) { throw new Error("timeline not registered under window.__timelines"); }
-  tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `);
+  tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);
   return new Promise(function(resolve){
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){ resolve(true); });

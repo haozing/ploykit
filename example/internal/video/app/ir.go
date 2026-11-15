@@ -334,6 +334,7 @@ func validateEffectParams(typ string, params json.RawMessage) error {
 		allowed["from"] = true
 		allowed["to"] = true
 		allowed["suffix"] = true
+		allowed["color"] = true
 	case EffectHighlight:
 		allowed["color"] = true
 	case EffectShake:

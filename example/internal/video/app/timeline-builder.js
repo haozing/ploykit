@@ -241,7 +241,16 @@
     }
   }
 
-  // counter effects need a text host node appended on the canvas
+  // counter effects need a text host node appended on the canvas.
+  // Color: fx.params.color if the IR provides one, otherwise a dark ink
+  // default (#2B2118). The host reuses .el-text only for typography —
+  // .el-text's default white is unreadable on light card backgrounds
+  // (contrast ~1.06:1 on VS-C01's cream #FFF7EE, defect D-01 second half).
+  // z-index 9999: elements layer at 1 + el.z (bg el_z=0 → z-index 1); a
+  // z-index:auto host would paint UNDER the full-canvas background shape and
+  // the digits would be invisible even with textContent populated (observed
+  // live: DOM had "8767 件" at rect 344x129 while the screenshot showed an
+  // empty origin — the element layer occluded it).
   function counterHost(fx) {
     var id = 'counter-' + fx.id;
     var node = document.getElementById(id);
@@ -249,6 +258,8 @@
       node = document.createElement('div');
       node.id = id;
       node.className = 'el el-text counter';
+      node.style.color = (fx.params && fx.params.color) || '#2B2118';
+      node.style.zIndex = '9999';
       canvas.appendChild(node);
     }
     return node;

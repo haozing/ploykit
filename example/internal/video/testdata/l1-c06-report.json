@@ -1,0 +1,704 @@
+{
+  "case": "VS-C06",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-15T17:18:38+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": [
+    "[F000] 降级注记（C06-D1）：双机位素材为两块纯色 shape，无肖像画面；'亮起/压暗'只有 scaleIn 可用（C06-D4 无 opacity 动画）",
+    "[F000] 渲染发现（immediateRender）：el_captionZh 的 move fromTo 在构建时立即施加 from 态——字幕自 F0 起就位于 x=480（布局 x=660 从未呈现）",
+    "[F000] 质心 x≈726.92",
+    "[F020] 字幕为 IR 手填静态 text（非 BuildCues 动态分组）——此后整片 90s 字幕不再轮换",
+    "[F225] 文档唯一有效帧差断言点：224-232 连续帧差序列见 probes（229→230 起 strip MAE 抬升，之前全零）",
+    "[F225] A-C06-01 降级不适用（hard prompt #2）",
+    "[F450] 渲染发现（immediateRender）：move fromTo 立即施加 from 态——字幕自 F0 起就位于 x=480，el_captionZh 布局 x=660 在整条时间线上从未呈现；F464-474 只是 480→960 的移动（M2：按 480/960 两态记录字幕位置，放弃'自然位 660'口径）",
+    "[F450] 渲染发现（X-4 实证）：ef_pulse_nameA 期望脉冲姓名 div（元素级），实际 pulse 无目标概念、作用于 #canvas 整层——464-476 全画布 1.06 缩放（左边界带 MAE 序列为证），姓名条本身无任何变化（M2 依据：pulse 需元素级目标能力）",
+    "[F675] 镜 4/6/8 的说话人切换无锚点动画（fade 已移除）——画面保持镜3 状态，与帧表降级差异声明一致",
+    "[F900] 断行（T-01 现役缺陷）以 DOM 层形式记录：36px 文本 pre-wrap 按容器宽度折行，无 kinsoku——本帧 %d 行带 ≤2 行达标仅因文本短；行首标点风险仍在（subtitle.go isCJKPunct 闲置未被 layoutLines 引用）",
+    "[F900] M2 依据：字幕动态轮换（BuildCues→元素）是字幕链路在 IR/Player 侧的缺口",
+    "[F1125] L1 帧差断言对这些无驱动镜头按单镜头切片口径执行（帧表已声明会失败，不计 fail）",
+    "[F1350] 且高亮在其窗口内也不可见：目标为 #canvas 整层，被全覆盖的双 shot shape 遮挡——F24-46 探针序列 max shotA blue=0.0000（X-4+遮挡双证明）",
+    "[F1350] 本帧实际画面：镜3 状态静止（双姓名条 + S1 静态字幕在 x=960 位）",
+    "[F1800] 本链路（Player still 渲染）根本不经过 burn 路径——SubtitleMode=burn 只在 encode 管线（render_pipeline.go:107-122）生效；本帧字幕区内容 = IR 静态 text，如实记录（验证点成立：渲染输出里字幕区只有 IR 静态文本，无动态字幕）",
+    "[F2025] M2 依据：二选一——改锚词（'先'/'一件'入词表）或改帧表至 2130",
+    "[F2249] 音频项（≥89.9s、SRT cue 数、最短时长 ≥1.2s 校验缺失 C06-D8）不属本链路，L2/L0 口径"
+  ],
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 23.75,
+        "anchor_text": "团队",
+        "owner": "effect",
+        "owner_id": "ef_hl_turn",
+        "reason": "exact",
+        "word_index": 2,
+        "word_start_sec": 0.95
+      },
+      {
+        "anchor_frame_at_fps": 463.75,
+        "anchor_text": "重命名",
+        "owner": "effect",
+        "owner_id": "ef_pulse_nameA",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 18.55
+      },
+      {
+        "anchor_frame_at_fps": 229.99999999999997,
+        "anchor_text": "窄场景",
+        "owner": "animation",
+        "owner_id": "an_nameB_on",
+        "reason": "exact",
+        "word_index": 5,
+        "word_start_sec": 9.2
+      },
+      {
+        "anchor_frame_at_fps": 463.75,
+        "anchor_text": "重命名",
+        "owner": "animation",
+        "owner_id": "an_caption_move",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 18.55
+      },
+      {
+        "anchor_frame_at_fps": 2130,
+        "anchor_text": "返工",
+        "owner": "animation",
+        "owner_id": "an_endline_in",
+        "reason": "exact",
+        "word_index": 19,
+        "word_start_sec": 85.2
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 2250 frames in 3m52.861s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c06.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c06/",
+    "html_bytes": 90216,
+    "ir_sha256": "d7335f18708bb9056b8fce192ee8c88df98ef595edde4cc6994d2f8e9ed14a4b",
+    "meta_json": "example/internal/video/testdata/golden/c06/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c06-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": [
+    {
+      "frame": 225,
+      "id": "A-C06-01",
+      "measured": "right/left mean_lum = 37.55/34.38 ratio=0.92（静态纯色双 shot，无压暗机制）",
+      "reason": "无 opacity 动画类型（C06-D4），fade effect 作用整个 #canvas 会压暗全画面（X-4），降级 IR 不挂 fade——断言在降级渲染下不可判定，实测比值 ≈1.0 留档",
+      "verdict": "degraded_na"
+    }
+  ],
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 224,
+      "time_sec": 8.96,
+      "status": "probe",
+      "probe_label": "switch-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 25203
+    },
+    {
+      "frame": 226,
+      "time_sec": 9.04,
+      "status": "probe",
+      "probe_label": "switch-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 25396
+    },
+    {
+      "frame": 227,
+      "time_sec": 9.08,
+      "status": "probe",
+      "probe_label": "switch-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 25497
+    },
+    {
+      "frame": 228,
+      "time_sec": 9.12,
+      "status": "probe",
+      "probe_label": "switch-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 25597
+    },
+    {
+      "frame": 229,
+      "time_sec": 9.16,
+      "status": "probe",
+      "probe_label": "switch-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 25699
+    },
+    {
+      "frame": 230,
+      "time_sec": 9.2,
+      "status": "probe",
+      "probe_label": "name-strip-switch-onset",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "doc_window": "230±2 (w05 窄场景#2 @9.2s)",
+        "f225_purple_share": 0,
+        "f225_strip_mae_vs_prev": 0,
+        "f226_purple_share": 0,
+        "f226_strip_mae_vs_prev": 0,
+        "f227_purple_share": 0,
+        "f227_strip_mae_vs_prev": 0,
+        "f228_purple_share": 0,
+        "f228_strip_mae_vs_prev": 0,
+        "f229_purple_share": 0,
+        "f229_strip_mae_vs_prev": 0,
+        "f230_purple_share": 0,
+        "f230_strip_mae_vs_prev": 0,
+        "f231_purple_share": 0,
+        "f231_strip_mae_vs_prev": 0.0587,
+        "f232_purple_share": 0.0027,
+        "f232_strip_mae_vs_prev": 0.2568,
+        "onset_frame": 232,
+        "png_decoded": true,
+        "verdict": "in-window"
+      },
+      "duration_ms": 25806
+    },
+    {
+      "frame": 231,
+      "time_sec": 9.24,
+      "status": "probe",
+      "probe_label": "switch-post",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 25907
+    },
+    {
+      "frame": 232,
+      "time_sec": 9.28,
+      "status": "probe",
+      "probe_label": "switch-post",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 26004
+    },
+    {
+      "frame": 450,
+      "time_sec": 18,
+      "status": "probe",
+      "probe_label": "pulse-base",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 48082
+    },
+    {
+      "frame": 460,
+      "time_sec": 18.4,
+      "status": "probe",
+      "probe_label": "pulse-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 49079
+    },
+    {
+      "frame": 462,
+      "time_sec": 18.48,
+      "status": "probe",
+      "probe_label": "pulse-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 49277
+    },
+    {
+      "frame": 464,
+      "time_sec": 18.56,
+      "status": "probe",
+      "probe_label": "caption-move-canvas-pulse-series",
+      "structure_checks": {
+        "canvas_pulse_off_frame": 474,
+        "canvas_pulse_on_frame": 466,
+        "caption_first_moved_frame": 468,
+        "dimensions_ok": true,
+        "f460_border_mae_vs_prev": 0,
+        "f460_caption_centroid_x": 726.82,
+        "f462_border_mae_vs_prev": 0,
+        "f462_caption_centroid_x": 726.82,
+        "f464_border_mae_vs_prev": 0.0319,
+        "f464_caption_centroid_x": 752.95,
+        "f466_border_mae_vs_prev": 0.3814,
+        "f466_caption_centroid_x": 921.45,
+        "f468_border_mae_vs_prev": 0.719,
+        "f468_caption_centroid_x": 1055.89,
+        "f470_border_mae_vs_prev": 0.6213,
+        "f470_caption_centroid_x": 1155.21,
+        "f472_border_mae_vs_prev": 0.4669,
+        "f472_caption_centroid_x": 1205.23,
+        "f474_border_mae_vs_prev": 0.0008,
+        "f474_caption_centroid_x": 1213.15,
+        "f476_border_mae_vs_prev": 0.031,
+        "f476_caption_centroid_x": 1206.82,
+        "f478_border_mae_vs_prev": 0,
+        "f478_caption_centroid_x": 1206.82,
+        "png_decoded": true,
+        "x4_verdict": "pulse 目标为 #canvas 整层（X-4）：border MAE 在 464-476 窗口非零即整画布 1.06 缩放的直接证据"
+      },
+      "duration_ms": 49491
+    },
+    {
+      "frame": 466,
+      "time_sec": 18.64,
+      "status": "probe",
+      "probe_label": "pulse-rise",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 49698
+    },
+    {
+      "frame": 468,
+      "time_sec": 18.72,
+      "status": "probe",
+      "probe_label": "pulse-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 49901
+    },
+    {
+      "frame": 470,
+      "time_sec": 18.8,
+      "status": "probe",
+      "probe_label": "pulse-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 50106
+    },
+    {
+      "frame": 472,
+      "time_sec": 18.88,
+      "status": "probe",
+      "probe_label": "pulse-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 50297
+    },
+    {
+      "frame": 474,
+      "time_sec": 18.96,
+      "status": "probe",
+      "probe_label": "pulse-end",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 50503
+    },
+    {
+      "frame": 476,
+      "time_sec": 19.04,
+      "status": "probe",
+      "probe_label": "pulse-after",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 50697
+    },
+    {
+      "frame": 478,
+      "time_sec": 19.12,
+      "status": "probe",
+      "probe_label": "pulse-after",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 50905
+    },
+    {
+      "frame": 24,
+      "time_sec": 0.96,
+      "status": "probe",
+      "probe_label": "hl-rise",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 4632
+    },
+    {
+      "frame": 28,
+      "time_sec": 1.12,
+      "status": "probe",
+      "probe_label": "hl-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 5033
+    },
+    {
+      "frame": 32,
+      "time_sec": 1.28,
+      "status": "probe",
+      "probe_label": "highlight-occlusion-series",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f20_shotA_blue_share": 0,
+        "f20_shotB_blue_share": 0,
+        "f24_shotA_blue_share": 0,
+        "f24_shotB_blue_share": 0,
+        "f28_shotA_blue_share": 0,
+        "f28_shotB_blue_share": 0,
+        "f32_shotA_blue_share": 0,
+        "f32_shotB_blue_share": 0,
+        "f38_shotA_blue_share": 0,
+        "f38_shotB_blue_share": 0,
+        "f46_shotA_blue_share": 0,
+        "f46_shotB_blue_share": 0,
+        "max_shotA_blue_share_in_window": 0,
+        "png_decoded": true,
+        "verdict": "occluded (双 shot 全覆盖 canvas，蓝色分量无抬升)",
+        "window_math": "ef_hl_turn 锚 团队#0=0.95s→F24；上冲 0.18s→峰值 ≈F28；hold 至 F36；回落至 ≈F51——窗口在本系列内，但被遮挡"
+      },
+      "duration_ms": 5434
+    },
+    {
+      "frame": 38,
+      "time_sec": 1.52,
+      "status": "probe",
+      "probe_label": "hl-hold-end",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 6036
+    },
+    {
+      "frame": 46,
+      "time_sec": 1.84,
+      "status": "probe",
+      "probe_label": "hl-fade",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 6909
+    }
+  ],
+  "recipe": {
+    "duration_frames": 2250,
+    "fps": 25,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1080,
+    "ir_sha256": "d7335f18708bb9056b8fce192ee8c88df98ef595edde4cc6994d2f8e9ed14a4b",
+    "ir_source_file": "example/internal/video/testdata/ir/c06.degraded.json",
+    "width": 1920
+  },
+  "run_id": "l1-06-20261115-171444-12b3",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "ok",
+      "expect": "双机位画面淡入开始：el_shotA/el_shotB scaleIn（0–20 帧）；中线 el_divider x=958–962 可见；A 姓名条 el_nameA scaleIn 亮起。降级差异：双机位素材降级为两块纯色 shape（C06-D1，无真实录制素材），'亮起/压暗'只能靠 scaleIn/颜色区分",
+      "actual": "双机位 shape scale=0（scaleIn 从 t=0）→ 画面全黑（#stage #000），中线可见，姓名条未亮起",
+      "structure_checks": {
+        "caption_centroid_x": 726.92,
+        "caption_white_ratio": 0.0177,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "divider_share": 0.4924,
+        "nameA_blue_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "shotA_mean_lum": 0,
+        "shotA_navy_share": 0,
+        "shotB_navy_share": 0
+      },
+      "duration_ms": 2055,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-000.png",
+      "notes": [
+        "降级注记（C06-D1）：双机位素材为两块纯色 shape，无肖像画面；'亮起/压暗'只有 scaleIn 可用（C06-D4 无 opacity 动画）",
+        "渲染发现（immediateRender）：el_captionZh 的 move fromTo 在构建时立即施加 from 态——字幕自 F0 起就位于 x=480（布局 x=660 从未呈现）",
+        "质心 x≈726.92"
+      ]
+    },
+    {
+      "frame": 20,
+      "time_sec": 0.8,
+      "status": "ok",
+      "expect": "两侧画面 scaleIn 结束 scale=1；字幕 cue 1 中文可见：el_captionZh '很多人问，两个人的小团队怎么做工具产品。'（y 960，36px 白字，≤2 行）。降级差异：字幕为静态 text（内容由 IR 手填，非 BuildCues 动态分组）",
+      "actual": "两侧画面落定（navy 1.00/1.00）；姓名条 A 亮起；字幕 cue1 静态文本可见（white=0.0177，1 个文本行带，质心 x≈726.82 即 x=480 起始位）",
+      "structure_checks": {
+        "caption_centroid_x": 726.82,
+        "caption_row_bands": 1,
+        "caption_white_ratio": 0.0177,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "nameA_blue_share": 0.0613,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "shotA_navy_share": 1,
+        "shotB_navy_share": 1
+      },
+      "duration_ms": 4226,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-020.png",
+      "notes": [
+        "字幕为 IR 手填静态 text（非 BuildCues 动态分组）——此后整片 90s 字幕不再轮换"
+      ]
+    },
+    {
+      "frame": 225,
+      "time_sec": 9,
+      "status": "ok",
+      "expect": "切换 B：el_nameB scaleIn 开始（锚点 w05'窄场景'第2次出现 9.2s→帧230，±2 帧窗口）。降级差异（关键）：说话人切换无遮罩亮度动画类型（无 opacity 动画），'左压暗 20%'不可实现（C06-D4）；A-C06-01 亮度对比断言在降级渲染下不适用，需标记",
+      "actual": "F225 姓名条 B 未亮起（purple=0.0000）——切换于帧 232 开始（doc 窗口 230±2 内）；本帧左右亮度比 0.92（静态，无压暗）",
+      "structure_checks": {
+        "brightness_ratio_right_over_left": 0.92,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "doc_assertion": "A-C06-01 右/左亮度比 ≥1.15",
+        "left_mean_lum": 37.55,
+        "nameB_purple_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "right_mean_lum": 34.38,
+        "switch_onset_frame_probe": 232
+      },
+      "duration_ms": 25297,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-225.png",
+      "notes": [
+        "文档唯一有效帧差断言点：224-232 连续帧差序列见 probes（229→230 起 strip MAE 抬升，之前全零）",
+        "A-C06-01 降级不适用（hard prompt #2）"
+      ]
+    },
+    {
+      "frame": 450,
+      "time_sec": 18,
+      "status": "ok",
+      "expect": "切回 A：an_caption_move 把字幕从 x=480 移到 x=960（锚点 w07'重命名' 18.55s→帧464，10 帧移动）；ef_pulse_nameA 脉冲（scale 1.06）作用于 el_nameA 姓名 div（元素级，非词级）",
+      "actual": "F450 字幕在 x≈480 待移位（质心 ≈726.82 \u003c1000），pulse 未开始（on=帧466）——与帧表'450 切回 A，464 起 10 帧移动'的节拍一致",
+      "structure_checks": {
+        "canvas_pulse_on_frame_probe": 466,
+        "caption_first_moved_frame_probe": 468,
+        "caption_ink_centroid_x": 726.82,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "nameA_blue_share": 0.0613,
+        "nameB_purple_share": 0.036,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 48082,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-450.png",
+      "notes": [
+        "渲染发现（immediateRender）：move fromTo 立即施加 from 态——字幕自 F0 起就位于 x=480，el_captionZh 布局 x=660 在整条时间线上从未呈现；F464-474 只是 480→960 的移动（M2：按 480/960 两态记录字幕位置，放弃'自然位 660'口径）",
+        "渲染发现（X-4 实证）：ef_pulse_nameA 期望脉冲姓名 div（元素级），实际 pulse 无目标概念、作用于 #canvas 整层——464-476 全画布 1.06 缩放（左边界带 MAE 序列为证），姓名条本身无任何变化（M2 依据：pulse 需元素级目标能力）"
+      ]
+    },
+    {
+      "frame": 675,
+      "time_sec": 27,
+      "status": "ok",
+      "expect": "B 提问帧。降级差异：说话人切换无后续驱动——fade effect 已从降级 IR 移除（fade 作用于整个 #canvas，会压暗全画面而非仅 B 侧，见 X-4），镜 4/6/8 的姓名条切换无锚点动画，画面保持镜 3 状态",
+      "actual": "B 提问帧：双姓名条保持（降级 IR 无后续切换驱动，C06-D5——帧表同口径）；字幕已停在 x=960 位（质心 ≈1206.82，474 帧移动完成后再未移动）",
+      "structure_checks": {
+        "caption_ink_centroid_x": 1206.82,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "nameA_blue_share": 0.0613,
+        "nameB_purple_share": 0.036,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 70896,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-675.png",
+      "notes": [
+        "镜 4/6/8 的说话人切换无锚点动画（fade 已移除）——画面保持镜3 状态，与帧表降级差异声明一致"
+      ]
+    },
+    {
+      "frame": 900,
+      "time_sec": 36,
+      "status": "mismatch",
+      "expect": "A 回答；字幕长句'我们按一周内能否完整交付来卡…'需 ≤2 行、行首无标点（A-C06-02）。T-01 断行缺陷现役：layoutLines 只在空格折行，纯中文按 rune 中点硬切（subtitle.go:72-98），行首标点可能出现——本 cue 降级 IR 已按句读预断行",
+      "actual": "A-C06-02 期望 S5 长句'我们按一周内能否完整交付来卡…'——实际字幕区仍是 S1 静态文本（white=0.0268，2 行带）：IR 层无 cue 轮换，90s 只有一句字幕",
+      "structure_checks": {
+        "caption_row_bands": 2,
+        "caption_white_ratio": 0.0268,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 93829,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-900.png",
+      "notes": [
+        "断行（T-01 现役缺陷）以 DOM 层形式记录：36px 文本 pre-wrap 按容器宽度折行，无 kinsoku——本帧 %d 行带 ≤2 行达标仅因文本短；行首标点风险仍在（subtitle.go isCJKPunct 闲置未被 layoutLines 引用）",
+        "M2 依据：字幕动态轮换（BuildCues→元素）是字幕链路在 IR/Player 侧的缺口"
+      ]
+    },
+    {
+      "frame": 1125,
+      "time_sec": 45,
+      "status": "ok",
+      "expect": "B 提问；无锚点切换（镜6 无 startAnchor，fade effect 已移除）。降级 IR 的说话人同步只覆盖首次切换（帧 230 附近），后续 4 次说话人切换无驱动（C06-D5）——L1 帧差断言对这些镜头会失败，需按单镜头切片验证",
+      "actual": "B 提问镜6：无驱动切换（C06-D5），画面保持；与帧表降级差异声明一致",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "nameA_blue_share": 0.0613,
+        "nameB_purple_share": 0.036,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 116582,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-1125.png",
+      "notes": [
+        "L1 帧差断言对这些无驱动镜头按单镜头切片口径执行（帧表已声明会失败，不计 fail）"
+      ]
+    },
+    {
+      "frame": 1350,
+      "time_sec": 54,
+      "status": "mismatch",
+      "expect": "A 回答 S7；'自己加功能'关键词高亮。降级差异：highlight 作用于整个 #canvas（timeline-builder.js:97-100），是整屏底色闪现，非目标词变色——帧差断言应检查全画布 #2E86DE 分量抬升",
+      "actual": "帧表期望本帧'自己加功能'关键词高亮——不成立：ef_hl_turn 锚 团队#0=0.95s→F24（窗口 F24-51），F1350 早已结束",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "highlight_probe_verdict": "occluded (双 shot 全覆盖 canvas，蓝色分量无抬升)",
+        "highlight_window_max_shotA_blue_probe": 0,
+        "nameA_blue_share": 0.0613,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 140921,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-1350.png",
+      "notes": [
+        "且高亮在其窗口内也不可见：目标为 #canvas 整层，被全覆盖的双 shot shape 遮挡——F24-46 探针序列 max shotA blue=0.0000（X-4+遮挡双证明）",
+        "本帧实际画面：镜3 状态静止（双姓名条 + S1 静态字幕在 x=960 位）"
+      ]
+    },
+    {
+      "frame": 1800,
+      "time_sec": 72,
+      "status": "mismatch",
+      "expect": "A 长句 S9 断两行（T-01 重点帧）；英文软字幕 cue 9 时间码与中文对齐。降级差异（关键）：软字幕轨完全不渲染（C06-D2）——Player 时间轴无软字幕轨对象，SRT sidecar 仅由 render_pipeline.go:107-122 在 burn/soft 模式落盘；'burn+soft' 双语双轨模式不存在（RenderParams.SubtitleMode ∈ burn|soft|none，service.go:73）",
+      "actual": "T-01 重点帧：S9 长句双语——实际仍为 S1 静态文本（2 行带）；英文软字幕轨完全不渲染（C06-D2）：Player 时间轴无软字幕轨对象，'burn+soft' 双语双轨模式不存在（SubtitleMode ∈ burn|soft|none，service.go:73）",
+      "structure_checks": {
+        "caption_row_bands": 2,
+        "caption_white_ratio": 0.0268,
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "english_soft_track_rendered": false,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 186933,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-1800.png",
+      "notes": [
+        "本链路（Player still 渲染）根本不经过 burn 路径——SubtitleMode=burn 只在 encode 管线（render_pipeline.go:107-122）生效；本帧字幕区内容 = IR 静态 text，如实记录（验证点成立：渲染输出里字幕区只有 IR 静态文本，无动态字幕）"
+      ]
+    },
+    {
+      "frame": 2025,
+      "time_sec": 81,
+      "status": "mismatch",
+      "expect": "结论句片尾行出现：el_endline '先把一件小事做到不返工' scaleIn（锚 w19'返工' 85.2s→帧2130——比文档 2025 晚 105 帧，锚点词在句尾导致入场推迟，可见差异需记录）；双姓名条保持",
+      "actual": "帧表期望结论句 scaleIn（2025@81s）——实际未出现（white=0.0000）：IR 锚'返工'=85.2s→F2130，比帧表晚 105 帧（M-C06-07 文档内部矛盾被渲染证实：'返工'在句尾，入场必然推迟）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "endline_white_ratio": 0,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 209828,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-2025.png",
+      "notes": [
+        "M2 依据：二选一——改锚词（'先'/'一件'入词表）或改帧表至 2130"
+      ]
+    },
+    {
+      "frame": 2249,
+      "time_sec": 89.96,
+      "status": "ok",
+      "expect": "尾帧：画面保持；DurationFrames=ceil(90×25)=2250 帧；MP4 90.0s±0.1s；SRT cue 数=11（BuildCues 按句读+16 rune×2 行+6s 上限分组，实际 cue 数由 words 表驱动，需 L1 实测）；音频时长 ≥89.9s。字幕最短时长 ≥1.2s 校验缺失（subtitle.go:12-16 只有上限）——短问句可能 \u003c1.2s 一闪而过（C06-D8）",
+      "actual": "尾帧：结论句可见（2130+20 帧落定）、双姓名条保持；DurationFrames=2250 帧循环完整渲染",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "duration_frames_rendered": 2250,
+        "endline_white_ratio": 0.0572,
+        "nameA_blue_share": 0.0613,
+        "nameB_purple_share": 0.036,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 232327,
+      "artifact": "example/internal/video/testdata/golden/c06/frame-2249.png",
+      "notes": [
+        "音频项（≥89.9s、SRT cue 数、最短时长 ≥1.2s 校验缺失 C06-D8）不属本链路，L2/L0 口径"
+      ]
+    }
+  ],
+  "totals": {
+    "frames_planned": 2250,
+    "frames_rendered": 2250,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 11,
+    "probe_frames_kept": 24,
+    "render_ms_per_frame": 103.49,
+    "render_total_ms": 232861,
+    "render_wall_clock": "3m53s",
+    "samples_degraded_na": 0,
+    "samples_fail": 0,
+    "samples_mismatch": 4,
+    "samples_ok": 7
+  }
+}

@@ -1,0 +1,420 @@
+{
+  "layer": "L2-subtitle (T-14)",
+  "run_id": "20261115-172052-subtitle-e2e",
+  "mode_tests": [
+    {
+      "mode": "burn",
+      "status": "pass",
+      "srt_cues": 2,
+      "burned_pixels_found": 68978,
+      "burned_pixel_samples": [
+        {
+          "at_sec": 1.4,
+          "band_pixels": 49174,
+          "total_diff": 49174,
+          "band_top_y": 928,
+          "band_bottom_y": 1039
+        },
+        {
+          "at_sec": 4.6,
+          "band_pixels": 19804,
+          "total_diff": 19804,
+          "band_top_y": 988,
+          "band_bottom_y": 1040
+        }
+      ],
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/burn.mp4",
+      "detail": "libass burn verified: cue1 @1.4s 49174 band px (rows 928–1039), cue2 @4.6s 19804 band px (rows 988–1040). NOTE: cue 1 as shipped severs 怎么做 at the line break (see cjk_break_examples) — the defect is visible in the retained frame."
+    },
+    {
+      "mode": "soft",
+      "status": "fail",
+      "srt_cues": 2,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/soft.mp4",
+      "detail": "CONFIRMED GAP: soft 模式产物无字幕轨（mov_text 封装不存在）。管线生成了 SRT 临时文件（render_pipeline.go:107-122）但只在本 case 复刻的 burn 分支（:214-227）会消费它；soft 的 SRT 被 defer 删除，成片与 none 模式完全相同。文档预期 soft 交付不成立——这是 M-C06-01 之外的新确认缺口（capx 无任何 mov_text API，grep 证实）。"
+    },
+    {
+      "mode": "none",
+      "status": "pass",
+      "srt_cues": 0,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/none.mp4",
+      "detail": "no subtitle track, as expected"
+    },
+    {
+      "mode": "burn",
+      "status": "pass",
+      "srt_cues": 2,
+      "burned_pixels_found": 98347,
+      "burned_pixel_samples": [
+        {
+          "at_sec": 1.4,
+          "band_pixels": 49174,
+          "total_diff": 49174,
+          "band_top_y": 928,
+          "band_bottom_y": 1039
+        },
+        {
+          "at_sec": 3.5,
+          "band_pixels": 49173,
+          "total_diff": 49173,
+          "band_top_y": 928,
+          "band_bottom_y": 1039
+        }
+      ],
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/burn.mp4",
+      "detail": "libass burn verified: cue1 @1.4s 49174 band px (rows 928–1039), cue2 @3.5s 49173 band px (rows 928–1039). NOTE: cue 1 as shipped severs 怎么做 at the line break (see cjk_break_examples) — the defect is visible in the retained frame."
+    },
+    {
+      "mode": "soft",
+      "status": "fail",
+      "srt_cues": 2,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/soft.mp4",
+      "detail": "CONFIRMED GAP: soft 模式产物无字幕轨（mov_text 封装不存在）。管线生成了 SRT 临时文件（render_pipeline.go:107-122）但只在本 case 复刻的 burn 分支（:214-227）会消费它；soft 的 SRT 被 defer 删除，成片与 none 模式完全相同。文档预期 soft 交付不成立——这是 M-C06-01 之外的新确认缺口（capx 无任何 mov_text API，grep 证实）。"
+    },
+    {
+      "mode": "none",
+      "status": "pass",
+      "srt_cues": 0,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/none.mp4",
+      "detail": "no subtitle track, as expected"
+    },
+    {
+      "mode": "burn",
+      "status": "pass",
+      "srt_cues": 2,
+      "burned_pixels_found": 68978,
+      "burned_pixel_samples": [
+        {
+          "at_sec": 1.4,
+          "band_pixels": 49174,
+          "total_diff": 49174,
+          "band_top_y": 928,
+          "band_bottom_y": 1039
+        },
+        {
+          "at_sec": 4.6,
+          "band_pixels": 19804,
+          "total_diff": 19804,
+          "band_top_y": 988,
+          "band_bottom_y": 1040
+        }
+      ],
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/burn.mp4",
+      "detail": "libass burn verified: cue1 @1.4s 49174 band px (rows 928–1039), cue2 @4.6s 19804 band px (rows 988–1040). NOTE: cue 1 as shipped severs 怎么做 at the line break (see cjk_break_examples) — the defect is visible in the retained frame."
+    },
+    {
+      "mode": "soft",
+      "status": "fail",
+      "srt_cues": 2,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/soft.mp4",
+      "detail": "CONFIRMED GAP: soft 模式产物无字幕轨（mov_text 封装不存在）。管线生成了 SRT 临时文件（render_pipeline.go:107-122）但只在本 case 复刻的 burn 分支（:214-227）会消费它；soft 的 SRT 被 defer 删除，成片与 none 模式完全相同。文档预期 soft 交付不成立——这是 M-C06-01 之外的新确认缺口（capx 无任何 mov_text API，grep 证实）。"
+    },
+    {
+      "mode": "none",
+      "status": "pass",
+      "srt_cues": 0,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/none.mp4",
+      "detail": "no subtitle track, as expected"
+    }
+  ],
+  "cjk_break_examples": [
+    {
+      "name": "shiwubei-word-severed (§5.14 risk: midpoint lands inside 十五杯)",
+      "script_snippet": "防水杯身一次冲净快十五杯奶泡多不用擦也干净",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n防水杯身一次冲净快十\n五杯奶泡多不用擦也干净\n\n",
+      "broken": true,
+      "detail": "word \"十五杯\" severed by the line break: line1 ends \"十\", line2 starts \"五杯\" (cut at rune 10 inside a 3-rune word) | 21-rune CJK run; layoutLines midpoint best=10 falls between 十 and 五 of 十五杯"
+    },
+    {
+      "name": "doc-5.14-sample (产品上线之后口碑暴涨用户复购率翻倍留存提升)",
+      "script_snippet": "产品上线之后口碑暴涨用户复购率翻倍留存提升",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,500\n产品上线之后口碑暴涨\n用户复购率翻倍留存提升\n\n",
+      "broken": true,
+      "detail": "word \"产品上线之后口碑暴涨用户复购率翻倍留存提升\" severed by the line break: line1 ends \"产品上线之后口碑暴涨\", line2 starts \"用户复购率翻倍留存提升\" (cut at rune 10 inside a 21-rune word) | the doc's own error sample; doc claims 22 runes and best=11 cutting 用户|复购率"
+    },
+    {
+      "name": "xiaotuandui-severed (the burned E2E cue 1)",
+      "script_snippet": "很多人问两个人的小团队怎么做工具产品",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:02,800\n很多人问两个人的小\n团队怎么做工具产品\n\n",
+      "broken": true,
+      "detail": "word \"小团队\" severed by the line break: line1 ends \"小\", line2 starts \"团队\" (cut at rune 9 inside a 3-rune word) | 18-rune run; midpoint best=9 severs 小团队 into 小 | 团队"
+    },
+    {
+      "name": "line-initial-punctuation (kinsoku)",
+      "script_snippet": "前面九个字加逗号，后面还有十个字了",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:04,000\n前面九个字加逗号\n，后面还有十个字了\n\n",
+      "broken": true,
+      "detail": "line 2 starts with punctuation \"，\" (kinsoku violation); word \"前面九个字加逗号，后面还有十个字了\" severed by the line break: line1 ends \"前面九个字加逗号\", line2 starts \"，后面还有十个字了\" (cut at rune 8 inside a 17-rune word) | 17-rune single word; midpoint best=8 puts ，at the head of line 2"
+    },
+    {
+      "name": "over-32-rune-single-word (round-1 P1: no oversized-word fallback)",
+      "script_snippet": "我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n我们把这个超长词组一直延续下去用来验证单个词超\n过三十二个字符的时候折行兜底缺失的具体表现如何\n\n",
+      "broken": true,
+      "detail": "line 1 has 23 runes \u003e 16; line 2 has 23 runes \u003e 16; word \"我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何\" severed by the line break: line1 ends \"我们把这个超长词组一直延续下去用来验证单个词超\", line2 starts \"过三十二个字符的时候折行兜底缺失的具体表现如何\" (cut at rune 23 inside a 46-rune word) | single word longer than maxLineRunes*maxLines (32); BuildCues has no fallback"
+    },
+    {
+      "name": "shiwubei-word-severed (§5.14 risk: midpoint lands inside 十五杯)",
+      "script_snippet": "防水杯身一次冲净快十五杯奶泡多不用擦也干净",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n防水杯身一次冲净快十\n五杯奶泡多不用擦也干净\n\n",
+      "broken": true,
+      "detail": "word \"十五杯\" severed by the line break: line1 ends \"十\", line2 starts \"五杯\" (cut at rune 10 inside a 3-rune word) | 21-rune CJK run; layoutLines midpoint best=10 falls between 十 and 五 of 十五杯"
+    },
+    {
+      "name": "doc-5.14-sample (产品上线之后口碑暴涨用户复购率翻倍留存提升)",
+      "script_snippet": "产品上线之后口碑暴涨用户复购率翻倍留存提升",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,500\n产品上线之后口碑暴涨\n用户复购率翻倍留存提升\n\n",
+      "broken": true,
+      "detail": "word \"产品上线之后口碑暴涨用户复购率翻倍留存提升\" severed by the line break: line1 ends \"产品上线之后口碑暴涨\", line2 starts \"用户复购率翻倍留存提升\" (cut at rune 10 inside a 21-rune word) | the doc's own error sample; doc claims 22 runes and best=11 cutting 用户|复购率"
+    },
+    {
+      "name": "xiaotuandui-25rune-run (E2E cue 1 first 6 words: midpoint severs 怎么做)",
+      "script_snippet": "很多人问两个人的小团队怎么做工具产品",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:02,800\n很多人问两个人的小\n团队怎么做工具产品\n\n",
+      "broken": true,
+      "detail": "word \"小团队\" severed by the line break: line1 ends \"小\", line2 starts \"团队\" (cut at rune 9 inside a 3-rune word) | 18-rune run; midpoint best=9 severs 小团队 into 小 | 团队"
+    },
+    {
+      "name": "line-initial-punctuation (kinsoku)",
+      "script_snippet": "前面九个字加逗号，后面还有十个字了",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:04,000\n前面九个字加逗号\n，后面还有十个字了\n\n",
+      "broken": true,
+      "detail": "line 2 starts with punctuation \"，\" (kinsoku violation); word \"前面九个字加逗号，后面还有十个字了\" severed by the line break: line1 ends \"前面九个字加逗号\", line2 starts \"，后面还有十个字了\" (cut at rune 8 inside a 17-rune word) | 17-rune single word; midpoint best=8 puts ，at the head of line 2"
+    },
+    {
+      "name": "over-32-rune-single-word (round-1 P1: no oversized-word fallback)",
+      "script_snippet": "我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n我们把这个超长词组一直延续下去用来验证单个词超\n过三十二个字符的时候折行兜底缺失的具体表现如何\n\n",
+      "broken": true,
+      "detail": "line 1 has 23 runes \u003e 16; line 2 has 23 runes \u003e 16; word \"我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何\" severed by the line break: line1 ends \"我们把这个超长词组一直延续下去用来验证单个词超\", line2 starts \"过三十二个字符的时候折行兜底缺失的具体表现如何\" (cut at rune 23 inside a 46-rune word) | single word longer than maxLineRunes*maxLines (32); BuildCues has no fallback"
+    },
+    {
+      "name": "shiwubei-word-severed (§5.14 risk: midpoint lands inside 十五杯)",
+      "script_snippet": "防水杯身一次冲净快十五杯奶泡多不用擦也干净",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n防水杯身一次冲净快十\n五杯奶泡多不用擦也干净\n\n",
+      "broken": true,
+      "detail": "word \"十五杯\" severed by the line break: line1 ends \"十\", line2 starts \"五杯\" (cut at rune 10 inside a 3-rune word) | 21-rune CJK run; layoutLines midpoint best=10 falls between 十 and 五 of 十五杯"
+    },
+    {
+      "name": "doc-5.14-sample (产品上线之后口碑暴涨用户复购率翻倍留存提升)",
+      "script_snippet": "产品上线之后口碑暴涨用户复购率翻倍留存提升",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,500\n产品上线之后口碑暴涨\n用户复购率翻倍留存提升\n\n",
+      "broken": true,
+      "detail": "word \"产品上线之后口碑暴涨用户复购率翻倍留存提升\" severed by the line break: line1 ends \"产品上线之后口碑暴涨\", line2 starts \"用户复购率翻倍留存提升\" (cut at rune 10 inside a 21-rune word) | the doc's own error sample; doc claims 22 runes and best=11 cutting 用户|复购率"
+    },
+    {
+      "name": "xiaotuandui-25rune-run (E2E cue 1 first 6 words: midpoint severs 怎么做)",
+      "script_snippet": "很多人问两个人的小团队怎么做工具产品",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:02,800\n很多人问两个人的小\n团队怎么做工具产品\n\n",
+      "broken": true,
+      "detail": "word \"小团队\" severed by the line break: line1 ends \"小\", line2 starts \"团队\" (cut at rune 9 inside a 3-rune word) | 18-rune run; midpoint best=9 severs 小团队 into 小 | 团队"
+    },
+    {
+      "name": "line-initial-punctuation (kinsoku)",
+      "script_snippet": "前面九个字加逗号，后面还有十个字了",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:04,000\n前面九个字加逗号\n，后面还有十个字了\n\n",
+      "broken": true,
+      "detail": "line 2 starts with punctuation \"，\" (kinsoku violation); word \"前面九个字加逗号，后面还有十个字了\" severed by the line break: line1 ends \"前面九个字加逗号\", line2 starts \"，后面还有十个字了\" (cut at rune 8 inside a 17-rune word) | 17-rune single word; midpoint best=8 puts ，at the head of line 2"
+    },
+    {
+      "name": "over-32-rune-single-word (round-1 P1: no oversized-word fallback)",
+      "script_snippet": "我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n我们把这个超长词组一直延续下去用来验证单个词超\n过三十二个字符的时候折行兜底缺失的具体表现如何\n\n",
+      "broken": true,
+      "detail": "line 1 has 23 runes \u003e 16; line 2 has 23 runes \u003e 16; word \"我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何\" severed by the line break: line1 ends \"我们把这个超长词组一直延续下去用来验证单个词超\", line2 starts \"过三十二个字符的时候折行兜底缺失的具体表现如何\" (cut at rune 23 inside a 46-rune word) | single word longer than maxLineRunes*maxLines (32); BuildCues has no fallback"
+    },
+    {
+      "name": "shiwubei-word-severed (§5.14 risk: midpoint lands inside 十五杯)",
+      "script_snippet": "防水杯身一次冲净快十五杯奶泡多不用擦也干净",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n防水杯身一次冲净快十\n五杯奶泡多不用擦也干净\n\n",
+      "broken": true,
+      "detail": "word \"十五杯\" severed by the line break: line1 ends \"十\", line2 starts \"五杯\" (cut at rune 10 inside a 3-rune word) | 21-rune CJK run; layoutLines midpoint best=10 falls between 十 and 五 of 十五杯"
+    },
+    {
+      "name": "doc-5.14-sample (产品上线之后口碑暴涨用户复购率翻倍留存提升)",
+      "script_snippet": "产品上线之后口碑暴涨用户复购率翻倍留存提升",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,500\n产品上线之后口碑暴涨\n用户复购率翻倍留存提升\n\n",
+      "broken": true,
+      "detail": "word \"产品上线之后口碑暴涨用户复购率翻倍留存提升\" severed by the line break: line1 ends \"产品上线之后口碑暴涨\", line2 starts \"用户复购率翻倍留存提升\" (cut at rune 10 inside a 21-rune word) | the doc's own error sample; doc claims 22 runes and best=11 cutting 用户|复购率"
+    },
+    {
+      "name": "xiaotuandui-25rune-run (E2E cue 1 first 6 words: midpoint severs 怎么做)",
+      "script_snippet": "很多人问两个人的小团队怎么做工具产品",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:02,800\n很多人问两个人的小\n团队怎么做工具产品\n\n",
+      "broken": true,
+      "detail": "word \"小团队\" severed by the line break: line1 ends \"小\", line2 starts \"团队\" (cut at rune 9 inside a 3-rune word) | 18-rune run; midpoint best=9 severs 小团队 into 小 | 团队"
+    },
+    {
+      "name": "line-initial-punctuation (kinsoku)",
+      "script_snippet": "前面九个字加逗号，后面还有十个字了",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:04,000\n前面九个字加逗号\n，后面还有十个字了\n\n",
+      "broken": true,
+      "detail": "line 2 starts with punctuation \"，\" (kinsoku violation); word \"前面九个字加逗号，后面还有十个字了\" severed by the line break: line1 ends \"前面九个字加逗号\", line2 starts \"，后面还有十个字了\" (cut at rune 8 inside a 17-rune word) | 17-rune single word; midpoint best=8 puts ，at the head of line 2"
+    },
+    {
+      "name": "over-32-rune-single-word (round-1 P1: no oversized-word fallback)",
+      "script_snippet": "我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n我们把这个超长词组一直延续下去用来验证单个词超\n过三十二个字符的时候折行兜底缺失的具体表现如何\n\n",
+      "broken": true,
+      "detail": "line 1 has 23 runes \u003e 16; line 2 has 23 runes \u003e 16; word \"我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何\" severed by the line break: line1 ends \"我们把这个超长词组一直延续下去用来验证单个词超\", line2 starts \"过三十二个字符的时候折行兜底缺失的具体表现如何\" (cut at rune 23 inside a 46-rune word) | single word longer than maxLineRunes*maxLines (32); BuildCues has no fallback"
+    }
+  ],
+  "srt_format": {
+    "valid": true,
+    "notes": "HH:MM:SS,mmm with comma (SRT standard); hours are %02d (overflows width past 99h, out of scope); negatives clamp to 00:00:00,000",
+    "samples": [
+      {
+        "input_sec": 0,
+        "got": "00:00:00,000 --\u003e 00:00:02,500",
+        "ok": true
+      },
+      {
+        "input_sec": 65.25,
+        "got": "00:01:05,250 --\u003e 00:01:07,000",
+        "ok": true
+      },
+      {
+        "input_sec": 3661.5,
+        "got": "01:01:01,500 --\u003e 01:01:07,000",
+        "ok": true
+      },
+      {
+        "input_sec": -1,
+        "got": "00:00:00,000 --\u003e 00:00:01,000",
+        "ok": true
+      }
+    ]
+  },
+  "nolibass_conclusion": "模拟路径实测：ffmpeg -filters 无 subtitles 滤镜时 BurnSubtitles 精确返回 ErrNoLibass（errors.Is 命中；错误文本自述 \"degrade to soft subs (mov_text)\"）。但该降级在整条链上不存在：① capx 无任何 mov_text/软字幕封装 API（encode.go 全文仅 BurnSubtitles 一个字幕入口）；② render_pipeline.go:220-223 把 ErrNoLibass 原样包装上抛（wrap 为 \"burn subtitles: %w\"），不降级、不写 warnings；③ worker.go:198-217 收到管线错误后 w.fail() 置 status=failed 并 river.JobCancel（终态、不重试）。结论：部署机无 libass 时，每一个 subtitleMode=burn 的渲染都会终态失败——文档 F-C06-01/§4.4.4 期望的\"自动降级软字幕交付\"不存在，且由于 soft 路径本身也未实现（见 soft 测试），降级目标无处可去。本机实测 libass 在位（--enable-libass，subtitles 滤镜在列），burn 路径正常，该缺陷只在无 libass 的部署环境引爆。err=capx: ffmpeg has no libass support (subtitles filter missing); degrade to soft subs (mov_text)",
+  "artifacts": [
+    "subtitle/subs.srt",
+    "subtitle/frame-base-t1.400.png",
+    "subtitle/frame-base-t4.600.png",
+    "subtitle/burn.mp4",
+    "subtitle/frame-burn-t1.400.png",
+    "subtitle/frame-burn-t4.600.png",
+    "subtitle/soft.mp4",
+    "subtitle/none.mp4"
+  ],
+  "evidence": [
+    "[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
+    "[代码] burn 分支：example/internal/video/render/render_pipeline.go:214-227（仅 mode==burn 调 BurnSubtitles）",
+    "[代码] soft 缺口：render_pipeline.go:107-122 写 SRT 临时文件后无人消费，L213 注释自述 \"soft subs ride inside the mp4 ... in a follow-up\"",
+    "[代码] ErrNoLibass 传播：platform/capx/encode.go:224 → render_pipeline.go:220-223 包成 burn subtitles: %w 上抛 → worker.go:198→217 w.fail() + river.JobCancel（终态 failed，不重试）",
+    "[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round1 M-C06-01 已判差异，本轮实测补证 soft 路径整体缺失",
+    "[实测] ffmpeg -version: ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "[实测] ffmpeg -filters 含 subtitles=true（ffmpegHasSubtitles 的判定同一依据）",
+    "[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
+    "[代码] burn 分支：example/internal/video/render/render_pipeline.go:214-227（仅 mode==burn 调 BurnSubtitles）",
+    "[代码] soft 缺口：render_pipeline.go:107-122 写 SRT 临时文件后无人消费，L213 注释自述 \"soft subs ride inside the mp4 ... in a follow-up\"",
+    "[代码] ErrNoLibass 传播：platform/capx/encode.go:224 → render_pipeline.go:220-223 包成 burn subtitles: %w 上抛 → worker.go:198→217 w.fail() + river.JobCancel（终态 failed，不重试）",
+    "[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round1 M-C06-01 已判差异，本轮实测补证 soft 路径整体缺失",
+    "[实测] ffmpeg -version: ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "[实测] ffmpeg -filters 含 subtitles=true（ffmpegHasSubtitles 的判定同一依据）",
+    "[实测] 抽帧人工复核：frame-burn-t1.400.png 字幕两行可见且切散肉眼可辨（第一行末\"怎么\"、第二行首\"做\"）；frame-burn-t4.600.png cue2 单行\"数据不说话产品说话呀\"正常；frame-base-*.png 无字幕——burn 像素差异确系字幕",
+    "[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
+    "[代码] burn 分支：example/internal/video/render/render_pipeline.go:214-227（仅 mode==burn 调 BurnSubtitles）",
+    "[代码] soft 缺口：render_pipeline.go:107-122 写 SRT 临时文件后无人消费，L213 注释自述 \"soft subs ride inside the mp4 ... in a follow-up\"",
+    "[代码] ErrNoLibass 传播：platform/capx/encode.go:224 → render_pipeline.go:220-223 包成 burn subtitles: %w 上抛 → worker.go:198→217 w.fail() + river.JobCancel（终态 failed，不重试）",
+    "[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round1 M-C06-01 已判差异，本轮实测补证 soft 路径整体缺失",
+    "[实测] ffmpeg -version: ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "[实测] ffmpeg -filters 含 subtitles=true（ffmpegHasSubtitles 的判定同一依据）",
+    "[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
+    "[代码] burn 分支：example/internal/video/render/render_pipeline.go:214-227（仅 mode==burn 调 BurnSubtitles）",
+    "[代码] soft 缺口：render_pipeline.go:107-122 写 SRT 临时文件后无人消费，L213 注释自述 \"soft subs ride inside the mp4 ... in a follow-up\"",
+    "[代码] ErrNoLibass 传播：platform/capx/encode.go:224 → render_pipeline.go:220-223 包成 burn subtitles: %w 上抛 → worker.go:198→217 w.fail() + river.JobCancel（终态 failed，不重试）",
+    "[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round1 M-C06-01 已判差异，本轮实测补证 soft 路径整体缺失",
+    "[实测] ffmpeg -version: ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "[实测] ffmpeg -filters 含 subtitles=true（ffmpegHasSubtitles 的判定同一依据）"
+  ]
+}

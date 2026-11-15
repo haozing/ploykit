@@ -1,7 +1,15 @@
-// DOM probe for the L1 F360 counter finding. Replicates the capx render flow
-// (document load + timeline seek + double rAF) with an inspectable tab, then
-// dumps the counter host node's live state at the F360 seek position. Debug
-// evidence only — no pass/fail assertions beyond "the probe itself worked".
+// DOM probe for the L1 F360 counter finding (D-01). Replicates the capx render
+// flow (document load + timeline seek + double rAF) with an inspectable tab,
+// then dumps the counter host node's live state at the F360 seek position.
+//
+// Post-fix role: capx seekTimeline now seeks with pause(t, false) — this probe
+// demonstrates BOTH sides of the mechanism on the live document:
+//  1. single-arg tl.pause(12) still yields textContent="" (GSAP
+//     suppressEvents defaults true — the documented root cause stays true)
+//  2. tl.pause(12, false) — the new capx semantics — populates the digits
+//     ("8767 件" at t=12), and the host ink is dark (#2B2118) on the cream bg.
+//
+// Debug evidence only — no pass/fail assertions beyond "the probe itself worked".
 //
 // Run: go -C example test -run TestProbeCounterDOMState -v ./internal/video/testdata
 package l1
@@ -70,7 +78,9 @@ func TestProbeCounterDOMState(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	// seek to F360 = 12.0s with double rAF flush (same as capx seekTimeline)
+	// seek to F360 = 12.0s with double rAF flush. SIDE 1: the OLD capx
+	// semantics (single-arg pause, suppressEvents defaults true) — kept as a
+	// live demonstration that the mechanism is in GSAP, not in the document.
 	if _, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(function(){
   var tl = window.__timelines && window.__timelines["main"];
   if (!tl) { throw new Error("timeline not registered"); }
@@ -134,10 +144,12 @@ func TestProbeCounterDOMState(t *testing.T) {
 	}
 	t.Logf("player/timeline state: %s", state)
 
-	// seek past the counter tween end (11.92+1.2=13.12) and re-read text
+	// seek past the counter tween end (11.92+1.2=13.12) and re-read text.
+	// SIDE 2 (new capx semantics): pause(t, false) — onUpdate fires and the
+	// digits persist after the tween's end.
 	if _, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(function(){
   var tl = window.__timelines && window.__timelines["main"];
-  tl.pause(13.5);
+  tl.pause(13.5, false);
   return new Promise(function(resolve){
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){ resolve(true); });
@@ -153,10 +165,13 @@ func TestProbeCounterDOMState(t *testing.T) {
 	}
 	t.Logf("counter textContent after seek to 13.5s (tween end=13.12s): %q", after)
 
-	// and back before the tween start
+	// and back before the tween start (still suppressEvents=false): the
+	// tween is fully rewound, so onUpdate leaves the counter at its "from"
+	// value (8200 件) — a seeked frame before the tween must NOT carry text
+	// from the previous position.
 	if _, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(function(){
   var tl = window.__timelines && window.__timelines["main"];
-  tl.pause(5);
+  tl.pause(5, false);
   return new Promise(function(resolve){
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){ resolve(true); });
@@ -172,10 +187,9 @@ func TestProbeCounterDOMState(t *testing.T) {
 	}
 	t.Logf("counter textContent after seek to 5s (before tween start 11.92s): %q", before)
 
-	// ROOT-CAUSE CHECK: GSAP pause(atTime, suppressEvents) — suppressEvents
-	// defaults to TRUE, which suppresses onUpdate during the seek render.
-	// capx seekTimeline calls tl.pause(t) with one arg. Re-seek with
-	// suppressEvents=false: if text populates, the root cause is proven.
+	// ROOT-CAUSE CHECK (unchanged): re-seek with the single-arg pause shows
+	// suppression once more, then the nosuppress seek shows the fix. Kept in
+	// one flow so both sides of D-01 are provable from one probe run.
 	if _, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(function(){
   var tl = window.__timelines && window.__timelines["main"];
   tl.pause(12, false);
