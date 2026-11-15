@@ -1224,7 +1224,7 @@ func c06Post(cx *caseCtx) {
 	if c900["caption_white_ratio"].(float64) >= 0.005 && bands <= 2 {
 		cx.set(900, "mismatch",
 			fmt.Sprintf("A-C06-02 期望 S5 长句'我们按一周内能否完整交付来卡…'——实际字幕区仍是 S1 静态文本（white=%.4f，%d 行带）：IR 层无 cue 轮换，90s 只有一句字幕", c900["caption_white_ratio"], bands),
-			"断行（T-01 现役缺陷）以 DOM 层形式记录：36px 文本 pre-wrap 按容器宽度折行，无 kinsoku——本帧 %d 行带 ≤2 行达标仅因文本短；行首标点风险仍在（subtitle.go isCJKPunct 闲置未被 layoutLines 引用）",
+			"断行（T-01 DOM 层记录）：36px 文本 pre-wrap 按容器宽度折行——本帧 %d 行带 ≤2 行达标仅因文本短；注意 SRT 层（subtitle.go layoutUnits）已于 round-3 落地 kinsoku + 词完整性换行，但本链路（Player still 渲染）不经过它，DOM 折行风险独立存在",
 			"M2 依据：字幕动态轮换（BuildCues→元素）是字幕链路在 IR/Player 侧的缺口")
 	} else {
 		cx.set(900, "fail", fmt.Sprintf("字幕区异常 white=%.4f bands=%d", c900["caption_white_ratio"], bands))

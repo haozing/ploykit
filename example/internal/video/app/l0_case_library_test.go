@@ -212,31 +212,46 @@ func TestL0_BuildCues_EmptyWords(t *testing.T) {
 	assert.Nil(t, BuildCues([]Word{}))
 }
 
-// TestL0_BuildCues_SingleOversizedWordBoundary documents a known boundary gap
-// honestly instead of asserting the §7.1 threshold: when a SINGLE word alone
-// exceeds the capacity the caps (≤16 runes/line, ≤6s) are not enforced —
-// BuildCues has no rejection path for an oversized single word. Reachable in
-// practice: EstimateWords splits by whitespace, so a space-less CJK script
-// becomes one giant estimated word. Fixing this is a business-code change,
-// which this round's discipline forbids; skipped until the gap closes.
+// TestL0_BuildCues_SingleOversizedWordBoundary: when a SINGLE word alone
+// exceeds the capacity, the round-3 fix hard-splits it into ≤16-rune chunks
+// (times linearly interpolated across the word's interval) instead of
+// emitting over-limit lines — the §7.1 gap this test used to skip over is
+// closed; the old skip asserted a 20/20 two-line layout that the balanced
+// split (27|13 with the cue packing at 32) supersedes. The 8s-duration half
+// stays skipped: cue duration capping for a single word is a separate
+// boundary, out of this fix's scope.
 func TestL0_BuildCues_SingleOversizedWordBoundary(t *testing.T) {
-	t.Run("40-rune single word yields two 20-rune lines", func(t *testing.T) {
+	t.Run("40-rune single word hard-splits into ≤16-rune lines", func(t *testing.T) {
 		w := []Word{{Index: 0, Text: strings.Repeat("长", 40), Start: 0, End: 1, Source: WordSourceEstimated}}
 		cues := BuildCues(w)
-		require.Len(t, cues, 1)
-		for _, line := range strings.Split(cues[0].Text, "\n") {
-			t.Logf("observed line runes=%d (cap is 16)", len([]rune(line)))
+		require.NotEmpty(t, cues)
+		for _, c := range cues {
+			for _, line := range strings.Split(c.Text, "\n") {
+				assert.LessOrEqual(t, len([]rune(line)), maxLineRunes,
+					"hard-split lines respect the 16-rune cap (was 20 before the fix)")
+			}
 		}
-		t.Skip("known boundary gap: single word exceeding capacity is not split or rejected; " +
-			"asserting the §7.1 threshold would fail until BuildCues gains a single-word path (business-code change)")
+		assert.Equal(t, 27, len([]rune(strings.ReplaceAll(cues[0].Text, "\n", ""))),
+			"first cue holds chunks 1-2 (16+11 = 27 runes, the cue packing cap is 32)")
+		total := 0
+		for _, c := range cues {
+			total += len([]rune(strings.ReplaceAll(c.Text, "\n", "")))
+		}
+		assert.Equal(t, 40, total, "all 40 runes preserved across cues")
+		// time interpolation tiles [0,1] exactly
+		assert.InDelta(t, 0.0, cues[0].Start, 1e-9)
+		for i := 1; i < len(cues); i++ {
+			assert.InDelta(t, cues[i-1].End, cues[i].Start, 1e-9, "cues contiguous across the split word")
+		}
+		assert.InDelta(t, 1.0, cues[len(cues)-1].End, 1e-9)
 	})
 	t.Run("8s single word yields one 8s cue", func(t *testing.T) {
 		w := []Word{{Index: 0, Text: "八秒长词", Start: 0, End: 8, Source: WordSourceTTS}}
 		cues := BuildCues(w)
 		require.Len(t, cues, 1)
 		t.Logf("observed cue duration=%.1fs (cap is 6s)", cues[0].End-cues[0].Start)
-		t.Skip("known boundary gap: single word longer than maxCueSec is not cut; " +
-			"asserting the §7.1 threshold would fail until BuildCues gains a single-word path (business-code change)")
+		t.Skip("separate boundary, not this fix's scope: single-word cue duration capping; " +
+			"the line-length half of this test is now asserted above")
 	})
 }
 

@@ -131,7 +131,7 @@ type fakePipeline struct {
 	onFrame func(int)
 }
 
-func (f *fakePipeline) Run(_ context.Context, _ *Worker, row renderRow, _ *videoapp.IR, _ videoapp.RenderParams, onFrame func(int)) (string, error) {
+func (f *fakePipeline) Run(_ context.Context, _ *Worker, row renderRow, _ *videoapp.IR, _ videoapp.RenderParams, onFrame func(int)) (string, string, error) {
 	total := row.FramesTotal
 	if total <= 0 {
 		total = f.frames
@@ -140,9 +140,9 @@ func (f *fakePipeline) Run(_ context.Context, _ *Worker, row renderRow, _ *video
 		onFrame(i)
 	}
 	if f.fail != nil {
-		return "", f.fail
+		return "", "", f.fail
 	}
-	return "video/ws1/renders/" + row.ID + "/output.mp4", nil
+	return "video/ws1/renders/" + row.ID + "/output.mp4", "", nil
 }
 
 func workerWith(t *testing.T, store *fakeStore, pub *fakePub, aud *fakeAuditor, pipe pipeline) *Worker {
@@ -269,7 +269,7 @@ func TestWorker_StubPipeline_DefaultBuild(t *testing.T) {
 	// capx tag the real pipeline is compiled instead — probe the type by its
 	// error behavior so this test file compiles under both tags.
 	w := NewWorker(WorkerDeps{Log: testLogger()})
-	_, err := w.pipe.Run(t.Context(), w, renderRow{}, &videoapp.IR{}, videoapp.RenderParams{}, func(int) {})
+	_, _, err := w.pipe.Run(t.Context(), w, renderRow{}, &videoapp.IR{}, videoapp.RenderParams{}, func(int) {})
 	if !errors.Is(err, ErrNotConfigured) {
 		t.Skipf("capx tag active (real pipeline, err=%v) — stub assertion not applicable", err)
 	}
@@ -291,6 +291,39 @@ func TestWorker_QuotaReleasePort(t *testing.T) {
 	qr.mu.Lock()
 	defer qr.mu.Unlock()
 	assert.Contains(t, qr.released, "ws1:"+videoapp.QuotaKey)
+}
+
+// --- subtitle degradation note (round-2 soft/degrade closure) ---
+
+// notePipeline returns a soft-degradation note with its output key — what
+// capxPipeline.Run produces after a burn→soft degrade.
+type notePipeline struct {
+	note string
+}
+
+func (n *notePipeline) Run(_ context.Context, _ *Worker, row renderRow, _ *videoapp.IR, _ videoapp.RenderParams, _ func(int)) (string, string, error) {
+	return "video/ws1/renders/" + row.ID + "/output.mp4", n.note, nil
+}
+
+func TestWorker_SucceededCarriesDegradationNote(t *testing.T) {
+	// A non-fatal degradation note must ride the succeeded write without
+	// flipping the row to failed: the state machine keys off status, and the
+	// error column merely carries the note (log/WS/audit surface it).
+	const note = "subtitle degraded: burn→soft (no libass)"
+	store := &fakeStore{rows: rowMap{"r1": rowWith(sampleIR())}}
+	pub := &fakePub{}
+	aud := &fakeAuditor{}
+	w := workerWith(t, store, pub, aud, &notePipeline{note: note})
+
+	require.NoError(t, w.Work(t.Context(), job("r1")))
+	last := store.updated[len(store.updated)-1]
+	assert.Equal(t, videoapp.RenderSucceeded, last.status, "note must not flip the row to failed")
+	assert.Equal(t, note, last.errMsg, "note persisted on the succeeded row")
+	assert.Empty(t, store.released, "no quota release on success")
+	aud.mu.Lock()
+	defer aud.mu.Unlock()
+	assert.Contains(t, aud.recorded, videoapp.AuditRenderCompleted)
+	assert.NotContains(t, aud.recorded, videoapp.AuditRenderFailed)
 }
 
 // --- batch-2 guard regressions (delivery-audit-video-studio §4 P4/P5) ---
@@ -386,10 +419,10 @@ func (c *cancelPipeline) waitStarted() {
 	<-c.started
 }
 
-func (c *cancelPipeline) Run(ctx context.Context, _ *Worker, _ renderRow, _ *videoapp.IR, _ videoapp.RenderParams, _ func(int)) (string, error) {
+func (c *cancelPipeline) Run(ctx context.Context, _ *Worker, _ renderRow, _ *videoapp.IR, _ videoapp.RenderParams, _ func(int)) (string, string, error) {
 	c.once.Do(func() { close(c.started) })
 	<-ctx.Done()
-	return "", ctx.Err()
+	return "", "", ctx.Err()
 }
 
 // compile-time guards: fakes satisfy their ports.

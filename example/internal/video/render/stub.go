@@ -14,8 +14,8 @@ import (
 // the failure observable instead of silent.
 type stubPipeline struct{}
 
-func (stubPipeline) Run(_ context.Context, _ *Worker, _ renderRow, _ *videoapp.IR, _ videoapp.RenderParams, _ func(int)) (string, error) {
-	return "", ErrNotConfigured
+func (stubPipeline) Run(_ context.Context, _ *Worker, _ renderRow, _ *videoapp.IR, _ videoapp.RenderParams, _ func(int)) (string, string, error) {
+	return "", "", ErrNotConfigured
 }
 
 func pickPipeline(deps WorkerDeps) pipeline { return stubPipeline{} }

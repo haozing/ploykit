@@ -1,0 +1,99 @@
+{
+  "case": "L5-consistency-sampling (synthesized 30-frame segment, 1080x1920@30, 1s, text + move)",
+  "degrade_reason": "",
+  "degraded": false,
+  "digest_all_match": true,
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "host": "DESKTOP-IGMKJLG",
+    "os": "windows/amd64",
+    "tab_model": "one fresh tab per RenderFrames call (chromedp.NewContext in renderer.go render()); no document state shared between runs; warm browser process reused (production shape)"
+  },
+  "evidence": {
+    "command": "go -C example test -tags capx ./internal/video/testdata -run TestL5Consistency -v -timeout 30m",
+    "digest_groups_written": 100,
+    "digests_file": "example/internal/video/testdata/consistency/digests-100.txt",
+    "isolation": "capx LocalChromeRenderer.render(): fresh tab + Page.setDocumentContent + __player.ready wait + per-frame pause(t,false)/double-rAF/Page.captureScreenshot",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §7.0 §7.6 §7.8",
+    "report_json": "example/internal/video/testdata/consistency-l5-report.json"
+  },
+  "first_run_digest_sha256": "2bd030eb4a9353e99fa4c70a98bdd5bb095bdb37dad6a97d506da671d24a57b5",
+  "first_run_digest_sha256_algorithm": "sha256 over strings.Join(first-run digest[0..29], \"\\n\")",
+  "layer": "L5",
+  "mismatches": null,
+  "perf": {
+    "avg_frames_per_sec": 6.76,
+    "per_frame_ms": {
+      "min": 72.67,
+      "median": 103.54,
+      "p95": 148.05,
+      "max": 2548.69
+    },
+    "per_frame_steady_ms": {
+      "min": 72.67,
+      "median": 103.18,
+      "p95": 124.36,
+      "max": 542.4
+    },
+    "per_run_ms": {
+      "min": 3885.08,
+      "median": 4289.27,
+      "p95": 4986.38,
+      "max": 11829.19
+    },
+    "total_ms": 443815,
+    "total_wall_clock": "7m24s"
+  },
+  "png": {
+    "avg_bytes": 26073,
+    "compression_ratio_avg": 238.59,
+    "max_bytes": 27566,
+    "min_bytes": 24626,
+    "note": "minimal composition (solid bg + moving white text): ratio 238.6x is an upper bound. Real case-content cross-check (L1 goldens, this repo): 130-180x. §7.8 3-8x estimate does NOT hold for flat-color motion graphics; see l1_golden_cross_check.",
+    "raw_rgb_bytes_per_frame": 6220800,
+    "l1_golden_cross_check": {
+      "c01": {
+        "frames": 10,
+        "avg_bytes": 34890,
+        "compression_ratio": 178.3,
+        "note": "1080x1920, VS-C01 cream bg + text/cards/CTA bar"
+      },
+      "c04": {
+        "frames": 11,
+        "avg_bytes": 47146,
+        "compression_ratio": 131.95,
+        "note": "1920x1080, VS-C04 dark bg + bar chart + ring"
+      },
+      "c06": {
+        "frames": 11,
+        "avg_bytes": 34839,
+        "compression_ratio": 178.56,
+        "note": "1920x1080, VS-C06 dark bg + caption text"
+      },
+      "verdict": "real case-content frames compress 130-180x (flat-color motion graphics), far above the 3-8x estimate in §7.8; the 3-8x band assumes photographic/noise content, not the flat-design compositions this pipeline produces. §7.8 PNG disk estimates (0.76-2.02 MB/frame weighted) are thereby overestimates by ~20-25x; realistic HD frame is ~35-47 KB, L1 golden 90 frames ~3-4 MB total, L3 temp frames 10800 x ~40KB ~ 430 MB (not 8-21 GB)."
+    }
+  },
+  "recipe": {
+    "duration_frames": 30,
+    "duration_sec": 1,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1920,
+    "html_bytes": 86448,
+    "ir_sha256": "691459d8c0413088e8121219c7e0e4c1ec17e4423ca0359b9742c125e1eda40e",
+    "ir_sha256_basis": "sha256(json.Marshal(videoapp.IR) after ResolveAll, before projection)",
+    "timeline_id": "main",
+    "width": 1080
+  },
+  "run_id": "l5-consistency-20261115-175713-273b",
+  "samples": {
+    "frames_per_run": 30,
+    "runs": 100,
+    "total_frames": 3000
+  },
+  "threshold": "all runs identical (same machine, per-frame PNG SHA-256)",
+  "threshold_source": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §7.6"
+}

@@ -84,8 +84,12 @@ type Auditor interface {
 
 // pipeline is the capx-isolated step (§4.9.2 steps 3-7). The stub returns
 // ErrNotConfigured; the capx build implements the real capture/encode/put.
+// note carries non-fatal degradation facts (e.g. "subtitle degraded:
+// burn→soft (no libass)") for the succeeded row — the state machine keys off
+// err, never off the error column, so a non-empty note on a succeeded row is
+// safe to persist.
 type pipeline interface {
-	Run(ctx context.Context, w *Worker, row renderRow, ir *videoapp.IR, params videoapp.RenderParams, onFrame func(frame int)) (outputKey string, err error)
+	Run(ctx context.Context, w *Worker, row renderRow, ir *videoapp.IR, params videoapp.RenderParams, onFrame func(frame int)) (outputKey, note string, err error)
 }
 
 // Worker is the river.Worker for RenderArgs on the "video" queue.
@@ -195,7 +199,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 
 	// 3-7. pipeline (assets preload → projector → capx frames → subtitles →
 	// mux → storage put). Context cancellation (drain) surfaces here.
-	outputKey, perr := w.pipe.Run(ctx, w, row, ir, row.Params, onFrame)
+	outputKey, subNote, perr := w.pipe.Run(ctx, w, row, ir, row.Params, onFrame)
 	if perr != nil {
 		if ctx.Err() != nil {
 			// Soft-stop / job-timeout cancellation: the compensation writes
@@ -227,17 +231,23 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 		return river.JobCancel(errSilentFail)
 	}
 
-	// 7. succeeded
-	if err := w.transition(ctx, &row, videoapp.RenderSucceeded, "", total, outputKey); err != nil {
+	// 7. succeeded — a non-fatal degradation note rides in the error column
+	// (guarded UPDATE accepts any string; the status alone drives the state
+	// machine, and the UI/API render error only on failed/interrupted rows).
+	succeededErr := subNote
+	if err := w.transition(ctx, &row, videoapp.RenderSucceeded, succeededErr, total, outputKey); err != nil {
 		return err
 	}
 	// 8. audit + terminal WS frame
 	if w.deps.Audit != nil {
+		meta := map[string]any{"project_id": row.ProjectID, "output_key": outputKey, "frames_total": total}
+		if subNote != "" {
+			meta["degradation"] = subNote
+		}
 		w.deps.Audit.Record(ctx, &row.WorkspaceID, row.CreatedBy,
-			videoapp.AuditRenderCompleted, "video_render", row.ID,
-			map[string]any{"project_id": row.ProjectID, "output_key": outputKey, "frames_total": total})
+			videoapp.AuditRenderCompleted, "video_render", row.ID, meta)
 	}
-	w.pushState(ctx, &row, "")
+	w.pushState(ctx, &row, subNote)
 	w.deps.Log.Info("video render completed", "render_id", row.ID, "frames", total)
 	return nil
 }

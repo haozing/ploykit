@@ -239,6 +239,40 @@ func (r *Runtime) BurnSubtitles(ctx context.Context, videoPath, srtPath string, 
 	return runFFMpegPipe(ctx, ffmpeg, args, w)
 }
 
+// SoftSubtitles packages an SRT file as an embedded mov_text subtitle track
+// inside the MP4 written to w. The video stream is copied without re-encoding
+// (the deliverable keeps the already-encoded picture; players show the track
+// as toggleable captions instead of burned-in pixels):
+//
+//	ffmpeg -i video -i srt -map 0:v -map 1:s \
+//	    -c:v copy -c:s mov_text -f mp4 -
+//
+// This is the no-libass degradation target for BurnSubtitles (design §3.4)
+// and the native implementation of subtitle_mode=soft.
+func (r *Runtime) SoftSubtitles(ctx context.Context, videoPath, srtPath string, w io.Writer) error {
+	if !r.Available() {
+		return ErrNotConfigured
+	}
+	if videoPath == "" || srtPath == "" {
+		return errors.New("capx: SoftSubtitles requires videoPath and srtPath")
+	}
+	ffmpeg := r.encoderPath()
+	args := []string{
+		"-y",
+		"-i", videoPath,
+		"-i", srtPath,
+		"-map", "0:v",
+		"-map", "1:s",
+		"-c:v", "copy",
+		"-c:s", "mov_text",
+		// Pipe-safe fragmented MP4 (same rationale as EncodePNGStream).
+		"-movflags", "frag_keyframe+empty_moov+default_base_moof",
+		"-f", "mp4",
+		"-",
+	}
+	return runFFMpegPipe(ctx, ffmpeg, args, w)
+}
+
 // ExtractThumbnail writes a single JPEG frame taken early in videoPath to w:
 //
 //	ffmpeg -i video -ss 00:00:01 -frames:v 1 -q:v 2 -f image2 -

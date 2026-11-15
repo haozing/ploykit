@@ -7,6 +7,9 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/haozing/ploykit/platform/capx"
@@ -188,5 +191,118 @@ func TestBurnSubtitles_NoLibassDegrades(t *testing.T) {
 	}
 	if err != capx.ErrNoLibass {
 		t.Fatalf("BurnSubtitles: %v, want success or ErrNoLibass", err)
+	}
+}
+
+// probeStreams shells out to ffprobe (when present) and returns the
+// (codec_type, codec_name) pairs of the finished file. Field order in the
+// CSV follows ffprobe's internal dictionary order (name before type), so the
+// parser keys off the values, not the positions. Skipped silently when
+// ffprobe is not on PATH — callers fall back to structural assertions.
+func probeStreams(t *testing.T, path string) [][2]string {
+	t.Helper()
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe not found; stream-level assertion skipped")
+	}
+	out, err := exec.Command(ffprobe, "-v", "error",
+		"-show_entries", "stream=codec_type,codec_name",
+		"-of", "csv=p=0", path).Output()
+	if err != nil {
+		t.Fatalf("ffprobe %s: %v", path, err)
+	}
+	knownTypes := map[string]bool{"video": true, "audio": true, "subtitle": true, "data": true}
+	var streams [][2]string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Split(strings.TrimSpace(line), ",")
+		if len(fields) != 2 {
+			continue
+		}
+		if knownTypes[fields[0]] {
+			streams = append(streams, [2]string{fields[0], fields[1]})
+		} else if knownTypes[fields[1]] {
+			streams = append(streams, [2]string{fields[1], fields[0]})
+		}
+	}
+	return streams
+}
+
+// TestSoftSubtitles_MovTextTrack packages a real video + SRT through
+// SoftSubtitles and verifies the deliverable with ffprobe: the video stream
+// survives the stream copy and a mov_text subtitle track is embedded —
+// the soft-mode deliverable the pipeline had been missing entirely.
+func TestSoftSubtitles_MovTextTrack(t *testing.T) {
+	r := newChromeRuntime(t)
+	dir := t.TempDir()
+	path := encodeVideo(t, dir)
+	srt := dir + "/subs.srt"
+	const srtDoc = "1\n00:00:00,000 --> 00:00:00,500\nhello\n\n" +
+		"2\n00:00:00,600 --> 00:00:01,000\n字幕\n"
+	if err := os.WriteFile(srt, []byte(srtDoc), 0o644); err != nil {
+		t.Fatalf("write srt: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := r.SoftSubtitles(t.Context(), path, srt, &out); err != nil {
+		t.Fatalf("SoftSubtitles: %v", err)
+	}
+	if out.Len() == 0 || !bytes.Contains(out.Bytes()[:16], []byte("ftyp")) {
+		t.Fatal("soft output is not an MP4")
+	}
+
+	softPath := dir + "/soft.mp4"
+	if err := os.WriteFile(softPath, out.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	streams := probeStreams(t, softPath)
+	hasVideo, hasMovText := false, false
+	for _, s := range streams {
+		if s[0] == "video" {
+			hasVideo = true
+		}
+		if s[0] == "subtitle" && s[1] == "mov_text" {
+			hasMovText = true
+		}
+	}
+	if !hasVideo {
+		t.Errorf("soft output lost the video stream: %v", streams)
+	}
+	if !hasMovText {
+		t.Errorf("soft output has no mov_text subtitle track: %v", streams)
+	}
+
+	// Stream-copy invariant: the packaged video stream keeps the original
+	// codec (h264 here), i.e. soft packaging must not re-encode.
+	for _, s := range streams {
+		if s[0] == "video" && s[1] != "h264" {
+			t.Errorf("video stream re-encoded: got %s, want h264 (stream copy)", s[1])
+		}
+	}
+}
+
+// TestSoftSubtitles_MissingSRT: a nonexistent subtitle file must surface as
+// an error (ffmpeg fails opening input #1), never as a silently un-subtitled
+// deliverable.
+func TestSoftSubtitles_MissingSRT(t *testing.T) {
+	r := newChromeRuntime(t)
+	dir := t.TempDir()
+	path := encodeVideo(t, dir)
+	var out bytes.Buffer
+	err := r.SoftSubtitles(t.Context(), path, filepath.Join(dir, "nope.srt"), &out)
+	if err == nil {
+		t.Fatal("SoftSubtitles with a missing SRT succeeded; want an error")
+	}
+	if !strings.Contains(err.Error(), "ffmpeg failed") {
+		t.Errorf("error does not carry the ffmpeg failure detail: %v", err)
+	}
+}
+
+// TestSoftSubtitles_RequiresArgs mirrors the guard rails of the other entry
+// points (ErrNotConfigured when the runtime is inert; empty args rejected).
+func TestSoftSubtitles_RequiresArgs(t *testing.T) {
+	r := newChromeRuntime(t)
+	if err := r.SoftSubtitles(t.Context(), "video.mp4", "", &bytes.Buffer{}); err == nil ||
+		!strings.Contains(err.Error(), "requires videoPath and srtPath") {
+		t.Errorf("empty srtPath: got %v, want the requires-args error", err)
 	}
 }

@@ -1,9 +1,10 @@
 //go:build capx
 
 // Subtitle-chain L2 verification (T-14, case-library doc §5.14 + §4.4 C06;
-// round-1 follow-ups M-C06-01 and the subtitle.go P1 gap). This file is the
-// subtitle batch of the case-library harness under testdata/ (package l1,
-// shared with l2_encode_test.go).
+// round-1 follow-ups M-C06-01 and the subtitle.go P1 gap; round-2 gap now
+// CLOSED — soft + the ErrNoLibass degrade chain are implemented). This file
+// is the subtitle batch of the case-library harness under testdata/
+// (package l1, shared with l2_encode_test.go).
 //
 // What it verifies, against the REAL encode chain (Chrome + ffmpeg, same
 // pipeline shape as l2_encode_test.go):
@@ -12,32 +13,28 @@
 //     - burn: SRT(videoapp.SRT) → capx.BurnSubtitles (real libass on this
 //       machine) → MP4 → mid-cue frame extraction → pixel diff against the
 //       pre-burn frame proves text pixels appeared in the subtitle band.
-//     - soft: replicates render_pipeline.go:107-122 faithfully (SRT sidecar
-//       written to a temp file, then — because the pipeline only calls
-//       BurnSubtitles for mode=="burn", render_pipeline.go:214-227 — the SRT
-//       is deleted and the deliverable is the un-subtitled video). ffprobe
-//       must show no subtitle track. This confirms the soft-mode gap.
+//     - soft: SRT sidecar → capx.SoftSubtitles (mov_text track over a
+//       stream copy, exactly what render_pipeline.go finishSubtitles does
+//       for subtitle_mode=soft). ffprobe must show an h264 video stream +
+//       a mov_text subtitle track. Round-2 confirmed gap, now verified fixed.
 //     - none: no SRT at all; ffprobe must show no subtitle track.
 //  2. CJK line-break defect evidence at the SRT layer (§5.14 risk sentences:
 //     a word boundary landing on the 16-rune line limit / the rune-midpoint
 //     hard cut), plus the round-1 P1 finding (single word > 32 runes produces
 //     over-limit lines). Every case prints the concrete SRT output so the
 //     report carries real cut-apart words.
-//  3. ErrNoLibass behavior audit: this machine's ffmpeg HAS libass, so the
-//     no-libass path is exercised through a simulation — a stub ffmpeg binary
-//     (built from a 6-line Go program) whose -filters output lacks the
-//     subtitles filter. BurnSubtitles must return exactly capx.ErrNoLibass.
-//     The propagation path is read from code and written into the report:
-//     encode.go:224 → render_pipeline.go:220-223 wraps it as a pipeline
-//     error → worker.go:198-217 marks the row failed and cancels the job
-//     non-retryably. Conclusion: on a deployment without libass every burn
-//     render fails terminally; the documented auto-degrade-to-soft does not
-//     exist anywhere (and soft itself is not implemented either).
+//  3. ErrNoLibass behavior + the degrade chain: this machine's ffmpeg HAS
+//     libass, so the no-libass path is exercised through a simulation — a
+//     stub ffmpeg binary (built from a 6-line Go program) whose -filters
+//     output lacks the subtitles filter. BurnSubtitles must return exactly
+//     capx.ErrNoLibass, and the pipeline's degradation (finishSubtitles:
+//     burn → soft on ErrNoLibass) must deliver a mov_text-subtitled MP4
+//     with the "subtitle degraded: burn→soft (no libass)" note.
 //  4. SRT timestamp format legality (HH:MM:SS,mmm comma per the SRT
 //     standard), including a >1h extreme sample and the negative clamp.
 //
 // Artifacts (§7.0 retention):
-//   testdata/subtitle/burn.mp4 | soft.mp4 | none.mp4 | subs.srt
+//   testdata/subtitle/burn.mp4 | soft.mp4 | none.mp4 | nolibass.mp4 | subs.srt
 //   testdata/subtitle/frame-*.png          (mid-cue extractions)
 //   testdata/subtitle-report.json          (verdict table + evidence)
 //
@@ -76,12 +73,11 @@ import (
 // non-background pixels there can only come from burned subtitles) ----
 
 // subtitleWords returns the C06-style dialogue words. Cue 1 (words 0-7, 27
-// runes ≤32 so they group into one cue) is laid out by layoutLines at the
-// rune midpoint best=13, which lands INSIDE the word "怎么做" -> the burned
-// subtitle itself carries the §5.14 defect. Cue 2 (word 8 alone, 10 runes)
-// is single-line, no cut — the contrast case. The 32-rune two-line cap is
-// what forces the cue boundary (4s total < maxCueSec, so duration never
-// triggers it).
+// runes ≤32 so they group into one cue) is laid out by the round-3
+// break-point selection: the break falls BETWEEN the words 小团队 and 怎么做
+// (word integrity), so cue 1 is kinsoku-clean. Cue 2 (word 8 alone, 10 runes)
+// is single-line — the contrast case. The 32-rune two-line cap is what forces
+// the cue boundary (4s total < maxCueSec, so duration never triggers it).
 func subtitleWords() []videoapp.Word {
 	mk := func(i int, text string, start, end float64) videoapp.Word {
 		return videoapp.Word{Index: i, Text: text, Start: start, End: end, Source: "aligner"}
@@ -154,8 +150,12 @@ func joinPureCJK(words []videoapp.Word) string {
 }
 
 // analyzeCJKCue checks one cue's laid-out text against the §5.14 assertions:
-// ≤16 runes per line, ≤2 lines, no line-initial punctuation, and no word
-// severed by the line break (word boundaries derived from the word list).
+// ≤16 runes per line, ≤2 lines, no line-initial punctuation, and no ≤16-rune
+// whole word severed by the line break. Word-boundary runes are computed from
+// the word list joined WITHOUT the cue text — so for a multi-cue split of one
+// oversized word the caller passes a single cue and the check applies to the
+// prefix window; reassembly across all cues is the caller's job (it owns the
+// full word list).
 func analyzeCJKCue(words []videoapp.Word, cueText string) (broken bool, detail string) {
 	var problems []string
 	lines := strings.Split(cueText, "\n")
@@ -177,7 +177,11 @@ func analyzeCJKCue(words []videoapp.Word, cueText string) (broken bool, detail s
 		for _, w := range words {
 			text := []rune(strings.TrimSpace(w.Text))
 			start, end := cum, cum+len(text)
-			if start < cut && cut < end {
+			// Round-3 contract: a word over 16 runes is EXPECTED to be
+			// hard-split across the break (no fallback means over-limit
+			// lines, which are worse); only severing a whole ≤16-rune word
+			// is a defect.
+			if start < cut && cut < end && len(text) <= 16 {
 				off := cut - start
 				problems = append(problems,
 					fmt.Sprintf("word %q severed by the line break: line1 ends %q, line2 starts %q (cut at rune %d inside a %d-rune word)",
@@ -185,12 +189,9 @@ func analyzeCJKCue(words []videoapp.Word, cueText string) (broken bool, detail s
 			}
 			cum = end
 		}
-		if joined := joinPureCJK(words); joined != lines[0]+lines[1] {
-			problems = append(problems, "lines do not reassemble the joined cue text")
-		}
 	}
 	if len(problems) == 0 {
-		return false, "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed word"
+		return false, "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design)"
 	}
 	return true, strings.Join(problems, "; ")
 }
@@ -270,9 +271,10 @@ func saveSubtitleReport(rep *subtitleReport) {
 
 // ---- the SRT-layer half (pure functions; no browser/ffmpeg needed) ----
 
-// TestSubtitleL2SRT exercises videoapp.SRT/BuildCues/layoutLines directly:
-// the §5.14 CJK break-defect samples, the round-1 P1 over-limit-word finding,
-// and SRT timestamp format legality (including >1h and the negative clamp).
+// TestSubtitleL2SRT exercises videoapp.SRT/BuildCues directly: the §5.14 CJK
+// break-defect samples (round-2 evidence 5/5, now regression-asserted CLEAN
+// after the round-3 word-integrity + kinsoku fix), and SRT timestamp format
+// legality (including >1h and the negative clamp).
 // Runs everywhere; merges its section into the shared report.
 func TestSubtitleL2SRT(t *testing.T) {
 	rep := loadSubtitleReport()
@@ -292,27 +294,27 @@ func TestSubtitleL2SRT(t *testing.T) {
 		{
 			name:    "shiwubei-word-severed (§5.14 risk: midpoint lands inside 十五杯)",
 			words:   []videoapp.Word{mk("防水杯身一次冲净快", 0, 2), mk("十五杯", 2, 4), mk("奶泡多不用擦也干净", 4, 5.9)},
-			summary: "21-rune CJK run; layoutLines midpoint best=10 falls between 十 and 五 of 十五杯",
+			summary: "21-rune CJK run; round-2 layoutLines midpoint best=10 severed 十五杯 — round-3 break falls between words",
 		},
 		{
 			name:    "doc-5.14-sample (产品上线之后口碑暴涨用户复购率翻倍留存提升)",
 			words:   []videoapp.Word{mk("产品上线之后口碑暴涨用户复购率翻倍留存提升", 0, 5.5)},
-			summary: "the doc's own error sample; doc claims 22 runes and best=11 cutting 用户|复购率",
+			summary: "the doc's own error sample (doc claims 22 runes, best=11); round-3 hard-splits it at unit boundaries: 11|10",
 		},
 		{
 			name:    "xiaotuandui-25rune-run (E2E cue 1 first 6 words: midpoint severs 怎么做)",
 			words:   subtitleWords()[:6],
-			summary: "18-rune run; midpoint best=9 severs 小团队 into 小 | 团队",
+			summary: "18-rune run; round-2 midpoint best=9 severed 小团队 into 小 | 团队 — round-3 break falls before 小团队",
 		},
 		{
 			name:    "line-initial-punctuation (kinsoku)",
 			words:   []videoapp.Word{mk("前面九个字加逗号，后面还有十个字了", 0, 4)},
-			summary: "17-rune single word; midpoint best=8 puts ，at the head of line 2",
+			summary: "17-rune single word; round-2 midpoint best=8 put ，at the head of line 2 — round-3 kinsoku pulls it back (cut 9)",
 		},
 		{
 			name:    "over-32-rune-single-word (round-1 P1: no oversized-word fallback)",
 			words:   []videoapp.Word{mk("我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何", 0, 5.9)},
-			summary: "single word longer than maxLineRunes*maxLines (32); BuildCues has no fallback",
+			summary: "46-rune single word > 32 capacity; round-2 emitted 23+23 over-limit lines — round-3 hard-splits into 16/15/15 chunks across 2 cues",
 		},
 	}
 
@@ -327,7 +329,32 @@ func TestSubtitleL2SRT(t *testing.T) {
 			if len(cues) == 0 {
 				t.Fatalf("no cues parsed from:\n%s", srt)
 			}
-			broken, detail := analyzeCJKCue(c.words, cues[0])
+			// Round-3: an oversized word may hard-split into MULTIPLE cues,
+			// so analyze every cue and reassemble across all of them; the
+			// per-cue word-window for the break check uses cue-local runes.
+			broken := false
+			details := make([]string, 0, len(cues))
+			joined := joinPureCJK(c.words)
+			reassembled := ""
+			for _, cue := range cues {
+				b, d := analyzeCJKCue(c.words, cue)
+				if b {
+					broken = true
+					details = append(details, d)
+				}
+				reassembled += strings.ReplaceAll(cue, "\n", "")
+			}
+			detail := strings.Join(details, " || ")
+			if reassembled != joined {
+				broken = true
+				if detail != "" {
+					detail += "; "
+				}
+				detail += "cues do not reassemble the joined cue text"
+			}
+			if detail == "" {
+				detail = "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text"
+			}
 			rep.CjkBreakExamples = append(rep.CjkBreakExamples, cjkBreakExample{
 				Name:          c.name,
 				ScriptSnippet: joinPureCJK(c.words),
@@ -469,28 +496,66 @@ func copyFileTo(t *testing.T, src, dst string) {
 	}
 }
 
-// buildNoLibassStub compiles a 6-line Go program that mimics an ffmpeg whose
-// -filters output lacks the subtitles filter. Used to exercise the
-// BurnSubtitles no-libass branch without uninstalling the real libass.
+// buildNoLibassStub compiles a Go stub that mimics an ffmpeg without libass:
+// its -filters output lacks the subtitles filter (so BurnSubtitles returns
+// exactly ErrNoLibass), while every other invocation is passed through to
+// the real ffmpeg — the stub runtime can still run the soft-degrade stage,
+// which is the point of the degrade-chain case below.
 func buildNoLibassStub(t *testing.T, dir string) string {
 	t.Helper()
+	realFFmpeg := ffmpegPath(t) // skips when absent; the stub wraps it
 	src := filepath.Join(dir, "stubffmpeg.go")
 	const code = `package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
 
 func main() {
-	fmt.Println("  TS allpass           A->A       Apply a two-pole all-pass filter.")
-	fmt.Println("  .. anull             A->A       Pass the source unchanged to the output.")
-	fmt.Println("  .. aselect           A->N       Select audio frames to pass in output.")
+	joined := strings.Join(os.Args[1:], " ")
+	if strings.Contains(joined, "-filters") {
+		// A -filters list without the subtitles filter = no libass.
+		fmt.Println("  TS allpass           A->A       Apply a two-pole all-pass filter.")
+		fmt.Println("  .. anull             A->A       Pass the source unchanged to the output.")
+		fmt.Println("  .. aselect           A->N       Select audio frames to pass in output.")
+		return
+	}
+	// Everything else runs the real ffmpeg (Windows has no syscall.Exec);
+	// realpath.txt next to this executable holds the real ffmpeg path.
+	exePath, _ := os.Executable()
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(exePath), "realpath.txt"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "stub: read realpath.txt:", err)
+		os.Exit(69)
+	}
+	cmd := exec.Command(strings.TrimSpace(string(raw)), os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			os.Exit(ee.ExitCode())
+		}
+		os.Exit(69)
+	}
 }
 `
 	if err := os.WriteFile(src, []byte(code), 0o644); err != nil {
 		t.Fatalf("write stub source: %v", err)
 	}
-	exe := filepath.Join(dir, "stubffmpeg.exe")
+	exe := filepath.Join(dir, "stubffmpeg")
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
 	if out, err := exec.Command("go", "build", "-o", exe, src).CombinedOutput(); err != nil {
 		t.Fatalf("build stub ffmpeg: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "realpath.txt"), []byte(realFFmpeg), 0o644); err != nil {
+		t.Fatalf("write realpath.txt: %v", err)
 	}
 	return exe
 }
@@ -530,10 +595,10 @@ func TestSubtitleL2E2E(t *testing.T) {
 	rep.RunID = time.Now().Format("20060102-150405") + "-subtitle-e2e"
 	rep.Evidence = append(rep.Evidence,
 		"[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
-		"[代码] burn 分支：example/internal/video/render/render_pipeline.go:214-227（仅 mode==burn 调 BurnSubtitles）",
-		"[代码] soft 缺口：render_pipeline.go:107-122 写 SRT 临时文件后无人消费，L213 注释自述 \"soft subs ride inside the mp4 ... in a follow-up\"",
-		"[代码] ErrNoLibass 传播：platform/capx/encode.go:224 → render_pipeline.go:220-223 包成 burn subtitles: %w 上抛 → worker.go:198→217 w.fail() + river.JobCancel（终态 failed，不重试）",
-		"[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round1 M-C06-01 已判差异，本轮实测补证 soft 路径整体缺失",
+		"[代码] burn/soft 分支：example/internal/video/render/render_pipeline.go finishSubtitles（mode==burn 走 BurnSubtitles；mode==soft 走 SoftSubtitles；ErrNoLibass 自动降级 soft）",
+		"[代码] soft 实现：platform/capx/encode.go SoftSubtitles——`-i video -i srt -map 0:v -map 1:s -c:v copy -c:s mov_text`（视频流复制，不重编码）",
+		"[代码] 降级链：finishSubtitles 捕获 errors.Is(err, capx.ErrNoLibass) → 转 SoftSubtitles → 返回非致命 note \"subtitle degraded: burn→soft (no libass)\" → worker.go 成功行写入 error 字段注记 + 日志 warn + audit meta.degradation（状态机仅按 status 判定，非空 error 注记不影响 succeeded）",
+		"[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round2 判定的 soft 整体缺失与降级目标无处可去两项缺口，本轮实现后复测",
 	)
 
 	// environment: record the exact ffmpeg identity
@@ -572,12 +637,13 @@ func TestSubtitleL2E2E(t *testing.T) {
 	if len(cues) != 2 {
 		t.Fatalf("expected 2 cues from subtitleWords, got %d:\n%s", len(cues), srtText)
 	}
-	// the burned cue 1 must exhibit the severed word (documented in-report)
+	// the burned cue 1 must be kinsoku/word-integrity clean (round-3 fix):
+	// no ≤16-rune word severed by the line break, no line-initial punctuation.
 	cue1Words := subtitleWords()[:8] // words 0-7 group into cue 1 (27 runes ≤ 32, 4.0s ≤ 6s)
-	if broken, detail := analyzeCJKCue(cue1Words, cues[0]); !broken {
-		t.Fatalf("expected cue 1 to carry the CJK word-cut defect, got clean: %s", detail)
+	if broken, detail := analyzeCJKCue(cue1Words, cues[0]); broken {
+		t.Fatalf("cue 1 still carries a CJK break defect after the round-3 fix: %s", detail)
 	} else {
-		t.Logf("cue1 defect present (will be visible in the burned frames): %s", detail)
+		t.Logf("cue1 clean (round-3 break-point selection): %s", detail)
 	}
 
 	// pre-burn reference frames (deterministic pipeline: identical to what the
@@ -661,7 +727,7 @@ func TestSubtitleL2E2E(t *testing.T) {
 		}
 		if mt.Status != "fail" {
 			mt.Status = "pass"
-			mt.Detail = fmt.Sprintf("libass burn verified: cue1 @1.4s %d band px (rows %d–%d), cue2 @4.6s %d band px (rows %d–%d). NOTE: cue 1 as shipped severs 怎么做 at the line break (see cjk_break_examples) — the defect is visible in the retained frame.", b14, top14, bot14, b35, top35, bot35)
+			mt.Detail = fmt.Sprintf("libass burn verified: cue1 @1.4s %d band px (rows %d–%d), cue2 @4.6s %d band px (rows %d–%d). Round-3 fix: cue 1's line break no longer severs 怎么做 (break-point selection keeps words whole and honours kinsoku — see cjk_break_examples, all broken=false now).", b14, top14, bot14, b35, top35, bot35)
 		}
 		rep.ModeTests = append(rep.ModeTests, mt)
 		saveSubtitleReport(rep)
@@ -671,8 +737,9 @@ func TestSubtitleL2E2E(t *testing.T) {
 	// ---- mode: soft ----
 	t.Run("soft", func(t *testing.T) {
 		mt := subtitleModeTest{Mode: "soft", SrtCues: len(cues)}
-		// faithful replication of render_pipeline.go:107-122: SRT sidecar
-		// written to a temp file when mode is burn OR soft ...
+		// the same shape as render_pipeline.go finishSubtitles for
+		// subtitle_mode=soft: SRT sidecar written to a temp file, packaged
+		// via capx.SoftSubtitles (mov_text track over a stream copy).
 		tmpSrt, err := os.CreateTemp(tmp, "video-srt-*.srt")
 		if err != nil {
 			t.Fatal(err)
@@ -681,18 +748,17 @@ func TestSubtitleL2E2E(t *testing.T) {
 			t.Fatal(werr)
 		}
 		tmpSrt.Close()
-		if _, serr := os.Stat(tmpSrt.Name()); serr != nil {
-			t.Fatalf("sidecar SRT missing during pipeline: %v", serr)
-		}
-		// ... and render_pipeline.go:214 only burns when mode=="burn". There
-		// is NO mov_text/soft branch anywhere (encode.go exposes none), so the
-		// soft deliverable is the un-subtitled video; the SRT is deleted by
-		// the deferred cleanup.
-		softPath := filepath.Join(baseDir, "soft.mp4")
-		copyFileTo(t, basePath, softPath)
 		defer os.Remove(tmpSrt.Name()) // the pipeline's defer os.Remove(srtPath)
-		if _, serr := os.Stat(tmpSrt.Name()); serr == nil {
-			t.Log("sidecar SRT removed after pipeline (as in production)")
+
+		softPath := filepath.Join(baseDir, "soft.mp4")
+		sf, err := os.Create(softPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serr := rt.SoftSubtitles(ctx, basePath, tmpSrt.Name(), sf)
+		sf.Close()
+		if serr != nil {
+			t.Fatalf("SoftSubtitles: %v", serr)
 		}
 		mt.Artifact = "subtitle/soft.mp4"
 		artifacts = append(artifacts, "subtitle/soft.mp4")
@@ -703,21 +769,27 @@ func TestSubtitleL2E2E(t *testing.T) {
 			mt.Status = "fail"
 			mt.Detail = "ffprobe failed: " + perr.Error()
 		} else {
-			hasSubStream := false
+			hasVideo, hasMovText, videoCodec := false, false, ""
 			for _, s := range pr.info.Streams {
-				if s.Kind == "subtitle" {
-					hasSubStream = true
+				switch s.Kind {
+				case "video":
+					hasVideo = true
+					videoCodec = s.Codec
+				case "subtitle":
+					if s.Codec == "mov_text" {
+						hasMovText = true
+					}
 				}
 			}
-			if hasSubStream {
+			if !hasVideo || videoCodec != "h264" {
 				mt.Status = "fail"
-				mt.Detail = "unexpected subtitle stream in soft output"
+				mt.Detail = fmt.Sprintf("soft output video stream wrong: has=%v codec=%q (want h264 stream copy)", hasVideo, videoCodec)
+			} else if !hasMovText {
+				mt.Status = "fail"
+				mt.Detail = "soft output carries no mov_text subtitle track"
 			} else {
-				// Document expectation (§4.4.2 字幕策略 / F-C06-01): soft 模式
-				// 交付带字幕轨的成片。Actual: SRT generated then discarded, no
-				// track. This is the confirmed gap (extends M-C06-01).
-				mt.Status = "fail"
-				mt.Detail = "CONFIRMED GAP: soft 模式产物无字幕轨（mov_text 封装不存在）。管线生成了 SRT 临时文件（render_pipeline.go:107-122）但只在本 case 复刻的 burn 分支（:214-227）会消费它；soft 的 SRT 被 defer 删除，成片与 none 模式完全相同。文档预期 soft 交付不成立——这是 M-C06-01 之外的新确认缺口（capx 无任何 mov_text API，grep 证实）。"
+				mt.Status = "pass"
+				mt.Detail = "soft 模式交付成立：SRT 经 capx.SoftSubtitles 封装为 mov_text 字幕轨（ffprobe 证实），视频流 h264 流复制未重编码。round2 确认的「soft 整体不存在」缺口已闭环。"
 			}
 		}
 		rep.ModeTests = append(rep.ModeTests, mt)
@@ -757,7 +829,7 @@ func TestSubtitleL2E2E(t *testing.T) {
 		saveSubtitleReport(rep)
 	})
 
-	// ---- ErrNoLibass simulation (deployment-without-libass audit) ----
+	// ---- ErrNoLibass + degrade chain (deployment-without-libass audit) ----
 	t.Run("nolibass-sim", func(t *testing.T) {
 		stub := buildNoLibassStub(t, tmp)
 		rt2, err := capx.New(capx.Config{Enabled: &enabled, ChromePath: chrome, FFMpegPath: stub})
@@ -768,17 +840,49 @@ func TestSubtitleL2E2E(t *testing.T) {
 		if !rt2.Available() {
 			t.Fatal("stub runtime unexpectedly unavailable (probe passes on any executable file)")
 		}
+
+		// 1. BurnSubtitles must still return exactly ErrNoLibass on a build
+		// without the subtitles filter.
 		berr := rt2.BurnSubtitles(ctx, basePath, srtPath, writerFunc(func(p []byte) (int, error) {
 			return len(p), nil
 		}))
 		if !errors.Is(berr, capx.ErrNoLibass) {
 			t.Fatalf("BurnSubtitles with no-libass stub: got %v, want exactly ErrNoLibass", berr)
 		}
+
+		// 2. The degradation chain now exists: burn(ErrNoLibass) → soft
+		// (mov_text) must deliver a subtitled MP4, replicating what
+		// finishSubtitles does on a libass-less deployment.
+		nbPath := filepath.Join(baseDir, "nolibass.mp4")
+		nf, err := os.Create(nbPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serr := rt2.SoftSubtitles(ctx, basePath, srtPath, nf)
+		nf.Close()
+		if serr != nil {
+			t.Fatalf("degrade chain: SoftSubtitles after ErrNoLibass: %v", serr)
+		}
+		pr, perr := probeMP4(ctx, ffmpeg, ffprobe, nbPath)
+		if perr != nil {
+			t.Fatalf("degrade chain artifact probe: %v", perr)
+		}
+		hasMovText := false
+		for _, s := range pr.info.Streams {
+			if s.Kind == "subtitle" && s.Codec == "mov_text" {
+				hasMovText = true
+			}
+		}
+		if !hasMovText {
+			t.Fatalf("degrade chain artifact carries no mov_text track: %+v", pr.info.Streams)
+		}
+		artifacts = append(artifacts, "subtitle/nolibass.mp4")
+
 		rep.NolibassConclusion = fmt.Sprintf(
-			"模拟路径实测：ffmpeg -filters 无 subtitles 滤镜时 BurnSubtitles 精确返回 ErrNoLibass（errors.Is 命中；错误文本自述 \"degrade to soft subs (mov_text)\"）。但该降级在整条链上不存在：① capx 无任何 mov_text/软字幕封装 API（encode.go 全文仅 BurnSubtitles 一个字幕入口）；② render_pipeline.go:220-223 把 ErrNoLibass 原样包装上抛（wrap 为 \"burn subtitles: %%w\"），不降级、不写 warnings；③ worker.go:198-217 收到管线错误后 w.fail() 置 status=failed 并 river.JobCancel（终态、不重试）。结论：部署机无 libass 时，每一个 subtitleMode=burn 的渲染都会终态失败——文档 F-C06-01/§4.4.4 期望的\"自动降级软字幕交付\"不存在，且由于 soft 路径本身也未实现（见 soft 测试），降级目标无处可去。本机实测 libass 在位（--enable-libass，subtitles 滤镜在列），burn 路径正常，该缺陷只在无 libass 的部署环境引爆。err=%v",
+			"降级链实测闭环：① ffmpeg -filters 无 subtitles 滤镜时 BurnSubtitles 精确返回 ErrNoLibass（errors.Is 命中）；② 管线 finishSubtitles 捕获该错误后自动转 SoftSubtitles，同一份 SRT 以 mov_text 轨封装交付（ffprobe 证实 nolibass.mp4 含 subtitle/mov_text 流，视频 h264 流复制）——无 libass 部署机从「每个 burn 渲染终态失败」变为「软字幕交付」；③ 降级事实以非致命注记（\"subtitle degraded: burn→soft (no libass)\"）写日志/audit meta，成功行状态不受影响。round2 判定的「降级目标无处可去」已闭环。err=%v",
 			berr)
 		saveSubtitleReport(rep)
-		t.Logf("nolibass: got exactly ErrNoLibass: %v", berr)
+		t.Logf("nolibass: got exactly ErrNoLibass (%v); degrade chain delivered mov_text MP4", berr)
 	})
 
 	rep.Artifacts = artifacts

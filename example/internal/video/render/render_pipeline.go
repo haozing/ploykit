@@ -21,6 +21,7 @@ package render
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -43,17 +44,17 @@ func pickPipeline(deps WorkerDeps) pipeline { return capxPipeline{} }
 var CapxRuntime *capx.Runtime
 
 func (capxPipeline) Run(ctx context.Context, w *Worker, row renderRow, ir *videoapp.IR,
-	params videoapp.RenderParams, onFrame func(frame int)) (string, error) {
+	params videoapp.RenderParams, onFrame func(frame int)) (string, string, error) {
 
 	if CapxRuntime == nil {
-		return "", ErrNotConfigured
+		return "", "", ErrNotConfigured
 	}
 	if w.deps.Store == nil {
-		return "", fmt.Errorf("video render: storage not wired")
+		return "", "", fmt.Errorf("video render: storage not wired")
 	}
 	renderer, err := CapxRuntime.Renderer()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// 3. asset preload — images inline as data URIs, audio to temp files.
@@ -65,7 +66,7 @@ func (capxPipeline) Run(ctx context.Context, w *Worker, row renderRow, ir *video
 	proj := videoapp.NewProjector(resolver)
 	html, err := proj.HTML(ctx, ir, "")
 	if err != nil {
-		return "", fmt.Errorf("project: %w", err)
+		return "", "", fmt.Errorf("project: %w", err)
 	}
 
 	fps := params.FPS
@@ -83,7 +84,7 @@ func (capxPipeline) Run(ctx context.Context, w *Worker, row renderRow, ir *video
 		Width: params.Width, Height: params.Height, FPS: fps, DurationFrames: total,
 	}
 	if err := spec.Validate(); err != nil {
-		return "", fmt.Errorf("frame spec: %w", err)
+		return "", "", fmt.Errorf("frame spec: %w", err)
 	}
 
 	// 4-7. frames → ffmpeg stdin (image2pipe), progress per N frames; the
@@ -100,7 +101,7 @@ type pngSource struct {
 // encodeAndUpload runs the capture loop with its stdin plumbed into
 // EncodePNGStream, then subtitles → mux → storage put.
 func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoapp.IR,
-	params videoapp.RenderParams, spec capx.FrameSpec, src pngSource, onFrame func(frame int)) (string, error) {
+	params videoapp.RenderParams, spec capx.FrameSpec, src pngSource, onFrame func(frame int)) (string, string, error) {
 
 	// 5. subtitles sidecar (burn/soft need an .srt on disk for ffmpeg).
 	srtPath := ""
@@ -150,7 +151,7 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 	defer os.Remove(videoPath)
 	videoOut, err := os.Create(videoPath)
 	if err != nil {
-		return "", fmt.Errorf("stage video create: %w", err)
+		return "", "", fmt.Errorf("stage video create: %w", err)
 	}
 
 	// capture → encoder via os.Pipe: RenderFrames writes length-prefixed PNG
@@ -158,7 +159,7 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 	// h264 file (EncodePNGStream consumes the framed reader).
 	pr, pw, err := os.Pipe()
 	if err != nil {
-		return "", fmt.Errorf("pipe: %w", err)
+		return "", "", fmt.Errorf("pipe: %w", err)
 	}
 	fw := capx.NewFrameWriter(pw)
 	encodeDone := make(chan error, 1)
@@ -188,7 +189,7 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 		if renderErr.Error() != ErrNotConfigured.Error() {
 			renderErr = fmt.Errorf("render frames: %w", renderErr)
 		}
-		return "", renderErr
+		return "", "", renderErr
 	}
 	videoOut.Close()
 
@@ -198,51 +199,107 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 		muxPath := filepath.Join(workDir, fmt.Sprintf("video-mux-%s.mp4", row.ID))
 		mf, err := os.Create(muxPath)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if merr := CapxRuntime.MuxAV(ctx, mf, videoPath, voicePath, bgmPath, bgmVolume); merr != nil {
 			mf.Close()
-			return "", fmt.Errorf("mux: %w", merr)
+			return "", "", fmt.Errorf("mux: %w", merr)
 		}
 		mf.Close()
 		defer os.Remove(muxPath)
 		finalPath = muxPath
 	}
 
-	// 5b. burn subtitles (ErrNoLibass → the error text notes the degradation
-	// path; soft subs ride inside the mp4 via the mux step in a follow-up).
-	if srtPath != "" && params.SubtitleMode == "burn" {
-		burnPath := filepath.Join(workDir, fmt.Sprintf("video-burn-%s.mp4", row.ID))
-		bf, err := os.Create(burnPath)
-		if err != nil {
-			return "", err
-		}
-		if berr := CapxRuntime.BurnSubtitles(ctx, finalPath, srtPath, bf); berr != nil {
-			bf.Close()
-			return "", fmt.Errorf("burn subtitles: %w", berr)
-		}
-		bf.Close()
-		defer os.Remove(burnPath)
-		finalPath = burnPath
+	// 5b. subtitles: burn (libass) or soft (mov_text track). ErrNoLibass on
+	// the burn path degrades to soft automatically so a deployment without
+	// libass delivers soft-subtitled video instead of failing every burn
+	// render (design §3.4 / F-C06-01). The degradation fact is returned as a
+	// non-fatal note for the worker to surface via logs + WS state.
+	origFinal := finalPath
+	finalPath, subNote, err := w.finishSubtitles(ctx, row, params, workDir, finalPath, srtPath)
+	if err != nil {
+		return "", "", err
+	}
+	if finalPath != origFinal {
+		// finishSubtitles produced a new stage file; the pipeline owns its
+		// lifetime (removed after the storage put below returns).
+		defer os.Remove(finalPath)
 	}
 
 	// 7. storage put output.mp4 + first-frame thumb.jpg.
 	vf, err := os.Open(finalPath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer vf.Close()
 	outputKey := fmt.Sprintf("video/%s/renders/%s/output.mp4", row.WorkspaceID, row.ID)
 	if _, err := w.deps.Store.Put(ctx, outputKey, "video/mp4", vf); err != nil {
-		return "", fmt.Errorf("put output: %w", err)
+		return "", "", fmt.Errorf("put output: %w", err)
 	}
+	if subNote != "" {
+		// Degradation facts are log/WS-level notes only: the succeeded row's
+		// error column stays empty (its semantics remain "failure detail" —
+		// the UI renders error only on failed/interrupted rows).
+		w.deps.Log.Warn("video render: subtitle degraded, delivered as soft subs",
+			"render_id", row.ID, "note", subNote)
+	}
+
 	thumbKey := fmt.Sprintf("video/%s/renders/%s/thumb.jpg", row.WorkspaceID, row.ID)
 	if thumb, terr := firstThumb(ctx, w.deps.Store, ir); terr == nil && thumb != nil {
 		if _, err := w.deps.Store.Put(ctx, thumbKey, "image/jpeg", bytes.NewReader(thumb)); err != nil {
 			w.deps.Log.Warn("thumb put failed (non-fatal)", "render_id", row.ID, "err", err)
 		}
 	}
-	return outputKey, nil
+	return outputKey, subNote, nil
+}
+
+// finishSubtitles applies the subtitle stage to finalPath (steps 5b). burn
+// re-encodes with libass; soft embeds a mov_text track over a stream copy.
+// burn falling back to soft on ErrNoLibass is the documented degradation
+// (F-C06-01): the returned note ("" = no degradation) flows to the worker for
+// logging/WS, so the fact is observable without abusing the error column.
+// The returned file is the caller's to remove — this function only cleans up
+// its own intermediates (the burned output abandoned by a degrade).
+func (w *Worker) finishSubtitles(ctx context.Context, row renderRow, params videoapp.RenderParams,
+	workDir, finalPath, srtPath string) (path, note string, err error) {
+
+	if srtPath == "" || (params.SubtitleMode != "burn" && params.SubtitleMode != "soft") {
+		return finalPath, "", nil
+	}
+	// burn first (the requested mode), degrading to soft only on ErrNoLibass.
+	if params.SubtitleMode == "burn" {
+		burnPath := filepath.Join(workDir, fmt.Sprintf("video-burn-%s.mp4", row.ID))
+		bf, ferr := os.Create(burnPath)
+		if ferr != nil {
+			return "", "", ferr
+		}
+		berr := CapxRuntime.BurnSubtitles(ctx, finalPath, srtPath, bf)
+		bf.Close()
+		if berr == nil {
+			return burnPath, "", nil
+		}
+		if !errors.Is(berr, capx.ErrNoLibass) {
+			os.Remove(burnPath)
+			return "", "", fmt.Errorf("burn subtitles: %w", berr)
+		}
+		// No libass on this deployment: degrade to soft (mov_text) so the
+		// render still delivers captions instead of failing terminally. The
+		// abandoned burned output (empty or partial) is an intermediate here.
+		defer os.Remove(burnPath)
+		note = "subtitle degraded: burn→soft (no libass)"
+	}
+	softPath := filepath.Join(workDir, fmt.Sprintf("video-soft-%s.mp4", row.ID))
+	sf, ferr := os.Create(softPath)
+	if ferr != nil {
+		return "", "", ferr
+	}
+	serr := CapxRuntime.SoftSubtitles(ctx, finalPath, srtPath, sf)
+	sf.Close()
+	if serr != nil {
+		os.Remove(softPath)
+		return "", "", fmt.Errorf("soft subtitles: %w", serr)
+	}
+	return softPath, note, nil
 }
 
 // tempFile materializes one storage object into the worker temp dir.
