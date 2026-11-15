@@ -1,0 +1,13 @@
+[
+  {"frame": 0, "time_sec": 0.0, "expect": "双机位画面淡入开始：el_shotA/el_shotB scaleIn（0–20 帧）；中线 el_divider x=958–962 可见；A 姓名条 el_nameA scaleIn 亮起。降级差异：双机位素材降级为两块纯色 shape（C06-D1，无真实录制素材），'亮起/压暗'只能靠 scaleIn/颜色区分"},
+  {"frame": 20, "time_sec": 0.8, "expect": "两侧画面 scaleIn 结束 scale=1；字幕 cue 1 中文可见：el_captionZh '很多人问，两个人的小团队怎么做工具产品。'（y 960，36px 白字，≤2 行）。降级差异：字幕为静态 text（内容由 IR 手填，非 BuildCues 动态分组）"},
+  {"frame": 225, "time_sec": 9.0, "expect": "切换 B：el_nameB scaleIn 开始（锚点 w05'窄场景'第2次出现 9.2s→帧230，±2 帧窗口）。降级差异（关键）：说话人切换无遮罩亮度动画类型（无 opacity 动画），'左压暗 20%'不可实现（C06-D4）；A-C06-01 亮度对比断言在降级渲染下不适用，需标记"},
+  {"frame": 450, "time_sec": 18.0, "expect": "切回 A：an_caption_move 把字幕从 x=480 移到 x=960（锚点 w07'重命名' 18.55s→帧464，10 帧移动）；ef_pulse_nameA 脉冲（scale 1.06）作用于 el_nameA 姓名 div（元素级，非词级）"},
+  {"frame": 675, "time_sec": 27.0, "expect": "B 提问帧。降级差异：说话人切换无后续驱动——fade effect 已从降级 IR 移除（fade 作用于整个 #canvas，会压暗全画面而非仅 B 侧，见 X-4），镜 4/6/8 的姓名条切换无锚点动画，画面保持镜 3 状态"},
+  {"frame": 900, "time_sec": 36.0, "expect": "A 回答；字幕长句'我们按一周内能否完整交付来卡…'需 ≤2 行、行首无标点（A-C06-02）。T-01 断行缺陷现役：layoutLines 只在空格折行，纯中文按 rune 中点硬切（subtitle.go:72-98），行首标点可能出现——本 cue 降级 IR 已按句读预断行"},
+  {"frame": 1125, "time_sec": 45.0, "expect": "B 提问；无锚点切换（镜6 无 startAnchor，fade effect 已移除）。降级 IR 的说话人同步只覆盖首次切换（帧 230 附近），后续 4 次说话人切换无驱动（C06-D5）——L1 帧差断言对这些镜头会失败，需按单镜头切片验证"},
+  {"frame": 1350, "time_sec": 54.0, "expect": "A 回答 S7；'自己加功能'关键词高亮。降级差异：highlight 作用于整个 #canvas（timeline-builder.js:97-100），是整屏底色闪现，非目标词变色——帧差断言应检查全画布 #2E86DE 分量抬升"},
+  {"frame": 1800, "time_sec": 72.0, "expect": "A 长句 S9 断两行（T-01 重点帧）；英文软字幕 cue 9 时间码与中文对齐。降级差异（关键）：软字幕轨完全不渲染（C06-D2）——Player 时间轴无软字幕轨对象，SRT sidecar 仅由 render_pipeline.go:107-122 在 burn/soft 模式落盘；'burn+soft' 双语双轨模式不存在（RenderParams.SubtitleMode ∈ burn|soft|none，service.go:73）"},
+  {"frame": 2025, "time_sec": 81.0, "expect": "结论句片尾行出现：el_endline '先把一件小事做到不返工' scaleIn（锚 w19'返工' 85.2s→帧2130——比文档 2025 晚 105 帧，锚点词在句尾导致入场推迟，可见差异需记录）；双姓名条保持"},
+  {"frame": 2249, "time_sec": 89.96, "expect": "尾帧：画面保持；DurationFrames=ceil(90×25)=2250 帧；MP4 90.0s±0.1s；SRT cue 数=11（BuildCues 按句读+16 rune×2 行+6s 上限分组，实际 cue 数由 words 表驱动，需 L1 实测）；音频时长 ≥89.9s。字幕最短时长 ≥1.2s 校验缺失（subtitle.go:12-16 只有上限）——短问句可能 <1.2s 一闪而过（C06-D8）"}
+]

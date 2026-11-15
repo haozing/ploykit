@@ -1,0 +1,13 @@
+[
+  {"frame": 0, "time_sec": 0.0, "expect": "标题卡可见：el_title '经济总量 · 增速 · 服务业占比' scaleIn 进行中（0/24帧），背景 #F2F5F9 铺满；降级差异：柱/线/环元素已挂载 DOM（无 startFrame/endFrame 显隐区间，C04-D6），但 scale=0 占位不可见"},
+  {"frame": 24, "time_sec": 0.8, "expect": "标题 scaleIn 落定 scale=1；三指标标题一行可读（视觉断言 A-C04-01 前置）"},
+  {"frame": 180, "time_sec": 6.0, "expect": "柱状图区激活：el_bar22 scaleIn 开始（锚点 w05'总量'第2次出现≈6.2s→帧186，±2 帧窗口内）；降级差异：柱为整柱 scaleIn（中心缩放），非 T-11 底部基线生长"},
+  {"frame": 216, "time_sec": 7.2, "expect": "三根柱全部可见；柱高比例 ≈180:240:330（A-C04-01：柱顶 y≈620/560/470 ±10px，柱宽 120px）。降级差异：counter 数字不贴柱顶——ef_bar24_cnt 自建 div 固定画布左上原点 (0,0)，柱顶金额标签需另配静态 text（降级 IR 用整柱 scaleIn 近似，柱顶标签省略）"},
+  {"frame": 540, "time_sec": 18.0, "expect": "折线图区出现（锚点 w10'增速'第2次出现 18.3s→帧549）；首点 3.0% 应在左下。降级差异：无逐段描线，el_line 整体 60 帧 scaleIn 淡入；三点/连线出现顺序不可控（C04-D1）；'3.0%' '5.2%' '5.0%' 标签与纵轴刻度为静态文本兜底"},
+  {"frame": 720, "time_sec": 24.0, "expect": "折线三点与连线完整可见；点2（5.2%）y 位置高于点1与点3（A-C04-03：区域 x 800–1240, y 360–660 内）。降级差异：整线 scaleIn 后不再有逐段生长动画"},
+  {"frame": 900, "time_sec": 30.0, "expect": "占比环出现（锚点 w15'产业' 30.3s→帧909 ±2帧）：el_ring scaleIn 30 帧 + el_ring_num '56.7%' scaleIn 20 帧。封面帧候选（文档选 900）。降级差异：环为整圆 shape，无 56.7/43.3 扇区划分（C04-D7）——橙圆 + 灰底需素材侧预置，降级 IR 只保留单色圆"},
+  {"frame": 960, "time_sec": 32.0, "expect": "环心数字 56.7% 可见；ef_ring_cnt counter 开始滚动（锚点 w17'五十六点七' 31.9s→帧957）。降级差异：counter div 在画布左上 (0,0) 而非环心，96px/700 固定样式"},
+  {"frame": 1260, "time_sec": 42.0, "expect": "镜5 三图同屏缩略并置：降级差异——无 group/镜头对象，60% 缩放需逐元素 move+scale 近似，降级 IR 未实现镜5 缩略（三图保持原尺寸）；结论句在字幕区由 el_caption 承载。ef_hl_growth 高亮触发：作用于整个 #canvas 背景层而非目标词（C04-D8，timeline-builder.js:97-100 高亮目标是 canvas）"},
+  {"frame": 1620, "time_sec": 54.0, "expect": "片尾说明卡覆盖。降级差异（重要）：无元素卸载——三图与标题仍在 DOM（C04-D6），仅被后 append 的 el_note 区覆盖；A-C04-04 的'柱图区蓝色像素 ≤2%'在降级渲染下会失败（柱仍可见），该断言需标记为降级不适用"},
+  {"frame": 1799, "time_sec": 59.97, "expect": "尾帧：说明卡保持；DurationFrames=ceil(60×30)=1800 帧（service.go:898 单源公式，timeline-builder.js:37 同步 ceil）；MP4 时长 60.0s±0.1s；BGM 淡出不可实现（无 loop/loudnorm/淡出滤镜，amix duration=first 截断）"}
+]

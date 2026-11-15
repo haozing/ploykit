@@ -351,7 +351,7 @@ func TestWorker_Interrupted_CompensationOnLiveContext(t *testing.T) {
 	store := &fakeStore{rows: rowMap{"r1": rowWith(sampleIR())}}
 	pub := &fakePub{}
 	aud := &fakeAuditor{}
-	pipe := &cancelPipeline{}
+	pipe := &cancelPipeline{started: make(chan struct{})}
 	w := workerWith(t, store, pub, aud, pipe)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -372,22 +372,21 @@ func TestWorker_Interrupted_CompensationOnLiveContext(t *testing.T) {
 }
 
 // cancelPipeline fails with context.Canceled once ctx dies.
+//
+// started is initialized EAGERLY at struct construction (test body uses
+// &cancelPipeline{started: make(chan struct{})}) — a lazily-made channel
+// here races between waitStarted and Run (both would create different
+// channels and waitStarted blocks forever; audit gate F-G3-1, 2/8 runs).
 type cancelPipeline struct {
 	started chan struct{}
 	once    sync.Once
 }
 
 func (c *cancelPipeline) waitStarted() {
-	if c.started == nil {
-		c.started = make(chan struct{})
-	}
 	<-c.started
 }
 
-func (c *cancelPipeline) Run(ctx context.Context, _ *Worker, row renderRow, _ *videoapp.IR, _ videoapp.RenderParams, onFrame func(int)) (string, error) {
-	if c.started == nil {
-		c.started = make(chan struct{})
-	}
+func (c *cancelPipeline) Run(ctx context.Context, _ *Worker, _ renderRow, _ *videoapp.IR, _ videoapp.RenderParams, _ func(int)) (string, error) {
 	c.once.Do(func() { close(c.started) })
 	<-ctx.Done()
 	return "", ctx.Err()

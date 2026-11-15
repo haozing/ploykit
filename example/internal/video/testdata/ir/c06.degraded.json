@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "meta": {"fps": 25, "width": 1920, "height": 1080, "durationSec": 90},
+  "script": "S1（A）很多人问，两个人的小团队怎么做工具产品。我们的答案是先选窄场景，再谈功能。S2（B）你说的窄场景，具体指什么？S3（A）比如文件重命名这种需求，用户要的不是一个全能管理器，而是把一批文件名一次改对。S4（B）那团队规模怎么决定功能边界？S5（A）我们按一周内能否完整交付来卡：超过一周的需求先记进清单，不进当前版本。S6（B）小团队最容易被什么拖住？S7（A）是自己加功能。用户没提的精致设置，往往最后只有设计者自己会用。S8（B）长期怎么做决策？S9（A）数据只回答用户用不用，不回答该不该做；方向还是靠自己对场景的判断。S10（B）最后给同类团队一句话？S11（A）先把一件小事做到不返工，再谈下一件。",
+  "words": [
+    {"index": 0, "text": "很多人", "start": 0.0, "end": 0.45, "source": "aligner"},
+    {"index": 1, "text": "两个人", "start": 0.45, "end": 0.95, "source": "aligner"},
+    {"index": 2, "text": "团队", "start": 0.95, "end": 1.25, "source": "aligner"},
+    {"index": 3, "text": "工具", "start": 1.25, "end": 1.65, "source": "aligner"},
+    {"index": 4, "text": "窄场景", "start": 2.3, "end": 2.65, "source": "aligner"},
+    {"index": 5, "text": "窄场景", "start": 9.2, "end": 9.55, "source": "aligner"},
+    {"index": 6, "text": "文件", "start": 18.2, "end": 18.55, "source": "aligner"},
+    {"index": 7, "text": "重命名", "start": 18.55, "end": 18.95, "source": "aligner"},
+    {"index": 8, "text": "文件名", "start": 19.6, "end": 20.0, "source": "aligner"},
+    {"index": 9, "text": "团队", "start": 27.2, "end": 27.55, "source": "aligner"},
+    {"index": 10, "text": "规模", "start": 27.55, "end": 27.95, "source": "aligner"},
+    {"index": 11, "text": "一周", "start": 36.2, "end": 36.6, "source": "aligner"},
+    {"index": 12, "text": "清单", "start": 37.6, "end": 38.0, "source": "aligner"},
+    {"index": 13, "text": "团队", "start": 45.2, "end": 45.6, "source": "aligner"},
+    {"index": 14, "text": "功能", "start": 54.2, "end": 54.6, "source": "aligner"},
+    {"index": 15, "text": "设置", "start": 55.6, "end": 56.0, "source": "aligner"},
+    {"index": 16, "text": "数据", "start": 72.2, "end": 72.6, "source": "aligner"},
+    {"index": 17, "text": "场景", "start": 73.6, "end": 74.0, "source": "aligner"},
+    {"index": 18, "text": "团队", "start": 81.2, "end": 81.6, "source": "aligner"},
+    {"index": 19, "text": "返工", "start": 85.2, "end": 85.7, "source": "aligner"}
+  ],
+  "effects": [
+    {"id": "ef_hl_turn", "type": "highlight", "anchor": {"text": "团队", "occurrence": 0}, "params": {"color": "#2E86DE"}},
+    {"id": "ef_pulse_nameA", "type": "pulse", "anchor": {"text": "重命名", "occurrence": 0}, "params": {"scale": 1.06}}
+  ],
+  "elements": [
+    {"id": "el_shotA", "type": "shape", "color": "#1E2530", "x": 0, "y": 0, "w": 960, "h": 1080, "z": 0,
+      "animations": [{"id": "an_shotA_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 20, "easing": "power2.out"}]},
+    {"id": "el_shotB", "type": "shape", "color": "#251E30", "x": 960, "y": 0, "w": 960, "h": 1080, "z": 0,
+      "animations": [{"id": "an_shotB_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 20, "easing": "power2.out"}]},
+    {"id": "el_divider", "type": "shape", "color": "#2A313B", "x": 958, "y": 0, "w": 4, "h": 1080, "z": 1},
+    {"id": "el_nameA", "type": "text", "text": "林澈 · 独立开发者", "color": "#2E86DE", "fontSize": 30, "x": 60, "y": 860, "w": 440, "h": 50, "z": 5,
+      "animations": [{"id": "an_nameA_on", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 12, "easing": "power1.out"}]},
+    {"id": "el_nameB", "type": "text", "text": "沈屿 · 主持人", "color": "#7E57C2", "fontSize": 30, "x": 1020, "y": 860, "w": 420, "h": 50, "z": 5,
+      "animations": [{"id": "an_nameB_on", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 12, "easing": "power1.out", "startAnchor": {"text": "窄场景", "occurrence": 1}}]},
+    {"id": "el_captionZh", "type": "text", "text": "很多人问，两个人的小团队怎么做工具产品。", "color": "#FFFFFF", "fontSize": 36, "x": 660, "y": 960, "w": 600, "h": 70, "z": 20,
+      "animations": [{"id": "an_caption_move", "type": "move", "from": {"x": 480, "y": 960}, "to": {"x": 960, "y": 960}, "durationFrames": 10, "easing": "power1.out", "startAnchor": {"text": "重命名", "occurrence": 0}}]},
+    {"id": "el_captionEn", "type": "text", "text": "", "color": "#C9D2DC", "fontSize": 28, "x": 660, "y": 1010, "w": 600, "h": 40, "z": 19},
+    {"id": "el_endline", "type": "text", "text": "先把一件小事做到不返工", "color": "#FFFFFF", "fontSize": 34, "x": 660, "y": 760, "w": 600, "h": 50, "z": 5,
+      "animations": [{"id": "an_endline_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 20, "easing": "power2.out", "startAnchor": {"text": "返工", "occurrence": 0}}]}
+  ],
+  "audio": {
+    "voice": {"key": "video/vs-c06/voice-two-speakers.m4a", "durationSec": 90.0, "volume": 1.0},
+    "bgm": {"key": "video/vs-c06/as_bgm_interview.m4a", "durationSec": 91.0, "volume": 0.12}
+  }
+}

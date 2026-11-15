@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "generated_at": "2026-11-15",
+    "baseline": "d25362e (audit round 6) + working tree",
+    "doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md",
+    "doc_sections": ["4.2 VS-C04", "4.4 VS-C06", "3.1.4 format exemplar"],
+    "note": "Spec-audit batch 1: converted target-schema case specs into degraded IRs renderable by the current implementation; every doc-mapped file:line citation was re-verified against HEAD. The doc-reality mismatch list below is the primary deliverable."
+  },
+  "cases": [
+    {
+      "case_id": "VS-C04",
+      "title": "数据可视化口播：中国经济三年切面（2022–2024）",
+      "spec_section": "4.2 (doc lines 1399-1558)",
+      "ir_valid": true,
+      "validate_errors": [],
+      "validate_evidence": "go test ./internal/video -run TestDegradedIRFiles_Validate → c04.degraded.json: Validate=nil, DurationFrames=1800 (meta 1920x1080@30 60s, 20 words, 10 elements, 3 effects)",
+      "artifacts": [
+        "example/internal/video/testdata/ir/c04.degraded.json",
+        "example/internal/video/testdata/ir/c04.frames.json"
+      ],
+      "degradations": [
+        {"capability": "T-11 图表生长（逐柱）", "target_field": "animation params.axis=vertical / scaleIn 底部基线生长", "substitute": "整柱 scaleIn（中心缩放，transformOrigin 50% 50%，timeline-builder.js:126）；柱入场锚定到对应年份词 startAnchor", "visible_diff": "柱从中心放大而非自底部立起；视觉断言 A-C04-01 的柱顶 y 坐标检查在入场进行中的帧会偏移，落定帧（216）不受影响"},
+        {"capability": "T-11 折线逐段描线", "target_field": "animation params.reveal=leftToRight", "substitute": "el_line 整体 60 帧 scaleIn（C04-D1）", "visible_diff": "三点与连线同时整体淡入，出现顺序不可控；'先点后线'的节奏与口播 S4 不同步"},
+        {"capability": "T-10 counter 定位（柱顶金额/环心百分比）", "target_field": "counter + targetElementId", "substitute": "counter 自建 div 固定画布左上原点 (0,0)，96px/700 样式写死在 projector.go:301 CSS .el-text.counter；降级 IR 同时保留静态文本 el_ring_num '56.7%' 在环心位置兜底", "visible_diff": "滚动数字堆在左上角而非贴柱顶/环心；环心只有静态数字不滚动；字号不可配"},
+        {"capability": "T-06 镜头平移（group/chartGroup）", "target_field": "chartGroup 整组 move", "substitute": "三根柱各挂一条相同轨迹的顶层 move 动画（C04-D3），180-360 帧同向平移 -60px", "visible_diff": "多元素逐条复制参数；任一条缺 anchor 或错帧即层间滑移；无独立镜头对象"},
+        {"capability": "T-12 高亮作用域", "target_field": "highlight targetElementId=el_caption 词内上色", "substitute": "highlight 作用于整个 #canvas 背景（timeline-builder.js:97-100 target=canvas）", "visible_diff": "整屏 #F5A623 底色闪现 0.25s 而非字幕词变色；帧差断言应检查全画布背景色抬升"},
+        {"capability": "donut/lineChart 图形类型", "target_field": "elements[].params.shape=donut|lineChart、segments、points、labels", "substitute": "删除（现 Element 类型仅 image/text/shape，ir.go:30-34；扩展键无消费者）", "visible_diff": "占比环退化为单色圆形 shape，56.7/43.3 扇区划分丢失；折线三点几何丢失（整块矩形占位）；真实扇区/折线需素材侧预置位图"},
+        {"capability": "元素时间区间（镜6 卸载旧图）", "target_field": "elements[].startFrame/endFrame", "substitute": "全元素挂载到片尾，靠 z 层级与后 append 覆盖（C04-D6）", "visible_diff": "1620 帧起三图仍渲染在 DOM 中；A-C04-04 '柱图区蓝色像素 ≤2%' 在降级渲染下必然失败，L1 需将该断言标记为降级不适用"},
+        {"capability": "多 track 调度（tr_main/tr_chart/tr_note/tr_caption/tr_bgm）", "target_field": "tracks[] + trackId + z", "substitute": "tracks 删除；层级用元素 z 字段（ir.go:127 → zIndex = 1+z，timeline-builder.js:66）", "visible_diff": "轨道级整体显隐/重排不支持；z 值有效（文档'z 仅作字段保留'的说法已过时，见 doc_reality_mismatches M-C04-06）"},
+        {"capability": "字幕动态烧录", "target_field": "render.subtitle.mode=burn + el_caption maxLines/maxLineRunes", "substitute": "el_caption 保留为空静态 text（占位，文本需 L1 侧注入）；burn 路径由 RenderParams.SubtitleMode=burn 驱动 render_pipeline.go:107-122 + encode.go:211", "visible_diff": "IR 层无 subtitle 配置对象；行长/行数限制在 BuildCues（subtitle.go:12-16）而非元素参数；SRT 文本由 words 自动分组，与本案预断行文本可能不一致"},
+        {"capability": "BGM 淡入淡出 + loudnorm -16 LUFS", "target_field": "render.audio.loudness、镜1 淡入/镜6 淡出", "substitute": "仅 audio.bgm.volume=0.16 参与 amix（encode.go:166 volume filter）", "visible_diff": "无淡入淡出滤镜、无响度归一；BGM 被 amix duration=first 截到 voice 时长（60s），不循环"},
+        {"capability": "封面帧 atSec=30.0 候选比选", "target_field": "render.thumbnail.atSec", "substitute": "ExtractThumbnail(capx/encode.go:245) 存在但固定取 -ss 00:00:01；render_pipeline.go:268 firstThumb 是返回 nil 的 stub，缩略图实际不产出（非致命）", "visible_diff": "帧 900 封面候选需 L1 用帧渲染器单独截取；'候选帧对比'无管线接口"},
+        {"capability": "voice/bgm 双轨音频资产", "target_field": "tracks tr_bgm + assets[] + voice.provider", "substitute": "audio.voice + audio.bgm 各一条（ir.go:140-143），key 必须 video/ 前缀（ir.go:431）", "visible_diff": "voice 文件在本案是假设资产（testdata 无实体）；L1 渲染前需上传或置空（audio 为 omitempty 可整体删除→静音渲染）"}
+      ],
+      "doc_reality_mismatches": [
+        {"id": "M-C04-01", "doc_claim": "（§4.2.4 映射表行'多 track 调度'）'z 值仅作字段保留'——暗示 z 不参与渲染", "file_ref": "example/internal/video/app/timeline-builder.js:66（node.style.zIndex = String(1 + (el.z || 0))）；ir.go:127（Z 字段）；projector.go:229（elementMap 输出 z）", "actual_behavior": "z 字段是活的：builder 把 el.z 投影为 DOM zIndex 并参与层叠。'z 仅作字段保留'的低估会导致测试者放弃用 z 控制遮挡（本案片尾卡覆盖恰依赖它）。", "severity": "medium"},
+        {"id": "M-C04-02", "doc_claim": "（§4.2.4）counter 无定位字段，'固定左上原点 [代码] timeline-builder.js:232-241'", "file_ref": "当前 counterHost 在 timeline-builder.js:245-255（append 到 canvas，无 x/y），计数动画在 :85-94", "actual_behavior": "行为结论仍然成立（counter div 无定位、堆在左上），但行号漂移 232-241→245-255；且 232-241 现在是 postState 的 postMessage 代码。文档引用行号过时。", "severity": "low"},
+        {"id": "M-C04-03", "doc_claim": "（§4.2.4）'现仅 move|scaleIn|rotate；…nearest 会静默落到相邻词 [代码] ir.go:500-575'", "file_ref": "ir.go:507-546 ResolveAnchors；ir.go:463-499 anchorCandidates", "actual_behavior": "行为成立（exact>same_text>nearest>missing 四级、nearest 确实静默返回最近词索引，无 warning 通道），行号漂移 500-575→507-546。另注意 §4.2.6 F-C04-03 期望错误码 E_VIDEO_ANCHOR_AMBIGUOUS 不存在——service.go:27-36 只有 E_VIDEO_ANCHOR_NOT_FOUND，且现状歧义时 exact 精确取 occurrence 而非'取首个匹配'（文档 §3.1.6 F-C01-02 的 same_text 描述与 507-546 实现一致：occurrence 越界才落 same_text 最近候选）。", "severity": "medium"},
+        {"id": "M-C04-04", "doc_claim": "（§4.2.4）'T-15 封面帧…现 ExtractThumbnail 取单帧 JPEG，参数来自 render recipe [代码] encode.go:240'——暗示封面帧可选", "file_ref": "platform/capx/encode.go:245-263（-ss 00:00:01 固定）；example/internal/video/render/render_pipeline.go:268-273 firstThumb stub 返回 nil,nil", "actual_behavior": "双重失真：① ExtractThumbnail 的 '-ss 00:00:01' 写死，atSec 根本没有通路（比文档更差）；② 管线 firstThumb 是 stub，缩略图当前完全不产出。'封面帧选取可落地 ✅'的判定过时——应降级为 ⛔（管线未接）。", "severity": "high"},
+        {"id": "M-C04-05", "doc_claim": "（§4.2.6 A-C04 层）'时长 60.0s ±0.1s；30fps'与帧数'现实现 round=1800'（§4.2.1 案例头）", "file_ref": "example/internal/video/app/service.go:898-911 DurationFrames 用 ceil(max(meta,voice)×fps)；timeline-builder.js:34-37 注释明确 round→ceil 修正（delivery audit P8）", "actual_behavior": "文档自己标注 round=1800 但本轮已统一为 ceil 单源公式；60×30 数值上 round==ceil==1800 无差异，但文档口径已过时（'现实现 round='表述错误），若改时长/帧率产生小数帧时按 round 预期会差 1 帧。", "severity": "low"},
+        {"id": "M-C04-06", "doc_claim": "（§4.2.6 F-C04-04）'asset key 非 video/ 前缀 → ir.go:355-365 拒绝，E_VIDEO_INVALID_IR'", "file_ref": "当前 src 校验在 ir.go:365-372（E_VIDEO_IR_INVALID 由 service.go:291 从 ValidationError 映射），audio key 校验在 ir.go:431-433", "actual_behavior": "行为成立，行号漂移 355-365→365-372。错误码名文档写 E_VIDEO_INVALID_IR，实际常量是 E_VIDEO_IR_INVALID（service.go:291），测试断言需用后者。", "severity": "low"},
+        {"id": "M-C04-07", "doc_claim": "（§4.2.4 隐含）动画写法按目标 schema 顶层 from/to（'案例 IR 已按顶层书写 ✅ 以顶层为准'）", "file_ref": "timeline-builder.js:114-135 animBuilders 只读 an.from/an.to（move）与 an.fromValue/an.toValue（scaleIn/rotate）；§4.2.3 原始 IR 的 animations 是顶层平铺且带 targetElementId", "actual_behavior": "顶层写法确认正确，但重大结构差异文档未点明：现实现 animations 必须内嵌在 elements[].animations 里（ir.go:129、builder 在 :162 遍历 el.animations），顶层 animations 数组会被投影仪整个丢弃。降级 IR 已按内嵌结构转换。", "severity": "high"},
+        {"id": "M-C04-08", "doc_claim": "（§4.2.3 目标 IR）anchor 用 {wordId, lastText, lastIndex, occurrence, resolvedFrom, status}；words 带 confidence/scriptStart/scriptEnd", "file_ref": "ir.go:73-76 Anchor={text,occurrence}；ir.go:63-69 Word={index,text,start,end,source}", "actual_behavior": "与 C01 映射表一致（锚点只有 text+occurrence），但 §4.2.3 的 IR JSON 没有像 §3.1.4 那样在降级映射里明确'wordId→text 映射'一行，照抄 §4.2.3 JSON 会因 anchor 缺 text 校验失败（effects[i].anchor.text required，ir.go:260-262）。降级转换规则补上了这一步。", "severity": "medium"}
+      ]
+    },
+    {
+      "case_id": "VS-C06",
+      "title": "访谈/字幕：双人对谈——小团队怎么做工具产品",
+      "spec_section": "4.4 (doc lines 1706-1869)",
+      "ir_valid": true,
+      "validate_errors": [],
+      "validate_evidence": "go test ./internal/video -run TestDegradedIRFiles_Validate → c06.degraded.json: Validate=nil, DurationFrames=2250 (meta 1920x1080@25 90s, 20 words, 8 elements, 2 effects)",
+      "artifacts": [
+        "example/internal/video/testdata/ir/c06.degraded.json",
+        "example/internal/video/testdata/ir/c06.frames.json"
+      ],
+      "degradations": [
+        {"capability": "T-14 双语双轨字幕（zh burn + en soft）", "target_field": "tracks[].mode=burn/soft、render.subtitle.mode=burn+soft", "substitute": "中文走 RenderParams.SubtitleMode=burn（SRT 由 BuildCues 从 words 自动生成，render_pipeline.go:107-122）；英文 SRT 作为独立 asset 手工交付，Player 时间轴无软字幕轨对象（C06-D2）", "visible_diff": "'burn+soft' 组合模式不存在（SubtitleMode ∈ burn|soft|none，service.go:73-98）；成片内无双轨合成；英文轨只能挂播放器/剪辑侧"},
+        {"capability": "T-14 软字幕封装进 mp4", "target_field": "subtitle.soft=[en]", "substitute": "soft 模式仅落盘 SRT sidecar；mov_text 封装不存在（render_pipeline.go:212 注释自述 follow-up）", "visible_diff": "MP4 内无字幕流；F-C06-01 的'无 libass 降级软字幕轨交付'在管线层只到 sidecar 文件为止"},
+        {"capability": "T-01 CJK 断行与行首标点", "target_field": "maxLineRunes、句读折行、避头尾", "substitute": "完整保留 20 词 words[]（aligner 时间戳）供 BuildCues/SRT 分组；字幕元素文本按 16 rune 预断行手填（C06-D7）", "visible_diff": "layoutLines 只在空格折行、无空格按 rune 中点硬切（subtitle.go:72-98），isCJKPunct 标点集存在但未被折行引用（kinsoku 缺失，subtitle.go:150-156）——长句仍可能词中断行/行首标点；L1 应把帧 900（S5 长句）与 1800（S9 长句）作为断行缺陷重点帧"},
+        {"capability": "说话人亮起/压暗（opacity 遮罩）", "target_field": "遮罩透明度 20% 交叉过渡", "substitute": "无 opacity 动画类型（仅 move/scaleIn/rotate）；fade effect 存在但作用于整个 #canvas（timeline-builder.js:182 target 非 counter 一律 canvas），压暗它会牺牲全画面——降级 IR 直接不挂 fade，靠姓名条颜色区分（C06-D4）", "visible_diff": "A-C06-01 亮度对比断言（右/左 ≥1.15）降级渲染下不可判定；12 帧交叉淡化不可实现；fade effect 语义与目标（元素级压暗）错位——目标字段 opacity:0.8 进 effect params 虽过 Validate，但触发位置错误，L1 不得使用"},
+        {"capability": "姓名条切换与 cue 同步（±1 帧）", "target_field": "每镜独立 startAnchor", "substitute": "降级 IR 只给 el_nameB 挂了首次切换锚（'窄场景'第2次 9.2s→帧230），后续切换无锚点——效果级方案均需元素级目标，不存在", "visible_diff": "帧 675/1125/1575/2025 的姓名条切换在降级 IR 中无驱动；L1 帧差断言（224→225 姓名条区域变化）对后续镜头会失败，需按单镜头切片验证"},
+        {"capability": "字幕位置随说话人切换", "target_field": "caption move 到左半下方", "substitute": "an_caption_move 顶层 move（480→960）挂在 el_captionZh.animations，锚定'重命名'（C06-D3）", "visible_diff": "位置移动按词锚定可行，但只有一次（A→中），镜 2 的'切到 B 侧'没有反向 move；from/to 是绝对画布坐标（builder 里换算为相对位移），语义与目标一致"},
+        {"capability": "双人独立音轨", "target_field": "voice 双轨数组", "substitute": "audio.voice 单轨预混（C06-D6，ir.go:140-143 Audio{voice,bgm}）", "visible_diff": "IR 无法表达 A/B 分轨；各自的音量/静音/替换需素材阶段完成——与文档判定一致（⛔）"},
+        {"capability": "字幕最短显示时长 ≥1.2s", "target_field": "render.subtitle.minCueSec", "substitute": "无替代（BuildCues 只有上限：16 rune/2 行/6s，subtitle.go:12-16）（C06-D8）", "visible_diff": "短问句（S2/S4/S6/S8/S10）可能 <1.2s 一闪而过；words 表中 S2 词 9.2-9.55s 仅 0.35s，BuildCues 会并入相邻窗口缓解，但纯短句场景仍暴露"},
+        {"capability": "双机位真实画面素材", "target_field": "image 元素 as_shot_a/b.jpg + params.crop=left/right-half", "substitute": "两块纯色 shape 占位（C06-D1）；crop 扩展键无消费者（ir.go:118-134 无 mask/裁剪）", "visible_diff": "无肖像画面；若 L1 有真实素材可把两个 shape 换回 image+src（src 须 video/ 前缀且已上传）——IR 结构两者兼容"},
+        {"capability": "锚定词歧义兜底", "target_field": "anchor.occurrence 精确区分'团队'×3", "substitute": "降级 IR 用 occurrence=0/1 显式区分（团队@w02 idx1、团队@w10 idx9）", "visible_diff": "现状 exact 分支按 occurrence 选取（ir.go:525-527 cands[occurrence]），occurrence 越界才落 same_text——文档'现状取首个匹配'的描述不精确（见 M-C06-03）"}
+      ],
+      "doc_reality_mismatches": [
+        {"id": "M-C06-01", "doc_claim": "（§4.4.4）'现 BurnSubtitles 仅做硬字幕烧录；无 libass 返回 ErrNoLibass 降级软字幕 [代码] encode.go:188-238'", "file_ref": "platform/capx/encode.go:190-240（ErrNoLibass :193，BurnSubtitles :211-240）；render_pipeline.go:214-227 burn 分支", "actual_behavior": "行为成立、行号漂移 188-238→211-240。但注意方向性差异：文档说'管线降级为软字幕轨交付，不报错崩溃'（F-C06-01 期望），实际 render_pipeline.go:220-223 把 BurnSubtitles 的错误（含 ErrNoLibass）原样上抛为 render 失败——管线层并没有自动降级，ErrNoLibass 只是让调用方'可以'选择降级，选择逻辑不存在。F-C06-01 的期望断言会失败。", "severity": "high"},
+        {"id": "M-C06-02", "doc_claim": "（§4.4.4/§4.4.2）'预览不播放音频（[代码] timeline-builder.js:36-40）'", "file_ref": "timeline-builder.js:31-33（audio.voice.durationSec 只用于拉长 durationSec 渲染基线），全文无 audio 元素/播放调用", "actual_behavior": "结论成立，行号漂移且 36-40 现在是帧数 ceil 注释区。预览无声、渲染出声的口径可继续引用。", "severity": "low"},
+        {"id": "M-C06-03", "doc_claim": "（§4.4.6 F-C06-03）'锚定词团队出现三次注入 occurrence 缺失…期望 E_VIDEO_ANCHOR_AMBIGUOUS；现状取首个匹配，可能挂错说话人侧'", "file_ref": "ir.go:507-546 ResolveAnchors（exact: cands[anchor.Occurrence]，:525-527；same_text: occurrence 越界→最近候选 :528-536）；service.go:27-36 错误码表", "actual_behavior": "两个失真：① E_VIDEO_ANCHOR_AMBIGUOUS 错误码不存在（也不在 §1.1 服务层错误码表里），歧义不会 400；② '取首个匹配'不准确——missing 锚点的 effect 是 skip+无动画（timeline-builder.js:181），而 occurrence 越界落 same_text 最近候选。挂错侧的风险真实存在但机制描述错了。", "severity": "medium"},
+        {"id": "M-C06-04", "doc_claim": "（§4.4.4）'T-01 CJK 断行…可能切词、行首可能出现标点 [代码] subtitle.go:16-20、:66-96'", "file_ref": "subtitle.go:12-16（三上限常量）、subtitle.go:70-99（layoutLines）、:150-156（isCJKPunct 未被折行引用）", "actual_behavior": "行为成立（现状确实无 kinsoku），行号漂移 16-20→12-16、66-96→70-99。文档没有提到 isCJKPunct 已经存在但闲置——修复点其实已备好标点集，缺的是 layoutLines 的引用。", "severity": "low"},
+        {"id": "M-C06-05", "doc_claim": "（§4.4.4）'字幕最短显示时长…现 BuildCues 只限制单 cue ≤6s，无最短时长校验 [代码] subtitle.go:16-20'——⛔ 需 L0 补校验", "file_ref": "subtitle.go:12-16", "actual_behavior": "成立，行号漂移。补充：BuildCues 分组按句读优先切（:45-47 breakPunct），纯短句 cue 的实际时长由词表时间戳决定，L0 校验应加在 SRT 生成处而非 IR Validate（IR 层没有 cue 概念）。", "severity": "low"},
+        {"id": "M-C06-06", "doc_claim": "（§4.4.4）'动画参数层级…现 ElementAnimation 读顶层 from/to…params 内仅保留扩展键（axis、staggerFrames、reveal、path 等）'", "file_ref": "ir.go:101-113 ElementAnimation（from/to/fromValue/toValue/easing 顶层）+ Extra json.RawMessage；projector.go:243-275 elementMap 不输出 extra", "actual_behavior": "成立，但'params 内保留扩展键'的说法有两层偏差：① Element 结构根本没有 params 字段（扩展键无处安放），Extra 字段存在但投影仪不输出（文档 §1.1 已正确记录'elementMap 不消费'，案例表自相矛盾）；② 目标 schema 的 params.axis 等键即使放 extra 也不会到达 builder。降级处理：扩展效果全部删除或用现有效果近似。", "severity": "medium"},
+        {"id": "M-C06-07", "doc_claim": "（§4.4.5 预期帧表/§4.4.2 分镜）'结论句 scaleIn'在帧 2025（81.0s）", "file_ref": "降级 IR 用 '返工'（w19, 85.2s→帧2130）锚定 an_endline_in——按文档词表，S11 的结论句台词'先把一件小事做到不返工'中唯一锚点词'返工'在句尾", "actual_behavior": "若严格按词表锚定，结论句入场比文档帧表晚 105 帧（4.2s）；文档帧表 2025 与其自己的 words 表就不自洽（2025 帧对应 S10 的'最后给同类团队一句话'起点附近，但该句无入选词表词）。这是文档内部矛盾，L1 需二选一：改锚词（加'先'或'一件'入词表）或改帧表。", "severity": "medium"},
+        {"id": "M-C06-08", "doc_claim": "（§4.4.6 IR 层断言）'软字幕 asset kind=subtitle'、'11 条 cue 时间码单调递增'", "file_ref": "ir.go 无 asset/kind=subtitle 概念（assets[] 是目标 schema 字段，现 IR 只有 elements+audio）；cue 由 BuildCues 运行时从 words 派生", "actual_behavior": "断言对象不存在：现实现没有 IR 层 asset 表（资源走 storagex key 直传），'kind=subtitle' 无处校验；cue 数与时间码是 SRT(words) 的输出，属 L0 单测对象（subtitle_test.go 存在）而非 IR 断言。", "severity": "low"}
+      ]
+    }
+  ],
+  "cross_cutting_findings": [
+    {"id": "X-1", "finding": "文档所有 [代码] file:line 引用在 d25362e 后普遍漂移 5-30 行（timeline-builder.js 重构最大：decode fail-closed +149 行、effectBuilders/animBuilders 位置变化）。行为特征大多仍在，但三处实质性过时：M-C04-04（缩略图 stub，'可落地 ✅'应降级 ⛔）、M-C04-07（animations 必须内嵌 elements，文档按顶层平铺示范）、M-C06-01（ErrNoLibass 无自动降级路径，F-C06-01 期望会失败）。", "severity": "high", "evidence": "见各案 doc_reality_mismatches"},
+    {"id": "X-2", "finding": "帧数公式口径已从 round 改为 ceil 单源（service.go:898 DurationFrames + timeline-builder.js:37 Math.ceil，bd9e217 P8 修复）；两案数值 1800/2250 在两种公式下相同，验证无碍，但文档'现实现 round='表述与 §1.3 的说法需要统一改口径。", "severity": "low", "evidence": "example/internal/video/app/service.go:898-911; timeline-builder.js:34-37"},
+    {"id": "X-3", "finding": "目标 schema→现实现转换规则确认（与 C01 范例同款并补三条）：① anchor.wordId→{text,occurrence}（wordId 序号=words[] 下标，occurrence 按同文本出现序重算）；② targetElementId 删除（effect 无目标概念，highlight/pulse 挂 builder 默认目标：highlight→#canvas、pulse→需元素——现实现 pulse effect 同样无目标，降级 IR 用元素动画近似或接受整屏效果）；③ startFrame/endFrame 删除（全元素常驻）；④ tracks[]→元素 z 字段；⑤ assets[]/render 块删除（burn/soft 由 RenderParams 在提交渲染时传，不入 IR）；⑥ 顶层 animations[] 内嵌进 elements[].animations（文档未写明此条，实测 projector 丢弃顶层动画）；⑦ 复合 params 键（axis/segments/points/labels/reveal/crop/mode）删除。", "severity": "info", "evidence": "ir.go:63-167 类型定义; projector.go:154-209 payload 组装; timeline-builder.js:140-184 build()"},
+    {"id": "X-4", "finding": "effect 目标定位缺口比文档点名的更大：C04/C06 映射表只点破 counter（自建 div）与 highlight（整层 #canvas），实测 timeline-builder.js:182 `var target = fx.type === 'counter' ? counterHost(fx) : canvas;`——pulse/shake/fade 同样全部作用于 #canvas 整层。C06 文档 ef_pulse_nameA（脉冲姓名条）与 ef_fade_turn（压暗 B 侧）按目标 schema 语义写，现实现下前者脉冲全画布、后者把整个画面压到 0.8 透明度再不复原——降级 IR 已移除这两个 effect（保留 ef_hl_turn 时须接受整屏闪现）。", "severity": "high", "evidence": "timeline-builder.js:79-112 effectBuilders（5 个 builder 均无 target 概念）+ :182 target 选择"}
+  ]
+}

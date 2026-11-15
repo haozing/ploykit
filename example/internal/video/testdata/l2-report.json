@@ -1,0 +1,312 @@
+{
+  "layer": "L2",
+  "run_id": "20261115-155356-l2",
+  "env": [
+    "os=windows/amd64",
+    "host=DESKTOP-IGMKJLG",
+    "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "ffmpeg=C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+    "ffprobe=C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe"
+  ],
+  "cases": [
+    {
+      "case_id": "VS-C01",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.066667,
+            "sample_rate": 44100,
+            "channels": 1
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"111562\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        },\r\n        {\r\n            \"index\": 1,\r\n            \"codec_name\": \"aac\",\r\n            \"codec_long_name\": \"AAC (Advanced Audio Coding)\",\r\n            \"profile\": \"LC\",\r\n            \"codec_type\": \"audio\",\r\n            \"codec_tag_string\": \"mp4a\",\r\n            \"codec_tag\": \"0x6134706d\",\r\n            \"sample_fmt\": \"fltp\",\r\n            \"sample_rate\": \"44100\",\r\n            \"channels\": 1,\r\n            \"channel_layout\": \"mono\",\r\n            \"bits_per_sample\": 0,\r\n            \"initial_padding\": 0,\r\n            \"id\": \"0x2\",\r\n            \"r_frame_rate\": \"0/0\",\r\n            \"avg_frame_rate\": \"0/0\",\r\n            \"time_base\": \"1/44100\",\r\n            \"start_pts\": 0,\r\n            \"start_time\": \"0.000000\",\r\n            \"duration_ts\": 223440,\r\n            \"duration\": \"5.066667\",\r\n            \"bit_rate\": \"68784\",\r\n            \"extradata_size\": 5,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"SoundHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\VS-C01\\\\output.mp4\",\r\n        \"nb_streams\": 2,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.000000\",\r\n        \"duration\": \"5.066667\",\r\n        \"size\": \"117785\",\r\n        \"bit_rate\": \"185976\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\VS-C01\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:05.07, start: 0.000000, bitrate: 185 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1080x1920, 111 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 000001eb62a72340] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 000001eb62a72240] n_samples: 222208\n[Parsed_volumedetect_0 @ 000001eb62a72240] mean_volume: -21.5 dB\n[Parsed_volumedetect_0 @ 000001eb62a72240] max_volume: -18.0 dB\n[Parsed_volumedetect_0 @ 000001eb62a72240] histogram_18db: 46952\n[out#0/null @ 000001eb62a72e00] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:05.08 bitrate=N/A speed= 529x    \n"
+      },
+      "duration_ms": 19002,
+      "artifact": "l2/VS-C01/output.mp4",
+      "bytes": 117785
+    },
+    {
+      "case_id": "VS-C04",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.066667,
+            "sample_rate": 44100,
+            "channels": 1
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"128518\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        },\r\n        {\r\n            \"index\": 1,\r\n            \"codec_name\": \"aac\",\r\n            \"codec_long_name\": \"AAC (Advanced Audio Coding)\",\r\n            \"profile\": \"LC\",\r\n            \"codec_type\": \"audio\",\r\n            \"codec_tag_string\": \"mp4a\",\r\n            \"codec_tag\": \"0x6134706d\",\r\n            \"sample_fmt\": \"fltp\",\r\n            \"sample_rate\": \"44100\",\r\n            \"channels\": 1,\r\n            \"channel_layout\": \"mono\",\r\n            \"bits_per_sample\": 0,\r\n            \"initial_padding\": 0,\r\n            \"id\": \"0x2\",\r\n            \"r_frame_rate\": \"0/0\",\r\n            \"avg_frame_rate\": \"0/0\",\r\n            \"time_base\": \"1/44100\",\r\n            \"start_pts\": 0,\r\n            \"start_time\": \"0.000000\",\r\n            \"duration_ts\": 223440,\r\n            \"duration\": \"5.066667\",\r\n            \"bit_rate\": \"68784\",\r\n            \"extradata_size\": 5,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"SoundHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\VS-C04\\\\output.mp4\",\r\n        \"nb_streams\": 2,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.000000\",\r\n        \"duration\": \"5.066667\",\r\n        \"size\": \"128383\",\r\n        \"bit_rate\": \"202709\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\VS-C04\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:05.07, start: 0.000000, bitrate: 202 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080, 128 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000023202a43f40] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000023202a447c0] n_samples: 222208\n[Parsed_volumedetect_0 @ 0000023202a447c0] mean_volume: -21.5 dB\n[Parsed_volumedetect_0 @ 0000023202a447c0] max_volume: -18.0 dB\n[Parsed_volumedetect_0 @ 0000023202a447c0] histogram_18db: 46952\n[out#0/null @ 0000023202a43c00] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:05.08 bitrate=N/A speed= 570x    \n"
+      },
+      "duration_ms": 17898,
+      "artifact": "l2/VS-C04/output.mp4",
+      "bytes": 128383
+    },
+    {
+      "case_id": "VS-C06",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 25,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.08,
+            "sample_rate": 44100,
+            "channels": 1
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 125,
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"25/1\",\r\n            \"avg_frame_rate\": \"25/1\",\r\n            \"time_base\": \"1/12800\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.080000\",\r\n            \"duration_ts\": 64000,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"90997\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        },\r\n        {\r\n            \"index\": 1,\r\n            \"codec_name\": \"aac\",\r\n            \"codec_long_name\": \"AAC (Advanced Audio Coding)\",\r\n            \"profile\": \"LC\",\r\n            \"codec_type\": \"audio\",\r\n            \"codec_tag_string\": \"mp4a\",\r\n            \"codec_tag\": \"0x6134706d\",\r\n            \"sample_fmt\": \"fltp\",\r\n            \"sample_rate\": \"44100\",\r\n            \"channels\": 1,\r\n            \"channel_layout\": \"mono\",\r\n            \"bits_per_sample\": 0,\r\n            \"initial_padding\": 0,\r\n            \"id\": \"0x2\",\r\n            \"r_frame_rate\": \"0/0\",\r\n            \"avg_frame_rate\": \"0/0\",\r\n            \"time_base\": \"1/44100\",\r\n            \"start_pts\": 0,\r\n            \"start_time\": \"0.000000\",\r\n            \"duration_ts\": 224028,\r\n            \"duration\": \"5.080000\",\r\n            \"bit_rate\": \"68603\",\r\n            \"extradata_size\": 5,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"SoundHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\VS-C06\\\\output.mp4\",\r\n        \"nb_streams\": 2,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.000000\",\r\n        \"duration\": \"5.080000\",\r\n        \"size\": \"104732\",\r\n        \"bit_rate\": \"164932\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\VS-C06\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:05.08, start: 0.000000, bitrate: 164 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080, 90 kb/s, 25 fps, 25 tbr, 12800 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000021330ee3800] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000021330ee3900] n_samples: 222208\n[Parsed_volumedetect_0 @ 0000021330ee3900] mean_volume: -21.5 dB\n[Parsed_volumedetect_0 @ 0000021330ee3900] max_volume: -18.0 dB\n[Parsed_volumedetect_0 @ 0000021330ee3900] histogram_18db: 46952\n[out#0/null @ 0000021330ee43c0] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:05.09 bitrate=N/A speed= 626x    \n"
+      },
+      "duration_ms": 15696,
+      "artifact": "l2/VS-C06/output.mp4",
+      "bytes": 104732
+    },
+    {
+      "case_id": "AUDIO-VOICE-ONLY",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.066667,
+            "sample_rate": 44100,
+            "channels": 1
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"123262\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        },\r\n        {\r\n            \"index\": 1,\r\n            \"codec_name\": \"aac\",\r\n            \"codec_long_name\": \"AAC (Advanced Audio Coding)\",\r\n            \"profile\": \"LC\",\r\n            \"codec_type\": \"audio\",\r\n            \"codec_tag_string\": \"mp4a\",\r\n            \"codec_tag\": \"0x6134706d\",\r\n            \"sample_fmt\": \"fltp\",\r\n            \"sample_rate\": \"44100\",\r\n            \"channels\": 1,\r\n            \"channel_layout\": \"mono\",\r\n            \"bits_per_sample\": 0,\r\n            \"initial_padding\": 0,\r\n            \"id\": \"0x2\",\r\n            \"r_frame_rate\": \"0/0\",\r\n            \"avg_frame_rate\": \"0/0\",\r\n            \"time_base\": \"1/44100\",\r\n            \"start_pts\": 0,\r\n            \"start_time\": \"0.000000\",\r\n            \"duration_ts\": 223440,\r\n            \"duration\": \"5.066667\",\r\n            \"bit_rate\": \"68784\",\r\n            \"extradata_size\": 5,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"SoundHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\AUDIO-VOICE-ONLY\\\\output.mp4\",\r\n        \"nb_streams\": 2,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.000000\",\r\n        \"duration\": \"5.066667\",\r\n        \"size\": \"125098\",\r\n        \"bit_rate\": \"197523\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\AUDIO-VOICE-ONLY\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:05.07, start: 0.000000, bitrate: 197 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080, 123 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 00000228c20923c0] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 00000228c2093080] n_samples: 222208\n[Parsed_volumedetect_0 @ 00000228c2093080] mean_volume: -21.5 dB\n[Parsed_volumedetect_0 @ 00000228c2093080] max_volume: -18.0 dB\n[Parsed_volumedetect_0 @ 00000228c2093080] histogram_18db: 46952\n[out#0/null @ 00000228c2093700] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:05.08 bitrate=N/A speed= 769x    \n"
+      },
+      "duration_ms": 267,
+      "artifact": "l2/AUDIO-VOICE-ONLY/output.mp4",
+      "bytes": 125098
+    },
+    {
+      "case_id": "AUDIO-BGM-ONLY",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.066667,
+            "sample_rate": 44100,
+            "channels": 1
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"123262\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        },\r\n        {\r\n            \"index\": 1,\r\n            \"codec_name\": \"aac\",\r\n            \"codec_long_name\": \"AAC (Advanced Audio Coding)\",\r\n            \"profile\": \"LC\",\r\n            \"codec_type\": \"audio\",\r\n            \"codec_tag_string\": \"mp4a\",\r\n            \"codec_tag\": \"0x6134706d\",\r\n            \"sample_fmt\": \"fltp\",\r\n            \"sample_rate\": \"44100\",\r\n            \"channels\": 1,\r\n            \"channel_layout\": \"mono\",\r\n            \"bits_per_sample\": 0,\r\n            \"initial_padding\": 0,\r\n            \"id\": \"0x2\",\r\n            \"r_frame_rate\": \"0/0\",\r\n            \"avg_frame_rate\": \"0/0\",\r\n            \"time_base\": \"1/44100\",\r\n            \"start_pts\": 0,\r\n            \"start_time\": \"0.000000\",\r\n            \"duration_ts\": 223440,\r\n            \"duration\": \"5.066667\",\r\n            \"bit_rate\": \"68997\",\r\n            \"extradata_size\": 5,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"SoundHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\AUDIO-BGM-ONLY\\\\output.mp4\",\r\n        \"nb_streams\": 2,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.000000\",\r\n        \"duration\": \"5.066667\",\r\n        \"size\": \"125233\",\r\n        \"bit_rate\": \"197736\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -32,
+        "max_volume_db": -28.4,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\AUDIO-BGM-ONLY\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:05.07, start: 0.000000, bitrate: 197 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080, 123 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000020415113800] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 00000204151142c0] n_samples: 222208\n[Parsed_volumedetect_0 @ 00000204151142c0] mean_volume: -32.0 dB\n[Parsed_volumedetect_0 @ 00000204151142c0] max_volume: -28.4 dB\n[Parsed_volumedetect_0 @ 00000204151142c0] histogram_28db: 12824\n[out#0/null @ 0000020415113d40] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:05.08 bitrate=N/A speed= 897x    \n"
+      },
+      "duration_ms": 256,
+      "artifact": "l2/AUDIO-BGM-ONLY/output.mp4",
+      "bytes": 125233
+    },
+    {
+      "case_id": "AUDIO-VOICE-BGM",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.066667,
+            "sample_rate": 44100,
+            "channels": 1
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"123262\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        },\r\n        {\r\n            \"index\": 1,\r\n            \"codec_name\": \"aac\",\r\n            \"codec_long_name\": \"AAC (Advanced Audio Coding)\",\r\n            \"profile\": \"LC\",\r\n            \"codec_type\": \"audio\",\r\n            \"codec_tag_string\": \"mp4a\",\r\n            \"codec_tag\": \"0x6134706d\",\r\n            \"sample_fmt\": \"fltp\",\r\n            \"sample_rate\": \"44100\",\r\n            \"channels\": 1,\r\n            \"channel_layout\": \"mono\",\r\n            \"bits_per_sample\": 0,\r\n            \"initial_padding\": 0,\r\n            \"id\": \"0x2\",\r\n            \"r_frame_rate\": \"0/0\",\r\n            \"avg_frame_rate\": \"0/0\",\r\n            \"time_base\": \"1/44100\",\r\n            \"start_pts\": 0,\r\n            \"start_time\": \"0.000000\",\r\n            \"duration_ts\": 223440,\r\n            \"duration\": \"5.066667\",\r\n            \"bit_rate\": \"68741\",\r\n            \"extradata_size\": 5,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"SoundHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\AUDIO-VOICE-BGM\\\\output.mp4\",\r\n        \"nb_streams\": 2,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.000000\",\r\n        \"duration\": \"5.066667\",\r\n        \"size\": \"125071\",\r\n        \"bit_rate\": \"197480\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -27.2,
+        "max_volume_db": -22.5,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\AUDIO-VOICE-BGM\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:05.07, start: 0.000000, bitrate: 197 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1920x1080, 123 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000026058073ac0] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 0000026058072140] n_samples: 222208\n[Parsed_volumedetect_0 @ 0000026058072140] mean_volume: -27.2 dB\n[Parsed_volumedetect_0 @ 0000026058072140] max_volume: -22.5 dB\n[Parsed_volumedetect_0 @ 0000026058072140] histogram_22db: 15216\n[out#0/null @ 0000026058073880] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:05.08 bitrate=N/A speed= 656x    \n"
+      },
+      "duration_ms": 284,
+      "artifact": "l2/AUDIO-VOICE-BGM/output.mp4",
+      "bytes": 125071
+    },
+    {
+      "case_id": "AUDIO-SILENT",
+      "status": "pass",
+      "notes": [
+        "(info) frames counted via ffprobe -count_packets nb_read_packets"
+      ],
+      "ffprobe": {
+        "tool": "ffprobe",
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          }
+        ],
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": false,
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"123262\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\l2\\\\AUDIO-SILENT\\\\output.mp4\",\r\n        \"nb_streams\": 1,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.066667\",\r\n        \"duration\": \"5.000000\",\r\n        \"size\": \"79201\",\r\n        \"bit_rate\": \"126721\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
+      },
+      "duration_ms": 148,
+      "artifact": "l2/AUDIO-SILENT/output.mp4",
+      "bytes": 79201
+    }
+  ],
+  "totals": {
+    "pass": 7,
+    "fail": 0,
+    "skip": 0
+  },
+  "evidence": [
+    "[实测] ffmpeg -version =\u003e N-117763-ge35587250c-20241113 (--enable-libx264 --enable-libass), 2026-11-15",
+    "[代码] 编码链路：example/internal/video/testdata/l2_encode_test.go renderAndEncode（镜像 render/render_pipeline.go encodeAndUpload 的 pipe 组合）",
+    "[代码] 断言阈值：§7.3 通过阈值行（ftyp / 帧数 / 时长 Δ≤1帧 / 音频 RMS\u003e阈值 via volumedetect mean_volume\u003e-50dB）",
+    "[实测] volumedetect 原始输出已写入 report.json audio.volumedetect_raw（截断至 2KB）"
+  ]
+}

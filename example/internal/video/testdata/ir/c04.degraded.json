@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "meta": {"fps": 30, "width": 1920, "height": 1080, "durationSec": 60},
+  "script": "S1 这组数据讲中国经济的三个切面：经济总量、实际增速，以及服务业占比。S2 先看总量。二零二二年国内生产总值十二万一千零二十亿元，二零二三年十二万六千零五十八亿元，二零二四年十三万四千九百零八亿元。S3 总量按现价计算，单位亿元，来自国家统计局各年国民经济和社会发展统计公报。S4 再看实际增速。二零二二年增长百分之三点零，二零二三年百分之五点二，二零二四年百分之五点零。S5 增速按不变价格计算，剔除价格变动，反映的是实际产出变化。S6 第三组图是二零二四年产业结构：第三产业增加值占国内生产总值百分之五十六点七。S7 同年第一产业占百分之六点八，第二产业占百分之三十六点五，三者相加为百分之百。S8 三组图合在一起看：总量台阶抬升，增速保持在百分之五上下，服务业贡献超过一半。S9 数据口径、发布时间与原始公报链接，列在片尾说明卡。",
+  "words": [
+    {"index": 0, "text": "数据", "start": 0.0, "end": 0.6, "source": "aligner"},
+    {"index": 1, "text": "总量", "start": 0.6, "end": 0.95, "source": "aligner"},
+    {"index": 2, "text": "增速", "start": 0.95, "end": 1.35, "source": "aligner"},
+    {"index": 3, "text": "占比", "start": 1.35, "end": 1.75, "source": "aligner"},
+    {"index": 4, "text": "总量", "start": 6.2, "end": 6.6, "source": "aligner"},
+    {"index": 5, "text": "二零二二", "start": 6.6, "end": 7.05, "source": "aligner"},
+    {"index": 6, "text": "生产", "start": 7.05, "end": 7.6, "source": "aligner"},
+    {"index": 7, "text": "二零二三", "start": 8.7, "end": 9.1, "source": "aligner"},
+    {"index": 8, "text": "二零二四", "start": 10.1, "end": 10.5, "source": "aligner"},
+    {"index": 9, "text": "现价", "start": 12.3, "end": 12.65, "source": "aligner"},
+    {"index": 10, "text": "增速", "start": 18.3, "end": 18.7, "source": "aligner"},
+    {"index": 11, "text": "二零二二", "start": 18.7, "end": 19.15, "source": "aligner"},
+    {"index": 12, "text": "二零二三", "start": 19.65, "end": 20.1, "source": "aligner"},
+    {"index": 13, "text": "二零二四", "start": 20.6, "end": 21.0, "source": "aligner"},
+    {"index": 14, "text": "不变价", "start": 24.3, "end": 24.75, "source": "aligner"},
+    {"index": 15, "text": "产业", "start": 30.3, "end": 30.75, "source": "aligner"},
+    {"index": 16, "text": "第三产业", "start": 30.75, "end": 31.3, "source": "aligner"},
+    {"index": 17, "text": "五十六点七", "start": 31.9, "end": 32.4, "source": "aligner"},
+    {"index": 18, "text": "总量", "start": 42.3, "end": 42.8, "source": "aligner"},
+    {"index": 19, "text": "服务业", "start": 43.3, "end": 43.75, "source": "aligner"}
+  ],
+  "effects": [
+    {"id": "ef_bar24_cnt", "type": "counter", "anchor": {"text": "二零二四", "occurrence": 0}, "params": {"from": 0, "to": 1349084, "suffix": " 亿元"}},
+    {"id": "ef_ring_cnt", "type": "counter", "anchor": {"text": "五十六点七", "occurrence": 0}, "params": {"from": 0, "to": 56.7, "suffix": "%"}},
+    {"id": "ef_hl_growth", "type": "highlight", "anchor": {"text": "产业", "occurrence": 0}, "params": {"color": "#F5A623"}}
+  ],
+  "elements": [
+    {"id": "el_bg", "type": "shape", "color": "#F2F5F9", "x": 0, "y": 0, "w": 1920, "h": 1080, "z": 0},
+    {"id": "el_title", "type": "text", "text": "经济总量 · 增速 · 服务业占比", "color": "#1F3A5F", "fontSize": 56, "x": 960, "y": 180, "w": 840, "h": 80, "z": 0,
+      "animations": [{"id": "an_title_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 24, "easing": "power2.out"}]},
+    {"id": "el_bar22", "type": "shape", "color": "#2E86DE", "x": 180, "y": 620, "w": 120, "h": 180, "z": 5,
+      "animations": [
+        {"id": "an_bar22_grow", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 24, "easing": "power2.out", "startAnchor": {"text": "二零二二", "occurrence": 0}},
+        {"id": "an_camera_pan_bar22", "type": "move", "from": {"x": 180, "y": 620}, "to": {"x": 120, "y": 620}, "durationFrames": 360, "easing": "linear", "startAnchor": {"text": "总量", "occurrence": 1}}
+      ]},
+    {"id": "el_bar23", "type": "shape", "color": "#2E86DE", "x": 360, "y": 560, "w": 120, "h": 240, "z": 5,
+      "animations": [
+        {"id": "an_bar23_grow", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 24, "easing": "power2.out", "startAnchor": {"text": "二零二三", "occurrence": 0}},
+        {"id": "an_camera_pan_bar23", "type": "move", "from": {"x": 360, "y": 560}, "to": {"x": 300, "y": 560}, "durationFrames": 360, "easing": "linear", "startAnchor": {"text": "总量", "occurrence": 1}}
+      ]},
+    {"id": "el_bar24", "type": "shape", "color": "#2E86DE", "x": 540, "y": 470, "w": 120, "h": 330, "z": 5,
+      "animations": [
+        {"id": "an_bar24_grow", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 24, "easing": "power2.out", "startAnchor": {"text": "二零二四", "occurrence": 0}},
+        {"id": "an_camera_pan_bar24", "type": "move", "from": {"x": 540, "y": 470}, "to": {"x": 480, "y": 470}, "durationFrames": 360, "easing": "linear", "startAnchor": {"text": "总量", "occurrence": 1}}
+      ]},
+    {"id": "el_line", "type": "shape", "color": "#2E86DE", "x": 800, "y": 360, "w": 440, "h": 300, "z": 5,
+      "animations": [{"id": "an_line_draw", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 60, "easing": "power1.out", "startAnchor": {"text": "增速", "occurrence": 1}}]},
+    {"id": "el_ring", "type": "shape", "color": "#F5A623", "x": 1380, "y": 380, "w": 280, "h": 280, "z": 5,
+      "animations": [{"id": "an_ring_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 30, "easing": "power3.out", "startAnchor": {"text": "产业", "occurrence": 0}}]},
+    {"id": "el_ring_num", "type": "text", "text": "56.7%", "color": "#1F3A5F", "fontSize": 44, "x": 1460, "y": 500, "w": 160, "h": 60, "z": 5,
+      "animations": [{"id": "an_ring_num_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 20, "easing": "power2.out", "startAnchor": {"text": "产业", "occurrence": 0}}]},
+    {"id": "el_note", "type": "text", "text": "口径：总量现价 / 增速不变价；来源：国家统计局各年统计公报", "color": "#5B6B7F", "fontSize": 26, "x": 80, "y": 830, "w": 900, "h": 40, "z": 10,
+      "animations": [{"id": "an_note_in", "type": "scaleIn", "fromValue": 0, "toValue": 1, "durationFrames": 20, "easing": "power2.out", "startAnchor": {"text": "增速", "occurrence": 1}}]},
+    {"id": "el_caption", "type": "text", "text": "", "color": "#1F3A5F", "fontSize": 36, "x": 660, "y": 980, "w": 600, "h": 60, "z": 20}
+  ],
+  "audio": {
+    "voice": {"key": "video/vs-c04/voice-zh-CN-male.m4a", "durationSec": 60.0, "volume": 1.0},
+    "bgm": {"key": "video/vs-c04/as_bgm_corporate.m4a", "durationSec": 61.0, "volume": 0.16}
+  }
+}

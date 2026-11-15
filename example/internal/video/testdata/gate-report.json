@@ -1,0 +1,215 @@
+{
+  "run_id": "gate-20261115-batch1-d25362e",
+  "date": "2026-11-15",
+  "head": "d25362ec59f520a2af1649da57fa9bf5e4b2014c",
+  "env": {
+    "os": "Windows 10.0.26200 x64 (Git Bash)",
+    "go": "go1.27.0 windows/amd64",
+    "gcc": "gcc.exe (Rev8, Built by MSYS2 project) 15.2.0 (on PATH; cgo BROKEN, see findings F-ENV-1)",
+    "chrome_version": "157.0.8103.51",
+    "chrome_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe (NOT on PATH; capx uses absolute path)",
+    "ffmpeg_version": "ffmpeg version N-117763-ge35587250c-20241113 (C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe, on PATH)",
+    "ffprobe_present": true,
+    "ffprobe_version": "ffprobe version N-117763-ge35587250c-20241113 (same PATH dir as ffmpeg)",
+    "node": "v22.19.0",
+    "npm": "10.9.3",
+    "db": "postgres:16-alpine docker container pk-video-test-db on localhost:5437 (removed after run)"
+  },
+  "gates": [
+    {
+      "name": "G1 root build",
+      "command": "go build ./... (cwd D:\\code\\ploykit, root module github.com/haozing/ploykit)",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 10269,
+      "output_summary": "silent success"
+    },
+    {
+      "name": "G1 root vet",
+      "command": "go vet ./... (root module)",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 5095,
+      "output_summary": "silent success"
+    },
+    {
+      "name": "G1 root test",
+      "command": "go test ./... (root module)",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 10605,
+      "output_summary": "86 ok / 0 FAIL across 96 packages (incl. platform/capx ok ~15-24s)"
+    },
+    {
+      "name": "G2 example build (default tags)",
+      "command": "go -C example build ./...",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 9521,
+      "output_summary": "silent success"
+    },
+    {
+      "name": "G2 example vet (default tags)",
+      "command": "go -C example vet ./...",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 1706,
+      "output_summary": "silent success"
+    },
+    {
+      "name": "G2 example build (capx tag)",
+      "command": "go -C example build -tags capx ./...",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 6615,
+      "output_summary": "silent success"
+    },
+    {
+      "name": "G2 example vet (capx tag)",
+      "command": "go -C example vet -tags capx ./...",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 6004,
+      "output_summary": "silent success"
+    },
+    {
+      "name": "G3 video packages + cmd/app tests",
+      "command": "go -C example test -count=1 ./internal/video/... ./cmd/app/",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_ms": 604686,
+      "output_summary": "FAIL myproduct/internal/video/render 601.657s — TestWorker_Interrupted_CompensationOnLiveContext hung in cancelPipeline.waitStarted (chan receive) until 10min default test timeout; ok: internal/video/app (0.157s), adapters/http, adapters/mcp, cmd/app (0.376s). Reproduced in isolation: -run TestWorker -timeout 120s hung again at the same test (120.881s). Root cause: data race in test stub cancelPipeline (see findings F-G3-1). 8 bounded reruns: 7 pass, 2 hang — flaky-by-race, not deterministic."
+    },
+    {
+      "name": "G4 packages/ui vitest",
+      "command": "cd packages/ui && npx vitest run",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 77579,
+      "output_summary": "Test Files 93 passed (93); Tests 974 passed (974)"
+    },
+    {
+      "name": "G5 API contract drift",
+      "command": "python tools/check_api.py",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 739,
+      "output_summary": "spec routes: 172  code routes: 172 — OK, zero drift"
+    },
+    {
+      "name": "G6 DB bootstrap via video/app",
+      "command": "TEST_DATABASE_URL=postgres://pk:pk@localhost:5437/pk?sslmode=disable go -C example test -p 1 -count=1 ./internal/video/app/",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_ms": 15626,
+      "output_summary": "pgmigrate.Up + product migrations 1001-1010 all applied successfully (schema_migrations verified; video_project has NO script column after 1010 — expected). 3 integration tests FAIL with `column \"script\" does not exist (SQLSTATE 42703)` at service_db_test.go:156/197/221 — they call svc.Create, whose SQL at service.go:345 still references the dropped column. REAL HEAD DEFECT, see findings F-DB-1."
+    },
+    {
+      "name": "G6 example full suite on DB",
+      "command": "TEST_DATABASE_URL=... go -C example test -p 1 -count=1 -timeout 600s ./...",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_ms": 167058,
+      "output_summary": "13 ok (cmd/app, cmd/render, authorization, devtenant, eventsdemo, fidelity, task, internal/video, adapters/http, adapters/mcp, video/render, +2), FAIL internal/video/app — same 3 TestIntegration_* script-column failures. TestRegisteredKeysFullLoop PASSED on this bootstrapped DB (verified separately: --- PASS, 0.14s)."
+    },
+    {
+      "name": "G6 bootstrap-order verification",
+      "command": "go -C example test -count=1 -run TestRegisteredKeysFullLoop ./cmd/app/... (same DB, after video/app bootstrap)",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 382,
+      "output_summary": "TestRegisteredKeysFullLoop --- PASS (0.14s) on the video-bootstrapped DB. Confirms §7.9 task note: the test does not self-bootstrap; on a fresh DB it fails on missing site_settings, but after any video/app DB test ran first it goes green. Bootstrap-order dependency CONFIRMED, not a code defect."
+    }
+  ],
+  "supplementary": [
+    {
+      "name": "V1 capx race (§1.9 pending item)",
+      "command": "go test -race ./platform/capx",
+      "status": "skip",
+      "exit_code": 1,
+      "duration_ms": 17460,
+      "output_summary": "ENVIRONMENT UNAVAILABLE: `runtime/cgo: cgo.exe: exit status 2` [build failed]. Root-caused: msys2 gcc 15.2.0's cc1.exe resolves DLL deps to /mingw64/bin (libgmp-10.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll, libzstd.dll, zlib1.dll) but C:\\msys64\\mingw64\\bin does not exist — stale mingw64 references in a ucrt64-only install. gcc -c on any C file exits 1 with zero stderr; hence cgo AND -race cannot build anywhere on this machine (minimal `import \"C\"` probe fails identically). Verdict: cannot run race detector on this host until msys2 mingw64 residue is repaired. §1.9 item stays [待验证→环境受阻], NOT a repo defect."
+    },
+    {
+      "name": "V2 video/app race (§1.9 pending item)",
+      "command": "go -C example test -race ./internal/video/app/",
+      "status": "skip",
+      "exit_code": 1,
+      "duration_ms": 23312,
+      "output_summary": "Same cgo environment failure as V1 (`runtime/cgo: cgo.exe: exit status 2`, build failed). Same root cause."
+    },
+    {
+      "name": "V4 capx full verbose",
+      "command": "go test ./platform/capx -count=1 -v",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 19077,
+      "output_summary": "20/20 top-level tests PASS, 0 FAIL, 0 SKIP. Notables: TestRenderFrames_Deterministic 5.73s, TestThreeFrames 4.02s, TestPoolHardCap_NeverExceedsPoolSize 0.12s PASS."
+    },
+    {
+      "name": "env matrix backfill for §7.7",
+      "command": "chrome --version / ffmpeg -version / ffprobe -version / node --version / npm --version",
+      "status": "pass",
+      "exit_code": 0,
+      "duration_ms": 2000,
+      "output_summary": "Chrome 157.0.8103.51 (fills §7.7 blank); ffmpeg+ffprobe N-117763-ge35587250c-20241113 both on PATH; node v22.19.0; npm 10.9.3"
+    }
+  ],
+  "flaky_check": {
+    "target": "TestPoolHardCap_NeverExceedsPoolSize (chrome-stub GetFileAttributesEx, §1.9 #2 first-round failure)",
+    "command": "for i in 1 2 3; do go test ./platform/capx -count=1 -run 'TestPoolHardCap|TestFrameSpec' -v; done (consecutive, no gap)",
+    "runs": 3,
+    "results": [
+      {"run": 1, "verdict": "PASS", "detail": "TestPoolHardCap_NeverExceedsPoolSize 0.12s PASS; TestFrameSpec_OddDimensionsRejected PASS; ok 1.630s"},
+      {"run": 2, "verdict": "PASS", "detail": "same two tests PASS; ok 1.421s"},
+      {"run": 3, "verdict": "PASS", "detail": "same two tests PASS; ok 1.336s"}
+    ],
+    "conclusion": "NOT REPRODUCED in 3/3 consecutive runs (plus V4 full suite and G1 root test both passed it again). §1.9 flaky verdict [待验证] upgraded to CONFIRMED-FLAKY-ONE-OFF: 4 consecutive clean passes across independent processes; the original failure (chrome-stub executable not found) is consistent with a transient Windows file-handle/AV-lock or a racing temp-dir cleanup, not a logic bug. No reproduction path identified; keep monitoring, no code change required."
+  },
+  "findings": [
+    {
+      "id": "F-DB-1",
+      "severity": "P0",
+      "title": "HEAD d25362e breaks ProjectService.Create against its own migration 1010",
+      "detail": "Migration 1010_video_drop_script_column.up.sql drops video_project.script, and the commit message claims 'SELECT/Scan 同步收窄', but example/internal/video/app/service.go:345 INSERT...RETURNING still selects `script` — every Create fails on a freshly-migrated DB with SQLSTATE 42703 `column \"script\" does not exist`. Also the Scan list at :349-350 has 9 destinations for 10 RETURNING columns. Unit tests pass because they use fakes; the 3 DB integration tests (CreateMutateGet / OptimisticLockConflict / SubmitRender_GateOrder) are the only catch-net and they fail. This is a shipped, reproducible defect at HEAD — merge gate is RED.",
+      "evidence": "docker schema dump: video_project has no script column; go -C example test ./internal/video/app/ reproducible 3-test FAIL; git show HEAD:service.go line 345 unchanged"
+    },
+    {
+      "id": "F-G3-1",
+      "severity": "P1",
+      "title": "Test stub cancelPipeline has an unsynchronized lazy-init data race → whole render package hangs",
+      "detail": "example/internal/video/render/worker_test.go:377-392: both waitStarted() and Run() do `if c.started == nil { c.started = make(chan struct{}) }` without any lock before the once.Do(close). When the test's goroutine (line 358-361) calls waitStarted() concurrently with the worker's Run(), both may allocate DIFFERENT channels; waitStarted blocks forever on the channel nobody closes, Work never returns, and the package dies at the test timeout. Reproduced: full-batch run hung 601.657s; isolated -run TestWorker -timeout 120s hung again; 8 bounded reruns = 2 hangs / 7 passes (25%). Real Chrome-using tests and stub pool tests share nothing here — §1.9's 'suspected cross-test interference' hypothesis is superseded: the race is INSIDE this one test's stub. Fix is mechanical (init channel in struct literal or guard with the existing once) — left to a code-change task, out of scope for this read-only audit.",
+      "evidence": "panic traces name worker_test.go:384 (waitStarted <-chan) both times; /tmp/render_all_8.txt"
+    },
+    {
+      "id": "F-ENV-1",
+      "severity": "P2",
+      "title": "cgo/-race unusable on this host: msys2 cc1.exe DLL deps point to deleted mingw64/bin",
+      "detail": "go test -race (any package importing runtime/cgo) and any `import \"C\"` build fail with silent `cgo.exe: exit status 2`. Root cause chain: gcc 15.2.0 (ucrt64) invokes cc1.exe; ldd shows cc1.exe resolves libgcc_s_seh-1/libgmp-10/libwinpthread-1/libzstd/zlib1 from /mingw64/bin — that directory does not exist (stale references from a removed mingw64 toolchain). gcc -c exits 1 with EMPTY stderr. Blocks V1/V2 race verification (§1.9 pending items) and any CGO_ENABLED=1 workflow. Repair hint: reinstall/repair msys2 mingw-w64 toolchain or purge the ghost mingw64 path from the install; retest with `gcc -c` on a trivial file before re-running race gates.",
+      "evidence": "ldd output for cc1.exe; minimal import-C probe fails identically with and without CC override"
+    },
+    {
+      "id": "F-G6-1",
+      "severity": "P3 (documented environment contract)",
+      "title": "Bootstrap-order dependency: TestRegisteredKeysFullLoop requires a pre-migrated DB",
+      "detail": "As anticipated by the task brief: TestRegisteredKeysFullLoop (cmd/app settings) does not self-bootstrap migrations. On a fresh DB it fails on missing site_settings; after video/app DB tests ran first (pgmigrate.Up + product chain), it PASSES (verified 0.14s green in this run). This is a test-design property, not a regression: any future CI using a fresh DB must run a self-bootstrapping package (e.g. ./internal/video/app/) or make -C example db-up before ./... sweeps, or the full-suite verdict will contain one spurious FAIL.",
+      "evidence": "--- PASS: TestRegisteredKeysFullLoop (0.14s) on bootstrapped DB in this run"
+    },
+    {
+      "id": "F-WORKSPACE-1",
+      "severity": "P3",
+      "title": "Concurrent-session files interfered with the first full-suite run",
+      "detail": "example/internal/video/app/l0_case_library_test.go (untracked, written by a concurrent session mid-run) caused 6 video packages to report [build failed] simultaneously during the first background full-suite attempt; all compiled and passed cleanly on rerun minutes later. Audit runs on a live workspace should re-run 'build failed' results once after quiescence before believing them. testdata/l0-report.json (15:35) and testdata/ dir likewise pre-existed from the concurrent session; this report is written alongside them as gate-report.json.",
+      "evidence": "first full-suite log: 6x [build failed] with no compile error detail; immediate clean rerun"
+    }
+  ],
+  "pending_items_status": {
+    "go test -race ./platform/capx": "环境受阻 (F-ENV-1) — cgo broken on host; item remains 未验证, repair hint recorded",
+    "go -C example test -race ./internal/video/app/": "环境受阻 (F-ENV-1) — same",
+    "make test-db / DB-integration": "已验证 — DB chain run against postgres:16-alpine; video/app integration FAILs are a REAL code defect (F-DB-1), settings loop green (F-G6-1)",
+    "make verify-ui (packages/ui vitest)": "已验证 — 93 files / 974 tests all pass",
+    "chrome --version backfill for §7.7": "已验证 — 157.0.8103.51",
+    "TestPoolHardCap flaky verdict": "已验证 — confirmed one-off flaky, 3/3 + 2 more consecutive passes, no repro"
+  },
+  "verdict": "MERGE GATE RED — 2 blocking findings: F-DB-1 (P0, HEAD code breaks fresh-DB Create path) and F-G3-1 (P1, render package hangs ~25% of runs on a test-stub race). All other gates green. Race detector verification blocked by host toolchain damage (F-ENV-1), not by the repo."
+}

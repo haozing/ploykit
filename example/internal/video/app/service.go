@@ -342,7 +342,7 @@ func (s *ProjectService) Create(ctx context.Context, p *webx.Principal, title st
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO video_project (id, workspace_id, title, ir, created_by, updated_by, created_at, updated_at)
 		VALUES ($1,$2,$3,$4,$5,$5,$6,$6)
-		RETURNING id, workspace_id, title, script, ir, version, created_by, updated_by, created_at, updated_at`,
+		RETURNING id, workspace_id, title, ir, version, created_by, updated_by, created_at, updated_at`,
 		id, p.WorkspaceID, title, irBytes(ir), p.UserID, now).
 		Scan(&pr.ID, &pr.Workspace, &pr.Title, &irDest{&pr.IR}, &pr.Version,
 			&pr.CreatedBy, &pr.UpdatedBy, &pr.CreatedAt, &pr.UpdatedAt)

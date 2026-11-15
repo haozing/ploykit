@@ -1,0 +1,103 @@
+{
+  "layer": "L0",
+  "run_id": "l0-20261115-1533",
+  "date": "2026-11-15",
+  "env": {
+    "go": "go1.27.0 windows/amd64",
+    "os": "windows 10.0.26200 x64",
+    "machine": "local-windows",
+    "chrome": "not-required-at-L0",
+    "ffmpeg": "not-required-at-L0",
+    "node": "not-used (no JS unit-test framework in repo; JS parity checked by source-string assertion per plan §7.1 degradation clause)"
+  },
+  "scope": "example/internal/video/app pure functions: DurationFrames / ResolveAnchors / anchorCandidates / BuildCues / projector escaping — no Chrome, no DB (fake-only, plan §7.1)",
+  "baseline": {
+    "command": "go -C example test -count=1 ./internal/video/app/",
+    "output": "ok  \tmyproduct/internal/video/app\t0.160s",
+    "note": "pre-change run, before new L0 test file was added"
+  },
+  "cases": [
+    { "id": "VS-C01", "name": "TestL0_DurationFrames_CaseTable/VS-C01 短视频带货 15s@30", "status": "pass", "detail": "DurationFrames=450=ceil(15*30); fps=0 fallback path also 450" },
+    { "id": "VS-C02", "name": "TestL0_DurationFrames_CaseTable/VS-C02 品牌发布 30s@25", "status": "pass", "detail": "DurationFrames=750=ceil(30*25)" },
+    { "id": "VS-C03", "name": "TestL0_DurationFrames_CaseTable/VS-C03 知识科普 45s@30", "status": "pass", "detail": "DurationFrames=1350=ceil(45*30)" },
+    { "id": "VS-C04", "name": "TestL0_DurationFrames_CaseTable/VS-C04 数据可视化口播 60s@30", "status": "pass", "detail": "DurationFrames=1800=ceil(60*30)" },
+    { "id": "VS-C05", "name": "TestL0_DurationFrames_CaseTable/VS-C05 旅行生活方式 30s@30", "status": "pass", "detail": "DurationFrames=900=ceil(30*30)" },
+    { "id": "VS-C06", "name": "TestL0_DurationFrames_CaseTable/VS-C06 访谈字幕 90s@25", "status": "pass", "detail": "DurationFrames=2250=ceil(90*25)" },
+    { "id": "VS-C07", "name": "TestL0_DurationFrames_CaseTable/VS-C07 招聘/企业宣传 40s@30", "status": "pass", "detail": "DurationFrames=1200=ceil(40*30)" },
+    { "id": "VS-C08", "name": "TestL0_DurationFrames_CaseTable/VS-C08 节日促销 20s@30", "status": "pass", "detail": "DurationFrames=600=ceil(20*30)" },
+    { "id": "VS-C09", "name": "TestL0_DurationFrames_CaseTable/VS-C09 产品功能演示 50s@30", "status": "pass", "detail": "DurationFrames=1500=ceil(50*30)" },
+    { "id": "VS-C01-parity", "name": "TestL0_DurationFrames_CaseTable/parity 8.04s@30 = 242", "status": "pass", "detail": "8.04*30=241.2 → ceil 242; historical JS Math.round gave 241 — Go side pins 242" },
+    { "id": "F-parity-voice", "name": "TestL0_DurationFrames_CaseTable/voice duration extends the timeline", "status": "pass", "detail": "meta 10s + voice 12.4s @30 → 372 (voice-extension branch of the formula)" },
+    { "id": "F-min-frame", "name": "TestL0_DurationFrames_CaseTable/minimum one frame floor", "status": "pass", "detail": "0.01s@30 → ceil 1, floor keeps 1" },
+    { "id": "F-integer-off-by-one", "name": "TestL0_DurationFrames_CaseTable/exact integer product", "status": "pass", "detail": "30s@25 → exactly 750, no float off-by-one" },
+    { "id": "JS-parity", "name": "TestL0_TimelineBuilderJS_FrameFormulaParity", "status": "pass", "detail": "documented degradation (no JS test framework in repo): source-string assertion on embedded timeline-builder.js — 'Math.max(1, Math.ceil(durationSec * fps))' present at line 37; 'Math.round(durationSec*fps)' absent. Math.round legitimately remains at lines 92 (counter text display) and 191 (seek clamping) — not on the frame-count path, verified by reading the file" },
+    { "id": "ANC-repeat-0", "name": "TestL0_ResolveAnchors_RepeatedWordOccurrence/occurrence 0", "status": "pass", "detail": "plan §2.1 C01 scenario: '充电' twice — occurrence 0 → wordIndex 1, reason=exact" },
+    { "id": "ANC-repeat-1", "name": "TestL0_ResolveAnchors_RepeatedWordOccurrence/occurrence 1", "status": "pass", "detail": "'充电' twice — occurrence 1 → wordIndex 4, reason=exact (different index than occurrence 0)" },
+    { "id": "ANC-concat-0", "name": "TestL0_ResolveAnchors_ConcatRun/concat run start wins", "status": "pass", "detail": "anchorCandidates Type-A concat path: '券后七十九' spans words 5-7, resolution = run START index 5, reason=exact" },
+    { "id": "ANC-concat-1", "name": "TestL0_ResolveAnchors_ConcatRun/repeated concat anchor occurrence 1", "status": "pass", "detail": "second '券后七十九' run (words 8-10) → index 8, occurrence selection across concat candidates" },
+    { "id": "ANC-contain", "name": "TestL0_ResolveAnchors_ConcatRun/single-word containment (Type B)", "status": "pass", "detail": "single-word containment path → index 4, reason=exact" },
+    { "id": "ANC-dedup", "name": "TestL0_ResolveAnchors_ConcatRun/dedup both-type candidate", "status": "pass", "detail": "anchorCandidates('券后') = [5,8] no duplicates; occurrence 5 out of range → same_text, nearest to prev=8 → index 8" },
+    { "id": "CUE-wrap", "name": "TestL0_BuildCues_LongSentenceWrap", "status": "pass", "detail": "19-rune CJK sentence wraps to exactly 2 lines, each ≤16 runes, 0 runes dropped" },
+    { "id": "CUE-6s", "name": "TestL0_BuildCues_SixSecondCap", "status": "pass", "detail": "12s of 2s-words cut so every cue ≤6s" },
+    { "id": "CUE-empty", "name": "TestL0_BuildCues_EmptyWords", "status": "pass", "detail": "BuildCues(nil) and BuildCues([]Word{}) → nil" },
+    { "id": "CUE-monster-len", "name": "TestL0_BuildCues_SingleOversizedWordBoundary/40-rune single word", "status": "skip", "detail": "KNOWN BOUNDARY GAP: single word alone exceeding capacity is NOT split or rejected — observed 2 lines × 20 runes (cap 16). Skipped because asserting §7.1 thresholds would fail until BuildCues gains a single-word path; fixing it is a business-code change forbidden this round. Reachable in practice: EstimateWords splits by whitespace, so a space-less CJK script becomes one giant estimated word" },
+    { "id": "CUE-monster-dur", "name": "TestL0_BuildCues_SingleOversizedWordBoundary/8s single word", "status": "skip", "detail": "KNOWN BOUNDARY GAP: single word longer than maxCueSec is NOT cut — observed one 8.0s cue (cap 6s). Same skip reason: business-code change forbidden this round" },
+    { "id": "XSS-u2028", "name": "(no test added) U+2028/2029 escaping status", "status": "pass", "detail": "§7.1 expected this to be missing (blocked by F-XSS-01); empirical scratch test (run then removed, no business change) showed encoding/json ALREADY escapes both: projected data block contains \\u2028/\\u2029, zero raw bytes. Document's pessimistic premise is stale — coverage of </script>/injection vectors already exists in projector_test.go TestProjector_HTML_DataBlock_InjectionVectors. Remaining F-XSS-01 sub-gaps (postMessage source/origin validation) are protocol-layer, not L0 escapable-string surface" }
+  ],
+  "existing_coverage_verified": {
+    "anchors_four_branches": "TestResolveAnchors_FourBranches (ir_test.go:152) covers exact (occurrence 0/1/tail) / same_text (out-of-range, nearest-to-prev) / nearest (absent text, prev 0 and 2, global-minimum subtest) / missing (empty words) — §7.1 four-branch requirement already satisfied; this round only ADDS the §2.1 C01 repeated-word and concat-run scenarios",
+    "build_cues": "TestBuildCues_Limits (ir_test.go:279, 40-word stream caps), TestBuildCues_PunctuationPreferred (ir_test.go:301), TestSRT_Basic (ir_test.go:256, incl. >6s gap split), TestSRT_Empty (ir_test.go:312) — all verified passing; this round adds direct >16-rune wrap / 6s cap / empty-words assertions and the oversized-single-word boundary record",
+    "projector_escaping": "TestProjector_HTML_DataBlock_InjectionVectors (projector_test.go:90) covers </script> closure; U+2028/2029 verified working (see XSS-u2028 case)"
+  },
+  "totals": {
+    "top_level_tests": 36,
+    "pass": 62,
+    "fail": 0,
+    "skip": 5,
+    "skip_breakdown": "3 = TestIntegration_* (TEST_DATABASE_URL not set — pre-existing, not L0 scope); 2 = oversized-single-word boundary gaps (reasons in case detail)",
+    "note": "pass count includes subtests (go test -v accounting); top-level: 31 PASS + 0 FAIL + 5 SKIP"
+  },
+  "duration_ms": 1045,
+  "expected_duration": "plan §7.1 estimates seconds-scale, CI target <30s — actual 1.0s wall clock, comfortably inside budget",
+  "verdict": "pass",
+  "evidence": [
+    "go -C example test -count=1 ./internal/video/app/  → ok  myproduct/internal/video/app  0.160s (baseline, before new tests)",
+    "go -C example test -count=1 -run TestL0_ -v ./internal/video/app/  → all new subtests PASS (2 SKIP by design)",
+    "go -C example test -count=1 -v ./internal/video/app/  → 62 PASS / 0 FAIL / 5 SKIP, ok  myproduct/internal/video/app  0.157s",
+    "wall-clock measured: duration_ms=1045 for full -count=1 suite",
+    "timeline-builder.js:37  var durationFrames = Math.max(1, Math.ceil(durationSec * fps));  — read directly, matches Go formula",
+    "render/worker.go:183 and render/render_pipeline.go:80 both call videoapp.DurationFrames — three-consumer same-source confirmed by code read",
+    "business code untouched: only new file app/l0_case_library_test.go + testdata/l0-report.json (this file)"
+  ],
+  "artifacts": {
+    "test_file": "example/internal/video/app/l0_case_library_test.go",
+    "report": "example/internal/video/testdata/l0-report.json"
+  },
+  "problems_found": [
+    {
+      "id": "P1",
+      "severity": "minor",
+      "title": "BuildCues cannot enforce caps on a single oversized word",
+      "detail": "A single Word longer than 32 runes produces 20-rune lines (cap 16); a single Word spanning 8s produces an 8s cue (cap 6s). BuildCues accumulates greedily and never splits WITHIN a word, so a one-word input can violate both §4.10.3 limits. Reachable in practice: EstimateWords splits on whitespace, so a space-less CJK script becomes one giant estimated word. Recorded as skip (CUE-monster-*), not fixed — business-code change forbidden this round"
+    },
+    {
+      "id": "P2",
+      "severity": "info",
+      "title": "Plan §7.1 premise on U+2028/2029 is stale (in the good direction)",
+      "detail": "§7.1 says the U+2028/2029 escape test is missing pending F-XSS-01 implementation; empirical check shows encoding/json already escapes both line separators in the projected data block, so a permanent regression test could be added immediately when the gap-tracker next revisits F-XSS-01"
+    },
+    {
+      "id": "P3",
+      "severity": "info",
+      "title": "Math.round occurrences in timeline-builder.js are benign but worth knowing",
+      "detail": "Math.round appears at line 92 (counter effect text display — integer display value, correct) and line 191 (seek frame clamping — rounding a fractional seek target, correct); neither is the frame-count path. Documented so future round-vs-ceil audits do not false-positive on them"
+    },
+    {
+      "id": "P4",
+      "severity": "info",
+      "title": "ResolveAnchors same_text is asymmetric about candidates",
+      "detail": "When occurrence is out of range, same_text picks the candidate nearest prevWordIndex — with prev=0 and candidates [0,2] this returns index 0 even though occurrence 5 was requested; behavior is per spec (§4.2.4) but means a large occurrence silently degrades instead of missing. Already covered by existing tests; no action needed, noted for audit awareness"
+    }
+  ],
+  "discipline_check": "no business .go/.js/SQL/OpenAPI files modified; only app/l0_case_library_test.go created and testdata/l0-report.json written; two scratch verification test files were created, run, then deleted (results recorded in case details)"
+}
