@@ -391,3 +391,30 @@ package separately.
 
 Product pages may freely use classic palette classes (the Tailwind default palette is
 always generated); framework components never do.
+
+## Optional dependencies for video rendering (platform/capx — default off)
+
+Video rendering (Agent video studio) needs two local binaries. Both are **optional**: with
+either missing, `capx.Available()` is false, render submission answers `E_NOT_CONFIGURED`,
+and everything else (project CRUD, preview, editing) works untouched. Readiness probes
+never check for them — the capability must not affect the health of video-less products.
+
+- **Chrome** (headless, frame capture): `CAPX_CHROME_PATH` wins if set; otherwise PATH
+  lookup (`chrome` / `google-chrome` / `chromium` / `msedge`) plus the platform default
+  install paths (Windows: `%ProgramFiles%\Google\Chrome\Application\chrome.exe`;
+  macOS: `/Applications/Google Chrome.app`; Linux `/usr/bin/*` covered by PATH).
+- **ffmpeg** (encode / mux / subtitles): `CAPX_FFMPEG_PATH` wins if set, otherwise
+  `ffmpeg` on PATH. Subtitle **burning** (`BurnSubtitles`) requires a build with libass
+  (Debian `ffmpeg` ships it; some static builds do not) — without libass the render
+  degrades to soft subs (`mov_text`) and the render error notes the downgrade.
+
+Optional speech services (env-driven, silent degradation when unset):
+
+- `VIDEO_TTS_URL` (+ `VIDEO_TTS_KEY` / `VIDEO_TTS_VOICE`): a TTS provider that returns
+  word-level timestamps directly. Unset → `set_script` falls back to estimated word
+  timings (`source=estimated`); render still works, just without a voice track (BGM
+  still mixes).
+- `VIDEO_ALIGNER_URL`: a WhisperX sidecar exposing an HTTP align endpoint, needed only
+  for the "upload existing audio" path. Unset → alignment unavailable; the TTS path is
+  unaffected.
+

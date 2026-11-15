@@ -21,7 +21,7 @@ export interface WsClientOptions {
 }
 
 
-export type ScopePrefix = 'workspace' | 'user' | 'task' | 'chat'
+export type ScopePrefix = 'workspace' | 'user' | 'task' | 'chat' | 'video'
 
 export class WsClient {
   private socket: WebSocket | null = null

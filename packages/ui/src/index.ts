@@ -92,6 +92,7 @@ export {
 export {
   Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger,
 } from './components/ui/popover'
+export { Slider } from './components/ui/slider'
 export { Switch } from './components/ui/switch'
 export {
   Progress, ProgressTrack, ProgressIndicator, ProgressLabel, ProgressValue,

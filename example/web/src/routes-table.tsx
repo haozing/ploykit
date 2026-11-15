@@ -179,6 +179,14 @@ const Realtime = lazyPage('RealtimeRoute', () =>
   import('./routes-app').then((m) => ({ default: m.RealtimeRoute })),
 );
 
+// 视频工作室（workspace 区组）：列表 + 工作室（:id 详情）。
+const VideoStudioList = lazyPage('VideoStudioListRoute', () =>
+  import('./routes-app').then((m) => ({ default: m.VideoStudioListRoute })),
+);
+const VideoStudio = lazyPage('VideoStudioRoute', () =>
+  import('./routes-app').then((m) => ({ default: m.VideoStudioRoute })),
+);
+
 // 兜底：未知路径回首页。同步实现——它渲染在任何页面之前，走懒加载只会
 // 让 404 多等一次网络往返。
 function CatchAll() {
@@ -274,6 +282,8 @@ export function buildRouteTable(auth: AuthRouteSpecs) {
     // 登录后：按功能区懒加载（见文件头注释）。
     '/app': { component: AppGroup },
     '/dev/realtime': { component: Realtime },
+    '/studio': { component: VideoStudioList },
+    '/studio/:id': { component: VideoStudio },
     '/invitations': { component: Invitations },
     '/billing/success': { component: BillingSuccess },
 

@@ -1,0 +1,102 @@
+package videoapp
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"io"
+	"strings"
+	"testing"
+
+	"github.com/haozing/ploykit/platform/storagex"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func projectorIR() *IR {
+	ir := validIR()
+	ir.Elements = []Element{
+		{ID: "sticker_1", Type: ElementImage, Src: "video/ws-1/assets/p1/abc.png",
+			X: 100, Y: 100, W: 200, H: 200, Z: 1},
+		{ID: "title_1", Type: ElementText, Text: "标题", Color: "#fff", FontSize: 64,
+			X: 100, Y: 300, W: 800, H: 120, Z: 2},
+	}
+	ir.Effects = []Effect{{
+		ID: "fx_1", Anchor: Anchor{Text: "发布", Occurrence: 0}, Type: EffectPulse,
+		ResolvedFrom: &ResolvedFrom{WordIndex: 0, Reason: AnchorExact},
+	}}
+	return ir
+}
+
+func TestProjector_HTML_Preview(t *testing.T) {
+	p := NewProjector(nil) // PreviewResolver default
+	html, err := p.HTML(context.Background(), projectorIR(), "https://app.example.com")
+	require.NoError(t, err)
+	s := string(html)
+
+	require.True(t, strings.HasPrefix(s, "<!DOCTYPE html>"), "full document")
+	require.Contains(t, s, `<script type="application/json" id="ploykit-ir">`,
+		"IR data block present (§4.4.4)")
+	require.NotContains(t, s, "https://evil.example", "no external URLs")
+	assert.Contains(t, s, "/api/video/files/video/ws-1/assets/p1/abc.png",
+		"image resolved to authorized same-origin path")
+	assert.Contains(t, s, "width: 1080px", "canvas geometry from meta")
+	assert.Contains(t, s, "gsap", "gsap inlined")
+	assert.Contains(t, s, "__player", "builder contract present")
+}
+
+func TestProjector_HTML_URLEscaping(t *testing.T) {
+	// the IR JSON block must survive </script> (§4.4.4 note): craft a script
+	// text containing the closing sequence and verify escaping.
+	ir := validIR()
+	ir.Script = "closing tag test </script><script>alert(1)</script>"
+	ir.Elements = []Element{{ID: "t", Type: ElementText, Text: ir.Script, X: 0, Y: 0, W: 10, H: 10}}
+	html, err := NewProjector(nil).HTML(context.Background(), ir, "")
+	require.NoError(t, err)
+	// encoding/json escapes < and > to \u003c/\u003e by default, which itself
+	// prevents </script> early closure; escapeJSONBlock is defense in depth.
+	b := html
+	idx := bytes.Index(b, []byte(`id="ploykit-ir">`))
+	require.GreaterOrEqual(t, idx, 0)
+	end := bytes.Index(b[idx:], []byte(`</script>`))
+	require.GreaterOrEqual(t, end, 0)
+	block := string(b[idx : idx+end])
+	assert.NotContains(t, block, "</scr", "no raw closing sequence inside the data block")
+	assert.Contains(t, block, `\u003c/script`, "json < escaping applied")
+}
+
+func TestProjector_HTML_DataURI(t *testing.T) {
+	png := []byte("PNGDATA")
+	p := NewProjector(DataURIResolver{
+		Loader: func(_ context.Context, key string) (io.ReadCloser, storagex.Object, error) {
+			require.Equal(t, "video/ws-1/assets/p1/abc.png", key)
+			return io.NopCloser(bytes.NewReader(png)), storagex.Object{ContentType: "image/png"}, nil
+		},
+	})
+	html, err := p.HTML(context.Background(), projectorIR(), "")
+	require.NoError(t, err)
+	assert.Contains(t, string(html),
+		"data:image/png;base64,"+base64.StdEncoding.EncodeToString(png),
+		"render path inlines bytes as data URI")
+	assert.NotContains(t, string(html), "/api/video/files/", "no network fetches in render path")
+}
+
+func TestInlineScriptHash_MatchesEmittedScript(t *testing.T) {
+	// The CSP hash must cover exactly the inline script bytes the projector
+	// emits (gsap + builder + boot). Compute the hash from a rendered doc and
+	// compare with InlineScriptHash().
+	g, err := GSAPJS()
+	require.NoError(t, err)
+	b, err := BuilderJS()
+	require.NoError(t, err)
+	sum := sha256.Sum256(inlineScript(g, b))
+	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	got, err := InlineScriptHash()
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+	// sanity: gsap is non-trivial and builder non-empty (embed wired)
+	require.Greater(t, len(g), 10000)
+	require.Greater(t, len(b), 1000)
+}
+

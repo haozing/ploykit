@@ -13,6 +13,7 @@ import {
   CreditCard,
   Webhook,
   CalendarClock,
+  Clapperboard,
 } from 'lucide-react';
 import { useAuth } from '@ploykit/hooks';
 import {
@@ -100,6 +101,10 @@ export function RequirePlatformAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+const icon = (I: React.ComponentType<{ size?: number }>) => (
+  <I size={16} aria-hidden="true" />
+);
+
 const shellNav = [
   {
     path: '/app',
@@ -109,9 +114,21 @@ const shellNav = [
   // /dev/realtime（调试页）不进一级导航，仅经 URL 访问（routes 表 + PAGE_TITLES）。
 ];
 
-const icon = (I: React.ComponentType<{ size?: number }>) => (
-  <I size={16} aria-hidden="true" />
-);
+// 一级导航（产品功能区）：视频工作室是 Agent 动线的入口页，进一级导航；
+// permKey 对齐 authz 目录的 video:read（main.go 装配 video:read/write/render）。
+const productNav: AppShellNavGroup[] = [
+  {
+    group: '工作区',
+    items: [
+      {
+        path: '/studio',
+        label: '视频工作室',
+        icon: icon(Clapperboard),
+        permKey: 'video:read',
+      },
+    ],
+  },
+];
 
 const accountNav: SettingsNavGroup[] = [
   {
@@ -240,11 +257,12 @@ function HeaderRight() {
 export function Shell({
   children,
   breadcrumbTail,
-  navGroups = workspaceNav,
+  // 产品页默认侧栏：一级功能组（视频工作室）+ 设置工作区组（permKey 门控各自生效）。
+  navGroups = [...productNav, ...workspaceNav],
 }: {
   children: ReactNode;
   breadcrumbTail?: string;
-  /** 设置区（/account、/settings）传统一导航 settingsNav；产品页默认只保留工作区组。 */
+  /** 设置区（/account、/settings）传统一导航 settingsNav；产品页默认带功能组+工作区组。 */
   navGroups?: AppShellNavGroup[];
 }) {
   return (

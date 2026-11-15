@@ -41,6 +41,10 @@ const PAGE_TITLES: Array<[RegExp, string]> = [
   [/^\/settings\/workspace\/schedules/, '调度 · 工作区设置'],
   [/^\/settings/, '工作区设置'],
   [/^\/billing\/success/, '支付确认'],
+  // 视频工作室：先静态匹配 /studio 列表，再匹配 :id 详情（数组顺序敏感——
+  // PAGE_TITLES 是 first-match，/:id 条目放前面会把列表页也吃掉）。
+  [/^\/studio\/./, '视频工作室 · MyProduct'],
+  [/^\/studio/, '视频工作室 · MyProduct'],
   [/^\/app/, '概览 · MyProduct'],
   [/^\/dev\/realtime/, '实时连接（调试） · MyProduct'],
   [/^\/invitations/, '我的邀请 · MyProduct'],

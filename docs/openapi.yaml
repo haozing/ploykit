@@ -57,6 +57,8 @@ tags:
       防同刻失败惊群。
   - name: tasks
     description: example 产品域——任务（业务域示例）
+  - name: video
+    description: example 产品域——Agent 视频工作室（IR 项目/预览/渲染/素材；scope video:read / video:write / video:render）
   - name: system
     description: example——配置/健康检查/调试
   - name: ws
@@ -4184,6 +4186,403 @@ paths:
         default:
           $ref: '#/components/responses/DefaultError'
 
+  # ---------- example：video 业务域（Agent 视频工作室；design doc plan-agent-video-studio-architecture-2026-11-14 §4.7） ----------
+  # 工作区上下文：扁平路由由 X-Workspace-Id 请求头注入（wsMW 校验成员资格）；
+  # 所有写方法 CSRF 由全局中间件覆盖（PAT 豁免）。
+  # 渲染受配额 video_renders_monthly 门控（fail-closed；402 E_QUOTA_EXCEEDED）。
+  # capx（Chrome/ffmpeg）未配置时渲染提交 503 E_NOT_CONFIGURED。
+  /api/video/projects:
+    get:
+      operationId: listVideoProjects
+      tags: [video]
+      summary: 视频项目列表（video:read；X-Workspace-Id；updated_at 倒序）
+      responses:
+        '200':
+          description: 项目列表（workspace 内）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VideoProjectSummary'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      operationId: createVideoProject
+      tags: [video]
+      summary: 创建视频项目（video:write；空 IR 起步，version=1）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, description: 项目标题 }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoProjectCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/projects/{id}:
+    get:
+      operationId: getVideoProject
+      tags: [video]
+      summary: 视频项目详情（video:read；含完整 IR 与乐观锁版本号）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      responses:
+        '200':
+          description: 项目详情（project 元数据 + ir + version）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoProjectDetail'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      operationId: deleteVideoProject
+      tags: [video]
+      summary: 删除视频项目（video:write；204；renders 级联删——DB CASCADE）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      responses:
+        '204':
+          description: 已删除（无响应体）
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/projects/{id}/ir:
+    put:
+      operationId: putVideoProjectIR
+      tags: [video]
+      summary: 全量替换 IR（video:write；expected_version 必填——乐观锁，不符 409 E_VIDEO_VERSION_CONFLICT）
+      description: |
+        IR 是唯一真相源：MCP 工具、人肉 UI、预览 iframe、渲染 worker 全部读写同一份
+        `video_project.ir`。写入时全量校验（§4.2.2 规则）并重解析全部词锚点
+        （resolvedFrom 供审计）；校验失败 400（E_VIDEO_IR_INVALID + details.field）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ir, expected_version]
+              properties:
+                ir:
+                  $ref: '#/components/schemas/VideoIR'
+                expected_version:
+                  type: integer
+                  description: 乐观锁预期版本；与服务端当前 version 不符即 409
+      responses:
+        '200':
+          description: 已替换（返回新版本号与锚点解析结果）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version: { type: integer, description: 替换后的乐观锁版本号 }
+                  resolutions:
+                    type: array
+                    description: 锚点解析结果（exact/same_text/nearest/missing 审计视图）
+                    items:
+                      $ref: '#/components/schemas/VideoAnchorResolution'
+        '400':
+          description: IR 校验失败（E_VIDEO_IR_INVALID，details.field 指明字段）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 乐观锁冲突（E_VIDEO_VERSION_CONFLICT，details.current_version）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/projects/{id}/preview.html:
+    get:
+      operationId: getVideoProjectPreview
+      tags: [video]
+      summary: 预览页直出（video:read + membership；IR 投影为自包含 HTML，text/html）
+      description: |
+        单一投影函数（Go）产出的自包含 HTML：内联 gsap + timeline-builder + IR JSON。
+        与渲染 worker 消费同一投影产物（预览=iframe 加载本页，渲染=SetDocumentContent）。
+        `Content-Type: text/html; charset=utf-8`、`Cache-Control: no-store`、
+        CSP（script-src 按哈希放行常量脚本、`frame-ancestors 'self'` 只许同源 iframe 嵌入）。
+        仅限浏览器会话消费（本端点不面向 PAT 调用方）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      responses:
+        '200':
+          description: 预览 HTML（no-store；同源 iframe 嵌入）
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/projects/{id}/renders:
+    post:
+      operationId: createVideoRender
+      tags: [video]
+      summary: 提交渲染（video:render；与 video_render MCP 工具同一服务方法；配额 video_renders_monthly 预扣）
+      description: |
+        渲染定格于提交时的 ir_snapshot：渲染过程中改 IR 不影响在途任务（出片可复现）。
+        提交即 `Quota.ConsumeWith(idempotency=render_id)`；渲染失败/中断自动 Release。
+        capx 未配置（Chrome/ffmpeg 缺失）→ 503 E_NOT_CONFIGURED（不建 render 行、不扣配额）；
+        配额用尽 → 402 E_QUOTA_EXCEEDED。渲染在 river `video` 队列串行（MaxWorkers 默认 1）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fps: { type: integer, description: 缺省用 ir.meta.fps }
+                width: { type: integer, description: 缺省用 ir.meta.width }
+                height: { type: integer, description: 缺省用 ir.meta.height }
+                burn_subtitles: { type: boolean, description: 烧录字幕（需 ffmpeg libass；缺 libass 自动降级软封装） }
+                subtitle_mode: { type: string, enum: [burn, soft, none], description: 字幕封装方式 }
+                bgm_volume: { type: number, description: 覆盖 ir.audio.bgm.volume }
+                expected_version: { type: integer, description: 可选乐观锁校验；不符 409 }
+      responses:
+        '202':
+          description: 已入队（status=queued）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoRenderCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '402':
+          $ref: '#/components/responses/QuotaExceeded'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 乐观锁冲突（E_VIDEO_VERSION_CONFLICT，details.current_version）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    get:
+      operationId: listVideoRenders
+      tags: [video]
+      summary: 渲染历史列表（video:read；created_at 倒序）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      responses:
+        '200':
+          description: 渲染历史
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VideoRender'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/renders/{id}:
+    get:
+      operationId: getVideoRender
+      tags: [video]
+      summary: 渲染状态/进度/输出（video:read；轮询兜底——实时进度走 WS scope "video"）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 渲染 ID
+      responses:
+        '200':
+          description: 渲染详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoRender'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/assets:
+    post:
+      operationId: uploadVideoAsset
+      tags: [video]
+      summary: 上传素材（video:write；multipart/form-data；≤1MiB；内容寻址幂等覆盖）
+      description: |
+        storagex.ParseUpload 解析；key 形如 `video/<wsID>/assets/<projectID>/<sha256>.<ext>`
+        （内容寻址，同内容重复上传幂等）。/api/ 全局 body limit 1MiB 继承——更大素材
+        需产品侧为该前缀放宽（webx.BodyLimitExcept 单前缀，不叠层）。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 素材文件（image/audio；≤1MiB）
+      responses:
+        '200':
+          description: 上传成功（返回 storagex key 与下载 URL）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, url, size]
+                properties:
+                  key: { type: string, description: 'storagex key（IR elements 的 src / audio 只接受本域 key）' }
+                  url: { type: string, description: /api/video/files/<key> 下载 URL }
+                  size: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: 超出 1MiB body limit（E_PAYLOAD_TOO_LARGE）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/files/{key...}:
+    get:
+      operationId: getVideoFile
+      tags: [video]
+      summary: 素材/成片下载（video:read + membership；Range/If-Range/HEAD 全支持——mp4 拖动必需）
+      description: |
+        key 形如 `video/<wsID>/...`：先解析前缀得 wsID，校验 membership（平台管理员豁免）再下发，
+        绝不匿名暴露。Local 后端 storagex.Open → http.ServeContent（**206 Partial Content**
+        按 Range 切片、304 If-Range、HEAD 全支持）；S3 后端 storagex.Presign 302。
+        响应头：Content-Type 取上传 meta、X-Content-Type-Options: nosniff、
+        `Cache-Control: private, max-age=31536000, immutable`（key 内容寻址；禁止 public 缓存——内容私密）。
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+          description: storagex key（video/<wsID>/...）
+      responses:
+        '200':
+          description: 对象内容（完整 body；二进制）
+        '206':
+          description: Partial Content（按 Range 请求头切片——mp4 拖动进度条必需）
+        '302':
+          description: S3 后端预签名重定向（storagex.Presign）
+          headers:
+            Location:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -5678,3 +6077,226 @@ components:
           type: string
           enum: [db, env, '']
           description: 有 billing_channel.<name>.* 库键=db；无库键但渠道已建=env；未配置=空串
+
+    # ---- video 业务域（Agent 视频工作室）：IR 契约（design doc §4.2） ----
+    # 写时全量校验（非法即 400 E_VIDEO_IR_INVALID + details.field）；读时投影层对未知
+    # effect/element type 跳过并 warn（前向兼容：新客户端写、旧 worker 渲）。
+    VideoIR:
+      type: object
+      description: |
+        语义中间表示（IR）——项目唯一真相源。JSONB 总量 ≤ 256 KiB；
+        渲染定格于提交时的快照（ir_snapshot），在途渲染不受后续 IR 变更影响。
+      required: [version, meta]
+      properties:
+        version:
+          type: integer
+          description: IR 结构版本（与 project 乐观锁 version 是两个维度——project version 由服务层维护）
+        meta:
+          type: object
+          required: [fps, width, height]
+          properties:
+            fps:
+              type: integer
+              enum: [24, 25, 30, 50, 60]
+              default: 30
+            width:
+              type: integer
+              minimum: 360
+              maximum: 2160
+              description: 画布宽（与 height 比例建议 9:16 / 16:9 / 1:1，不强限）
+            height:
+              type: integer
+              minimum: 360
+              maximum: 2160
+            durationSec:
+              type: number
+              description: 时长基准（渲染 frames_total = max(meta.durationSec, audio.voice.durationSec)）
+        script:
+          type: string
+          maxLength: 5000
+          description: 旁白脚本（CJK 按字符计）
+        words:
+          type: array
+          maxItems: 2000
+          description: 词级时间戳（TTS 直出 / WhisperX 对齐 / 估算）；start<end、相邻不重叠、单调递增
+          items:
+            type: object
+            required: [index, text, start, end, source]
+            properties:
+              index: { type: integer, minimum: 0 }
+              text: { type: string }
+              start: { type: number, description: 秒 }
+              end: { type: number, description: 秒；必须 > start }
+              source:
+                type: string
+                enum: [tts, aligner, manual, estimated]
+        effects:
+          type: array
+          maxItems: 128
+          items:
+            type: object
+            required: [id, anchor, type, params]
+            properties:
+              id: { type: string }
+              anchor:
+                $ref: '#/components/schemas/VideoWordAnchor'
+              type:
+                type: string
+                enum: [pulse, counter, highlight, shake, fade]
+                description: 动效注册表（v1）；未知 type 投影层跳过并 warn
+              params:
+                type: object
+                description: 按 type 校验（如 pulse{scale}, counter{from,to}）
+              resolvedFrom:
+                $ref: '#/components/schemas/VideoAnchorResolution'
+        elements:
+          type: array
+          maxItems: 64
+          items:
+            type: object
+            required: [id, type]
+            properties:
+              id: { type: string }
+              type:
+                type: string
+                enum: [image, text, shape]
+                description: 未知 type 投影层跳过并 warn
+              src:
+                type: string
+                description: 只允许本域 storagex key（video/<ws>/...）；外部 URL 拒绝（SSRF 面收窄）
+              x: { type: number }
+              y: { type: number }
+              w: { type: number }
+              h: { type: number }
+              z: { type: integer }
+              animations:
+                type: array
+                maxItems: 16
+                items:
+                  type: object
+                  required: [id, type, durationFrames]
+                  properties:
+                    id: { type: string }
+                    type:
+                      type: string
+                      enum: [move, scaleIn, rotate]
+                    from:
+                      type: object
+                      properties:
+                        x: { type: number }
+                        y: { type: number }
+                    to:
+                      type: object
+                      properties:
+                        x: { type: number }
+                        y: { type: number }
+                    startAnchor:
+                      $ref: '#/components/schemas/VideoWordAnchor'
+                    durationFrames: { type: integer, minimum: 1 }
+                    easing:
+                      type: string
+                      enum: [linear, power1.out, power2.out, power3.out, back.out, expo.out]
+        audio:
+          type: object
+          properties:
+            voice:
+              type: object
+              properties:
+                key: { type: string, description: storagex key（本域） }
+                durationSec:
+                  type: number
+                  description: 存在时须 ≥ words 末词 end；作为渲染时长基准之一
+            bgm:
+              type: object
+              properties:
+                key: { type: string, description: storagex key（本域） }
+                volume: { type: number, minimum: 0, maximum: 1 }
+    VideoWordAnchor:
+      type: object
+      description: 词锚点——写入时经 ResolveAnchors 解析（解析失败 400 E_VIDEO_ANCHOR_NOT_FOUND；words 为空置 unresolved 并投影跳过）
+      required: [text, occurrence]
+      properties:
+        text: { type: string, description: 目标词文本 }
+        occurrence:
+          type: integer
+          minimum: 0
+          description: 同文本第 N 次出现（0 起）
+    VideoAnchorResolution:
+      type: object
+      description: 锚点解析审计（写入时写回 effect.resolvedFrom；改稿重解析后 inspect 可见漂移）
+      required: [wordIndex, reason]
+      properties:
+        wordIndex:
+          type: integer
+          description: 解析命中的词 index（missing 时为 -1）
+        reason:
+          type: string
+          enum: [exact, same_text, nearest, missing]
+          description: |
+            exact=文本与 occurrence 都命中；same_text=文本存在但 occurrence 越界（取同文本最近邻）；
+            nearest=文本不存在（取全词表最近邻）；missing=words 为空（unresolved，投影跳过）
+    VideoProjectSummary:
+      type: object
+      required: [id, title, version, updated_at]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        version: { type: integer, description: 乐观锁版本号（PUT ir / MCP 变更须携带） }
+        updated_at: { type: string, format: date-time }
+    VideoProjectCreated:
+      type: object
+      required: [id, version]
+      properties:
+        id: { type: string }
+        version: { type: integer }
+    VideoProjectDetail:
+      type: object
+      required: [project, ir, version]
+      properties:
+        project:
+          type: object
+          properties:
+            id: { type: string }
+            title: { type: string }
+            created_by: { type: string }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+        ir:
+          $ref: '#/components/schemas/VideoIR'
+        version: { type: integer }
+    VideoRender:
+      type: object
+      required: [id, project_id, status, frames_done, frames_total, created_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, interrupted]
+          description: interrupted=进程被 drain/杀掉（river 重试后回到 running）
+        params:
+          type: object
+          description: 渲染参数（fps/width/height/burn_subtitles/subtitle_mode/bgm_volume；与 ir_snapshot 共同定格）
+        frames_done: { type: integer }
+        frames_total: { type: integer }
+        output_url:
+          type: string
+          description: 成片下载 URL（/api/video/files/<key>；Range 支持——仅 workspace 成员可取）
+        thumb_url:
+          type: string
+          description: 首帧缩略图 URL
+        error: { type: string, description: 失败明细（如 E_VIDEO_IR_INVALID；缺 libass 降级软封装注记） }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+    VideoRenderCreated:
+      type: object
+      required: [render_id, status]
+      properties:
+        render_id: { type: string }
+        status:
+          type: string
+          enum: [queued]

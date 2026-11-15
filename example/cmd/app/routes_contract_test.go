@@ -37,13 +37,14 @@ import (
 	workspacehttp "github.com/haozing/ploykit/workspace/adapters/http"
 
 	"myproduct/internal/task"
+	videohttp "myproduct/internal/video/adapters/http"
 )
 
 // expectedRouteCount pins the total endpoint count to the value
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-const expectedRouteCount = 161
+const expectedRouteCount = 172
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
@@ -119,6 +120,11 @@ func mountProductionRoutes(mux *webx.Mux) {
 	// (handlers are closures; nothing is dereferenced without a request).
 	// /mcp is a method-less mount, skipped by the count like /metrics.
 	devx.Mount(mux, devx.Deps{})
+
+	// Video studio (plan-agent-video-studio-architecture §4.7): 11 contract
+	// routes; registration-safe with a nil service (handlers dereference per
+	// request; this test never sends one).
+	videohttp.Mount(mux, videohttp.Deps{})
 }
 
 // runtimeRoutes returns the production endpoint set as "METHOD /path" keys.

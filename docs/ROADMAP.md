@@ -45,6 +45,18 @@ Maintenance rules:
 | `platform/sealx` | Master key rotation | Multi-instance deployments / compliance audits. Versioned envelopes (v2) with dual-read plus a re-encrypt command. |
 | identity / storage | Full row-level security (RLS) enablement | Multi-instance / compliance hardening. The tenant-scoping channel and tri-state tests are already in place. |
 
+## Video Rendering (Agent video studio, 2026-11-14)
+
+| Area | Item | Trigger / Notes |
+|---|---|---|
+| `platform/capx` | Distributed rendering via the capx remote renderer (`remote.go` `RemoteHTTP`) | Single-node render queue P95 wait >10min, or daily render volume beyond a threshold agreed per product. Pre-agreed approach: implement the `Renderer` interface against an external render server and swap the implementation at the assembly layer — the video domain changes zero code. |
+| `video` | Render cancel + resumable rendering | First requirement for long videos (>5min). Pre-agreed direction: a cancel control on the river `video` job + checkpointing frame progress so a retry resumes from the last completed frame instead of re-rendering from the snapshot (today a retry restarts from the snapshot; deterministic, but wasteful for long runs). |
+| `video` | `video_cancel_render` MCP tool | Same trigger as cancel support above; v1 deliberately ships without it (no cancel path in the render state machine). |
+| `video` / storagex | Render artifact retention policy | Storage growth pressure from `video/<ws>/renders/` output. Pre-agreed direction: per-project keep-last-N + a GC worker (v1 keeps everything forever). |
+| `video` | Public share links for renders | First "watch without logging in" requirement (v1: only workspace members can download). Pre-agreed direction: signed URLs (storagex.Presign already exists on the S3 backend; local backend needs an equivalent signed-path mechanism). |
+| `platform/capx` | Lottie / Three.js effect types | First requirement for Lottie animations or 3D scenes in compositions. Pre-agreed direction: a new `capx.Renderer` implementation slot + registry extension in timeline-builder (the IR type/enum whitelist gains the new effect kinds). |
+| `billing` | Metered billing for video renders | First commercial product needing overage invoicing beyond the `video_renders_monthly` quota. Pre-agreed direction: a `metered_video_renders` billing key (quota-only today; the metered-overage channel machinery already exists). |
+
 ## Compliance & Data Lifecycle
 
 | Area | Item | Trigger / Notes |

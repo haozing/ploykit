@@ -234,6 +234,24 @@ The WS wire protocol vocabulary is a public platform package so that products bu
 | IndexNow | `IndexNow(ctx, deps IndexNowDeps, urls []string) error` | Publish hook that pushes URLs to search engines (DefaultIndexNowEndpoint) |
 | Error sentinels | `ErrPageNotFound` `ErrPatternNotFound` `ErrPatternMismatch` `ErrMissingPaths` `ErrInvalidParam` `ErrInvalidDirective` `ErrInvalidHeadTag` `ErrInvalidCacheKey` `ErrBuildIDMismatch` `ErrPropsTooLarge` `ErrRenderTimeout` `ErrPoolClosed` `ErrEmptyRenderOutput` `ErrMissingTitle` | Judge with errors.Is; never match error text. `ErrPageNotFound` = the Loader determined the content does not exist (missing page) → 404 + SPA fallback |
 
+## platform/capx (Frame-accurate capture + encode for video rendering)
+
+Headless-Chrome frame-accurate capture + ffmpeg encode: seek a paused GSAP timeline frame by frame, screenshot each frame to a PNG stream, and pipe it through ffmpeg (encode / AV muxing / subtitle burning / thumbnail). Zero business dependencies (arch tests cover it like every platform package).
+
+Gating: **default off**. `Config.Enabled` nil/false → `New` returns an inert runtime and `RenderFrames` returns `ErrNotConfigured` — diagnosable, never silent. Discovery at boot: `CAPX_CHROME_PATH` → `exec.LookPath("chrome"/"google-chrome"/"chromium"/"msedge")` plus platform default install paths (Windows `%ProgramFiles%`, macOS `/Applications`), then `CAPX_FFMPEG_PATH` → `exec.LookPath("ffmpeg")`; either missing → `Available() == false`. Readiness probes must NOT check Chrome/ffmpeg — an optional capability must not drag a video-less product's health red.
+
+| Symbol | Signature essentials | Purpose |
+|---|---|---|
+| New | `New(cfg Config) (*Runtime, error)`; `Config{Enabled *bool, ChromePath, FFMpegPath, PoolSize, LaunchTimeout}` | Runtime constructor (disabled = inert; PoolSize default 1; LaunchTimeout default 20s) |
+| Available / Close | `(*Runtime) Available() bool` / `Close() error` | Capability probe (call before accepting render submissions — the video domain answers E_NOT_CONFIGURED when false) and pool teardown |
+| Renderer | `interface { RenderFrames(ctx, doc Doc, spec FrameSpec, onFrame FrameFunc) error }` | The single capture contract: `Doc{HTML, TimelineID}` is a self-contained document (caller-generated; player registers a paused GSAP timeline under `window.__timelines[TimelineID]`); `FrameSpec{Width, Height, FPS, DurationFrames}`; `FrameFunc` receives `Frame{Index, Time, PNG []byte}` per frame — stream straight into the encoder, no disk staging |
+| EncodePNGStream | `(r *Runtime) EncodePNGStream(ctx, w io.Writer, spec FrameSpec, opts EncodeOptions) error` | ffmpeg `-f image2pipe` encode of the frame stream (caller pumps PNGs via onFrame); timeouts owned by the caller's ctx |
+| MuxAV | Mux video + voice + bgm into one track (ffmpeg `filter_complex` amix; `-c:v copy`) | Audio mixing helper (render worker step 6) |
+| BurnSubtitles | Burn an SRT into the video (`-vf subtitles=...:force_style=...`) | Requires an ffmpeg build with libass; without libass degrade to soft subs (`-c:s mov_text`) and note it in the render error |
+| ExtractThumbnail | Single-frame extract (ffmpeg) | First-frame `thumb.jpg` for render outputs |
+
+**Boundary declaration (AGENTS.md boundary clause)**: the `remote.go` `RemoteHTTP` renderer (a `Renderer` implementation targeting an external render server) **is not consumed by example** — example wires only the LocalChrome path. When to use it: when single-node render throughput becomes the bottleneck (1080p30 capture runs at ~4–8 fps), implement/point the `Renderer` slot at an external render server and swap the implementation at the assembly layer — the video domain changes zero code (the interface is the engine slot; see ADR 0017 when it lands).
+
 ## platform/events (Transactional events, ADR 0003)
 
 | Symbol | Signature essentials | Purpose |

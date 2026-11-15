@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -108,11 +109,18 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/haozing/ploykit/platform/capx"
+	"github.com/haozing/ploykit/platform/wswire"
+
 	"myproduct/internal/authorization"
 	"myproduct/internal/blog"
 	"myproduct/internal/devtools"
 	"myproduct/internal/eventsdemo"
 	"myproduct/internal/task"
+	videoapp "myproduct/internal/video/app"
+	videohttp "myproduct/internal/video/adapters/http"
+	videomcp "myproduct/internal/video/adapters/mcp"
+	videorender "myproduct/internal/video/render"
 )
 
 //go:embed migrations/*.sql
@@ -497,10 +505,16 @@ func main() {
 
 	authzCatalog := authz.NewCatalog(authz.DefaultPerms()...)
 	authzCatalog.Register("tasks:read", "tasks:write", "tasks:delete_own", "schedules:manage")
+	// Video studio permission keys (plan-agent-video-studio §5.1): the owner
+	// carries the full catalog by design; admin gets full video surface,
+	// member read+write (renders stay admin/owner — they consume quota).
+	authzCatalog.Register("video:read", "video:write", "video:render")
 	roles := authz.DefaultRoles().Clone()
-	roles.Grant(authz.RoleOwner, "tasks:read", "tasks:write", "tasks:delete_own", "schedules:manage")
-	roles.Grant(authz.RoleAdmin, "tasks:read", "tasks:write", "tasks:delete_own", "schedules:manage")
-	roles.Grant(authz.RoleMember, "tasks:read", "tasks:write")
+	roles.Grant(authz.RoleOwner, "tasks:read", "tasks:write", "tasks:delete_own", "schedules:manage",
+		"video:read", "video:write", "video:render")
+	roles.Grant(authz.RoleAdmin, "tasks:read", "tasks:write", "tasks:delete_own", "schedules:manage",
+		"video:read", "video:write", "video:render")
+	roles.Grant(authz.RoleMember, "tasks:read", "tasks:write", "video:read", "video:write")
 	authorizer := authz.New(authzCatalog, roles, authz.WithProvider(authzpg.New(pool)))
 
 	workspaces := workspaceapp.NewWorkspaceService(wsRepo, authorizer, mailer, auditor, workspaceapp.WorkspaceConfig{MaxPerUser: 5}, now)
@@ -829,6 +843,7 @@ func main() {
 	}
 
 	var mcpMount *mcpx.Mount
+	var mcpServer *devtools.Server
 	if mcpOn {
 		mcpMount = mcpx.NewMount(mcpx.Config{
 			Enabled:       &mcpOn,
@@ -839,6 +854,7 @@ func main() {
 			// Product-registered tools go here too — the example ships one
 			// reference integration (dev tenant provisioning).
 			devtools.RegisterProductTools(s, pool, log)
+			mcpServer = s
 		})
 		mux.Handle(mcpMount.Path(), mcpMount.Handler())
 	}
@@ -947,6 +963,30 @@ func main() {
 
 	hub.PATResolve = func(ctx context.Context, token string) (*webx.Principal, error) {
 		return idRepo.ResolvePAT(ctx, token, time.Now())
+	}
+
+	// Video studio WS scope (plan-agent-video-studio §4.8): the scope must be
+	// registered BEFORE hub.Capabilities is snapshotted below, and the custom
+	// scope's subscribe gate is hub.Authorize (fail-closed when nil —
+	// hub.go:437), so video:<projectID> subscriptions verify project
+	// membership here. Existing workspace/user scope behavior is untouched.
+	if err := wswire.RegisterScope("video"); err != nil {
+		log.Error("register video ws scope", "err", err)
+		os.Exit(1)
+	}
+	hub.Authorize = func(ctx context.Context, p *webx.Principal, connWorkspace, scopePrefix, id string) bool {
+		if scopePrefix != "video" {
+			return true
+		}
+		if p == nil || videoSvcForAccess == nil {
+			return false
+		}
+		ok, err := videoSvcForAccess.CanAccess(ctx, p, id)
+		if err != nil {
+			log.Warn("video ws authorize", "err", err)
+			return false
+		}
+		return ok
 	}
 
 	if ru := env("REDIS_URL", ""); ru != "" {
@@ -1158,6 +1198,88 @@ func main() {
 		}
 		webx.WriteJSON(w, http.StatusOK, map[string]any{"key": obj.Key, "url": uploadsStore.URL(obj.Key), "size": obj.Size})
 	}))
+
+	// --- Video studio (plan-agent-video-studio-architecture §4.3/§4.9): ---
+	// assets live in their own store root (NOT the generic /uploads/ space —
+	// downloads go through the domain's authorized Range handler only).
+	videoDataDir := env("VIDEO_DATA_DIR", "data/video")
+	videoStore, err := storagex.NewLocal(filepath.Join(videoDataDir, "assets"))
+	if err != nil {
+		log.Error("video store", "err", err)
+		os.Exit(1)
+	}
+	videoTmpDir := env("VIDEO_TMP_DIR", filepath.Join(videoDataDir, "tmp"))
+	if err := os.MkdirAll(videoTmpDir, 0o755); err != nil {
+		log.Error("video tmp dir", "err", err)
+		os.Exit(1)
+	}
+
+	// capx runtime: env-gated, inert when Chrome/ffmpeg are missing — every
+	// consumer degrades to structured E_NOT_CONFIGURED, boot stays green.
+	capxRuntime, capxErr := capx.New(capx.Config{
+		Enabled:    &mcpOn, // reuse the agent-facing gate: video studio is an agent-driven surface
+		ChromePath: env("CAPX_CHROME_PATH", ""),
+		FFMpegPath: env("CAPX_FFMPEG_PATH", ""),
+	})
+	if capxErr != nil {
+		log.Warn("capx runtime degraded", "err", capxErr)
+	}
+
+	videoMembership := videomcpMemberAdapter{repo: wsRepo}
+	videoAud := videoAuditAdapter{rec: auditor}
+	videoPub := videoPublishAdapter{hub: hub}
+	videoQuota := videoQuotaAdapter{svc: quotaSvc}
+	videoEnq := &videoEnqueuer{}
+
+	videoSvc := videoapp.NewProjectService(pool, videoapp.Ports{
+		Enqueue:    videoEnq,
+		Publish:    videoPub,
+		Audit:      videoAud,
+		Quota:      videoQuota,
+		Membership: videoMembership,
+		Store:      videoStore,
+		Cap:        videoCapProbe{rt: capxRuntime},
+	}, log)
+
+	videoSvcForAccess = videoSvc
+	videohttp.Mount(mux, videohttp.Deps{Svc: videoSvc, Store: videoStore})
+
+	// video render worker: dedicated river client on the "video" queue
+	// (MaxWorkers env-tunable, default 1). The client starts/drains inside a
+	// workers.Runner wrapper mirroring schedule.NewFireRunner.
+	videoWorkers := river.NewWorkers()
+	videoWorker := videorender.NewWorker(videorender.WorkerDeps{
+		Pool:         pool,
+		Store:        videoStore,
+		Publish:      videoPub,
+		Audit:        videoAud,
+		QuotaRelease: videoQuota,
+		Log:          log,
+		TmpDir:       videoTmpDir,
+	})
+	river.AddWorker(videoWorkers, videoWorker)
+	videoClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+		Queues: map[string]river.QueueConfig{
+			videorender.QueueName: {MaxWorkers: envInt("CAPX_RENDER_WORKERS", 1)},
+		},
+		Workers: videoWorkers,
+	})
+	if err != nil {
+		log.Error("video river client", "err", err)
+		os.Exit(1)
+	}
+	videoEnq.client = videoClient
+	wk.Add(newVideoRunner(videoClient))
+	videoWorker.SweepOrphans(ctx)
+
+	// video MCP tools: registered on the same server as devx (the registration
+	// callback captured the server above). No-op when PLOYKIT_MCP_ENABLED=0.
+	if mcpServer != nil {
+		videomcp.RegisterTools(mcpServer, videomcp.Deps{
+			Svc: videoSvc,
+			Cap: videoCapProbe{rt: capxRuntime},
+		})
+	}
 
 	mux.HandleFunc("GET /config", webx.ConfigHandler(webx.ConfigDeps{
 		OAuthProviders:  func() []string { return oauthNames },
@@ -1496,3 +1618,98 @@ func splitCSV(s string) []string {
 	}
 	return out
 }
+
+// --- video studio adapters (plan-agent-video-studio-architecture §4.3/§4.8): ---
+// thin bridges from the domain ports to the framework services. All wiring
+// lives here in product code; the domain only sees interfaces.
+
+// videoCapProbe adapts capx.Runtime to the domain's CapProbe port (the
+// domain must not import capx).
+type videoCapProbe struct{ rt *capx.Runtime }
+
+func (p videoCapProbe) CapAvailable() bool { return p.rt != nil && p.rt.Available() }
+
+type videomcpMemberAdapter struct{ repo *workspacepg.Repo }
+
+func (a videomcpMemberAdapter) IsMember(ctx context.Context, workspaceID, userID string) (bool, error) {
+	_, ok, err := a.repo.GetMember(ctx, workspaceID, userID)
+	return ok, err
+}
+
+type videoAuditAdapter struct{ rec *auditrec.Recorder }
+
+func (a videoAuditAdapter) RecordTx(ctx context.Context, tx pgx.Tx, workspaceID *string, userID string, action, resourceType, resourceID string, meta map[string]any) error {
+	return a.rec.RecordTx(ctx, tx, workspaceID, &webx.Principal{UserID: userID}, action, resourceType, resourceID, meta)
+}
+
+func (a videoAuditAdapter) Record(ctx context.Context, workspaceID *string, userID string, action, resourceType, resourceID string, meta map[string]any) {
+	// Worker-side lifecycle events record the triggering user as a plain
+	// principal (session-shaped; the recorder marks actor from source and
+	// there is no worker source — the action name carries the context).
+	a.rec.Record(ctx, workspaceID, &webx.Principal{UserID: userID}, action, resourceType, resourceID, meta)
+}
+
+type videoPublishAdapter struct{ hub *wsx.Hub }
+
+func (a videoPublishAdapter) BroadcastEvent(ctx context.Context, event string, payload []byte, eventID string) error {
+	// The domain port carries no scope; every video frame is scoped to
+	// "video:<projectID>" (§4.8), and both payloads embed project_id.
+	var pl struct {
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal(payload, &pl); err != nil || pl.ProjectID == "" {
+		// Unscoped fallback would fan out to nobody — treat as a wiring bug.
+		return fmt.Errorf("video publish: payload missing project_id for %s", event)
+	}
+	return a.hub.BroadcastEvent(ctx, "video:"+pl.ProjectID, event, payload, eventID)
+}
+
+type videoQuotaAdapter struct{ svc *quota.Service }
+
+func (a videoQuotaAdapter) ConsumeWith(ctx context.Context, workspaceID, key string, n int64, now time.Time, idemKey string) error {
+	_, err := a.svc.ConsumeWith(ctx, workspaceID, key, n, now, quota.ConsumeOpts{IdemKey: idemKey})
+	return err
+}
+
+func (a videoQuotaAdapter) Release(ctx context.Context, workspaceID, key string, n int64, now time.Time) error {
+	return a.svc.Release(ctx, workspaceID, key, n, now)
+}
+
+type videoEnqueuer struct{ client *river.Client[pgx.Tx] }
+
+func (e *videoEnqueuer) InsertTx(ctx context.Context, tx pgx.Tx, args any, opts *river.InsertOpts) error {
+	ra, ok := args.(videoapp.RenderArgs)
+	if !ok {
+		return fmt.Errorf("video enqueuer: unexpected args %T", args)
+	}
+	_, err := e.client.InsertTx(ctx, tx, ra, opts)
+	return err
+}
+
+// newVideoRunner wraps the video river client in a workers.Runner (start on
+// boot, drain on shutdown) — same shape as schedule.NewFireRunner.
+type videoRunner struct {
+	client *river.Client[pgx.Tx]
+}
+
+func newVideoRunner(client *river.Client[pgx.Tx]) *videoRunner { return &videoRunner{client: client} }
+
+func (r *videoRunner) Name() string { return "video_render_queue" }
+
+func (r *videoRunner) Run(ctx context.Context) error {
+	if err := r.client.Start(ctx); err != nil {
+		return err
+	}
+	<-ctx.Done()
+	// Aligned with the shared drain window (45s = events soft-stop 30s + 15s
+	// margin); a render past this window is marked interrupted and retried.
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+	defer cancel()
+	return r.client.Stop(stopCtx)
+}
+
+// videoSvcForAccess backs hub.Authorize for the "video" scope (§4.8): the
+// closure above reads it; it is assigned right after the video service is
+// constructed (the hub is built earlier in boot). Before assignment the
+// closure fails closed (nil check) — no subscriptions, no leak.
+var videoSvcForAccess *videoapp.ProjectService

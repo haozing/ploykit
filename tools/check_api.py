@@ -42,6 +42,7 @@ SCAN_FILES = [
     *sorted(ROOT.glob("platform/devx/*.go")),
     ROOT / "example" / "cmd" / "app" / "main.go",
     *sorted((ROOT / "example" / "internal").glob("task/*.go")),
+    *sorted((ROOT / "example" / "internal" / "video" / "adapters" / "http").glob("*.go")),
 ]
 
 def go_routes() -> set[tuple[str, str]]:

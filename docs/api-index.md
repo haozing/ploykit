@@ -36,6 +36,28 @@
 
 Semantics quick reference: Transactional = returning an error rolls back the entire operation; Observational = logging only; Validating = may block the operation; Cleanup = best-effort cleanup where a single item's failure does not block.
 
+## video domain (example product domain, Agent video studio)
+
+HTTP endpoints (full contract in docs/openapi.yaml; workspace context via X-Workspace-Id, writes CSRF-protected, PAT scopes video:read / video:write / video:render):
+
+| Endpoint | Semantics |
+|---|---|
+| GET /api/video/projects | List video projects in the workspace (updated_at desc) |
+| POST /api/video/projects | Create a project (empty IR, version=1) |
+| GET /api/video/projects/{id} | Project detail: metadata + full IR + optimistic-lock version |
+| PUT /api/video/projects/{id}/ir | Full IR replacement; `expected_version` required — 409 E_VIDEO_VERSION_CONFLICT on mismatch |
+| DELETE /api/video/projects/{id} | Delete a project (renders cascade via DB) |
+| GET /api/video/projects/{id}/preview.html | Single-projection preview HTML (iframe embed; same projection the render worker consumes) |
+| POST /api/video/projects/{id}/renders | Submit a render (river `video` queue; snapshots ir_snapshot; video_renders_monthly quota; 503 E_NOT_CONFIGURED when capx lacks Chrome/ffmpeg) |
+| GET /api/video/projects/{id}/renders | Render history for the project |
+| GET /api/video/renders/{id} | Render status / progress / output (polling fallback; live progress rides WS scope "video") |
+| POST /api/video/assets | Upload an asset (multipart, ≤1MiB, content-addressed storagex key) |
+| GET /api/video/files/{key} | Authorized download with Range support (membership checked off the key's workspace prefix; mp4 seeking requires 206) |
+
+Hooks: **video has no hooks in v1** — hook extension slots are reserved in the
+`app/service.go` hooks shape (the domain's service layer is the single mutation entry; when
+the first hook need appears, follow the existing domain `hooks.go` pattern).
+
 ## Other API surfaces
 
 | Surface | Source of truth |
