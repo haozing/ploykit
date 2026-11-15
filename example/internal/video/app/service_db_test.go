@@ -168,7 +168,7 @@ func TestIntegration_CreateMutateGet(t *testing.T) {
 	// Add an effect anchored at a word, then re-set the script: anchor
 	// re-resolution writes resolvedFrom back (drift visible).
 	_, rf, err := e.svc.AddEffectAtWord(ctx, e.principal(e.wsID), pr.ID,
-		Anchor{Text: "三倍", Occurrence: 0}, EffectPulse, []byte(`{"scale":1.3}`), nil)
+		Anchor{Text: "三倍", Occurrence: 0}, EffectPulse, []byte(`{"scale":1.3}`), "", nil)
 	require.NoError(t, err)
 	require.NotNil(t, rf)
 	assert.Equal(t, AnchorExact, rf.Reason)

@@ -609,6 +609,361 @@ func TestCounterL2(t *testing.T) {
 		thumb.Format, thumb.Width, thumb.Height, thumb.Bytes)
 }
 
+// ---- element-level positioning variant (IR extension T-10 P0) ----
+//
+// The counter host historically self-anchored at the canvas origin (0,0) —
+// case library §5.10 degrade: C01's price digits and C04's hub number were
+// never where they belonged. The IR extension Effect.TargetElementID
+// (targetElementId, write-time validated against elements[]) lets the host
+// borrow the target element's bbox. This variant is the pixel-level proof:
+//
+//   - the target element is a price panel at the BOTTOM-RIGHT of the canvas
+//     (a region the origin-originated counter could never reach);
+//   - the bottom-right region must carry >0.5% dark ink at each sample
+//     (digits present at the target);
+//   - the digit roll must be observable INSIDE the target region (diff >300px
+//     between mid-roll and settled) — the number is rolling where the target
+//     is, not just sitting there;
+//   - the ORIGIN region must be clean (<0.1% ink) — proving the host MOVED,
+//     not multiplied (back-compat regression in the same frame: the no-target
+//     TestCounterL2 asserts the origin behavior unchanged for legacy IRs).
+//
+// Degradation semantics recorded (builder comment mirrors this): the host
+// takes the target's POSITION but not its visibility/animation state — the
+// counter is a word-anchored stage effect borrowing geometry only.
+func TestCounterL2_TargetElement(t *testing.T) {
+	chrome := chromePath(t)
+	ffmpeg := ffmpegPath(t)
+	ffprobe := ffprobePath()
+	ctx := context.Background()
+
+	enabled := true
+	rt, err := capx.New(capx.Config{
+		Enabled:    &enabled,
+		ChromePath: chrome,
+		FFMpegPath: ffmpeg,
+		PoolSize:   1,
+	})
+	if err != nil {
+		t.Fatalf("capx.New: %v", err)
+	}
+	defer rt.Close()
+	if !rt.Available() {
+		t.Fatal("runtime not available after successful New")
+	}
+
+	_, thisFile, _, _ := runtime.Caller(0)
+	baseDir := filepath.Join(filepath.Dir(thisFile), "counter", "VS-C10-COUNTER-TARGET")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now()
+	res := counterCaseResult{CaseID: "VS-C10-COUNTER-TARGET"}
+	fail := func(reason string) {
+		res.Status = "fail"
+		res.FailReasons = append(res.FailReasons, reason)
+	}
+
+	report := &counterReport{
+		Layer: "L2-counter-target (T-10 P0: targetElementId element-level positioning, case library §5.10)",
+		RunID: time.Now().Format("20060102-150405") + "-counter-l2-target",
+	}
+	host, _ := os.Hostname()
+	report.Env = append(report.Env,
+		"os="+runtime.GOOS+"/"+runtime.GOARCH,
+		"host="+host,
+		"chrome="+chrome,
+		"ffmpeg="+ffmpeg,
+	)
+	if ffprobe == "" {
+		report.Env = append(report.Env, "ffprobe=MISSING (degraded to ffmpeg -i stderr parsing)")
+	} else {
+		report.Env = append(report.Env, "ffprobe="+ffprobe)
+	}
+	report.Evidence = append(report.Evidence,
+		"[代码] IR 扩展：example/internal/video/app/ir.go Effect.TargetElementID（json:targetElementId）+ Validate 写时校验（引用不存在的 element id → E_VIDEO_IR_INVALID details.field=targetElementId）",
+		"[代码] 定位实现：example/internal/video/app/timeline-builder.js counterHost — fx.targetElementId 命中画布节点时宿主 left/top 取目标 bbox（同一 stage 坐标系），z-index 9999 保留（D-01 第三层不回退）",
+		"[语义] 宿主只借目标几何，不随目标显隐/入场动画（目标 scaleIn 未入场时 counter 仍显示于目标位置）——降级链口径，见 builder 注释",
+		"[口径] 断言对象是 MP4 解码抽帧：右下目标区域墨迹>0.5%、区域内滚动差>300px、原点区域墨迹<0.1%（宿主迁移而非复制）",
+	)
+
+	// 1) IR: same counter as VS-C01 but bound to a bottom-right price panel.
+	ir := buildCounterTargetIR(t)
+	if verr := videoapp.Validate(ir); verr != nil {
+		res.IRValidate = "FAIL: " + verr.Error()
+		fail("IR failed Validate: " + verr.Error())
+		res.DurationMS = time.Since(start).Milliseconds()
+		report.Cases = append(report.Cases, res)
+		writeCounterReport(t, report)
+		t.Fatalf("fixture IR invalid: %v", verr)
+	}
+	res.IRValidate = "pass (counter carries targetElementId=el_price, resolves to existing element)"
+	res.AnchorResolution = fmt.Sprintf("anchor %q → word %d (%s), reason %s",
+		counterAnchorWW, ir.Effects[0].ResolvedFrom.WordIndex,
+		ir.Words[ir.Effects[0].ResolvedFrom.WordIndex].Text,
+		ir.Effects[0].ResolvedFrom.Reason)
+
+	// 2) full-chain render + encode
+	frames := videoapp.DurationFrames(ir, counterFPS) // 150
+	spec := capx.FrameSpec{Width: counterW, Height: counterH, FPS: counterFPS, DurationFrames: frames}
+	if serr := spec.Validate(); serr != nil {
+		t.Fatalf("frame spec: %v", serr)
+	}
+	res.FramesRendered = frames
+
+	outputPath := filepath.Join(baseDir, "output.mp4")
+	if _, rErr := renderAndEncode(t, ctx, rt, baseDir, ir, spec, outputPath); rErr != nil {
+		fail("render+encode: " + rErr.Error())
+		res.DurationMS = time.Since(start).Milliseconds()
+		report.Cases = append(report.Cases, res)
+		writeCounterReport(t, report)
+		t.Fatalf("render+encode: %v", rErr)
+	}
+	res.Artifacts = append(res.Artifacts, "counter/VS-C10-COUNTER-TARGET/output.mp4")
+
+	// 3) extract the same sample frames from the DECODED product
+	sampleSpecs := []struct {
+		atSec float64
+		name  string
+	}{
+		{1.0, "frame-t1.000.png"},
+		{3.0, "frame-t3.000.png"},
+		{4.8, "frame-t4.800.png"},
+		{4.9, "frame-t4.900.png"},
+	}
+	paths := map[string]string{}
+	for _, s := range sampleSpecs {
+		p := filepath.Join(baseDir, s.name)
+		if err := extractFrame(ctx, ffmpeg, outputPath, p, s.atSec); err != nil {
+			fail(fmt.Sprintf("extract frame @%.1fs: %v", s.atSec, err))
+			continue
+		}
+		paths[s.name] = p
+		res.Artifacts = append(res.Artifacts, "counter/VS-C10-COUNTER-TARGET/"+s.name)
+	}
+
+	// target region under test: bottom-right price panel and its surroundings.
+	// el_price sits at x=648, y=1440, w=360, h=200; the region is the panel
+	// plus margin (digits may exceed the declared w — width is not set on the
+	// host so a long "12600 件" overflows rightward without wrapping).
+	const tRx, tRy, tRw, tRh = 620, 1410, 440, 260
+	regionTarget := func(pngPath string) inkStats { return regionInkAt(t, pngPath, tRx, tRy, tRw, tRh) }
+	diffTarget := func(pngA, pngB string) int { return regionDiffAt(t, pngA, pngB, tRx, tRy, tRw, tRh) }
+
+	// 3a) digit presence in the TARGET region at each sample
+	for _, s := range sampleSpecs[:3] {
+		p, ok := paths[s.name]
+		if !ok {
+			continue
+		}
+		st := regionTarget(p)
+		sm := inkSample{AtSec: s.atSec, File: s.name, Stats: st, Pass: st.InkRatio > inkRatioMin}
+		sm.Detail = fmt.Sprintf("target region (%d,%d,%d,%d): ink %d/%d px (%.2f%%), bbox %v, meanRGB %v",
+			tRx, tRy, tRw, tRh, st.InkPx, st.TotalPx, st.InkRatio*100, st.BBox, st.MeanRGB)
+		if !sm.Pass {
+			sm.Detail += " — BELOW threshold: digits missing at the target element region"
+			fail(fmt.Sprintf("t=%.1fs target-region ink ratio %.4f <= %.3f — counter did not land at targetElementId bbox", s.atSec, st.InkRatio, inkRatioMin))
+		}
+		res.InkSamples = append(res.InkSamples, sm)
+	}
+
+	// 3b) the roll happens INSIDE the target region (t=1.0 mid-roll vs
+	// t=4.8 settled)
+	if p1, ok1 := paths["frame-t1.000.png"]; ok1 {
+		if p48, ok48 := paths["frame-t4.800.png"]; ok48 {
+			res.RollDiffPx = diffTarget(p1, p48)
+			if res.RollDiffPx <= rollDiffMin {
+				fail(fmt.Sprintf("target-region roll diff t=1.0 vs t=4.8 = %d px <= %d — digits at the target are static (not rolling there)", res.RollDiffPx, rollDiffMin))
+			}
+		}
+	}
+
+	// 3c) settle check inside the target region
+	if p48, ok48 := paths["frame-t4.800.png"]; ok48 {
+		if p49, ok49 := paths["frame-t4.900.png"]; ok49 {
+			res.SettleDiffPx = diffTarget(p48, p49)
+			if res.SettleDiffPx >= settleDiffMax {
+				fail(fmt.Sprintf("target-region settle diff t=4.8 vs t=4.9 = %d px >= %d — digits not stable at the terminal value", res.SettleDiffPx, settleDiffMax))
+			}
+		}
+	}
+
+	// 3d) the host MOVED: the origin region must be near-empty in the same
+	// frames that carry the digits at the target (a duplicated host would
+	// paint both; the legacy origin behavior has its own test in TestCounterL2)
+	if p49, ok := paths["frame-t4.900.png"]; ok {
+		stOrigin := regionInk(t, p49) // (0,0,300,120) — same region as legacy test
+		if stOrigin.InkRatio > 0.001 {
+			fail(fmt.Sprintf("origin-region ink %.4f%% > 0.1%% at t=4.9 while digits render at the target — host not relocated (or duplicated)", stOrigin.InkRatio*100))
+		}
+		res.Notes = append(res.Notes, fmt.Sprintf(
+			"origin region clean: ink %.3f%% (<0.1%%) — host relocated to target bbox, not duplicated",
+			stOrigin.InkRatio*100))
+		stTarget := regionTarget(p49)
+		res.Notes = append(res.Notes, fmt.Sprintf(
+			"target region ink bbox(x0,y0,x1,y1)=%v within region (%d,%d,+%d,+%d); meanRGB %v vs params.color #2B2118",
+			stTarget.BBox, tRx, tRy, tRw, tRh, stTarget.MeanRGB))
+	}
+
+	if res.Status == "" {
+		res.Status = "pass"
+	}
+	res.DurationMS = time.Since(start).Milliseconds()
+	report.Cases = append(report.Cases, res)
+
+	if res.RollDiffPx > 0 {
+		report.Findings = append(report.Findings, fmt.Sprintf(
+			"target-region roll quantified: %d px changed between t=1.0 and t=4.8 inside (%d,%d,%d,%d) — the digit roll IS encoded at the target position",
+			res.RollDiffPx, tRx, tRy, tRw, tRh))
+	}
+
+	for _, c := range report.Cases {
+		switch c.Status {
+		case "pass":
+			report.Totals.Pass++
+		case "fail":
+			report.Totals.Fail++
+		default:
+			report.Totals.Skip++
+		}
+	}
+
+	writeCounterReport(t, report)
+	if res.Status != "pass" {
+		t.Fatalf("%s failed assertions: %v", res.CaseID, res.FailReasons)
+	}
+	t.Logf("%s pass: %d frames, target-region roll_diff=%d px, settle_diff=%d px",
+		res.CaseID, res.FramesRendered, res.RollDiffPx, res.SettleDiffPx)
+}
+
+// buildCounterTargetIR synthesizes the element-positioned counter IR: same
+// counter numbers as VS-C01, but a bottom-right price panel (el_price) is the
+// counter's targetElementId. Panel geometry (648,1440,360x200) was chosen so
+// the origin region (0,0,300,120) and the target region (620,1410,440x260)
+// are disjoint — one host relocated shows up as ink in exactly one of them.
+func buildCounterTargetIR(t *testing.T) *videoapp.IR {
+	t.Helper()
+
+	script := "开抢 五折爆款 全场清仓 两千件手慢无 最后一天"
+	ir := &videoapp.IR{
+		SchemaVersion: videoapp.IRSchemaVersion,
+		Meta: videoapp.Meta{
+			FPS:         counterFPS,
+			Width:       counterW,
+			Height:      counterH,
+			DurationSec: counterSeconds,
+		},
+		Script: script,
+		Words:  videoapp.EstimateWords(script, counterSeconds),
+		Effects: []videoapp.Effect{{
+			ID:              "fx_counter_price",
+			Anchor:          videoapp.Anchor{Text: counterAnchorWW, Occurrence: 0},
+			Type:            videoapp.EffectCounter,
+			TargetElementID: "el_price",
+			Params: []byte(`{"from":` + fmt.Sprint(counterFrom) +
+				`,"to":` + fmt.Sprint(counterTo) +
+				`,"suffix":"` + counterSuffix + `","color":"` + counterColor + `"}`),
+		}},
+		Elements: []videoapp.Element{
+			{ID: "bg", Type: videoapp.ElementShape, Color: counterBG,
+				X: 0, Y: 0, W: counterW, H: counterH, Z: 0},
+			// the positioning target: a price panel at the bottom-right
+			{ID: "el_price", Type: videoapp.ElementShape, Color: "#FFFDF7",
+				X: 648, Y: 1440, W: 360, H: 200, Z: 2},
+			// static headline mid-card — outside both asserted regions
+			{ID: "headline", Type: videoapp.ElementText, Text: "限时五折 · T-10",
+				Color: "#2B2118", FontSize: 84,
+				X: counterW * 0.14, Y: counterH * 0.34,
+				W: counterW * 0.72, H: 200, Z: 3},
+		},
+	}
+
+	fx := &ir.Effects[0]
+	idx, reason, ok := videoapp.ResolveAnchors(fx.Anchor, ir.Words, -1)
+	if !ok || idx != 0 || reason != videoapp.AnchorExact {
+		t.Fatalf("counter anchor %q did not resolve to word 0/exact: idx=%d reason=%s ok=%v",
+			counterAnchorWW, idx, reason, ok)
+	}
+	fx.ResolvedFrom = &videoapp.ResolvedFrom{WordIndex: idx, Reason: reason}
+	return ir
+}
+
+// regionInkAt is regionInk parameterized over the region rectangle (the
+// element-positioning variant asserts a bottom-right region instead of the
+// origin).
+func regionInkAt(t *testing.T, pngPath string, rx, ry, rw, rh int) inkStats {
+	t.Helper()
+	img := decodePNGRect(t, pngPath, rx+rw, ry+rh)
+	st := inkStats{TotalPx: rw * rh, BBox: [4]int{-1, -1, -1, -1}}
+	var rSum, gSum, bSum int64
+	for y := ry; y < ry+rh; y++ {
+		for x := rx; x < rx+rw; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			r8, g8, b8 := int(r>>8), int(g>>8), int(b>>8)
+			if (r8+g8+b8)/3 < 128 {
+				st.InkPx++
+				rSum += int64(r8)
+				gSum += int64(g8)
+				bSum += int64(b8)
+				if st.BBox[0] < 0 || x < st.BBox[0] {
+					st.BBox[0] = x
+				}
+				if st.BBox[1] < 0 || y < st.BBox[1] {
+					st.BBox[1] = y
+				}
+				if x > st.BBox[2] {
+					st.BBox[2] = x
+				}
+				if y > st.BBox[3] {
+					st.BBox[3] = y
+				}
+			}
+		}
+	}
+	if st.InkPx > 0 {
+		st.InkRatio = float64(st.InkPx) / float64(st.TotalPx)
+		st.MeanRGB = [3]int{int(rSum / int64(st.InkPx)), int(gSum / int64(st.InkPx)), int(bSum / int64(st.InkPx))}
+	}
+	return st
+}
+
+// regionDiffAt is regionDiff parameterized over the region rectangle.
+func regionDiffAt(t *testing.T, pngA, pngB string, rx, ry, rw, rh int) int {
+	t.Helper()
+	a, b := decodePNGRect(t, pngA, rx+rw, ry+rh), decodePNGRect(t, pngB, rx+rw, ry+rh)
+	n := 0
+	for y := ry; y < ry+rh; y++ {
+		for x := rx; x < rx+rw; x++ {
+			ar, ag, ab, _ := a.At(x, y).RGBA()
+			br, bg, bb, _ := b.At(x, y).RGBA()
+			d := abs8(int(ar>>8)-int(br>>8)) + abs8(int(ag>>8)-int(bg>>8)) + abs8(int(ab>>8)-int(bb>>8))
+			if d > 90 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// decodePNGRect decodes a PNG and verifies it covers the asserted rectangle.
+func decodePNGRect(t *testing.T, path string, needW, needH int) image.Image {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	if img.Bounds().Dx() < needW || img.Bounds().Dy() < needH {
+		t.Fatalf("frame %s smaller than the asserted region: %v", path, img.Bounds())
+	}
+	return img
+}
+
 // writeCounterReport persists the report next to the other L2 reports
 // (testdata/counter-l2-report.json) — always, pass or fail.
 func writeCounterReport(t *testing.T, report *counterReport) {

@@ -1,0 +1,246 @@
+{
+  "layer": "L3-render-subpath-smoke",
+  "run_id": "20261115-1852-l3-smoke",
+  "date": "2026-11-15",
+  "scope": "首次真实全链路冒烟（round3 §8 入口 1 / 案例库 §7.4 渲染子路径）：HTTP 提交 → DB 行+配额 → river worker → capx 真实渲染 → 编码 → storagex 落盘 → 状态机终态。reconciler/资产表缺口不在本轮范围。",
+  "env": [
+    "os=windows/amd64 host=DESKTOP-IGMKJLG",
+    "db=postgres:16-alpine docker pk-video-l3-db :5437",
+    "server=example/cmd/app build -tags capx（go version -m 确认 build -tags=capx, CGO_ENABLED=1）",
+    "chrome=C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "ffmpeg=C:/Program Files/ffmpeg/bin/ffmpeg.exe",
+    "addr=:8031（8030 被无关残留 go-build app.exe PID 47944 占用，改绑 8031）",
+    "PLOYKIT_MCP_ENABLED=1（=0 时 capx 随之关闭，见 findings F2）",
+    "STORAGE_BACKEND=local"
+  ],
+  "steps": [
+    {
+      "step": "1 DB 启动",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "docker pk-video-l3-db (postgres:16-alpine, :5437) pg_isready accepting"
+    },
+    {
+      "step": "2 服务构建",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "go -C example build -tags capx -o /tmp/pk-l3/ploykit-l3.exe ./cmd/app；buildinfo 确认 -tags=capx"
+    },
+    {
+      "step": "3 服务启动",
+      "status": "pass",
+      "duration_ms": 3250,
+      "detail": "migrations applied → listening addr=:8031 → workers started count=14 → River client started；首轮 8030 被无关进程占用（非本项目产物），改绑 8031"
+    },
+    {
+      "step": "4 注册",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "POST /auth/register 200（email+password+display_name 全填，一次成功）；响应轮换 csrf_token（T1）"
+    },
+    {
+      "step": "5 登录",
+      "status": "pass",
+      "duration_ms": 98,
+      "detail": "POST /auth/login 200（T1→T2 轮换，符合 api-conventions CSRF 生命周期）"
+    },
+    {
+      "step": "6 workspace",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "GET /api/workspaces 200；首个用户 Personal workspace role=owner，role_perms 含 video:read/write/render 全量 catalog（第 1 批 authz 结论成立）"
+    },
+    {
+      "step": "7 建项目",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "POST /api/video/projects {title:L3-Smoke} → 201，version=1，空 IR 默认 1080x1920@30"
+    },
+    {
+      "step": "8 提交 IR",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "PUT /ir（expected_version=1）→ 200 version=2；3 锚点全部解析 reason=exact（文字入场→word#3、纯色背景→word#2 ×2）；words 按 EstimateWords 输出格式（index/text/start/end/source=estimated，20 词，末词 end=5.0 恰合 duration）"
+    },
+    {
+      "step": "9 首次提交渲染",
+      "status": "fail_then_retry",
+      "duration_ms": null,
+      "detail": "第 1 次 body {\"fps\":30}（openapi 文档形态）→ 400 E_BAD_JSON unknown field \"fps\"（见 F1）；改 {\"params\":{\"fps\":30}} → 201 queued，render_id=01a1ded8-29ca-73ef-89a4-81351f6e0771，frames_total=150"
+    },
+    {
+      "step": "10 轮询终态",
+      "status": "fail",
+      "duration_ms": 97,
+      "detail": "GET /renders/{id} → status=failed（提交后 ~97ms），error=\"video render: capx pipeline not compiled in (build tag capx)\"，frames_done=0/150。根因 F3：main.go 组装 capxRuntime 后从未赋值 videorender.CapxRuntime，capxPipeline.Run 首行判 nil 直接 ErrNotConfigured。首次真实渲染未能 succeeded。"
+    },
+    {
+      "step": "11 幂等键重放",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "同 Idempotency-Key: l3-smoke-001 重复 POST → 201 返回同一 render_id 01a1ded8-29ca-73ef-89a4-81351f6e0771（含终态 failed 详情），未建新行未二次扣额——幂等闭环成立（uq_video_render_submission 唯一索引兜底）"
+    },
+    {
+      "step": "12 换键新提交",
+      "status": "pass",
+      "duration_ms": null,
+      "detail": "Idempotency-Key: l3-smoke-002 → 201 新 render_id 01a1ded9-1fdc-769b-93e7-b3e9e8a464e3，同样 failed（同一根因），~86ms 终态"
+    },
+    {
+      "step": "13 产物文件验证",
+      "status": "blocked",
+      "duration_ms": null,
+      "detail": "无 MP4 产物（output_key 为空），ftyp 前 32 字节读取与 Range: bytes=0-99 → 206 无法执行；仅验证 /api/video/files 路由挂载：不存在 key → 404（membership 门在）"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "high",
+      "kind": "contract-drift",
+      "title": "openapi 与实现漂移：POST /renders 请求体结构不一致",
+      "detail": "docs/openapi.yaml（createVideoRender）声明平铺字段 {fps,width,height,burn_subtitles,subtitle_mode,bgm_volume,expected_version}；实现 routes.go:198-200 解码 {\"params\":RenderParams, expected_version}，且 webx.DecodeJSON 拒绝未知字段——按契约文档发的 {\"fps\":30} 直接 400 E_BAD_JSON。按文档集成的客户端 100% 首发即失败。",
+      "evidence": [
+        "docs/openapi.yaml /api/video/projects/{id}/renders requestBody（平铺 fps 等字段）",
+        "example/internal/video/adapters/http/routes.go:198-213（嵌套 params 结构）",
+        "实测响应原文：{\"error\":\"E_BAD_JSON\",\"message\":\"invalid request body\",\"details\":\"json: unknown field \\\"fps\\\"\"}"
+      ]
+    },
+    {
+      "id": "F2",
+      "severity": "medium",
+      "kind": "wiring-coupling",
+      "title": "capx 渲染能力被 PLOYKIT_MCP_ENABLED 开关联动",
+      "detail": "main.go:1228-1231 capx.New(Enabled:&mcpOn)，mcpOn=PLOYKIT_MCP_ENABLED。设 0 时 REST 提交渲染在 CapAvailable 门返回 503 E_NOT_CONFIGURED（不建行、不扣额——降级语义正确），但产品面网页端渲染也必须开 MCP 才可用；两个独立能力共用一个开关。",
+      "evidence": [
+        "main.go:799 mcpOn := env(PLOYKIT_MCP_ENABLED, \"\") == \"1\"",
+        "main.go:1228-1231 capx.New(Config{Enabled: &mcpOn, ...})",
+        "实测 MCP=0 → 503 E_NOT_CONFIGURED render capability not configured"
+      ]
+    },
+    {
+      "id": "F3",
+      "severity": "critical",
+      "kind": "wiring-gap",
+      "title": "main.go 从未注入 videorender.CapxRuntime —— capx 构建下首次真实渲染必失败",
+      "detail": "render_pipeline.go:44 声明 var CapxRuntime *capx.Runtime 并注释 injected at wiring time；main.go 组装了 capxRuntime 局部变量（:1228）却没有任何一行 videorender.CapxRuntime = capxRuntime。capxPipeline.Run 首行 if CapxRuntime == nil → ErrNotConfigured。全 example 代码库仅测试文件（render_pipeline_subtitle_test.go）对该变量赋值。结果：-tags capx 构建的服务端每次渲染 ~97ms 即 failed（river JobCancel 非重试路径），L3 全链路在真实浏览器渲染开始前就断流。",
+      "evidence": [
+        "example/internal/video/render/render_pipeline.go:41-51（nil 检查返回 ErrNotConfigured）",
+        "example/cmd/app/main.go:1228（局部 capxRuntime 从未外传）",
+        "grep 全库 CapxRuntime 赋值点：仅 render_pipeline_subtitle_test.go:321,357,388",
+        "实测两次渲染 error 完全相同：video render: capx pipeline not compiled in (build tag capx)"
+      ],
+      "fix_suggestion": "main.go capx.New 成功后注入 videorender.CapxRuntime = capxRuntime；该变量仅存在于 capx 构建文件，stub 构建无此符号——需用带 //go:build capx 的小文件承载注入，或在主文件用同 tag 守卫。"
+    },
+    {
+      "id": "F4",
+      "severity": "low",
+      "kind": "note",
+      "title": "river job 终态为 cancelled 而非 discarded（语义注记）",
+      "detail": "worker 对确定性失败走 river.JobCancel（worker.go:229-231）→ river_job.state=cancelled, attempt=1/2（正确：不重试、审计先行）。river 语义里 cancelled 通常指人为取消，此处是确定性业务失败，读库排障需结合 errors JSON 辨识。行为正确，仅记录。"
+    }
+  ],
+  "db_assertions": {
+    "video_render_rows": [
+      {
+        "id": "01a1ded8-29ca-73ef-89a4-81351f6e0771",
+        "status": "failed",
+        "frames": "0/150",
+        "submission_key": "l3-smoke-001",
+        "quota_period": "2026-11",
+        "released_at_not_null": true
+      },
+      {
+        "id": "01a1ded9-1fdc-769b-93e7-b3e9e8a464e3",
+        "status": "failed",
+        "frames": "0/150",
+        "submission_key": "l3-smoke-002",
+        "quota_period": "2026-11",
+        "released_at_not_null": true
+      }
+    ],
+    "quota_counter": {
+      "counter_key": "video_renders_monthly",
+      "used": 0,
+      "reserved": 0,
+      "period": "2026-11",
+      "note": "两笔渲染失败后均自动 Release，used 归 0——失败释放闭环成立（成功场景 used=1 本轮未达成，被 F3 阻断）"
+    },
+    "quota_consume_idem": [
+      {
+        "idem_key": "l3-smoke-001",
+        "amount": 1,
+        "period": "2026-11"
+      },
+      {
+        "idem_key": "l3-smoke-002",
+        "amount": 1,
+        "period": "2026-11"
+      }
+    ],
+    "audit_event": [
+      "video.project.created @10:52:25 (project 01a1ded6)",
+      "video.ir.updated @10:53:04 (project 01a1ded6)",
+      "video.render.created + video.render.failed @10:54:30 (render 01a1ded8)",
+      "video.render.created + video.render.failed @10:55:33 (render 01a1ded9)",
+      "注：审计序列完整（created→failed），无 video.render.completed（本轮无成功渲染）"
+    ],
+    "river_job": [
+      {
+        "id": 1,
+        "kind": "video_render",
+        "state": "cancelled",
+        "attempt": "1/2",
+        "queue": "video",
+        "errors": "JobCancelError: video render: failed (already audited; no retry)"
+      },
+      {
+        "id": 2,
+        "kind": "video_render",
+        "state": "cancelled",
+        "attempt": "1/2",
+        "queue": "video",
+        "errors": "同上"
+      }
+    ]
+  },
+  "idempotency_check": {
+    "key": "l3-smoke-001",
+    "first_submit_render_id": "01a1ded8-29ca-73ef-89a4-81351f6e0771",
+    "replay_render_id": "01a1ded8-29ca-73ef-89a4-81351f6e0771",
+    "same_id": true,
+    "rows_created_by_replay": 0,
+    "double_charge": false,
+    "verdict": "pass——批3 提交幂等键闭环验证成立（失败终态行重放同键也返回原行，不新建不二次扣额）"
+  },
+  "range_check": {
+    "status": "blocked",
+    "reason": "渲染未产出 MP4（F3），output_key 为空；ftyp 前 32 字节验证与 Range: bytes=0-99 → 206 无法执行",
+    "route_mounted": true,
+    "missing_key_response": 404
+  },
+  "errors": [
+    {
+      "step": "提交渲染(按 openapi 文档形态)",
+      "http": 400,
+      "body": "E_BAD_JSON invalid request body: json: unknown field \"fps\""
+    },
+    {
+      "step": "提交渲染(PLOYKIT_MCP_ENABLED=0 时)",
+      "http": 503,
+      "body": "E_NOT_CONFIGURED render capability not configured"
+    },
+    {
+      "step": "渲染执行x2",
+      "http": null,
+      "error": "video render: capx pipeline not compiled in (build tag capx)"
+    }
+  ],
+  "server_log_excerpts": [
+    "10:51:31 migrations applied / 10:51:34 listening addr=:8031 / workers started count=14 / River client started client_id=DESKTOP-IGMKJLG_2026_11_15T10_51_32_252559（首轮 8030 bind 冲突退出，8031 重启）",
+    "10:54:09 listening addr=:8031（MCP=1 重启）/ River client started client_id=DESKTOP-IGMKJLG_2026_11_15T10_54_08_379644",
+    "10:54:30 POST /renders 201 ms=56 → worker 无 capx 渲染日志（pipeline 在 nil 检查处立即返回）；river errors: JobCancelError: video render: failed (already audited; no retry)",
+    "10:55:33 POST /renders 201 ×2（幂等重放 + 换键）→ 同样 ~97ms 终态 failed"
+  ],
+  "verdict": "L3 渲染子路径冒烟：FAIL——首次真实渲染未 succeeded，根因 F3（main.go 未赋值 videorender.CapxRuntime，一行注入缺失），非渲染管线本体问题。已验证成立：HTTP 鉴权/CSRF/workspace 门、IR 校验+锚点解析（exact×3）、提交幂等键闭环、配额预扣+失败自动释放、审计 created/failed 双事件、river 非重试终态、文件路由 membership 门。被 F3 阻断：capx 真实渲染、编码、storagex 落盘、succeeded 终态、quota used=1、ftyp/Range-206 产物验证。"
+}

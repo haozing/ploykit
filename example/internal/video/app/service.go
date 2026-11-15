@@ -680,8 +680,11 @@ func (s *ProjectService) SetWords(ctx context.Context, p *webx.Principal, projec
 
 // AddEffectAtWord appends one effect anchored at anchor{text,occurrence} and
 // returns the resolvedFrom the re-resolution pass wrote (tool audit view).
+// targetElementID optionally binds the effect to an existing element
+// (validated by IR Validate — a dangling id fails the write with
+// E_VIDEO_IR_INVALID details.field=targetElementId).
 func (s *ProjectService) AddEffectAtWord(ctx context.Context, p *webx.Principal, projectID string,
-	anchor Anchor, typ string, params json.RawMessage, expectedVersion *int) (int, *ResolvedFrom, error) {
+	anchor Anchor, typ string, params json.RawMessage, targetElementID string, expectedVersion *int) (int, *ResolvedFrom, error) {
 
 	var rf ResolvedFrom
 	newVersion, _, err := s.Mutate(ctx, p, projectID, expectedVersion, func(ir *IR) error {
@@ -693,7 +696,7 @@ func (s *ProjectService) AddEffectAtWord(ctx context.Context, p *webx.Principal,
 		rf = ResolvedFrom{WordIndex: wordIndex, Reason: reason}
 		ir.Effects = append(ir.Effects, Effect{
 			ID: "fx_" + ids.NewV7().String(), Anchor: anchor, Type: typ,
-			Params: params, ResolvedFrom: &rf,
+			Params: params, TargetElementID: targetElementID, ResolvedFrom: &rf,
 		})
 		return nil
 	})

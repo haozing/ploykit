@@ -1233,6 +1233,12 @@ func main() {
 	if capxErr != nil {
 		log.Warn("capx runtime degraded", "err", capxErr)
 	}
+	// Inject the runtime into the capx-tagged render pipeline (L3 smoke
+	// finding F3: the var existed but was never assigned — every render
+	// failed ErrNotConfigured 97ms in). main.go is the only production
+	// assigner; CapxRuntime lives behind the capx build tag, so the default
+	// build has no such symbol and pipeline callers are tag-gated to match.
+	videorender.SetCapxRuntime(capxRuntime)
 
 	videoMembership := videomcpMemberAdapter{repo: wsRepo}
 	videoAud := videoAuditAdapter{rec: auditor}

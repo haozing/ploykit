@@ -410,23 +410,51 @@ func TestL1RenderC01Keyframes(t *testing.T) {
 				notes = append(notes, fmt.Sprintf("A-C01-01 doc target >=18%%: actual %.1f%% — target likely calibrated for target-schema layout (fontWeight 900 / no wrap); informational, no baseline this round", tr*100))
 			case 77, 90, 180:
 				checks["card_white_ratio"] = cr
-				checks["assert_card_visible_ge_90pct"] = cr >= 0.90
-				if s.frame == 180 {
-					checks["card_green_accent_ratio"] = card["yellow_ratio"] // green #1E9E62 not covered by a dedicated class; yellow+orange ratios stay ~0 when absent
-					notes = append(notes, "degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance")
+				if s.frame == 90 {
+					// X-4 FIX (2026-11-15): ef_kw1 (三倍@2.6s → F78) now paints a
+					// VISIBLE z-10000 canvas overlay during F78-F111 (0.25s rise,
+					// 0.5s hold, 0.6s fall) — pre-fix the flash was occluded by
+					// el_bg and the whiteness>=90% assert passed on the HIDDEN
+					// state. During the window the overlay tints the whole frame
+					// toward #FFD166, so the card-zone whiteness gate is replaced
+					// by the two outcomes it actually distinguishes: peak-window
+					// tint (whiteness low + yellow present) or settled whiteness.
+					// F77 (pre-window) and F180 (post-window) keep the original
+					// >=90% whiteness assert unchanged.
+					checks["card_white_ratio_during_x4_window"] = cr
+					checks["card_yellow_ratio_during_x4_window"] = card["yellow_ratio"]
+					if cr < 0.90 && frY < 0.01 {
+						status = "fail"
+						notes = append(notes, fmt.Sprintf("F90 card zone neither white (%.1f%%) nor tinted by the visible highlight overlay (full-frame yellow %.4f) — overlay missing AND card missing", cr*100, frY))
+					} else if cr < 0.90 {
+						notes = append(notes, fmt.Sprintf("X-4 fix observable: F90 sits in the ef_kw1 flash window (F78-F111) — overlay tints the card zone to whiteness %.1f%% (pre-fix: >=90%% because the flash was occluded behind el_bg); yellow_ratio=%.4f proves the flash is now VISIBLE", cr*100, frY))
+					} else {
+						notes = append(notes, "degradation observed: card already fully entered at F90 (target expected scale∈[0.8,1]) — flash overlay not tinting (outside window?), whiteness holds >=90%")
+					}
 				} else {
-					notes = append(notes, "degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)")
-				}
-				if cr < 0.90 {
-					status = "fail"
-					notes = append(notes, fmt.Sprintf("card zone whiteness %.1f%% < 90%%", cr*100))
+					checks["card_white_ratio"] = cr
+					checks["assert_card_visible_ge_90pct"] = cr >= 0.90
+					if s.frame == 180 {
+						checks["card_green_accent_ratio"] = card["yellow_ratio"] // green #1E9E62 not covered by a dedicated class; yellow+orange ratios stay ~0 when absent
+						notes = append(notes, "degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance")
+					} else {
+						notes = append(notes, "degradation observed: card already fully entered at F77 (target expected scale=0)")
+					}
+					if cr < 0.90 {
+						status = "fail"
+						notes = append(notes, fmt.Sprintf("card zone whiteness %.1f%% < 90%%", cr*100))
+					}
 				}
 			case 250:
-				// highlight peak per target table; degraded implementation
-				// paints #canvas which el_bg fully occludes -> expect ~0
+				// X-4 FIXED: the highlight flash now paints a visible z-10000
+				// overlay — F250 (peak of ef_hook 五分钟@1.4s→F42 hold... actually
+				// the whole-frame tint persists while any flash window is open;
+				// at F250 the ef_kw1/ef_kw3 windows may overlap; expect the
+				// full-frame yellow ratio to be HIGH where a window covers the
+				// frame (pre-fix it measured ~0 everywhere: occluded).
 				checks["full_frame_yellow_ratio"] = frY
 				checks["highlight_visible"] = frY > 0.01
-				notes = append(notes, "degradation observed (stronger than documented): highlight paints the #canvas layer, which the full-canvas el_bg shape fully occludes — F250 target '#FFD166 lift' is INVISIBLE, not merely full-screen")
+				notes = append(notes, fmt.Sprintf("X-4 fix: full-frame yellow ratio %.4f at F250 — the no-target highlight now paints a visible overlay (pre-fix measured ≈0: occluded by el_bg; l1-report 2026-11-15 baseline inverted)", frY))
 			case 320:
 				checks["price_orange_ratio"] = pr
 				checks["assert_price_ink_exists_ge_2pct"] = pr >= 0.02

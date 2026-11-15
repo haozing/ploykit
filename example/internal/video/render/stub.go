@@ -19,3 +19,8 @@ func (stubPipeline) Run(_ context.Context, _ *Worker, _ renderRow, _ *videoapp.I
 }
 
 func pickPipeline(deps WorkerDeps) pipeline { return stubPipeline{} }
+
+// SetCapxRuntime is a no-op on the default build: CapxRuntime (and the
+// whole capx pipeline) only exists under the capx tag, so main.go can call
+// this unconditionally and the default build simply discards the injection.
+func SetCapxRuntime(_ any) {}

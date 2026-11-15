@@ -17,7 +17,7 @@
     396,
     449
   ],
-  "generated_at": "2026-11-15T17:19:33+08:00",
+  "generated_at": "2026-11-15T19:55:41+08:00",
   "go": "go1.27.0",
   "height": 1920,
   "ir_sha256": "078365678fcd4bf11bcede278621b5365a9301988d3aec92ade1a7afac0ea00d",
@@ -25,7 +25,7 @@
   "layer": "L1",
   "notes": "first baseline run — no golden compare; structural existence assertions only",
   "render_mode": "full 450-frame loop; only keyframes kept",
-  "render_total_ms": 53749,
-  "run_id": "l1-c01-20261115-171839-d395",
+  "render_total_ms": 56304,
+  "run_id": "l1-c01-20261115-195444-bad3",
   "width": 1080
 }

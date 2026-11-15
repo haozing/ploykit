@@ -25,56 +25,35 @@
   "layer": "L5",
   "mismatches": null,
   "perf": {
-    "avg_frames_per_sec": 6.76,
+    "avg_frames_per_sec": 6.5,
     "per_frame_ms": {
-      "min": 72.67,
-      "median": 103.54,
-      "p95": 148.05,
-      "max": 2548.69
+      "min": 76.92,
+      "median": 103.77,
+      "p95": 171.68,
+      "max": 3081.25
     },
     "per_frame_steady_ms": {
-      "min": 72.67,
-      "median": 103.18,
-      "p95": 124.36,
-      "max": 542.4
+      "min": 76.92,
+      "median": 103.34,
+      "p95": 138.41,
+      "max": 401.9
     },
     "per_run_ms": {
-      "min": 3885.08,
-      "median": 4289.27,
-      "p95": 4986.38,
-      "max": 11829.19
+      "min": 3964.07,
+      "median": 4215.06,
+      "p95": 6522.12,
+      "max": 10951.6
     },
-    "total_ms": 443815,
-    "total_wall_clock": "7m24s"
+    "total_ms": 461336,
+    "total_wall_clock": "7m41s"
   },
   "png": {
     "avg_bytes": 26073,
     "compression_ratio_avg": 238.59,
     "max_bytes": 27566,
     "min_bytes": 24626,
-    "note": "minimal composition (solid bg + moving white text): ratio 238.6x is an upper bound. Real case-content cross-check (L1 goldens, this repo): 130-180x. §7.8 3-8x estimate does NOT hold for flat-color motion graphics; see l1_golden_cross_check.",
-    "raw_rgb_bytes_per_frame": 6220800,
-    "l1_golden_cross_check": {
-      "c01": {
-        "frames": 10,
-        "avg_bytes": 34890,
-        "compression_ratio": 178.3,
-        "note": "1080x1920, VS-C01 cream bg + text/cards/CTA bar"
-      },
-      "c04": {
-        "frames": 11,
-        "avg_bytes": 47146,
-        "compression_ratio": 131.95,
-        "note": "1920x1080, VS-C04 dark bg + bar chart + ring"
-      },
-      "c06": {
-        "frames": 11,
-        "avg_bytes": 34839,
-        "compression_ratio": 178.56,
-        "note": "1920x1080, VS-C06 dark bg + caption text"
-      },
-      "verdict": "real case-content frames compress 130-180x (flat-color motion graphics), far above the 3-8x estimate in §7.8; the 3-8x band assumes photographic/noise content, not the flat-design compositions this pipeline produces. §7.8 PNG disk estimates (0.76-2.02 MB/frame weighted) are thereby overestimates by ~20-25x; realistic HD frame is ~35-47 KB, L1 golden 90 frames ~3-4 MB total, L3 temp frames 10800 x ~40KB ~ 430 MB (not 8-21 GB)."
-    }
+    "note": "minimal composition (solid bg + moving white text): ratio is an upper bound, NOT representative of case-content PNGs (§7.8 3-8x estimate refers to typical motion graphics); cross-check against L1 golden frames recorded in evidence",
+    "raw_rgb_bytes_per_frame": 6220800
   },
   "recipe": {
     "duration_frames": 30,
@@ -82,13 +61,13 @@
     "fps": 30,
     "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
     "height": 1920,
-    "html_bytes": 86448,
+    "html_bytes": 93229,
     "ir_sha256": "691459d8c0413088e8121219c7e0e4c1ec17e4423ca0359b9742c125e1eda40e",
     "ir_sha256_basis": "sha256(json.Marshal(videoapp.IR) after ResolveAll, before projection)",
     "timeline_id": "main",
     "width": 1080
   },
-  "run_id": "l5-consistency-20261115-175713-273b",
+  "run_id": "l5-consistency-20261115-194427-5c16",
   "samples": {
     "frames_per_run": 30,
     "runs": 100,

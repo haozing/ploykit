@@ -83,12 +83,18 @@ type ResolvedFrom struct {
 }
 
 // Effect is a word-anchored motion effect (pulse/counter/highlight/shake/fade).
+// TargetElementID is an optional element-level target (IR extension, T-10
+// P0): the counter effect self-hosts a div at the canvas origin by default;
+// when TargetElementID names an existing element the counter host is
+// positioned at that element's bbox instead. Write-time validated (must
+// reference an existing element id); absent = origin behavior (back-compat).
 type Effect struct {
-	ID           string          `json:"id"`
-	Anchor       Anchor          `json:"anchor"`
-	Type         string          `json:"type"`
-	Params       json.RawMessage `json:"params,omitempty"`
-	ResolvedFrom *ResolvedFrom   `json:"resolvedFrom,omitempty"`
+	ID              string          `json:"id"`
+	Anchor          Anchor          `json:"anchor"`
+	Type            string          `json:"type"`
+	Params          json.RawMessage `json:"params,omitempty"`
+	TargetElementID string          `json:"targetElementId,omitempty"`
+	ResolvedFrom    *ResolvedFrom   `json:"resolvedFrom,omitempty"`
 }
 
 // Point is a 2D canvas coordinate (also used for from/to animation endpoints).
@@ -269,6 +275,19 @@ func Validate(ir *IR) error {
 	}
 	if len(ir.Elements) > MaxElements {
 		return ve("elements", fmt.Sprintf("elements exceeds %d entries", MaxElements))
+	}
+	// element ids are the reference target of effect.targetElementId — build
+	// the set once, validate every effect reference against it (write-time:
+	// a dangling reference is a hard 400 E_VIDEO_IR_INVALID).
+	elementIDs := make(map[string]bool, len(ir.Elements))
+	for i := range ir.Elements {
+		elementIDs[ir.Elements[i].ID] = true
+	}
+	for i := range ir.Effects {
+		if fx := &ir.Effects[i]; fx.TargetElementID != "" && !elementIDs[fx.TargetElementID] {
+			return ve(fmt.Sprintf("effects[%d].targetElementId", i),
+				"targetElementId must reference an existing element id ("+fx.TargetElementID+" not found)")
+		}
 	}
 	for i := range ir.Elements {
 		if err := validateElement(i, &ir.Elements[i], &ir.Meta); err != nil {

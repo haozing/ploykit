@@ -1,6 +1,6 @@
 {
-  "layer": "L2-counter (T-10 encode chain + T-15 thumbnail, D-01 round-2 follow-up)",
-  "run_id": "20261115-184101-counter-l2",
+  "layer": "L2-counter-target (T-10 P0: targetElementId element-level positioning, case library §5.10)",
+  "run_id": "20261115-202109-counter-l2-target",
   "env": [
     "os=windows/amd64",
     "host=DESKTOP-IGMKJLG",
@@ -10,30 +10,50 @@
   ],
   "cases": [
     {
-      "case_id": "VS-C01-COUNTER",
+      "case_id": "VS-C10-COUNTER-TARGET",
       "status": "pass",
       "notes": [
-        "t=4.9 settle reference: ink 25.02% (threshold 0.5%), diff vs t=4.8 = 8 px (\u003c 150) — counter 定格于终值，147 次顺序 seek 后无漂移",
-        "no wrapping: ink bbox height 106 px fits one 96px/1.35 line; bbox(x0,y0,x1,y1)=[0 0 278 106] — counter host renders at origin as documented (§5.10 known degrade)",
-        "suffix spacing: ink column span x=0..278, internal gaps≥10px: [x=108(w=10)] — \" 件\" suffix gap profile",
-        "ink color fidelity: mean RGB of ink pixels [45 35 26] vs params.color #2B2118=(43,33,24) — dark ink legible on cream #FFF7EE"
+        "origin region clean: ink 0.033% (\u003c0.1%) — host relocated to target bbox, not duplicated",
+        "target region ink bbox(x0,y0,x1,y1)=[656 1465 1045 1554] within region (620,1410,+440,+260); meanRGB [45 35 27] vs params.color #2B2118"
       ],
-      "ir_validate": "pass (counter params from/to/suffix/color all in whitelist)",
-      "anchor_resolution": "anchor \"开抢\" → word 0 (开抢), reason exact, tween starts t=0.000s",
+      "ir_validate": "pass (counter carries targetElementId=el_price, resolves to existing element)",
+      "anchor_resolution": "anchor \"开抢\" → word 0 (开抢), reason exact",
       "frames_rendered": 150,
       "ink_samples": [
         {
           "at_sec": 1,
           "file": "frame-t1.000.png",
           "stats": {
-            "ink_px": 8328,
-            "total_px": 36000,
-            "ink_ratio": 0.23133333333333334,
+            "ink_px": 11809,
+            "total_px": 114400,
+            "ink_ratio": 0.10322552447552448,
             "bbox": [
-              0,
-              0,
-              278,
-              106
+              656,
+              1465,
+              1045,
+              1554
+            ],
+            "mean_rgb": [
+              45,
+              36,
+              27
+            ]
+          },
+          "pass": true,
+          "detail": "target region (620,1410,440,260): ink 11809/114400 px (10.32%), bbox [656 1465 1045 1554], meanRGB [45 36 27]"
+        },
+        {
+          "at_sec": 3,
+          "file": "frame-t3.000.png",
+          "stats": {
+            "ink_px": 12485,
+            "total_px": 114400,
+            "ink_ratio": 0.10913461538461539,
+            "bbox": [
+              656,
+              1465,
+              1045,
+              1554
             ],
             "mean_rgb": [
               45,
@@ -42,100 +62,41 @@
             ]
           },
           "pass": true,
-          "detail": "ink 8328/36000 px (23.13%), bbox [0 0 278 106], meanRGB [45 35 27]"
-        },
-        {
-          "at_sec": 3,
-          "file": "frame-t3.000.png",
-          "stats": {
-            "ink_px": 9007,
-            "total_px": 36000,
-            "ink_ratio": 0.25019444444444444,
-            "bbox": [
-              0,
-              0,
-              278,
-              106
-            ],
-            "mean_rgb": [
-              45,
-              35,
-              26
-            ]
-          },
-          "pass": true,
-          "detail": "ink 9007/36000 px (25.02%), bbox [0 0 278 106], meanRGB [45 35 26]"
+          "detail": "target region (620,1410,440,260): ink 12485/114400 px (10.91%), bbox [656 1465 1045 1554], meanRGB [45 35 27]"
         },
         {
           "at_sec": 4.8,
           "file": "frame-t4.800.png",
           "stats": {
-            "ink_px": 9007,
-            "total_px": 36000,
-            "ink_ratio": 0.25019444444444444,
+            "ink_px": 12485,
+            "total_px": 114400,
+            "ink_ratio": 0.10913461538461539,
             "bbox": [
-              0,
-              0,
-              278,
-              106
+              656,
+              1465,
+              1045,
+              1554
             ],
             "mean_rgb": [
               45,
               35,
-              26
+              27
             ]
           },
           "pass": true,
-          "detail": "ink 9007/36000 px (25.02%), bbox [0 0 278 106], meanRGB [45 35 26]"
+          "detail": "target region (620,1410,440,260): ink 12485/114400 px (10.91%), bbox [656 1465 1045 1554], meanRGB [45 35 27]"
         }
       ],
-      "roll_diff_px": 5274,
-      "settle_diff_px": 8,
-      "mp4_check": {
-        "case_id": "VS-C01-COUNTER",
-        "status": "",
-        "notes": [
-          "(info) frames counted via ffprobe -count_packets nb_read_packets"
-        ],
-        "ffprobe": {
-          "tool": "ffprobe",
-          "streams": [
-            {
-              "kind": "video",
-              "codec": "h264",
-              "width": 1080,
-              "height": 1920,
-              "fps": 30,
-              "duration": 5
-            }
-          ],
-          "duration": 5,
-          "nb_frames": 150,
-          "width": 1080,
-          "height": 1920,
-          "fps": 30,
-          "has_ftyp": false,
-          "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"79170\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24.100 libx264\"\r\n            }\r\n        }\r\n    ],\r\n    \"format\": {\r\n        \"filename\": \"D:\\\\code\\\\ploykit\\\\example\\\\internal\\\\video\\\\testdata\\\\counter\\\\VS-C01-COUNTER\\\\output.mp4\",\r\n        \"nb_streams\": 1,\r\n        \"nb_programs\": 0,\r\n        \"nb_stream_groups\": 0,\r\n        \"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\",\r\n        \"format_long_name\": \"QuickTime / MOV\",\r\n        \"start_time\": \"0.066667\",\r\n        \"duration\": \"5.000000\",\r\n        \"size\": \"51623\",\r\n        \"bit_rate\": \"82596\",\r\n        \"probe_score\": 100,\r\n        \"tags\": {\r\n            \"major_brand\": \"iso5\",\r\n            \"minor_version\": \"512\",\r\n            \"compatible_brands\": \"iso5iso6mp41\",\r\n            \"encoder\": \"Lavf61.9.100\"\r\n        }\r\n    }\r\n}\r\n"
-        },
-        "duration_ms": 0,
-        "bytes": 51623
-      },
-      "thumbnail": {
-        "ok": true,
-        "bytes": 32159,
-        "format": "jpeg",
-        "width": 1080,
-        "height": 1920
-      },
+      "roll_diff_px": 5301,
+      "settle_diff_px": 2,
       "artifacts": [
-        "counter/VS-C01-COUNTER/output.mp4",
-        "counter/VS-C01-COUNTER/frame-t1.000.png",
-        "counter/VS-C01-COUNTER/frame-t3.000.png",
-        "counter/VS-C01-COUNTER/frame-t4.800.png",
-        "counter/VS-C01-COUNTER/frame-t4.900.png",
-        "counter/VS-C01-COUNTER/thumb-1s.jpg"
+        "counter/VS-C10-COUNTER-TARGET/output.mp4",
+        "counter/VS-C10-COUNTER-TARGET/frame-t1.000.png",
+        "counter/VS-C10-COUNTER-TARGET/frame-t3.000.png",
+        "counter/VS-C10-COUNTER-TARGET/frame-t4.800.png",
+        "counter/VS-C10-COUNTER-TARGET/frame-t4.900.png"
       ],
-      "duration_ms": 20480
+      "duration_ms": 20277
     }
   ],
   "totals": {
@@ -144,16 +105,12 @@
     "skip": 0
   },
   "findings": [
-    "roll quantified: 5274 origin-region px changed between t=1.0 (mid-roll, power1.out ≈ 12478) and t=4.8 (settled 12600) — the digit roll IS encoded into the MP4"
+    "target-region roll quantified: 5301 px changed between t=1.0 and t=4.8 inside (620,1410,440,260) — the digit roll IS encoded at the target position"
   ],
   "evidence": [
-    "[代码] D-01 修复点：platform/capx/renderer.go seekTimeline — tl.pause(t, false)（suppressEvents=false，onUpdate 写数字回调在 seek 渲染时触发）",
-    "[代码] counter 参数白名单含 color：example/internal/video/app/ir.go validateEffectParams（from/to/suffix/color）",
-    "[代码] counter 宿主：example/internal/video/app/timeline-builder.js counterHost — 原点定位（无 x/y/w/h，§5.10 已知降级）、z-index 9999（D-01 第三层）、色缺省/params.color 覆盖",
-    "[代码] counter tween 时长 = Math.min(1.2, Math.max(0.3, durationSec - at))，ease power1.out —— 锚 word0（t=0）→ 滚动窗口 0~1.2s，t=1.0s 处于滚动尾段（≈12478），t≥1.2s 定格 12600",
-    "[代码] 缩略图：platform/capx/encode.go ExtractThumbnail（-ss 00:00:01 -frames:v 1 -q:v 2 真实现）；render_pipeline.go firstThumb 为 stub（M-C04-04 已知管线缺口，本轮不重复报、不验管线层）",
-    "[口径] 断言对象是 MP4 解码抽帧（ffmpeg -ss 提取 → png.Decode），不是渲染侧原始截屏——证明数字被编码进产物而非仅存在于捕获层",
-    "[实测] 断言阈值：墨迹\u003e0.5%（300x120 暗像素，亮度\u003c128）；滚动差\u003e300px；定格差\u003c150px（通道和\u003e90 计变化，与 diffPNGFrames 同一噪声门限）",
-    "[实测] 数字滚动期望锚点：t=1.0s ≈ 8200+4400*power1.out(1/1.2)=12478（计算值，非 OCR——像素差断言不依赖具体数值）"
+    "[代码] IR 扩展：example/internal/video/app/ir.go Effect.TargetElementID（json:targetElementId）+ Validate 写时校验（引用不存在的 element id → E_VIDEO_IR_INVALID details.field=targetElementId）",
+    "[代码] 定位实现：example/internal/video/app/timeline-builder.js counterHost — fx.targetElementId 命中画布节点时宿主 left/top 取目标 bbox（同一 stage 坐标系），z-index 9999 保留（D-01 第三层不回退）",
+    "[语义] 宿主只借目标几何，不随目标显隐/入场动画（目标 scaleIn 未入场时 counter 仍显示于目标位置）——降级链口径，见 builder 注释",
+    "[口径] 断言对象是 MP4 解码抽帧：右下目标区域墨迹\u003e0.5%、区域内滚动差\u003e300px、原点区域墨迹\u003c0.1%（宿主迁移而非复制）"
   ]
 }

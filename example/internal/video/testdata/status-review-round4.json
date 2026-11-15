@@ -1,0 +1,386 @@
+{
+  "review_time": "2026-11-15T18:53:00+08:00",
+  "code_baseline": {
+    "head_commit": "36ccf03b129545bdc53dbd88e726e66286abe470 (2026-11-15 18:43:15 +0800, 案例库第3批)",
+    "working_tree_state": "批4-3/批4-4 并行实现中——盘点时未提交改动：example/internal/video/app/ir.go（18:50，+29/-5）、timeline-builder.js（18:51，+23）、ir_test.go（+13）、adapters/mcp/tools.go（+5/-2）；本报告对这些文件按「in-flight 目标状态」预估，落地后须重跑 §1.8 取证"
+  },
+  "matrix": [
+    {
+      "t_id": "T-01",
+      "structural": "⚠️",
+      "visual": "⚠️",
+      "evidence": "分层判定：SRT 层断行/禁则已修（subtitle.go:68 expandUnits 超限词≤16 rune 硬切+时间插值、:183 layoutUnits 词边界换行+禁则评分、kinsokuShift 行首标点回拉；round3 实测 5/5 CJK 实证样本转绿——十五杯/行首逗号/46 rune 单词/E2E 怎么做全词完整）；DOM 层排版未动：Element 仅 text/color/fontSize（ir.go:120-122 实测 118-122），CSS 固定 line-height:1.35/pre-wrap/font-size:48px/白字（projector.go:297-300），无 textAlign/lineHeight/letterSpacing/fontWeight/fontFamily（grep 零命中）。C01 字重降级 400、F12 对比度按 ≥1% 口径仍挂账（round2 §4）",
+      "change_since_round1": "SRT 层从 ⛔ 子能力（CJK 切散/禁则）转 ✅（round3）；DOM 排版维持 ⚠️ 不变（P1-1 未动）。整格从 round1「⚠️/⚠️(禁则不可达)」改善为「⚠️/⚠️(仅 DOM 排版不可控，字幕断行子能力已达)」"
+    },
+    {
+      "t_id": "T-02",
+      "structural": "✅",
+      "visual": "⚠️",
+      "evidence": "Element.z（ir.go:133）→ zIndex=1+z（timeline-builder.js:66）；元素上限 64（ir.go:183,276）；无 trackId（ir.go:116-130 无该字段）。静态图层次结构 ✅、轨道级重排不可达维持原判；图片 decode() fail-closed 已实现（timeline-builder.js:148-160，P0-5 前半【已实现】），服务端素材预检/magic bytes 仍缺（P0-5 剩余提案）",
+      "change_since_round1": "无变化（round1 即 ✅/⚠️）；P0-5 decode fail-closed 侧证据在 round0 修复提交 d25362e 已落地，本轮确认在位"
+    },
+    {
+      "t_id": "T-03",
+      "structural": "⛔",
+      "visual": "⛔",
+      "evidence": "Element 无 clipPath/mask/borderRadius/overflow 字段（ir.go:116-130，grep 零命中）；舞台 overflow:hidden（projector.go:291）；shape 仅背景色+固定 border-radius:8px（timeline-builder.js:55-59；projector.go:302——8px 是全局装饰，非可控 mask）。P1-3 未动",
+      "change_since_round1": "无变化（维持双 ⛔）"
+    },
+    {
+      "t_id": "T-04",
+      "structural": "⛔",
+      "visual": "⛔",
+      "evidence": "元素类型仅 image/text/shape（ir.go:31-34,201）；无粒子系统/批量实例化（grep particles 零命中）；仅 counter 宿主自建节点（timeline-builder.js:260-289）。P2-6 未动",
+      "change_since_round1": "无变化（维持双 ⛔）"
+    },
+    {
+      "t_id": "T-05",
+      "structural": "⚠️",
+      "visual": "⛔",
+      "evidence": "动画类型仅 move/scaleIn/rotate（ir.go:103,203）；变换仅 x/y/scale/2D rotation（timeline-builder.js:120-140）；无 perspective/rotateX/rotateY/skew（grep 零命中）；scaleIn/rotate transformOrigin 硬编码 50% 50%（timeline-builder.js:132,138）。P2-5 未动",
+      "change_since_round1": "无变化"
+    },
+    {
+      "t_id": "T-06",
+      "structural": "⚠️",
+      "visual": "⚠️",
+      "evidence": "无 camera/composition 级变换（ir.go 全文无 camera 字段）；舞台视口固定（projector.go:286-294）；运动仅逐元素 move（timeline-builder.js:121-128）。P2-3 未动",
+      "change_since_round1": "无变化"
+    },
+    {
+      "t_id": "T-07",
+      "structural": "⛔",
+      "visual": "⛔",
+      "evidence": "单一 timeline 'main'（timeline-builder.js:186,192）；效果白名单无 transition（ir.go:196-199）；无多 composition/元素时间窗（Element 无 startFrame/endFrame，grep 零命中——P0-1 未动）。P2-1 未动",
+      "change_since_round1": "无变化（维持双 ⛔）；P0-1 是 M2 关键缺口仍未落地"
+    },
+    {
+      "t_id": "T-08",
+      "structural": "⚠️",
+      "visual": "⚠️",
+      "evidence": "move 仅 from/to 单点（ir.go:110-111）；GSAP x/y 直线插值（timeline-builder.js:121-127）；无 waypoints/path/bezier（grep 零命中）。P2-2 未动",
+      "change_since_round1": "无变化"
+    },
+    {
+      "t_id": "T-09",
+      "structural": "⚠️",
+      "visual": "⛔",
+      "evidence": "StartAnchor 词锚+服务端解析在位（ir.go:114,592-601；service.go AnimateElement 经 Mutate）；无 startFrame/endFrame（P0-1 未动，grep 零命中）；无 fadeIn/fadeOut 动画类型（ir.go:203 仅 move|scaleIn|rotate，P0-2 未动）；入场前隐藏仍依赖 immediateRender——C06 el_captionZh fromTo 构建时立即施加 from 态（l1-c06-report.json degradations F000 实证），未解析锚点 reason=missing 现行为 skip（timeline-builder.js:181）比 round1 记录的「落 0 帧全显」已有改善但非 fail-closed",
+      "change_since_round1": "无实质变化；锚点口径已统一为词锚唯一时钟（round3 §7.0 裁定），锚点 miss 语义从「落 0 帧全显」确认为「skip 不判 fail」"
+    },
+    {
+      "t_id": "T-10",
+      "structural": "⚠️",
+      "visual": "✅（预估，in-flight 批4-3 落地后）",
+      "evidence": "已落地部分：D-01 三层修复全部在位——① renderer.go:273 tl.pause(t,false) 双参（onUpdate seek 帧生效）；② counter 宿主缺省色 #2B2118+params.color 白名单（timeline-builder.js:277；ir.go:341）；③ z-index 9999（timeline-builder.js:278）。counter L2 编码验证闭环（counter-l2-report.json：t=1s 帧 \"12478 件\" 与 power1.out 精确吻合、终值定格漂移 8px、色度偏差≤2、150 帧出片 pass）。in-flight 批4-3（盘点时未提交工作区 diff 实读）：Effect.TargetElementID 字段（ir.go:96 targetElementId+写时校验引用存在 element id :279-290）+ counterHost 按 target bbox 定位（timeline-builder.js:278-286 left/top 搬运）+ service.AddEffectAtWord 第 5 参（service.go:687,699）+ MCP target_element_id 入参（tools.go:129）+ ir_test.go 3 组校验用例。落地后剩余缺口：host 不继承 target 入场态（diff 注释明示为记录在案的降级语义）、无 prefix/decimals/durationSec/easing/千分位（P0-4 仅部分——定位坐标走 targetElementId 引用而非 x/y/w/h 直填，align/fontSize 仍固定 96px/700）",
+      "change_since_round1": "两格均为 round4 最大变化：round1 ⛔（数字完全不可渲染，D-01）→ round2 修复后 L1 层 ✅ → round3 L2 编码层 ✅ → 批4-3 落地后定位版式 ✅（预估）。预估依据：定位实现在工作区 diff 中已完整（字段+校验+builder+service+MCP+测试五层同批），且 round3 counter-l2 测试 harness 已验证同链路；落地后需重跑 L1/L2 取证，视觉列转 ✅ 才算实测"
+    },
+    {
+      "t_id": "T-11",
+      "structural": "⚠️",
+      "visual": "⛔",
+      "evidence": "无 chart 元素类型（ir.go:31-34）；shape 纯色块（timeline-builder.js:55-59）；scaleIn origin 硬编码 50% 50%（timeline-builder.js:132）；l1-c04-report.json 实证：柱=整柱中心 scaleIn 非底部立起、三柱全可见实际 F327（帧表原 F216）、el_line 折线渲染为 440×300 实心蓝矩形。P1-2（transformOrigin+grow）未动",
+      "change_since_round1": "无变化；证据面增强（round2 L1 渲染坐实降级形态）"
+    },
+    {
+      "t_id": "T-12",
+      "structural": "⚠️",
+      "visual": "⚠️→✅（预估，in-flight 批4-4 落地后）",
+      "evidence": "现役状态（round1 X-4 实测）：highlight 画在 #canvas 整层（timeline-builder.js:188 var target = fx.type==='counter' ? counterHost(fx) : canvas——盘点时该行仍在），被全画布 el_bg 遮挡=完全不可见（round1 §2.3.1「比文档更严重」）。in-flight 批4-4（盘点时未提交 diff 实读）：Effect.TargetElementID 同一字段已落地（ir.go:96+校验 :279-290），但 builder 侧 effects 循环的 target 选择（:188）盘点时点尚未改为消费 fx.targetElementId——diff 只含 counterHost 定位，pulse/highlight/shake/fade 四个 builder 仍无 target 概念。若批4-4 按目标把 target 选择改为「fx.targetElementId 命中元素则用之」，highlight 即获得元素级背景色动画=逐元素高亮 ✅（词级 words[] 驱动仍缺，逐词高亮维持元素替代路径）；落地前维持 ⛔（高亮不可见）",
+      "change_since_round1": "预估转格：⛔（完全不可见）→ ⚠️（元素级高亮可达、词级仍靠逐词元素替代）或 ✅（若断言口径只需元素级）。这是预估格：IR 字段半边已见，builder 半边盘点时未落地；本报告不判实测，落地后须以 L1 断言取证"
+    },
+    {
+      "t_id": "T-13",
+      "structural": "⚠️",
+      "visual": "⚠️",
+      "evidence": "确认仍未做：AudioTrack 仅 key/durationSec/volume（ir.go:139-143）；MuxAV 仅 volume+amix（encode.go:158-194）；grep loop/loudnorm/apad/aresample/stream_loop 在 encode.go 零命中；volume 校验 [0,1]（ir.go:441-443）。P1-5 未动",
+      "change_since_round1": "无变化（维持 ⛔ 判级中的 loop/loudnorm 子能力；两列 ⚠️/⚠️ 与 round1 一致——loop/loudnorm 是 ⚠️ 项内的 ⛔ 子能力，任务描述中「维持 ⛔」按子能力口径成立，矩阵格本身无格变）"
+    },
+    {
+      "t_id": "T-14",
+      "structural": "✅",
+      "visual": "✅",
+      "evidence": "三模式全绿（subtitle-report.json run_id 20261115-184122-subtitle-e2e）：burn=pass（libass 烧录，cue1@1.4s 49174 band px）✅；soft=pass（capx.SoftSubtitles mov_text 封装 encode.go:258-280，ffprobe 证实 h264+mova_text 双流、视频流复制不重编码）✅——round2「soft 整体不存在」已闭环；none=pass；burn→soft 降级链闭环（render_pipeline.go:269-308 finishSubtitles 三态，ErrNoLibass 自动转 soft+非致命注记，subtitle-report.json nolibass_conclusion ①②③ 实测）。CJK 断行 ✅（subtitle.go expandUnits/layoutUnits/kinsokuShift 三件套，round3 5/5 实证样本转绿，9 组新测试 subtitle_kinsoku_test.go）。残缺口（不阻塞两列 ✅）：字幕样式字段未进 IR（样式不可控，§1.5 #10）、cue 最短显示时长无校验（M-C06-05）、渲染配方未记录 subtitleMode 降级细节到 DB 行（仅日志/WS）",
+      "change_since_round1": "格变最彻底的一项：round1 ⚠️/⚠️（soft 未接通+CJK 禁则 ⛔ 子能力）→ round4 ✅/✅。三个子缺口（soft、降级链、词保护禁则）分别由 round3 三路修复关闭，全部有代码+实测双证据"
+    },
+    {
+      "t_id": "T-15",
+      "structural": "✅",
+      "visual": "⛔（端到端）",
+      "evidence": "包内能力在位：capx ExtractThumbnail（encode.go:285-303，-ss 00:00:01 -frames:v 1 -q:v 2 真实现，counter-l2 实测提取 1080×1920 jpg 正常）。管线 stub 仍在：render_pipeline.go:325-336 firstThumb 返回 nil,nil（注释 v1: thumb deferred to integration）；:254 thumbKey 组装+Put 分支永不触发。服务层无 thumbKey 字段（service.go Render 结构无；grep thumbKey/thumb_url 仅 openapi.yaml:6285 一处 spec 声明）；UI 无封面列（VideoStudioPage.tsx 731 行 grep thumb 零命中）。atSec 无通路（-ss 写死 1s）。P1-6 未动",
+      "change_since_round1": "无变化（维持端到端 ⛔）；counter-l2 测试已实证包内函数可用，差的是管线/服务/UI 三层接线"
+    }
+  ],
+  "m2": {
+    "definition_ref": "案例库 §2.3：M2 = M1 通过（round1 已达成）+ §5.16 提案 P0 字段落地后，9 案例 L1/L2 全绿 + 人工验收点全部通过",
+    "p0_fields": [
+      {
+        "field": "P0-1 Element.startFrame/endFrame + 窗口外 display:none",
+        "status": "未动",
+        "evidence": "ir.go:116-130 无窗字段；timeline-builder.js:150 一次性 append；grep startFrame/endFrame 零命中。解除 T-09/T-07"
+      },
+      {
+        "field": "P0-2 元素级 opacity（fadeIn/fadeOut 动画类型）",
+        "status": "未动",
+        "evidence": "ir.go:203 动画白名单仍仅 move|scaleIn|rotate；fade effect 存在但作用于 #canvas 整层（timeline-builder.js:188）。解除 T-09/T-12/T-07"
+      },
+      {
+        "field": "P0-3 Effect.targetElementId（含 counter 绑定文本元素）",
+        "status": "in-flight（批4-3/4-4；盘点时工作区未提交 diff 已含 IR 字段+写时校验+service/MCP 入参+counter 定位+3 组测试；builder 侧 pulse/highlight/shake/fade 的 target 消费未在盘点时点 diff 中出现）",
+        "evidence": "工作区 diff：ir.go:96 TargetElementID+ir.go:279-290 引用校验+ir_test.go 3 用例+service.go:687,699+tools.go:129+timeline-builder.js:278-286（仅 counterHost）；timeline-builder.js:188 target 选择行未变。解除 T-10/T-12"
+      },
+      {
+        "field": "P0-4 counter 参数 x/y/w/h/align/color/fontSize",
+        "status": "部分落地（color 已落地 round2；定位走批4-3 targetElementId 引用式而非 x/y/w/h 直填；align/fontSize 仍未做——host 固定 96px/700）",
+        "evidence": "ir.go:341（params.color 白名单，round2）+timeline-builder.js:277（#2B2118 缺省）；in-flight diff 注释明示 width/height 不设（防窄目标换行）、96px 排版保持。解除 T-10（部分）"
+      },
+      {
+        "field": "P0-5 图片 decode() fail-closed（前半【已实现】；剩余：服务端素材预检/magic bytes/像素总量上限/上传前解码校验）",
+        "status": "部分落地（前半已实现；服务端预检未动）",
+        "evidence": "timeline-builder.js:148-160（__player.error+rethrow，ready 保持 false）+capx renderer.go:234-239（awaitReady 读根因中止）；服务端仅 UploadLimit 700KiB+MIME 白名单（service.go），无 magic bytes/像素炸弹防护"
+      }
+    ],
+    "remaining_work": "① 等 in-flight 批4-3/4-4 提交并重跑 L1/L2 取证（T-10 定位、T-12 高亮两格转正的实测依据）——预计 1 个批次内；② P0-1/P0-2 是 M2 剩余两块硬骨头（元素时间窗+元素级 opacity），支撑 T-09 错峰入场与 C06 说话人压暗等人工验收点，按 round2/round3 速率（每批次关闭 2-3 个能力项）估计 1-2 个批次；③ 9 案例 L1/L2 全绿：C01/C04/C06 三案已有 L1（C01 10 ok/0 fail、C04/C06 0 fail 但 mismatch 5+4=9 行须按 round3 回填帧表重跑），其余六案（C02/C03/C05/C07/C08/C09）降级 IR 未建、未渲染——按每案约 0.5-1 批次（降级 IR 构造+全帧渲染 4-8 分钟+断言核对）估计 3-5 个批次；④ 人工验收点（golden 逐帧目检、对比度恢复 18% 口径整批重生成）随③顺带。综合：M2 还差约 5-8 个批次（每批次≈半天并行五路），关键路径是 P0-1/P0-2 → 六案降级 IR 构造 → 全量 L1/L2 回归"
+  },
+  "issue_ledger": [
+    {
+      "id": "F-DB-1",
+      "level": "P0",
+      "description": "迁移 1010 删 script 列后 Create 的 INSERT...RETURNING 仍引用 script——全新库每次建项目必败（SQLSTATE 42703）；单测 fake 全绿，仅 DB 集成拦截（round1）",
+      "status": "fixed",
+      "fix_ref": "service.go:345 RETURNING 删 script 列（round1 修复提交 823e181）；DB 集成复跑通过"
+    },
+    {
+      "id": "F-G3-1",
+      "level": "P1",
+      "description": "cancelPipeline 测试桩懒初始化 channel 无锁双写（waitStarted 与 Run 各自 make）→ render 包整包 10min 超时，复现 2/8（round1）",
+      "status": "fixed",
+      "fix_ref": "worker_test.go 桩 channel 改构造期字面量初始化（round1）；5/5 连跑通过"
+    },
+    {
+      "id": "D-01",
+      "level": "P0（渲染正确性）",
+      "description": "counter 数字在所有 seek 帧上不渲染，端到端数字滚动完全不可用；修复中剥离为三层：① GSAP pause(t) suppressEvents 压制 onUpdate；② 宿主白字奶白底对比度 1.06:1；③ counter div 无 z-index 被 el_bg 遮挡（round1 发现、round2 三层全修）",
+      "status": "fixed",
+      "fix_ref": "①renderer.go:273 tl.pause(t,false)；②timeline-builder.js:277 缺省 #2B2118+ir.go:341 params.color 白名单；③timeline-builder.js:278 z-index:9999（round2 提交 f1b6cf4）；L1（F360 dark_ratio 0.2303 pass）+L2（counter-l2-report.json 编码层精确吻合）双闭环（round3）"
+    },
+    {
+      "id": "M-C04-01",
+      "level": "medium",
+      "description": "文档称 z 值仅作字段保留、暗示不参与渲染；实际 zIndex=1+z 生效（round1 spec-audit）",
+      "status": "fixed",
+      "fix_ref": "案例库文档 round2 修正（§4.2 映射表按事实改写）；timeline-builder.js:66 证据在位"
+    },
+    {
+      "id": "M-C04-02",
+      "level": "low",
+      "description": "counter 无定位字段固定左上原点（round1 登记；后续 round2 发现同位叠印/白字浅底两缺陷现役）",
+      "status": "in-flight",
+      "fix_ref": "批4-3 targetElementId 元素级定位（盘点时工作区 diff 已含五层实现未提交）；同位叠印/多 counter 冲突的专项修复未见于本批 diff"
+    },
+    {
+      "id": "M-C04-03",
+      "level": "medium",
+      "description": "文档称 nearest 静默落相邻词的行为与实际解析四级算法描述不一致（round1）",
+      "status": "fixed",
+      "fix_ref": "案例库文档修正（round1 正文两列修正）；ir.go:508-547 ResolveAnchors exact→same_text→nearest→missing 四级行为与文档对齐"
+    },
+    {
+      "id": "M-C04-04",
+      "level": "high",
+      "description": "文档称封面帧 ExtractThumbnail 可落地 ✅；实际 render_pipeline.go firstThumb 是返回 nil 的 stub，且 -ss 1s 写死 atSec 无通路——缩略图完全不产出（round1）",
+      "status": "open-挂账",
+      "fix_ref": "文档已修正（两列口径：包内 ✅/端到端 ⛔，round2 落地 9 处修正之一）；代码缺口仍在（render_pipeline.go:325 stub+P1-6 atSec 未做）——文档层闭环、代码层挂账 T-15"
+    },
+    {
+      "id": "M-C04-05",
+      "level": "low",
+      "description": "时长/帧数公式口径：文档现实现 round= 表述与实际 ceil 单源不一致（round1，X-2 同源）",
+      "status": "fixed",
+      "fix_ref": "X-2 裁定：帧数公式 ceil 单源（service.go DurationFrames+timeline-builder.js:37），文档表述统一（round2 文档修正落地）"
+    },
+    {
+      "id": "M-C04-06",
+      "level": "low",
+      "description": "文档引用 E_VIDEO_INVALID_IR 错误码；实际该码不存在（错误码集合不符，round1）",
+      "status": "fixed",
+      "fix_ref": "案例库文档修正为实际错误码（ValidationError→E_VIDEO_IR_INVALID 映射，round2 文档修正）"
+    },
+    {
+      "id": "M-C04-07",
+      "level": "high",
+      "description": "案例 IR 以顶层 animations[] 示范；现实现动画必须内嵌 elements[].animations，顶层动画被 projector 整个丢弃（round1）",
+      "status": "fixed",
+      "fix_ref": "案例库文档 §4.2.3/§4.4.3 加 ⚠️ 警告框+X-3 转换规则③（round2 落地）；降级 IR（testdata/ir/*.degraded.json）为可运行替代"
+    },
+    {
+      "id": "M-C04-08",
+      "level": "medium",
+      "description": "目标 IR anchor {wordId,...} 照抄会因缺 anchor.text 校验失败，须先做 wordId→{text,occurrence} 映射（round1）",
+      "status": "fixed",
+      "fix_ref": "X-3 转换规则①（wordId 序号=words[] 下标、occurrence 按同文本出现序重算）登记 §8.8（round2）"
+    },
+    {
+      "id": "M-C06-01",
+      "level": "high",
+      "description": "文档称 ErrNoLibass 自动降级软字幕交付；实际 render_pipeline 把 ErrNoLibass 原样上抛为渲染失败，自动降级路径不存在（round1；round2 进一步确认 soft 模式整体不存在、无 libass 机每个 burn 渲染必失败）",
+      "status": "fixed",
+      "fix_ref": "round3 双修复：capx.SoftSubtitles（encode.go:258-280 mov_text 封装）+finishSubtitles 三态降级链（render_pipeline.go:269-308，ErrNoLibass→soft+非致命注记）；subtitle-report.json nolibass_conclusion ①②③ 实测闭环"
+    },
+    {
+      "id": "M-C06-02",
+      "level": "low",
+      "description": "预览不播放音频（by design，文档与实现一致，登记存证）（round1）",
+      "status": "fixed",
+      "fix_ref": "确认为设计行为并登记（非缺陷）；文档表述对齐"
+    },
+    {
+      "id": "M-C06-03",
+      "level": "medium",
+      "description": "文档期望锚定词多次出现时返回 E_VIDEO_ANCHOR_AMBIGUOUS；实际取首个匹配可能挂错说话人侧（round1）",
+      "status": "open-挂账",
+      "fix_ref": "现行为 occurrence 语义+same_text 最近候选（ir.go:529-537）；E_VIDEO_ANCHOR_AMBIGUOUS 错误码未落地；文档已按实际行为修正，歧义防护挂账（与 F-ALN-01 错误码缺口同族）"
+    },
+    {
+      "id": "M-C06-04",
+      "level": "low",
+      "description": "CJK 断行切词/行首标点（round1 文档登记缺陷；round2 字幕链实测 5/5 实证样本：十五杯切十|五杯、行首逗号、46 rune 单词双行超限）",
+      "status": "fixed",
+      "fix_ref": "round3 subtitle.go 三件套：expandUnits（:68 超限词硬切+时间插值）/layoutUnits（:183 词边界换行+禁则评分）/kinsokuShift（行首标点回拉+行尾开括号推下）；5/5 样本转绿+9 组新测试"
+    },
+    {
+      "id": "M-C06-05",
+      "level": "low",
+      "description": "字幕最短显示时长无校验：BuildCues 只限制单 cue ≤6s，无 min-duration（round1 登记 ⛔ 需 L0 补校验）",
+      "status": "open-挂账",
+      "fix_ref": "盘点时 subtitle.go grep minDuration/最短 零命中；L0 亦未见新增校验用例——挂账"
+    },
+    {
+      "id": "M-C06-06",
+      "level": "medium",
+      "description": "动画参数层级：文档示范 params 内 from/to；现实现读顶层，params 内同名键落 extra 被忽略（round1，与 M-C04-07 同族）",
+      "status": "fixed",
+      "fix_ref": "X-3 转换规则（含 P1-7 提案：字段应在动画顶层——现实现即顶层，目标 schema 侧已修正示范）；§4.4.3 警告框落地"
+    },
+    {
+      "id": "M-C06-07",
+      "level": "medium",
+      "description": "结论句 scaleIn 期望帧 2025（81.0s）；渲染坐实实际入场 F2130（词锚 85.2s），帧表与渲染差 105 帧（round1 登记、round2 渲染实锤）",
+      "status": "fixed",
+      "fix_ref": "round3 锚点口径统一：§7.0 裁定词锚唯一时钟（frame=ceil(word.start×fps)），C06 帧表回填 2025→2130 定稿（词锚胜出，回 2025 的正路是改词表）；三校准锚点复现"
+    },
+    {
+      "id": "M-C06-08",
+      "level": "low",
+      "description": "软字幕 asset kind=subtitle / cue 时间码断言口径与实现不符（round1 登记）",
+      "status": "fixed",
+      "fix_ref": "round3 soft 落地后断言随 subtitle_l2_test 更新（mov_text 双流 ffprobe 断言）；文档对齐"
+    },
+    {
+      "id": "X-1",
+      "level": "high",
+      "description": "文档所有 [代码] file:line 引用在 d25362e 后普遍漂移 5-30 行，三处实质性过时（M-C04-04/M-C04-07/M-C06-01）（round1）",
+      "status": "fixed",
+      "fix_ref": "三处实质项各自闭环（见 M-C04-04 文档层/M-C04-07/M-C06-01）；行号漂移随 round2/round3 文档修正+本盘点重取证收敛"
+    },
+    {
+      "id": "X-2",
+      "level": "low",
+      "description": "帧数公式 round→ceil 单源口径，文档 round= 表述需统一（round1）",
+      "status": "fixed",
+      "fix_ref": "round3 §7.0 口径条款+文档统一改写；JS Math.ceil 与 Go 服务端同源（timeline-builder.js:37）"
+    },
+    {
+      "id": "X-3",
+      "level": "info",
+      "description": "目标 schema→现实现转换规则确认（wordId 映射/targetElementId 删除/顶层动画内嵌等 7 条）（round1）",
+      "status": "fixed",
+      "fix_ref": "§8.8 登记入口+两案降级 IR 过 Validate（testdata/ir/c04.degraded.json 1800 帧/c06.degraded.json 2250 帧）"
+    },
+    {
+      "id": "X-4",
+      "level": "high",
+      "description": "effect 目标定位缺口比文档点名更大：pulse/shake/fade 与 highlight 一样全部作用于 #canvas 整层（5 个 effectBuilder 无 target 概念，timeline-builder.js:188）；C06 侧 ef_pulse_nameA 脉冲全画布、ef_fade_turn 把全画面压暗不复原，降级 IR 已移除这两个 effect；C01 高亮被 el_bg 完全遮挡=完全不可见（round1 发现，round2 C04 渲染再证）",
+      "status": "in-flight",
+      "fix_ref": "批4-3/4-4（盘点时工作区 diff：ir.go TargetElementID 字段+校验+counter 定位已写；builder effects 循环 target 选择未改——highlight/pulse 元素级化的最后半步盘点时未落）。落地后 T-12 视觉列预估 ⛔→⚠️/✅，须重跑 L1 断言取证"
+    },
+    {
+      "id": "R1-HIGH-2",
+      "level": "P1（round1 §2.3 复合键连锁）",
+      "description": "复合参数键（params.mask/title/body/... P2-7/P2-8）builder 不消费：卡面无文案、CTA 无文字、价格无划线价——F396 断言橙条 pass 但无文字内容（round1 §2.3.2）",
+      "status": "open-挂账",
+      "fix_ref": "P2-7/P2-8 提案未动（§5.16）；golden meta.json 已将该降级记录为「表达力缺口记录非验收目标」（round2 A-eligible caveat）——M2 人工验收点若涉卡面文案须素材侧预置或等 P2-7"
+    },
+    {
+      "id": "R1-LOW-U2028",
+      "level": "info",
+      "description": "文档 §7.1 U+2028/2029 转义缺口前提过时（encoding/json 已转义，好方向的过时）（round1 L0 探针）",
+      "status": "fixed",
+      "fix_ref": "文档前提修正（l0-report.json problems_found[1] 登记实测证据）"
+    },
+    {
+      "id": "R1-P2-BUILD cues超限词",
+      "level": "P1→已并入 M-C06-04",
+      "description": "BuildCues 对单个超限词无兜底（>32 rune 产出超限行）（round1 L0 发现，round2 实证 46 rune 案例）",
+      "status": "fixed",
+      "fix_ref": "round3 expandUnits ≤16 rune 硬切+时间线性插值（subtitle.go:68）；与 M-C06-04 同一修复，台账保留双重登记以对齐两轮原始记录"
+    },
+    {
+      "id": "R1-ANCHOR-PARITY",
+      "level": "P1（round1/2 锚点口径）",
+      "description": "帧表锚帧与 IR 词锚帧普遍差 9-105 帧（C04 最大 ±111、C06 结论句 +105）——两套时钟并存（round2 M2 关键输入）",
+      "status": "fixed",
+      "fix_ref": "round3 §7.0 词锚唯一时钟裁定+三案帧表回填（27 行 19 差异全量并排回填）+三校准锚点复现；M2 重新验收按推导列执行"
+    },
+    {
+      "id": "R2-C04双counter叠印",
+      "level": "P1（round2 渲染发现）",
+      "description": "C04 双 counter div 同位叠印（都落原点）+白字浅底不可读两缺陷在 L1 渲染现役（F960 数字可见但不可读）",
+      "status": "in-flight",
+      "fix_ref": "定位半边由批4-3 targetElementId 解决（双 counter 可锚不同元素）；同位叠印兜底（无 target 时仍同落原点）与每元素唯一 host 约束未见专项修复——落地后重验"
+    },
+    {
+      "id": "R2-CJK切散实证",
+      "level": "P1（round2 字幕实测）",
+      "description": "CJK 切散 5/5 实证（十五杯切十|五杯/行首，/46 rune 双超限）+soft 整体不存在（SRT 写临时文件无人消费、capx 无 mov_text）",
+      "status": "fixed",
+      "fix_ref": "切散=round3 subtitle 三件套；soft=round3 capx.SoftSubtitles；两缺口同批关闭（与 M-C06-04/M-C06-01 同源，台账按 round2 发现口径保留条目）"
+    },
+    {
+      "id": "R3-ENV-race",
+      "level": "P2（环境项）",
+      "description": "go test -race 不可用：msys2 cc1.exe DLL 断链（gcc 15.2.0 ucrt64 指向已删 mingw64/bin）——round1 F-ENV-1，round2/round3 连续三轮未动（环境问题非仓库问题）",
+      "status": "open-挂账",
+      "fix_ref": "无仓库侧修复路径；需本机 msys2 残留清理后补 -race 车道（计划 §16.2 要求，M3 前置）"
+    },
+    {
+      "id": "R3-OPER-timeout残留进程",
+      "level": "P2（运维注记）",
+      "description": "timeout 截断后的残留浏览器进程需 taskkill 才能重启（截断后 0.89s 内 FAIL，清理后 100× 全等）——不构成缺陷（round3 §5）",
+      "status": "fixed",
+      "fix_ref": "已记录为运维注意事项（round3 实测+清理流程验证）；无需代码改动"
+    },
+    {
+      "id": "R3-锚点词miss现状",
+      "level": "P2（口径注记）",
+      "description": "词锚 miss 现状（动画落 0 帧/effect skip）照实标注不判 fail；C04 片尾说明卡 F1620 无词锚动画、三图同屏 F1269 无专属锚点——M2 需补片尾锚词或改 IR（round3 回填注记）",
+      "status": "open-挂账",
+      "fix_ref": "M2 重验收时逐案补锚词/改 IR（文档 §4.2.5 F1260/F1620 行注记）；代码层无缺口（词锚语义正确执行）"
+    },
+    {
+      "id": "R1-CAVEAT-对比度口径",
+      "level": "P2（golden 口径注记）",
+      "description": "F12 对比度文档 18% 目标过期（隐含居中大版式前提），实测 bbox 12.5%+字重 400——T-01 落地前用 ≥1% 口径，落地后恢复 18% 并整批重生成（round2 §4）",
+      "status": "open-挂账",
+      "fix_ref": "随 P1-1（T-01 DOM 排版字段）落地后整批重生成 golden——挂账至 T-01"
+    }
+  ],
+  "ledger_stats": {
+    "total": 33,
+    "fixed": 23,
+    "in_flight": 3,
+    "open": 7,
+    "open_items": ["M-C04-04（代码层，文档层已闭环）", "M-C06-03", "M-C06-05", "R1-HIGH-2（复合键 P2-7）", "R3-ENV-race", "R3-锚点词miss现状", "R1-CAVEAT-对比度口径"],
+    "note": "R1-P2-BUILD cues超限词（=M-C06-04 同一修复）与 R2-CJK切散实证（=M-C06-04/M-C06-01 同源）为跨轮双重登记，按各轮原始记录口径保留条目；去重后 effective total=31（fixed 22/in-flight 3/open 6）"
+  }
+}

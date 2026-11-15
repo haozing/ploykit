@@ -4407,13 +4407,18 @@ paths:
           application/json:
             schema:
               type: object
+              required: [params]
               properties:
-                fps: { type: integer, description: 缺省用 ir.meta.fps }
-                width: { type: integer, description: 缺省用 ir.meta.width }
-                height: { type: integer, description: 缺省用 ir.meta.height }
-                burn_subtitles: { type: boolean, description: 烧录字幕（需 ffmpeg libass；缺 libass 自动降级软封装） }
-                subtitle_mode: { type: string, enum: [burn, soft, none], description: 字幕封装方式 }
-                bgm_volume: { type: number, description: 覆盖 ir.audio.bgm.volume }
+                params:
+                  type: object
+                  description: 渲染参数（嵌套对象；L3 冒烟 F1 契约修正——平铺字段会被拒绝）
+                  properties:
+                    fps: { type: integer, description: 缺省用 ir.meta.fps }
+                    width: { type: integer, description: 缺省用 ir.meta.width }
+                    height: { type: integer, description: 缺省用 ir.meta.height }
+                    burn_subtitles: { type: boolean, description: 烧录字幕（需 ffmpeg libass；缺 libass 自动降级 soft mov_text——round3 已实现） }
+                    subtitle_mode: { type: string, enum: [burn, soft, none], description: 字幕封装方式 }
+                    bgm_volume: { type: number, description: 覆盖 ir.audio.bgm.volume }
                 expected_version: { type: integer, description: 可选乐观锁校验；不符 409 }
       responses:
         '202':
@@ -6144,6 +6149,9 @@ components:
                 type: string
                 enum: [pulse, counter, highlight, shake, fade]
                 description: 动效注册表（v1）；未知 type 投影层跳过并 warn
+              targetElementId:
+                type: string
+                description: 可选元素级目标——须引用 elements[] 中已存在的 id（写时校验，悬空引用 400 E_VIDEO_IR_INVALID）；counter 宿主定位到该元素 bbox，缺省保持画布原点（向后兼容）
               params:
                 type: object
                 description: 按 type 校验（如 pulse{scale}, counter{from,to}）

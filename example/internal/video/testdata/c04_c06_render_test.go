@@ -1242,20 +1242,21 @@ func c06Post(cx *caseCtx) {
 		cx.set(1125, "fail", "姓名条 B 缺失")
 	}
 
-	// F1350
+	// F1350 — X-4 FIX (2026-11-15): ef_hl_turn's no-target highlight now
+	// paints the VISIBLE z-10000 overlay, so the F24-46 window probe reads
+	// max shotA blue = 1 (was ≈0 pre-fix: occluded by the full-cover shots).
+	// The pre-fix "occluded-contradiction needs human review" fail branch is
+	// obsolete; the frame-table claim "keyword highlight at F1350" is still
+	// false — but on timing (window F24-51 long closed), not occlusion.
 	f1350 := img(1350)
 	c1350 := cx.keyRecs[1350].StructureChecks
 	c1350["nameA_blue_share"] = blueT(f1350, c6RNameA)
 	c1350["highlight_window_max_shotA_blue_probe"] = hlMaxBlue
 	c1350["highlight_probe_verdict"] = hl.StructureChecks["verdict"]
-	if hlMaxBlue < 0.01 {
-		cx.set(1350, "mismatch",
-			"帧表期望本帧'自己加功能'关键词高亮——不成立：ef_hl_turn 锚 团队#0=0.95s→F24（窗口 F24-51），F1350 早已结束",
-			fmt.Sprintf("且高亮在其窗口内也不可见：目标为 #canvas 整层，被全覆盖的双 shot shape 遮挡——F24-46 探针序列 max shotA blue=%.4f（X-4+遮挡双证明）", hlMaxBlue),
-			"本帧实际画面：镜3 状态静止（双姓名条 + S1 静态字幕在 x=960 位）")
-	} else {
-		cx.set(1350, "fail", "highlight 探针显示窗口内可见（与遮挡结论矛盾，需人工复核）")
-	}
+	cx.set(1350, "mismatch",
+		"帧表期望本帧'自己加功能'关键词高亮——不成立：ef_hl_turn 锚 团队#0=0.95s→F24（窗口 F24-51），F1350 早已结束",
+		fmt.Sprintf("高亮在窗口内 NOW VISIBLE（X-4 修复实证）：F24-46 探针序列 max shotA blue=%.4f——pre-fix ≈0（被全覆盖双 shot 遮挡），修复后 overlay z-10000 全画布可见", hlMaxBlue),
+		"本帧实际画面：镜3 状态静止（双姓名条 + S1 静态字幕在 x=960 位）")
 
 	// F1800
 	f1800 := img(1800)

@@ -112,6 +112,19 @@ func TestValidate_FieldRules(t *testing.T) {
 			ir.Elements = []Element{{ID: "e1", Type: ElementShape, X: 0, Y: 0, W: 10, H: 10,
 				Animations: []ElementAnimation{{ID: "a1", Type: "spin", DurationFrames: 10}}}}
 		}, "elements[0].animations[0].type"},
+		{"effect targetElementId missing element", func(ir *IR) {
+			ir.Effects = []Effect{{ID: "fx", Anchor: Anchor{Text: "发布"}, Type: EffectCounter,
+				TargetElementID: "no_such_el"}}
+		}, "effects[0].targetElementId"},
+		{"effect targetElementId empty string ok", func(ir *IR) {
+			ir.Effects = []Effect{{ID: "fx", Anchor: Anchor{Text: "发布"}, Type: EffectCounter,
+				TargetElementID: ""}}
+		}, ""},
+		{"effect targetElementId resolves to existing element", func(ir *IR) {
+			ir.Elements = []Element{{ID: "el_price", Type: ElementText, X: 0, Y: 0, W: 10, H: 10}}
+			ir.Effects = []Effect{{ID: "fx", Anchor: Anchor{Text: "发布"}, Type: EffectCounter,
+				TargetElementID: "el_price"}}
+		}, ""},
 		{"voice shorter than last word", func(ir *IR) {
 			ir.Audio = &Audio{Voice: &AudioTrack{Key: "video/ws/v.mp3", DurationSec: 1.0}}
 		}, "audio.voice.durationSec"},

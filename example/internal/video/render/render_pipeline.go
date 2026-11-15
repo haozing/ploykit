@@ -340,3 +340,8 @@ func copyFile(dst string, r io.Reader) error {
 	}
 	return f.Close()
 }
+
+// SetCapxRuntime assigns the pipeline's runtime from the composition root
+// (main.go). Named setter rather than a direct var write so the call site
+// is tag-portable: the default build's stub declares the same signature.
+func SetCapxRuntime(rt *capx.Runtime) { CapxRuntime = rt }

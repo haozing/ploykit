@@ -122,3 +122,27 @@ func TestDecodePoint(t *testing.T) {
 	assert.InDelta(t, 2.5, pt.Y, 1e-9)
 	assert.Nil(t, decodePoint(map[string]any{"x": "bad"}))
 }
+
+// addEffectIn carries the optional element-level target (IR extension T-10):
+// the wire key is target_element_id and it maps onto Effect.TargetElementID
+// (targetElementId in the IR document) through AddEffectAtWord.
+func TestAddEffectArgsTargetElementRoundtrip(t *testing.T) {
+	in := map[string]any{
+		"project_id":        "p1",
+		"anchor_text":       "三倍",
+		"type":              "counter",
+		"params":            json.RawMessage(`{"from":0,"to":100}`),
+		"target_element_id": "el_price",
+	}
+	b, err := json.Marshal(in)
+	require.NoError(t, err)
+	var out addEffectIn
+	require.NoError(t, json.Unmarshal(b, &out))
+	assert.Equal(t, "el_price", out.TargetElementID)
+	assert.Equal(t, "counter", out.Type)
+
+	// omitted target_element_id decodes to "" — the back-compat origin path
+	var bare addEffectIn
+	require.NoError(t, json.Unmarshal([]byte(`{"project_id":"p1","anchor_text":"x","type":"pulse"}`), &bare))
+	assert.Empty(t, bare.TargetElementID)
+}

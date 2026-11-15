@@ -13,6 +13,12 @@
  * Motion registry v1: pulse | counter | highlight | shake | fade
  * Element animations:        move  | scaleIn | rotate
  * Adding an effect = one builder function below + IR whitelist (app/ir.go).
+ *
+ * Scope semantics (X-4 fix, case library §5.12/§8.2): an effect carrying
+ * targetElementId acts on that element node (element-level scope); without
+ * one, highlight/fade paint a z-9999 full-canvas overlay so the whole-frame
+ * flash/dim is actually VISIBLE, while pulse/shake keep the legacy
+ * whole-#canvas transform. Target resolution lives in effectTarget().
  */
 (function () {
   'use strict';
@@ -75,8 +81,68 @@
     return w ? w.start : 0;
   }
 
-  /* ---- motion registry v1 (§4.4.2) ---- */
+  /* ---- motion registry v1 (§4.4.2) ----
+   *
+   * Scope semantics per effect (X-4, case library §5.12/§8.2 — batches 1-3
+   * proved highlight/pulse/shake/fade painted #canvas behind the full-canvas
+   * el_bg shape: amber=0 at the C04 F916 peak, pulse was a whole-canvas
+   * 1.06 scale, fade dimmed everything invisibly):
+   *   - fx.targetElementId names an existing element node → element-level
+   *     scope: highlight flashes the node's background, pulse scales the
+   *     node, shake jitters the node, fade sets the node's opacity.
+   *   - no target (legacy IR) → highlight/fade paint a full-canvas OVERLAY
+   *     at z-index 10000 (above every element layer and the counter's 9999),
+   *     appended at effect start and removed at effect end — the whole-frame
+   *     flash is finally visible instead of being occluded by el_bg. This is
+   *     a deliberate pixel behavior change vs the pre-X-4 builder (invisible
+   *     → visible) — the point of the fix. pulse/shake keep the legacy
+   *     whole-#canvas transform (a canvas-wide scale/jitter is already the
+   *     documented reading of a target-less pulse/shake).
+   * Not in scope this round: word/text coloring (the T-01-level "highlight
+   * colors the words" upgrade) — highlight flash is a background flash.
+   */
+
+  // resolve an effect's target node: the element node when targetElementId
+  // resolves on the canvas, else null (canvas-scope fallback).
+  function effectTarget(fx) {
+    if (!fx.targetElementId) return null;
+    var node = document.getElementById(fx.targetElementId);
+    if (!node && window.console) {
+      console.warn('ploykit-video: effect ' + fx.id + ' targetElementId "' +
+        fx.targetElementId + '" not on canvas — falling back to canvas scope');
+    }
+    return node || null;
+  }
+
+  // full-canvas overlay host for target-less highlight/fade (X-4). One overlay
+  // per effect id, z-index 10000 (elements are 1+el.z; the counter host is
+  // 9999), pointer-events none, so the flash paints over everything. The
+  // overlay persists for the document lifetime (append once, tween to
+  // transparent) — a remove-on-end callback would fight GSAP's scrub/seek
+  // model: seeked-back frames must re-show the flash deterministically, and
+  // a fixed hidden element keeps every frame of the timeline reproducible.
+  function canvasOverlay(fx) {
+    var id = 'fx-overlay-' + fx.id;
+    var node = document.getElementById(id);
+    if (!node) {
+      node = document.createElement('div');
+      node.id = id;
+      node.style.position = 'absolute';
+      node.style.left = '0';
+      node.style.top = '0';
+      node.style.width = '100%';
+      node.style.height = '100%';
+      node.style.zIndex = '10000';
+      node.style.pointerEvents = 'none';
+      canvas.appendChild(node);
+    }
+    return node;
+  }
+
   var effectBuilders = {
+    // pulse: element-level scale wave on the target node; target-less keeps
+    // the legacy whole-#canvas scale (X-4: canvas scope retained by design —
+    // a full-frame breathing beat).
     pulse: function (tl, node, fx, at) {
       var scale = (fx.params && fx.params.scale) || 1.2;
       tl.to(node, { scale: scale, duration: 0.18, ease: 'power2.out' }, at)
@@ -92,12 +158,19 @@
         ease: 'power1.out', onUpdate: function () { node.textContent = Math.round(obj.v) + suffix; }
       }, at);
     },
+    // highlight: background flash — the node's backgroundColor tweens to
+    // params.color and back to the node's OWN background. Deliberately .to()
+    // (not fromTo): fromTo's immediateRender would apply backgroundColor:
+    // transparent at build time and blank a shape element's fill for the
+    // whole video (the overlay/canvas targets are transparent anyway, so the
+    // visible result is identical for them). The flash colors the element's
+    // background, NOT its text — word coloring is the T-01-level upgrade,
+    // deliberately out of X-4 scope.
     highlight: function (tl, node, fx, at) {
       var color = (fx.params && fx.params.color) || '#ffd54f';
-      tl.fromTo(node,
-        { backgroundColor: 'transparent' },
-        { backgroundColor: color, duration: 0.25, ease: 'power2.out' }, at)
-        .to(node, { backgroundColor: 'transparent', duration: 0.6 }, at + 0.5);
+      var orig = node.style.backgroundColor || node.style.background || 'transparent';
+      tl.to(node, { backgroundColor: color, duration: 0.25, ease: 'power2.out' }, at)
+        .to(node, { backgroundColor: orig, duration: 0.6 }, at + 0.5);
     },
     shake: function (tl, node, fx, at) {
       var intensity = (fx.params && fx.params.intensity) || 8;
@@ -105,6 +178,9 @@
       tl.to(node, { x: '+=' + intensity, duration: dur, yoyo: true, repeat: 5, ease: 'none' }, at)
         .to(node, { x: '0', duration: dur }, at + dur * 6);
     },
+    // fade: element-level opacity (the node settles at params.opacity);
+    // the target-less path is handled at dispatch (black cover overlay with
+    // inverted polarity — see the effects loop below).
     fade: function (tl, node, fx, at) {
       var opacity = fx.params && typeof fx.params.opacity === 'number' ? fx.params.opacity : 0;
       tl.fromTo(node, { opacity: 1 }, { opacity: opacity, duration: 0.6, ease: 'power2.out' }, at);
@@ -179,7 +255,32 @@
       }
       var at = anchorTime(fx.resolvedFrom);
       if (fx.resolvedFrom && fx.resolvedFrom.reason === 'missing') return; // unresolved: skip (§4.2.4)
-      var target = fx.type === 'counter' ? counterHost(fx) : canvas;
+      // X-4 target dispatch: counter keeps its host builder; highlight/fade
+      // fall back to the z-10000 canvas overlay when there is no element
+      // target (visible whole-frame flash instead of the occluded #canvas
+      // paint); pulse/shake fall back to #canvas (legacy whole-layer scope).
+      var target;
+      if (fx.type === 'counter') {
+        target = counterHost(fx);
+      } else {
+        target = effectTarget(fx);
+        if (!target && fx.type === 'highlight') {
+          target = canvasOverlay(fx);
+        } else if (!target && fx.type === 'fade') {
+          // fade inverts on the overlay: the cover starts transparent and
+          // rises to (1 - params.opacity) black — dimming the frame to the
+          // requested residual opacity is the same visual as fading #canvas
+          // itself, but as a layer el_bg cannot occlude.
+          var ov = canvasOverlay(fx);
+          ov.style.background = '#000';
+          var op = fx.params && typeof fx.params.opacity === 'number' ? fx.params.opacity : 0;
+          tl.fromTo(ov, { opacity: 0 },
+            { opacity: 1 - op, duration: 0.6, ease: 'power2.out' }, at);
+          return;
+        } else if (!target) {
+          target = canvas;
+        }
+      }
       builder(tl, target, fx, at);
     });
 
@@ -251,6 +352,21 @@
   // the digits would be invisible even with textContent populated (observed
   // live: DOM had "8767 件" at rect 344x129 while the screenshot showed an
   // empty origin — the element layer occluded it).
+  //
+  // Element-level positioning (IR extension T-10 P0, case library §5.10):
+  // when fx.targetElementId names an element node that exists on the canvas,
+  // the host is absolutely positioned onto that element's bbox (left/top from
+  // the IR geometry — the same numbers buildClipDOM applied, so no layout
+  // dependency). Sizing: fixed 96px typography stays (deterministic layout,
+  // no font metrics read); width/height are NOT set so the host can overflow
+  // a narrow target with a long "12600 件" instead of wrapping it.
+  //
+  // Degradation semantics (recorded choice): the host is positioned at the
+  // target's bbox but does NOT inherit the target's visibility or entrance
+  // animation state — a target that has not entered yet (e.g. scaleIn from 0)
+  // still shows the counter at the target's position. The counter is a
+  // word-anchored stage effect that happens to borrow the target's geometry;
+  // the target's animations continue to apply to the target itself only.
   function counterHost(fx) {
     var id = 'counter-' + fx.id;
     var node = document.getElementById(id);
@@ -260,6 +376,14 @@
       node.className = 'el el-text counter';
       node.style.color = (fx.params && fx.params.color) || '#2B2118';
       node.style.zIndex = '9999';
+      var targetEl = fx.targetElementId ? document.getElementById(fx.targetElementId) : null;
+      if (targetEl) {
+        // position onto the target element's bbox (IR geometry; the node is
+        // appended to #canvas which is inset:0 of #stage, so left/top are
+        // stage-relative — identical coordinate space to buildClipDOM)
+        node.style.left = targetEl.style.left;
+        node.style.top = targetEl.style.top;
+      }
       canvas.appendChild(node);
     }
     return node;

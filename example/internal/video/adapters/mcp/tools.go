@@ -33,6 +33,20 @@ const (
 // the message shape, not the sentinel identity).
 var ErrScopeDenied = errors.New("videomcp: scope denied")
 
+// addEffectIn is the video_add_effect_at_word input (package-level so tests
+// can pin the wire shape). TargetElementID is the optional element-level
+// target of the IR extension (T-10): it lands on Effect.TargetElementID
+// (targetElementId in the IR document) and is write-time validated there.
+type addEffectIn struct {
+	ProjectID       string          `json:"project_id" jsonschema:"project id"`
+	AnchorText      string          `json:"anchor_text" jsonschema:"anchor word text (must exist in words[]; miss = error)"`
+	Occurrence      int             `json:"occurrence,omitempty" jsonschema:"0-based occurrence of the text among words (default 0)"`
+	Type            string          `json:"type" jsonschema:"effect type: pulse|counter|highlight|shake|fade"`
+	Params          json.RawMessage `json:"params,omitempty" jsonschema:"effect params object, validated per type"`
+	TargetElementID string          `json:"target_element_id,omitempty" jsonschema:"optional element id the effect targets (must exist in elements[]; counter positions its host at that element's bbox)"`
+	ExpectedVersion *int            `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
+}
+
 // Deps carries the service plus the capability probe (no capx import: the
 // probe is an interface so the tools compile without chromedp).
 type Deps struct {
@@ -120,20 +134,12 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		})
 
 	// ---- video_add_effect_at_word (video:write) ----
-	type addEffectIn struct {
-		ProjectID       string          `json:"project_id" jsonschema:"project id"`
-		AnchorText      string          `json:"anchor_text" jsonschema:"anchor word text (must exist in words[]; miss = error)"`
-		Occurrence      int             `json:"occurrence,omitempty" jsonschema:"0-based occurrence of the text among words (default 0)"`
-		Type            string          `json:"type" jsonschema:"effect type: pulse|counter|highlight|shake|fade"`
-		Params          json.RawMessage `json:"params,omitempty" jsonschema:"effect params object, validated per type"`
-		ExpectedVersion *int            `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
-	}
 	mcpAdd(s, "video_add_effect_at_word",
-		"Add a motion effect anchored at a word. Resolved word index + reason come back in resolvedFrom.",
+		"Add a motion effect anchored at a word. Resolved word index + reason come back in resolvedFrom. Pass target_element_id to bind the effect to an existing element (counter renders at that element's position).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in addEffectIn) (any, error) {
 			version, rf, err := deps.Svc.AddEffectAtWord(ctx, webx.PrincipalFrom(ctx),
 				in.ProjectID, videoapp.Anchor{Text: in.AnchorText, Occurrence: in.Occurrence},
-				in.Type, in.Params, in.ExpectedVersion)
+				in.Type, in.Params, in.TargetElementID, in.ExpectedVersion)
 			if err != nil {
 				return nil, err
 			}

@@ -59,9 +59,10 @@
   ],
   "degradations": [
     "[F000] degradation observed: price text and CTA bar already on screen at F0 (no element visibility windows)",
-    "[F077] degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)",
+    "[F077] degradation observed: card already fully entered at F77 (target expected scale=0)",
+    "[F090] X-4 fix observable: F90 sits in the ef_kw1 flash window (F78-F111) — overlay tints the card zone to whiteness 0.0% (pre-fix: \u003e=90% because the flash was occluded behind el_bg); yellow_ratio=1.0000 proves the flash is now VISIBLE",
     "[F180] degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance",
-    "[F250] degradation observed (stronger than documented): highlight paints the #canvas layer, which the full-canvas el_bg shape fully occludes — F250 target '#FFD166 lift' is INVISIBLE, not merely full-screen",
+    "[F250] X-4 fix: full-frame yellow ratio 1.0000 at F250 — the no-target highlight now paints a visible overlay (pre-fix measured ≈0: occluded by el_bg; l1-report 2026-11-15 baseline inverted)",
     "[F320] degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Post-D-01-fix the pre-tween state renders no 'from' value either: before its start the tween is at progress 0 and GSAP has not rendered once, so textContent is still empty (probe: seek to 5s then back past start shows '8200 件' only after the tween has run once — origin zone dark_ratio=0.0003)",
     "[F396] degradation observed: CTA bar has NO text (text/textColor compound keys unconsumed) — plain orange bar; entry move completed at ~F10 (from t=0) so bar rests at y=1780",
     "[F449] degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 242.4 stays at background level"
@@ -109,9 +110,9 @@
         "word_start_sec": 8.08
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 450 frames in 53.75s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 450 frames in 56.304s",
     "golden_dir": "example/internal/video/testdata/golden/c01/",
-    "html_bytes": 89210,
+    "html_bytes": 95991,
     "ir_sha256": "078365678fcd4bf11bcede278621b5365a9301988d3aec92ade1a7afac0ea00d",
     "meta_json": "example/internal/video/testdata/golden/c01/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §3.1 §7.2",
@@ -119,7 +120,7 @@
     "timeline_id": "main"
   },
   "layer": "L1",
-  "run_id": "l1-c01-20261115-171839-d395",
+  "run_id": "l1-c01-20261115-195444-bad3",
   "samples": [
     {
       "frame": 0,
@@ -133,7 +134,7 @@
         "png_magic_ok": true,
         "title_dark_ratio": 0
       },
-      "duration_ms": 2029,
+      "duration_ms": 2585,
       "artifact": "example/internal/video/testdata/golden/c01/frame-000.png",
       "notes": [
         "degradation observed: price text and CTA bar already on screen at F0 (no element visibility windows)"
@@ -153,7 +154,7 @@
         "png_magic_ok": true,
         "title_dark_ratio": 0.0339
       },
-      "duration_ms": 3380,
+      "duration_ms": 4027,
       "artifact": "example/internal/video/testdata/golden/c01/frame-012.png",
       "notes": [
         "A-C01-01 doc target \u003e=18%: actual 3.4% — target likely calibrated for target-schema layout (fontWeight 900 / no wrap); informational, no baseline this round"
@@ -171,10 +172,10 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 10059,
+      "duration_ms": 17304,
       "artifact": "example/internal/video/testdata/golden/c01/frame-077.png",
       "notes": [
-        "degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)"
+        "degradation observed: card already fully entered at F77 (target expected scale=0)"
       ]
     },
     {
@@ -182,17 +183,18 @@
       "time_sec": 3,
       "status": "ok",
       "structure_checks": {
-        "assert_card_visible_ge_90pct": true,
-        "card_white_ratio": 0.9999,
+        "card_white_ratio": 0,
+        "card_white_ratio_during_x4_window": 0,
+        "card_yellow_ratio_during_x4_window": 1,
         "dimensions": "1080x1920",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 11508,
+      "duration_ms": 18634,
       "artifact": "example/internal/video/testdata/golden/c01/frame-090.png",
       "notes": [
-        "degradation observed: card already fully entered at F77/F90 (target expected scale=0 at F77, scale∈[0.8,1] at F90)"
+        "X-4 fix observable: F90 sits in the ef_kw1 flash window (F78-F111) — overlay tints the card zone to whiteness 0.0% (pre-fix: \u003e=90% because the flash was occluded behind el_bg); yellow_ratio=1.0000 proves the flash is now VISIBLE"
       ]
     },
     {
@@ -208,7 +210,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 20741,
+      "duration_ms": 28205,
       "artifact": "example/internal/video/testdata/golden/c01/frame-180.png",
       "notes": [
         "degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance"
@@ -221,15 +223,15 @@
       "structure_checks": {
         "dimensions": "1080x1920",
         "dimensions_ok": true,
-        "full_frame_yellow_ratio": 0,
-        "highlight_visible": false,
+        "full_frame_yellow_ratio": 1,
+        "highlight_visible": true,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 28238,
+      "duration_ms": 35283,
       "artifact": "example/internal/video/testdata/golden/c01/frame-250.png",
       "notes": [
-        "degradation observed (stronger than documented): highlight paints the #canvas layer, which the full-canvas el_bg shape fully occludes — F250 target '#FFD166 lift' is INVISIBLE, not merely full-screen"
+        "X-4 fix: full-frame yellow ratio 1.0000 at F250 — the no-target highlight now paints a visible overlay (pre-fix measured ≈0: occluded by el_bg; l1-report 2026-11-15 baseline inverted)"
       ]
     },
     {
@@ -246,7 +248,7 @@
         "png_magic_ok": true,
         "price_orange_ratio": 0.0607
       },
-      "duration_ms": 36173,
+      "duration_ms": 42384,
       "artifact": "example/internal/video/testdata/golden/c01/frame-320.png",
       "notes": [
         "degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Post-D-01-fix the pre-tween state renders no 'from' value either: before its start the tween is at progress 0 and GSAP has not rendered once, so textContent is still empty (probe: seek to 5s then back past start shows '8200 件' only after the tween has run once — origin zone dark_ratio=0.0003)"
@@ -264,7 +266,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 40825,
+      "duration_ms": 46527,
       "artifact": "example/internal/video/testdata/golden/c01/frame-360.png"
     },
     {
@@ -280,7 +282,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 45003,
+      "duration_ms": 50251,
       "artifact": "example/internal/video/testdata/golden/c01/frame-396.png",
       "notes": [
         "degradation observed: CTA bar has NO text (text/textColor compound keys unconsumed) — plain orange bar; entry move completed at ~F10 (from t=0) so bar rests at y=1780"
@@ -299,7 +301,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 53082,
+      "duration_ms": 56001,
       "artifact": "example/internal/video/testdata/golden/c01/frame-449.png",
       "notes": [
         "degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 242.4 stays at background level"
@@ -307,12 +309,12 @@
     }
   ],
   "totals": {
-    "analysis_total_ms": 841,
+    "analysis_total_ms": 662,
     "frames_planned": 450,
     "frames_rendered": 450,
     "keyframes_kept": 10,
-    "render_ms_per_frame": 119.44,
-    "render_total_ms": 53749,
+    "render_ms_per_frame": 125.12,
+    "render_total_ms": 56304,
     "samples_fail": 0,
     "samples_ok": 10
   }
