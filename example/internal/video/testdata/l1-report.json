@@ -110,7 +110,7 @@
         "word_start_sec": 8.08
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 450 frames in 40.935s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 450 frames in 41.429s",
     "golden_dir": "example/internal/video/testdata/golden/c01/",
     "html_bytes": 105352,
     "ir_sha256": "078365678fcd4bf11bcede278621b5365a9301988d3aec92ade1a7afac0ea00d",
@@ -120,7 +120,7 @@
     "timeline_id": "main"
   },
   "layer": "L1",
-  "run_id": "l1-c01-20261116-010251-a528",
+  "run_id": "l1-c01-20261116-012316-3d01",
   "samples": [
     {
       "frame": 0,
@@ -134,7 +134,7 @@
         "png_magic_ok": true,
         "title_dark_ratio": 0
       },
-      "duration_ms": 1212,
+      "duration_ms": 1208,
       "artifact": "example/internal/video/testdata/golden/c01/frame-000.png",
       "notes": [
         "degradation observed: price text and CTA bar already on screen at F0 (no element visibility windows)"
@@ -154,7 +154,7 @@
         "png_magic_ok": true,
         "title_dark_ratio": 0.0339
       },
-      "duration_ms": 2333,
+      "duration_ms": 2363,
       "artifact": "example/internal/video/testdata/golden/c01/frame-012.png",
       "notes": [
         "A-C01-01 doc target \u003e=18%: actual 3.4% — target likely calibrated for target-schema layout (fontWeight 900 / no wrap); informational, no baseline this round"
@@ -172,7 +172,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 8233,
+      "duration_ms": 8512,
       "artifact": "example/internal/video/testdata/golden/c01/frame-077.png",
       "notes": [
         "degradation observed: card already fully entered at F77 (target expected scale=0)"
@@ -191,7 +191,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 9379,
+      "duration_ms": 9606,
       "artifact": "example/internal/video/testdata/golden/c01/frame-090.png",
       "notes": [
         "X-4 fix observable: F90 sits in the ef_kw1 flash window (F78-F111) — overlay tints the card zone to whiteness 0.0% (pre-fix: \u003e=90% because the flash was occluded behind el_bg); yellow_ratio=1.0000 proves the flash is now VISIBLE"
@@ -210,7 +210,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 17353,
+      "duration_ms": 17276,
       "artifact": "example/internal/video/testdata/golden/c01/frame-180.png",
       "notes": [
         "degradation observed: all three cards mounted from F0 and stacked at identical position/color — F77 target 'cardA not entered' and F180 'cardB distinguishable + green accent' are NOT expressible; whiteness proves the (degraded) card, not staggered entrance"
@@ -228,7 +228,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 23348,
+      "duration_ms": 23379,
       "artifact": "example/internal/video/testdata/golden/c01/frame-250.png",
       "notes": [
         "X-4 fix: full-frame yellow ratio 1.0000 at F250 — the no-target highlight now paints a visible overlay (pre-fix measured ≈0: occluded by el_bg; l1-report 2026-11-15 baseline inverted)"
@@ -248,7 +248,7 @@
         "png_magic_ok": true,
         "price_orange_ratio": 0.0607
       },
-      "duration_ms": 29320,
+      "duration_ms": 29512,
       "artifact": "example/internal/video/testdata/golden/c01/frame-320.png",
       "notes": [
         "degradation observed: counter empty at F320 (word anchor starts 11.92s = F358, so F320 is BEFORE the tween; expected-frame-table's 'counter starts 8,200 at F320' does not hold under word-anchored timing). Post-D-01-fix the pre-tween state renders no 'from' value either: before its start the tween is at progress 0 and GSAP has not rendered once, so textContent is still empty (probe: seek to 5s then back past start shows '8200 件' only after the tween has run once — origin zone dark_ratio=0.0003)"
@@ -266,7 +266,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 32847,
+      "duration_ms": 33130,
       "artifact": "example/internal/video/testdata/golden/c01/frame-360.png"
     },
     {
@@ -282,7 +282,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 36099,
+      "duration_ms": 36376,
       "artifact": "example/internal/video/testdata/golden/c01/frame-396.png",
       "notes": [
         "degradation observed: CTA bar has NO text (text/textColor compound keys unconsumed) — plain orange bar; entry move completed at ~F10 (from t=0) so bar rests at y=1780"
@@ -301,7 +301,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 40698,
+      "duration_ms": 41163,
       "artifact": "example/internal/video/testdata/golden/c01/frame-449.png",
       "notes": [
         "degradation observed: target F445 whole-frame fade-to-dark not expressible (fade effect needs a word anchor; last word ends 14.62s ≠ 14.83s) — mean luminance 242.4 stays at background level"
@@ -309,12 +309,12 @@
     }
   ],
   "totals": {
-    "analysis_total_ms": 579,
+    "analysis_total_ms": 575,
     "frames_planned": 450,
     "frames_rendered": 450,
     "keyframes_kept": 10,
-    "render_ms_per_frame": 90.96,
-    "render_total_ms": 40934,
+    "render_ms_per_frame": 92.06,
+    "render_total_ms": 41428,
     "samples_fail": 0,
     "samples_ok": 10
   }

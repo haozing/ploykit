@@ -2908,6 +2908,8 @@
 - 跨镜像容差放宽：全帧 MAE ≤ 6/255、SSIM ≥ 0.95；同镜像不放宽。
 - DOM 断言：`getBoundingClientRect()` 四向误差 ≤ 1 px；`TextMetrics.width` 误差 ≤ 2 px；元素存在性 / 顺序 / z-index 必须逐项相等。
 
+**窗口可见帧区间（[口径 round3 实测补遗]）：** 帧表书写用理想语义 [startFrame, endFrame)；**渲染实测为 [startFrame+1, endFrame]**（可见 set 位于 startFrame 帧内 ε=1/2f 处，seek(k≥startFrame+1) 才应用；hide set 于 endFrame 帧精确生效）。三处独立证据：C02 F262/F263、C03 F1094、C05 F899。帧表断言凡涉及"元素已可见"一律用 startFrame+1 起；"已退场"用 endFrame 起。
+
 **案例规格（已回填；帧量唯一来源 = 架构 §2.1，下表为其推导）：**
 
 | 案例 | 内容类型 | 分辨率 | fps | 时长（s） | 帧数 F=ceil(d·fps) |

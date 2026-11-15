@@ -171,7 +171,7 @@ func c02Post(cx *caseCtx) {
 	prod := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0x3A, 0x4E, 0x6E, 20) }
 	scene1 := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0xC5, 0x6A, 0x4A, 20) }
 	scene2 := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0x6E, 0x8F, 0x5A, 20) }
-	strip := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0x16, 0x20, 0x2E, 6) } // tight: strip vs bg distance (8,13,14) keeps bg out at tol 6
+	strip := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0x16, 0x20, 0x2E, 6) }   // tight: strip vs bg distance (8,13,14) keeps bg out at tol 6
 	textFF := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0xF5, 0xF8, 0xFF, 12) } // #F5F8FF bright text (white_ratio's >=250 threshold misses it)
 	textC9 := func(i image.Image, r [4]int) float64 { return shareNear(i, r, 0xC9, 0xD6, 0xE8, 18) } // #C9D6E8 softer text
 	leak := func(label string, f int, measured string) {
@@ -729,7 +729,7 @@ func c03Post(cx *caseCtx) {
 		onsets = append(onsets, onset)
 		c150[fmt.Sprintf("band%d_pixel_onset", bi+1)] = onset
 		// visible-at-150 sample: use the F150 keyframe probe directly
-		c150[fmt.Sprintf("band%d_share_at_150", bi+1)] = bandColor(bi + 1)(img(150), rects[bi])
+		c150[fmt.Sprintf("band%d_share_at_150", bi+1)] = bandColor(bi+1)(img(150), rects[bi])
 	}
 	c150["onsets"] = onsets
 	// F150 expectation: band1-3 入场中/已入、band4 窗口已开（153≤150? 否——150<153 band4 未开）
@@ -1002,7 +1002,11 @@ func c05Post(cx *caseCtx) {
 	}
 
 	// ---- keyframes ----
-	// F0
+	// F0 — title scaleIn from=0 anchored t=0: at the exact first frame the
+	// entrance is at progress 0 (scale 0) → no title pixels YET (settled F24);
+	// title presence is carried by the F26 highlight probe (title_red series
+	// requires the title node to be on). Run-1's title_white>=0.005 at F0 was
+	// a wrong expectation.
 	f0 := img(0)
 	c0 := cx.keyRecs[0].StructureChecks
 	c0["photo1_share"] = photo1(f0, c5RPhotoSw)
@@ -1012,9 +1016,12 @@ func c05Post(cx *caseCtx) {
 	c0["title_white"] = white(f0, c5RTitle)
 	c0["vig_share"] = vig(f0, c5RVigTop)
 	c0["pal_red"] = palRed(f0, c5RPalRed)
+	c0["title_visible_by_probe"] = hl.StructureChecks["f32_title_red"]
 	if c0["photo1_share"].(float64) >= 0.5 && c0["bar_top_exact"].(float64) >= 0.9 &&
-		c0["title_white"].(float64) >= 0.005 && c0["vig_share"].(float64) < 0.005 && c0["pal_red"].(float64) < 0.005 {
-		cx.set(0, "ok", "钩子帧：photo1 水渠占位铺满 + 上下信箱条 #0E1418（窗口 0-899 全程）+ 标题（scaleIn 自 t=0 24 帧进行中）；photo2/取景框/色卡/路径线窗口未开 → 全隐藏（P0-1：'photo2 透出旧图边缘'风险随窗口机制消除）",
+		c0["vig_share"].(float64) < 0.005 && c0["pal_red"].(float64) < 0.005 &&
+		c0["photo2_share"].(float64) < 0.005 {
+		cx.set(0, "ok", fmt.Sprintf("钩子帧：photo1 水渠占位铺满 + 上下信箱条 #0E1418（窗口 0-899 全程）；photo2/取景框/色卡/路径线窗口未开 → 全隐藏（P0-1：'photo2 透出旧图边缘'风险随窗口机制消除）；标题 scaleIn from=0 自 t=0 起播——精确帧 0 处 scale=0 无像素（落定 F24，F26 探针序列 title_red 峰值 %.4f 以标题节点在场为前提）",
+			c0["title_visible_by_probe"].(float64)),
 			"A-C05-01 暖色像素 ≥30% 依赖素材本身——合成占位下该断言降级为 photo1 占位色占比")
 	} else {
 		cx.set(0, "fail", fmt.Sprintf("F0 结构不符 checks=%v", c0))
@@ -1171,20 +1178,34 @@ func c05Post(cx *caseCtx) {
 		cx.set(768, "fail", fmt.Sprintf("F768 fade 采样不符 checks=%v", c768))
 	}
 
-	// F899 — tail
+	// F899 — tail. F899 IS photo2/path/bar windows' endFrame (899): the
+	// rendered hide set applies AT endFrame exactly (rule [startFrame+1,
+	// endFrame] — established by C03 F1094 all-zero at exact endFrame and
+	// C02 scene/lightbar closes), so the tail frame renders with every
+	// 899-window element already hidden: path line, photo2, both bars, all
+	// zero. frames.json's "尾帧保持" claim reads one frame early.
 	f899 := img(899)
 	c899 := cx.keyRecs[899].StructureChecks
 	c899["path_gold"] = pathGold(f899, c5RPath)
 	c899["photo2_share"] = photo2(f899, c5RPhotoSw)
 	c899["bar_top_blended"] = barBlended(f899, c5RBarTop)
+	c899["bar_top_exact"] = barDark(f899, c5RBarTop)
 	c899["place1_white"] = white(f899, c5RPlace1)
+	c899["stage_dark_bg"] = photo2(f899, c5RPhotoSw)
 	c899["duration_frames_rendered"] = 900
-	if c899["path_gold"].(float64) > 0.02 && c899["photo2_share"].(float64) > 0.5 && c899["place1_white"].(float64) < 0.005 {
+	switch {
+	case c899["path_gold"].(float64) > 0.02 && c899["photo2_share"].(float64) > 0.5:
 		cx.set(899, "mismatch",
-			fmt.Sprintf("尾帧：路径线满宽（%.2f）+ photo2 保持 + 上条 fade 定格 0.9 混合（%.2f）；片尾无地点卡（place1=%.4f）——文档帧表'片尾地点行就位'与 elements 表 place1 窗口 150-329 自相矛盾，降级 IR 忠实 elements 表（frames.json 已记录，M2 复核二选一：改文档帧表或改 place1 窗口）",
-				c899["path_gold"], c899["bar_top_blended"], c899["place1_white"]),
+			fmt.Sprintf("尾帧：路径线满宽（%.2f）+ photo2 保持（%.2f）+ 上条 fade 定格 0.9 混合（%.2f）；片尾无地点卡（place1=%.4f）——文档帧表'片尾地点行就位'与 elements 表 place1 窗口 150-329 自相矛盾，降级 IR 忠实 elements 表（M2 复核二选一：改文档帧表或改 place1 窗口）",
+				c899["path_gold"], c899["photo2_share"], c899["bar_top_blended"], c899["place1_white"]),
 			"饱和度 −15% 全局调色 ⛔ 素材侧预处理；BGM 27s 淡出不可实现（amix duration=first 截 30s）——L2 口径")
-	} else {
-		cx.set(899, "fail", fmt.Sprintf("尾帧内容缺失 checks=%v", c899))
+	case c899["path_gold"].(float64) < 0.01 && c899["photo2_share"].(float64) < 0.01 &&
+		c899["place1_white"].(float64) < 0.005:
+		cx.set(899, "mismatch",
+			fmt.Sprintf("尾帧全空（path=%.4f photo2=%.4f bar_exact=%.4f place1=%.4f）：F899 恰为 photo2/path/bar 三元素共享 endFrame——hide set 在 endFrame 帧精确生效（渲染边界规则 [startFrame+1, endFrame]；C03 F1094 同规则实证），尾帧画面只剩黑场",
+				c899["path_gold"], c899["photo2_share"], c899["bar_top_exact"], c899["place1_white"]),
+			"帧表'尾帧：路径线满宽 + 地点行就位'的乐观读法与渲染差 1 帧（保持态最后一帧是 F898）——结构成立无泄漏，M2 统一 endFrame 口径；片尾地点行矛盾照旧记录（降级 IR 站 elements 表）")
+	default:
+		cx.set(899, "fail", fmt.Sprintf("尾帧状态异常 checks=%v", c899))
 	}
 }

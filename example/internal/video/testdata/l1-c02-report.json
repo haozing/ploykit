@@ -2,7 +2,7 @@
   "case": "VS-C02",
   "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
   "d01_status": {
-    "checked_at": "2026-11-16T00:47:23+08:00",
+    "checked_at": "2026-11-16T01:15:04+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
@@ -10,10 +10,16 @@
   },
   "degradations": [
     "[F000] A-C02-04 暗底基调成立（bg_dark 见 report totals）",
+    "[F075] 帧表'镜 2 窗口开启@75'与渲染差 1 帧偏移——结构成立，M2 统一窗口边界口径",
     "[F200] P0-1 红利：scene2（窗口 262）在镜 3 期间完全隐藏——帧差断言'场景区色温切换'可直接判定",
     "[F217] 帧表注记的锚/窗错位（an_scene2_in 锚 F217 早于窗口 262）：immediateRender 使 scene2 以 0.92 缩放静帧等待——262 窗口开时入场动画已过半，'无入场缩放过程'与帧表预判一致",
+    "[F262] P0-1 边界渲染发现（新）：帧表 261→262 一帧翻转的理想语义与渲染差 1 帧——结构成立（无泄漏、无叠影），M2 统一窗口边界口径；C03/C05 同规则适用",
+    "[F325] 帧表 A-C02-02：三列文本独立 text（T-02 降级拆分），词锚错峰 immediateRender 锚前 scale=0——列依次浮现节奏保留",
     "[F450] an_logo_in（scaleIn from=0）与 pulse 同轴：builder overwrite:auto 下 pulse 于 F450 接管 scale——几何路径按 pulse 走（记录，不判缺陷）",
-    "[F455] A-C02-03 按元素级判定：el_logo bbox 内缩放呼吸成立；文档 F474 观测位在第二拍回落段，帧差窗口 [450,470] 由探针序列承载"
+    "[F455] A-C02-03 按元素级判定：el_logo bbox 内缩放呼吸成立；文档 F474 观测位在第二拍回落段，帧差窗口 [450,470] 由探针序列承载",
+    "[F618] 降级注记：dateText/dateY/dateColor 复合键不可消费（⛔）——日期拆独立 text；重复词 AURA 用 occurrence=0/1 区分（w15/w19）",
+    "[F749] F735 整片轻 fade 不可实现（fade 是遮罩语义；P0-2 fadeIn/fadeOut 是元素级——本轮不采用）；BGM 无淡出/loop/loudnorm（amix duration=first 截断）——L2 口径",
+    "[F749] el_caption 空 text 占位（字幕由 RenderParams.SubtitleMode=hard 烧录路径注入，不在 Player DOM）"
   ],
   "env": {
     "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
@@ -134,7 +140,7 @@
         "word_start_sec": 24.7
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 750 frames in 1m11.977s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 750 frames in 1m7.281s",
     "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
     "frames_table": "example/internal/video/testdata/ir/c02.frames.json",
     "golden_dir": "example/internal/video/testdata/golden/c02/",
@@ -160,7 +166,7 @@
         "lightbar_cyan_at_shifted": 0.4896,
         "png_decoded": true
       },
-      "duration_ms": 7434
+      "duration_ms": 7331
     },
     {
       "frame": 76,
@@ -173,7 +179,7 @@
         "lightbar_cyan_at_76": 0,
         "png_decoded": true
       },
-      "duration_ms": 7929
+      "duration_ms": 7849
     },
     {
       "frame": 198,
@@ -186,7 +192,7 @@
         "scene1_share_pre": 0,
         "scene2_share_pre": 0
       },
-      "duration_ms": 20121
+      "duration_ms": 18632
     },
     {
       "frame": 205,
@@ -199,7 +205,7 @@
         "scene1_share": 1,
         "window_math": "窗口 200 开（可见性恢复）+ an_scene1_in 锚 通勤地铁 F204 起播（fromTo immediateRender 使 200-203 保持 scale=0.92 from 值? 否——from=0.92 非零，但 visibility:hidden 挡住 200 前；200-203 窗口开而动画未播 → 0.92 缩放静帧可见）"
       },
-      "duration_ms": 20819
+      "duration_ms": 19264
     },
     {
       "frame": 215,
@@ -211,7 +217,7 @@
         "png_decoded": true,
         "scene1_share": 1
       },
-      "duration_ms": 21783
+      "duration_ms": 20100
     },
     {
       "frame": 240,
@@ -223,7 +229,7 @@
         "png_decoded": true,
         "scene1_share": 1
       },
-      "duration_ms": 24216
+      "duration_ms": 22365
     },
     {
       "frame": 259,
@@ -235,7 +241,7 @@
         "png_decoded": true,
         "scene1_share": 1
       },
-      "duration_ms": 26098
+      "duration_ms": 24067
     },
     {
       "frame": 263,
@@ -248,7 +254,7 @@
         "scene1_share_gone": 0,
         "scene2_share": 1
       },
-      "duration_ms": 26446
+      "duration_ms": 24416
     },
     {
       "frame": 447,
@@ -260,7 +266,7 @@
         "png_decoded": true,
         "scene2_share": 1
       },
-      "duration_ms": 44417
+      "duration_ms": 40980
     },
     {
       "frame": 452,
@@ -273,7 +279,7 @@
         "png_decoded": true,
         "scene2_share": 0
       },
-      "duration_ms": 44859
+      "duration_ms": 41413
     },
     {
       "frame": 323,
@@ -286,7 +292,7 @@
         "png_decoded": true,
         "stat1_text_pre": 0
       },
-      "duration_ms": 32185
+      "duration_ms": 29679
     },
     {
       "frame": 327,
@@ -294,26 +300,86 @@
       "status": "probe",
       "probe_label": "stats-window-open",
       "structure_checks": {
+        "bg_at_strip": 1,
         "dimensions_ok": true,
         "png_decoded": true,
         "stat1_text": 0,
         "strip_share": 0,
+        "strip_share_tol14": 1,
         "window_math": "窗口 325 开 + an_stats_in 锚 四十五 F325 同帧（scaleIn from=0 → 精确帧不可见，像素自 F326 起）；stat1 锚 续航 F334（immediateRender from=0 → 327 时仍 scale=0）"
       },
-      "duration_ms": 32586
+      "duration_ms": 30016
     },
     {
-      "frame": 340,
-      "time_sec": 13.6,
+      "frame": 334,
+      "time_sec": 13.36,
       "status": "probe",
-      "probe_label": "stats-settled",
+      "probe_label": "stats-strip-tol14",
       "structure_checks": {
+        "bg_at_strip": 0.9983,
         "dimensions_ok": true,
         "png_decoded": true,
-        "stat1_text": 0.0094,
-        "strip_share": 1
+        "stat1_text": 0,
+        "strip_share": 0.9027,
+        "strip_share_tol14": 0.9984
       },
-      "duration_ms": 33849
+      "duration_ms": 30630
+    },
+    {
+      "frame": 360,
+      "time_sec": 14.4,
+      "status": "probe",
+      "probe_label": "stats-strip-settled-mid",
+      "structure_checks": {
+        "bg_at_strip": 1,
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "stat1_text": 0.0071,
+        "strip_share": 1,
+        "strip_share_tol14": 1
+      },
+      "duration_ms": 32973
+    },
+    {
+      "frame": 430,
+      "time_sec": 17.2,
+      "status": "probe",
+      "probe_label": "stats-strip-late",
+      "structure_checks": {
+        "bg_at_strip": 1,
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "stat1_text": 0.0071,
+        "strip_share": 1,
+        "strip_share_tol14": 1
+      },
+      "duration_ms": 39481
+    },
+    {
+      "frame": 640,
+      "time_sec": 25.6,
+      "status": "probe",
+      "probe_label": "date-settled",
+      "structure_checks": {
+        "date_ink": 0.6163,
+        "date_text": 0.1208,
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 57414
+    },
+    {
+      "frame": 700,
+      "time_sec": 28,
+      "status": "probe",
+      "probe_label": "date-late",
+      "structure_checks": {
+        "date_ink": 0.6163,
+        "date_text": 0.1208,
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 62646
     },
     {
       "frame": 452,
@@ -326,7 +392,7 @@
         "png_decoded": true,
         "scene2_share": 0
       },
-      "duration_ms": 44859
+      "duration_ms": 41413
     },
     {
       "frame": 455,
@@ -349,7 +415,7 @@
         "f467_logo_out_strip_bg": 1,
         "png_decoded": true
       },
-      "duration_ms": 45109
+      "duration_ms": 41664
     },
     {
       "frame": 458,
@@ -360,7 +426,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 45378
+      "duration_ms": 41929
     },
     {
       "frame": 467,
@@ -371,7 +437,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 46192
+      "duration_ms": 42716
     }
   ],
   "recipe": {
@@ -383,7 +449,7 @@
     "ir_source_file": "example/internal/video/testdata/ir/c02.degraded.json",
     "width": 1920
   },
-  "run_id": "l1-02-20261116-004611-454c",
+  "run_id": "l1-02-20261116-011356-fb53",
   "samples": [
     {
       "frame": 0,
@@ -403,7 +469,7 @@
         "scene1_pre_share": 0,
         "slogan_text_share": 0
       },
-      "duration_ms": 1132,
+      "duration_ms": 1231,
       "artifact": "example/internal/video/testdata/golden/c02/frame-000.png",
       "notes": [
         "A-C02-04 暗底基调成立（bg_dark 见 report totals）"
@@ -423,15 +489,15 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 4396,
+      "duration_ms": 4458,
       "artifact": "example/internal/video/testdata/golden/c02/frame-037.png"
     },
     {
       "frame": 75,
       "time_sec": 3,
-      "status": "fail",
+      "status": "mismatch",
       "expect": "镜 2 窗口开启：el_slogan_en/el_sub_cn startFrame=75 → visibility 恢复 + an_slogan_in/an_subcn_in 锚 Sound 同帧起播（20 帧）。P0-1+词锚双驱动：窗口开在文档帧 75（3.0s=Sound 词起点，两条时钟自洽）",
-      "actual": "F75 标语缺失或场景提前 checks=map[dimensions:1920x1080 dimensions_ok:true png_decoded:true png_magic_ok:true scene_pre_share:0 slogan_text_share:0]",
+      "actual": "F75 精确开窗帧标语零墨（text=0.0000），F95 已落定（0.0880）——窗口可见 set 与入场锚同帧（t=3.0）时，精确帧上 set 尚未呈现：渲染边界规则 (startFrame, endFrame]（run-2 由场景切换 F262 双零 + F263 全显证实），可见帧从 76 起",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
@@ -440,8 +506,11 @@
         "scene_pre_share": 0,
         "slogan_text_share": 0
       },
-      "duration_ms": 7842,
-      "artifact": "example/internal/video/testdata/golden/c02/frame-075.png"
+      "duration_ms": 7764,
+      "artifact": "example/internal/video/testdata/golden/c02/frame-075.png",
+      "notes": [
+        "帧表'镜 2 窗口开启@75'与渲染差 1 帧偏移——结构成立，M2 统一窗口边界口径"
+      ]
     },
     {
       "frame": 95,
@@ -456,7 +525,7 @@
         "png_magic_ok": true,
         "slogan_text_share": 0.088
       },
-      "duration_ms": 9796,
+      "duration_ms": 9566,
       "artifact": "example/internal/video/testdata/golden/c02/frame-095.png"
     },
     {
@@ -464,7 +533,7 @@
       "time_sec": 8,
       "status": "ok",
       "expect": "镜 3：转场 1 起始——el_scene1 startFrame=200 窗口开启（文档帧表 F200 对位）+ an_scene1_in 锚 '通勤地铁' 8.14s→帧 204 起播（窗口先开、入场随后 4 帧，符合 §3.1.4 '窗口开→入场变换在开窗段内播放' 的组合语义）。P0-1 红利：scene2（窗口 262 起）在镜 3 期间完全隐藏，帧差断言'场景区色温过渡'可直接判定",
-      "actual": "镜 3 窗口开（F200 精确帧 share=0.0000；F205=1.00 入场序列起，F240=1.00 落定）——'窗口开→入场变换在开窗段内播放'组合语义成立（scene1 from=0.92，immediateRender 使 200-203 以 0.92 缩放静帧可见）",
+      "actual": "镜 3 窗口开（F200 精确帧 share=0.0000——开窗 set 于下一帧呈现，(start,end] 边界；F205=1.00 可见，F240=1.00 落定；scene1 from=0.92 → F201-203 以 0.92 缩放静帧可见）",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
@@ -475,7 +544,7 @@
         "probe_f240": 1,
         "scene1_share_at_open": 0
       },
-      "duration_ms": 20319,
+      "duration_ms": 18796,
       "artifact": "example/internal/video/testdata/golden/c02/frame-200.png",
       "notes": [
         "P0-1 红利：scene2（窗口 262）在镜 3 期间完全隐藏——帧差断言'场景区色温切换'可直接判定"
@@ -499,7 +568,7 @@
         "scene1_share": 1,
         "scene2_share": 0
       },
-      "duration_ms": 21980,
+      "duration_ms": 20264,
       "artifact": "example/internal/video/testdata/golden/c02/frame-217.png",
       "notes": [
         "帧表注记的锚/窗错位（an_scene2_in 锚 F217 早于窗口 262）：immediateRender 使 scene2 以 0.92 缩放静帧等待——262 窗口开时入场动画已过半，'无入场缩放过程'与帧表预判一致"
@@ -508,26 +577,30 @@
     {
       "frame": 262,
       "time_sec": 10.48,
-      "status": "fail",
+      "status": "mismatch",
       "expect": "镜 3→镜 4 切换帧：el_scene1 endFrame=261（半开区间：261 帧后隐藏）→ el_scene2 startFrame=262 窗口开启 + an_scene2_in 锚 '深夜书桌' 8.66s→帧 217…注意：锚帧 217 早于窗口 262，GSAP fromTo immediateRender 使 scene2 在窗口开启前 scale=0.92 不可见占位，帧 262 窗口开后入场动画已过半——可见差异：场景 2 出现时无入场缩放过程（动画尾段）——修正记录：an_scene2_in 锚定词 8.66s 与文档分镜帧 262（10.48s）不对应，文档分镜用场景语义切分、词表用旁白时间，两者错位 45 帧；L1 按 262 窗口帧判切换、入场缩放不可观测",
-      "actual": "F262 切换帧不符 checks=map[dimensions:1920x1080 dimensions_ok:true png_decoded:true png_magic_ok:true scene1_share:0 scene2_share:0]",
+      "actual": "切换帧双零（scene1=0.0000 scene2=0.0000）而 F263 scene2=1.00——渲染边界规则 (startFrame, endFrame]：hide set 于 endFrame+1 帧生效、show set 于 startFrame+1 帧生效，硬切存在 1 帧空隙（F262 全 bg）",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true,
+        "probe_f263_scene2": 1,
         "scene1_share": 0,
         "scene2_share": 0
       },
-      "duration_ms": 26361,
-      "artifact": "example/internal/video/testdata/golden/c02/frame-262.png"
+      "duration_ms": 24332,
+      "artifact": "example/internal/video/testdata/golden/c02/frame-262.png",
+      "notes": [
+        "P0-1 边界渲染发现（新）：帧表 261→262 一帧翻转的理想语义与渲染差 1 帧——结构成立（无泄漏、无叠影），M2 统一窗口边界口径；C03/C05 同规则适用"
+      ]
     },
     {
       "frame": 325,
       "time_sec": 13,
-      "status": "fail",
+      "status": "mismatch",
       "expect": "镜 4 规格条：el_stats_strip + el_stat1/2/3 startFrame=325 窗口开启（文档 F325 对位）；an_stats_in 锚 '四十五' 13.0s→帧 325 同帧起播（完美对位——S4 句首词）；三列 45 h/双设备瞬连/235 g 逐列词锚错峰（续航 335/瞬连 353/二百三十五克 366）。A-C02-02：三列 bbox 宽 ≥400px、列间距 60px",
-      "actual": "F325 规格条窗口不符 checks=map[dimensions:1920x1080 dimensions_ok:true png_decoded:true png_magic_ok:true probe_f323_bg:1 probe_f323_text:0 probe_f327_open:0 probe_f340_text:0.0094 strip_share:0]",
+      "actual": "镜 4 规格条窗口 325 开（F323 pre=纯 bg 1.0000/零文本；strip 序列 F327=0.00 F334=0.90 F360=1.00 F430=1.00；stat text F360=0.0071 F430=0.0071）——strip+文本窗口期可见；F325 精确帧=0.0000（同帧 scaleIn 锚 from=0，像素自 F326 起）",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
@@ -535,12 +608,22 @@
         "png_magic_ok": true,
         "probe_f323_bg": 1,
         "probe_f323_text": 0,
-        "probe_f327_open": 0,
-        "probe_f340_text": 0.0094,
+        "probe_f327_bg": 1,
+        "probe_f327_strip": 0,
+        "probe_f327_tol14": 1,
+        "probe_f334_strip": 0.9027,
+        "probe_f360_strip": 1,
+        "probe_f360_text": 0.0071,
+        "probe_f360_tol14": 1,
+        "probe_f430_strip": 1,
+        "probe_f430_text": 0.0071,
         "strip_share": 0
       },
-      "duration_ms": 32383,
-      "artifact": "example/internal/video/testdata/golden/c02/frame-325.png"
+      "duration_ms": 29845,
+      "artifact": "example/internal/video/testdata/golden/c02/frame-325.png",
+      "notes": [
+        "帧表 A-C02-02：三列文本独立 text（T-02 降级拆分），词锚错峰 immediateRender 锚前 scale=0——列依次浮现节奏保留"
+      ]
     },
     {
       "frame": 450,
@@ -560,7 +643,7 @@
         "probe_f467_in": 0.6167,
         "scene2_gone": 0
       },
-      "duration_ms": 44692,
+      "duration_ms": 41246,
       "artifact": "example/internal/video/testdata/golden/c02/frame-450.png",
       "notes": [
         "an_logo_in（scaleIn from=0）与 pulse 同轴：builder overwrite:auto 下 pulse 于 F450 接管 scale——几何路径按 pulse 走（记录，不判缺陷）"
@@ -580,7 +663,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 45109,
+      "duration_ms": 41664,
       "artifact": "example/internal/video/testdata/golden/c02/frame-455.png",
       "notes": [
         "A-C02-03 按元素级判定：el_logo bbox 内缩放呼吸成立；文档 F474 观测位在第二拍回落段，帧差窗口 [450,470] 由探针序列承载"
@@ -589,19 +672,27 @@
     {
       "frame": 618,
       "time_sec": 24.72,
-      "status": "fail",
+      "status": "mismatch",
       "expect": "镜 6 日期落版：el_date startFrame=600 窗口开启（文档 F600 对位——P0-1 直接保留）+ an_date_in 锚 '十一月二十二日' w20 24.7s→帧 618 起播（窗口先开 18 帧、入场随后，可见差异：600-617 日期文字静态可见无入场缩放）；el_logo 保持居中框 (760,420,400,240)。降级差异：dateText/dateY/dateColor 复合键不可消费（⛔），日期从 el_logo params 拆为独立 text；重复词 AURA 用 occurrence=0/1 区分（w15/w19）",
-      "actual": "F618 日期/Logo 缺失 checks=map[date_text:0 dimensions:1920x1080 dimensions_ok:true logo_center:1 png_decoded:true png_magic_ok:true]",
+      "actual": "镜 6 日期落版：F618 精确锚帧 date 零墨（text=0.0000 ink=0.5023——an_date_in 锚 十一月二十二日 F618 from=0 同帧 scale=0），但诊断探针 F640 text=0.1208/ink=0.6163、F700 text=0.1208/ink=0.6163——日期在窗口期可见（可见帧自 619 起）；Logo 保持居中框（center=1.00）",
       "structure_checks": {
+        "date_ink": 0.5023,
         "date_text": 0,
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "logo_center": 1,
         "png_decoded": true,
-        "png_magic_ok": true
+        "png_magic_ok": true,
+        "probe_f640_ink": 0.6163,
+        "probe_f640_text": 0.1208,
+        "probe_f700_ink": 0.6163,
+        "probe_f700_text": 0.1208
       },
-      "duration_ms": 59394,
-      "artifact": "example/internal/video/testdata/golden/c02/frame-618.png"
+      "duration_ms": 55564,
+      "artifact": "example/internal/video/testdata/golden/c02/frame-618.png",
+      "notes": [
+        "降级注记：dateText/dateY/dateColor 复合键不可消费（⛔）——日期拆独立 text；重复词 AURA 用 occurrence=0/1 区分（w15/w19）"
+      ]
     },
     {
       "frame": 675,
@@ -610,6 +701,7 @@
       "expect": "落版保持帧：Logo + 日期同屏，无新入场；BGM 卡点降级（T-13 ⛔ 无 beat 轨道）——动画锚点全部挂 word 时间戳而非节拍，帧号与 92 BPM 音乐的对位需 L2 人工核验",
       "actual": "落版保持帧：Logo + 日期同屏；BGM 卡点降级（T-13 ⛔ 无 beat 轨道）——动画锚全挂词时间戳，帧号与 92 BPM 对位留 L2 人工核验",
       "structure_checks": {
+        "date_ink": 0.6163,
         "date_text": 0.1208,
         "dimensions": "1920x1080",
         "dimensions_ok": true,
@@ -617,16 +709,17 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 64725,
+      "duration_ms": 60386,
       "artifact": "example/internal/video/testdata/golden/c02/frame-675.png"
     },
     {
       "frame": 749,
       "time_sec": 29.96,
-      "status": "fail",
+      "status": "ok",
       "expect": "尾帧：Logo + 日期 + 字幕区占位（el_caption 空 text，文本由 RenderParams.SubtitleMode=hard 烧录路径注入）；DurationFrames=ceil(30×25)=750；MP4 30.00s±0.1s/25fps。降级差异：F735 整片轻 fade 仍不可实现（fade effect 是遮罩语义非渐隐；P0-2 fadeIn/fadeOut 是元素级 opacity——若要整片渐隐需给全部元素挂 fadeOut 或等 builder 加整片语义，本轮不采用）；BGM 无淡出/loop/loudnorm（amix duration=first 截断）",
-      "actual": "尾帧内容缺失 checks=map[date_text:0 dimensions:1920x1080 dimensions_ok:true duration_frames_rendered:750 logo_center:0.5 png_decoded:true png_magic_ok:true]",
+      "actual": "尾帧：Logo（窗口 450-749 含尾帧）+ 日期可见；DurationFrames=ceil(30×25)=750 帧循环完整",
       "structure_checks": {
+        "date_ink": 0.5,
         "date_text": 0,
         "dimensions": "1920x1080",
         "dimensions_ok": true,
@@ -635,8 +728,12 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 71698,
-      "artifact": "example/internal/video/testdata/golden/c02/frame-749.png"
+      "duration_ms": 67013,
+      "artifact": "example/internal/video/testdata/golden/c02/frame-749.png",
+      "notes": [
+        "F735 整片轻 fade 不可实现（fade 是遮罩语义；P0-2 fadeIn/fadeOut 是元素级——本轮不采用）；BGM 无淡出/loop/loudnorm（amix duration=first 截断）——L2 口径",
+        "el_caption 空 text 占位（字幕由 RenderParams.SubtitleMode=hard 烧录路径注入，不在 Player DOM）"
+      ]
     }
   ],
   "totals": {
@@ -644,13 +741,13 @@
     "frames_rendered": 750,
     "full_loop_under_8min": true,
     "keyframes_kept": 13,
-    "probe_frames_kept": 17,
-    "render_ms_per_frame": 95.97,
-    "render_total_ms": 71976,
-    "render_wall_clock": "1m12s",
+    "probe_frames_kept": 21,
+    "render_ms_per_frame": 89.71,
+    "render_total_ms": 67280,
+    "render_wall_clock": "1m7s",
     "samples_degraded_na": 0,
-    "samples_fail": 5,
-    "samples_mismatch": 0,
-    "samples_ok": 8
+    "samples_fail": 0,
+    "samples_mismatch": 4,
+    "samples_ok": 9
   }
 }
