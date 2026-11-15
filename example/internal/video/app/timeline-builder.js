@@ -11,7 +11,7 @@
  *   iframe → page: {type:"player:state", frame, t, durationFrames, ready}
  *
  * Motion registry v1: pulse | counter | highlight | shake | fade
- * Element animations:        move  | scaleIn | rotate
+ * Element animations:        move  | scaleIn | rotate | fadeIn | fadeOut
  * Adding an effect = one builder function below + IR whitelist (app/ir.go).
  *
  * Scope semantics (X-4 fix, case library §5.12/§8.2): an effect carrying
@@ -70,15 +70,41 @@
     if (el.w) node.style.width = el.w + 'px';
     if (el.h) node.style.height = el.h + 'px';
     node.style.zIndex = String(1 + (el.z || 0));
+    // Element time window (P0-1, case library §5.16 / T-09): a windowed
+    // element starts INVISIBLE so frames before startFrame are clean — the
+    // window sets on the timeline re-show it exactly at startFrame (below).
+    // Only visibility is touched here, never transform: entrance animations
+    // (scaleIn from 0 / move offscreen) keep owning the transform axis, the
+    // window owns the visibility axis — the two compose without fighting
+    // (§3.1.4 expected combination: hidden → window opens at startFrame →
+    // entrance transform plays inside the open window). Elements without a
+    // window keep the legacy always-mounted, always-visible behavior.
+    if (typeof el.startFrame === 'number' || typeof el.endFrame === 'number') {
+      node.style.visibility = 'hidden';
+    }
     canvas.appendChild(node);
     return node;
   }
+
+  // Frame → seconds on the global timeline (§7.0 clock: frame = ceil(t ×
+  // fps) means t = frame / fps round-trips the same clock the anchor path
+  // uses). startFrame/endFrame are frame numbers on THIS timeline — the
+  // same global axis words resolve onto — not per-element offsets.
+  function frameTime(frame) { return frame / fps; }
 
   // word start time (t, seconds) for a resolved anchor
   function anchorTime(resolved) {
     if (!resolved || resolved.wordIndex < 0) return 0;
     var w = (IR.words || [])[resolved.wordIndex];
     return w ? w.start : 0;
+  }
+
+  // word end time (t, seconds) for a resolved anchor (T-12: the text-color
+  // highlight window runs from the word's start to its end).
+  function wordEndTime(resolved) {
+    if (!resolved || resolved.wordIndex < 0) return 0;
+    var w = (IR.words || [])[resolved.wordIndex];
+    return w ? (w.end || w.start) : 0;
   }
 
   /* ---- motion registry v1 (§4.4.2) ----
@@ -112,6 +138,20 @@
         fx.targetElementId + '" not on canvas — falling back to canvas scope');
     }
     return node || null;
+  }
+
+  // element kind for an id, from the IR element table ("text" | "shape" |
+  // "image" | null when the id is not an element). T-12: highlight needs the
+  // kind to pick its color target (textColor on text nodes vs backgroundColor
+  // everywhere else); the effect loop passes real nodes through effectTarget
+  // and overlays/counter hosts are NOT elements, so the null path keeps them
+  // on the background semantics without extra dispatch.
+  function elementKindOf(id) {
+    var els = IR.elements || [];
+    for (var i = 0; i < els.length; i++) {
+      if (els[i] && els[i].id === id) return els[i].type || null;
+    }
+    return null;
   }
 
   // full-canvas overlay host for target-less highlight/fade (X-4). One overlay
@@ -158,16 +198,45 @@
         ease: 'power1.out', onUpdate: function () { node.textContent = Math.round(obj.v) + suffix; }
       }, at);
     },
-    // highlight: background flash — the node's backgroundColor tweens to
-    // params.color and back to the node's OWN background. Deliberately .to()
-    // (not fromTo): fromTo's immediateRender would apply backgroundColor:
-    // transparent at build time and blank a shape element's fill for the
-    // whole video (the overlay/canvas targets are transparent anyway, so the
-    // visible result is identical for them). The flash colors the element's
-    // background, NOT its text — word coloring is the T-01-level upgrade,
-    // deliberately out of X-4 scope.
+    // highlight (T-12 complete form, case library §5.12 / §3.1.4 C01): on a
+    // TEXT element the effect colors the node's TEXT — textColor tweens from
+    // the element's own color to params.color at the anchor word's START and
+    // falls back at the word's END (the effect window is the word window, NOT
+    // the legacy 0.25s flash rhythm — a word timed 1s→3s must read as colored
+    // across that whole span; that is C01's acceptance semantics). The
+    // builder paints each text element as ONE node (no per-word spans — the
+    // T-01-level word-split upgrade is deliberately out of scope this round),
+    // so the granularity is the whole text element: C01's three highlights
+    // each target a separate card-title element, so element-granularity
+    // coloring satisfies the documented expectation. The background-flash
+    // branch (X-4) is unchanged below and stays the path for shape/image
+    // targets and for the target-less overlay: textColor on those would be
+    // invisible (shapes and the overlay have no text). Deliberately .to()
+    // both legs (not fromTo): fromTo's immediateRender would restyle color
+    // at build time; to() resumes from the node's current value on every
+    // seek/scrub — deterministic across seeks.
     highlight: function (tl, node, fx, at) {
       var color = (fx.params && fx.params.color) || '#ffd54f';
+      if (elementKindOf(fx.targetElementId) === 'text') {
+        // text-color semantics: orig = the element's own color (the IR color
+        // buildClipDOM applied, else the .el-text stylesheet default #fff).
+        var orig = node.style.color || 'rgb(255, 255, 255)';
+        var end = wordEndTime(fx.resolvedFrom);
+        if (end > at) {
+          // word window: rise 0.25s from word start, hold to word end
+          // (minus a 0.6s tail inside the window for the settle-back).
+          tl.to(node, { color: color, duration: 0.25, ease: 'power2.out' }, at)
+            .to(node, { color: orig, duration: 0.6 }, Math.max(at + 0.3, end - 0.6));
+        } else {
+          // degenerate/zero-length word: fall back to the flash rhythm
+          tl.to(node, { color: color, duration: 0.25, ease: 'power2.out' }, at)
+            .to(node, { color: orig, duration: 0.6 }, at + 0.5);
+        }
+        return;
+      }
+      // background flash — the node's backgroundColor tweens to params.color
+      // and back to the node's OWN background (shape/image/overlay targets;
+      // legacy rhythm unchanged for X-4/L2 back-compat).
       var orig = node.style.backgroundColor || node.style.background || 'transparent';
       tl.to(node, { backgroundColor: color, duration: 0.25, ease: 'power2.out' }, at)
         .to(node, { backgroundColor: orig, duration: 0.6 }, at + 0.5);
@@ -207,6 +276,37 @@
       var toV = typeof an.toValue === 'number' ? an.toValue : 360;
       tl.fromTo(node, { rotation: fromV, transformOrigin: '50% 50%' },
         { rotation: toV, duration: an.durationFrames / fps, ease: an.easing || 'linear' }, at);
+    },
+    // fadeIn/fadeOut (P0-2, case library §5.16): element-level opacity
+    // animation — autoAlpha (opacity + visibility) so the element also drops
+    // out of hit-testing while faded and visibility restores cleanly on
+    // reverse seeks; renders identically to plain opacity in screenshots.
+    //
+    // Coordination rule with the P0-1 element time window (the tl.set
+    // visibility calls in the element loop): ORTHOGONAL AXES BY DESIGN.
+    //   - The window owns VISIBILITY (set at startFrame/endFrame); fadeIn/
+    //     fadeOut own OPACITY (fromTo across their duration). GSAP composes
+    //     them independently — a hidden window phase gates the element
+    //     regardless of opacity, and inside the open window the opacity
+    //     tween plays without touching visibility.
+    //   - One caveat: fromTo with autoAlpha writes visibility too (autoAlpha
+    //     drives opacity AND visibility when opacity hits 0). If a fadeIn
+    //     overlaps the window's hidden phase (anchor earlier than
+    //     startFrame), the tween's visibility write and the window's set are
+    //     both live at that frame — GSAP's overwrite:auto + write order (the
+    //     set sits at a later timeline position) lets the window set win
+    //     until startFrame, after which the tween re-owns both properties
+    //     every frame it is active. The documented combination — anchor the
+    //     fadeIn AT startFrame — never overlaps, so no conflict exists on
+    //     the intended authoring path. seeks re-evaluate the same order
+    //     deterministically.
+    fadeIn: function (tl, node, an, at) {
+      tl.fromTo(node, { autoAlpha: 0 },
+        { autoAlpha: 1, duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
+    },
+    fadeOut: function (tl, node, an, at) {
+      tl.fromTo(node, { autoAlpha: 1 },
+        { autoAlpha: 0, duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
     }
   };
 
@@ -221,6 +321,41 @@
       // read-time tolerance (§4.2.3): unknown element types are skipped
       if (!el || !el.id) return;
       var node = buildClipDOM(el);
+      // Element time window (P0-1): zero-duration visibility sets on the
+      // main timeline. tl.set is deterministic under seek (a set is a 0s
+      // tween — scrubbing to any frame re-applies exactly the sets whose
+      // time is <= that frame, in order), so hide/show survives arbitrary
+      // seek directions, unlike callbacks (onStart/onComplete) which only
+      // fire on play-through and desync on seeks. Defaults: startFrame 0
+      // (visible from the top), endFrame = durationFrames (never re-hidden),
+      // so startFrame-only and endFrame-only IRs both behave.
+      //
+      // Composition with entrance animations (§3.1.4 expected behavior): the
+      // window set owns VISIBILITY only; entrance animations (scaleIn/move/
+      // rotate/fadeIn) own TRANSFORM/OPACITY and are anchored at word times
+      // that land inside the open window. Stacking order at one frame:
+      //   - before startFrame  → visibility:hidden, no transform applied yet
+      //   - at/after startFrame → visible; a scaleIn anchored at startFrame
+      //     scales the node up from 0 INSIDE the visible window (autoAlpha
+      //     would couple opacity into this; plain visibility leaves entrance
+      //     opacity animations like fadeIn free to animate opacity alone)
+      //   - at endFrame        → visibility:hidden again (any exit transform
+      //     is moot; the element is gone)
+      if (typeof el.startFrame === 'number' || typeof el.endFrame === 'number') {
+        var tStart = typeof el.startFrame === 'number' ? frameTime(el.startFrame) : 0;
+        var tEnd = typeof el.endFrame === 'number' ? frameTime(el.endFrame) : frameTime(durationFrames);
+        tl.set(node, { visibility: 'visible' }, tStart);
+        if (tEnd > tStart) {
+          tl.set(node, { visibility: 'hidden' }, tEnd);
+        } else {
+          // collapsed/empty window (startFrame === endFrame): never visible;
+          // keep the initial hidden state by overwriting the visible set at
+          // the same timestamp (later set wins in GSAP's overwrite:auto mode
+          // for the same property at the same position — and if not, the
+          // element is one frame wide, matching the validated IR semantics).
+          tl.set(node, { visibility: 'hidden' }, tStart + 1 / (fps * 2));
+        }
+      }
       if (el.type === 'image' && node.decode) {
         // Resource failure is FAIL-CLOSED (Remotion delayRender semantics;
         // delivery audit Q3): a broken asset must NOT yield a "successful"

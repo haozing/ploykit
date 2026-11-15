@@ -165,3 +165,34 @@ func TestProjector_PayloadCarriesSchemaVersion(t *testing.T) {
 	_, hasBare := payload["version"]
 	assert.False(t, hasBare, "no bare row-version key")
 }
+
+func TestProjector_ElementTimeWindow_Projection(t *testing.T) {
+	// P0-1: the time window rides into the builder payload as plain numbers
+	// when set and is ABSENT when unset — legacy IRs must produce a payload
+	// without the keys (back-compat: the builder's windowed path never
+	// activates for old documents).
+	ir := validIR()
+	ir.Elements = []Element{
+		{ID: "el_win", Type: ElementShape, Color: "#FF6A3D", X: 0, Y: 0, W: 10, H: 10,
+			StartFrame: intp(45), EndFrame: intp(105)},
+		{ID: "el_free", Type: ElementShape, Color: "#1E9E62", X: 20, Y: 0, W: 10, H: 10},
+	}
+	html, err := NewProjector(nil).HTML(t.Context(), ir, "")
+	require.NoError(t, err)
+	str := string(html)
+	marker := "id=\"ploykit-ir\">"
+	start := strings.Index(str, marker) + len(marker)
+	end := strings.Index(str[start:], "</script>")
+	require.GreaterOrEqual(t, end, 0)
+	var payload struct {
+		Elements []map[string]any `json:"elements"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(str[start:start+end]), &payload))
+	require.Len(t, payload.Elements, 2)
+	assert.Equal(t, float64(45), payload.Elements[0]["startFrame"], "startFrame projected as number")
+	assert.Equal(t, float64(105), payload.Elements[0]["endFrame"], "endFrame projected as number")
+	_, has := payload.Elements[1]["startFrame"]
+	assert.False(t, has, "no startFrame key on windowless element")
+	_, has = payload.Elements[1]["endFrame"]
+	assert.False(t, has, "no endFrame key on windowless element")
+}

@@ -1,0 +1,558 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "fps": 30,
+    "width": 1080,
+    "height": 1920,
+    "durationSec": 30
+  },
+  "script": "S1 十一月中旬，京都的红叶进入最佳观赏期。S2 从哲学之道沿水渠北行，两侧枫树把天光滤成橙红与金褐。S3 东福寺通天桥上，红叶层层叠进山谷，桥栏与树冠构成上下两道水平线。S4 午后光线偏暖，画面统一压低饱和度，保留红叶的橙红与苔藓的绿。S5 三十秒短片不做地图跳转，只沿一条步行路径推进，把季节、光线和一处处取景框留给观众。",
+  "words": [
+    {
+      "index": 0,
+      "text": "十一月",
+      "start": 0.0,
+      "end": 0.45,
+      "source": "aligner"
+    },
+    {
+      "index": 1,
+      "text": "京都",
+      "start": 0.45,
+      "end": 0.85,
+      "source": "aligner"
+    },
+    {
+      "index": 2,
+      "text": "红叶",
+      "start": 0.85,
+      "end": 1.15,
+      "source": "aligner"
+    },
+    {
+      "index": 3,
+      "text": "观赏期",
+      "start": 1.15,
+      "end": 1.55,
+      "source": "aligner"
+    },
+    {
+      "index": 4,
+      "text": "哲学",
+      "start": 5.2,
+      "end": 5.6,
+      "source": "aligner"
+    },
+    {
+      "index": 5,
+      "text": "之道",
+      "start": 5.6,
+      "end": 5.85,
+      "source": "aligner"
+    },
+    {
+      "index": 6,
+      "text": "水渠",
+      "start": 5.85,
+      "end": 6.15,
+      "source": "aligner"
+    },
+    {
+      "index": 7,
+      "text": "枫树",
+      "start": 6.5,
+      "end": 6.8,
+      "source": "aligner"
+    },
+    {
+      "index": 8,
+      "text": "橙红",
+      "start": 7.2,
+      "end": 7.55,
+      "source": "aligner"
+    },
+    {
+      "index": 9,
+      "text": "金褐",
+      "start": 7.55,
+      "end": 7.85,
+      "source": "aligner"
+    },
+    {
+      "index": 10,
+      "text": "东福寺",
+      "start": 11.2,
+      "end": 11.6,
+      "source": "aligner"
+    },
+    {
+      "index": 11,
+      "text": "通天桥",
+      "start": 11.6,
+      "end": 11.95,
+      "source": "aligner"
+    },
+    {
+      "index": 12,
+      "text": "红叶",
+      "start": 11.95,
+      "end": 12.3,
+      "source": "aligner"
+    },
+    {
+      "index": 13,
+      "text": "桥栏",
+      "start": 13.1,
+      "end": 13.4,
+      "source": "aligner"
+    },
+    {
+      "index": 14,
+      "text": "树冠",
+      "start": 13.4,
+      "end": 13.7,
+      "source": "aligner"
+    },
+    {
+      "index": 15,
+      "text": "饱和度",
+      "start": 18.3,
+      "end": 18.7,
+      "source": "aligner"
+    },
+    {
+      "index": 16,
+      "text": "橙红",
+      "start": 19.3,
+      "end": 19.6,
+      "source": "aligner"
+    },
+    {
+      "index": 17,
+      "text": "苔藓",
+      "start": 19.6,
+      "end": 19.95,
+      "source": "aligner"
+    },
+    {
+      "index": 18,
+      "text": "路径",
+      "start": 24.3,
+      "end": 24.7,
+      "source": "aligner"
+    },
+    {
+      "index": 19,
+      "text": "取景框",
+      "start": 25.6,
+      "end": 26.0,
+      "source": "aligner"
+    }
+  ],
+  "effects": [
+    {
+      "id": "ef_hl_maple",
+      "type": "highlight",
+      "targetElementId": "el_title",
+      "anchor": {
+        "text": "红叶",
+        "occurrence": 0
+      },
+      "params": {
+        "color": "#C8553D"
+      }
+    },
+    {
+      "id": "ef_pulse_frame",
+      "type": "pulse",
+      "targetElementId": "el_vig_top",
+      "anchor": {
+        "text": "水渠",
+        "occurrence": 0
+      },
+      "params": {
+        "scale": 1.03
+      }
+    },
+    {
+      "id": "ef_fade_bars",
+      "type": "fade",
+      "targetElementId": "el_bar_top",
+      "anchor": {
+        "text": "取景框",
+        "occurrence": 0
+      },
+      "params": {
+        "opacity": 0.9
+      }
+    }
+  ],
+  "elements": [
+    {
+      "id": "el_photo1",
+      "type": "image",
+      "src": "video/vs-c05/as_photo_path.jpg",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1920,
+      "z": 0,
+      "animations": [
+        {
+          "id": "an_photo1_pan",
+          "type": "move",
+          "from": {
+            "x": -40,
+            "y": 0
+          },
+          "to": {
+            "x": 0,
+            "y": 0
+          },
+          "durationFrames": 120,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "水渠",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 329
+    },
+    {
+      "id": "el_photo2",
+      "type": "image",
+      "src": "video/vs-c05/as_photo_bridge.jpg",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1920,
+      "z": 1,
+      "animations": [
+        {
+          "id": "an_photo2_in",
+          "type": "scaleIn",
+          "fromValue": 0.92,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "东福寺",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 330,
+      "endFrame": 899
+    },
+    {
+      "id": "el_vig_top",
+      "type": "shape",
+      "color": "#F2F5F9",
+      "x": 180,
+      "y": 420,
+      "w": 720,
+      "h": 6,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_vig1_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 24,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "通天桥",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 330,
+      "endFrame": 719
+    },
+    {
+      "id": "el_vig_bot",
+      "type": "shape",
+      "color": "#F2F5F9",
+      "x": 180,
+      "y": 1494,
+      "w": 720,
+      "h": 6,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_vig2_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 24,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "通天桥",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 330,
+      "endFrame": 719
+    },
+    {
+      "id": "el_vig_left",
+      "type": "shape",
+      "color": "#F2F5F9",
+      "x": 180,
+      "y": 420,
+      "w": 6,
+      "h": 1080,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_vig3_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 24,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "通天桥",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 330,
+      "endFrame": 719
+    },
+    {
+      "id": "el_vig_right",
+      "type": "shape",
+      "color": "#F2F5F9",
+      "x": 894,
+      "y": 420,
+      "w": 6,
+      "h": 1080,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_vig4_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 24,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "通天桥",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 330,
+      "endFrame": 719
+    },
+    {
+      "id": "el_bar_top",
+      "type": "shape",
+      "color": "#0E1418",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 120,
+      "z": 4,
+      "startFrame": 0,
+      "endFrame": 899
+    },
+    {
+      "id": "el_bar_bot",
+      "type": "shape",
+      "color": "#0E1418",
+      "x": 0,
+      "y": 1800,
+      "w": 1080,
+      "h": 120,
+      "z": 4,
+      "startFrame": 0,
+      "endFrame": 899
+    },
+    {
+      "id": "el_title",
+      "type": "text",
+      "text": "京都 · 十一月红叶步行线",
+      "color": "#FFFFFF",
+      "fontSize": 58,
+      "x": 72,
+      "y": 300,
+      "w": 936,
+      "h": 80,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_title_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 24,
+          "easing": "power2.out"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 329
+    },
+    {
+      "id": "el_place1",
+      "type": "text",
+      "text": "哲学之道 · 水渠",
+      "color": "#F2F5F9",
+      "fontSize": 40,
+      "x": 72,
+      "y": 1500,
+      "w": 700,
+      "h": 60,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_place1_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "哲学",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 150,
+      "endFrame": 329
+    },
+    {
+      "id": "el_pal_red",
+      "type": "shape",
+      "color": "#C8553D",
+      "x": 180,
+      "y": 1560,
+      "w": 220,
+      "h": 60,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_pal1_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "饱和度",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 540,
+      "endFrame": 719
+    },
+    {
+      "id": "el_pal_gold",
+      "type": "shape",
+      "color": "#D9A441",
+      "x": 430,
+      "y": 1560,
+      "w": 220,
+      "h": 60,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_pal2_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "橙红",
+            "occurrence": 1
+          }
+        }
+      ],
+      "startFrame": 540,
+      "endFrame": 719
+    },
+    {
+      "id": "el_pal_green",
+      "type": "shape",
+      "color": "#5E7A52",
+      "x": 680,
+      "y": 1560,
+      "w": 220,
+      "h": 60,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_pal3_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "苔藓",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 540,
+      "endFrame": 719
+    },
+    {
+      "id": "el_path_line",
+      "type": "shape",
+      "color": "#D9A441",
+      "x": 120,
+      "y": 1620,
+      "w": 840,
+      "h": 4,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_path_grow",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 40,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "路径",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 720,
+      "endFrame": 899
+    },
+    {
+      "id": "el_caption",
+      "type": "text",
+      "text": "",
+      "color": "#FFFFFF",
+      "fontSize": 38,
+      "x": 72,
+      "y": 1690,
+      "w": 936,
+      "h": 90,
+      "z": 20
+    }
+  ],
+  "audio": {
+    "voice": {
+      "key": "video/vs-c05/voice-zh-CN-female-walk.m4a",
+      "durationSec": 30.0,
+      "volume": 1.0
+    },
+    "bgm": {
+      "key": "video/vs-c05/as_bgm_walk.m4a",
+      "durationSec": 31.0,
+      "volume": 0.2
+    }
+  }
+}

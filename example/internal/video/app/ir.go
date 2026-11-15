@@ -103,10 +103,10 @@ type Point struct {
 	Y float64 `json:"y"`
 }
 
-// ElementAnimation moves/scales/rotates one element, anchored at a word.
+// ElementAnimation moves/scales/rotates/fades one element, anchored at a word.
 type ElementAnimation struct {
 	ID             string          `json:"id"`
-	Type           string          `json:"type"` // move|scaleIn|rotate
+	Type           string          `json:"type"` // move|scaleIn|rotate|fadeIn|fadeOut
 	From           *Point          `json:"from,omitempty"`
 	To             *Point          `json:"to,omitempty"`
 	FromValue      *float64        `json:"fromValue,omitempty"` // scale/rotate scalar
@@ -119,6 +119,15 @@ type ElementAnimation struct {
 }
 
 // Element is one composable layer on the canvas.
+//
+// Element time window (P0-1, case library §5.16 / T-09): StartFrame/EndFrame
+// are an optional visibility window in GLOBAL-TIMELINE frame numbers — the
+// same clock as word anchors (§7.0 ruling: frame = ceil(t × fps); valid range
+// [0, DurationFrames-1]). A windowed element is hidden before StartFrame,
+// visible inside the window, and hidden again from EndFrame on; without a
+// window the element is visible for the whole composition exactly as before
+// (back-compat: pointers distinguish unset from 0, so an endFrame=0 without
+// startFrame expresses "never visible").
 type Element struct {
 	ID       string  `json:"id"`
 	Type     string  `json:"type"` // image|text|shape
@@ -131,6 +140,13 @@ type Element struct {
 	W        float64 `json:"w"`
 	H        float64 `json:"h"`
 	Z        int     `json:"z"`
+
+	// Element time window (P0-1): optional, pointer-typed so JSON omission
+	// stays distinct from explicit 0. Validated non-negative, startFrame ≤
+	// endFrame, and bounded by DurationFrames (the single-source formula,
+	// meta extended by voice duration — not meta-only).
+	StartFrame *int `json:"startFrame,omitempty"`
+	EndFrame   *int `json:"endFrame,omitempty"`
 
 	Animations []ElementAnimation `json:"animations,omitempty"`
 }
@@ -200,7 +216,10 @@ var validEffects = map[string]bool{
 
 var validElementTypes = map[string]bool{ElementImage: true, ElementText: true, ElementShape: true}
 
-var validAnimationTypes = map[string]bool{"move": true, "scaleIn": true, "rotate": true}
+var validAnimationTypes = map[string]bool{
+	"move": true, "scaleIn": true, "rotate": true,
+	"fadeIn": true, "fadeOut": true, // P0-2: element-level opacity animation
+}
 
 var validEasings = map[string]bool{
 	"linear": true, "power1.out": true, "power2.out": true, "power3.out": true,
@@ -290,7 +309,7 @@ func Validate(ir *IR) error {
 		}
 	}
 	for i := range ir.Elements {
-		if err := validateElement(i, &ir.Elements[i], &ir.Meta); err != nil {
+		if err := validateElement(i, &ir.Elements[i], &ir.Meta, ir); err != nil {
 			return err
 		}
 	}
@@ -369,7 +388,7 @@ func validateEffectParams(typ string, params json.RawMessage) error {
 	return nil
 }
 
-func validateElement(i int, el *Element, meta *Meta) error {
+func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 	field := fmt.Sprintf("elements[%d]", i)
 	if el.ID == "" {
 		return ve(field+".id", "id is required")
@@ -400,7 +419,7 @@ func validateElement(i int, el *Element, meta *Meta) error {
 			return ve(af+".id", "id is required")
 		}
 		if !validAnimationTypes[an.Type] {
-			return ve(af+".type", "type must be move|scaleIn|rotate")
+			return ve(af+".type", "type must be move|scaleIn|rotate|fadeIn|fadeOut")
 		}
 		if an.DurationFrames <= 0 {
 			return ve(af+".durationFrames", "durationFrames must be > 0")
@@ -429,6 +448,38 @@ func validateElement(i int, el *Element, meta *Meta) error {
 	}
 	if el.W < 0 || el.H < 0 {
 		return ve(field, "element w/h must be >= 0")
+	}
+	// Element time window (P0-1, case library §5.16 / T-09): non-negative,
+	// start ≤ end, bounded by the GLOBAL frame count. The bound uses
+	// DurationFrames — the single-source formula (ceil(max(meta, voice) ×
+	// fps)) — so a voice-extended timeline extends the legal window too, and
+	// frames stay on the same clock as word anchors (§7.0). maxFrames == 0
+	// means the caller had no ir to derive it from (never happens from
+	// Validate; the seam exists for direct unit calls).
+	if el.StartFrame != nil && *el.StartFrame < 0 {
+		return ve(field+".startFrame", "startFrame must be >= 0")
+	}
+	if el.EndFrame != nil && *el.EndFrame < 0 {
+		return ve(field+".endFrame", "endFrame must be >= 0")
+	}
+	if el.StartFrame != nil && el.EndFrame != nil && *el.StartFrame > *el.EndFrame {
+		return ve(field, "startFrame must be <= endFrame")
+	}
+	if ir != nil && (el.StartFrame != nil || el.EndFrame != nil) {
+		maxFrames := DurationFrames(ir, meta.FPS)
+		// Bound is <= DurationFrames (not < ): valid frames are [0, F-1] and
+		// the window is half-open [startFrame, endFrame) — the hide set lands
+		// exactly at endFrame, so endFrame == F expresses "visible to the
+		// end" and is legal; anything beyond it references a frame past the
+		// timeline.
+		if el.StartFrame != nil && *el.StartFrame > maxFrames {
+			return ve(field+".startFrame",
+				fmt.Sprintf("startFrame must be <= durationFrames (%d)", maxFrames))
+		}
+		if el.EndFrame != nil && *el.EndFrame > maxFrames {
+			return ve(field+".endFrame",
+				fmt.Sprintf("endFrame must be <= durationFrames (%d)", maxFrames))
+		}
 	}
 	return nil
 }

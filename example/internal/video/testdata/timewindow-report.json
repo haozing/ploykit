@@ -1,0 +1,87 @@
+{
+  "layer": "L2-timewindow (P0-1 element startFrame/endFrame, case library §5.16 + §3.1.4 T-09)",
+  "run_id": "20261115-205839-timewindow",
+  "env": [
+    "os=windows/amd64",
+    "host=DESKTOP-IGMKJLG",
+    "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "ffmpeg=C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe"
+  ],
+  "case_id": "VS-TW",
+  "status": "pass",
+  "frame_verdicts": [
+    {
+      "frame": 30,
+      "at_sec": "1.000",
+      "check": "A region",
+      "pass": true,
+      "detail": "region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238)",
+      "expected": "background (A hidden outside window)"
+    },
+    {
+      "frame": 30,
+      "at_sec": "1.000",
+      "check": "B region (windowless control)",
+      "pass": true,
+      "detail": "region(80,1000,500,400) mean RGB (29,157,95) vs #1E9E62 (30,158,98)",
+      "expected": "element B color at every frame (legacy always-visible)"
+    },
+    {
+      "frame": 60,
+      "at_sec": "2.000",
+      "check": "A region",
+      "pass": true,
+      "detail": "region(80,400,500,400) mean RGB (253,105,60) vs #FF6A3D (255,106,61)",
+      "expected": "element A color (A visible inside window)"
+    },
+    {
+      "frame": 60,
+      "at_sec": "2.000",
+      "check": "B region (windowless control)",
+      "pass": true,
+      "detail": "region(80,1000,500,400) mean RGB (29,157,95) vs #1E9E62 (30,158,98)",
+      "expected": "element B color at every frame (legacy always-visible)"
+    },
+    {
+      "frame": 120,
+      "at_sec": "4.000",
+      "check": "A region",
+      "pass": true,
+      "detail": "region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238)",
+      "expected": "background (A hidden outside window)"
+    },
+    {
+      "frame": 120,
+      "at_sec": "4.000",
+      "check": "B region (windowless control)",
+      "pass": true,
+      "detail": "region(80,1000,500,400) mean RGB (29,157,95) vs #1E9E62 (30,158,98)",
+      "expected": "element B color at every frame (legacy always-visible)"
+    }
+  ],
+  "evidence": [
+    "[代码] IR 扩展：example/internal/video/app/ir.go Element.StartFrame/EndFrame（json:startFrame/endFrame，指针区分缺省与 0）+ Validate 写时校验（非负 / start≤end / ≤DurationFrames）",
+    "[代码] 投影：example/internal/video/app/projector.go elementMap — 两字段数值透传，缺省不出键（向后兼容：旧 IR payload 无 startFrame/endFrame 键）",
+    "[代码] 渲染：example/internal/video/app/timeline-builder.js — buildClipDOM 对带窗元素初始 visibility:hidden；build() 在主时间线 tl.set(visible, tStart) / tl.set(hidden, tEnd)（零时长 set，seek 确定性安全）",
+    "[口径] 帧号 = 全局时间轴帧（§7.0 时钟，与词锚同轴）；t = frame/fps；F30→1.000s、F60→2.000s、F120→4.000s 均为整帧时刻",
+    "[口径] 断言对象是 MP4 解码抽帧（ffmpeg -ss 提取 → png.Decode 区域均值），证明显隐被编码进产物而非仅存在于捕获层",
+    "[语义] B 元素无时间窗 = 旧行为（全程可见）——同帧对照组，向后兼容的像素级证明"
+  ],
+  "notes": [
+    "boundary probe F44 (extract 1.450s, sampling PTS 1.4667s): want background — region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238) — as expected",
+    "boundary probe F45 (extract 1.483s, sampling PTS 1.5000s): want element A color — region(80,400,500,400) mean RGB (253,105,60) vs #FF6A3D (255,106,61) — as expected",
+    "boundary probe F105 (extract 3.483s, sampling PTS 3.5000s): want background — region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238) — as expected",
+    "boundary probe F106 (extract 3.517s, sampling PTS 3.5333s): want background — region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238) — as expected"
+  ],
+  "totals": {
+    "pass": 6,
+    "fail": 0
+  },
+  "artifacts": [
+    "timewindow/VS-TW/output.mp4",
+    "timewindow/VS-TW/frame-F030.png",
+    "timewindow/VS-TW/frame-F060.png",
+    "timewindow/VS-TW/frame-F120.png"
+  ],
+  "duration_ms": 16932
+}

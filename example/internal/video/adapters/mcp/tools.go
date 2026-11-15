@@ -190,7 +190,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	type animateIn struct {
 		ProjectID       string         `json:"project_id" jsonschema:"project id"`
 		ElementID       string         `json:"element_id" jsonschema:"element id to animate"`
-		Type            string         `json:"type" jsonschema:"animation type: move|scaleIn|rotate"`
+		Type            string         `json:"type" jsonschema:"animation type: move|scaleIn|rotate|fadeIn|fadeOut"`
 		From            map[string]any `json:"from,omitempty" jsonschema:"move start {x,y}"`
 		To              map[string]any `json:"to,omitempty" jsonschema:"move end {x,y}"`
 		FromValue       *float64       `json:"fromValue,omitempty" jsonschema:"scaleIn/rotate start value"`
@@ -202,7 +202,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		ExpectedVersion *int           `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 	}
 	mcpAdd(s, "video_animate_element",
-		"Append a start-anchored animation to an element (move/scaleIn/rotate).",
+		"Append a start-anchored animation to an element (move/scaleIn/rotate/fadeIn/fadeOut).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in animateIn) (any, error) {
 			an := videoapp.ElementAnimation{
 				Type: in.Type, DurationFrames: in.DurationFrames, Easing: in.Easing,

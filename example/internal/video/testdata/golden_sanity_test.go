@@ -1,17 +1,23 @@
 // go test -run TestGoldenC01_StructuralSanity -v ./internal/video/testdata
 //
-// Structural sanity guard for the C01 golden baseline (round-2 review, 2026-11-15).
+// Structural sanity guard for the C01 golden baseline (round-2 review, 2026-11-15;
+// re-blessed round-3 after the X-4 fix, 2026-11-15).
 // Complements the human review (§7.7: 区域亮度 / 元素边界 / 豆腐块) with pixel-level
 // invariants that hold for THIS baseline batch:
 //   - all 10 frames decode, identical 1080x1920
-//   - frame center is exactly #FFF7EE (el_bg) on every frame
-//   - no degenerate frame (uniform / all-black / all-white on a sparse grid)
-//   - two deterministic perimeter signatures observed in this batch:
+//   - cluster B: frame center is exactly #FFF7EE (el_bg)
+//   - no degenerate frame EXCEPT the overlay-peak cluster Y, whose whole-frame
+//     uniform tint IS the signature (see below)
+//   - two deterministic signatures in the post-X-4 baseline (fa1de7c batch,
+//     re-rendered byte-identical by l1-c01-20261115-211009):
 //       cluster B (F0,F12,F77,F180,F320,F360,F396,F449): 1px black capture border
 //         (stage #000 bleeding at the viewport edge) + AA ramp, pure bg by inset 4px
-//       cluster Y (F90,F250): 2-4px #FFD166 ~16%-alpha perimeter tint — the only
-//         visible trace of the highlight effect (known degradation X-4: highlight
-//         paints #canvas, occluded by el_bg except at the AA perimeter)
+//       cluster Y (F90,F250): the X-4 fix made the target-less highlight VISIBLE —
+//         at the overlay peak the opaque z-10000 overlay tints the WHOLE frame to
+//         exactly #FFD166 (uniform frame, no black border). Evidence: x4_effects_
+//         test.go header (behavior change, not a break) + l1-report F90 note
+//         "yellow_ratio=1.0000 proves the flash is now VISIBLE" (pre-fix these
+//         frames were bg-centered with a ~16% perimeter tint — the occluded state).
 //     If a regeneration changes the cluster membership or the signatures, this
 //     test fails and the baseline must be re-reviewed (not silently re-blessed).
 // Not wired into CI gates; kept under testdata/ as a baseline-change tripwire.
@@ -25,7 +31,8 @@ import (
 	"testing"
 )
 
-var bg = [3]int{255, 247, 238} // #FFF7EE, VS-C01 el_bg (A-C01-05)
+var bg = [3]int{255, 247, 238}      // #FFF7EE, VS-C01 el_bg (A-C01-05)
+var overlayPeak = [3]int{255, 209, 102} // #FFD166, target-less highlight overlay at peak (X-4 post-fix)
 
 var c01Frames = []struct {
 	file    string
@@ -84,31 +91,39 @@ func TestGoldenC01_StructuralSanity(t *testing.T) {
 			t.Errorf("%s: expected 1080x1920, got %dx%d", fr.file, w, h)
 		}
 
-		// center must be exact background on every frame
-		if c := rgb(img, w/2, h/2); c != bg {
-			t.Errorf("%s: center pixel %v != bg %v", fr.file, c, bg)
-		}
-
-		// degenerate-frame detection on a sparse grid (inset 8px: skip perimeter band)
-		colors := map[[3]int]int{}
-		dark, white, total := 0, 0, 0
-		for gy := 0; gy < 32; gy++ {
-			for gx := 0; gx < 18; gx++ {
-				x := 8 + gx*(w-16)/17
-				y := 8 + gy*(h-16)/31
-				c := rgb(img, x, y)
-				colors[c]++
-				total++
-				if c[0] < 16 && c[1] < 16 && c[2] < 16 {
-					dark++
-				}
-				if c[0] > 250 && c[1] > 250 && c[2] > 250 {
-					white++
-				}
+		// cluster-B frames: center must be exact background. Cluster-Y frames
+		// sit at the overlay peak — the whole frame IS the tint, asserted below.
+		if fr.cluster == 'B' {
+			if c := rgb(img, w/2, h/2); c != bg {
+				t.Errorf("%s: center pixel %v != bg %v", fr.file, c, bg)
 			}
 		}
-		if len(colors) == 1 || dark == total || white == total {
-			t.Errorf("%s: degenerate frame (uniform=%v dark=%d/%d white=%d/%d)", fr.file, len(colors) == 1, dark, total, white, total)
+
+		// degenerate-frame detection on a sparse grid (inset 8px: skip perimeter
+		// band). Cluster-Y overlay-peak frames are UNIFORM by design (the opaque
+		// z-10000 overlay covers every pixel) — uniformity is their signature,
+		// asserted below, so the degeneracy check applies to cluster B only.
+		if fr.cluster == 'B' {
+			colors := map[[3]int]int{}
+			dark, white, total := 0, 0, 0
+			for gy := 0; gy < 32; gy++ {
+				for gx := 0; gx < 18; gx++ {
+					x := 8 + gx*(w-16)/17
+					y := 8 + gy*(h-16)/31
+					c := rgb(img, x, y)
+					colors[c]++
+					total++
+					if c[0] < 16 && c[1] < 16 && c[2] < 16 {
+						dark++
+					}
+					if c[0] > 250 && c[1] > 250 && c[2] > 250 {
+						white++
+					}
+				}
+			}
+			if len(colors) == 1 || dark == total || white == total {
+				t.Errorf("%s: degenerate frame (uniform=%v dark=%d/%d white=%d/%d)", fr.file, len(colors) == 1, dark, total, white, total)
+			}
 		}
 
 		// perimeter cluster signatures
@@ -130,16 +145,39 @@ func TestGoldenC01_StructuralSanity(t *testing.T) {
 				}
 			}
 		case 'Y':
-			// no black anywhere on edges; (4,4) is bg tinted toward #FFD166 (~16% alpha):
-			// R stays 255, G/B dip well below bg but stay far above the ~8% alpha value
+			// post-X-4 signature: the target-less highlight overlay is VISIBLE
+			// and opaque at its peak — the sampled frame is uniformly #FFD166
+			// (no black capture border anywhere, no bg showing through).
+			// Pre-fix this cluster was bg-with-perimeter-tint (occluded state).
+			sampled := 0
+			uniform := true
+			var first [3]int
+			for gy := 0; gy < 32; gy++ {
+				for gx := 0; gx < 18; gx++ {
+					x := 8 + gx*(w-16)/17
+					y := 8 + gy*(h-16)/31
+					c := rgb(img, x, y)
+					if sampled == 0 {
+						first = c
+					}
+					if c != first {
+						uniform = false
+					}
+					sampled++
+				}
+			}
+			if !uniform {
+				t.Errorf("%s: cluster-Y overlay-peak signature lost — frame not uniform on the sparse grid (first=%v)", fr.file, first)
+			}
+			for _, p := range [][2]int{{4, 4}, {w / 2, h / 2}, {w - 5, h - 5}} {
+				if c := rgb(img, p[0], p[1]); c != overlayPeak {
+					t.Errorf("%s: cluster-Y pixel (%d,%d)=%v != overlay peak %v", fr.file, p[0], p[1], c, overlayPeak)
+				}
+			}
 			for _, e := range []struct{ x, y int }{{0, 2}, {w - 1, 2}, {0, h - 3}, {w - 1, h - 3}} {
 				if c := rgb(img, e.x, e.y); c == [3]int{0, 0, 0} {
 					t.Errorf("%s: cluster-Y frame has pure-black edge pixel (%d,%d)", fr.file, e.x, e.y)
 				}
-			}
-			c := rgb(img, 4, 4)
-			if c[0] != 255 || c[1] < 225 || c[2] < 190 || c[2] > bg[2] {
-				t.Errorf("%s: cluster-Y tint signature lost at (4,4)=%v (want R=255, G∈[225,247), B∈[190,238])", fr.file, c)
 			}
 		}
 

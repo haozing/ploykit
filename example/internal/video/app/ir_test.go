@@ -153,6 +153,86 @@ func TestValidate_FieldRules(t *testing.T) {
 	}
 }
 
+func TestValidate_ElementTimeWindow(t *testing.T) {
+	// P0-1 (case library §5.16): Element.startFrame/endFrame optional element
+	// visibility window. Pointers distinguish unset from 0; frames are on the
+	// global timeline (§7.0 clock) and bounded by DurationFrames.
+	const fps = 30
+	sec := func(s float64) *IR {
+		ir := validIR() // 12.4s @30fps → ceil(372) = 372 frames
+		ir.Meta.FPS = fps
+		ir.Meta.DurationSec = s
+		ir.Elements = []Element{{ID: "e1", Type: ElementShape, X: 0, Y: 0, W: 10, H: 10}}
+		return ir
+	}
+
+	cases := []struct {
+		name  string
+		start *int
+		end   *int
+		field string // "" = must pass
+	}{
+		{"both unset (back-compat)", nil, nil, ""},
+		{"start only", intp(45), nil, ""},
+		{"end only", nil, intp(105), ""},
+		{"start and end", intp(45), intp(105), ""},
+		{"startFrame 0 valid", intp(0), intp(10), ""},
+		{"endFrame 0 with no start (hide from frame 0)", nil, intp(0), ""},
+		{"start 0 end 0 (single frame F0)", intp(0), intp(0), ""},
+		{"negative start", intp(-1), intp(10), "elements[0].startFrame"},
+		{"negative end", intp(10), intp(-5), "elements[0].endFrame"},
+		{"start > end", intp(20), intp(10), "elements[0]"},
+		{"end exceeds duration frames", intp(45), intp(373), "elements[0].endFrame"},
+		{"end equals duration frames (boundary ok)", intp(45), intp(372), ""},
+		{"start exceeds duration frames", intp(373), nil, "elements[0].startFrame"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ir := sec(12.4)
+			ir.Elements[0].StartFrame = c.start
+			ir.Elements[0].EndFrame = c.end
+			err := Validate(ir)
+			if c.field == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			var ve *ValidationError
+			require.True(t, errors.As(err, &ve), "error is ValidationError: %v", err)
+			assert.Equal(t, c.field, ve.Field, "field path in error")
+		})
+	}
+
+	t.Run("voice-extended timeline bounds the window", func(t *testing.T) {
+		// DurationFrames uses max(meta, voice) — an 8s meta with a 10s voice
+		// is 300 frames @30fps; endFrame 300 passes, 301 fails (single-source
+		// formula, not meta-only).
+		ir := sec(8.0)
+		ir.Audio = &Audio{Voice: &AudioTrack{Key: "video/ws/v.mp3", DurationSec: 10.0}}
+		ir.Elements[0].EndFrame = intp(300)
+		require.NoError(t, Validate(ir))
+		ir.Elements[0].EndFrame = intp(301)
+		err := Validate(ir)
+		require.Error(t, err)
+		var ve *ValidationError
+		require.True(t, errors.As(err, &ve))
+		assert.Equal(t, "elements[0].endFrame", ve.Field)
+	})
+
+	t.Run("second element index in error path", func(t *testing.T) {
+		ir := sec(12.4)
+		ir.Elements = append(ir.Elements,
+			Element{ID: "e2", Type: ElementShape, X: 0, Y: 0, W: 5, H: 5, StartFrame: intp(-3)})
+		err := Validate(ir)
+		require.Error(t, err)
+		var ve *ValidationError
+		require.True(t, errors.As(err, &ve))
+		assert.Equal(t, "elements[1].startFrame", ve.Field)
+	})
+}
+
+func intp(i int) *int { return &i }
+
 func TestValidate_ListLimits(t *testing.T) {
 	ir := validIR()
 	ir.Words = make([]Word, MaxWords+1)

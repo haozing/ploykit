@@ -1,0 +1,22 @@
+{
+  "case": "VS-C08",
+  "fps": 30,
+  "duration_frames": 600,
+  "frame_formula": "DurationFrames = ceil(max(meta.durationSec, voice.durationSec) × fps) = ceil(20×30) = 600（单源 ceil 公式）",
+  "anchor_formula": "锚点命中帧 = ceil(word.start × fps)；元素窗口 = 文档分镜/elements 表 startFrame/endFrame 原值（P0-1 已落地，全局帧时钟一致）",
+  "capability_upgrade_note": "本帧表按并行 agent 已落地的 P0-1（元素时间窗）升级：headline（0-89）/三券（90/130/210-599）/倒计时（330-449）/CTA（450-599）显隐区间全部恢复文档原窗口——初版'headline 常驻与倒计时同屏'的差异消除，五段分镜的元素生命周期与文档帧表完全对位。",
+  "frames": [
+    {"frame": 0, "time_sec": 0.0, "expect": "开场：el_bg #B3261E 红底铺满（A-C08-05 纯度断言基线；渐变键 #7A1F2B→#B3261E ⛔ 素材侧预置）；3 片彩带 shape 在画面顶部外（y -40/-180/-300，窗口 0-599 全程）；el_headline scaleIn 起始（窗口 0-89，15 帧落定，A-C08-01 缩略图可读）。P0-1 红利：券面/倒计时/CTA 窗口未开段全部 visibility:hidden——帧 0 画面 = 红底+彩带（顶部外）+标题入场中，与文档 F0 完全对位"},
+    {"frame": 15, "time_sec": 0.5, "expect": "标题落定（scaleIn 15 帧完成，F15 白文字 ≥15% 判定窗口开始）；首片彩带进入画面（an_confetti_fall 线性 600 帧：帧 15 时 y≈415——三片相继行进，白片仍在顶部外，对应文档'粒子开始下落'）。降级差异保留：T-04 粒子系统 ⛔——3 片独立 shape（18 片阵列压到 3 片），无重力/散布/旋转/loop，单次线性下落；A-C08-04 '粒子占比 ≤10%' 必然达标——断言降级弱化"},
+    {"frame": 90, "time_sec": 3.0, "expect": "镜 2 券 1 翻转入场：el_coupon1/el_coupon1_text startFrame=90 窗口开启（文档 an_coupon1_flip startFrame=90 精确对位——词表 '第一张券' 3.0s→帧 90 两条时钟自洽）+ scaleIn back.out 18 帧同帧起播；headline 窗口 89 关闭（半开：89 帧后隐藏）——标题退场、券 1 入场同帧交替。降级差异保留：T-05 flipAxis:'rotateY' ⛔ 平面缩放近似；券面复合键 threshold/face/tag ⛔ 拆底板+text 面额"},
+    {"frame": 130, "time_sec": 4.33, "expect": "券 2 窗口开启（startFrame=130，文档对位）+ an_coupon2_flip 锚 '第二张券' w07 4.32s→帧 130 同帧起播（18 帧）；ef_coupon_pulse 峰值 ≈帧 135（锚 130 + pulse 0.18s）。能力升级红利：pulse 挂 targetElementId=el_coupon2（元素级 1.05 呼吸）——只缩中列券卡；券 1 已落定（108）两券横排"},
+    {"frame": 210, "time_sec": 7.0, "expect": "券 3 补齐三列：el_coupon3/el_coupon3_text startFrame=210 窗口开启（文档 startFrame=210 对位，词 '第三张券' 7.0s→帧 210 自洽）+ scaleIn back.out 18 帧。A-C08-02 列几何：三列 x 90/390/690 宽 300 间距 30（shape 精确坐标，断言可达）；'仅限今天'并入券 3 面额文本（badge 键 ⛔）；重复词 '满' w04/w08/w12 三次出现但无 effect 挂靠（无歧义面）"},
+    {"frame": 270, "time_sec": 9.0, "expect": "三券落定：面额 '减 30 / 减 80 / 减 150' 与 S2/S3 逐字一致（A-C08-03 同源断言对象为三个 el_coupon*_text）；S3 关键词'仅限今天'由券 3 文本静态承载（文档 ef 高亮挂券 3 角标签，降级为文本内嵌——如需词窗口着色可将 targetElementId 改指 el_coupon3_text（text 类型走 T-12 着色分支），按文档 effects 表未加，不改"},
+    {"frame": 330, "time_sec": 11.0, "expect": "镜 4 倒计时：el_countdown startFrame=330 窗口开启（文档 an 区间 330-449 精确对位）+ an_countdown_in 锚 '倒计时' w16 11.0s→帧 330 同帧起播（15 帧）；券面窗口持续（90/130/210-599），三券+倒计时同屏（文档'券面缩至上方保持'的'缩'不可表达 ⛔——券保持原位原尺寸，可见差异：倒计时区 y700 与券区 y300-620 不重叠，无遮挡）"},
+    {"frame": 341, "time_sec": 11.37, "expect": "ef_countdown counter 启动：锚 '十五秒' w17 11.36s→帧 341（0 起点 15 → 0，suffix 's'）。能力升级红利（round4）：counter 挂 targetElementId=el_countdown——数字定位到中轴 bbox (340,700,400,120)，96px 金色字形叠在静态 '15s' 兜底文本上（不再是画布左上原点）；可见差异保留：纯整数无 00:15 格式与前导零（T-10 format ⛔），最长 1.2s 滚动（341+36=377 帧到 0）"},
+    {"frame": 390, "time_sec": 13.0, "expect": "倒计时中段：counter 已在 377 帧提前归 0（builder 滚动上限 1.2s vs 文档 120 帧窗口——可见差异：'0s' 静态保持至 449 窗口关闭）；'粒子密度降低'不可实现保留（无逐片显隐，三片彩带匀速下落至 599）——F390 '粒子像素占比较 F45 下降 ≥30%' 断言降级不适用"},
+    {"frame": 450, "time_sec": 15.0, "expect": "镜 5 CTA：倒计时 endFrame=449 半开关闭（449 帧后隐藏）+ el_cta/el_cta_text startFrame=450 窗口开启（文档区间 450-599 精确对位）+ an_cta_in/an_ctatext_in 锚 '点击' w19 15.0s→帧 450 同帧起播（move 940→880 上移 14 帧）；白底红字条 (190,880,700,100)（A-C08-05 白底 ≥80% 判定窗口开始）。跨词锚 '自动抵扣' w20+w21 由 ef_cta_hl 按 w21 '抵扣' 解析（文档同款规则）"},
+    {"frame": 487, "time_sec": 16.23, "expect": "ef_cta_hl 生效窗口：锚 '抵扣' w21 16.19s→帧 486。T-12 核对：el_cta 是 shape 元素 → highlight 走背景闪分支（白条背景 → #FFD166 0.25s 升、0.6s 回落，峰值 ≈帧 494）——CTA 文本在 el_cta_text（text）上，若要词着色应指 el_cta_text；按文档 effects 表 targetElementId=el_cta 忠实保留（闪条背景），差异记录：'自动抵扣'词变色仍 ⛔；F585 整片轻 fade 不可实现（fade effect 是遮罩语义非渐隐；P0-2 fadeOut 元素级可表达，按忠实原则不加——尾段静止收束）"},
+    {"frame": 599, "time_sec": 19.97, "expect": "尾帧：三券 + CTA 同屏（headline/倒计时已按窗口退场）；bbox 全在界内；DurationFrames=ceil(20×30)=600；MP4 20.00s±0.1s/30fps/1080×1080。BGM 无 loop/loudnorm（amix duration=first 截 20s）；字幕烧录走 RenderParams（倒计时段让位 y640–690 由 el_caption 固定 y 位置近似，非动态让位）；voice rate 1.15 为 TTS 供应商参数，素材侧预混"}
+  ]
+}

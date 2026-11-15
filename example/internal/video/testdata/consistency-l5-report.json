@@ -25,27 +25,27 @@
   "layer": "L5",
   "mismatches": null,
   "perf": {
-    "avg_frames_per_sec": 6.5,
+    "avg_frames_per_sec": 6.52,
     "per_frame_ms": {
-      "min": 76.92,
-      "median": 103.77,
-      "p95": 171.68,
-      "max": 3081.25
+      "min": 75,
+      "median": 106.6,
+      "p95": 152.68,
+      "max": 2080.61
     },
     "per_frame_steady_ms": {
-      "min": 76.92,
-      "median": 103.34,
-      "p95": 138.41,
-      "max": 401.9
+      "min": 75,
+      "median": 106.02,
+      "p95": 132.01,
+      "max": 248.13
     },
     "per_run_ms": {
-      "min": 3964.07,
-      "median": 4215.06,
-      "p95": 6522.12,
-      "max": 10951.6
+      "min": 4046.76,
+      "median": 4413.72,
+      "p95": 5592.48,
+      "max": 6703.26
     },
-    "total_ms": 461336,
-    "total_wall_clock": "7m41s"
+    "total_ms": 460470,
+    "total_wall_clock": "7m40s"
   },
   "png": {
     "avg_bytes": 26073,
@@ -61,13 +61,13 @@
     "fps": 30,
     "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
     "height": 1920,
-    "html_bytes": 93229,
+    "html_bytes": 101515,
     "ir_sha256": "691459d8c0413088e8121219c7e0e4c1ec17e4423ca0359b9742c125e1eda40e",
     "ir_sha256_basis": "sha256(json.Marshal(videoapp.IR) after ResolveAll, before projection)",
     "timeline_id": "main",
     "width": 1080
   },
-  "run_id": "l5-consistency-20261115-194427-5c16",
+  "run_id": "l5-consistency-20261115-211841-1f8b",
   "samples": {
     "frames_per_run": 30,
     "runs": 100,

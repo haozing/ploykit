@@ -6,7 +6,7 @@
   "duration_frames": 1800,
   "fps": 30,
   "frame_basis": "ceil(60s×30)=1800, videoapp.DurationFrames = 1800",
-  "generated_at": "2026-11-15T19:13:45+08:00",
+  "generated_at": "2026-11-15T21:10:47+08:00",
   "go": "go1.27.0",
   "height": 1080,
   "ir_sha256": "35848546acc20add06e0f4f870e0941a3940ebe5c913014f8d51aa25cb496ffc",
@@ -41,7 +41,7 @@
   "layer": "L1",
   "notes": "round3 口径统一（词锚 frame=ceil(word.start×fps)）后的 C04 帧表重跑——修正帧位断言 + before/after 对照",
   "render_mode": "full 1800-frame loop（模式记录：与 round2 l1-c04 同模式，保证 before/after 对照在同一渲染产物内）；修正帧位 + 原帧位 + 探针共 25 帧留存",
-  "render_total_ms": 192680,
+  "render_total_ms": 196698,
   "roles": {
     "1269": "corrected",
     "1620": "corrected",
@@ -69,6 +69,6 @@
     "957": "corrected",
     "960": "before"
   },
-  "run_id": "c04r3-20261115-191031-a324",
+  "run_id": "c04r3-20261115-210729-559b",
   "width": 1920
 }

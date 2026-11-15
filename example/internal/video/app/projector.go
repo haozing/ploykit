@@ -240,6 +240,15 @@ func elementMap(el Element) map[string]any {
 	if el.FontSize != 0 {
 		m["fontSize"] = el.FontSize
 	}
+	// Element time window (P0-1): pointers project as numbers only when set,
+	// so legacy IRs (both nil) produce no keys and the builder's windowed
+	// path never activates — byte-identical projection for old documents.
+	if el.StartFrame != nil {
+		m["startFrame"] = *el.StartFrame
+	}
+	if el.EndFrame != nil {
+		m["endFrame"] = *el.EndFrame
+	}
 	if len(el.Animations) > 0 {
 		ans := make([]map[string]any, 0, len(el.Animations))
 		for _, an := range el.Animations {

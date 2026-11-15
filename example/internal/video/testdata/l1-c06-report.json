@@ -2,7 +2,7 @@
   "case": "VS-C06",
   "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
   "d01_status": {
-    "checked_at": "2026-11-15T20:15:43+08:00",
+    "checked_at": "2026-11-15T21:10:08+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
@@ -83,11 +83,11 @@
         "word_start_sec": 85.2
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 2250 frames in 3m54.08s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 2250 frames in 4m2.074s",
     "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
     "frames_table": "example/internal/video/testdata/ir/c06.frames.json",
     "golden_dir": "example/internal/video/testdata/golden/c06/",
-    "html_bytes": 96997,
+    "html_bytes": 105283,
     "ir_sha256": "d7335f18708bb9056b8fce192ee8c88df98ef595edde4cc6994d2f8e9ed14a4b",
     "meta_json": "example/internal/video/testdata/golden/c06/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
@@ -115,7 +115,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 24968
+      "duration_ms": 26105
     },
     {
       "frame": 226,
@@ -126,7 +126,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 25153
+      "duration_ms": 26319
     },
     {
       "frame": 227,
@@ -137,7 +137,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 25253
+      "duration_ms": 26428
     },
     {
       "frame": 228,
@@ -148,7 +148,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 25348
+      "duration_ms": 26551
     },
     {
       "frame": 229,
@@ -159,7 +159,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 25457
+      "duration_ms": 26656
     },
     {
       "frame": 230,
@@ -189,7 +189,7 @@
         "png_decoded": true,
         "verdict": "in-window"
       },
-      "duration_ms": 25563
+      "duration_ms": 26777
     },
     {
       "frame": 231,
@@ -200,7 +200,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 25665
+      "duration_ms": 26891
     },
     {
       "frame": 232,
@@ -211,7 +211,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 25764
+      "duration_ms": 26999
     },
     {
       "frame": 450,
@@ -222,7 +222,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 48544
+      "duration_ms": 49738
     },
     {
       "frame": 460,
@@ -233,7 +233,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 49545
+      "duration_ms": 50766
     },
     {
       "frame": 462,
@@ -244,7 +244,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 49752
+      "duration_ms": 50983
     },
     {
       "frame": 464,
@@ -279,7 +279,7 @@
         "png_decoded": true,
         "x4_verdict": "pulse 目标为 #canvas 整层（X-4）：border MAE 在 464-476 窗口非零即整画布 1.06 缩放的直接证据"
       },
-      "duration_ms": 49950
+      "duration_ms": 51194
     },
     {
       "frame": 466,
@@ -290,7 +290,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 50152
+      "duration_ms": 51426
     },
     {
       "frame": 468,
@@ -301,7 +301,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 50349
+      "duration_ms": 51634
     },
     {
       "frame": 470,
@@ -312,7 +312,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 50563
+      "duration_ms": 51839
     },
     {
       "frame": 472,
@@ -323,7 +323,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 50800
+      "duration_ms": 52053
     },
     {
       "frame": 474,
@@ -334,7 +334,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 51008
+      "duration_ms": 52278
     },
     {
       "frame": 476,
@@ -345,7 +345,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 51243
+      "duration_ms": 52505
     },
     {
       "frame": 478,
@@ -356,7 +356,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 51471
+      "duration_ms": 52714
     },
     {
       "frame": 24,
@@ -367,7 +367,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 4898
+      "duration_ms": 5341
     },
     {
       "frame": 28,
@@ -378,7 +378,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 5297
+      "duration_ms": 5816
     },
     {
       "frame": 32,
@@ -404,7 +404,7 @@
         "verdict": "VISIBLE",
         "window_math": "ef_hl_turn 锚 团队#0=0.95s→F24；上冲 0.18s→峰值 ≈F28；hold 至 F36；回落至 ≈F51——窗口在本系列内，但被遮挡"
       },
-      "duration_ms": 5677
+      "duration_ms": 6248
     },
     {
       "frame": 38,
@@ -415,7 +415,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 6264
+      "duration_ms": 6846
     },
     {
       "frame": 46,
@@ -426,7 +426,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 7051
+      "duration_ms": 7657
     }
   ],
   "recipe": {
@@ -438,7 +438,7 @@
     "ir_source_file": "example/internal/video/testdata/ir/c06.degraded.json",
     "width": 1920
   },
-  "run_id": "l1-06-20261115-201147-8569",
+  "run_id": "l1-06-20261115-210605-2da6",
   "samples": [
     {
       "frame": 0,
@@ -459,7 +459,7 @@
         "shotA_navy_share": 0,
         "shotB_navy_share": 0
       },
-      "duration_ms": 2374,
+      "duration_ms": 2545,
       "artifact": "example/internal/video/testdata/golden/c06/frame-000.png",
       "notes": [
         "降级注记（C06-D1）：双机位素材为两块纯色 shape，无肖像画面；'亮起/压暗'只有 scaleIn 可用（C06-D4 无 opacity 动画）",
@@ -485,7 +485,7 @@
         "shotA_navy_share": 1,
         "shotB_navy_share": 1
       },
-      "duration_ms": 4496,
+      "duration_ms": 4868,
       "artifact": "example/internal/video/testdata/golden/c06/frame-020.png",
       "notes": [
         "字幕为 IR 手填静态 text（非 BuildCues 动态分组）——此后整片 90s 字幕不再轮换"
@@ -509,7 +509,7 @@
         "right_mean_lum": 34.38,
         "switch_onset_frame_probe": 232
       },
-      "duration_ms": 25046,
+      "duration_ms": 26221,
       "artifact": "example/internal/video/testdata/golden/c06/frame-225.png",
       "notes": [
         "文档唯一有效帧差断言点：224-232 连续帧差序列见 probes（229→230 起 strip MAE 抬升，之前全零）",
@@ -533,7 +533,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 48544,
+      "duration_ms": 49738,
       "artifact": "example/internal/video/testdata/golden/c06/frame-450.png",
       "notes": [
         "渲染发现（immediateRender）：move fromTo 立即施加 from 态——字幕自 F0 起就位于 x=480，el_captionZh 布局 x=660 在整条时间线上从未呈现；F464-474 只是 480→960 的移动（M2：按 480/960 两态记录字幕位置，放弃'自然位 660'口径）",
@@ -555,7 +555,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 71696,
+      "duration_ms": 74036,
       "artifact": "example/internal/video/testdata/golden/c06/frame-675.png",
       "notes": [
         "镜 4/6/8 的说话人切换无锚点动画（fade 已移除）——画面保持镜3 状态，与帧表降级差异声明一致"
@@ -575,7 +575,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 94769,
+      "duration_ms": 99994,
       "artifact": "example/internal/video/testdata/golden/c06/frame-900.png",
       "notes": [
         "断行（T-01 DOM 层记录）：36px 文本 pre-wrap 按容器宽度折行——本帧 %d 行带 ≤2 行达标仅因文本短；注意 SRT 层（subtitle.go layoutUnits）已于 round-3 落地 kinsoku + 词完整性换行，但本链路（Player still 渲染）不经过它，DOM 折行风险独立存在",
@@ -596,7 +596,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 117686,
+      "duration_ms": 123781,
       "artifact": "example/internal/video/testdata/golden/c06/frame-1125.png",
       "notes": [
         "L1 帧差断言对这些无驱动镜头按单镜头切片口径执行（帧表已声明会失败，不计 fail）"
@@ -617,7 +617,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 141651,
+      "duration_ms": 147394,
       "artifact": "example/internal/video/testdata/golden/c06/frame-1350.png",
       "notes": [
         "高亮在窗口内 NOW VISIBLE（X-4 修复实证）：F24-46 探针序列 max shotA blue=1.0000——pre-fix ≈0（被全覆盖双 shot 遮挡），修复后 overlay z-10000 全画布可见",
@@ -639,7 +639,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 187741,
+      "duration_ms": 194055,
       "artifact": "example/internal/video/testdata/golden/c06/frame-1800.png",
       "notes": [
         "本链路（Player still 渲染）根本不经过 burn 路径——SubtitleMode=burn 只在 encode 管线（render_pipeline.go:107-122）生效；本帧字幕区内容 = IR 静态 text，如实记录（验证点成立：渲染输出里字幕区只有 IR 静态文本，无动态字幕）"
@@ -658,7 +658,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 210565,
+      "duration_ms": 217572,
       "artifact": "example/internal/video/testdata/golden/c06/frame-2025.png",
       "notes": [
         "M2 依据：二选一——改锚词（'先'/'一件'入词表）或改帧表至 2130"
@@ -680,7 +680,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 233462,
+      "duration_ms": 241547,
       "artifact": "example/internal/video/testdata/golden/c06/frame-2249.png",
       "notes": [
         "音频项（≥89.9s、SRT cue 数、最短时长 ≥1.2s 校验缺失 C06-D8）不属本链路，L2/L0 口径"
@@ -693,9 +693,9 @@
     "full_loop_under_8min": true,
     "keyframes_kept": 11,
     "probe_frames_kept": 24,
-    "render_ms_per_frame": 104.04,
-    "render_total_ms": 234079,
-    "render_wall_clock": "3m54s",
+    "render_ms_per_frame": 107.59,
+    "render_total_ms": 242074,
+    "render_wall_clock": "4m2s",
     "samples_degraded_na": 0,
     "samples_fail": 0,
     "samples_mismatch": 4,

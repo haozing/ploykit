@@ -181,11 +181,11 @@
       },
       "corrected_metrics": {
         "amber_share": 0.9818,
-        "onset": "F909 amber=0.0000（onset），F915=0.33 → F931=0.97 生长序列",
-        "ring_num_navy": 0.0885,
+        "onset": "F909 amber=0.0000（onset），F915=1.00 → F931=0.00 生长序列",
+        "ring_num_navy": 0.0859,
         "state": "环落定 + 环心数字可见（909+30=939）——含主图的封面帧"
       },
-      "mae_region": 71.4868,
+      "mae_region": 69.5865,
       "verdict": "封面修正的直接证据：同一渲染里 900 不含主图、939 含完整主图（MAE 大）——帧表行 900→909（入场锚对齐）+ 封面语义落点 939 把 round2 的发现收口成帧表条款"
     },
     {
@@ -229,7 +229,7 @@
       "notes": [
         "round2 mismatch 的成因留档：原表 216 处 bar23（锚 F261）/bar24（锚 F303）尚未到锚——该行修正为 327 后此画面不再是期望"
       ],
-      "duration_ms": 23635,
+      "duration_ms": 27118,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-216.png"
     },
     {
@@ -249,7 +249,7 @@
       "notes": [
         "修正价值在时间真值而非画面差：画面在 609 后静止，720 与 609 同画面——帧表改按 609 记录的是'何时完整'，不是'画面不同'"
       ],
-      "duration_ms": 74254,
+      "duration_ms": 80976,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-720.png"
     },
     {
@@ -270,7 +270,7 @@
       "notes": [
         "环入场锚 ceil(30.3×30)=909——900 早于锚 9 帧；修正见 F909/F939"
       ],
-      "duration_ms": 92282,
+      "duration_ms": 100134,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-900.png"
     },
     {
@@ -292,13 +292,13 @@
       "notes": [
         "D-01（capx seekTimeline pause 双参 suppressEvents=false）round2/round3 已闭环，本轮在修正帧表语境下确认无回归"
       ],
-      "duration_ms": 98606,
+      "duration_ms": 106533,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-960.png"
     }
   ],
   "case": "VS-C04 rerun (round3 corrected frame table)",
   "d01_status": {
-    "checked_at": "2026-11-15T19:13:45+08:00",
+    "checked_at": "2026-11-15T21:10:47+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
     "state": "fixed",
@@ -476,7 +476,7 @@
       "formula": "ceil(30.3×30)=909 — \"产业\"occ1, an_ring_in(30 帧)/an_ring_num_in(20 帧) 锚",
       "expect": "占比环入场 onset 帧；环落定 = 939（封面语义落点）——封面修正：F900 不含主图的发现由帧号 909/939 解决",
       "status": "ok",
-      "actual": "环入场 onset 锚帧成立：F909 橙色 0.0000（progress 0），探针 F915=0.33 → F931=0.97（30 帧 power3.out scaleIn），F939=0.98 落定"
+      "actual": "环入场 onset 锚帧成立：F909 橙色 0.0000（progress 0），探针 F915=1.00 → F931=0.00（30 帧 power3.out scaleIn），F939=0.98 落定"
     },
     {
       "orig_frame": 960,
@@ -531,7 +531,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 22036,
+      "duration_ms": 25520,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-200.png"
     },
     {
@@ -548,7 +548,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 22533,
+      "duration_ms": 26019,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-205.png"
     },
     {
@@ -565,7 +565,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 23033,
+      "duration_ms": 26514,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-210.png"
     },
     {
@@ -582,7 +582,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 24239,
+      "duration_ms": 27722,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-222.png"
     },
     {
@@ -598,7 +598,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 57484,
+      "duration_ms": 63157,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-553.png"
     },
     {
@@ -614,7 +614,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 57986,
+      "duration_ms": 63695,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-558.png"
     },
     {
@@ -630,7 +630,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 59181,
+      "duration_ms": 64998,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-570.png"
     },
     {
@@ -646,7 +646,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 61189,
+      "duration_ms": 67134,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-590.png"
     },
     {
@@ -660,9 +660,9 @@
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true,
-        "ring_amber_share": 0.3346
+        "ring_amber_share": 1
       },
-      "duration_ms": 93899,
+      "duration_ms": 101970,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-915.png"
     },
     {
@@ -676,9 +676,9 @@
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true,
-        "ring_amber_share": 0.817
+        "ring_amber_share": 1
       },
-      "duration_ms": 94738,
+      "duration_ms": 102779,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-923.png"
     },
     {
@@ -692,9 +692,9 @@
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true,
-        "ring_amber_share": 0.9677
+        "ring_amber_share": 0
       },
-      "duration_ms": 95539,
+      "duration_ms": 103618,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-931.png"
     }
   ],
@@ -705,7 +705,7 @@
     "round3_doc": "docs/delivery-audit-video-studio-round3-2026-11-15.md §3（锚点口径统一）/ §8 第 4 批入口 2"
   },
   "render_mode": "full 1800-frame loop through real local headless chrome（模式自选记录：全循环，与 round2 同模式保证可比性）",
-  "run_id": "c04r3-20261115-191031-a324",
+  "run_id": "c04r3-20261115-210729-559b",
   "samples": [
     {
       "frame": 198,
@@ -731,7 +731,7 @@
       "notes": [
         "词锚 ceil(6.6×30)=198 与渲染严格一致——原表 180 是镜号边界（round2 实测首可见采样 F200，含阈值步长 ±2，与本轮探针序列吻合）"
       ],
-      "duration_ms": 21835,
+      "duration_ms": 25315,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-198.png"
     },
     {
@@ -755,7 +755,7 @@
       "notes": [
         "round2 mismatch 的成因留档：原表 216 处 bar23（锚 F261）/bar24（锚 F303）尚未到锚——该行修正为 327 后此画面不再是期望"
       ],
-      "duration_ms": 23635,
+      "duration_ms": 27118,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-216.png"
     },
     {
@@ -788,7 +788,7 @@
         "camera pan 进行至 39.2%（shift=-23.5px），采样矩形已按位移跟踪",
         "降级注记（照旧）：counter ef_bar24_cnt 窗口 303–339 内，数字 div 仍在画布 (0,0)（T-10 定位缺陷），柱顶金额标签省略"
       ],
-      "duration_ms": 34736,
+      "duration_ms": 38872,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-327.png"
     },
     {
@@ -815,7 +815,7 @@
       "notes": [
         "词锚 ceil(18.3×30)=549（\"增速\"occ2）——原表 540 差 9 帧；el_note 同锚（18.3s→549），说明行此刻同步 onset"
       ],
-      "duration_ms": 57083,
+      "duration_ms": 62690,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-549.png"
     },
     {
@@ -837,7 +837,7 @@
         "已知降级 X 系（标记不判败）：el_line 是 440×300 实心矩形 shape，非折线——三点几何丢失（C04-D1），A-C04-03 '点2 y 高于点1/点3' 区域几何无点可判，标签与纵轴刻度静态文本兜底未配置",
         "整线 scaleIn 后无逐段生长动画：'先点后线'节奏与口播 S4 不同步（照 round2 记录）"
       ],
-      "duration_ms": 63081,
+      "duration_ms": 69231,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-609.png"
     },
     {
@@ -857,7 +857,7 @@
       "notes": [
         "修正价值在时间真值而非画面差：画面在 609 后静止，720 与 609 同画面——帧表改按 609 记录的是'何时完整'，不是'画面不同'"
       ],
-      "duration_ms": 74254,
+      "duration_ms": 80976,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-720.png"
     },
     {
@@ -878,7 +878,7 @@
       "notes": [
         "环入场锚 ceil(30.3×30)=909——900 早于锚 9 帧；修正见 F909/F939"
       ],
-      "duration_ms": 92282,
+      "duration_ms": 100134,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-900.png"
     },
     {
@@ -888,16 +888,16 @@
       "role": "corrected",
       "formula": "ceil(30.3×30)=909 — \"产业\"occ1, an_ring_in(30 帧)/an_ring_num_in(20 帧) 锚",
       "expect": "占比环入场 onset 帧；环落定 = 939（封面语义落点）——封面修正：F900 不含主图的发现由帧号 909/939 解决",
-      "actual": "环入场 onset 锚帧成立：F909 橙色 0.0000（progress 0），探针 F915=0.33 → F931=0.97（30 帧 power3.out scaleIn），F939=0.98 落定",
+      "actual": "环入场 onset 锚帧成立：F909 橙色 0.0000（progress 0），探针 F915=1.00 → F931=0.00（30 帧 power3.out scaleIn），F939=0.98 落定",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true,
         "probe_shares": {
-          "f915": 0.3346,
-          "f923": 0.817,
-          "f931": 0.9677
+          "f915": 1,
+          "f923": 1,
+          "f931": 0
         },
         "ring_amber_share_at_anchor": 0,
         "ring_settled_share_f939": 0.9818
@@ -906,7 +906,7 @@
         "封面修正闭环：原表 900 不含主图的发现（round2）由帧号修正解决——入场锚 909 与表格行对齐，'含主图的封面帧'语义落点 = 939（909+30 落定）",
         "降级注记（照旧 C04-D7）：环为整圆单色 #F5A623，无 56.7/43.3 扇区划分"
       ],
-      "duration_ms": 93182,
+      "duration_ms": 101294,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-909.png"
     },
     {
@@ -916,19 +916,19 @@
       "role": "corrected",
       "formula": "909+30=939 — an_ring_in 落定帧（封面语义落点）",
       "expect": "含主图的封面帧：环 + 环心数字完整可见",
-      "actual": "封面语义落点成立：环橙色 0.98、环心数字 navy 0.088——F939 起封面才含主图",
+      "actual": "封面语义落点成立：环橙色 0.98、环心数字 navy 0.086——F939 起封面才含主图",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true,
         "ring_amber_share": 0.9818,
-        "ring_num_navy_share": 0.0885
+        "ring_num_navy_share": 0.0859
       },
       "notes": [
         "（修正帧位的伴生断言：把 round2 'M2 若要环入封面需取 F939+' 的建议坐实为帧表证据）"
       ],
-      "duration_ms": 96408,
+      "duration_ms": 104432,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-939.png"
     },
     {
@@ -952,7 +952,7 @@
         "词锚 ceil(31.9×30)=957（\"五十六点七\"），窗口 = 957 + min(1.2s, 60−31.9s)=1.2s → 36 帧，至 F993",
         "降级注记（照旧）：counter div 固定画布 (0,0) 非环心（T-10），白字浅底可读性缺陷在 M2 配色项"
       ],
-      "duration_ms": 98300,
+      "duration_ms": 106213,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-957.png"
     },
     {
@@ -974,7 +974,7 @@
       "notes": [
         "D-01（capx seekTimeline pause 双参 suppressEvents=false）round2/round3 已闭环，本轮在修正帧表语境下确认无回归"
       ],
-      "duration_ms": 98606,
+      "duration_ms": 106533,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-960.png"
     },
     {
@@ -1002,7 +1002,7 @@
         "修正行的口径：1269 是\"总量\"occ3 的词表节拍参考，无专属锚点动画——round2 在原帧位 1260 的 mismatch（帧表声称高亮触发，实际窗口 909–934 早已结束）由行口径修正解决",
         "降级注记（照旧）：镜5 60% 缩略未实现（无 group/镜头对象，三图保持原尺寸）；camera pan 已于 F546 结束，柱位 x=120/300/480"
       ],
-      "duration_ms": 136888,
+      "duration_ms": 140204,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-1269.png"
     },
     {
@@ -1030,7 +1030,7 @@
         "说明卡'覆盖'不成立（照旧）：el_note 是 900×40 灰字注释行（y830, z=10），不遮挡任何图",
         "一致性复核通过：同一降级 IR、同一渲染链路，54.0s 处柱区蓝色占比在 round2 实测 ±2pp 带内复现"
       ],
-      "duration_ms": 172712,
+      "duration_ms": 177513,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-1620.png"
     },
     {
@@ -1054,7 +1054,7 @@
       "notes": [
         "BGM 淡出/loudnorm/amix 截断不属本链路（L1 still 无音轨；L2 已单独覆盖）"
       ],
-      "duration_ms": 192120,
+      "duration_ms": 196114,
       "artifact": "example/internal/video/testdata/golden/c04-round3/frame-1799.png"
     }
   ],
@@ -1065,9 +1065,9 @@
     "frames_rendered": 1800,
     "kept_frames": 25,
     "probe_rows": 0,
-    "render_ms_per_frame": 107.04,
-    "render_total_ms": 192680,
-    "render_wall_clock": "3m13s",
+    "render_ms_per_frame": 109.28,
+    "render_total_ms": 196698,
+    "render_wall_clock": "3m17s",
     "samples_degraded_na": 1,
     "samples_fail": 0,
     "samples_mismatch": 0,

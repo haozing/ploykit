@@ -1,0 +1,604 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "fps": 30,
+    "width": 1080,
+    "height": 1080,
+    "durationSec": 20
+  },
+  "script": "年终大促开始了，全场两件八折。第一张券满一百九十九减三十，第二张券满三百九十九减八十。第三张券满六百九十九减一百五十，仅限今天。倒计时十五秒，手慢无。点击领取优惠券，结算时自动抵扣。",
+  "words": [
+    {
+      "index": 0,
+      "text": "年终大促",
+      "start": 0.0,
+      "end": 0.48,
+      "source": "aligner"
+    },
+    {
+      "index": 1,
+      "text": "全场",
+      "start": 0.9,
+      "end": 1.1,
+      "source": "aligner"
+    },
+    {
+      "index": 2,
+      "text": "两件八折",
+      "start": 1.1,
+      "end": 1.56,
+      "source": "aligner"
+    },
+    {
+      "index": 3,
+      "text": "第一张券",
+      "start": 3.0,
+      "end": 3.36,
+      "source": "aligner"
+    },
+    {
+      "index": 4,
+      "text": "满",
+      "start": 3.36,
+      "end": 3.54,
+      "source": "aligner"
+    },
+    {
+      "index": 5,
+      "text": "一百九十九",
+      "start": 3.54,
+      "end": 3.96,
+      "source": "aligner"
+    },
+    {
+      "index": 6,
+      "text": "减三十",
+      "start": 3.96,
+      "end": 4.28,
+      "source": "aligner"
+    },
+    {
+      "index": 7,
+      "text": "第二张券",
+      "start": 4.32,
+      "end": 4.68,
+      "source": "aligner"
+    },
+    {
+      "index": 8,
+      "text": "满",
+      "start": 4.68,
+      "end": 4.86,
+      "source": "aligner"
+    },
+    {
+      "index": 9,
+      "text": "三百九十九",
+      "start": 4.86,
+      "end": 5.28,
+      "source": "aligner"
+    },
+    {
+      "index": 10,
+      "text": "减八十",
+      "start": 5.28,
+      "end": 5.6,
+      "source": "aligner"
+    },
+    {
+      "index": 11,
+      "text": "第三张券",
+      "start": 7.0,
+      "end": 7.36,
+      "source": "aligner"
+    },
+    {
+      "index": 12,
+      "text": "满",
+      "start": 7.36,
+      "end": 7.54,
+      "source": "aligner"
+    },
+    {
+      "index": 13,
+      "text": "六百九十九",
+      "start": 7.54,
+      "end": 7.96,
+      "source": "aligner"
+    },
+    {
+      "index": 14,
+      "text": "减一百五十",
+      "start": 7.96,
+      "end": 8.4,
+      "source": "aligner"
+    },
+    {
+      "index": 15,
+      "text": "仅限今天",
+      "start": 8.44,
+      "end": 8.92,
+      "source": "aligner"
+    },
+    {
+      "index": 16,
+      "text": "倒计时",
+      "start": 11.0,
+      "end": 11.36,
+      "source": "aligner"
+    },
+    {
+      "index": 17,
+      "text": "十五秒",
+      "start": 11.36,
+      "end": 11.66,
+      "source": "aligner"
+    },
+    {
+      "index": 18,
+      "text": "手慢无",
+      "start": 11.7,
+      "end": 12.16,
+      "source": "aligner"
+    },
+    {
+      "index": 19,
+      "text": "点击",
+      "start": 15.0,
+      "end": 15.18,
+      "source": "aligner"
+    },
+    {
+      "index": 20,
+      "text": "自动",
+      "start": 15.98,
+      "end": 16.19,
+      "source": "aligner"
+    },
+    {
+      "index": 21,
+      "text": "抵扣",
+      "start": 16.19,
+      "end": 16.5,
+      "source": "aligner"
+    }
+  ],
+  "effects": [
+    {
+      "id": "ef_countdown",
+      "type": "counter",
+      "targetElementId": "el_countdown",
+      "anchor": {
+        "text": "十五秒",
+        "occurrence": 0
+      },
+      "params": {
+        "from": 15,
+        "to": 0,
+        "suffix": "s"
+      }
+    },
+    {
+      "id": "ef_coupon_pulse",
+      "type": "pulse",
+      "targetElementId": "el_coupon2",
+      "anchor": {
+        "text": "第二张券",
+        "occurrence": 0
+      },
+      "params": {
+        "scale": 1.05
+      }
+    },
+    {
+      "id": "ef_cta_hl",
+      "type": "highlight",
+      "targetElementId": "el_cta",
+      "anchor": {
+        "text": "抵扣",
+        "occurrence": 0
+      },
+      "params": {
+        "color": "#FFD166"
+      }
+    }
+  ],
+  "elements": [
+    {
+      "id": "el_bg",
+      "type": "shape",
+      "color": "#B3261E",
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1080,
+      "z": 0,
+      "startFrame": 0,
+      "endFrame": 599
+    },
+    {
+      "id": "el_confetti",
+      "type": "shape",
+      "color": "#FFD166",
+      "x": 520,
+      "y": -40,
+      "w": 40,
+      "h": 40,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_confetti_fall",
+          "type": "move",
+          "from": {
+            "x": 520,
+            "y": -40
+          },
+          "to": {
+            "x": 520,
+            "y": 1080
+          },
+          "durationFrames": 600,
+          "easing": "linear"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 599
+    },
+    {
+      "id": "el_confetti_b2",
+      "type": "shape",
+      "color": "#FFFFFF",
+      "x": 180,
+      "y": -180,
+      "w": 24,
+      "h": 24,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_confetti_fall_b2",
+          "type": "move",
+          "from": {
+            "x": 180,
+            "y": -180
+          },
+          "to": {
+            "x": 180,
+            "y": 1080
+          },
+          "durationFrames": 600,
+          "easing": "linear"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 599
+    },
+    {
+      "id": "el_confetti_b3",
+      "type": "shape",
+      "color": "#FFFFFF",
+      "x": 860,
+      "y": -300,
+      "w": 28,
+      "h": 28,
+      "z": 3,
+      "animations": [
+        {
+          "id": "an_confetti_fall_b3",
+          "type": "move",
+          "from": {
+            "x": 860,
+            "y": -300
+          },
+          "to": {
+            "x": 860,
+            "y": 1080
+          },
+          "durationFrames": 600,
+          "easing": "linear"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 599
+    },
+    {
+      "id": "el_headline",
+      "type": "text",
+      "text": "年终大促 · 全场两件八折",
+      "color": "#FFFFFF",
+      "fontSize": 72,
+      "x": 60,
+      "y": 90,
+      "w": 960,
+      "h": 140,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_headline_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 15,
+          "easing": "power2.out"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 89
+    },
+    {
+      "id": "el_coupon1",
+      "type": "shape",
+      "color": "#FFF3E0",
+      "x": 90,
+      "y": 300,
+      "w": 300,
+      "h": 320,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_coupon1_flip",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "back.out",
+          "startAnchor": {
+            "text": "第一张券",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 90,
+      "endFrame": 599
+    },
+    {
+      "id": "el_coupon1_text",
+      "type": "text",
+      "text": "券 1 · 满 199 减 30",
+      "color": "#1B2733",
+      "fontSize": 56,
+      "x": 90,
+      "y": 420,
+      "w": 300,
+      "h": 120,
+      "z": 11,
+      "animations": [
+        {
+          "id": "an_coupon1_text_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "back.out",
+          "startAnchor": {
+            "text": "第一张券",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 90,
+      "endFrame": 599
+    },
+    {
+      "id": "el_coupon2",
+      "type": "shape",
+      "color": "#FFF3E0",
+      "x": 390,
+      "y": 300,
+      "w": 300,
+      "h": 320,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_coupon2_flip",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "back.out",
+          "startAnchor": {
+            "text": "第二张券",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 130,
+      "endFrame": 599
+    },
+    {
+      "id": "el_coupon2_text",
+      "type": "text",
+      "text": "券 2 · 满 399 减 80",
+      "color": "#1B2733",
+      "fontSize": 56,
+      "x": 390,
+      "y": 420,
+      "w": 300,
+      "h": 120,
+      "z": 11,
+      "animations": [
+        {
+          "id": "an_coupon2_text_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "back.out",
+          "startAnchor": {
+            "text": "第二张券",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 130,
+      "endFrame": 599
+    },
+    {
+      "id": "el_coupon3",
+      "type": "shape",
+      "color": "#FFF3E0",
+      "x": 690,
+      "y": 300,
+      "w": 300,
+      "h": 320,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_coupon3_flip",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "back.out",
+          "startAnchor": {
+            "text": "第三张券",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 210,
+      "endFrame": 599
+    },
+    {
+      "id": "el_coupon3_text",
+      "type": "text",
+      "text": "券 3 · 满 699 减 150 · 仅限今天",
+      "color": "#1B2733",
+      "fontSize": 44,
+      "x": 690,
+      "y": 420,
+      "w": 300,
+      "h": 160,
+      "z": 11,
+      "animations": [
+        {
+          "id": "an_coupon3_text_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "back.out",
+          "startAnchor": {
+            "text": "第三张券",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 210,
+      "endFrame": 599
+    },
+    {
+      "id": "el_countdown",
+      "type": "text",
+      "text": "15s",
+      "color": "#FFD166",
+      "fontSize": 96,
+      "x": 340,
+      "y": 700,
+      "w": 400,
+      "h": 120,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_countdown_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 15,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "倒计时",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 330,
+      "endFrame": 449
+    },
+    {
+      "id": "el_cta",
+      "type": "shape",
+      "color": "#FFFFFF",
+      "x": 190,
+      "y": 880,
+      "w": 700,
+      "h": 100,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_cta_in",
+          "type": "move",
+          "from": {
+            "x": 190,
+            "y": 940
+          },
+          "to": {
+            "x": 190,
+            "y": 880
+          },
+          "durationFrames": 14,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "点击",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 450,
+      "endFrame": 599
+    },
+    {
+      "id": "el_cta_text",
+      "type": "text",
+      "text": "点击领取优惠券 · 结算自动抵扣",
+      "color": "#B3261E",
+      "fontSize": 36,
+      "x": 190,
+      "y": 905,
+      "w": 700,
+      "h": 50,
+      "z": 11,
+      "animations": [
+        {
+          "id": "an_ctatext_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 14,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "点击",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 450,
+      "endFrame": 599
+    },
+    {
+      "id": "el_caption",
+      "type": "text",
+      "text": "",
+      "color": "#FFFFFF",
+      "fontSize": 44,
+      "x": 90,
+      "y": 640,
+      "w": 900,
+      "h": 56,
+      "z": 20,
+      "startFrame": 0,
+      "endFrame": 599
+    }
+  ],
+  "audio": {
+    "voice": {
+      "key": "video/c08/voice-zh-CN-xiaoxiao-promo.m4a",
+      "durationSec": 20.0,
+      "volume": 1.0
+    },
+    "bgm": {
+      "key": "video/c08/bgm-festive-126.m4a",
+      "durationSec": 20.0,
+      "volume": 0.24
+    }
+  }
+}

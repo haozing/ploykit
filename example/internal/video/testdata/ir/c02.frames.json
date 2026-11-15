@@ -1,0 +1,23 @@
+{
+  "case": "VS-C02",
+  "fps": 25,
+  "duration_frames": 750,
+  "frame_formula": "DurationFrames = ceil(max(meta.durationSec, voice.durationSec) × fps) = ceil(30×25) = 750（service.go DurationFrames 单源公式，timeline-builder.js:37 同步 ceil）",
+  "anchor_formula": "锚点命中帧 = ceil(word.start × fps)；特效峰值帧 = 锚点帧 + ceil(特效时长(s) × fps)；元素窗口 = 文档分镜 startFrame/endFrame 原值（P0-1 已落地，全局帧时钟一致，直接采用）",
+  "capability_upgrade_note": "本帧表按并行 agent 已落地的 P0-1（元素时间窗）+P0-2（fadeIn/fadeOut）+T-12（text 元素 highlight 词窗口着色）升级：文档分镜的 startFrame/endFrame 直接保留进 IR；标语/场景/规格条/Logo/日期的显隐区间全部恢复文档原语义。",
+  "frames": [
+    {"frame": 0, "time_sec": 0.0, "expect": "暗场开场：el_bg #0E1320 铺满（A-C02-04 基底）；扫光条 el_lightbar #7BE3FF 位于 x=800（move 起点，窗口 0-74）；el_product scaleIn from=0.6 静持（锚点 Sound 3.0s 未到，GSAP fromTo immediateRender 先应用 from 值）——对应文档 F0 '产品 scale≈0.6'。P0-1 红利：标语/场景/规格条/Logo/日期全部 visibility:hidden（窗口未开），帧 0 画面只有暗底+产品轮廓+扫光条，与文档 F0 '标语/场景/Logo 未入场' 完全对位"},
+    {"frame": 37, "time_sec": 1.48, "expect": "扫光位移中段（move 线性 74 帧，进度 37/74=0.5，条带 x≈960±60）：A-C02-01 青通道像素重心 ∈ [800,1120]。降级差异：扫光是实心高亮 shape 条（非目标 schema 的描边光线），宽度 120px 固定"},
+    {"frame": 75, "time_sec": 3.0, "expect": "镜 2 窗口开启：el_slogan_en/el_sub_cn startFrame=75 → visibility 恢复 + an_slogan_in/an_subcn_in 锚 Sound 同帧起播（20 帧）。P0-1+词锚双驱动：窗口开在文档帧 75（3.0s=Sound 词起点，两条时钟自洽）"},
+    {"frame": 95, "time_sec": 3.8, "expect": "标语落定（scaleIn 20 帧于 95 结束）；产品 scaleIn 至帧 115 仍在进行（40 帧档）。降级差异：T-05 伪 3D 侧转仍为平面缩放（无 rotateY/perspective，⛔——P0-2 只解决透明度轴，不解决透视）"},
+    {"frame": 200, "time_sec": 8.0, "expect": "镜 3：转场 1 起始——el_scene1 startFrame=200 窗口开启（文档帧表 F200 对位）+ an_scene1_in 锚 '通勤地铁' 8.14s→帧 204 起播（窗口先开、入场随后 4 帧，符合 §3.1.4 '窗口开→入场变换在开窗段内播放' 的组合语义）。P0-1 红利：scene2（窗口 262 起）在镜 3 期间完全隐藏，帧差断言'场景区色温过渡'可直接判定"},
+    {"frame": 217, "time_sec": 8.68, "expect": "场景 2 尚未入场（startFrame=262）；场景 1 scaleIn 进行中（204+18=222 落定）。ef_trans1 fade 已从降级 IR 移除——转场为窗口切换（261→262 硬切），无叠化；A-C02 '叠化前后重叠 ≥6 帧' 断言降级不适用（P0-1 窗口是硬显隐，无 cross-fade；T-07 ⚠️ 语义仍在转场专题）"},
+    {"frame": 262, "time_sec": 10.48, "expect": "镜 3→镜 4 切换帧：el_scene1 endFrame=261（半开区间：261 帧后隐藏）→ el_scene2 startFrame=262 窗口开启 + an_scene2_in 锚 '深夜书桌' 8.66s→帧 217…注意：锚帧 217 早于窗口 262，GSAP fromTo immediateRender 使 scene2 在窗口开启前 scale=0.92 不可见占位，帧 262 窗口开后入场动画已过半——可见差异：场景 2 出现时无入场缩放过程（动画尾段）——修正记录：an_scene2_in 锚定词 8.66s 与文档分镜帧 262（10.48s）不对应，文档分镜用场景语义切分、词表用旁白时间，两者错位 45 帧；L1 按 262 窗口帧判切换、入场缩放不可观测"},
+    {"frame": 325, "time_sec": 13.0, "expect": "镜 4 规格条：el_stats_strip + el_stat1/2/3 startFrame=325 窗口开启（文档 F325 对位）；an_stats_in 锚 '四十五' 13.0s→帧 325 同帧起播（完美对位——S4 句首词）；三列 45 h/双设备瞬连/235 g 逐列词锚错峰（续航 335/瞬连 353/二百三十五克 366）。A-C02-02：三列 bbox 宽 ≥400px、列间距 60px"},
+    {"frame": 450, "time_sec": 18.0, "expect": "镜 5 Logo：el_logo startFrame=450 窗口开启（文档 F450 对位）+ an_logo_in 锚 'AURA' w15 occurrence=0 18.0s→帧 450 同帧起播，back.out 24 帧；ef_logo_pulse 同锚。能力升级红利：pulse 挂 targetElementId=el_logo（round4 元素级作用域）——呼吸缩放只作用于 Logo 节点自身；规格条窗口 449 关闭（半开：endFrame=449 即 449 帧后隐藏），帧 450 规格条消失、Logo 出现，与文档'转场 2 叠化'的硬切近似"},
+    {"frame": 455, "time_sec": 18.2, "expect": "Logo pulse 第一拍峰值 scale=1.06（450 + ceil(0.18s×25)=455）；A-C02-03 按元素级 pulse 判定 el_logo bbox scale ∈ [1,1.06]；文档 F474 观测位在 pulse 第二回落段，L1 帧差窗口 [450,470]"},
+    {"frame": 618, "time_sec": 24.72, "expect": "镜 6 日期落版：el_date startFrame=600 窗口开启（文档 F600 对位——P0-1 直接保留）+ an_date_in 锚 '十一月二十二日' w20 24.7s→帧 618 起播（窗口先开 18 帧、入场随后，可见差异：600-617 日期文字静态可见无入场缩放）；el_logo 保持居中框 (760,420,400,240)。降级差异：dateText/dateY/dateColor 复合键不可消费（⛔），日期从 el_logo params 拆为独立 text；重复词 AURA 用 occurrence=0/1 区分（w15/w19）"},
+    {"frame": 675, "time_sec": 27.0, "expect": "落版保持帧：Logo + 日期同屏，无新入场；BGM 卡点降级（T-13 ⛔ 无 beat 轨道）——动画锚点全部挂 word 时间戳而非节拍，帧号与 92 BPM 音乐的对位需 L2 人工核验"},
+    {"frame": 749, "time_sec": 29.96, "expect": "尾帧：Logo + 日期 + 字幕区占位（el_caption 空 text，文本由 RenderParams.SubtitleMode=hard 烧录路径注入）；DurationFrames=ceil(30×25)=750；MP4 30.00s±0.1s/25fps。降级差异：F735 整片轻 fade 仍不可实现（fade effect 是遮罩语义非渐隐；P0-2 fadeIn/fadeOut 是元素级 opacity——若要整片渐隐需给全部元素挂 fadeOut 或等 builder 加整片语义，本轮不采用）；BGM 无淡出/loop/loudnorm（amix duration=first 截断）"}
+  ]
+}

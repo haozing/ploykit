@@ -1,0 +1,258 @@
+{
+  "meta": {
+    "generated_at": "2026-11-15",
+    "baseline": "fa1de7c (case library batch 4) + working tree with P0-1/P0-2 landed mid-task",
+    "doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md",
+    "doc_sections": ["3.2 VS-C02", "4.1 VS-C03", "4.3 VS-C05", "3.3 VS-C07", "3.4 VS-C08", "4.5 VS-C09"],
+    "task": "Batch 2 degraded IR construction (remaining six cases) — M2 full-coverage L1/L2 prerequisite. Conversion rules X-3 per testdata/spec-audit-report.json, with rule upgrades from capability changes landed during this batch.",
+    "conversion_rule_status": {
+      "rule_2_targetElementId": "UPGRADED AND USED — round4 landed element-level effect targeting: contract ir.go:96 (Effect.TargetElementID), write-time validation (dangling ref = E_VIDEO_IR_INVALID), builder element-scoped highlight/pulse/shake/fade + counter positioned onto the target bbox. All 15 effects across the six IRs carry element targets where the doc specifies one; all pass Validate's reference check.",
+      "rule_4_startFrame_endFrame": "LANDED MID-TASK AND ADOPTED — the batch started with ir.go clean at fa1de7c (no window fields; windows deleted per the original rule); mid-task a parallel agent landed P0-1: Element.StartFrame/EndFrame (pointer-typed, global-timeline frame clock, validated 0 ≤ start ≤ end ≤ DurationFrames, half-open [start, end) visibility in the builder). All six IRs were UPGRADED in place to carry the case docs' own startFrame/endFrame values (doc storyboard/elements tables), so the docs' element lifecycles are now expressed natively instead of deleted.",
+      "rule_7_fadeIn_fadeOut": "LANDED MID-TASK, ZERO CONSUMERS IN THESE DOCS — validAnimationTypes now includes fadeIn|fadeOut (element-level opacity via autoAlpha). None of the six case docs' target-schema animation lists contain fadeIn/fadeOut animations, so no substitution (scaleIn/rotate approximation) was ever needed; the recorded P0-2 benefit is prospective (available to M2), not consumed here. Whole-clip fade beats remain unmapped — see rule_fade_effect_note.",
+      "rule_fade_effect_note": "Whole-clip 'light fade' end-beats (C02 F735, C07 F1185, C08 F585) stay unmapped: post-X-4 target-less fade is a one-way z-10000 black cover rising to (1-opacity) that never recovers on seek — using it would end each video in a permanent dim. With P0-2 landed, an element-level fadeOut on every on-screen element COULD reproduce the beat; per the fidelity-first rule these were left out of the degraded IRs (documented per case) rather than invented. C05's ef_fade_bars (element fade opacity 0.9) is the one doc fade that maps safely and is kept.",
+      "rule_12_supplement_t12": "NEW RULE DISCOVERED MID-TASK — the parallel agent also completed T-12: highlight on a TEXT-element target now colors the node's TEXT across the anchor word's [start, end] window (not the legacy 0.25s background flash). The six IRs keep the docs' targetElementId choices verbatim; frames.json records per effect which branch applies (text-coloring for text targets, background-flash for shape/image targets) and what the visible difference is (element granularity, no per-word spans)."
+    },
+    "validate_gate": "go test ./internal/video -run TestDegradedIRFiles_Validate → 8/8 PASS (six new + two batch-1), run twice: pre-upgrade (windows absent) and post-upgrade (windows present, exercising the new P0-1 validation path incl. DurationFrames bound). Gate extended beyond batch 1: every effect anchor and animation startAnchor must resolve reason=exact (no nearest/same_text/missing) — all six new IRs pass with zero non-exact resolutions; every targetElementId reference is checked by Validate.",
+    "element_window_policy": "Windows are taken VERBATIM from each case doc (storyboard frame ranges / elements table start/endFrame). Two doc-internal contradictions surfaced and were recorded rather than silently resolved: C05 el_place1 window (150-329) vs frame-table claim '片尾地点行就位' at 720; C05 ef_pulse_frame anchored at '水渠' (5.85s, before the vignette window opens at 330) — pulse fires on a hidden node, recorded as doc-side timing mismatch, kept per fidelity rule."
+  },
+  "cases": [
+    {
+      "id": "VS-C02",
+      "title": "品牌发布（AURA One 无线耳机 TVC）",
+      "doc_section": "§3.2",
+      "meta_render": "1920x1080@25, 30s",
+      "words_count": 22,
+      "elements_count": 14,
+      "effects_count": 1,
+      "element_windows": 11,
+      "animations_types_used": ["scaleIn", "move"],
+      "duration_frames": 750,
+      "validate_ok": true,
+      "artifacts": ["example/internal/video/testdata/ir/c02.degraded.json", "example/internal/video/testdata/ir/c02.frames.json"],
+      "new_capabilities_used": {
+        "targetElementId": ["ef_logo_pulse -> el_logo (pulse breathing scoped to the logo node; pre-round4 this was a whole-#canvas 1.06 scale)"],
+        "startFrame_endFrame": "11 windows adopted from doc storyboard: lightbar 0-74, slogan 75-199, sub_cn 75-599, scene1 200-261, scene2 262-449, stats strip + 3 stat texts 325-449, logo 450-749, date 600-749 — scene transitions and镜 6 落版 are now hard-cut clean, matching doc frame table F200/F262/F450/F600.",
+        "fadeIn_fadeOut": "not present in doc animation list (nothing to adopt)"
+      },
+      "downgrades": [
+        {"capability": "T-05 伪 3D 侧转（产品 rotate+scale 组合）", "decision": "rotate+scale 组合降级为单一 scaleIn 0.6→1（无 perspective/rotateY；P0-2 不解决透视轴）", "visible_diff": "产品侧转为平面缩放，无纵深压缩"},
+        {"capability": "T-07 三段分镜转场（ef_trans1/ef_trans2 整片叠化）", "decision": "两个 target-less fade effect 删除（post-X-4 语义=黑色全屏遮罩单向升 0.65 不复原）；P0-1 窗口使镜间切换为干净硬切", "visible_diff": "无叠化交叉帧；'转场前后重叠 ≥6 帧'断言降级不适用（硬切语义）"},
+        {"capability": "T-01 中外文混排 richRuns", "decision": "英文标语与中文副标拆两个独立 text 元素", "visible_diff": "分栏可复现；字距/字重不可配"},
+        {"capability": "T-02 复合键 columns/textColor/accent（el_stats 三列）", "decision": "规格条拆底板 shape + 三个独立 text 列（各自词锚错峰）", "visible_diff": "三列横排可复现；accent 色不可配"},
+        {"capability": "复合键 dateText/dateY/dateColor（Logo 落版日期）", "decision": "日期拆独立 el_date text（y700 带，窗口 600-749）", "visible_diff": "可复现；颜色/字号靠手填"},
+        {"capability": "T-13 BGM 卡点（92 BPM beat 锚）", "decision": "全部动画挂 word 时间戳锚（无 beat 轨道 ⛔）", "visible_diff": "帧号与音乐节拍对位需 L2 人工核验；预览无声"},
+        {"capability": "镜 3→4 场景入场时序", "decision": "an_scene2_in 锚 8.66s（帧 217）早于窗口 262——窗口开启时入场动画已过半（GSAP fromTo immediateRender 使窗口前 scale=0.92 不可见占位，窗口开后动画尾段）", "visible_diff": "场景 2 出现时无完整入场缩放过程（文档分镜时钟 vs 词表时钟错位 45 帧，frames.json 已记录，L1 按 262 窗口帧判切换）"},
+        {"capability": "双 voice（en+zh 双轨）", "decision": "audio.voice 单轨（Audio{voice,bgm} ⛔ 双轨）", "visible_diff": "英/中旁白需素材侧预混为一条"},
+        {"capability": "F735 整片轻 fade", "decision": "target-less fade 删除；P0-2 fadeOut 元素级可表达但按忠实原则未加（需给全部在屏元素挂 fadeOut）", "visible_diff": "尾段静止收束"}
+      ],
+      "p01_p02_notes": ["P0-1 已落地并采用：11 个窗口恢复文档生命周期——初版'标语常驻镜 3 起''场景残留'两条降级整条撤销", "P0-2 已落地但本案文档动画表无 fadeIn/fadeOut（零消费者）；fadeIn 亦无需要", "T-12 未涉及：唯一 highlight 是 pulse（无 text 着色场景）"]
+    },
+    {
+      "id": "VS-C03",
+      "title": "知识科普：为什么天空是蓝色的（瑞利散射图解）",
+      "doc_section": "§4.1",
+      "meta_render": "1080x1920@30, 45s",
+      "words_count": 20,
+      "elements_count": 15,
+      "effects_count": 3,
+      "element_windows": 13,
+      "animations_types_used": ["scaleIn", "move"],
+      "duration_frames": 1350,
+      "validate_ok": true,
+      "artifacts": ["example/internal/video/testdata/ir/c03.degraded.json", "example/internal/video/testdata/ir/c03.frames.json"],
+      "new_capabilities_used": {
+        "targetElementId": [
+          "ef_hl_blue -> el_title（text 元素 → T-12 词窗口着色：'蓝色' 0.86-1.18s 全行变 #4D96FF——pre-round4 是全画布闪现且被 el_bg 遮住不可见；round4 是元素背景闪；现 T-12 完整形态是文本着色——三代能力演进在同一 effect 上收敛）",
+          "ef_hl_cross -> el_note（text → 词窗口着色 #FFD54A，'分子' 11.1-11.46s）",
+          "ef_pulse_dot -> el_molecules（元素级 1.12 呼吸）"
+        ],
+        "startFrame_endFrame": "13 windows adopted from doc elements table: sun/title 0-539（太阳与标题镜 4 退场——初版最大差异'标题常驻遮公式'消除）, spectrum bands 135/141/147/153/159/165-539（T-09 六条 6 帧错峰精确恢复，不再词锚近似）, molecules/note 315-929, formula 540-929, bars 720/735-1094（文档 15 帧 stagger 精确恢复）.",
+        "fadeIn_fadeOut": "not present in doc animation list"
+      },
+      "downgrades": [
+        {"capability": "T-02 背景渐变（vertical:#0B1B3A→#1F4E8C）", "decision": "gradient 键不可消费 ⛔，纯色 #0B1B3A", "visible_diff": "A-C03-04 '渐变两采样点亮度差 ≥25' 在纯色下必失败——标记降级不适用或素材侧预置渐变位图"},
+        {"capability": "T-03 分子点阵 dotGrid", "decision": "单块浅色 shape 占位", "visible_diff": "12 点阵不可见"},
+        {"capability": "T-11 双柱垂直生长（axis:vertical）", "decision": "整柱中心 scaleIn（30 帧）；窗口 stagger 735 已恢复但生长动画仍锚 '蓝光' 762（窗口先开 27 帧，蓝柱静态满高可见 735-761，生长缩放 762-791）", "visible_diff": "柱自中心放大非底部立起；'窗口开即生长'的文档预期与词锚错位 27 帧已记录"},
+        {"capability": "T-10 counter 0→6.1 挂蓝柱柱顶", "decision": "counter effect 移除（round4 可定位 bbox，但 96px 固定字形溢出 60px 高柱顶标签区且压字）；比值用柱高比 60:140≈6:1 静态呈现", "visible_diff": "数字不滚动；'≈6.1×' 标签需素材/文本侧兜底"},
+        {"capability": "镜 6 左右对照小框", "decision": "需素材（对照图）+ 原本需窗口切换；P0-1 后窗口可表达但素材仍缺，图解层 1094 整体退场后画面只剩背景+字幕", "visible_diff": "S7 段画面空（旁白+字幕承载）"},
+        {"capability": "T-12 词级粒度", "decision": "T-12 完整形态可着色但粒度=整个 text 元素（无逐词 span）——标题整行变蓝而非'蓝色'两字", "visible_diff": "全行着色；如需词级需拆单字 text 元素（本版未做，保持文档元素结构）"}
+      ],
+      "p01_p02_notes": ["P0-1 已落地并采用：13 个窗口——本案是六案中元素生命周期最复杂、P0-1 收益最大案（太阳/标题退场、光谱逐条错峰窗口、双柱 stagger 全部恢复）", "P0-2 已落地零消费者（文档动画表无 fadeIn/fadeOut；BGM 淡出属音频滤镜层，与动画类型无关）", "T-12 完整形态落地：两个 text 高亮（标题/注释）从'背景闪'升级为'词窗口文本着色'——frames.json 已按新语义改写断言窗口"]
+    },
+    {
+      "id": "VS-C05",
+      "title": "旅行/生活方式：十一月京都红叶步行线",
+      "doc_section": "§4.3",
+      "meta_render": "1080x1920@30, 30s",
+      "words_count": 20,
+      "elements_count": 15,
+      "effects_count": 3,
+      "element_windows": 14,
+      "animations_types_used": ["scaleIn", "move"],
+      "duration_frames": 900,
+      "validate_ok": true,
+      "artifacts": ["example/internal/video/testdata/ir/c05.degraded.json", "example/internal/video/testdata/ir/c05.frames.json"],
+      "new_capabilities_used": {
+        "targetElementId": [
+          "ef_hl_maple -> el_title（text → T-12 词窗口着色 #C8553D，'红叶' 0.85-1.15s）",
+          "ef_pulse_frame -> el_vig_top（元素级 1.03——但锚 '水渠' 在取景框窗口开启前，见 downgrades）",
+          "ef_fade_bars -> el_bar_top（元素级 fade 至 opacity 0.9——唯一安全映射的 doc fade，保留）"
+        ],
+        "startFrame_endFrame": "14 windows adopted from doc elements table: photo1 0-329/photo2 330-899（场景切换硬切干净，el_dim 近似层删除——初版靠 z 层叠+压暗近似，现在原生窗口）, vignette four edges 330-719, bars 0-899, title 0-329, place1 150-329, palette 540-719, path_line 720-899——'菜单/面板提前透出'类风险（§4.3.7 点名）整体消除.",
+        "fadeIn_fadeOut": "not present in doc animation list（fade 仅作为 effect 出现，见 ef_fade_bars）"
+      },
+      "downgrades": [
+        {"capability": "T-08 曲线路径运动（沿步道弧线平移）", "decision": "单段直线 move -40→0（120 帧）", "visible_diff": "弧线拉直；A-C05-04 位移区间断言窗口按词锚修正为 [176,296]"},
+        {"capability": "T-03 取景框 shape:'frame'+outsideDim（框外压暗）+zoom 局部放大", "decision": "拆四条 4px 浅色 shape 拼框（几何精确）；框外压暗与框内放大不可表达", "visible_diff": "A-C05-02 '框内亮度 ≥ 框外 1.2 倍' 降级不适用；放大像素清晰度须素材阶段保证"},
+        {"capability": "doc 内部矛盾：ef_pulse_frame 锚 '水渠'（5.85s）早于取景框窗口（330 帧开）", "decision": "忠实文档保留锚值；pulse 作用于 visibility:hidden 节点=无像素", "visible_diff": "该脉冲在帧 181 附近不可见——文档 effects 表自身的时序错位（pulse 取景框却锚镜 1 词），frames.json 已记录；L1 若要观测脉冲需改锚或改窗口（按忠实原则不改）"},
+        {"capability": "doc 内部矛盾：el_place1 窗口 150-329 vs 帧表 '片尾地点行就位'（720）", "decision": "忠实 elements 表窗口（150-329）；片尾地点行由路径线段承载", "visible_diff": "片尾无地点卡（文档帧表与 elements 表矛盾，降级 IR 站 elements 表，frames.json 已记录）"},
+        {"capability": "T-08 路径线宽度生长（from{w:0}→to{w:840}）", "decision": "move 无法动 w/h ⛔，40 帧 scaleIn 整条线中心展开", "visible_diff": "'自左向右生长'定向感丢失；满宽 840px 落定帧 769 不受影响"},
+        {"capability": "T-09 色卡 swatches（staggerFrames:120）", "decision": "拆三块独立 shape，窗口 540-719 + 词锚 549/579/588", "visible_diff": "色块顺序随旁白词序；ΔE 断言窗口 [588,719]"},
+        {"capability": "全局饱和度调色（S −15%）", "decision": "渲染管线无颜色滤镜 ⛔，素材侧预处理", "visible_diff": "成片色彩断言只能比对预处理后的素材"},
+        {"capability": "BGM 27s 起淡出", "decision": "encode.go 无 fade 音频滤镜 ⛔", "visible_diff": "尾段无渐弱（P0-2 元素 fadeOut 不适用音频轨）"}
+      ],
+      "p01_p02_notes": ["P0-1 已落地并采用：14 个窗口——场景切换从'z 层叠+压暗近似'升级为原生硬切（el_dim 删除），photo 残留/透出风险消除", "P0-2 已落地：ef_fade_bars（元素级 fade effect）保留；文档动画表无 fadeIn/fadeOut 动画", "T-12 红利：红叶词着色从'背景闪'升级为'词窗口文本着色'"]
+    },
+    {
+      "id": "VS-C07",
+      "title": "招聘/企业宣传（云栖技术雇主品牌片）",
+      "doc_section": "§3.3",
+      "meta_render": "1920x1080@30, 40s",
+      "words_count": 24,
+      "elements_count": 18,
+      "effects_count": 3,
+      "element_windows": 18,
+      "animations_types_used": ["scaleIn", "move"],
+      "duration_frames": 1200,
+      "validate_ok": true,
+      "artifacts": ["example/internal/video/testdata/ir/c07.degraded.json", "example/internal/video/testdata/ir/c07.frames.json"],
+      "new_capabilities_used": {
+        "targetElementId": [
+          "ef_headcount -> el_infobar（counter 定位到信息卡 bbox (860,160)——pre-round4 固定画布左上原点，本案受益最直接）",
+          "ef_projects -> el_kpi（counter 定位到 KPI 卡 bbox (860,200)）",
+          "ef_quote_hl -> el_quote（shape 元素 → 背景闪分支 #FFD166；若要词着色应改指 el_quote_text——按文档忠实保留）"
+        ],
+        "startFrame_endFrame": "18 windows adopted: 右栏五段切换 infobar 系 0-599 → steps 系 270-419 → kpi 系 600-809 → quote 系 810-989 → cta 系 990-1199 全部恢复文档原窗口——初版最大缺口（镜 4 福利段断链）按文档 elements 表修复为'流程层 419 退场、信息卡回到 599'的叠放语义。photo 0-989→photo2 810-989 左栏切换恢复。",
+        "fadeIn_fadeOut": "not present in doc animation list"
+      },
+      "downgrades": [
+        {"capability": "T-09 流程五步错峰（staggerFrames:12）", "decision": "steps 复合键 ⛔ 拆流程卡 shape + 一条静态步骤文本整体 scaleIn", "visible_diff": "步骤级 12 帧错峰不可见——A-C07-02 降级为'整卡 F283–F313 可见'（文档 3.3.6 同款裁决）"},
+        {"capability": "镜 4 福利四条两列排布（el_infobar params 内容更新语义）", "decision": "IR 无法表达元素内容切换；流程层 419 已退场（P0-1 红利），但福利卡本身仍无对应元素", "visible_diff": "F420–F599 右栏显示信息卡（成立 2016/320 人）而非福利四条——比初版进步（无流程列表残留）但仍缺福利卡；L1 将 F425 段标记为降级内容"},
+        {"capability": "复合键 title/headcountText", "decision": "拆 el_infotitle/el_infocount 独立 text", "visible_diff": "可复现；el_infocount 64px 大于文档卡内 44 规格（视觉层级靠手填）"},
+        {"capability": "复合键 quote/author（引言卡署名）", "decision": "拆 el_quote_text 一条文本（引言+署名合并）", "visible_diff": "引号图形金色 #E8A33D 不可配；T-12 若指 text 可词窗口着色，文档指 shape 走背景闪"},
+        {"capability": "复合键 qrSrc/qrSize（footer 二维码）", "decision": "拆独立 el_qr image (1580,950,80,80) 窗口 990-1199", "visible_diff": "可复现；qr 无入场过渡直接出现（startFrame 窗口开启即静态可见）"},
+        {"capability": "F1185 整片轻 fade", "decision": "target-less fade 删除（黑遮罩单向语义）；P0-2 fadeOut 元素级可表达，按忠实原则未加", "visible_diff": "尾段静止收束"},
+        {"capability": "T-13 BGM loop/loudnorm；字幕 footer 段动态让位", "decision": "encode 无 loop/loudnorm ⛔；字幕带固定 y860-920", "visible_diff": "footer 段字幕不压二维码依赖构图而非动态让位"}
+      ],
+      "p01_p02_notes": ["P0-1 已落地并采用：18 个窗口——初版'最大缺口案'（镜 4 断链）按文档 elements 表修复，右栏五段切换全部原生；本案与 C09 并列为 P0-1 收益最大案", "P0-2 已落地零消费者（文档动画表无 fadeIn/fadeOut）", "counter 双案例验证：两处 counter 均用上 round4 bbox 定位——C04/C06 时代'数字堆左上'降级消除"]
+    },
+    {
+      "id": "VS-C08",
+      "title": "节日促销（年终大促优惠券 + 倒计时）",
+      "doc_section": "§3.4",
+      "meta_render": "1080x1080@30, 20s",
+      "words_count": 22,
+      "elements_count": 15,
+      "effects_count": 3,
+      "element_windows": 15,
+      "animations_types_used": ["scaleIn", "move"],
+      "duration_frames": 600,
+      "validate_ok": true,
+      "artifacts": ["example/internal/video/testdata/ir/c08.degraded.json", "example/internal/video/testdata/ir/c08.frames.json"],
+      "new_capabilities_used": {
+        "targetElementId": [
+          "ef_countdown -> el_countdown（counter 定位到中轴 bbox (340,700,400,120)——pre-round4 在画布左上原点，本案 T-10 头号降级消除）",
+          "ef_coupon_pulse -> el_coupon2（元素级 1.05 呼吸，只缩中列券卡）",
+          "ef_cta_hl -> el_cta（shape → 背景闪分支 #FFD166；若要'自动抵扣'词着色应改指 el_cta_text，按文档忠实保留）"
+        ],
+        "startFrame_endFrame": "15 windows adopted: headline 0-89（初版'与倒计时同屏'差异消除）, coupons 90/130/210-599（词表 3.0/4.32/7.0s→帧 90/130/210 与文档窗口精确自洽）, countdown 330-449, cta 450-599——五段分镜元素生命周期与文档帧表完全对位。",
+        "fadeIn_fadeOut": "not present in doc animation list"
+      },
+      "downgrades": [
+        {"capability": "T-04 粒子系统（18 片 + 重力/散布/旋转/loop/seed）", "decision": "粒子系统 ⛔；3 片独立 shape 彩带，单次线性 move 下落 600 帧", "visible_diff": "无重力/散布/旋转/循环；A-C08-04 断言降级弱化；'F390 粒子密度下降'不可实现（无逐片显隐——P0-1 可给每片挂窗口，本版未做：彩带氛围片无生命周期语义）"},
+        {"capability": "T-05 券面 rotateY 翻转（flipAxis）", "decision": "scaleIn back.out 平面缩放近似（18 帧）", "visible_diff": "无纵深与背面贴图——验收不得写'3D 翻券'"},
+        {"capability": "复合键 threshold/face/tag/badge（券面三层文字）", "decision": "每券拆 shape 底板 + 独立 text 面额（券 3 含'仅限今天'）", "visible_diff": "券孔描边/accent 色不可配；券 3 角标签并入文本行"},
+        {"capability": "T-10 counter 时间格式（00:15 前导零）+ 逐秒节奏", "decision": "整数 15→0；builder 滚动上限 1.2s（377 帧归零）vs 文档 120 帧窗口", "visible_diff": "倒计时提前归零后静态 '0s' 保持至 449 窗口关闭；无格式化"},
+        {"capability": "背景渐变 #7A1F2B→#B3261E", "decision": "gradient 键 ⛔，纯色 #B3261E", "visible_diff": "压缩块风险由纯色承担"},
+        {"capability": "'券面缩至上方'（镜 4）", "decision": "无缩放语义可用（scaleIn 是入场变换非持续状态），券保持原位原尺寸；倒计时区 y700 与券区 y300-620 不重叠故无遮挡", "visible_diff": "券不缩小，与文档'缩至上方'不同但无遮挡冲突"},
+        {"capability": "F585 整片轻 fade", "decision": "target-less fade 删除；P0-2 fadeOut 元素级可表达，按忠实原则未加", "visible_diff": "尾段静止收束"},
+        {"capability": "voice rate 1.15 / BGM 126 BPM 卡点", "decision": "rate 为 TTS 供应商参数 IR 无字段；卡点全挂 word 锚", "visible_diff": "预览无声；节拍对位 L2 人工核验"}
+      ],
+      "p01_p02_notes": ["P0-1 已落地并采用：15 个窗口——headline 0-89 退场、倒计时 449 关闭、CTA 450 开启，三段交替干净（初版 headline 常驻差异整条撤销）", "P0-2 已落地零消费者（文档动画表无 fadeIn/fadeOut 动画）", "counter 三案连线：C07 人数/项目数 + C08 倒计时 + C09 完成数均用上 round4 bbox 定位"]
+    },
+    {
+      "id": "VS-C09",
+      "title": "产品功能演示：批量重命名四步流程",
+      "doc_section": "§4.5",
+      "meta_render": "1920x1080@30, 50s",
+      "words_count": 20,
+      "elements_count": 16,
+      "effects_count": 3,
+      "element_windows": 16,
+      "animations_types_used": ["scaleIn", "move"],
+      "duration_frames": 1500,
+      "validate_ok": true,
+      "artifacts": ["example/internal/video/testdata/ir/c09.degraded.json", "example/internal/video/testdata/ir/c09.frames.json"],
+      "new_capabilities_used": {
+        "targetElementId": [
+          "ef_hl_op -> el_menu（image 元素 → 背景闪分支 #FFD54A；'重命名' 全表 4 次 occurrence=2 精确取菜单句 w10——文档 crossWord 的现行等价表达；若要逐词变黄需把菜单换文本元素+T-12 着色，按文档 image 忠实保留）",
+          "ef_pulse_btn -> el_panel（元素级 1.05；'确认按钮'在截图内无独立节点，降级为整面板卡）",
+          "ef_cnt_done -> el_status（counter 定位到状态栏 bbox (1300,820,380,44)——96px 固定字形大于 28px 状态栏位的压字差异保留）"
+        ],
+        "startFrame_endFrame": "16 windows adopted: title 0-119, zoom frame 120-959, cursor 120-1259, menu 360-599, panel 600-1259, status 960-1259, endline 1260-1499——§4.5.7 头号风险'菜单/面板提前透出'随窗口机制整体消除（初版完全依赖 z 层叠），菜单/面板硬切无同帧共存（599→600）。",
+        "fadeIn_fadeOut": "not present in doc animation list"
+      },
+      "downgrades": [
+        {"capability": "T-03 取景框 zoom:1.25 框内放大", "decision": "四条 4px 蓝 shape 拼框（边界几何精确）；框内放大不可实现", "visible_diff": "只画框不放大；'取景框切到面板区'不可实现（框固定列表区 120-959，镜 4/5 面板区无框——权衡后省略第二组框）"},
+        {"capability": "T-08 光标折线路径（path:'polyline'）", "decision": "拆三条 move（cursor_1/2/3），词锚衔接 126/366/966", "visible_diff": "转角由词锚衔接；单帧位移 ≤60px 可达（≈3.4px/帧）"},
+        {"capability": "T-09 badge 四枚错峰（staggerFrames:400 无解析 ⛔）", "decision": "badges 复合键拆四块独立 shape，step1 帧级 0 + step2/3/4 词锚 29/366/606", "visible_diff": "badge 亮起语义='步骤进行中'而非'流程预告'——文档帧表 36 处全可见改为 47（step2 落定）；P0-1 使四 badge 可挂精确窗口（如 0-1259 四枚同窗+词锚错峰入场，本版已如此）"},
+        {"capability": "T-12 菜单项逐词变黄", "decision": "highlight 闪菜单截图卡背景（image 走背景闪 0.25s 分支）", "visible_diff": "词级对 image 目标天然不可达（截图无文本节点）——素材侧可换文本元素实现；A-C09-02 '菜单行黄底' 降级为菜单卡整体闪色"},
+        {"capability": "面板文本（前缀/预览列表）DOM 可校验", "decision": "面板为 image 截图（素材自证）", "visible_diff": "'旅行-2026' 前缀 IR 层不可校验——需 OCR 或素材自证"},
+        {"capability": "目录树前后对照图", "decision": "el_ui 单张截图常驻（窗口 0-1499）承载'未变'语义；P0-1 可表达双图切换（两张 image 挂互补窗口）但素材只有一张", "visible_diff": "无前后对照切换（素材缺，非 IR 缺）"},
+        {"capability": "操作音效对齐", "decision": "无独立音效轨，前置混入 voice", "visible_diff": "音效与光标/按钮帧级对齐在素材预混阶段完成"}
+      ],
+      "p01_p02_notes": ["P0-1 已落地并采用：16 个窗口——§4.5.7 '菜单/面板提前透出'头号风险随窗口机制整体消除（599→600 硬切、959/960 取景框→状态栏交替、1259/1260 操作层→片尾行交替）", "P0-2 已落地零消费者（文档动画表无 fadeIn/fadeOut）", "counter 第四案连线：C07/C08/C09 三案五处 counter 全部用上 round4 bbox 定位", "锚点歧义最重案：'重命名'出现 4 次，occurrence=0..3 显式区分全部锚点，ResolveAll 全部 reason=exact"]
+    }
+  ],
+  "cross_case_findings": [
+    {
+      "id": "X-B2-1",
+      "finding": "能力升级红利三层叠加（round4 targetElementId → P0-1 时间窗 → T-12 词窗口着色）：六案 15 个 effect 全部保留并挂元素级目标；80 个元素窗口全部按文档原值采用；两个 text 高亮升级为词窗口着色。batch 1 报告 X-4 的头号降级（counter 堆画布左上原点）在 M2 全量清零；highlight/pulse 整屏闪现/缩放清零；'元素提前透出'风险类（C07 镜 4、C09 菜单/面板、C05 场景残留）整体消除。保留的可见差异：highlight 元素粒度（无逐词 span）、counter 96px/700 固定字形（C09 压状态栏）、image 目标无法词着色（截图位图）。",
+      "severity": "info"
+    },
+    {
+      "id": "X-B2-2",
+      "finding": "P0-1/P0-2 在本批执行中途落地（任务开始时 ir.go 在 fa1de7c 干净无窗口字段；中途并行 agent 提交窗口+fadeIn/fadeOut+T-12）。六案 IR 完成了一次原地升级：初版按'删除窗口'规则产出并通过 Validate；升级后按'采用文档窗口'产出并复跑 Validate（两条验证路径都走过：无窗口 back-compat 路径 + 有窗口 DurationFrames 边界校验路径）。P0-2 对六案零消费者（文档动画表均无 fadeIn/fadeOut 动画类型）；整片 fade 收束拍（C02 F735/C07 F1185/C08 F585）仍不可表达（target-less fade 黑遮罩单向语义 + 忠实原则下不给全元素代挂 fadeOut）。",
+      "severity": "info"
+    },
+    {
+      "id": "X-B2-3",
+      "finding": "target-less fade 的 post-X-4 语义必须进入 L1 判读口径：无目标 fade = z-10000 黑色遮罩单向升至 (1-opacity) 且 seek 不复原——文档四案'整片轻 fade'收束拍全部因此不映射。P0-2 落地后的正路是给每个在屏元素挂 fadeOut（元素级 autoAlpha），但那是对文档效果的'发明'而非转换——按内容忠实纪律，本批六案一律不加，frames.json 逐案记录'尾段静止收束'。L1/M2 若决定复现收束拍，应作为显式升级项（给全元素代挂 fadeOut）走变更而非静默加入。",
+      "severity": "high"
+    },
+    {
+      "id": "X-B2-4",
+      "finding": "词锚帧号与文档帧表的系统性漂移仍存在但影响面收窄：P0-1 后元素显隐/退场与文档帧表精确对位（硬切边界即文档帧号），漂移只剩'入场动画起播帧'（词表时间戳驱动）——普遍 0-33 帧（C03 公式 549 vs 文档 540；C05 色卡锚 549 vs 窗口 540；C07 KPI 606 vs 600；C09 菜单 366 vs 窗口 360）。'窗口先开、入场随后'成为六案统一模式；L1 帧差断言应拆两层：显隐边界按窗口帧（文档原值，零漂移）、入场动效按词锚帧（frames.json 逐案推导窗口）。",
+      "severity": "medium"
+    },
+    {
+      "id": "X-B2-5",
+      "finding": "锚点歧义全量显式化 + 两处文档内部矛盾如实记录不静默修正：六案重复词（C02 AURA×2、C03 蓝色/散射/波长/红光×2-3、C05 红叶/橙红×2、C07 工程师×2、C08 满×3、C09 重命名×4）全部 occurrence 显式且 ResolveAll 后 reason=exact（non-exact 即测试失败的门槛）。C09 crossWord 锚按文档'按 wN 解析'注记转 occurrence=2；C05 两处文档矛盾（pulse 锚早于窗口、place1 窗口 vs 帧表片尾）忠实保留文档值并在 frames.json 显式标记。转换规则补充：跨词锚按文档'按 wN 解析'注记转为该词 occurrence。",
+      "severity": "info"
+    },
+    {
+      "id": "X-B2-6",
+      "finding": "elements ≤64 与动画 ≤16/元素余量健康：最大 C07 18 元素/C09 单元素 3 动画；复合键拆元素策略平均使元素数 ×1.9，即使 18 片粒子全拆也 <64。P0-1 窗口字段为指针型 omitempty，无窗口元素零成本 back-compat——六案 80 个窗口全部通过新校验路径（含 DurationFrames 边界）。",
+      "severity": "info"
+    }
+  ],
+  "m2_readiness": {
+    "degraded_ir_files_ready": 9,
+    "cases_total": 9,
+    "all_validate_pass": true,
+    "all_anchors_exact": true,
+    "p0_1_adopted_windows": 80,
+    "t12_text_highlights": ["c03 ef_hl_blue(el_title)", "c03 ef_hl_cross(el_note)", "c05 ef_hl_maple(el_title)"],
+    "next_step": "M2 L1/L2 全量：显隐边界断言按窗口帧（文档原值）、入场动效断言按 frames.json 词锚推导窗口；A-C03-04（渐变）、A-C05-02（框外压暗）、A-C08-04（粒子密度）标记降级不适用；C05 pulse 时序矛盾、C05 place1 片尾矛盾按 frames.json 记录判读；C07 F425 段福利卡缺失标记降级内容。"
+  }
+}

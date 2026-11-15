@@ -1,0 +1,646 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "fps": 30,
+    "width": 1920,
+    "height": 1080,
+    "durationSec": 50
+  },
+  "script": "S1 这段演示展示文件管理器里的批量重命名流程，共四步。S2 第一步，在文件列表框选需要重命名的照片，状态栏显示已选中十二个文件。S3 第二步，右键打开上下文菜单，选择批量重命名。S4 第三步，在面板里输入新前缀旅行-2026，规则为前缀加原序号，预览区逐条显示新文件名。S5 第四步，确认预览无误后点击重命名，状态栏提示十二项已完成。S6 流程结束：文件未被移动，目录结构保持不变。",
+  "words": [
+    {
+      "index": 0,
+      "text": "演示",
+      "start": 0.0,
+      "end": 0.5,
+      "source": "aligner"
+    },
+    {
+      "index": 1,
+      "text": "批量",
+      "start": 0.95,
+      "end": 1.35,
+      "source": "aligner"
+    },
+    {
+      "index": 2,
+      "text": "重命名",
+      "start": 1.35,
+      "end": 1.75,
+      "source": "aligner"
+    },
+    {
+      "index": 3,
+      "text": "流程",
+      "start": 1.75,
+      "end": 2.1,
+      "source": "aligner"
+    },
+    {
+      "index": 4,
+      "text": "第一步",
+      "start": 4.2,
+      "end": 4.55,
+      "source": "aligner"
+    },
+    {
+      "index": 5,
+      "text": "框选",
+      "start": 4.95,
+      "end": 5.3,
+      "source": "aligner"
+    },
+    {
+      "index": 6,
+      "text": "重命名",
+      "start": 5.75,
+      "end": 6.1,
+      "source": "aligner"
+    },
+    {
+      "index": 7,
+      "text": "状态栏",
+      "start": 6.8,
+      "end": 7.2,
+      "source": "aligner"
+    },
+    {
+      "index": 8,
+      "text": "第二步",
+      "start": 12.2,
+      "end": 12.55,
+      "source": "aligner"
+    },
+    {
+      "index": 9,
+      "text": "批量",
+      "start": 13.4,
+      "end": 13.75,
+      "source": "aligner"
+    },
+    {
+      "index": 10,
+      "text": "重命名",
+      "start": 13.75,
+      "end": 14.15,
+      "source": "aligner"
+    },
+    {
+      "index": 11,
+      "text": "第三步",
+      "start": 20.2,
+      "end": 20.55,
+      "source": "aligner"
+    },
+    {
+      "index": 12,
+      "text": "前缀",
+      "start": 21.1,
+      "end": 21.5,
+      "source": "aligner"
+    },
+    {
+      "index": 13,
+      "text": "原序号",
+      "start": 22.3,
+      "end": 22.7,
+      "source": "aligner"
+    },
+    {
+      "index": 14,
+      "text": "预览",
+      "start": 23.2,
+      "end": 23.55,
+      "source": "aligner"
+    },
+    {
+      "index": 15,
+      "text": "第四步",
+      "start": 32.2,
+      "end": 32.55,
+      "source": "aligner"
+    },
+    {
+      "index": 16,
+      "text": "重命名",
+      "start": 33.4,
+      "end": 33.8,
+      "source": "aligner"
+    },
+    {
+      "index": 17,
+      "text": "状态栏",
+      "start": 34.3,
+      "end": 34.7,
+      "source": "aligner"
+    },
+    {
+      "index": 18,
+      "text": "完成",
+      "start": 35.2,
+      "end": 35.6,
+      "source": "aligner"
+    },
+    {
+      "index": 19,
+      "text": "目录",
+      "start": 42.3,
+      "end": 42.8,
+      "source": "aligner"
+    }
+  ],
+  "effects": [
+    {
+      "id": "ef_hl_op",
+      "type": "highlight",
+      "targetElementId": "el_menu",
+      "anchor": {
+        "text": "重命名",
+        "occurrence": 2
+      },
+      "params": {
+        "color": "#FFD54A"
+      }
+    },
+    {
+      "id": "ef_pulse_btn",
+      "type": "pulse",
+      "targetElementId": "el_panel",
+      "anchor": {
+        "text": "重命名",
+        "occurrence": 2
+      },
+      "params": {
+        "scale": 1.05
+      }
+    },
+    {
+      "id": "ef_cnt_done",
+      "type": "counter",
+      "targetElementId": "el_status",
+      "anchor": {
+        "text": "完成",
+        "occurrence": 0
+      },
+      "params": {
+        "from": 0,
+        "to": 12,
+        "suffix": " 项已完成"
+      }
+    }
+  ],
+  "elements": [
+    {
+      "id": "el_ui",
+      "type": "image",
+      "src": "video/vs-c09/as_ui_list.png",
+      "x": 240,
+      "y": 160,
+      "w": 1440,
+      "h": 740,
+      "z": 0,
+      "animations": [
+        {
+          "id": "an_ui_in",
+          "type": "scaleIn",
+          "fromValue": 0.96,
+          "toValue": 1,
+          "durationFrames": 20,
+          "easing": "power2.out"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 1499
+    },
+    {
+      "id": "el_title",
+      "type": "text",
+      "text": "批量重命名 · 四步流程",
+      "color": "#FFFFFF",
+      "fontSize": 48,
+      "x": 560,
+      "y": 70,
+      "w": 800,
+      "h": 60,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_title_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 119
+    },
+    {
+      "id": "el_step1",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 60,
+      "y": 240,
+      "w": 100,
+      "h": 100,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_step1_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out"
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_step2",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 60,
+      "y": 380,
+      "w": 100,
+      "h": 100,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_step2_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "批量",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_step3",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 60,
+      "y": 520,
+      "w": 100,
+      "h": 100,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_step3_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第二步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_step4",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 60,
+      "y": 660,
+      "w": 100,
+      "h": 100,
+      "z": 10,
+      "animations": [
+        {
+          "id": "an_step4_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第三步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 0,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_zoom_top",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 300,
+      "y": 240,
+      "w": 1200,
+      "h": 4,
+      "z": 5,
+      "animations": [
+        {
+          "id": "an_zoom1_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第一步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 120,
+      "endFrame": 959
+    },
+    {
+      "id": "el_zoom_bot",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 300,
+      "y": 716,
+      "w": 1200,
+      "h": 4,
+      "z": 5,
+      "animations": [
+        {
+          "id": "an_zoom2_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第一步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 120,
+      "endFrame": 959
+    },
+    {
+      "id": "el_zoom_left",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 300,
+      "y": 240,
+      "w": 4,
+      "h": 480,
+      "z": 5,
+      "animations": [
+        {
+          "id": "an_zoom3_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第一步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 120,
+      "endFrame": 959
+    },
+    {
+      "id": "el_zoom_right",
+      "type": "shape",
+      "color": "#2E86DE",
+      "x": 1496,
+      "y": 240,
+      "w": 4,
+      "h": 480,
+      "z": 5,
+      "animations": [
+        {
+          "id": "an_zoom4_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第一步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 120,
+      "endFrame": 959
+    },
+    {
+      "id": "el_cursor",
+      "type": "shape",
+      "color": "#FFFFFF",
+      "x": 300,
+      "y": 200,
+      "w": 36,
+      "h": 36,
+      "z": 15,
+      "animations": [
+        {
+          "id": "an_cursor_1",
+          "type": "move",
+          "from": {
+            "x": 300,
+            "y": 200
+          },
+          "to": {
+            "x": 520,
+            "y": 420
+          },
+          "durationFrames": 90,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "第一步",
+            "occurrence": 0
+          }
+        },
+        {
+          "id": "an_cursor_2",
+          "type": "move",
+          "from": {
+            "x": 700,
+            "y": 340
+          },
+          "to": {
+            "x": 860,
+            "y": 380
+          },
+          "durationFrames": 45,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "第二步",
+            "occurrence": 0
+          }
+        },
+        {
+          "id": "an_cursor_3",
+          "type": "move",
+          "from": {
+            "x": 1080,
+            "y": 560
+          },
+          "to": {
+            "x": 1180,
+            "y": 660
+          },
+          "durationFrames": 60,
+          "easing": "power1.out",
+          "startAnchor": {
+            "text": "第四步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 120,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_menu",
+      "type": "image",
+      "src": "video/vs-c09/as_ui_menu.png",
+      "x": 700,
+      "y": 300,
+      "w": 360,
+      "h": 280,
+      "z": 12,
+      "animations": [
+        {
+          "id": "an_menu_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 16,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第二步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 360,
+      "endFrame": 599
+    },
+    {
+      "id": "el_panel",
+      "type": "image",
+      "src": "video/vs-c09/as_ui_panel.png",
+      "x": 700,
+      "y": 240,
+      "w": 640,
+      "h": 520,
+      "z": 13,
+      "animations": [
+        {
+          "id": "an_panel_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 20,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第三步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 600,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_status",
+      "type": "text",
+      "text": "12 项已完成",
+      "color": "#3FA66A",
+      "fontSize": 28,
+      "x": 1300,
+      "y": 820,
+      "w": 380,
+      "h": 44,
+      "z": 12,
+      "animations": [
+        {
+          "id": "an_status_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "第四步",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 960,
+      "endFrame": 1259
+    },
+    {
+      "id": "el_endline",
+      "type": "text",
+      "text": "流程结束：文件未被移动，目录结构保持不变",
+      "color": "#3FA66A",
+      "fontSize": 30,
+      "x": 560,
+      "y": 120,
+      "w": 800,
+      "h": 44,
+      "z": 12,
+      "animations": [
+        {
+          "id": "an_endline_in",
+          "type": "scaleIn",
+          "fromValue": 0,
+          "toValue": 1,
+          "durationFrames": 18,
+          "easing": "power2.out",
+          "startAnchor": {
+            "text": "目录",
+            "occurrence": 0
+          }
+        }
+      ],
+      "startFrame": 1260,
+      "endFrame": 1499
+    },
+    {
+      "id": "el_caption",
+      "type": "text",
+      "text": "",
+      "color": "#FFFFFF",
+      "fontSize": 36,
+      "x": 360,
+      "y": 950,
+      "w": 1200,
+      "h": 70,
+      "z": 20,
+      "startFrame": 0,
+      "endFrame": 1499
+    }
+  ],
+  "audio": {
+    "voice": {
+      "key": "video/vs-c09/voice-zh-CN-male-guide.m4a",
+      "durationSec": 50.0,
+      "volume": 1.0
+    },
+    "bgm": {
+      "key": "video/vs-c09/as_bgm_guide.m4a",
+      "durationSec": 51.0,
+      "volume": 0.14
+    }
+  }
+}
