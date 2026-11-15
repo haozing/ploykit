@@ -1,0 +1,404 @@
+{
+  "layer": "L2-batch6",
+  "run_id": "20261115-215041-l2-batch6",
+  "method": "§7.3 short-clip: six-case degraded IRs truncated to first 5s (durationSec:=5.0, words end\u003c=5 kept+renumbered, element windows clamped into newFrames, effects/animations kept in full, audio block dropped — mux is the mux stage), Validate → Projector.HTML → capx RenderFrames → FrameWriter/EncodePNGStream (libx264 CRF18) → MP4; C08 muxes +440Hz voice.mp3 (batch-1 fixtures)",
+  "env": [
+    "os=windows/amd64",
+    "host=DESKTOP-IGMKJLG",
+    "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "ffmpeg=C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+    "ffprobe=C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe"
+  ],
+  "cases": [
+    {
+      "case_id": "VS-C02",
+      "ir_file": "ir/c02.degraded.json",
+      "status": "pass",
+      "notes": [
+        "truncation: 30s→5s (750→125 frames @25fps), words 22→4, effects kept 1 (anchors past 5s truncate naturally), windows clamped 10/dropped 8, audio block dropped",
+        "image elements served 4 gray 64×64 placeholder PNGs via DataURIResolver (L2 owns the encode chain, not the asset pipeline)",
+        "silent video clip (no audio mux — C08 carries the batch's audio branch)"
+      ],
+      "truncation": {
+        "orig_duration_sec": 30,
+        "orig_frames": 750,
+        "new_frames": 125,
+        "words_orig": 22,
+        "words_kept": 4,
+        "effects_kept": 1,
+        "elements_orig": 14,
+        "windows_clamped": 10,
+        "windows_dropped": 8,
+        "audio_dropped": true,
+        "notes": [
+          "el_scene1: startFrame 200 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_scene2: startFrame 262 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_stats_strip: startFrame 325 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_stat1: startFrame 325 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_stat2: startFrame 325 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_stat3: startFrame 325 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_logo: startFrame 450 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_date: startFrame 600 past the 5s cut — window dropped (element kept, whole-composition layer)"
+        ]
+      },
+      "geometry": {
+        "want": "1920x1080@25",
+        "got": "1920x1080@25"
+      },
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 5,
+        "nb_frames": 125,
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 25,
+            "duration": 5
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"25/1\",\r\n            \"avg_frame_rate\": \"25/1\",\r\n            \"time_base\": \"1/12800\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.080000\",\r\n            \"duration_ts\": 64000,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"165077\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24…(truncated)"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "duration_ms": 18965,
+      "artifact": "l2/VS-C02/output.mp4",
+      "bytes": 105115
+    },
+    {
+      "case_id": "VS-C03",
+      "ir_file": "ir/c03.degraded.json",
+      "status": "pass",
+      "notes": [
+        "truncation: 45s→5s (1350→150 frames @30fps), words 20→3, effects kept 3 (anchors past 5s truncate naturally), windows clamped 13/dropped 8, audio block dropped",
+        "silent video clip (no audio mux — C08 carries the batch's audio branch)"
+      ],
+      "truncation": {
+        "orig_duration_sec": 45,
+        "orig_frames": 1350,
+        "new_frames": 150,
+        "words_orig": 20,
+        "words_kept": 3,
+        "effects_kept": 3,
+        "elements_orig": 15,
+        "windows_clamped": 13,
+        "windows_dropped": 8,
+        "audio_dropped": true,
+        "notes": [
+          "el_band_green: startFrame 153 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_band_blue: startFrame 159 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_band_purple: startFrame 165 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_molecules: startFrame 315 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_formula: startFrame 540 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_bar_red: startFrame 720 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_bar_blue: startFrame 735 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_note: startFrame 315 past the 5s cut — window dropped (element kept, whole-composition layer)"
+        ]
+      },
+      "geometry": {
+        "want": "1080x1920@30",
+        "got": "1080x1920@30"
+      },
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "duration": 5
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"299547\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24…(truncated)"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "duration_ms": 18907,
+      "artifact": "l2/VS-C03/output.mp4",
+      "bytes": 189359
+    },
+    {
+      "case_id": "VS-C05",
+      "ir_file": "ir/c05.degraded.json",
+      "status": "pass",
+      "notes": [
+        "truncation: 30s→5s (900→150 frames @30fps), words 20→4, effects kept 3 (anchors past 5s truncate naturally), windows clamped 14/dropped 9, audio block dropped",
+        "image elements served 2 gray 64×64 placeholder PNGs via DataURIResolver (L2 owns the encode chain, not the asset pipeline)",
+        "silent video clip (no audio mux — C08 carries the batch's audio branch)"
+      ],
+      "truncation": {
+        "orig_duration_sec": 30,
+        "orig_frames": 900,
+        "new_frames": 150,
+        "words_orig": 20,
+        "words_kept": 4,
+        "effects_kept": 3,
+        "elements_orig": 15,
+        "windows_clamped": 14,
+        "windows_dropped": 9,
+        "audio_dropped": true,
+        "notes": [
+          "el_photo2: startFrame 330 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_vig_top: startFrame 330 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_vig_bot: startFrame 330 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_vig_left: startFrame 330 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_vig_right: startFrame 330 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_pal_red: startFrame 540 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_pal_gold: startFrame 540 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_pal_green: startFrame 540 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_path_line: startFrame 720 past the 5s cut — window dropped (element kept, whole-composition layer)"
+        ]
+      },
+      "geometry": {
+        "want": "1080x1920@30",
+        "got": "1080x1920@30"
+      },
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "duration": 5
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"146426\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24…(truncated)"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "duration_ms": 21210,
+      "artifact": "l2/VS-C05/output.mp4",
+      "bytes": 93658
+    },
+    {
+      "case_id": "VS-C07",
+      "ir_file": "ir/c07.degraded.json",
+      "status": "pass",
+      "notes": [
+        "truncation: 40s→5s (1200→150 frames @30fps), words 24→6, effects kept 3 (anchors past 5s truncate naturally), windows clamped 18/dropped 10, audio block dropped",
+        "image elements served 3 gray 64×64 placeholder PNGs via DataURIResolver (L2 owns the encode chain, not the asset pipeline)",
+        "silent video clip (no audio mux — C08 carries the batch's audio branch)"
+      ],
+      "truncation": {
+        "orig_duration_sec": 40,
+        "orig_frames": 1200,
+        "new_frames": 150,
+        "words_orig": 24,
+        "words_kept": 6,
+        "effects_kept": 3,
+        "elements_orig": 18,
+        "windows_clamped": 18,
+        "windows_dropped": 10,
+        "audio_dropped": true,
+        "notes": [
+          "el_steps: startFrame 270 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_step_list: startFrame 270 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_kpi: startFrame 600 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_kpi_text: startFrame 600 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_photo2: startFrame 810 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_quote: startFrame 810 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_quote_text: startFrame 810 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_qr: startFrame 990 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_cta: startFrame 990 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_cta_text: startFrame 990 past the 5s cut — window dropped (element kept, whole-composition layer)"
+        ]
+      },
+      "geometry": {
+        "want": "1920x1080@30",
+        "got": "1920x1080@30"
+      },
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"400202\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24…(truncated)"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "duration_ms": 21838,
+      "artifact": "l2/VS-C07/output.mp4",
+      "bytes": 252268
+    },
+    {
+      "case_id": "VS-C08",
+      "ir_file": "ir/c08.degraded.json",
+      "status": "pass",
+      "notes": [
+        "truncation: 20s→5s (600→150 frames @30fps), words 22→9, effects kept 3 (anchors past 5s truncate naturally), windows clamped 14/dropped 5, audio block dropped",
+        "voice track reused from batch-1 fixtures: l2/_fixtures/voice-440.mp3 (440 Hz sine)",
+        "audio branch: voice-only (440 Hz, gain 0.3 mux) — six-case-tier audio-track verification"
+      ],
+      "truncation": {
+        "orig_duration_sec": 20,
+        "orig_frames": 600,
+        "new_frames": 150,
+        "words_orig": 22,
+        "words_kept": 9,
+        "effects_kept": 3,
+        "elements_orig": 15,
+        "windows_clamped": 14,
+        "windows_dropped": 5,
+        "audio_dropped": true,
+        "notes": [
+          "el_coupon3: startFrame 210 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_coupon3_text: startFrame 210 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_countdown: startFrame 330 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_cta: startFrame 450 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_cta_text: startFrame 450 past the 5s cut — window dropped (element kept, whole-composition layer)"
+        ]
+      },
+      "geometry": {
+        "want": "1080x1080@30",
+        "got": "1080x1080@30"
+      },
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1080,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 5.066667
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 32,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"360651\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24…(truncated)"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l2\\VS-C08\\output.mp4':\r\n  Metadata:\r\n    major_brand     : iso5\r\n    minor_version   : 512\r\n    compatible_brands: iso5iso6mp41\r\n    encoder         : Lavf61.9.100\r\n  Duration: 00:00:05.07, start: 0.000000, bitrate: 431 kb/s\r\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1080x1080, 360 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\r\n    Metadata:\r\n      handler_name    : VideoHandler\r\n      vendor_id       : [0][0][0][0]\r\n      encoder         : Lavc61.24.100 libx264\r\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\r\n    Metadata:\r\n      handler_name    : SoundHandler\r\n      vendor_id       : [0][0][0][0]\r\n[Parsed_volumedetect_0 @ 000001d08c5d2c40] n_samples: 0\r\nStream mapping:\r\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\r\nPress [q] to stop, [?] for help\r\nOutput #0, null, to 'pipe:':\r\n  Metadata:\r\n    major_brand     : iso5\r\n    minor_version   : 512\r\n    compatible_brands: iso5iso6mp41\r\n    encoder         : Lavf61.9.100\r\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\r\n    Metadata:\r\n      encoder         : Lavc61.24.100 pcm_s16le\r\n      handler_name    : SoundHandler\r\n      vendor_id       : [0][0][0][0]\r\n[Parsed_volumedetect_0 @ 000001d08c5d4480] n_samples: 222208\r\n[Parsed_volumedetect_0 @ 000001d08c5d4480] mean_volume: -21.5 dB\r\n[Parsed_volumedetect_0 @ 000001d08c5d4480] max_volume: -18.0 dB\r\n[Parsed_volumedetect_0 @ 000001d08c5d4480] histogram_18db: 46952\r\n[out#0/null @ 000001d08c5d2f40] video:0KiB audio:434KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\r\nsize=N/A time=00:00:05.08 bitrate=N/A speed= 529x    \r\n"
+      },
+      "duration_ms": 17372,
+      "artifact": "l2/VS-C08/output.mp4",
+      "bytes": 273466
+    },
+    {
+      "case_id": "VS-C09",
+      "ir_file": "ir/c09.degraded.json",
+      "status": "pass",
+      "notes": [
+        "truncation: 50s→5s (1500→150 frames @30fps), words 20→5, effects kept 3 (anchors past 5s truncate naturally), windows clamped 15/dropped 4, audio block dropped",
+        "image elements served 3 gray 64×64 placeholder PNGs via DataURIResolver (L2 owns the encode chain, not the asset pipeline)",
+        "silent video clip (no audio mux — C08 carries the batch's audio branch)"
+      ],
+      "truncation": {
+        "orig_duration_sec": 50,
+        "orig_frames": 1500,
+        "new_frames": 150,
+        "words_orig": 20,
+        "words_kept": 5,
+        "effects_kept": 3,
+        "elements_orig": 16,
+        "windows_clamped": 15,
+        "windows_dropped": 4,
+        "audio_dropped": true,
+        "notes": [
+          "el_menu: startFrame 360 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_panel: startFrame 600 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_status: startFrame 960 past the 5s cut — window dropped (element kept, whole-composition layer)",
+          "el_endline: startFrame 1260 past the 5s cut — window dropped (element kept, whole-composition layer)"
+        ]
+      },
+      "geometry": {
+        "want": "1920x1080@30",
+        "got": "1920x1080@30"
+      },
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 5,
+        "nb_frames": 150,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 5
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 76800,\r\n            \"duration\": \"5.000000\",\r\n            \"bit_rate\": \"196800\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.24…(truncated)"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "duration_ms": 20486,
+      "artifact": "l2/VS-C09/output.mp4",
+      "bytes": 125142
+    }
+  ],
+  "totals": {
+    "pass": 6,
+    "fail": 0,
+    "skip": 0
+  },
+  "evidence": [
+    "[实测] ffmpeg N-117763-ge35587250c-20241113 (--enable-libx264), ffprobe 同版本, real headless Chrome via capx — 2026-11-15",
+    "[方法] 截短规则：meta.durationSec:=5.0；words 保留 end\u003c=5 并重排序；元素时间窗 clamp 到新帧数（endFrame\u003eF → F，startFrame\u003eF → 去窗口）；effects/动画全保留（锚点落在 5s 外由渲染时长上限自然截断）；audio 块删除（混音属 mux 阶段）——全部六案截短后一次通过 videoapp.Validate",
+    "[代码] 编码链路：example/internal/video/testdata/l2_batch6_test.go batch6RenderEncode（镜像 render/render_pipeline.go encodeAndUpload 的 pipe 组合）",
+    "[断言] §7.3：ftyp / 帧数精确（ffprobe -count_packets）/ 时长 5.000s±1帧 / 几何按 §7.0 表 / 编码 stderr 无 error（capx 成功路径吞 stderr，故以 ffmpeg -v error 全解码复验出片字节）/ C08 mean_volume\u003e-50dB",
+    "[实测] volumedetect 原始输出在 report audio.volumedetect_raw（截断 2KB）；ffprobe 原始输出在 ffprobe.raw_output（截断 2KB）"
+  ]
+}

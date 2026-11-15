@@ -79,8 +79,18 @@
     // (§3.1.4 expected combination: hidden → window opens at startFrame →
     // entrance transform plays inside the open window). Elements without a
     // window keep the legacy always-mounted, always-visible behavior.
-    if (typeof el.startFrame === 'number' || typeof el.endFrame === 'number') {
+    // Elements with a window start hidden ONLY when the window does not
+    // begin at frame 0: GSAP's seek(0) does not apply a zero-duration set
+    // positioned exactly at t=0, so a startFrame=0 element must stay
+    // visibly mounted (the DOM default) or frame F0 renders without it
+    // (C08's full-canvas el_bg went black at F0 — batch-6 finding). The
+    // endFrame hide-set below still applies on every seek ≥ its position.
+    if (typeof el.startFrame === 'number' && el.startFrame > 0) {
       node.style.visibility = 'hidden';
+    } else if (typeof el.startFrame !== 'number' && typeof el.endFrame === 'number') {
+      // endFrame-only window (visible from the top, hidden at endFrame):
+      // same reasoning — start mounted, the tl.set hides it at tEnd.
+      node.style.visibility = 'visible';
     }
     canvas.appendChild(node);
     return node;
@@ -344,16 +354,21 @@
       if (typeof el.startFrame === 'number' || typeof el.endFrame === 'number') {
         var tStart = typeof el.startFrame === 'number' ? frameTime(el.startFrame) : 0;
         var tEnd = typeof el.endFrame === 'number' ? frameTime(el.endFrame) : frameTime(durationFrames);
-        tl.set(node, { visibility: 'visible' }, tStart);
+        // Half-frame epsilon on the visible set: GSAP's seek(0) does NOT
+        // apply a zero-duration set positioned exactly at t=0 (the playhead
+        // sits BEFORE the set at that instant), so a startFrame=0 element —
+        // e.g. C08's full-canvas el_bg — rendered black on the first frame
+        // while every later frame was correct (batch-6 finding, F0 black /
+        // F15+ red). Placing the set INSIDE frame 0 makes seek(0) land
+        // after it. The half-frame is below any seek grid (frame k seeks to
+        // k/fps, and epsilon < 1/fps), so no frame skips past it.
+        tl.set(node, { visibility: 'visible' }, tStart + 1 / (fps * 2));
         if (tEnd > tStart) {
           tl.set(node, { visibility: 'hidden' }, tEnd);
         } else {
           // collapsed/empty window (startFrame === endFrame): never visible;
-          // keep the initial hidden state by overwriting the visible set at
-          // the same timestamp (later set wins in GSAP's overwrite:auto mode
-          // for the same property at the same position — and if not, the
-          // element is one frame wide, matching the validated IR semantics).
-          tl.set(node, { visibility: 'hidden' }, tStart + 1 / (fps * 2));
+          // hide right after the epsilon-visible set (one frame wide).
+          tl.set(node, { visibility: 'hidden' }, tStart + 1 / fps);
         }
       }
       if (el.type === 'image' && node.decode) {

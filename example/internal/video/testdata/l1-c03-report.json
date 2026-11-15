@@ -1,0 +1,1002 @@
+{
+  "case": "VS-C03",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-16T00:58:27+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": [
+    "[F000] 标题 scaleIn 无锚 → 起播 t=0，24 帧 power2.out → F24 落定可读",
+    "[F026] 降级注记：着色粒度=整个 text 元素（builder 无逐词 span）——标题整行 20 字全变蓝而非'蓝色'两字（frames.json 已记录）",
+    "[F026] 三代能力演进实证：pre-round4 全画布闪且被遮挡不可见 → round4 元素背景闪 → 现 T-12 文本着色（词窗口语义）",
+    "[F150] 帧表'F150 时 band1-3 已入场、band4 入场中'与渲染差 1 条：band3 的锚（不同 w04 5.2s→F156）晚于其窗口（147）9 帧——窗口先开、入场后行的组合语义下 band3 在 F150 仍不可见；错峰节奏本身（6 帧窗口步进）成立，M2 复核口径为'窗口步进+锚分两簇（白光/不同/波长）'",
+    "[F150] A-C03-01 前置'至少 5 条可见'在 band6 锚 波长 F167 起播 18 帧 → F185 全部落定（探针 band6_f185）",
+    "[F325] A-C03-02 注释层间距：注释 an_note_in 同锚 F324（y1290→1260 滑入 20 帧）——注释窗 315 开、锚 324 起：窗口先开 9 帧（滑入 from 态 immediateRender 置底位 y1290 静帧）",
+    "[F366] 降级注记：dotGrid/dots 复合键不可消费（⛔）——分子为一块浅色 shape 占位，12 点阵不可见",
+    "[F540] P0-1 红利核心帧（帧表原文）：无窗口时代标题常驻全片遮住公式区——实测 539 后标题零像素",
+    "[F729] T-11 降级：整柱中心 scaleIn 非底部立起——柱顶/柱底对称偏移，落定帧（759/792）几何不受影响",
+    "[F735] 帧表'蓝柱静态满高可见 735-761'的乐观读法不成立（15 帧窗口空档）——M2 复核：文档 stagger 15 帧在窗口轴恢复，但生长可见性仍由词锚决定；两时钟错位 27 帧与帧表预判一致",
+    "[F735] 红柱此时生长中（F729+6/30 帧）",
+    "[F750] 降级注记：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1）——封面候选需 L1 渲染器单独截取；ef_cnt_ratio counter 已移除（96px 字形压柱顶标签）——数字缺失，比值用柱高比 60:140≈6:1 静态呈现（落定后）",
+    "[F1094] P0-1 红利（帧表原文）：'图解退场'本身可表达——无窗口时代图解会常驻到片尾；镜 6 '左右对照小框'目标语义仍 ⛔（需素材）",
+    "[F1094] '蓝色' occurrence=1（w18 F1104）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载",
+    "[F1349] BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截 45s）——P0-2 fadeIn/fadeOut 是元素级 opacity，不适用音频轨——L2 口径"
+  ],
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 25.8,
+        "anchor_text": "蓝色",
+        "owner": "effect",
+        "owner_id": "ef_hl_blue",
+        "reason": "exact",
+        "word_index": 2,
+        "word_start_sec": 0.86
+      },
+      {
+        "anchor_frame_at_fps": 333,
+        "anchor_text": "分子",
+        "owner": "effect",
+        "owner_id": "ef_hl_cross",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 11.1
+      },
+      {
+        "anchor_frame_at_fps": 366,
+        "anchor_text": "散射",
+        "owner": "effect",
+        "owner_id": "ef_pulse_dot",
+        "reason": "exact",
+        "word_index": 10,
+        "word_start_sec": 12.2
+      },
+      {
+        "anchor_frame_at_fps": 144,
+        "anchor_text": "白光",
+        "owner": "animation",
+        "owner_id": "an_band1_in",
+        "reason": "exact",
+        "word_index": 3,
+        "word_start_sec": 4.8
+      },
+      {
+        "anchor_frame_at_fps": 144,
+        "anchor_text": "白光",
+        "owner": "animation",
+        "owner_id": "an_band2_in",
+        "reason": "exact",
+        "word_index": 3,
+        "word_start_sec": 4.8
+      },
+      {
+        "anchor_frame_at_fps": 156,
+        "anchor_text": "不同",
+        "owner": "animation",
+        "owner_id": "an_band3_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 5.2
+      },
+      {
+        "anchor_frame_at_fps": 156,
+        "anchor_text": "不同",
+        "owner": "animation",
+        "owner_id": "an_band4_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 5.2
+      },
+      {
+        "anchor_frame_at_fps": 166.5,
+        "anchor_text": "波长",
+        "owner": "animation",
+        "owner_id": "an_band5_in",
+        "reason": "exact",
+        "word_index": 5,
+        "word_start_sec": 5.55
+      },
+      {
+        "anchor_frame_at_fps": 166.5,
+        "anchor_text": "波长",
+        "owner": "animation",
+        "owner_id": "an_band6_in",
+        "reason": "exact",
+        "word_index": 5,
+        "word_start_sec": 5.55
+      },
+      {
+        "anchor_frame_at_fps": 324,
+        "anchor_text": "空气",
+        "owner": "animation",
+        "owner_id": "an_molecules",
+        "reason": "exact",
+        "word_index": 6,
+        "word_start_sec": 10.8
+      },
+      {
+        "anchor_frame_at_fps": 549,
+        "anchor_text": "瑞利",
+        "owner": "animation",
+        "owner_id": "an_formula_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 18.3
+      },
+      {
+        "anchor_frame_at_fps": 729,
+        "anchor_text": "红光",
+        "owner": "animation",
+        "owner_id": "an_bar_red_grow",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 24.3
+      },
+      {
+        "anchor_frame_at_fps": 762,
+        "anchor_text": "蓝光",
+        "owner": "animation",
+        "owner_id": "an_bar_blue_grow",
+        "reason": "exact",
+        "word_index": 17,
+        "word_start_sec": 25.4
+      },
+      {
+        "anchor_frame_at_fps": 324,
+        "anchor_text": "空气",
+        "owner": "animation",
+        "owner_id": "an_note_in",
+        "reason": "exact",
+        "word_index": 6,
+        "word_start_sec": 10.8
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1350 frames in 2m9.852s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c03.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c03/",
+    "html_bytes": 109338,
+    "ir_sha256": "effd26fd041a6506e5fc7c574054ae4d64ca46968a340b7a08520b20e3c9fa9c",
+    "meta_json": "example/internal/video/testdata/golden/c03/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c03-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": null,
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 24,
+      "time_sec": 0.8,
+      "status": "probe",
+      "probe_label": "hl-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 3598
+    },
+    {
+      "frame": 28,
+      "time_sec": 0.9333333333333333,
+      "status": "probe",
+      "probe_label": "hl-rise",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 3973
+    },
+    {
+      "frame": 32,
+      "time_sec": 1.0666666666666667,
+      "status": "probe",
+      "probe_label": "hl-rise",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 4369
+    },
+    {
+      "frame": 34,
+      "time_sec": 1.1333333333333333,
+      "status": "probe",
+      "probe_label": "hl-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f24_title_blue": 0,
+        "f28_title_blue": 0,
+        "f32_title_blue": 0.1329,
+        "f34_title_blue": 0.1329,
+        "f38_title_blue": 0,
+        "f44_title_blue": 0,
+        "f54_title_blue": 0,
+        "png_decoded": true,
+        "window_math": "锚 蓝色 w02 0.86s→F26：rise 0.25s → F33.5 全色；hold 至词尾 1.18s→F35；fall 0.6s 自 max(at+0.3s=F35, end-0.6s=F17)=F35 起 → F53 回落"
+      },
+      "duration_ms": 4572
+    },
+    {
+      "frame": 38,
+      "time_sec": 1.2666666666666666,
+      "status": "probe",
+      "probe_label": "hl-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 4972
+    },
+    {
+      "frame": 44,
+      "time_sec": 1.4666666666666666,
+      "status": "probe",
+      "probe_label": "hl-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 5573
+    },
+    {
+      "frame": 54,
+      "time_sec": 1.8,
+      "status": "probe",
+      "probe_label": "hl-back",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 6593
+    },
+    {
+      "frame": 133,
+      "time_sec": 4.433333333333334,
+      "status": "probe",
+      "probe_label": "band1-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 13733
+    },
+    {
+      "frame": 136,
+      "time_sec": 4.533333333333333,
+      "status": "probe",
+      "probe_label": "band1-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 13965
+    },
+    {
+      "frame": 143,
+      "time_sec": 4.766666666666667,
+      "status": "probe",
+      "probe_label": "band1-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 14601
+    },
+    {
+      "frame": 139,
+      "time_sec": 4.633333333333334,
+      "status": "probe",
+      "probe_label": "band2-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 14234
+    },
+    {
+      "frame": 142,
+      "time_sec": 4.733333333333333,
+      "status": "probe",
+      "probe_label": "band2-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 14502
+    },
+    {
+      "frame": 149,
+      "time_sec": 4.966666666666667,
+      "status": "probe",
+      "probe_label": "band2-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15168
+    },
+    {
+      "frame": 145,
+      "time_sec": 4.833333333333333,
+      "status": "probe",
+      "probe_label": "band3-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 14769
+    },
+    {
+      "frame": 148,
+      "time_sec": 4.933333333333334,
+      "status": "probe",
+      "probe_label": "band3-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15070
+    },
+    {
+      "frame": 155,
+      "time_sec": 5.166666666666667,
+      "status": "probe",
+      "probe_label": "band3-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15737
+    },
+    {
+      "frame": 151,
+      "time_sec": 5.033333333333333,
+      "status": "probe",
+      "probe_label": "band4-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15351
+    },
+    {
+      "frame": 154,
+      "time_sec": 5.133333333333334,
+      "status": "probe",
+      "probe_label": "band4-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15644
+    },
+    {
+      "frame": 161,
+      "time_sec": 5.366666666666666,
+      "status": "probe",
+      "probe_label": "band4-settled",
+      "structure_checks": {
+        "band1_f133": 0,
+        "band1_f136": 0,
+        "band1_f143": 0,
+        "band1_f185": 1,
+        "band2_f139": 0,
+        "band2_f142": 0,
+        "band2_f149": 0.8538,
+        "band2_f185": 1,
+        "band3_f145": 0,
+        "band3_f148": 0,
+        "band3_f155": 0,
+        "band3_f185": 1,
+        "band4_f151": 0,
+        "band4_f154": 0,
+        "band4_f161": 0.8538,
+        "band4_f185": 1,
+        "band5_f157": 0,
+        "band5_f160": 0,
+        "band5_f167": 0.01,
+        "band5_f185": 1,
+        "band6_f163": 0,
+        "band6_f166": 0,
+        "band6_f173": 1,
+        "band6_f185": 1,
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 16288
+    },
+    {
+      "frame": 157,
+      "time_sec": 5.233333333333333,
+      "status": "probe",
+      "probe_label": "band5-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15917
+    },
+    {
+      "frame": 160,
+      "time_sec": 5.333333333333333,
+      "status": "probe",
+      "probe_label": "band5-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 16186
+    },
+    {
+      "frame": 167,
+      "time_sec": 5.566666666666666,
+      "status": "probe",
+      "probe_label": "band5-6-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 16839
+    },
+    {
+      "frame": 150,
+      "time_sec": 5,
+      "status": "probe",
+      "probe_label": "f150-keyframe-sample",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 15254
+    },
+    {
+      "frame": 163,
+      "time_sec": 5.433333333333334,
+      "status": "probe",
+      "probe_label": "band6-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 16471
+    },
+    {
+      "frame": 166,
+      "time_sec": 5.533333333333333,
+      "status": "probe",
+      "probe_label": "band6-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 16737
+    },
+    {
+      "frame": 173,
+      "time_sec": 5.766666666666667,
+      "status": "probe",
+      "probe_label": "band6-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 17448
+    },
+    {
+      "frame": 185,
+      "time_sec": 6.166666666666667,
+      "status": "probe",
+      "probe_label": "bands-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 18625
+    },
+    {
+      "frame": 331,
+      "time_sec": 11.033333333333333,
+      "status": "probe",
+      "probe_label": "hlx-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 32621
+    },
+    {
+      "frame": 336,
+      "time_sec": 11.2,
+      "status": "probe",
+      "probe_label": "hlx-rise",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 33118
+    },
+    {
+      "frame": 340,
+      "time_sec": 11.333333333333334,
+      "status": "probe",
+      "probe_label": "hlx-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f331_note_gold": 0,
+        "f336_note_gold": 0,
+        "f340_note_gold": 0.0541,
+        "f346_note_gold": 0,
+        "f362_note_gold": 0,
+        "png_decoded": true,
+        "window_math": "锚 分子 w07 11.1s→F333：rise → F340.5 全色；fall 自 max(F335, end(F343.8)-0.6s=F325.8)=F342 起 → F360 回落"
+      },
+      "duration_ms": 33502
+    },
+    {
+      "frame": 346,
+      "time_sec": 11.533333333333333,
+      "status": "probe",
+      "probe_label": "hlx-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 34016
+    },
+    {
+      "frame": 362,
+      "time_sec": 12.066666666666666,
+      "status": "probe",
+      "probe_label": "hlx-back",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 35487
+    },
+    {
+      "frame": 364,
+      "time_sec": 12.133333333333333,
+      "status": "probe",
+      "probe_label": "pulse-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 35684
+    },
+    {
+      "frame": 371,
+      "time_sec": 12.366666666666667,
+      "status": "probe",
+      "probe_label": "pulse-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f364_mol_body": 1,
+        "f364_mol_top_strip": 0,
+        "f371_mol_body": 1,
+        "f371_mol_top_strip": 1,
+        "f377_mol_body": 1,
+        "f377_mol_top_strip": 0,
+        "f383_mol_body": 1,
+        "f383_mol_top_strip": 0,
+        "png_decoded": true,
+        "window_math": "锚 散射 w10 12.2s→F366：rise 0.18s→F371（scale 1.12，600 宽 bbox 顶缘上移 18px → 探针条 y806-816 变浅色）；fall 0.3s→F380 回落。an_molecules move（y880→820，锚 空气 F324+45f=F369 落定）走 x/y 轴与 scale 无冲突"
+      },
+      "duration_ms": 36370
+    },
+    {
+      "frame": 377,
+      "time_sec": 12.566666666666666,
+      "status": "probe",
+      "probe_label": "pulse-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 36953
+    },
+    {
+      "frame": 383,
+      "time_sec": 12.766666666666667,
+      "status": "probe",
+      "probe_label": "pulse-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 37491
+    },
+    {
+      "frame": 537,
+      "time_sec": 17.9,
+      "status": "probe",
+      "probe_label": "sun-title-open-last",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 51836
+    },
+    {
+      "frame": 543,
+      "time_sec": 18.1,
+      "status": "probe",
+      "probe_label": "sun-title-closed",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f537_sun": 0.9308,
+        "f543_bg_at_sun": 1,
+        "f543_sun": 0,
+        "f543_title_blue": 0,
+        "png_decoded": true
+      },
+      "duration_ms": 52414
+    },
+    {
+      "frame": 737,
+      "time_sec": 24.566666666666666,
+      "status": "probe",
+      "probe_label": "barblue-window-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 70966
+    },
+    {
+      "frame": 750,
+      "time_sec": 25,
+      "status": "probe",
+      "probe_label": "barblue-preanchor",
+      "structure_checks": {
+        "arbitration": "窗口 735 开 vs 锚 蓝光 F762（immediateRender from=0）：若 F750 share≈0 则'锚前 scale=0'语义成立（帧表'静态满高可见 735-761'的乐观读法不成立）；若 \u003e0.01 则窗口开即静态可见成立",
+        "dimensions_ok": true,
+        "f737_barblue": 0,
+        "f750_barblue": 0,
+        "f768_barblue": 0.3754,
+        "f800_barblue": 1,
+        "png_decoded": true
+      },
+      "duration_ms": 72218
+    },
+    {
+      "frame": 768,
+      "time_sec": 25.6,
+      "status": "probe",
+      "probe_label": "barblue-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 74003
+    },
+    {
+      "frame": 800,
+      "time_sec": 26.666666666666668,
+      "status": "probe",
+      "probe_label": "barblue-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 77131
+    }
+  ],
+  "recipe": {
+    "duration_frames": 1350,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1920,
+    "ir_sha256": "effd26fd041a6506e5fc7c574054ae4d64ca46968a340b7a08520b20e3c9fa9c",
+    "ir_source_file": "example/internal/video/testdata/ir/c03.degraded.json",
+    "width": 1080
+  },
+  "run_id": "l1-03-20261116-005616-e9a9",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "ok",
+      "expect": "首帧钩子：el_bg #0B1B3A 铺满（A-C03-04 渐变降级为纯色——shape 渐变键 gradient 不可消费，⛔ 素材侧预置），el_sun 左上 y120（窗口 0-539），el_title '天空为什么是蓝色的？' scaleIn 0.8→1 起始（0.5s 内可读，窗口 0-539）。P0-1 红利：光谱/分子/公式/柱图/注释在窗口未开段全部 visibility:hidden，帧 0 画面 = 渐变底+太阳+标题+问号，与文档镜 1 完全对位",
+      "actual": "首帧钩子：#0B1B3A 深蓝底铺满（T-02 渐变降级为纯色——A-C03-04 降级不适用）+ 太阳（窗口 0 开）+ 标题（scaleIn 0.8→1 自 t=0 进行中）；光谱/分子/公式/柱图/注释窗口未开 → 全隐藏（P0-1：帧 0 画面 = 底+太阳+标题，文档镜 1 对位）",
+      "structure_checks": {
+        "band1_pre": 0,
+        "bg_navy_share": 0.9809,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "mol_pre": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "sun_share": 0.9505
+      },
+      "duration_ms": 1240,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-000.png",
+      "notes": [
+        "标题 scaleIn 无锚 → 起播 t=0，24 帧 power2.out → F24 落定可读"
+      ]
+    },
+    {
+      "frame": 26,
+      "time_sec": 0.8666666666666667,
+      "status": "ok",
+      "expect": "ef_hl_blue 生效窗口开始：锚 '蓝色' w02 0.86s→帧 26。T-12 完整形态红利：el_title 是 text 元素 → highlight 不再闪背景，而是 TEXT 着色（color → #4D96FF，0.25s 上升，持续到词尾 1.18s→帧 35 回落）——标题中'蓝色'两字所在文本元素整体变蓝 9 帧（builder 粒度=整个 text 元素，无逐词 span；标题整行为单元素，全行变蓝）。降级差异保留：全行着色而非单字",
+      "actual": "T-12 完整形态首秀（标题）：'蓝色' 词窗口 F26-F36 内标题全行变 #4D96FF——share 序列 pre(F24)=0.0000 → peak(F34)=0.1329 → back(F54)=0.0000，升-持-降三段齐全",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "note_probe_peak_gold": 0.0541,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_back_blue": 0,
+        "probe_peak_blue": 0.1329,
+        "probe_pre_blue": 0
+      },
+      "duration_ms": 3779,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-026.png",
+      "notes": [
+        "降级注记：着色粒度=整个 text 元素（builder 无逐词 span）——标题整行 20 字全变蓝而非'蓝色'两字（frames.json 已记录）",
+        "三代能力演进实证：pre-round4 全画布闪且被遮挡不可见 → round4 元素背景闪 → 现 T-12 文本着色（词窗口语义）"
+      ]
+    },
+    {
+      "frame": 150,
+      "time_sec": 5,
+      "status": "mismatch",
+      "expect": "光谱六色带 T-09 错峰入场（P0-1 窗口 135-539 全开 + 逐条 startFrame 135/141/147/153/159/165 六帧间隔——文档 6 帧节奏精确恢复，词锚只驱动 scaleIn 入场变换）：帧 150 时 band1-3 已入场、band4 窗口已开入场中、band5/6 未入场——A-C03-01 前置'至少 5 条可见'在帧 167 后达成（band6 落定 183）。P0-1 红利：6 帧错峰不再依赖词锚近似",
+      "actual": "光谱错峰（P0-1 六条 6 帧窗口 135/141/147/153/159/165 全部按文档恢复；像素 onset 序列=[185 149 185 161 185 173]）：F150 时 band1/2 可见（锚 白光 F144 起播 6 帧 power2.out≈0.70）而 band3 窗口已开（147）但锚 不同 F156 未到 → scale=0 不可见（share=0.0000）",
+      "structure_checks": {
+        "band1_pixel_onset": 185,
+        "band1_share_at_150": 1,
+        "band2_pixel_onset": 149,
+        "band2_share_at_150": 1,
+        "band3_pixel_onset": 185,
+        "band3_share_at_150": 0,
+        "band4_pixel_onset": 161,
+        "band4_share_at_150": 0,
+        "band5_pixel_onset": 185,
+        "band5_share_at_150": 0,
+        "band6_pixel_onset": 173,
+        "band6_share_at_150": 0,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "onsets": [
+          185,
+          149,
+          185,
+          161,
+          185,
+          173
+        ],
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 15254,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-150.png",
+      "notes": [
+        "帧表'F150 时 band1-3 已入场、band4 入场中'与渲染差 1 条：band3 的锚（不同 w04 5.2s→F156）晚于其窗口（147）9 帧——窗口先开、入场后行的组合语义下 band3 在 F150 仍不可见；错峰节奏本身（6 帧窗口步进）成立，M2 复核口径为'窗口步进+锚分两簇（白光/不同/波长）'",
+        "A-C03-01 前置'至少 5 条可见'在 band6 锚 波长 F167 起播 18 帧 → F185 全部落定（探针 band6_f185）"
+      ]
+    },
+    {
+      "frame": 325,
+      "time_sec": 10.833333333333334,
+      "status": "ok",
+      "expect": "镜 3：分子点阵窗口开启（startFrame=315，文档对位）+ an_molecules 锚 '空气' 10.8s→帧 324 move 升至 y820（45 帧）；an_note_in 同锚（注释窗口 315-1094 开）。A-C03-02 注释层上沿 1260 ≥1240、图解层（分子 820+300=1120）下沿 ≤1200，间距 140px 达标。ef_hl_cross 锚 '分子' w07 11.1s→帧 333，注释条（text）着色 #FFD54A 至词尾 11.46s→帧 344",
+      "actual": "镜 3：分子块窗口 315 开（body=1.00，an_molecules 锚 空气 F324 升至 y820 45 帧进行中）；元素级 pulse 首秀在后方 F366（top-strip pre=0.0000 → peak=1.0000 → settled=0.0000——1.12 呼吸把顶缘推过 y806-816 探针条再回落，只作用 el_molecules 节点）",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "mol_body": 1,
+        "note_white_pre_hlx": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "pulse_probe_body": 1,
+        "pulse_probe_peak": 1,
+        "pulse_probe_pre": 0,
+        "pulse_probe_settled": 0
+      },
+      "duration_ms": 32024,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-325.png",
+      "notes": [
+        "A-C03-02 注释层间距：注释 an_note_in 同锚 F324（y1290→1260 滑入 20 帧）——注释窗 315 开、锚 324 起：窗口先开 9 帧（滑入 from 态 immediateRender 置底位 y1290 静帧）"
+      ]
+    },
+    {
+      "frame": 366,
+      "time_sec": 12.2,
+      "status": "ok",
+      "expect": "ef_pulse_dot：锚 '散射' w10 12.2s→帧 366，pulse 1.12 挂 targetElementId=el_molecules（元素级呼吸）。降级差异保留：dotGrid/dots 复合键不可消费（⛔），12 点阵为一块浅色 shape 占位",
+      "actual": "ef_hl_cross（T-12 第二处，注释条）：'分子' 词窗口 F333-F344 内注释全行变 #FFD54A——pre(F331)=0.0000 → peak(F340)=0.0541 → back(F362)=0.0000；ef_pulse_dot 同帧锚散射（top-strip 1.0000）——一帧双 effect（highlight 着色 note + pulse 呼吸 molecules）元素级并存",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "note_gold_back": 0,
+        "note_gold_peak": 0.0541,
+        "note_gold_pre": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "pulse_peak_top": 1
+      },
+      "duration_ms": 35869,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-366.png",
+      "notes": [
+        "降级注记：dotGrid/dots 复合键不可消费（⛔）——分子为一块浅色 shape 占位，12 点阵不可见"
+      ]
+    },
+    {
+      "frame": 540,
+      "time_sec": 18,
+      "status": "mismatch",
+      "expect": "镜 4：分子+注释窗口关闭（endFrame=929 未到——注意分子窗口 315-929 跨镜 3-5 持续，公式窗口 540-929 开启）+ el_sun/el_title endFrame=539 半开关闭（半开区间：539 帧后隐藏）——太阳与标题在镜 4 退场，与文档'镜 1 限定'完全一致。P0-1 红利核心帧：无窗口时代标题会常驻全片遮住公式区。an_formula_in 锚 '瑞利' 18.3s→帧 549 起播（窗口先开 9 帧、入场随后——可见差异：540-548 公式静态可见无入场缩放）",
+      "actual": "镜 4 边界：太阳/标题 endFrame=539 半开关闭（F537 sun=0.93 → F543 sun=0.0000）——'标题遮公式'风险在 P0-1 下像素级消除；公式窗口 540 开 + 锚 瑞利 F549 起播（F540 精确帧 formula=0.0000 即 scale=0 不可见，540-548 静态无缩放为 from=0 → 实为不可见，帧表'静态可见无入场缩放'的乐观读法被 immediateRender from=0 修正）",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "formula_blue": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f537_sun": 0.9308,
+        "probe_f543_sun": 0
+      },
+      "duration_ms": 52135,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-540.png",
+      "notes": [
+        "P0-1 红利核心帧（帧表原文）：无窗口时代标题常驻全片遮住公式区——实测 539 后标题零像素"
+      ]
+    },
+    {
+      "frame": 586,
+      "time_sec": 19.533333333333335,
+      "status": "ok",
+      "expect": "'四次方' w14 19.52s→帧 586 在旁白中；公式条完整可见。词级强调由 T-12 词窗口机制覆盖'蓝色/分子'两处（text 元素），公式（text）未挂 highlight——如需强调可后续补 ef（词窗口着色），本轮按文档 effects 表只挂三处",
+      "actual": "'四次方' 在旁白中（F586=词起点帧）：公式条落定（share=0.0973，锚 瑞利 F549+24f=F573 落定）；公式为 text 但未挂 highlight——T-12 只覆盖文档 effects 表三处，词级强调留 M2 补 ef 口径",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "formula_blue": 0.0973,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 56500,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-586.png"
+    },
+    {
+      "frame": 729,
+      "time_sec": 24.3,
+      "status": "ok",
+      "expect": "镜 5 双柱：el_bar_red startFrame=720 窗口开启（文档对位）+ an_bar_red_grow 锚 '红光' 24.3s→帧 729 起播（30 帧生长）。降级差异保留：T-11 axis=vertical ⛔——整柱中心 scaleIn 而非底部立起，A-C03-01 红柱区域像素检查在入场进行中帧的 y 边界对称偏移，落定帧（759）不受影响",
+      "actual": "镜 5 双柱起点：红柱窗口 720 开但锚 红光 F729 同帧（scaleIn from=0 → 精确帧不可见，像素自 F730 起 30 帧生长）；蓝柱窗口 735 未开 → 双零",
+      "structure_checks": {
+        "bar_blue_at_729": 0,
+        "bar_red": 0,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 70220,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-729.png",
+      "notes": [
+        "T-11 降级：整柱中心 scaleIn 非底部立起——柱顶/柱底对称偏移，落定帧（759/792）几何不受影响"
+      ]
+    },
+    {
+      "frame": 735,
+      "time_sec": 24.5,
+      "status": "mismatch",
+      "expect": "el_bar_blue startFrame=735 窗口开启——文档 stagger 15 帧精确恢复（P0-1 红利：蓝柱窗口独立于词锚）；an_bar_blue_grow 锚 '蓝光' 25.4s→帧 762 起播（窗口先开 27 帧——蓝柱静态可见于 735-761，入场缩放 762-791；可见差异：文档预期'窗口开即生长'，词锚在句中'蓝光'处，两时钟错位 27 帧；L1 按窗口 735 判可见、762 判生长中段）",
+      "actual": "蓝柱窗口/锚仲裁（帧表要求点）：F737=0.0000 F750=0.0000 F768=0.3754 F800=1.0000——immediateRender from=0 语义成立：窗口 735 开而锚 蓝光 F762 未到期间蓝柱不可见（scale=0），F762 起 30 帧生长至 F792 落定（F768=0.3754 生长中、F800=1.0000 已落定）",
+      "structure_checks": {
+        "bar_red": 0.5824,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f737_barblue": 0,
+        "probe_f750_barblue": 0,
+        "probe_f768_barblue": 0.3754,
+        "probe_f800_barblue": 1
+      },
+      "duration_ms": 70772,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-735.png",
+      "notes": [
+        "帧表'蓝柱静态满高可见 735-761'的乐观读法不成立（15 帧窗口空档）——M2 复核：文档 stagger 15 帧在窗口轴恢复，但生长可见性仍由词锚决定；两时钟错位 27 帧与帧表预判一致",
+        "红柱此时生长中（F729+6/30 帧）"
+      ]
+    },
+    {
+      "frame": 750,
+      "time_sec": 25,
+      "status": "mismatch",
+      "expect": "文档封面帧候选位（atSec=25）：红柱生长中（729-759）、蓝柱已可见未生长（735 窗口开）——与文档帧表'红柱矮蓝柱高'接近（蓝柱 scale=1 静态满高先于生长动画可见）。降级差异保留：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1，firstThumb stub），封面候选需 L1 帧渲染器单独截取；ef_cnt_ratio counter 仍移除（96px 字形压柱顶标签）",
+      "actual": "文档封面候选位（atSec=25）：红柱生长中（1.00，F729 起 30 帧 → 759 落定）、蓝柱不可见（0.0000——锚 762 未到，仲裁见 F735）——'红柱矮蓝柱高'的封面画面在降级渲染下不成立（蓝柱 27 帧空档）",
+      "structure_checks": {
+        "bar_blue": 0,
+        "bar_red": 1,
+        "barblue_arb_f750": 0,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 72218,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-750.png",
+      "notes": [
+        "降级注记：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1）——封面候选需 L1 渲染器单独截取；ef_cnt_ratio counter 已移除（96px 字形压柱顶标签）——数字缺失，比值用柱高比 60:140≈6:1 静态呈现（落定后）"
+      ]
+    },
+    {
+      "frame": 1094,
+      "time_sec": 36.46666666666667,
+      "status": "ok",
+      "expect": "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场，进入 S7 晚霞旁白段（画面只剩背景+字幕），文档镜 6'左右对照小框'目标语义仍 ⛔（需素材），但 P0-1 使'图解退场'本身可表达（无窗口时代图解会常驻到片尾）。'蓝色' occurrence=1（w18 36.8s）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载",
+      "actual": "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场（四区全零），S7 晚霞段画面只剩背景+字幕",
+      "structure_checks": {
+        "bar_blue": 0,
+        "bar_red": 0,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "formula_blue": 0,
+        "mol_body": 0,
+        "note_gold": 0,
+        "note_ink": 0,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 105152,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-1094.png",
+      "notes": [
+        "P0-1 红利（帧表原文）：'图解退场'本身可表达——无窗口时代图解会常驻到片尾；镜 6 '左右对照小框'目标语义仍 ⛔（需素材）",
+        "'蓝色' occurrence=1（w18 F1104）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载"
+      ]
+    },
+    {
+      "frame": 1349,
+      "time_sec": 44.96666666666667,
+      "status": "ok",
+      "expect": "尾帧：结论卡元素保持（el_caption 空 text 占位，烧录走 RenderParams.SubtitleMode=burn）；DurationFrames=ceil(45×30)=1350；MP4 45.0s±0.1s/30fps/1080×1920。BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截到 voice 45s）——P0-2 的 fadeIn/fadeOut 是元素级 opacity 动画，不适用于音频轨",
+      "actual": "尾帧：结论卡元素保持（el_caption 空 text 占位，烧录走 SubtitleMode=burn）；DurationFrames=ceil(45×30)=1350（bgm 46s 不抬基线——max(meta,voice) 单源）帧循环完整",
+      "structure_checks": {
+        "bg_navy_share": 1,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "duration_frames_rendered": 1350,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 129420,
+      "artifact": "example/internal/video/testdata/golden/c03/frame-1349.png",
+      "notes": [
+        "BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截 45s）——P0-2 fadeIn/fadeOut 是元素级 opacity，不适用音频轨——L2 口径"
+      ]
+    }
+  ],
+  "totals": {
+    "frames_planned": 1350,
+    "frames_rendered": 1350,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 12,
+    "probe_frames_kept": 42,
+    "render_ms_per_frame": 96.19,
+    "render_total_ms": 129852,
+    "render_wall_clock": "2m10s",
+    "samples_degraded_na": 0,
+    "samples_fail": 0,
+    "samples_mismatch": 4,
+    "samples_ok": 8
+  }
+}

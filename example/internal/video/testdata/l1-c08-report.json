@@ -1,0 +1,416 @@
+{
+  "case": "VS-C08",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-16T00:53:55+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": null,
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 340.79999999999995,
+        "anchor_text": "十五秒",
+        "owner": "effect",
+        "owner_id": "ef_countdown",
+        "reason": "exact",
+        "word_index": 17,
+        "word_start_sec": 11.36
+      },
+      {
+        "anchor_frame_at_fps": 129.60000000000002,
+        "anchor_text": "第二张券",
+        "owner": "effect",
+        "owner_id": "ef_coupon_pulse",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 4.32
+      },
+      {
+        "anchor_frame_at_fps": 485.70000000000005,
+        "anchor_text": "抵扣",
+        "owner": "effect",
+        "owner_id": "ef_cta_hl",
+        "reason": "exact",
+        "word_index": 21,
+        "word_start_sec": 16.19
+      },
+      {
+        "anchor_frame_at_fps": 90,
+        "anchor_text": "第一张券",
+        "owner": "animation",
+        "owner_id": "an_coupon1_flip",
+        "reason": "exact",
+        "word_index": 3,
+        "word_start_sec": 3
+      },
+      {
+        "anchor_frame_at_fps": 90,
+        "anchor_text": "第一张券",
+        "owner": "animation",
+        "owner_id": "an_coupon1_text_in",
+        "reason": "exact",
+        "word_index": 3,
+        "word_start_sec": 3
+      },
+      {
+        "anchor_frame_at_fps": 129.60000000000002,
+        "anchor_text": "第二张券",
+        "owner": "animation",
+        "owner_id": "an_coupon2_flip",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 4.32
+      },
+      {
+        "anchor_frame_at_fps": 129.60000000000002,
+        "anchor_text": "第二张券",
+        "owner": "animation",
+        "owner_id": "an_coupon2_text_in",
+        "reason": "exact",
+        "word_index": 7,
+        "word_start_sec": 4.32
+      },
+      {
+        "anchor_frame_at_fps": 210,
+        "anchor_text": "第三张券",
+        "owner": "animation",
+        "owner_id": "an_coupon3_flip",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 7
+      },
+      {
+        "anchor_frame_at_fps": 210,
+        "anchor_text": "第三张券",
+        "owner": "animation",
+        "owner_id": "an_coupon3_text_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 7
+      },
+      {
+        "anchor_frame_at_fps": 330,
+        "anchor_text": "倒计时",
+        "owner": "animation",
+        "owner_id": "an_countdown_in",
+        "reason": "exact",
+        "word_index": 16,
+        "word_start_sec": 11
+      },
+      {
+        "anchor_frame_at_fps": 450,
+        "anchor_text": "点击",
+        "owner": "animation",
+        "owner_id": "an_cta_in",
+        "reason": "exact",
+        "word_index": 19,
+        "word_start_sec": 15
+      },
+      {
+        "anchor_frame_at_fps": 450,
+        "anchor_text": "点击",
+        "owner": "animation",
+        "owner_id": "an_ctatext_in",
+        "reason": "exact",
+        "word_index": 19,
+        "word_start_sec": 15
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 600 frames in 51.505s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c08.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c08/",
+    "html_bytes": 109005,
+    "ir_sha256": "3153a8760befb35b93273ac110e8f9c416531195be22c54b517131f60dfa22ee",
+    "meta_json": "example/internal/video/testdata/golden/c08/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c08-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": null,
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 85,
+      "time_sec": 2.8333333333333335,
+      "status": "probe",
+      "probe_label": "coupon1-window-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 8324
+    },
+    {
+      "frame": 95,
+      "time_sec": 3.1666666666666665,
+      "status": "probe",
+      "probe_label": "coupon1-window-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 9156
+    },
+    {
+      "frame": 350,
+      "time_sec": 11.666666666666666,
+      "status": "probe",
+      "probe_label": "countdown-starting",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 30406
+    },
+    {
+      "frame": 420,
+      "time_sec": 14,
+      "status": "probe",
+      "probe_label": "countdown-zero-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 36242
+    }
+  ],
+  "recipe": {
+    "duration_frames": 600,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1080,
+    "ir_sha256": "3153a8760befb35b93273ac110e8f9c416531195be22c54b517131f60dfa22ee",
+    "ir_source_file": "example/internal/video/testdata/ir/c08.degraded.json",
+    "width": 1080
+  },
+  "run_id": "l1-08-20261116-005304-e0fc",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "",
+      "expect": "开场：el_bg #B3261E 红底铺满（A-C08-05 纯度断言基线；渐变键 #7A1F2B→#B3261E ⛔ 素材侧预置）；3 片彩带 shape 在画面顶部外（y -40/-180/-300，窗口 0-599 全程）；el_headline scaleIn 起始（窗口 0-89，15 帧落定，A-C08-01 缩略图可读）。P0-1 红利：券面/倒计时/CTA 窗口未开段全部 visibility:hidden——帧 0 画面 = 红底+彩带（顶部外）+标题入场中，与文档 F0 完全对位",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "red_bg_share": 0.9999
+      },
+      "duration_ms": 1222,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-000.png"
+    },
+    {
+      "frame": 15,
+      "time_sec": 0.5,
+      "status": "",
+      "expect": "标题落定（scaleIn 15 帧完成，F15 白文字 ≥15% 判定窗口开始）；首片彩带进入画面（an_confetti_fall 线性 600 帧：帧 15 时 y≈415——三片相继行进，白片仍在顶部外，对应文档'粒子开始下落'）。降级差异保留：T-04 粒子系统 ⛔——3 片独立 shape（18 片阵列压到 3 片），无重力/散布/旋转/loop，单次线性下落；A-C08-04 '粒子占比 ≤10%' 必然达标——断言降级弱化",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 2491,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-015.png"
+    },
+    {
+      "frame": 85,
+      "time_sec": 2.8333333333333335,
+      "status": "",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 8324,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-085.png"
+    },
+    {
+      "frame": 90,
+      "time_sec": 3,
+      "status": "",
+      "expect": "镜 2 券 1 翻转入场：el_coupon1/el_coupon1_text startFrame=90 窗口开启（文档 an_coupon1_flip startFrame=90 精确对位——词表 '第一张券' 3.0s→帧 90 两条时钟自洽）+ scaleIn back.out 18 帧同帧起播；headline 窗口 89 关闭（半开：89 帧后隐藏）——标题退场、券 1 入场同帧交替。降级差异保留：T-05 flipAxis:'rotateY' ⛔ 平面缩放近似；券面复合键 threshold/face/tag ⛔ 拆底板+text 面额",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 8737,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-090.png"
+    },
+    {
+      "frame": 95,
+      "time_sec": 3.1666666666666665,
+      "status": "",
+      "structure_checks": {
+        "coupon1_face_post": 0.207,
+        "coupon1_face_pre": 0,
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 9156,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-095.png"
+    },
+    {
+      "frame": 130,
+      "time_sec": 4.333333333333333,
+      "status": "",
+      "expect": "券 2 窗口开启（startFrame=130，文档对位）+ an_coupon2_flip 锚 '第二张券' w07 4.32s→帧 130 同帧起播（18 帧）；ef_coupon_pulse 峰值 ≈帧 135（锚 130 + pulse 0.18s）。能力升级红利：pulse 挂 targetElementId=el_coupon2（元素级 1.05 呼吸）——只缩中列券卡；券 1 已落定（108）两券横排",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 12076,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-130.png"
+    },
+    {
+      "frame": 210,
+      "time_sec": 7,
+      "status": "",
+      "expect": "券 3 补齐三列：el_coupon3/el_coupon3_text startFrame=210 窗口开启（文档 startFrame=210 对位，词 '第三张券' 7.0s→帧 210 自洽）+ scaleIn back.out 18 帧。A-C08-02 列几何：三列 x 90/390/690 宽 300 间距 30（shape 精确坐标，断言可达）；'仅限今天'并入券 3 面额文本（badge 键 ⛔）；重复词 '满' w04/w08/w12 三次出现但无 effect 挂靠（无歧义面）",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 18738,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-210.png"
+    },
+    {
+      "frame": 270,
+      "time_sec": 9,
+      "status": "",
+      "expect": "三券落定：面额 '减 30 / 减 80 / 减 150' 与 S2/S3 逐字一致（A-C08-03 同源断言对象为三个 el_coupon*_text）；S3 关键词'仅限今天'由券 3 文本静态承载（文档 ef 高亮挂券 3 角标签，降级为文本内嵌——如需词窗口着色可将 targetElementId 改指 el_coupon3_text（text 类型走 T-12 着色分支），按文档 effects 表未加，不改",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 23740,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-270.png"
+    },
+    {
+      "frame": 330,
+      "time_sec": 11,
+      "status": "",
+      "expect": "镜 4 倒计时：el_countdown startFrame=330 窗口开启（文档 an 区间 330-449 精确对位）+ an_countdown_in 锚 '倒计时' w16 11.0s→帧 330 同帧起播（15 帧）；券面窗口持续（90/130/210-599），三券+倒计时同屏（文档'券面缩至上方保持'的'缩'不可表达 ⛔——券保持原位原尺寸，可见差异：倒计时区 y700 与券区 y300-620 不重叠，无遮挡）",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 28742,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-330.png"
+    },
+    {
+      "frame": 341,
+      "time_sec": 11.366666666666667,
+      "status": "",
+      "expect": "ef_countdown counter 启动：锚 '十五秒' w17 11.36s→帧 341（0 起点 15 → 0，suffix 's'）。能力升级红利（round4）：counter 挂 targetElementId=el_countdown——数字定位到中轴 bbox (340,700,400,120)，96px 金色字形叠在静态 '15s' 兜底文本上（不再是画布左上原点）；可见差异保留：纯整数无 00:15 格式与前导零（T-10 format ⛔），最长 1.2s 滚动（341+36=377 帧到 0）",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 29660,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-341.png"
+    },
+    {
+      "frame": 390,
+      "time_sec": 13,
+      "status": "",
+      "expect": "倒计时中段：counter 已在 377 帧提前归 0（builder 滚动上限 1.2s vs 文档 120 帧窗口——可见差异：'0s' 静态保持至 449 窗口关闭）；'粒子密度降低'不可实现保留（无逐片显隐，三片彩带匀速下落至 599）——F390 '粒子像素占比较 F45 下降 ≥30%' 断言降级不适用",
+      "structure_checks": {
+        "countdown_amber_ink": 0,
+        "countdown_digits_ink": 0.0869,
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 33741,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-390.png"
+    },
+    {
+      "frame": 450,
+      "time_sec": 15,
+      "status": "",
+      "expect": "镜 5 CTA：倒计时 endFrame=449 半开关闭（449 帧后隐藏）+ el_cta/el_cta_text startFrame=450 窗口开启（文档区间 450-599 精确对位）+ an_cta_in/an_ctatext_in 锚 '点击' w19 15.0s→帧 450 同帧起播（move 940→880 上移 14 帧）；白底红字条 (190,880,700,100)（A-C08-05 白底 ≥80% 判定窗口开始）。跨词锚 '自动抵扣' w20+w21 由 ef_cta_hl 按 w21 '抵扣' 解析（文档同款规则）",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 38739,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-450.png"
+    },
+    {
+      "frame": 487,
+      "time_sec": 16.233333333333334,
+      "status": "",
+      "expect": "ef_cta_hl 生效窗口：锚 '抵扣' w21 16.19s→帧 486。T-12 核对：el_cta 是 shape 元素 → highlight 走背景闪分支（白条背景 → #FFD166 0.25s 升、0.6s 回落，峰值 ≈帧 494）——CTA 文本在 el_cta_text（text）上，若要词着色应指 el_cta_text；按文档 effects 表 targetElementId=el_cta 忠实保留（闪条背景），差异记录：'自动抵扣'词变色仍 ⛔；F585 整片轻 fade 不可实现（fade effect 是遮罩语义非渐隐；P0-2 fadeOut 元素级可表达，按忠实原则不加——尾段静止收束）",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 41825,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-487.png"
+    },
+    {
+      "frame": 599,
+      "time_sec": 19.966666666666665,
+      "status": "",
+      "expect": "尾帧：三券 + CTA 同屏（headline/倒计时已按窗口退场）；bbox 全在界内；DurationFrames=ceil(20×30)=600；MP4 20.00s±0.1s/30fps/1080×1080。BGM 无 loop/loudnorm（amix duration=first 截 20s）；字幕烧录走 RenderParams（倒计时段让位 y640–690 由 el_caption 固定 y 位置近似，非动态让位）；voice rate 1.15 为 TTS 供应商参数，素材侧预混",
+      "structure_checks": {
+        "dimensions": "1080x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 51154,
+      "artifact": "example/internal/video/testdata/golden/c08/frame-599.png"
+    }
+  ],
+  "totals": {
+    "frames_planned": 600,
+    "frames_rendered": 600,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 14,
+    "probe_frames_kept": 4,
+    "render_ms_per_frame": 85.84,
+    "render_total_ms": 51505,
+    "render_wall_clock": "52s",
+    "samples_degraded_na": 0,
+    "samples_fail": 0,
+    "samples_mismatch": 0,
+    "samples_ok": 0
+  }
+}

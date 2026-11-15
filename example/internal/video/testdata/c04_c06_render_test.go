@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,6 +49,7 @@ import (
 	"time"
 
 	"github.com/haozing/ploykit/platform/capx"
+	"github.com/haozing/ploykit/platform/storagex"
 	videoapp "myproduct/internal/video/app"
 )
 
@@ -106,8 +108,15 @@ func loadExpects(t *testing.T, baseDir, name string) map[int]kfExpect {
 	if err != nil {
 		t.Fatalf("read %s: %v", name, err)
 	}
+	// Two shapes in the wild: batch-2 files are a bare array; batch-5/6
+	// files wrap the array in an envelope ({case,fps,frames:[...]}).
 	var list []kfExpect
-	if err := json.Unmarshal(b, &list); err != nil {
+	var env struct {
+		Frames []kfExpect `json:"frames"`
+	}
+	if err := json.Unmarshal(b, &env); err == nil && len(env.Frames) > 0 {
+		list = env.Frames
+	} else if err := json.Unmarshal(b, &list); err != nil {
 		t.Fatalf("unmarshal %s: %v", name, err)
 	}
 	m := map[int]kfExpect{}
@@ -137,6 +146,12 @@ type caseCfg struct {
 	keyframes      []int
 	probes         []probeSpec
 	post           func(cx *caseCtx)
+
+	// Assets, when set, backs the projector's image resolution (data-URI
+	// injection for headless rendering — the network lock makes any URL
+	// reference a hard decode failure). Nil = PreviewResolver default,
+	// which only works for cases without image elements.
+	Assets func(ctx context.Context, key string) (io.ReadCloser, storagex.Object, error)
 }
 
 type sampleRec struct {
@@ -238,7 +253,12 @@ func runCase(t *testing.T, cfg *caseCfg) {
 	cx.irSHA = fmt.Sprintf("%x", sha256.Sum256(msha))
 
 	// -- 2. project to player HTML --
-	proj := videoapp.NewProjector(nil)
+	var proj *videoapp.Projector
+	if cfg.Assets != nil {
+		proj = videoapp.NewProjector(videoapp.DataURIResolver{Loader: cfg.Assets})
+	} else {
+		proj = videoapp.NewProjector(nil)
+	}
 	html, err := proj.HTML(context.Background(), ir, "")
 	if err != nil {
 		t.Fatalf("project HTML: %v", err)

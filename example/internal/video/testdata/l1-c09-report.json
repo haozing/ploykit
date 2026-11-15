@@ -1,0 +1,491 @@
+{
+  "case": "VS-C09",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-16T00:56:23+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": [
+    "[F370] menu window: gray 1.0000 → 0.9871, no raise after startFrame=360"
+  ],
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 412.5,
+        "anchor_text": "重命名",
+        "owner": "effect",
+        "owner_id": "ef_hl_op",
+        "reason": "exact",
+        "word_index": 10,
+        "word_start_sec": 13.75
+      },
+      {
+        "anchor_frame_at_fps": 412.5,
+        "anchor_text": "重命名",
+        "owner": "effect",
+        "owner_id": "ef_pulse_btn",
+        "reason": "exact",
+        "word_index": 10,
+        "word_start_sec": 13.75
+      },
+      {
+        "anchor_frame_at_fps": 1056,
+        "anchor_text": "完成",
+        "owner": "effect",
+        "owner_id": "ef_cnt_done",
+        "reason": "exact",
+        "word_index": 18,
+        "word_start_sec": 35.2
+      },
+      {
+        "anchor_frame_at_fps": 28.5,
+        "anchor_text": "批量",
+        "owner": "animation",
+        "owner_id": "an_step2_in",
+        "reason": "exact",
+        "word_index": 1,
+        "word_start_sec": 0.95
+      },
+      {
+        "anchor_frame_at_fps": 366,
+        "anchor_text": "第二步",
+        "owner": "animation",
+        "owner_id": "an_step3_in",
+        "reason": "exact",
+        "word_index": 8,
+        "word_start_sec": 12.2
+      },
+      {
+        "anchor_frame_at_fps": 606,
+        "anchor_text": "第三步",
+        "owner": "animation",
+        "owner_id": "an_step4_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 20.2
+      },
+      {
+        "anchor_frame_at_fps": 126,
+        "anchor_text": "第一步",
+        "owner": "animation",
+        "owner_id": "an_zoom1_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 4.2
+      },
+      {
+        "anchor_frame_at_fps": 126,
+        "anchor_text": "第一步",
+        "owner": "animation",
+        "owner_id": "an_zoom2_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 4.2
+      },
+      {
+        "anchor_frame_at_fps": 126,
+        "anchor_text": "第一步",
+        "owner": "animation",
+        "owner_id": "an_zoom3_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 4.2
+      },
+      {
+        "anchor_frame_at_fps": 126,
+        "anchor_text": "第一步",
+        "owner": "animation",
+        "owner_id": "an_zoom4_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 4.2
+      },
+      {
+        "anchor_frame_at_fps": 126,
+        "anchor_text": "第一步",
+        "owner": "animation",
+        "owner_id": "an_cursor_1",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 4.2
+      },
+      {
+        "anchor_frame_at_fps": 366,
+        "anchor_text": "第二步",
+        "owner": "animation",
+        "owner_id": "an_cursor_2",
+        "reason": "exact",
+        "word_index": 8,
+        "word_start_sec": 12.2
+      },
+      {
+        "anchor_frame_at_fps": 966.0000000000001,
+        "anchor_text": "第四步",
+        "owner": "animation",
+        "owner_id": "an_cursor_3",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 32.2
+      },
+      {
+        "anchor_frame_at_fps": 366,
+        "anchor_text": "第二步",
+        "owner": "animation",
+        "owner_id": "an_menu_in",
+        "reason": "exact",
+        "word_index": 8,
+        "word_start_sec": 12.2
+      },
+      {
+        "anchor_frame_at_fps": 606,
+        "anchor_text": "第三步",
+        "owner": "animation",
+        "owner_id": "an_panel_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 20.2
+      },
+      {
+        "anchor_frame_at_fps": 966.0000000000001,
+        "anchor_text": "第四步",
+        "owner": "animation",
+        "owner_id": "an_status_in",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 32.2
+      },
+      {
+        "anchor_frame_at_fps": 1269,
+        "anchor_text": "目录",
+        "owner": "animation",
+        "owner_id": "an_endline_in",
+        "reason": "exact",
+        "word_index": 19,
+        "word_start_sec": 42.3
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1500 frames in 2m26.811s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c09.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c09/",
+    "html_bytes": 110521,
+    "ir_sha256": "6cc3a83fe8a100621cb25e882705d5eba1a14e5f9ba67ce477a0774ab4fce5de",
+    "meta_json": "example/internal/video/testdata/golden/c09/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c09-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": null,
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 355,
+      "time_sec": 11.833333333333334,
+      "status": "probe",
+      "probe_label": "menu-window-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 34124
+    },
+    {
+      "frame": 370,
+      "time_sec": 12.333333333333334,
+      "status": "probe",
+      "probe_label": "menu-window-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 35458
+    },
+    {
+      "frame": 595,
+      "time_sec": 19.833333333333332,
+      "status": "probe",
+      "probe_label": "menu-endframe-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 56175
+    },
+    {
+      "frame": 605,
+      "time_sec": 20.166666666666668,
+      "status": "probe",
+      "probe_label": "panel-window-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 57126
+    }
+  ],
+  "recipe": {
+    "duration_frames": 1500,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1080,
+    "ir_sha256": "6cc3a83fe8a100621cb25e882705d5eba1a14e5f9ba67ce477a0774ab4fce5de",
+    "ir_source_file": "example/internal/video/testdata/ir/c09.degraded.json",
+    "width": 1920
+  },
+  "run_id": "l1-09-20261116-005356-f272",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "",
+      "expect": "开场：el_ui 文件列表截图 scaleIn 0.96→1（20 帧，窗口 0-1499 全程）+ el_title '批量重命名 · 四步流程'（窗口 0-119）+ step1 badge（scaleIn 帧级 0 起，18 帧）。P0-1 红利：取景框/光标/菜单/面板/状态栏/片尾行窗口未开段全部 visibility:hidden。badge 错峰降级保留：文档 an_badges_in staggerFrames:400 无解析 ⛔——step1 帧级 0 + step2/3/4 词锚 29/366/606（'批量'/'第二步'/'第三步'），badge 亮起语义='步骤进行中'（见帧 36 条时序差异记录）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 1143,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-000.png"
+    },
+    {
+      "frame": 36,
+      "time_sec": 1.2,
+      "status": "",
+      "expect": "文档帧表 36 处 badge 全可见——降级 IR 此帧仅 step1/step2 可见（step2 窗口 0-1259 + 锚 29 scaleIn 进行中，step3/4 未入场）。帧表对位差异记录：badgesIn 完成帧由 36 改为 47（step2 落定）；A-C09-01 取景框断言与此无耦合；A-C09-04 badge y 240/380/520/660 垂直间距 140px 断言不受影响（坐标精确，四 badge 窗口均 0-1259）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 4609,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-036.png"
+    },
+    {
+      "frame": 120,
+      "time_sec": 4,
+      "status": "",
+      "expect": "镜 2：el_title endFrame=119 半开关闭（标题退场——P0-1 精确对位文档 0-119）；取景框四边 el_zoom_* startFrame=120 窗口开启（文档 120-959 精确对位）+ an_zoom1-4_in 锚 '第一步' w04 4.2s→帧 126 起播（18 帧）；el_cursor 窗口 120 开 + an_cursor_1 同锚 126 起播（90 帧直线 300,200→520,420）。降级差异保留：T-03 shape:'frame'/zoom:1.25 ⛔——框为四条 4px 蓝 shape（x300-1500/y240-720 边界几何精确，A-C09-01 可达），框内放大不可实现",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 12826,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-120.png"
+    },
+    {
+      "frame": 149,
+      "time_sec": 4.966666666666667,
+      "status": "",
+      "expect": "光标行进中：an_cursor_1 至 216 落定；'框选' w05 4.95s→帧 149 在光标行进中旁白。降级差异保留：T-08 path:'polyline' ⛔——两段折线拆三条 move（cursor_1/2/3），词锚衔接；单帧位移 ≤60px 断言可达（90 帧 305px ≈3.4px/帧）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 15496,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-149.png"
+    },
+    {
+      "frame": 355,
+      "time_sec": 11.833333333333334,
+      "status": "",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 34124,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-355.png"
+    },
+    {
+      "frame": 366,
+      "time_sec": 12.2,
+      "status": "",
+      "expect": "镜 3 菜单弹出：el_menu startFrame=360 窗口开启（文档 360-599 精确对位——P0-1 消除'菜单提前透出'头号风险，帧 360 前菜单区域零像素）+ an_menu_in 锚 '第二步' 12.2s→帧 366 同锚起播（16 帧）；an_cursor_2 同锚 366 起播（45 帧 700,340→860,380）；badge step3 同锚亮起。P0-1+词锚双驱动：窗口先开 6 帧（菜单静态可见 360-365）、入场缩放随后——文档语义'菜单弹出'的缩放入场在 366-382",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 35058,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-366.png"
+    },
+    {
+      "frame": 370,
+      "time_sec": 12.333333333333334,
+      "status": "mismatch",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "menu_gray_post": 0.9871,
+        "menu_gray_pre": 1,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 35458,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-370.png",
+      "notes": [
+        "menu window: gray 1.0000 → 0.9871, no raise after startFrame=360"
+      ]
+    },
+    {
+      "frame": 413,
+      "time_sec": 13.766666666666667,
+      "status": "",
+      "expect": "ef_hl_op 生效窗口：锚 '重命名' occurrence=2 = w10 13.75s→帧 413（文档 crossWord '批量重命名' 按 w10 解析的现行等价表达；全表出现序 w02=occ0/w06=occ1/w10=occ2/w16=occ3，Validate 后 ResolveAll 全部 exact）。T-12 核对：el_menu 是 image 元素 → highlight 走背景闪分支（菜单截图卡背景 → #FFD54A，词窗口 413→w10 end 14.15s→帧 425 着色——注意 image 元素走的是背景闪 0.25s 节奏而非词窗口节奏，背景闪分支 unchanged：0.25s 升+0.6s 回落，L1 帧差窗口 [413,434]）。降级差异保留：'批量重命名'菜单项逐词变黄 ⛔（菜单是截图位图，无文本节点可着色——T-12 词级对 image 目标天然不可达，素材侧可换文本元素实现）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 39274,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-413.png"
+    },
+    {
+      "frame": 595,
+      "time_sec": 19.833333333333332,
+      "status": "",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 56175,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-595.png"
+    },
+    {
+      "frame": 599,
+      "time_sec": 19.966666666666665,
+      "status": "",
+      "expect": "镜 3→4 边界：el_menu endFrame=599 半开关闭（菜单退场）；el_panel startFrame=600 窗口开启（文档 600-1259 精确对位）+ an_panel_in 锚 '第三步' w11 20.2s→帧 606 起播（20 帧）——P0-1 硬切保证菜单/面板无同帧共存；badge step4 同 '第三步' 锚亮起（606）；'前缀' w12 21.1s→帧 633 旁白输入段。降级差异保留：面板文本（前缀 '旅行-2026'/预览列表）在截图内，DOM 断言需 OCR 或素材自证",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 56545,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-599.png"
+    },
+    {
+      "frame": 605,
+      "time_sec": 20.166666666666668,
+      "status": "",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "note": "panel window open at 600 (image placeholders, no color assertion)",
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 57126,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-605.png"
+    },
+    {
+      "frame": 705,
+      "time_sec": 23.5,
+      "status": "",
+      "expect": "预览段：'预览' w14 23.2s→帧 696；面板落定（626 起）+ 取景框常驻（窗口 120-959 覆盖镜 4）。降级差异保留：'取景框切到面板区'不可实现（框固定列表区，zoom 元素无第二组——可见差异记录：镜 4/5 面板区无框）；'规则文字 前缀+原序号' 在面板截图内（素材自证）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 67202,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-705.png"
+    },
+    {
+      "frame": 960,
+      "time_sec": 32,
+      "status": "",
+      "expect": "镜 5 确认段：取景框 endFrame=959 半开关闭（退场）；el_status startFrame=960 窗口开启（文档 960-1259 精确对位）+ an_status_in 锚 '第四步' w15 32.2s→帧 966 scaleIn（18 帧）；an_cursor_3 同锚 966 起播（60 帧 1080,560→1180,660，1026 落定）——光标窗口 120-1259 跨五镜持续（文档 cursor 120-1259 原值保留）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 92491,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-960.png"
+    },
+    {
+      "frame": 1002,
+      "time_sec": 33.4,
+      "status": "",
+      "expect": "ef_pulse_btn：锚 '重命名' occurrence=3（w16 33.4s→帧 1002，对应文档 w17 '重命名' pulse）。pulse 挂 targetElementId=el_panel（元素级 1.05，能力升级红利——不整画布缩放）；降级差异保留：'确认按钮'在面板截图内无独立节点，脉冲作用于整面板卡（按钮级目标不可达）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 96631,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-1002.png"
+    },
+    {
+      "frame": 1056,
+      "time_sec": 35.2,
+      "status": "",
+      "expect": "ef_cnt_done counter 启动：锚 '完成' w18 35.2s→帧 1056（0→12，suffix ' 项已完成'，最长 1.2s→1092 帧到 12）。能力升级红利（round4）：counter 挂 targetElementId=el_status——数字定位到状态栏 bbox (1300,820,380,44)，96px 固定字形大于 28px 状态栏位（可见差异保留：字形压到 y820 上方 UI 区）；静态 '12 项已完成' 绿色兜底文本（text）同位保持——A-C09-03 绿色断言对象为 el_status 静态文本；counter 单调递增窗口 [1056,1092] 不倒续不跳变可达",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 102029,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-1056.png"
+    },
+    {
+      "frame": 1260,
+      "time_sec": 42,
+      "status": "",
+      "expect": "镜 6 结果校验：el_panel/el_status/el_cursor endFrame=1259 半开关闭（操作层退场——P0-1 精确对位）+ el_endline startFrame=1260 窗口开启（文档 an_endline_in startFrame=1260 精确对位）+ 锚 '目录' w19 42.3s→帧 1269 scaleIn（18 帧）。片尾说明行 '流程结束：文件未被移动，目录结构保持不变' 顶部 y120 带出现；目录树保持（el_ui 截图常驻承载'未变'语义——前后对照图切换仍 ⛔ 需素材）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "result_digits_ink": 0.6729
+      },
+      "duration_ms": 122356,
+      "artifact": "example/internal/video/testdata/golden/c09/frame-1260.png"
+    }
+  ],
+  "totals": {
+    "frames_planned": 1500,
+    "frames_rendered": 1500,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 16,
+    "probe_frames_kept": 4,
+    "render_ms_per_frame": 97.87,
+    "render_total_ms": 146810,
+    "render_wall_clock": "2m27s",
+    "samples_degraded_na": 0,
+    "samples_fail": 0,
+    "samples_mismatch": 1,
+    "samples_ok": 0
+  }
+}

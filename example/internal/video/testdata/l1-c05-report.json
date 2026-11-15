@@ -1,0 +1,675 @@
+{
+  "case": "VS-C05",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-16T01:00:01+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": [
+    "[F026] 重复词 '红叶' w02/w12 用 occurrence=0/1 显式区分（F-C05-04 注入场景的现行答案）；粒度=整行（无逐词 span）",
+    "[F336] an_photo2_in 锚 东福寺 F336 同帧起播（窗口先开 6 帧：330-335 满幅静帧可见——photo2 无入场缩放空档与 photo 不同：from=0.92 非零，immediateRender 应用 0.92 缩放静帧）",
+    "[F549] A-C05-03 ΔE≤8 检查窗口 [600,719]（三块全落定后——597 红落定/597 金落定/606 绿落定）",
+    "[F720] T-08 降级：from{w:0}→to{w:840} 宽度生长 ⛔——40 帧 scaleIn 中心展开，'自左向右生长'定向感丢失；满宽落定 F769 不受影响"
+  ],
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 25.5,
+        "anchor_text": "红叶",
+        "owner": "effect",
+        "owner_id": "ef_hl_maple",
+        "reason": "exact",
+        "word_index": 2,
+        "word_start_sec": 0.85
+      },
+      {
+        "anchor_frame_at_fps": 175.5,
+        "anchor_text": "水渠",
+        "owner": "effect",
+        "owner_id": "ef_pulse_frame",
+        "reason": "exact",
+        "word_index": 6,
+        "word_start_sec": 5.85
+      },
+      {
+        "anchor_frame_at_fps": 768,
+        "anchor_text": "取景框",
+        "owner": "effect",
+        "owner_id": "ef_fade_bars",
+        "reason": "exact",
+        "word_index": 19,
+        "word_start_sec": 25.6
+      },
+      {
+        "anchor_frame_at_fps": 175.5,
+        "anchor_text": "水渠",
+        "owner": "animation",
+        "owner_id": "an_photo1_pan",
+        "reason": "exact",
+        "word_index": 6,
+        "word_start_sec": 5.85
+      },
+      {
+        "anchor_frame_at_fps": 336,
+        "anchor_text": "东福寺",
+        "owner": "animation",
+        "owner_id": "an_photo2_in",
+        "reason": "exact",
+        "word_index": 10,
+        "word_start_sec": 11.2
+      },
+      {
+        "anchor_frame_at_fps": 348,
+        "anchor_text": "通天桥",
+        "owner": "animation",
+        "owner_id": "an_vig1_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 11.6
+      },
+      {
+        "anchor_frame_at_fps": 348,
+        "anchor_text": "通天桥",
+        "owner": "animation",
+        "owner_id": "an_vig2_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 11.6
+      },
+      {
+        "anchor_frame_at_fps": 348,
+        "anchor_text": "通天桥",
+        "owner": "animation",
+        "owner_id": "an_vig3_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 11.6
+      },
+      {
+        "anchor_frame_at_fps": 348,
+        "anchor_text": "通天桥",
+        "owner": "animation",
+        "owner_id": "an_vig4_in",
+        "reason": "exact",
+        "word_index": 11,
+        "word_start_sec": 11.6
+      },
+      {
+        "anchor_frame_at_fps": 156,
+        "anchor_text": "哲学",
+        "owner": "animation",
+        "owner_id": "an_place1_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 5.2
+      },
+      {
+        "anchor_frame_at_fps": 549,
+        "anchor_text": "饱和度",
+        "owner": "animation",
+        "owner_id": "an_pal1_in",
+        "reason": "exact",
+        "word_index": 15,
+        "word_start_sec": 18.3
+      },
+      {
+        "anchor_frame_at_fps": 579,
+        "anchor_text": "橙红",
+        "owner": "animation",
+        "owner_id": "an_pal2_in",
+        "reason": "exact",
+        "word_index": 16,
+        "word_start_sec": 19.3
+      },
+      {
+        "anchor_frame_at_fps": 588,
+        "anchor_text": "苔藓",
+        "owner": "animation",
+        "owner_id": "an_pal3_in",
+        "reason": "exact",
+        "word_index": 17,
+        "word_start_sec": 19.6
+      },
+      {
+        "anchor_frame_at_fps": 729,
+        "anchor_text": "路径",
+        "owner": "animation",
+        "owner_id": "an_path_grow",
+        "reason": "exact",
+        "word_index": 18,
+        "word_start_sec": 24.3
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 900 frames in 1m31.039s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c05.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c05/",
+    "html_bytes": 109035,
+    "ir_sha256": "d0360655cac12ff4e11fd044c8bd5d808ca6a232628c8bbf7c4823646647964c",
+    "meta_json": "example/internal/video/testdata/golden/c05/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c05-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": null,
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 24,
+      "time_sec": 0.8,
+      "status": "probe",
+      "probe_label": "hl-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 3785
+    },
+    {
+      "frame": 28,
+      "time_sec": 0.9333333333333333,
+      "status": "probe",
+      "probe_label": "hl-rise",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 4160
+    },
+    {
+      "frame": 32,
+      "time_sec": 1.0666666666666667,
+      "status": "probe",
+      "probe_label": "hl-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f24_title_red": 0,
+        "f28_title_red": 0,
+        "f32_title_red": 0.1192,
+        "f36_title_red": 0.011,
+        "f54_title_red": 0,
+        "png_decoded": true,
+        "window_math": "锚 红叶 w02 occ0 0.85s→F26：rise 0.25s → F33.5；词尾 1.15s→F35；fall 自 max(F35, F16.5)=F35 起 0.6s → F53 回落"
+      },
+      "duration_ms": 4558
+    },
+    {
+      "frame": 36,
+      "time_sec": 1.2,
+      "status": "probe",
+      "probe_label": "hl-fall",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 4959
+    },
+    {
+      "frame": 54,
+      "time_sec": 1.8,
+      "status": "probe",
+      "probe_label": "hl-back",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 6784
+    },
+    {
+      "frame": 174,
+      "time_sec": 5.8,
+      "status": "probe",
+      "probe_label": "pulse-hidden-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 18782
+    },
+    {
+      "frame": 178,
+      "time_sec": 5.933333333333334,
+      "status": "probe",
+      "probe_label": "pulse-hidden-peak",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f174_photo_share": 0,
+        "f174_vig_share": 0,
+        "f178_photo_share": 0,
+        "f178_vig_share": 0,
+        "f184_photo_share": 0,
+        "f184_vig_share": 0,
+        "png_decoded": true,
+        "verdict_branch": "pulse 作用于 visibility:hidden 节点=无像素（frames.json '窗口前无效'判读）；photo1 色占满探针条 = 隐藏节点证据"
+      },
+      "duration_ms": 19174
+    },
+    {
+      "frame": 184,
+      "time_sec": 6.133333333333334,
+      "status": "probe",
+      "probe_label": "pulse-hidden-end",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 19777
+    },
+    {
+      "frame": 327,
+      "time_sec": 10.9,
+      "status": "probe",
+      "probe_label": "photo1-open-last",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 34042
+    },
+    {
+      "frame": 331,
+      "time_sec": 11.033333333333333,
+      "status": "probe",
+      "probe_label": "photo2-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f327_photo1": 1,
+        "f331_photo1": 0,
+        "f331_photo2": 1,
+        "png_decoded": true
+      },
+      "duration_ms": 34405
+    },
+    {
+      "frame": 332,
+      "time_sec": 11.066666666666666,
+      "status": "probe",
+      "probe_label": "vig-window-open-preanchor",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 34509
+    },
+    {
+      "frame": 352,
+      "time_sec": 11.733333333333333,
+      "status": "probe",
+      "probe_label": "vig-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f332_vig_top": 0.5,
+        "f352_vig_top": 0.0707,
+        "f372_vig_top": 0.5014,
+        "png_decoded": true
+      },
+      "duration_ms": 36489
+    },
+    {
+      "frame": 372,
+      "time_sec": 12.4,
+      "status": "probe",
+      "probe_label": "vig-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 38445
+    },
+    {
+      "frame": 542,
+      "time_sec": 18.066666666666666,
+      "status": "probe",
+      "probe_label": "pal-all-preanchor",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 55307
+    },
+    {
+      "frame": 556,
+      "time_sec": 18.533333333333335,
+      "status": "probe",
+      "probe_label": "pal-red-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 56656
+    },
+    {
+      "frame": 585,
+      "time_sec": 19.5,
+      "status": "probe",
+      "probe_label": "pal-gold-growing",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f542_gold": 0,
+        "f542_grn": 0,
+        "f542_red": 0,
+        "f556_gold": 0,
+        "f556_grn": 0,
+        "f556_red": 0.7659,
+        "f585_gold": 0.6763,
+        "f585_grn": 0,
+        "f585_red": 1,
+        "f600_gold": 1,
+        "f600_grn": 1,
+        "f600_red": 1,
+        "png_decoded": true
+      },
+      "duration_ms": 59504
+    },
+    {
+      "frame": 600,
+      "time_sec": 20,
+      "status": "probe",
+      "probe_label": "pal-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 61026
+    },
+    {
+      "frame": 766,
+      "time_sec": 25.533333333333335,
+      "status": "probe",
+      "probe_label": "fade-pre",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 77781
+    },
+    {
+      "frame": 780,
+      "time_sec": 26,
+      "status": "probe",
+      "probe_label": "fade-mid",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "f766_bar_blended": 0,
+        "f766_bar_exact": 1,
+        "f780_bar_blended": 0,
+        "f780_bar_exact": 1,
+        "f790_bar_blended": 0,
+        "f790_bar_exact": 1,
+        "png_decoded": true
+      },
+      "duration_ms": 79142
+    },
+    {
+      "frame": 790,
+      "time_sec": 26.333333333333332,
+      "status": "probe",
+      "probe_label": "fade-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 80106
+    }
+  ],
+  "recipe": {
+    "duration_frames": 900,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1920,
+    "ir_sha256": "d0360655cac12ff4e11fd044c8bd5d808ca6a232628c8bbf7c4823646647964c",
+    "ir_source_file": "example/internal/video/testdata/ir/c05.degraded.json",
+    "width": 1080
+  },
+  "run_id": "l1-05-20261116-005829-b437",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "fail",
+      "expect": "钩子帧：el_photo1 水渠红叶大图铺满 1080×1920（A-C05-01 暖色像素占比 ≥30% 依赖素材本身）；上下信箱条 el_bar_top/el_bar_bot #0E1418 各 120px（窗口 0-899 全程）；el_title scaleIn 起始（窗口 0-329，0.8s 内可读）。P0-1 红利：photo2/取景框/色卡/路径线在窗口未开段全部 visibility:hidden——帧 0 画面 = 大图+信箱条+标题，与文档镜 1 完全对位；photo2 透出旧图边缘的风险（§4.3.4 '场景切换'行）随窗口机制消除",
+      "actual": "F0 结构不符 checks=map[bar_bot_exact:1 bar_top_exact:1 dimensions:1080x1920 dimensions_ok:true pal_red:0 photo1_share:1 photo2_share:0 png_decoded:true png_magic_ok:true title_white:0 vig_share:0]",
+      "structure_checks": {
+        "bar_bot_exact": 1,
+        "bar_top_exact": 1,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "pal_red": 0,
+        "photo1_share": 1,
+        "photo2_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "title_white": 0,
+        "vig_share": 0
+      },
+      "duration_ms": 1357,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-000.png"
+    },
+    {
+      "frame": 26,
+      "time_sec": 0.8666666666666667,
+      "status": "ok",
+      "expect": "ef_hl_maple 生效窗口开始：锚 '红叶' w02 occurrence=0 0.85s→帧 26。T-12 完整形态红利：el_title 是 text 元素 → highlight 词窗口着色（title 全行 → #C8553D，0.25s 升、词尾 1.15s→帧 35 回落）；重复词 '红叶' w02/w12 用 occurrence=0/1 显式区分（F-C05-04 注入场景的现行答案）",
+      "actual": "T-12（C05 标题）：'红叶' 词窗口 F26-F35 内标题全行变 #C8553D——pre(F24)=0.0000 → peak(F32)=0.1192 → back(F54)=0.0000",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_back": 0,
+        "probe_peak": 0.1192,
+        "probe_pre": 0
+      },
+      "duration_ms": 3964,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-026.png",
+      "notes": [
+        "重复词 '红叶' w02/w12 用 occurrence=0/1 显式区分（F-C05-04 注入场景的现行答案）；粒度=整行（无逐词 span）"
+      ]
+    },
+    {
+      "frame": 150,
+      "time_sec": 5,
+      "status": "fail",
+      "expect": "镜 2：el_place1 startFrame=150 窗口开启（文档帧表对位）+ an_place1_in 锚 '哲学' 5.2s→帧 156 起播（窗口先开 6 帧、入场随后——可见差异：150-155 地点卡静态可见无入场缩放）；an_photo1_pan 锚 '水渠' 5.85s→帧 176 起播（120 帧直线 -40→0，至 296 落定）。A-C05-04 位移区间断言窗口按词锚修正为 [176,296]（文档 [150,270] 偏移 26 帧，词表自洽优先）。降级差异保留：T-08 path 曲线 ⛔ 直线近似",
+      "actual": "F150 地点卡不符 checks=map[dimensions:1080x1920 dimensions_ok:true hidden_pulse_verdict:true place1_white:0 png_decoded:true png_magic_ok:true]",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "hidden_pulse_verdict": true,
+        "place1_white": 0,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 16383,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-150.png"
+    },
+    {
+      "frame": 181,
+      "time_sec": 6.033333333333333,
+      "status": "fail",
+      "expect": "ef_pulse_frame 峰值：锚 '水渠' 5.85s→帧 176 + pulse 0.18s→峰值 ≈帧 181。pulse 挂 targetElementId=el_vig_top——但取景框窗口 330-719 未开，el_vig_top 在帧 181 仍 visibility:hidden！pulse 作用于隐藏节点=不可见（builder 注释明示 counter host 不继承目标可见性，但 pulse 直接作用于目标节点本身——隐藏节点脉冲无像素）。降级记录：本 pulse 在窗口开启（330）前不可见，文档锚 '之道'（w05 5.6s）本就落在镜 1 时段——这是文档 effects 表自身的时序错位（pulse 取景框却锚在镜 1 词上），降级 IR 保留文档锚值并把该脉冲标记为'窗口前无效'；若 L1 要观测脉冲需把锚改到 '通天桥'（帧 348+）或把取景框窗口提前——按'忠实文档'原则不改",
+      "actual": "F181 隐藏节点 pulse 判读不符 checks=map[dimensions:1080x1920 dimensions_ok:true photo_share:0 png_decoded:true png_magic_ok:true pulse_probe_f178_photo:0 pulse_probe_f178_vig:0 vig_share:0]",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "photo_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "pulse_probe_f178_photo": 0,
+        "pulse_probe_f178_vig": 0,
+        "vig_share": 0
+      },
+      "duration_ms": 19480,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-181.png"
+    },
+    {
+      "frame": 336,
+      "time_sec": 11.2,
+      "status": "ok",
+      "expect": "镜 2→3 切换：el_photo1 endFrame=329 半开关闭（329 帧后隐藏）；el_photo2 startFrame=330 窗口开启 + an_photo2_in 锚 '东福寺' 11.2s→帧 336 起播（窗口先开 6 帧——可见差异：330-335 通天桥静态满幅可见无入场缩放）；场景切换帧差断言窗口 329→330（文档对位，P0-1 后硬切干净无旧图残留）。el_dim 已从降级 IR 移除（P0-1 窗口切换使'切换瞬间压暗旧图'的近似不再需要——photo1 在 329 帧后 visibility:hidden）",
+      "actual": "镜 2→3 切换：photo1 F327=1.00 → photo2 F331=1.00（photo1 残留 0.0000）——329/330 半开硬切干净（el_dim 近似层已删：P0-1 使'切换瞬间压暗'不再需要）；取景框窗口 330 开但锚 通天桥 F348 未到（immediateRender from=0）→ F332=0.5000 F352=0.07（起播 4 帧）F372=0.50 落定",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f327_photo1": 1,
+        "probe_f331_photo1": 0,
+        "probe_f331_photo2": 1,
+        "vig_probe_f332": 0.5,
+        "vig_probe_f352": 0.0707,
+        "vig_probe_f372": 0.5014
+      },
+      "duration_ms": 34891,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-336.png",
+      "notes": [
+        "an_photo2_in 锚 东福寺 F336 同帧起播（窗口先开 6 帧：330-335 满幅静帧可见——photo2 无入场缩放空档与 photo 不同：from=0.92 非零，immediateRender 应用 0.92 缩放静帧）"
+      ]
+    },
+    {
+      "frame": 348,
+      "time_sec": 11.6,
+      "status": "ok",
+      "expect": "取景框四边入场：el_vig_* startFrame=330 窗口开启 + an_vig1-4_in 锚 '通天桥' 11.6s→帧 348 起播（24 帧）。降级差异保留：T-03 shape:'frame'/outsideDim/stroke ⛔ 框外压暗不可表达——A-C05-02 '框内比框外亮 1.2 倍' 降级不适用；框内 1.25× 放大（zoom 键）⛔——只画框不放大",
+      "actual": "取景框四边锚 通天桥 F348 起播（24 帧）：F372 探针 top=0.50 落定——T-03 降级：shape:'frame'/outsideDim ⛔ 框外压暗不可表达（A-C05-02 降级不适用），框内 1.25× 放大 ⛔——只画框不放大（四条 6px shape 几何精确）",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f372_top": 0.5014,
+        "vig_bot": 0,
+        "vig_left": 0,
+        "vig_top": 0
+      },
+      "duration_ms": 36089,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-348.png"
+    },
+    {
+      "frame": 549,
+      "time_sec": 18.3,
+      "status": "ok",
+      "expect": "镜 4 色卡：el_pal_* startFrame=540 窗口开启（文档帧表 548 对位近似——文档 an_place2_in startFrame=548，降级 IR 用文档 elements 表的 540 统一）+ an_pal1_in 锚 '饱和度' 18.3s→帧 549 起播；三块错峰锚 549/579/588（饱和度/橙红@occ1/苔藓）。降级差异保留：swatches 复合键 ⛔ 拆三块独立 shape",
+      "actual": "镜 4 色卡：窗口 540 开 + 三块错峰锚（红 饱和度 F549 / 金 橙红@occ1 F579 / 绿 苔藓 F588）——F542=0.0000（全 pre-anchor scale=0）→ F556 red=0.77（生长中）→ F585 gold=0.68（起播 6 帧）→ F600 grn=1.00（起播 12 帧）；T-09 swatches/staggerFrames ⛔ 拆三块独立 shape，顺序随旁白词序",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f542_red": 0,
+        "probe_f556_red": 0.7659,
+        "probe_f585_gold": 0.6763,
+        "probe_f600_grn": 1
+      },
+      "duration_ms": 55988,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-549.png",
+      "notes": [
+        "A-C05-03 ΔE≤8 检查窗口 [600,719]（三块全落定后——597 红落定/597 金落定/606 绿落定）"
+      ]
+    },
+    {
+      "frame": 579,
+      "time_sec": 19.3,
+      "status": "ok",
+      "expect": "金褐块入场（'橙红' occurrence=1 w16 19.3s——S4 复述色名的第二个橙红）；A-C05-03 三块 ΔE≤8 检查窗口 [588,719]（三块全部落定后、窗口 719 关闭前）",
+      "actual": "金褐块锚 橙红@occ1 F579（S4 复述色名的第二个橙红——occurrence 区分实证）：F585 探针 0.68 生长中",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "gold_share": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f585_gold": 0.6763
+      },
+      "duration_ms": 58909,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-579.png"
+    },
+    {
+      "frame": 720,
+      "time_sec": 24,
+      "status": "ok",
+      "expect": "镜 5：色卡+取景框 endFrame=719 半开关闭（图解元素退场）+ el_path_line startFrame=720 窗口开启（文档帧表 720 精确对位）+ an_path_grow 锚 '路径' 24.3s→帧 729 起播（40 帧 scaleIn）。降级差异保留：from{w:0}→to{w:840} 宽度生长 ⛔——scaleIn 中心展开，'自左向右生长'定向感丢失；满宽 840px 落定帧 769 不受影响；el_title 已在 329 退场（P0-1 红利：标题不再常驻片尾）",
+      "actual": "镜 5 边界：色卡+取景框 endFrame=719 半开关闭（red=0.0000 vig=0.0000 全零）+ el_path_line 窗口 720 开（锚 路径 F729 起播 40 帧——F720 精确帧 path=0.0000 即 from=0 不可见）；标题已在 329 退场（title=0.0000——P0-1：标题不再常驻片尾）",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "pal_red_gone": 0,
+        "path_gold": 0,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "title_white_gone": 0,
+        "vig_top_gone": 0
+      },
+      "duration_ms": 73208,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-720.png",
+      "notes": [
+        "T-08 降级：from{w:0}→to{w:840} 宽度生长 ⛔——40 帧 scaleIn 中心展开，'自左向右生长'定向感丢失；满宽落定 F769 不受影响"
+      ]
+    },
+    {
+      "frame": 768,
+      "time_sec": 25.6,
+      "status": "fail",
+      "expect": "ef_fade_bars：锚 '取景框' w19 25.6s→帧 768。fade 挂 targetElementId=el_bar_top（元素级，round4）——信箱上条 opacity 单向降至 0.9 即轻微透出红叶；可见差异保留：下条与全片不淡化；文档 'F585 起整片轻 fade' 若要复现可给全部在屏元素挂 fadeOut（P0-2 语义可用）——本轮按文档 effects 表只挂一处，不改",
+      "actual": "F768 fade 采样不符 checks=map[dimensions:1080x1920 dimensions_ok:true png_decoded:true png_magic_ok:true probe_f766_exact:1 probe_f780_blended:0 probe_f780_exact:1 probe_f790_blended:0]",
+      "structure_checks": {
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true,
+        "probe_f766_exact": 1,
+        "probe_f780_blended": 0,
+        "probe_f780_exact": 1,
+        "probe_f790_blended": 0
+      },
+      "duration_ms": 77969,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-768.png"
+    },
+    {
+      "frame": 899,
+      "time_sec": 29.966666666666665,
+      "status": "fail",
+      "expect": "尾帧：路径线满宽 + 地点行（el_place1 窗口 329 已关——注意：文档 place1 endFrame=329，片尾'地点行就位'由路径线段承载，文档帧表 720 '片尾地点行就位'与 elements 表 place1 0-329 自相矛盾，降级 IR 忠实 elements 表：片尾无地点卡，可见差异记录）+ el_caption 空 text 占位（烧录走 RenderParams.SubtitleMode=burn）；DurationFrames=ceil(30×30)=900；MP4 30.0s±0.1s/30fps/1080×1920。BGM 27s 起淡出不可实现（无 fade 音频滤镜，amix duration=first 截 30s）；降级差异保留：饱和度 −15% 全局调色 ⛔ 素材侧预处理",
+      "actual": "尾帧内容缺失 checks=map[bar_top_blended:0 dimensions:1080x1920 dimensions_ok:true duration_frames_rendered:900 path_gold:0 photo2_share:0 place1_white:0 png_decoded:true png_magic_ok:true]",
+      "structure_checks": {
+        "bar_top_blended": 0,
+        "dimensions": "1080x1920",
+        "dimensions_ok": true,
+        "duration_frames_rendered": 900,
+        "path_gold": 0,
+        "photo2_share": 0,
+        "place1_white": 0,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 90779,
+      "artifact": "example/internal/video/testdata/golden/c05/frame-899.png"
+    }
+  ],
+  "totals": {
+    "frames_planned": 900,
+    "frames_rendered": 900,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 11,
+    "probe_frames_kept": 20,
+    "render_ms_per_frame": 101.15,
+    "render_total_ms": 91039,
+    "render_wall_clock": "1m31s",
+    "samples_degraded_na": 0,
+    "samples_fail": 5,
+    "samples_mismatch": 0,
+    "samples_ok": 6
+  }
+}

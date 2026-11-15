@@ -1,0 +1,439 @@
+{
+  "case": "VS-C07",
+  "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
+  "d01_status": {
+    "checked_at": "2026-11-16T00:53:03+08:00",
+    "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
+    "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
+    "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
+    "state": "fixed"
+  },
+  "degradations": null,
+  "env": {
+    "capx": "github.com/haozing/ploykit/platform/capx (local headless chrome, pool=1)",
+    "chrome": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "chromedp": "real browser process — frame loop via CDP Page.captureScreenshot",
+    "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "go": "go1.27.0",
+    "os": "windows/amd64"
+  },
+  "evidence": {
+    "anchor_resolutions": [
+      {
+        "anchor_frame_at_fps": 46.2,
+        "anchor_text": "三百二十人",
+        "owner": "effect",
+        "owner_id": "ef_headcount",
+        "reason": "exact",
+        "word_index": 3,
+        "word_start_sec": 1.54
+      },
+      {
+        "anchor_frame_at_fps": 626.4,
+        "anchor_text": "三百多个项目",
+        "owner": "effect",
+        "owner_id": "ef_projects",
+        "reason": "exact",
+        "word_index": 18,
+        "word_start_sec": 20.88
+      },
+      {
+        "anchor_frame_at_fps": 817.1999999999999,
+        "anchor_text": "工程师",
+        "owner": "effect",
+        "owner_id": "ef_quote_hl",
+        "reason": "exact",
+        "word_index": 21,
+        "word_start_sec": 27.24
+      },
+      {
+        "anchor_frame_at_fps": 120,
+        "anchor_text": "在这里",
+        "owner": "animation",
+        "owner_id": "an_info_in",
+        "reason": "exact",
+        "word_index": 4,
+        "word_start_sec": 4
+      },
+      {
+        "anchor_frame_at_fps": 21.599999999999998,
+        "anchor_text": "二零一六年",
+        "owner": "animation",
+        "owner_id": "an_infotitle_in",
+        "reason": "exact",
+        "word_index": 1,
+        "word_start_sec": 0.72
+      },
+      {
+        "anchor_frame_at_fps": 39,
+        "anchor_text": "团队",
+        "owner": "animation",
+        "owner_id": "an_infocount_in",
+        "reason": "exact",
+        "word_index": 2,
+        "word_start_sec": 1.3
+      },
+      {
+        "anchor_frame_at_fps": 270,
+        "anchor_text": "招聘流程",
+        "owner": "animation",
+        "owner_id": "an_steps_in",
+        "reason": "exact",
+        "word_index": 8,
+        "word_start_sec": 9
+      },
+      {
+        "anchor_frame_at_fps": 282.6,
+        "anchor_text": "简历筛选",
+        "owner": "animation",
+        "owner_id": "an_steplist_in",
+        "reason": "exact",
+        "word_index": 9,
+        "word_start_sec": 9.42
+      },
+      {
+        "anchor_frame_at_fps": 605.4,
+        "anchor_text": "四十多家企业",
+        "owner": "animation",
+        "owner_id": "an_kpi_in",
+        "reason": "exact",
+        "word_index": 17,
+        "word_start_sec": 20.18
+      },
+      {
+        "anchor_frame_at_fps": 605.4,
+        "anchor_text": "四十多家企业",
+        "owner": "animation",
+        "owner_id": "an_kpitext_in",
+        "reason": "exact",
+        "word_index": 17,
+        "word_start_sec": 20.18
+      },
+      {
+        "anchor_frame_at_fps": 810,
+        "anchor_text": "后端",
+        "owner": "animation",
+        "owner_id": "an_photo2_in",
+        "reason": "exact",
+        "word_index": 20,
+        "word_start_sec": 27
+      },
+      {
+        "anchor_frame_at_fps": 825,
+        "anchor_text": "林娜",
+        "owner": "animation",
+        "owner_id": "an_quote_in",
+        "reason": "exact",
+        "word_index": 22,
+        "word_start_sec": 27.5
+      },
+      {
+        "anchor_frame_at_fps": 825,
+        "anchor_text": "林娜",
+        "owner": "animation",
+        "owner_id": "an_quotetext_in",
+        "reason": "exact",
+        "word_index": 22,
+        "word_start_sec": 27.5
+      },
+      {
+        "anchor_frame_at_fps": 1018.1999999999999,
+        "anchor_text": "jobs@yunqi.example",
+        "owner": "animation",
+        "owner_id": "an_cta_in",
+        "reason": "exact",
+        "word_index": 23,
+        "word_start_sec": 33.94
+      },
+      {
+        "anchor_frame_at_fps": 1018.1999999999999,
+        "anchor_text": "jobs@yunqi.example",
+        "owner": "animation",
+        "owner_id": "an_ctatext_in",
+        "reason": "exact",
+        "word_index": 23,
+        "word_start_sec": 33.94
+      }
+    ],
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1200 frames in 1m51.113s",
+    "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
+    "frames_table": "example/internal/video/testdata/ir/c07.frames.json",
+    "golden_dir": "example/internal/video/testdata/golden/c07/",
+    "html_bytes": 111067,
+    "ir_sha256": "80fc3a03bebcf2bcb047ec5b33d1a74a0d56e4c6617ddf9a274b30f33ddb442e",
+    "meta_json": "example/internal/video/testdata/golden/c07/meta.json",
+    "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
+    "report_json": "example/internal/video/testdata/l1-c07-report.json",
+    "spec_audit": "example/internal/video/testdata/spec-audit-report.json",
+    "timeline_id": "main"
+  },
+  "hard_prompt_assertions": null,
+  "layer": "L1",
+  "probes": [
+    {
+      "frame": 48,
+      "time_sec": 1.6,
+      "status": "probe",
+      "probe_label": "counter-starting",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 5519
+    },
+    {
+      "frame": 80,
+      "time_sec": 2.6666666666666665,
+      "status": "probe",
+      "probe_label": "counter-mid",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 8546
+    },
+    {
+      "frame": 120,
+      "time_sec": 4,
+      "status": "probe",
+      "probe_label": "infobar-settling",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 12145
+    },
+    {
+      "frame": 608,
+      "time_sec": 20.266666666666666,
+      "status": "probe",
+      "probe_label": "kpi-window-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 56401
+    },
+    {
+      "frame": 640,
+      "time_sec": 21.333333333333332,
+      "status": "probe",
+      "probe_label": "kpi-settled",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 59414
+    },
+    {
+      "frame": 1021,
+      "time_sec": 34.03333333333333,
+      "status": "probe",
+      "probe_label": "footer-window-open",
+      "structure_checks": {
+        "dimensions_ok": true,
+        "png_decoded": true
+      },
+      "duration_ms": 95127
+    }
+  ],
+  "recipe": {
+    "duration_frames": 1200,
+    "fps": 30,
+    "frame_formula": "ceil(durationSec*fps), videoapp.DurationFrames + timeline-builder.js Math.ceil",
+    "height": 1080,
+    "ir_sha256": "80fc3a03bebcf2bcb047ec5b33d1a74a0d56e4c6617ddf9a274b30f33ddb442e",
+    "ir_source_file": "example/internal/video/testdata/ir/c07.degraded.json",
+    "width": 1920
+  },
+  "run_id": "l1-07-20261116-005112-914e",
+  "samples": [
+    {
+      "frame": 0,
+      "time_sec": 0,
+      "status": "",
+      "expect": "开场三层依次入场：el_brandbar scaleIn（0-15 帧）+ 品牌文字同锚（窗口 0-1199 全程）；el_photo 窗口 0-989 + 锚帧 0 起播（文档 an_photo_in startFrame=8 降级为帧 0 隐式开始——8 帧偏移为镜头内微错峰，词表无对应，可见差异 8 帧）；el_infobar/el_infotitle/el_infocount 窗口 0-599。A-C07-04 品牌条 (0,40,1920,80) 深蓝 ≥85% 自帧 15 起、全程到 1199。P0-1 红利：steps/kpi/quote/cta 窗口未开段全部 visibility:hidden——'流程列表透出到镜 1'类风险消除",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 1180,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-000.png"
+    },
+    {
+      "frame": 22,
+      "time_sec": 0.7333333333333333,
+      "status": "ok",
+      "expect": "el_infotitle 锚 '二零一六年' 0.72s→帧 22 scaleIn；el_infobar 主卡锚 '在这里' 4.0s→帧 120（窗口 0 起可见，卡体入场动画 120 起——文档 an_info_in startFrame=16 的错峰节奏降级为词锚，卡体晚于标题文字入场是可见时序差异，L1 帧差窗口按 120 修正）。ef_headcount counter 同 '三百二十人' 1.54s→帧 47 启动",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "note": "title settled; region share asserted below",
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 3079,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-022.png"
+    },
+    {
+      "frame": 47,
+      "time_sec": 1.5666666666666667,
+      "status": "",
+      "expect": "人数 counter 滚动开始（from 0 to 320，suffix ' 人'）。能力升级红利（round4）：counter 挂 targetElementId=el_infobar——数字 div 定位到信息卡 bbox 左上 (860,160)，不再是画布原点 (0,0)；可见差异保留：96px/700 固定字号（压过 el_infocount 静态兜底文本区域上方），数字只在滚动期出现，落定后保持最终值",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 5417,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-047.png"
+    },
+    {
+      "frame": 60,
+      "time_sec": 2,
+      "status": "",
+      "expect": "人数落定进行中（counter 最长 1.2s：47+36=83 帧内完成；power1.out 前快后慢，帧 60 数值 ∈ [200,280] 待缓动标定）；A-C07 静态兜底 el_infocount '团队 320 人' scaleIn 18 帧落定中。双呈现：counter 滚动 + 静态文本兜底，数字口径同源（320 与 S1 一致）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "origin_not_counter_bg_share": 0.5152,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 6700,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-060.png"
+    },
+    {
+      "frame": 131,
+      "time_sec": 4.366666666666666,
+      "status": "",
+      "expect": "镜 2：el_infobar 卡体 scaleIn（锚 '在这里' 4.0s→帧 120，18 帧落定 138）；重复词 '工程师' occurrence=0（w05 4.36s）/1（w21 27.24s）由锚点显式区分——ef_quote_hl 取 occurrence=1 保证高亮落引言段；F-C07-02 注入场景（无 occurrence）的现行行为是 same_text 取最近候选，降级 IR 已预防性显式标注",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 13129,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-131.png"
+    },
+    {
+      "frame": 270,
+      "time_sec": 9,
+      "status": "",
+      "expect": "镜 3 流程层：el_steps/el_step_list startFrame=270 窗口开启（文档 an_steps_in startFrame=270 精确对位）+ el_steps 锚 '招聘流程' 9.0s→帧 270 同帧起播；el_step_list 锚 '简历筛选' 9.42s→帧 283。P0-1 红利：steps 出现的同时 infobar 三元素仍在窗口内（0-599）——文档语义'信息条与流程层共存'（steps z12 叠在 infobar z10 上），帧 270-419 右栏 = 信息卡+流程卡叠放。降级差异保留：steps/staggerFrames ⛔——五步为一条静态文本整体入场，T-09 步骤级 12 帧错峰不可见，A-C07-02 'F270/F282/F294/F306/F318 依次出现'降级为'整卡 F283–F313 可见'（文档 3.3.6 同款裁决）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "note": "P0-1 window-open frame; steps region ink vs F260 probe compared below",
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 25594,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-270.png"
+    },
+    {
+      "frame": 420,
+      "time_sec": 14,
+      "status": "",
+      "expect": "镜 4 福利段：el_steps/el_step_list endFrame=419 半开关闭（流程层退场）——P0-1 红利核心帧：右栏回到 infobar（窗口至 599）。降级差异（保留）：福利四条两列排布仍无对应元素（文档 el_infobar params 更新语义='同一张卡换内容'，现 IR 无法表达元素内容切换——可见差异：F420–F599 右栏显示'成立 2016/320 人'信息卡而非福利四条；跨词锚 '弹性工作制' w14+w15 由旁白+字幕承载；L1 将 F425 段标记为降级内容——比初版进步：不再有流程列表残留，但福利卡仍缺）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "frames_decoded": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 39079,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-420.png"
+    },
+    {
+      "frame": 606,
+      "time_sec": 20.2,
+      "status": "",
+      "expect": "镜 5 KPI：el_kpi/el_kpi_text startFrame=600 窗口开启（文档 an_kpi_in startFrame=600 精确对位）+ 锚 '四十多家企业' 20.18s→帧 606 起播（back.out 24 帧）；ef_projects counter 锚 '三百多个项目' 20.88s→帧 627 启动（0→300，'+ 项目'），挂 targetElementId=el_kpi 定位到 KPI 卡 bbox (860,200)；infobar 窗口 599 关闭——右栏干净切换为 KPI",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 56196,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-606.png"
+    },
+    {
+      "frame": 660,
+      "time_sec": 22,
+      "status": "",
+      "expect": "KPI 落定：三格 '40+ 企业 · 300+ 项目 · 82% 复购率' 静态文本可辨（A-C07-03 数字同源断言对象为 el_kpi_text）；counter ∈ [200,280] 待标定（627+36=663 帧内完成滚动）；复购率 82% 静态呈现（counter 只做项目数）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "note": "KPI settled: static three-cell text from IR",
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 61399,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-660.png"
+    },
+    {
+      "frame": 810,
+      "time_sec": 27,
+      "status": "",
+      "expect": "镜 6 引言段：el_photo/el_kpi endFrame=809/989——el_kpi 窗口 809 关闭、el_photo2 头像窗口 810-989 开启覆盖左栏（z6\u003ez5）；el_quote/el_quote_text 窗口 810 开启 + 锚 '林娜' 27.5s→帧 825 scaleIn；ef_quote_hl 同 '林娜' 锚（帧 825）。T-12 红利：el_quote 是 shape 元素 → highlight 走背景闪分支（#FFD166 0.25s 闪卡背景）——text 着色分支只对 text 类型生效；引言文本在 el_quote_text（text）上，若要词着色应把 targetElementId 改指 el_quote_text——按文档 effects 表 targetElementId=el_quote 忠实保留（闪卡背景），差异记录：'工程师'词变色仍 ⛔（T-12 元素粒度=整元素，'引言卡'粒度已是最接近表达）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 75793,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-810.png"
+    },
+    {
+      "frame": 1019,
+      "time_sec": 33.96666666666667,
+      "status": "",
+      "expect": "镜 7 footer：el_cta/el_cta_text/el_qr startFrame=990 窗口开启（文档 an_cta_in startFrame=990 精确对位）+ an_cta_in 锚 'jobs@yunqi.example' 33.94s→帧 1019 move 上移 1000→940（16 帧）；el_qr (1580,950,80,80) 常驻窗口内静态可见（990 起无入场动画，可见差异：二维码无入场过渡直接出现）；A-C07-05 黑白占比断言窗口 [1019,1199]；quote/photo2 窗口 989 关闭——右栏只剩 footer。F1185 整片轻 fade 不可实现（fade effect 是遮罩语义；P0-2 可给全元素挂 fadeOut，本轮按忠实原则不加）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 94975,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-1019.png"
+    },
+    {
+      "frame": 1199,
+      "time_sec": 39.96666666666667,
+      "status": "",
+      "expect": "尾帧：品牌条 + footer + 二维码同屏；bbox 全在界内；DurationFrames=ceil(40×30)=1200；MP4 40.00s±0.1s/30fps/1920×1080。BGM 无 loop/loudnorm（amix duration=first 截 40s）；字幕烧录走 RenderParams，el_caption 空 text 占位（窗口 0-1199，y860–920 带，footer 段让位降级未实现——字幕带固定）",
+      "structure_checks": {
+        "dimensions": "1920x1080",
+        "dimensions_ok": true,
+        "png_decoded": true,
+        "png_magic_ok": true
+      },
+      "duration_ms": 110807,
+      "artifact": "example/internal/video/testdata/golden/c07/frame-1199.png"
+    }
+  ],
+  "totals": {
+    "frames_planned": 1200,
+    "frames_rendered": 1200,
+    "full_loop_under_8min": true,
+    "keyframes_kept": 12,
+    "probe_frames_kept": 6,
+    "render_ms_per_frame": 92.59,
+    "render_total_ms": 111113,
+    "render_wall_clock": "1m51s",
+    "samples_degraded_na": 0,
+    "samples_fail": 0,
+    "samples_mismatch": 0,
+    "samples_ok": 1
+  }
+}

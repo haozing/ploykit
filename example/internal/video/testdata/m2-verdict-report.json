@@ -1,0 +1,237 @@
+{
+  "meta": {
+    "generated_at": "2026-11-15T22:15:00+08:00",
+    "task": "Video Studio 案例库测试第 6 批 M2 判定汇总与文档对齐",
+    "gate_source": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §2.3",
+    "gate_text": "M2 扩展后达标：9 案例 L1/L2 全绿，人工验收点全部通过",
+    "collection_discipline": "开工等待 5 分钟；此后每 5 分钟轮询一次、共三轮。L2 批6 报告第三轮内落盘；六案 L1 报告三轮等待后仍未落盘（testdata 下无对应报告文件、也无产出它们的 L1 测试文件），按任务纪律标注 pending，判定基于已落盘数据。"
+  },
+  "verdict": {
+    "status": "NOT_ACHIEVED",
+    "summary": "M2 未达成。L2 九案全绿已成立；L1 六案（C02/C03/C05/C07/C08/C09）报告未落盘（pending）；C06 L1 有 4 条 mismatch（0 fail，均带裁定/降级归档）未见按收口口径的全绿复跑；人工验收点 42 条完成真人复核 0 条。",
+    "gaps": [
+      {
+        "id": "G1",
+        "item": "六案 L1 渲染报告未落盘",
+        "detail": "C02/C03/C05/C07/C08/C09 的 L1 关键帧断言无报告 JSON；testdata 下批6 仅落盘 l2_batch6_test.go + l2-batch6-report.json（L2）。round5 §7 差距 1 明确要求按 c04_rerun 模式批量渲染（估算 6×2-4 分钟）。golden 目录也只有 c01/c04/c06/c04-round3，无六案目录。",
+        "blocks": "『9 案例 L1 全绿』不成立"
+      },
+      {
+        "id": "G2",
+        "item": "C06 L1 四条 mismatch 未按收口口径复跑",
+        "detail": "run l1-06-20261115-210605-2da6：7 ok / 4 mismatch / 0 fail。F2025（结论句锚）已由案例库 §4.4.6 [口径 round2 定稿] 收口为 F2130，但磁盘报告仍挂在 F2025 旧断言上；F900（字幕动态轮换=BuildCues→元素缺口，降级登记）、F1350（X-4 修复实证 + 帧位内容说明）、F1800（burn 链路不经 Player still，链路边界）均非缺陷但需按裁定口径复跑转绿或在报告中正式归档为降级注记。",
+        "blocks": "『L1 全绿』字面成立"
+      },
+      {
+        "id": "G3",
+        "item": "人工验收点真人复核 0/42",
+        "detail": "M2 判据要求『人工验收点全部通过』；九案 42 条验收点无一完成真人复核。MP4/golden 产物均在 testdata/ 可供复核（清单见 manual_acceptance.mp4_artifacts）。",
+        "blocks": "人工验收门槛"
+      }
+    ],
+    "satisfied_evidence": [
+      "L2 九案全绿：l2-report.json run 20261115-211102-l2（VS-C01/VS-C04/VS-C06 + AUDIO-VOICE-ONLY/BGM-ONLY/VOICE-BGM/SILENT 共 7 pass 0 fail）；l2-batch6-report.json run 20261115-215041-l2-batch6（VS-C02/C03/C05/C07/C08/C09 共 6 pass 0 fail；每案 150/125 帧时长精确、C08 带音轨、SILENT 无音轨为期望行为）",
+      "C01 L1 全绿：l1-report.json run l1-c01-20261115-211009-ee25，10 ok / 0 fail（450 帧真实 Chrome 渲染 52.1s；词锚全 exact；X-4 修复 F90/F250 可见性像素实证）",
+      "C04 L1 全绿：c04-rerun-report.json run c04r3-20261115-210729-559b（修正帧表口径）10 ok / 0 fail / 1 degraded_na（F1620 A-C04-04 hard prompt 留档不判败）；before×3 行留档对照证明帧号修正价值",
+      "C06 L1 零 fail：l1-c06-report.json run l1-06-20261115-210605-2da6，7 ok / 4 mismatch / 0 fail（2250 帧渲染 4m02s）",
+      "golden 三案 tripwire 全绿（本轮实测复跑）：go -C example test -tags capx -run 'TestGoldenC01_StructuralSanity|TestGoldenC04_StructuralSanity|TestGoldenC06_StructuralSanity' → ok（golden_sanity_test.go；C04/C06 为 round-6 review 新增基线签名）",
+      "L0 回归：l0-report.json run l0-20261115-1533，62 pass / 0 fail / 5 skip（3=TEST_DATABASE_URL 未设的历史 skip，2=超长词边界注记）",
+      "L5 确定性：consistency-l5-report.json run l5-consistency-20261115-211841-1f8b，100× 渲染 digest 全等（digest_all_match=true）",
+      "专项 L2：counter 元素级定位 1/1 pass（counter-l2-report.json，t=1s '12478 件'与缓动公式精确吻合）；X-4 元素级高亮 3/3 pass（x4-l2-report.json）；时间窗 6/6 pass（timewindow-report.json）；字幕 burn/soft/none 三模式全 pass + ErrNoLibass 降级链闭环（subtitle-report.json run 20261115-184122-subtitle-e2e）",
+      "六案降级 IR 就绪：ir/six-cases-report.json m2_readiness——9 案 degraded_ir 全部过 Validate、锚点 exact-only 全过、80 个元素窗口按文档原值采用、3 处 T-12 词窗口着色"
+    ]
+  },
+  "l1_l2_matrix": [
+    {
+      "case": "VS-C01", "title": "短视频带货（P0）",
+      "l1": {"status": "green", "run_id": "l1-c01-20261115-211009-ee25", "report": "testdata/l1-report.json", "ok": 10, "fail": 0, "mismatch": 0, "degraded_na": 0, "note": "450 帧全渲；F0/F77/F180/F320/F396/F449 降级注记不判败；X-4 修复 F90/F250 像素实证"},
+      "l2": {"status": "pass", "run_id": "20261115-211102-l2", "report": "testdata/l2-report.json", "note": "1080x1920@30, 150 帧, 5s, h264+aac"}
+    },
+    {
+      "case": "VS-C02", "title": "品牌发布（P1）",
+      "l1": {"status": "PENDING", "note": "报告未落盘（等待三轮后仍缺）"},
+      "l2": {"status": "pass", "run_id": "20261115-215041-l2-batch6", "report": "testdata/l2-batch6-report.json", "note": "1920x1080@25, 125 帧, 5s, 静音片段（音频分支由 C08 承载）；30s→5s 截断，窗口 clamp 10/drop 8"}
+    },
+    {
+      "case": "VS-C03", "title": "知识科普（P1）",
+      "l1": {"status": "PENDING", "note": "报告未落盘"},
+      "l2": {"status": "pass", "run_id": "20261115-215041-l2-batch6", "report": "testdata/l2-batch6-report.json", "note": "1080x1920@30, 150 帧, 5s, 静音；45s→5s 截断，窗口 clamp 13/drop 8"}
+    },
+    {
+      "case": "VS-C04", "title": "数据可视化口播（P0）",
+      "l1": {"status": "green", "run_id": "c04r3-20261115-210729-559b", "report": "testdata/c04-rerun-report.json", "ok": 10, "fail": 0, "mismatch": 0, "degraded_na": 1, "note": "修正帧表口径（round2 §7.0 词锚裁定）；degraded_na=F1620（A-C04-04 hard prompt 留档）；另有旧表口径报告 l1-c04-report.json（run l1-04-20261115-210242-4448，5 ok/5 mismatch/1 degraded_na）作为修正前留档"},
+      "l2": {"status": "pass", "run_id": "20261115-211102-l2", "report": "testdata/l2-report.json", "note": "1920x1080@30, 150 帧, 5s, h264+aac"}
+    },
+    {
+      "case": "VS-C05", "title": "旅行生活方式（P2）",
+      "l1": {"status": "PENDING", "note": "报告未落盘"},
+      "l2": {"status": "pass", "run_id": "20261115-215041-l2-batch6", "report": "testdata/l2-batch6-report.json", "note": "1080x1920@30, 150 帧, 5s, 静音；30s→5s 截断，窗口 clamp 14/drop 9"}
+    },
+    {
+      "case": "VS-C06", "title": "访谈/字幕（P0）",
+      "l1": {"status": "yellow", "run_id": "l1-06-20261115-210605-2da6", "report": "testdata/l1-c06-report.json", "ok": 7, "fail": 0, "mismatch": 4, "degraded_na": 0, "note": "0 fail；4 mismatch 逐条见 fail_mismatch_findings，均带裁定/降级归档，无缺陷性失败"},
+      "l2": {"status": "pass", "run_id": "20261115-211102-l2", "report": "testdata/l2-report.json", "note": "1920x1080@25, 125 帧, 5s, h264+aac"}
+    },
+    {
+      "case": "VS-C07", "title": "招聘/企业宣传（P2）",
+      "l1": {"status": "PENDING", "note": "报告未落盘"},
+      "l2": {"status": "pass", "run_id": "20261115-215041-l2-batch6", "report": "testdata/l2-batch6-report.json", "note": "1920x1080@30, 150 帧, 5s, 静音；40s→5s 截断，窗口 clamp 18/drop 10"}
+    },
+    {
+      "case": "VS-C08", "title": "节日促销（P2）",
+      "l1": {"status": "PENDING", "note": "报告未落盘"},
+      "l2": {"status": "pass", "run_id": "20261115-215041-l2-batch6", "report": "testdata/l2-batch6-report.json", "note": "1080x1080@30, 150 帧, 5s, 带音轨（l2/_fixtures/voice-440.mp3 440Hz gain 0.3 mux——六案档唯一音频分支）；20s→5s 截断"}
+    },
+    {
+      "case": "VS-C09", "title": "产品功能演示（P1）",
+      "l1": {"status": "PENDING", "note": "报告未落盘"},
+      "l2": {"status": "pass", "run_id": "20261115-215041-l2-batch6", "report": "testdata/l2-batch6-report.json", "note": "1920x1080@30, 150 帧, 5s, 静音；50s→5s 截断，窗口 clamp 15/drop 4"}
+    }
+  ],
+  "l2_extras": [
+    {"report": "testdata/l2-report.json", "extra_cases": ["AUDIO-VOICE-ONLY", "AUDIO-BGM-ONLY", "AUDIO-VOICE-BGM", "AUDIO-SILENT"], "result": "4/4 pass（SILENT 无音轨为期望行为）"},
+    {"report": "testdata/counter-l2-report.json", "run_id": "20261115-210214-counter-l2-target", "result": "1/1 pass（T-10 targetElementId 元素级定位，round4 交付的编码验证）"},
+    {"report": "testdata/x4-l2-report.json", "run_id": "20261115-210040-x4-l2", "result": "3/3 pass（元素级高亮/pulse + 无目标 overlay 兜底）"},
+    {"report": "testdata/timewindow-report.json", "run_id": "20261115-205839-timewindow", "result": "6/6 pass（P0-1 元素 startFrame/endFrame）"},
+    {"report": "testdata/subtitle-report.json", "run_id": "20261115-184122-subtitle-e2e", "result": "burn/soft/none 三模式全 pass + ErrNoLibass 降级链闭环（round3）"}
+  ],
+  "fail_mismatch_findings": [
+    {
+      "case": "VS-C04",
+      "report": "l1-c04-report.json（旧表口径留档，run l1-04-20261115-210242-4448）",
+      "items": [
+        {"frame": 180, "status": "mismatch", "cause": "帧表锚词标注 w05『总量』occ2≈6.2s→F186 与降级 IR 实际生长锚『二零二二』6.6s→F198 不一致", "disposition": "已由 round2 §7.0 词锚裁定收口；修正帧表 rerun F198 全绿"},
+        {"frame": 216, "status": "mismatch", "cause": "F216 三柱全可见不成立（bar23 锚 F261 / bar24 锚 F303 未到，最早同屏 ≈F327）", "disposition": "修正帧表改 327；rerun F327 全绿"},
+        {"frame": 540, "status": "mismatch", "cause": "『首点 3.0% 在左下』不成立（C04-D1：el_line 为 440×300 实心矩形 shape，无三点几何）；counter 窗口后定格态", "disposition": "C04-D1 降级登记；rerun F549 按词锚验收通过（降级注记不判败）"},
+        {"frame": 900, "status": "mismatch", "cause": "封面候选 900 早于环入场锚 909（『产业』occ0 30.3s），无环画面", "disposition": "修正帧表 909/939；rerun 全绿"},
+        {"frame": 1260, "status": "mismatch", "cause": "高亮作用目标 #canvas 整层被 el_bg 完全遮挡（C04-D8 强实测）——round4 X-4 元素级化修复前状态", "disposition": "X-4 已修复（x4-l2 3/3 pass + rerun 时点修复后画面）；留档"}
+      ]
+    },
+    {
+      "case": "VS-C04",
+      "report": "c04-rerun-report.json（定稿口径，run c04r3-20261115-210729-559b）",
+      "items": [
+        {"frame": 1620, "status": "degraded_na", "cause": "A-C04-04 降级不适用（hard prompt）：无元素卸载（C04-D6），三图常驻 DOM；说明卡为 900×40 灰字注释行不遮挡任何图", "disposition": "按 spec-audit 指示实测留档不判败；一致性复核通过（54.0s 柱区蓝色占比在 round2 ±2pp 带内复现）"}
+      ]
+    },
+    {
+      "case": "VS-C06",
+      "report": "l1-c06-report.json（run l1-06-20261115-210605-2da6，现行口径）",
+      "items": [
+        {"frame": 900, "status": "mismatch", "cause": "字幕动态轮换（BuildCues→元素）是 IR/Player 侧缺口——本链路字幕为 IR 静态 text，90s 不轮换", "disposition": "降级缺口登记（M2 依据）；非渲染缺陷"},
+        {"frame": 1350, "status": "mismatch", "cause": "X-4 修复实证：F24-46 探针序列 max shotA blue=1.0000（高亮窗口内 VISIBLE，pre-fix≈0）；本帧画面为镜3 静止态与帧表期望的镜4内容不同", "disposition": "修复正向证据 + 帧位内容说明；非缺陷"},
+        {"frame": 1800, "status": "mismatch", "cause": "SubtitleMode=burn 只在 encode 管线生效，Player still 渲染不经过 burn；字幕区=IR 静态文本", "disposition": "链路边界如实记录；burn 已由 subtitle-report 三模式实测单独验证"},
+        {"frame": 2025, "status": "mismatch", "cause": "结论句入场锚二选一（改锚词『先』/『一件』入词表，或改帧表至 F2130）", "disposition": "已由案例库 §4.4.6 [口径 round2 定稿] 收口为 F2130（an_endline_in 锚『返工』85.2s×25=2130）；磁盘报告仍挂 F2025 旧断言 → G2 待按收口帧表复跑"}
+      ]
+    },
+    {
+      "case": "VS-C01",
+      "report": "l1-report.json（run l1-c01-20261115-211009-ee25）",
+      "items": [
+        {"frame": "F0/F77/F180/F320/F396/F449", "status": "degraded_notes", "cause": "六条降级注记（无 visibility window 元素 F0 常驻 / fade 需词锚 14.62s≠14.83s 不可表达 / CTA 文字 compound keys 未消费为素条 / counter 词锚 F358 前为空）", "disposition": "降级注记不判败（10 ok / 0 fail）；F320 counter 空 = 词锚前的正确时序行为（D-01 修复后 F360 数字可见）"}
+      ]
+    }
+  ],
+  "manual_acceptance": {
+    "summary": "九案共 42 条人工验收点（案例库文档 §3/§4 各案「人工验收点」）。判定口径：已验=像素/DOM/机制断言可替代且本轮报告有直接证据；部分=断言覆盖机制层但画面/语义终审仍需真人；真人=无法自动断言或对应案例 L1 尚未落盘（待 L1）。M2 要求全部通过 → 当前真人复核完成 0/42。",
+    "mp4_artifacts": "testdata/l2/VS-C01..C09/output.mp4（9 件）+ testdata/golden/c01|c04|c06|c04-round3/ 关键帧 PNG + testdata/counter/ 与 testdata/x4/ 抽帧 + testdata/l3/smoke.mp4",
+    "per_case": [
+      {
+        "case": "VS-C01", "doc_line": 767,
+        "points": [
+          {"no": 1, "text": "三卡顺序与口播一一对应，无卡先于词", "status": "部分", "evidence": "词锚全 exact + P0-1 时间窗 6/6；但降级 IR 无窗口时三卡 F0 常驻（l1 F180 注记）——降级画面可接受度需真人"},
+          {"no": 2, "text": "¥79/¥129/12,600 与 S5 一致，无位数跳变残留", "status": "已验(可代替)", "evidence": "D-01 修复后 DOM 探针 '8767 件'@12s / '12600 件'@13.5s 插值精确；counter-l2 '12478 件' 与缓动公式精确吻合；终值定格无漂移"},
+          {"no": 3, "text": "字幕不把『十五杯』『防水』切单字一行", "status": "已验(SRT 层可代替)", "evidence": "round3 kinsoku+词保护 5/5 实证（subtitle_kinsoku_test）；DOM 层折行独立存在（C06 F900 注记），DOM 侧建议真人抽查"},
+          {"no": 4, "text": "F36 封面帧产品完整、标题无截断、无半入场元素", "status": "真人", "evidence": "T-15 封面帧降级登记（§1.8 ⛔）；golden F0 结构检查不覆盖『完整/截断』语义"},
+          {"no": 5, "text": "无 emoji 字形漂移，USB-C 不折行", "status": "真人", "evidence": "无对应自动断言；golden PNG 可人工检查"}
+        ]
+      },
+      {
+        "case": "VS-C02", "doc_line": 915, "l1_pending": true,
+        "points": [
+          {"no": 1, "text": "三段顺序与 S1→S6 对应，转场无跳帧残影", "status": "真人（待 L1）", "evidence": "T-07 转场降级登记；L2 仅证编码/音轨"},
+          {"no": 2, "text": "英文标语拼写大小写逐字一致，中文副标无错字", "status": "真人", "evidence": "OCR/拼写不在断言范围"},
+          {"no": 3, "text": "45 h / 235 g 与旁白同源", "status": "真人", "evidence": "数据一致性目检"},
+          {"no": 4, "text": "F450 后 Logo 居中、日期不压 Logo", "status": "真人（待 L1）", "evidence": "z/几何可自动但无 C02 L1 帧"},
+          {"no": 5, "text": "暗场无噪色块，高光青面积 ≤15%", "status": "真人（待 L1）", "evidence": "色域统计可自动但无 C02 L1 帧"}
+        ]
+      },
+      {
+        "case": "VS-C03", "doc_line": 1390, "l1_pending": true,
+        "points": [
+          {"no": 1, "text": "静音仅看图解能复述『短波更容易被散射』", "status": "真人", "evidence": "理解性验收"},
+          {"no": 2, "text": "镜5 两柱高度比 ≈6:1，标签数字与柱高一致", "status": "真人（待 L1）", "evidence": "像素比例可自动，无 C03 L1 帧"},
+          {"no": 3, "text": "术语注释无重叠、行首无标点卡注释行首字", "status": "部分（SRT 层已验；DOM 几何待 L1）", "evidence": "kinsoku 5/5 为 SRT 层；DOM 几何可自动"},
+          {"no": 4, "text": "科学表述无超出来源的断言", "status": "真人", "evidence": "内容审查"}
+        ]
+      },
+      {
+        "case": "VS-C04", "doc_line": 1572,
+        "points": [
+          {"no": 1, "text": "三组图数值与公报表逐一对上，无四舍五入量级错误", "status": "已验(可代替，建议真人扫尾)", "evidence": "counter 帧序列断言 F327/F609/F957（rerun 报告含逐帧算式）+ 词锚推导全表 Python/Node 双重复核（round3）；『量级错误』语义终审留真人"},
+          {"no": 2, "text": "柱线环出现顺序与口播 S2→S4→S6 一致", "status": "已验(可代替)", "evidence": "词锚 198/327/549/909 逐帧对齐（c04-rerun 全绿含 before/after 对照）"},
+          {"no": 3, "text": "片尾说明卡口径可读、无外链字符溢出", "status": "部分", "evidence": "F1620 degraded_na：说明卡灰字注释行不遮挡（几何已验）；『可读性』真人"},
+          {"no": 4, "text": "静音下仅靠图形判断『总量上升/增速5%/服务业过半』", "status": "真人", "evidence": "理解性验收"}
+        ]
+      },
+      {
+        "case": "VS-C05", "doc_line": 1719, "l1_pending": true,
+        "points": [
+          {"no": 1, "text": "两场景图色温饱和度统一", "status": "真人", "evidence": "调色为降级登记项（§4.3 结论：曲线路径/alpha 遮罩/全局调色/ducking 为阻塞项）"},
+          {"no": 2, "text": "取景框保留桥栏/树冠两道水平线，主体不切框边", "status": "真人", "evidence": "构图判断"},
+          {"no": 3, "text": "旁白与地点卡顺序一致，字幕不挡主体", "status": "真人（待 L1）", "evidence": "词窗+几何可自动，无 C05 L1 帧"},
+          {"no": 4, "text": "无地图跳转，30s 只呈现一条步行线", "status": "真人", "evidence": "内容完整性目检"}
+        ]
+      },
+      {
+        "case": "VS-C06", "doc_line": 1896,
+        "points": [
+          {"no": 1, "text": "每条 cue 说话人与亮灯侧一致", "status": "部分（结构层已验，逐 cue 语义真人）", "evidence": "F225 帧差序列 + 姓名条区域探针已验（l1 ok）；降级 IR 双机位为纯色 shape（C06-D1），语义侧真人"},
+          {"no": 2, "text": "中文断行不切词、行首无标点；英文翻译语义一致无漏句", "status": "部分", "evidence": "SRT 层 kinsoku 5/5 已验；DOM 层折行独立（F900 注记）；英文翻译语义真人"},
+          {"no": 3, "text": "短问句字幕显示时长 ≥1.2s 不一闪而过", "status": "已验(可代替，校验缺失已登记)", "evidence": "cue 时长为确定性计算；C06-D8 登记校验缺失待补（l1 F2249 注记归 L2/L0 口径）"},
+          {"no": 4, "text": "非说话侧压暗不影响看清；姓名条颜色与强调色一致", "status": "真人", "evidence": "降级：双机位纯色 shape（C06-D1）+ 无 opacity 动画（C06-D4），压暗语义不可达"},
+          {"no": 5, "text": "片尾结论句与 S11 台词逐字一致", "status": "部分", "evidence": "入场锚已收口 F2130（§4.4.6 定稿）；逐字比对需 OCR/真人"}
+        ]
+      },
+      {
+        "case": "VS-C07", "doc_line": 1067, "l1_pending": true,
+        "points": [
+          {"no": 1, "text": "七段顺序与 S1→S7 对应，流程五步编号无跳步", "status": "真人（待 L1）", "evidence": "词锚可自动，无 C07 L1 帧"},
+          {"no": 2, "text": "320人/300+项目/82% 与旁白一致无位数残留", "status": "真人（机制已验，待 L1）", "evidence": "counter 元素级 1/1 + D-01 修复实证；C07 具体帧待 L1"},
+          {"no": 3, "text": "引言署名与头像对应，无错字引号完整", "status": "真人", "evidence": "文字/素材目检"},
+          {"no": 4, "text": "二维码 ≥480×480 缩放后仍可扫码", "status": "真人", "evidence": "尺寸可自动；可扫性真人；L2 注记素材为占位灰图（真实素材链路未验）"},
+          {"no": 5, "text": "品牌条全程不被信息条/照片覆盖", "status": "真人（待 L1）", "evidence": "z/几何可自动，无 C07 L1 帧"}
+        ]
+      },
+      {
+        "case": "VS-C08", "doc_line": 1178, "l1_pending": true,
+        "points": [
+          {"no": 1, "text": "三券面额（199/30、399/80、699/150）与旁白顺序一致", "status": "真人（待 L1）", "evidence": "无 C08 L1 帧"},
+          {"no": 2, "text": "倒计时 15→0 无跳帧、无负数、无格式残留", "status": "真人（机制已验，待 L1）", "evidence": "counter 机制 1/1 pass；C08 具体帧待 L1"},
+          {"no": 3, "text": "粒子不遮挡券面额文字", "status": "真人", "evidence": "T-04 粒子降级登记（§1.8 ⛔）——降级画面本身需真人确认"},
+          {"no": 4, "text": "CTA 文字与 S5 一致，『自动抵扣』不拆两行", "status": "真人（待 L1）", "evidence": "DOM TextMetrics 可自动，无 C08 L1 帧"},
+          {"no": 5, "text": "缩略图尺寸下首帧可读『大促+八折』", "status": "真人", "evidence": "可读性判断"}
+        ]
+      },
+      {
+        "case": "VS-C09", "doc_line": 2063, "l1_pending": true,
+        "points": [
+          {"no": 1, "text": "四步顺序与旁白 S2→S5 一致，菜单/面板不提前出现", "status": "部分（机制已验，画面待 L1）", "evidence": "P0-1 时间窗 6/6 + 六案 80 窗口按文档原值采用（six-cases m2_readiness）；C09 画面待 L1"},
+          {"no": 2, "text": "光标落点与被操作对象一致（框选/菜单/确认）", "status": "真人", "evidence": "T-08 降级为直线位移（§4.5 结论），落点语义真人"},
+          {"no": 3, "text": "预览文件名规则可读（旅行-2026+序号）", "status": "真人", "evidence": "文字渲染目检"},
+          {"no": 4, "text": "片尾目录树与开头一致，无误导图示", "status": "真人", "evidence": "内容一致性目检"},
+          {"no": 5, "text": "UI 截图文字 1080p 下可读", "status": "真人", "evidence": "可读性判断；L2 用占位灰图，真实素材链路未验"}
+        ]
+      }
+    ],
+    "tally": {"total": 42, "auto_verified": 5, "partial": 8, "manual_only_or_pending_l1": 29, "human_review_completed": 0}
+  },
+  "batch_index": [
+    {"batch": 1, "doc": "docs/delivery-audit-video-studio-round1-2026-11-15.md", "commit": "823e181", "conclusion": "M1 达成；D-01/F-DB-1/F-G3-1 发掘"},
+    {"batch": 2, "doc": "docs/delivery-audit-video-studio-round2-2026-11-15.md", "commit": "f1b6cf4", "conclusion": "D-01 三层修复；C04/C06 L1 渲染 0 fail；soft 缺口确认"},
+    {"batch": 3, "doc": "docs/delivery-audit-video-studio-round3-2026-11-15.md", "commit": "36ccf03", "conclusion": "soft 落地；CJK 修复 5/5；§7.0 口径统一；L5 100× 确定性"},
+    {"batch": 4, "doc": "docs/delivery-audit-video-studio-round4-2026-11-15.md", "commit": "fa1de7c", "conclusion": "L3 全链 succeeded（F3 修复）；元素级化（counter/X-4）"},
+    {"batch": 5, "doc": "docs/delivery-audit-video-studio-round5-2026-11-15.md", "commit": "e174a3e", "conclusion": "P0-1/P0-2/T-12 落地；L3 正式化两连绿；六案降级 IR；ADR 0017"},
+    {"batch": 6, "doc": "example/internal/video/testdata/m2-verdict-report.json（本文件）", "commit": "（本批无新提交，工作区产物）", "conclusion": "L2 批6 6/6 pass → L2 九案全绿；六案 L1 pending；golden 三案 tripwire 全绿；M2 未达成（差距 G1/G2/G3）"}
+  ]
+}

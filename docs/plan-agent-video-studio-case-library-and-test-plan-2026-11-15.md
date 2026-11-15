@@ -527,6 +527,16 @@
 | `/mcp` per-principal 限流、PAT 跨 workspace 越权、session MCP 拒绝等安全用例 | [待验证] | 需运行中的服务 + 会话/PAT 两类凭证；代码层缺口见 §1.7 ③。 |
 | 软字幕 mov_text 封装、loudnorm、BGM 循环、缩略图提取的实际输出 | [待验证] | 对应能力在当前管线未接通（§1.5、§1.7 ②），无现成可跑路径。 |
 
+**round 2–6 实测记录索引（2026-11-15 追加；各批详情见对应 round 文档，此处只做入口索引，不重复正文）**
+
+| 批 | 记录文档 | 代码基线（提交） | run_id 集合（报告均在 `example/internal/video/testdata/`） | 结论 |
+|---|---|---|---|---|
+| 2 | [delivery-audit-video-studio-round2-2026-11-15.md](./delivery-audit-video-studio-round2-2026-11-15.md) | `f1b6cf4` | `l1-04-20261115-210242-4448`（C04 L1，旧表口径 5 ok/5 mismatch/1 degraded_na 留档）、`l1-06-20261115-210605-2da6`（C06 L1，7 ok/4 mismatch/0 fail） | D-01 三层修复（事件抑制/对比度/遮挡）；C04/C06 全帧渲染 0 fail；4 条 High 文档差异修正；soft 缺口确认 |
+| 3 | [delivery-audit-video-studio-round3-2026-11-15.md](./delivery-audit-video-studio-round3-2026-11-15.md) | `36ccf03` | `20261115-184122-subtitle-e2e`（字幕 burn/soft/none 三模式）、`20261115-210214-counter-l2-target`（counter L2 编码验证）、`l5-consistency-20261115-211841-1f8b`（L5 100×） | soft 字幕落地 + ErrNoLibass 降级链；CJK 断行修复 5/5；§7.0 词锚口径统一（三案帧表回填）；三条校准锚点全复现；counter '12478 件' 与缓动公式精确吻合；100× digest 全等 |
+| 4 | [delivery-audit-video-studio-round4-2026-11-15.md](./delivery-audit-video-studio-round4-2026-11-15.md) | `fa1de7c` | `20261115-1852-l3-smoke`（L3 冒烟含失败取证）、`c04r3-20261115-210729-559b`（C04 修正帧表 rerun 10 ok/0 fail/1 degraded_na）、`20261115-210040-x4-l2`（X-4 元素级 3/3） | L3 首次真实全链路 succeeded（F3 CapxRuntime 装配缺口修复）；C04 口径统一后首次全绿；counter/X-4 元素级化像素实证 |
+| 5 | [delivery-audit-video-studio-round5-2026-11-15.md](./delivery-audit-video-studio-round5-2026-11-15.md) | `e174a3e` | `l3_smoke_test.go` 两连绿（30.9s/29.96s）、`20261115-205839-timewindow`（P0-1 时间窗 6/6）、`ir/six-cases-report.json`（六案降级 IR + M2 readiness：9 案 Validate 全过、锚点 exact-only 全过、80 窗口采用、3 处 T-12 词着色）、`l0-20261115-1533`（L0 全量 62 pass/0 fail/5 skip） | M2 硬骨头清零（P0-1 元素时间窗 / P0-2 opacity / T-12 词着色）；L3 冒烟正式化；ADR 0017 |
+| 6 | [m2-verdict-report.json](../example/internal/video/testdata/m2-verdict-report.json)（本批判定产物，无 round 文档） | 工作区产物（无新提交） | `l1-c01-20261115-211009-ee25`（C01 L1 round5 时点 10 ok/0 fail）、`20261115-211102-l2`（L2 三 P0 + 音频 4 变体 7 pass/0 fail）、`20261115-215041-l2-batch6`（L2 六案 6 pass/0 fail）、golden 三案 tripwire（`TestGoldenC01/C04/C06_StructuralSanity` 本批复跑 ok） | **M2 未达成**：L2 九案全绿成立；六案 L1 报告未落盘（pending，差距 G1）；C06 四条 mismatch 未按收口口径复跑（G2，§4.4.6 定稿帧位 F2130）；人工验收点真人复核 0/42（G3）。L0/L5/专项 L2 全绿证据清单见判定产物 |
+
 ## 2. 案例库总览、覆盖矩阵与执行组合
 
 ### 2.1 案例索引
