@@ -66,6 +66,51 @@ func TestProjector_HTML_URLEscaping(t *testing.T) {
 	assert.Contains(t, block, `\u003c/script`, "json < escaping applied")
 }
 
+func TestProjector_HTML_DataBlock_IsJSONObject(t *testing.T) {
+	// Regression (delivery-audit-video-studio §3 N1): html/template escapes
+	// string data in <script> contexts as a JS *expression* — the whole blob
+	// came out quoted, so JSON.parse(textContent) returned a string and the
+	// player silently lost the IR. The data block must carry the raw escaped
+	// JSON object: it starts with '{"' and the round-trip keys survive.
+	ir := projectorIR()
+	html, err := NewProjector(nil).HTML(context.Background(), ir, "")
+	require.NoError(t, err)
+	s := string(html)
+
+	start := strings.Index(s, `id="ploykit-ir">`) + len(`id="ploykit-ir">`)
+	end := strings.Index(s[start:], `</script>`)
+	require.GreaterOrEqual(t, end, 0)
+	block := s[start : start+end]
+	require.True(t, strings.HasPrefix(block, `{"`), "data block is a raw JSON object, not a quoted JS string")
+	assert.Contains(t, block, `"meta"`, "meta key present")
+	assert.Contains(t, block, `"elements"`, "elements key present")
+}
+
+func TestProjector_HTML_DataBlock_InjectionVectors(t *testing.T) {
+	// Malicious text must not break out of the data block or spawn an
+	// executable block: </script> early closure is the canonical vector.
+	evil := `a</script><script>alert(1)</script>b`
+	ir := validIR()
+	ir.Script = evil
+	ir.Elements = []Element{{ID: "e1", Type: ElementText, Text: evil, X: 0, Y: 0, W: 10, H: 10}}
+	ir.Effects = nil
+	html, err := NewProjector(nil).HTML(context.Background(), ir, "")
+	require.NoError(t, err)
+	s := string(html)
+
+	// The attack must not materialize: no executable <script>alert block and
+	// no unescaped closing sequence inside the DATA BLOCK (the document's own
+	// structural </script> closers — data block end + inline script end — are
+	// legitimate markup, so the assertion targets the block contents only).
+	start := strings.Index(s, `id="ploykit-ir">`) + len(`id="ploykit-ir">`)
+	end := strings.Index(s[start:], `</script>`)
+	require.GreaterOrEqual(t, end, 0)
+	block := s[start : start+end]
+	require.NotContains(t, block, "</scr", "raw closing sequence inside the data block")
+	require.NotContains(t, s, "<script>alert", "injected executable block")
+	assert.Contains(t, block, `\u003c/script`, "json < escaping still applied")
+}
+
 func TestProjector_HTML_DataURI(t *testing.T) {
 	png := []byte("PNGDATA")
 	p := NewProjector(DataURIResolver{

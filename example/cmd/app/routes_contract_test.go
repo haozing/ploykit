@@ -28,6 +28,7 @@ import (
 	"github.com/haozing/ploykit/legal"
 	legalhttp "github.com/haozing/ploykit/legal/adapters/http"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
+	"github.com/haozing/ploykit/authz"
 	"github.com/haozing/ploykit/platform/devx"
 	"github.com/haozing/ploykit/platform/webx"
 	quotahttp "github.com/haozing/ploykit/quota/adapters/http"
@@ -49,6 +50,14 @@ const expectedRouteCount = 172
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
 func passthrough(next http.Handler) http.Handler { return next }
+
+// authorizerForContract builds a DB-free authorizer carrying the video keys
+// (Mount only closes over it; no request is ever sent in this test).
+func authorizerForContract() *authz.Authorizer {
+	catalog := authz.NewCatalog(append(authz.DefaultPerms(), "video:read", "video:write", "video:render")...)
+	roles := authz.DefaultRoles()
+	return authz.New(catalog, roles)
+}
 
 func noopHandler(http.ResponseWriter, *http.Request) {}
 
@@ -124,7 +133,7 @@ func mountProductionRoutes(mux *webx.Mux) {
 	// Video studio (plan-agent-video-studio-architecture §4.7): 11 contract
 	// routes; registration-safe with a nil service (handlers dereference per
 	// request; this test never sends one).
-	videohttp.Mount(mux, videohttp.Deps{})
+	videohttp.Mount(mux, videohttp.Deps{Authz: authorizerForContract()}, passthrough)
 }
 
 // runtimeRoutes returns the production endpoint set as "METHOD /path" keys.

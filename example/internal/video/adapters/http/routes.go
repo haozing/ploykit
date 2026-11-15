@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haozing/ploykit/authz"
 	"github.com/haozing/ploykit/platform/storagex"
 	"github.com/haozing/ploykit/platform/webx"
 
@@ -37,6 +38,12 @@ func dispositionFor(contentType string) string {
 type Deps struct {
 	Svc *videoapp.ProjectService
 
+	// Authz is the workspace authorizer (authz.New product wiring). Mount
+	// panics without it — running the video surface without role checks is a
+	// wiring bug (delivery-audit-video-studio §3 N2: the registered
+	// video:read/write/render keys must gate the routes, not decorate them).
+	Authz *authz.Authorizer
+
 	// FileServer, when wired, takes over GET /api/video/files/{key...}
 	// (backend-dependent serving: Local inline vs S3 302). Nil = Local mode
 	// driven by Deps.Store below.
@@ -52,18 +59,33 @@ type FileServer interface {
 // Mount registers the 11 routes (§4.7). CSRF for the write methods is
 // enforced by the product's global csrf middleware covering /api/ (main.go
 // wiring; nothing to do here).
-func Mount(mux webx.Router, d Deps) {
-	mux.HandleFunc("GET /api/video/projects", webx.P(d.handleList))
-	mux.HandleFunc("POST /api/video/projects", webx.P(d.handleCreate))
-	mux.HandleFunc("GET /api/video/projects/{id}", webx.P(d.handleGet))
-	mux.HandleFunc("PUT /api/video/projects/{id}/ir", webx.P(d.handlePutIR))
-	mux.HandleFunc("DELETE /api/video/projects/{id}", webx.P(d.handleDelete))
-	mux.HandleFunc("GET /api/video/projects/{id}/preview.html", webx.P(d.handlePreview))
-	mux.HandleFunc("POST /api/video/projects/{id}/renders", webx.P(d.handleCreateRender))
-	mux.HandleFunc("GET /api/video/projects/{id}/renders", webx.P(d.handleListRenders))
-	mux.HandleFunc("GET /api/video/renders/{id}", webx.P(d.handleGetRender))
-	mux.HandleFunc("POST /api/video/assets", webx.P(d.handleUploadAsset))
-	mux.HandleFunc("GET /api/video/files/{key...}", webx.P(d.handleFile))
+// Mount registers the 11 contract routes behind the full authorization
+// chain: wsMW (fills principal.WorkspaceID from the X-Workspace-Id header —
+// without it every non-admin request is a 403 because the session principal
+// carries no workspace) → authz.Require (role gate on the video:* keys the
+// product registered) → webx.P (principal assertion). Service-level
+// membership remains as defense in depth.
+func Mount(mux webx.Router, d Deps, wsMW func(http.Handler) http.Handler) {
+	if d.Authz == nil {
+		panic("videohttp.Mount: Deps.Authz is required (role checks are not optional)")
+	}
+	if wsMW == nil {
+		wsMW = func(next http.Handler) http.Handler { return next }
+	}
+	read := authz.Require(d.Authz, "video:read")
+	write := authz.Require(d.Authz, "video:write")
+	renderPerm := authz.Require(d.Authz, "video:render")
+	mux.Handle("GET /api/video/projects", wsMW(read(webx.P(d.handleList))))
+	mux.Handle("POST /api/video/projects", wsMW(write(webx.P(d.handleCreate))))
+	mux.Handle("GET /api/video/projects/{id}", wsMW(read(webx.P(d.handleGet))))
+	mux.Handle("PUT /api/video/projects/{id}/ir", wsMW(write(webx.P(d.handlePutIR))))
+	mux.Handle("DELETE /api/video/projects/{id}", wsMW(write(webx.P(d.handleDelete))))
+	mux.Handle("GET /api/video/projects/{id}/preview.html", wsMW(read(webx.P(d.handlePreview))))
+	mux.Handle("POST /api/video/projects/{id}/renders", wsMW(renderPerm(webx.P(d.handleCreateRender))))
+	mux.Handle("GET /api/video/projects/{id}/renders", wsMW(read(webx.P(d.handleListRenders))))
+	mux.Handle("GET /api/video/renders/{id}", wsMW(read(webx.P(d.handleGetRender))))
+	mux.Handle("POST /api/video/assets", wsMW(write(webx.P(d.handleUploadAsset))))
+	mux.Handle("GET /api/video/files/{key...}", wsMW(read(webx.P(d.handleFile))))
 }
 
 func (d Deps) handleList(w http.ResponseWriter, r *http.Request, p *webx.Principal) {

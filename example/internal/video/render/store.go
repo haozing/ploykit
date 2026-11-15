@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // pgStore is the SQL-backed rowStore (used when Pool is wired).
@@ -37,12 +35,18 @@ func (s pgStore) update(ctx context.Context, id string, status, errMsg string, f
 		UPDATE video_render SET status=$2, error=$3, frames_done=$4, output_key=$5,
 		  updated_at=now(),
 		  finished_at = CASE WHEN $2 IN ('succeeded','failed') THEN now() ELSE finished_at END
-		WHERE id=$1`, id, status, errMsg, framesDone, outputKey)
+		WHERE id=$1
+		  AND status IN ('queued','running','interrupted')`, id, status, errMsg, framesDone, outputKey)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+		// The row is already terminal — a stale river attempt re-entered a
+		// finished render, or a concurrent attempt closed it. Overwriting a
+		// terminal state would resurrect finished renders (at-least-once
+		// delivery makes stale attempts normal; audit §4 P5). Callers treat
+		// ErrTerminalSkip as a no-op skip, not a failure.
+		return ErrTerminalSkip
 	}
 	return nil
 }
@@ -59,6 +63,10 @@ func (s pgStore) releaseQuota(ctx context.Context, wsID, renderID string) {
 
 // ErrNoStore is returned by the nil-store fake mode when SQL is required.
 var ErrNoStore = errors.New("video render: no store wired")
+
+// ErrTerminalSkip is returned by update when the row is already in a
+// terminal state — the stale attempt is a no-op (river at-least-once).
+var ErrTerminalSkip = errors.New("video render: row already terminal; stale attempt skipped")
 
 // videoappQuotaKey aliases the quota key without importing videoapp twice.
 const videoappQuotaKey = quotaKeyAlias

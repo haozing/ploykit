@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"html/template"
+	"text/template"
 	"io"
 	"net/url"
 	"strings"
@@ -124,8 +124,23 @@ func inlineScript(gsap, builder []byte) []byte {
 type projection struct {
 	Width, Height int
 	FPS           int
-	IRJSON        string // </-escaped JSON for the data block
-	InlineScript  template.JS
+	// IRJSON is the data-block payload, inserted via text/template.
+	// html/template CANNOT be used here: inside a
+	// <script type="application/json"> context it applies its script-JSON
+	// escaping to the blob, emitting a quoted JS string literal —
+	// JSON.parse(textContent) then returns a string and the player silently
+	// loses the IR (delivery-audit-video-studio §3 N1). text/template is safe
+	// because the value is not raw user content: it is
+	// escapeJSONBlock(json.Marshal(...)) — encoding/json escapes <, >, & as
+	// \u003c/\u003e/\u0026 by default and escapeJSONBlock closes the
+	// </script> early-closure hole. Injection tests in projector_test.go pin
+	// both layers.
+	IRJSON string
+	// InlineScript is the verbatim embedded player bundle (vendored gsap +
+	// timeline-builder + boot). Inserted via text/template; it is served
+	// under a hash-pinned CSP (§4.4.4) and its bytes are locked by
+	// TestInlineScriptHash_MatchesEmittedScript.
+	InlineScript string
 }
 
 // bootJS starts the builder; the builder installs window.__player itself.
@@ -181,7 +196,7 @@ func (p *Projector) HTML(ctx context.Context, ir *IR, _ string) ([]byte, error) 
 		Height:       ir.Meta.Height,
 		FPS:          ir.Meta.FPS,
 		IRJSON:       escapeJSONBlock(irJSON),
-		InlineScript: template.JS(string(append(append(append([]byte{}, gsap...), builder...), bootJS...))),
+		InlineScript: string(append(append(append([]byte{}, gsap...), builder...), bootJS...)),
 	})
 	if err != nil {
 		return nil, err

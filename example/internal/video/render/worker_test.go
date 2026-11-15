@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,12 +55,20 @@ var errNotFound = pgx.ErrNoRows // matches the worker noop contract
 func (f *fakeStore) update(_ context.Context, id, status, errMsg string, frames int, outKey string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.updated = append(f.updated, updateCall{id: id, status: status, errMsg: errMsg, frames: frames, outKey: outKey})
-	if row, ok := f.rows[id]; ok {
-		row.Status = status
-		row.FramesDone = frames
-		f.rows[id] = row
+	// Mirror the real guarded UPDATE (WHERE status IN
+	// ('queued','running','interrupted')): terminal rows reject writes so the
+	// worker's terminal-skip paths are exercised in unit tests too.
+	row, ok := f.rows[id]
+	if !ok {
+		return errNotFound
 	}
+	if row.Status == videoapp.RenderSucceeded || row.Status == videoapp.RenderFailed {
+		return ErrTerminalSkip
+	}
+	f.updated = append(f.updated, updateCall{id: id, status: status, errMsg: errMsg, frames: frames, outKey: outKey})
+	row.Status = status
+	row.FramesDone = frames
+	f.rows[id] = row
 	return nil
 }
 
@@ -82,7 +91,7 @@ func (f *fakePub) BroadcastEvent(_ context.Context, event string, _ []byte, _ st
 }
 
 type fakeAuditor struct {
-	mu     sync.Mutex
+	mu       sync.Mutex
 	recorded []string
 }
 
@@ -92,7 +101,10 @@ func (f *fakeAuditor) Record(_ context.Context, _ *string, _ string, action, _, 
 	f.recorded = append(f.recorded, action)
 }
 
-type fakeQuotaRelease struct{ mu sync.Mutex; released []string }
+type fakeQuotaRelease struct {
+	mu       sync.Mutex
+	released []string
+}
 
 func (f *fakeQuotaRelease) Release(_ context.Context, wsID, key string, _ int64, _ time.Time) error {
 	f.mu.Lock()
@@ -151,8 +163,8 @@ func rowWith(ir *videoapp.IR) renderRow {
 	b, _ := json.Marshal(ir)
 	return renderRow{
 		ID: "r1", ProjectID: "p1", WorkspaceID: "ws1", Status: videoapp.RenderQueued,
-		Params:      videoapp.RenderParams{FPS: 30, Width: 1080, Height: 1920, SubtitleMode: "none"},
-		IRSnapshot:  b, FramesTotal: 60, CreatedBy: "u1",
+		Params:     videoapp.RenderParams{FPS: 30, Width: 1080, Height: 1920, SubtitleMode: "none"},
+		IRSnapshot: b, FramesTotal: 60, CreatedBy: "u1",
 	}
 }
 
@@ -268,6 +280,106 @@ func TestWorker_QuotaReleasePort(t *testing.T) {
 	qr.mu.Lock()
 	defer qr.mu.Unlock()
 	assert.Contains(t, qr.released, "ws1:"+videoapp.QuotaKey)
+}
+
+// --- batch-2 guard regressions (delivery-audit-video-studio §4 P4/P5) ---
+
+func TestWorker_TerminalSucceeded_StaleAttemptSkipped(t *testing.T) {
+	// A retry re-entering an already-succeeded render must not re-run the
+	// pipeline, re-write, re-release quota, or flip the row back to running.
+	store := &fakeStore{rows: rowMap{"r1": func() renderRow {
+		r := rowWith(sampleIR())
+		r.Status = videoapp.RenderSucceeded
+		r.OutputKey = "video/ws1/renders/r1/output.mp4"
+		return r
+	}()}}
+	pub := &fakePub{}
+	aud := &fakeAuditor{}
+	pipe := &fakePipeline{frames: 60}
+	w := workerWith(t, store, pub, aud, pipe)
+	require.NoError(t, w.Work(t.Context(), job("r1")))
+	assert.Empty(t, store.updated, "no writes on stale attempt")
+	assert.Empty(t, store.released, "no quota release on stale attempt")
+	assert.Empty(t, pub.events, "no WS frames on stale attempt")
+	assert.Empty(t, aud.recorded, "no duplicate audit on stale attempt")
+}
+
+func TestWorker_TerminalFailed_StaleAttemptSkipped(t *testing.T) {
+	store := &fakeStore{rows: rowMap{"r1": func() renderRow {
+		r := rowWith(sampleIR())
+		r.Status = videoapp.RenderFailed
+		r.Error = "boom"
+		return r
+	}()}}
+	aud := &fakeAuditor{}
+	w := workerWith(t, store, &fakePub{}, aud, &fakePipeline{frames: 60})
+	require.NoError(t, w.Work(t.Context(), job("r1")))
+	assert.Empty(t, store.updated)
+	assert.Empty(t, store.released, "failed row already released by the losing attempt")
+	assert.Empty(t, aud.recorded, "no duplicate failed audit")
+}
+
+func TestWorker_FailFlow_ExactlyOneQuotaRelease(t *testing.T) {
+	// Normal failing flow: exactly one release despite transition+release
+	// being separate steps (the fail-path ErrTerminalSkip guard prevents a
+	// second release if another actor closed the row first — audit §4 P3).
+	store := &fakeStore{rows: rowMap{"r1": rowWith(sampleIR())}}
+	pipe := &fakePipeline{fail: errors.New("boom")}
+	w := workerWith(t, store, &fakePub{}, &fakeAuditor{}, pipe)
+	err := w.Work(t.Context(), job("r1"))
+	// river.JobCancel = non-retryable: Work surfaces the wrapped sentinel.
+	var jce *rivertype.JobCancelError
+	require.ErrorAs(t, err, &jce, "fail path must be non-retryable (river.JobCancel)")
+	assert.Len(t, store.released, 1, "exactly one quota release per render")
+}
+
+func TestWorker_Interrupted_CompensationOnLiveContext(t *testing.T) {
+	// Drain: the pipeline observes ctx cancellation. The interrupted
+	// transition + release must still land (WithoutCancel compensation ctx),
+	// and Work returns the cancellation error for river to retry.
+	store := &fakeStore{rows: rowMap{"r1": rowWith(sampleIR())}}
+	pub := &fakePub{}
+	aud := &fakeAuditor{}
+	pipe := &cancelPipeline{}
+	w := workerWith(t, store, pub, aud, pipe)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	go func() {
+		// let Work start, then cancel mid-pipeline
+		pipe.waitStarted()
+		cancel()
+	}()
+	err := w.Work(ctx, job("r1"))
+	require.ErrorIs(t, err, context.Canceled)
+
+	// interrupted write landed
+	store.mu.Lock()
+	last := store.updated[len(store.updated)-1]
+	store.mu.Unlock()
+	assert.Equal(t, videoapp.RenderInterrupted, last.status)
+	assert.Len(t, store.released, 1, "quota released despite cancelled job ctx")
+}
+
+// cancelPipeline fails with context.Canceled once ctx dies.
+type cancelPipeline struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (c *cancelPipeline) waitStarted() {
+	if c.started == nil {
+		c.started = make(chan struct{})
+	}
+	<-c.started
+}
+
+func (c *cancelPipeline) Run(ctx context.Context, _ *Worker, row renderRow, _ *videoapp.IR, _ videoapp.RenderParams, onFrame func(int)) (string, error) {
+	if c.started == nil {
+		c.started = make(chan struct{})
+	}
+	c.once.Do(func() { close(c.started) })
+	<-ctx.Done()
+	return "", ctx.Err()
 }
 
 // compile-time guards: fakes satisfy their ports.

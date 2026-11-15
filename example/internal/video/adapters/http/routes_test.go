@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/haozing/ploykit/authz"
 	videoapp "myproduct/internal/video/app"
 	"github.com/haozing/ploykit/platform/webx"
 )
@@ -189,7 +190,7 @@ func TestWorkspaceFromKey(t *testing.T) {
 func TestMount_RegistersAll11Routes(t *testing.T) {
 	// Route registration smoke: Mount on a recording mux, count video routes.
 	mux := webx.NewMux()
-	Mount(mux, Deps{})
+	Mount(mux, Deps{Authz: testAuthorizer()}, func(next http.Handler) http.Handler { return next })
 	routes := mux.Routes()
 	video := 0
 	for _, rt := range routes {
@@ -198,6 +199,21 @@ func TestMount_RegistersAll11Routes(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 11, video, "exactly the 11 §4.7 routes registered")
+}
+
+func TestMount_NilAuthz_Panics(t *testing.T) {
+	// Role checks are not optional (delivery-audit-video-studio §3 N2): a
+	// Mount without the authorizer is a wiring bug and must fail fast.
+	assert.Panics(t, func() {
+		Mount(webx.NewMux(), Deps{}, nil)
+	})
+}
+
+// testAuthorizer builds a DB-free authorizer carrying the video keys (Mount
+// only closes over it; these tests never send an authorized request).
+func testAuthorizer() *authz.Authorizer {
+	catalog := authz.NewCatalog(append(authz.DefaultPerms(), "video:read", "video:write", "video:render")...)
+	return authz.New(catalog, authz.DefaultRoles())
 }
 
 func TestDispositionFor(t *testing.T) {

@@ -29,9 +29,11 @@ const (
 	QueueName        = videoapp.RenderQueue // "video" — isolated from events/schedule queues
 	ProgressEveryN   = 15                   // frames between progress UPDATE + WS push
 	OrphanAfter      = 10 * time.Minute     // running rows older than this at boot → failed
-	// MaxAttempts is set to 2 at client construction (river MaxAttempts: 2):
-	// the first failure retries once from the ir_snapshot (snapshot is
-	// deterministic → idempotent re-render); a second failure discards.
+	// Lifecycle knobs live at client construction in main.go (river.Config):
+	// JobTimeout = CAPX_RENDER_JOB_TIMEOUT (default 15min — river's 1min
+	// default killed every >60s render), MaxAttempts = 2 (river's default is
+	// 25), SoftStopTimeout = JobTimeout (so drain lets captures finish), and
+	// RescueStuckJobsAfter = JobTimeout + 15min. Delivery audit §4 P1.
 )
 
 // ErrNotConfigured is returned by the stub pipeline when the capx tag is off
@@ -39,7 +41,9 @@ const (
 var ErrNotConfigured = errors.New("video render: capx pipeline not compiled in (build tag capx)")
 
 // errSilentFail marks "already failed + audited; do not let river retry".
-// river discards jobs whose Work returns it via the non-retryable path.
+// Work wraps it in river.JobCancel (the non-retryable path) — a plain error
+// would be retried, and every retry re-runs fail() → a second quota release
+// (delivery-audit-video-studio §4 P3/P5).
 var errSilentFail = errors.New("video render: failed (already audited; no retry)")
 
 // WorkerDeps is the worker's injection surface. Everything is an interface so
@@ -136,8 +140,25 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 		return err
 	}
 
-	// 1. mark running + WS push
+	// Terminal-state short-circuit (at-least-once delivery): a retry after a
+	// terminal write (succeeded/failed by an earlier attempt, or failed by a
+	// sweep) must not re-run the pipeline, re-put storage, re-release quota,
+	// or flip the row back to running (audit §4 P5).
+	switch row.Status {
+	case videoapp.RenderSucceeded:
+		w.deps.Log.Info("video render: already succeeded; stale attempt skipped", "render_id", row.ID)
+		return nil
+	case videoapp.RenderFailed:
+		w.deps.Log.Info("video render: already failed; stale attempt skipped", "render_id", row.ID)
+		return nil
+	}
+
+	// 1. mark running + WS push. ErrTerminalSkip from the guarded UPDATE
+	// means another attempt closed the row concurrently — stop quietly.
 	if err := w.transition(ctx, &row, videoapp.RenderRunning, "", 0); err != nil {
+		if errors.Is(err, ErrTerminalSkip) {
+			return nil
+		}
 		return err
 	}
 	w.pushState(ctx, &row, "")
@@ -172,15 +193,24 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 	outputKey, perr := w.pipe.Run(ctx, w, row, ir, row.Params, onFrame)
 	if perr != nil {
 		if ctx.Err() != nil {
-			// soft-stop: mark interrupted + release; river retry restarts
-			// from the snapshot (deterministic → idempotent, MaxAttempts 2).
-			_ = w.transition(ctx, &row, videoapp.RenderInterrupted, "interrupted: "+ctx.Err().Error(), row.FramesDone)
-			w.releaseQuota(ctx, &row)
-			w.pushState(ctx, &row, "interrupted")
-			return ctx.Err()
+			// Soft-stop / job-timeout cancellation: the compensation writes
+			// MUST run on a context decoupled from the cancelled job ctx —
+			// pgx rejects the original ctx immediately (context.Canceled),
+			// which used to leave the row stuck in running and the quota
+			// still spent (delivery-audit-video-studio §4 P4).
+			compCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			defer cancel()
+			if terr := w.transition(compCtx, &row, videoapp.RenderInterrupted, "interrupted: "+ctx.Err().Error(), row.FramesDone); terr != nil && !errors.Is(terr, ErrTerminalSkip) {
+				w.deps.Log.Error("video render: interrupted transition failed", "render_id", row.ID, "err", terr)
+			}
+			w.releaseQuota(compCtx, &row)
+			w.pushState(compCtx, &row, "interrupted")
+			return ctx.Err() // river retries from the deterministic snapshot
 		}
 		_ = w.fail(ctx, &row, perr.Error())
-		return errSilentFail
+		// river.JobCancel = non-retryable: the row is terminal and audited;
+		// a retry would re-run fail() and release quota a second time.
+		return river.JobCancel(errSilentFail)
 	}
 
 	// 7. succeeded
@@ -202,6 +232,12 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 // terminal non-success releases), audits and pushes.
 func (w *Worker) fail(ctx context.Context, row *renderRow, msg string) error {
 	if err := w.transition(ctx, row, videoapp.RenderFailed, msg, row.FramesDone); err != nil {
+		if errors.Is(err, ErrTerminalSkip) {
+			// Already terminal: the losing attempt must NOT release quota
+			// again (non-idempotent counter decrement; audit §4 P3).
+			w.deps.Log.Info("video render: fail skipped, row already terminal", "render_id", row.ID)
+			return nil
+		}
 		w.deps.Log.Error("video render: failed transition also failed", "render_id", row.ID, "err", err)
 	}
 	w.releaseQuota(ctx, row)
@@ -295,7 +331,13 @@ func (w *Worker) transition(ctx context.Context, row *renderRow, status, errMsg 
 	if key != "" {
 		row.OutputKey = key
 	}
-	return w.deps.store.update(ctx, row.ID, status, errMsg, framesDone, key)
+	err := w.deps.store.update(ctx, row.ID, status, errMsg, framesDone, key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The old pgStore mapped "0 rows affected" to pgx.ErrNoRows; keep
+		// that shape distinguishable from a truly missing row at call sites.
+		return ErrTerminalSkip
+	}
+	return err
 }
 
 // setProgress persists the frame counter (every ProgressEveryN frames).

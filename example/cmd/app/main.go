@@ -164,6 +164,15 @@ func env(key, def string) string {
 	return def
 }
 
+func envDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
+}
+
 func envInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -1242,7 +1251,11 @@ func main() {
 	}, log)
 
 	videoSvcForAccess = videoSvc
-	videohttp.Mount(mux, videohttp.Deps{Svc: videoSvc, Store: videoStore})
+	// wsMW fills principal.WorkspaceID from the X-Workspace-Id header
+	// (delivery-audit-video-studio §3 N2: without it every session/PAT
+	// request carries an empty workspace and dies at membership); authz
+	// gates the registered video:* role keys per route.
+	videohttp.Mount(mux, videohttp.Deps{Svc: videoSvc, Store: videoStore, Authz: authorizer}, wsMW)
 
 	// video render worker: dedicated river client on the "video" queue
 	// (MaxWorkers env-tunable, default 1). The client starts/drains inside a
@@ -1258,18 +1271,41 @@ func main() {
 		TmpDir:       videoTmpDir,
 	})
 	river.AddWorker(videoWorkers, videoWorker)
+	// Lifecycle knobs (delivery-audit-video-studio §4 P1 — all three were
+	// left at river defaults before: JobTimeout 1min killed every >60s
+	// render into a retry-discard loop, MaxAttempts defaulted to 25, and an
+	// unset SoftStopTimeout made drain cancel in-flight work instantly):
+	JobTimeout := envDuration("CAPX_RENDER_JOB_TIMEOUT", 15*time.Minute)
 	videoClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues: map[string]river.QueueConfig{
 			videorender.QueueName: {MaxWorkers: envInt("CAPX_RENDER_WORKERS", 1)},
 		},
 		Workers: videoWorkers,
+		// One render of ~30s footage takes 2–4min of frame capture; give the
+		// job its own budget, far above the API default of 1 minute.
+		JobTimeout: JobTimeout,
+		// Two attempts, then discard: renders are snapshot-deterministic, a
+		// second failure is not transient (quota is released by the worker).
+		MaxAttempts: 2,
+		// Soft stop lets in-flight captures finish (or hit JobTimeout) before
+		// cancellation propagates; the runner's stop window below must cover
+		// this plus persistence margin.
+		SoftStopTimeout: JobTimeout,
+		// Rescue a stuck job (process died mid-render without cleanup) after
+		// JobTimeout + 15min, comfortably above one full render.
+		RescueStuckJobsAfter: JobTimeout + 15*time.Minute,
 	})
 	if err != nil {
 		log.Error("video river client", "err", err)
 		os.Exit(1)
 	}
 	videoEnq.client = videoClient
-	wk.Add(newVideoRunner(videoClient))
+	// Render drain window = SoftStopTimeout (job-timeout sized) + margin —
+	// NOT the shared 45s events window: a 2–4min render killed at 45s is
+	// interrupted, retried, and interrupted again until discarded
+	// (delivery-audit-video-studio §4 P1).
+	wk.Add(&videoRunner{client: videoClient,
+		StopWait: envDuration("CAPX_RENDER_JOB_TIMEOUT", 15*time.Minute) + time.Minute})
 	videoWorker.SweepOrphans(ctx)
 
 	// video MCP tools: registered on the same server as devx (the registration
@@ -1689,10 +1725,12 @@ func (e *videoEnqueuer) InsertTx(ctx context.Context, tx pgx.Tx, args any, opts 
 // newVideoRunner wraps the video river client in a workers.Runner (start on
 // boot, drain on shutdown) — same shape as schedule.NewFireRunner.
 type videoRunner struct {
-	client *river.Client[pgx.Tx]
+	client   *river.Client[pgx.Tx]
+	StopWait time.Duration
 }
 
 func newVideoRunner(client *river.Client[pgx.Tx]) *videoRunner { return &videoRunner{client: client} }
+
 
 func (r *videoRunner) Name() string { return "video_render_queue" }
 
@@ -1701,9 +1739,14 @@ func (r *videoRunner) Run(ctx context.Context) error {
 		return err
 	}
 	<-ctx.Done()
-	// Aligned with the shared drain window (45s = events soft-stop 30s + 15s
-	// margin); a render past this window is marked interrupted and retried.
-	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+	// Render-specific window: the client's SoftStopTimeout (job-timeout
+	// sized, default 15min) + 1min persistence margin. The shared 45s events
+	// window does NOT fit minute-scale captures (§8.1 of the video plan).
+	wait := r.StopWait
+	if wait == 0 {
+		wait = envDuration("CAPX_RENDER_JOB_TIMEOUT", 15*time.Minute) + time.Minute
+	}
+	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), wait)
 	defer cancel()
 	return r.client.Stop(stopCtx)
 }
