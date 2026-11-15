@@ -127,7 +127,8 @@ func TestDegradeMatrix_SetScriptSources(t *testing.T) {
 
 	t.Run("no tts no aligner → estimated", func(t *testing.T) {
 		ir := &IR{Meta: Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 8}}
-		words, src, err := svc.deriveWords(context.Background(), ir, "你好 世界")
+		dw, src, err := svc.deriveWordsUnlocked(context.Background(), ir, "你好 世界")
+		words := dw.words
 		require.NoError(t, err)
 		assert.Equal(t, WordSourceEstimated, src)
 		require.Len(t, words, 2)
@@ -148,7 +149,8 @@ func TestDegradeMatrix_SetScriptSources(t *testing.T) {
 			}}},
 		}
 		ir := &IR{Meta: Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 8}}
-		words, src, err := s.deriveWords(context.Background(), ir, "你好")
+		dw, src, err := s.deriveWordsUnlocked(context.Background(), ir, "你好")
+		words := dw.words
 		require.NoError(t, err)
 		assert.Equal(t, WordSourceTTS, src)
 		require.Len(t, words, 2)
@@ -162,7 +164,8 @@ func TestDegradeMatrix_SetScriptSources(t *testing.T) {
 			ports: Ports{Synth: &fakeSynth{result: VoiceResult{DurationSec: 5}}},
 		}
 		ir := &IR{Meta: Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 8}}
-		words, src, err := s.deriveWords(context.Background(), ir, "你好 世界")
+		dw, src, err := s.deriveWordsUnlocked(context.Background(), ir, "你好 世界")
+		words := dw.words
 		require.NoError(t, err)
 		assert.Equal(t, WordSourceTTS, src)
 		require.Len(t, words, 2)
@@ -175,7 +178,8 @@ func TestDegradeMatrix_SetScriptSources(t *testing.T) {
 			ports: Ports{Synth: &fakeSynth{err: context.DeadlineExceeded}},
 		}
 		ir := &IR{Meta: Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 8}}
-		_, src, err := s.deriveWords(context.Background(), ir, "你好")
+		dw, src, err := s.deriveWordsUnlocked(context.Background(), ir, "你好")
+		_ = dw
 		require.NoError(t, err)
 		assert.Equal(t, WordSourceEstimated, src)
 	})
@@ -191,7 +195,8 @@ func TestDegradeMatrix_SetScriptSources(t *testing.T) {
 			Meta:  Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 8},
 			Audio: &Audio{Voice: &AudioTrack{Key: "video/ws/v.mp3", DurationSec: 4}},
 		}
-		words, src, err := s.deriveWords(context.Background(), ir, "你好")
+		dw, src, err := s.deriveWordsUnlocked(context.Background(), ir, "你好")
+		words := dw.words
 		require.NoError(t, err)
 		assert.Equal(t, WordSourceAligner, src)
 		require.Len(t, words, 2)

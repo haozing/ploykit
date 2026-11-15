@@ -72,16 +72,12 @@ func (capxPipeline) Run(ctx context.Context, w *Worker, row renderRow, ir *video
 	if fps == 0 {
 		fps = ir.Meta.FPS
 	}
-	duration := ir.Meta.DurationSec
-	if ir.Audio != nil && ir.Audio.Voice != nil && ir.Audio.Voice.DurationSec > duration {
-		duration = ir.Audio.Voice.DurationSec // render baseline (§4.2.2 C5)
-	}
+	// Single-source frame formula (delivery audit P8): the same
+	// ceil(max(meta, voice) x fps) the service persists with; the row value
+	// normally wins and this is only the fallback.
 	total := row.FramesTotal
 	if total <= 0 {
-		total = int(duration * float64(fps))
-		if total <= 0 {
-			total = 1
-		}
+		total = videoapp.DurationFrames(ir, fps)
 	}
 	spec := capx.FrameSpec{
 		Width: params.Width, Height: params.Height, FPS: fps, DurationFrames: total,

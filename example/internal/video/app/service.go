@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,6 +31,7 @@ var (
 	ErrAnchorNotFound   = webx.NewError(400, "E_VIDEO_ANCHOR_NOT_FOUND", "anchor text not found in words")
 	ErrNotConfigured    = webx.NewError(503, "E_NOT_CONFIGURED", "render capability not configured")
 	ErrForbidden        = webx.NewError(403, "E_FORBIDDEN", "not a member of this workspace")
+	ErrInternalPreview  = webx.NewError(500, "E_VIDEO_PREVIEW_INTERNAL", "preview CSP hash unavailable")
 	ErrAssetTooLarge    = webx.NewError(400, "E_VIDEO_ASSET_TOO_LARGE", "asset exceeds the size limit")
 	ErrAssetUnsupported = webx.NewError(400, "E_VIDEO_ASSET_UNSUPPORTED", "asset content type not allowed")
 )
@@ -51,6 +53,9 @@ const (
 	AuditRenderCompleted = "video.render.completed"
 	AuditRenderFailed    = "video.render.failed"
 	AuditAssetUploaded   = "video.asset.uploaded"
+	AuditProjectDeleted  = "video.project.deleted"
+	AuditRenderInterrupt = "video.render.interrupted"
+	AuditMutationFailed  = "video.project.mutation_failed"
 )
 
 // UploadLimit is the asset size cap for the MCP upload path (~700KB inside
@@ -205,6 +210,14 @@ func (s *ProjectService) Mutate(ctx context.Context, p *webx.Principal, projectI
 		return 0, nil, err
 	}
 	if expectedVersion != nil && *expectedVersion != version {
+		// Optimistic-lock conflict is an auditable mutation failure
+		// (v2.0 Â§13): the row survives, so Record (no tx) is correct.
+		if s.ports.Audit != nil {
+			s.ports.Audit.Record(ctx, &p.WorkspaceID, p.UserID,
+				AuditMutationFailed, "video_project", projectID,
+				map[string]any{"reason": "version_conflict",
+					"expected": *expectedVersion, "current": version})
+		}
 		return 0, nil, conflict(version)
 	}
 
@@ -433,6 +446,12 @@ func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectI
 	if tag.RowsAffected() == 0 {
 		return ErrProjectNotFound
 	}
+	// Delete IS an audited lifecycle event (v2.0 Â§13): renders cascade via
+	// FK, so this record is the only trace the project ever existed.
+	if s.ports.Audit != nil {
+		s.ports.Audit.Record(ctx, &p.WorkspaceID, p.UserID,
+			AuditProjectDeleted, "video_project", projectID, nil)
+	}
 	return nil
 }
 
@@ -442,17 +461,48 @@ func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectI
 // Aligner for an existing voice track, otherwise the char-proportional
 // estimate (§4.3 SetScript internal). Never blocks the caller on a missing
 // capability.
+//
+// Two-phase (v2.0 §6.3; delivery audit P6): the external TTS/Aligner/storage
+// calls run OUTSIDE the row lock — holding SELECT FOR UPDATE across a 60s
+// vendor call pinned the row, queued every concurrent Mutate, and held a
+// pool connection. Phase 1 reads the IR WITHOUT the lock to gather the
+// derivation inputs; phase 2 takes the short lock, re-validates the
+// optimistic version, and applies. If the voice track changed between the
+// phases (concurrent edit), aligner words would be pinned to stale audio —
+// the closure detects the drift and falls back to estimate, which is always
+// safe.
 func (s *ProjectService) SetScript(ctx context.Context, p *webx.Principal, projectID, script string, expectedVersion *int) (int, []AnchorResolution, string, error) {
-	source := WordSourceEstimated
+	// Phase 0: cheap gate + unlocked read for the derivation inputs
+	// (best-effort snapshot; the locked phase re-validates the version).
+	pr, err := s.Get(ctx, p, projectID)
+	if err != nil {
+		return 0, nil, "", err
+	}
+	if expectedVersion != nil && *expectedVersion != pr.Version {
+		return 0, nil, "", conflict(pr.Version)
+	}
+
+	// Phase 1: external calls with NO row lock held.
+	pre, src, derr := s.deriveWordsUnlocked(ctx, pr.IR, script)
+	if derr != nil {
+		return 0, nil, "", derr
+	}
+
+	// Phase 2: short transaction; apply the pre-derived words.
+	source := src
 	var resolutions []AnchorResolution
 	newVersion, resolutions, err := s.Mutate(ctx, p, projectID, expectedVersion, func(ir *IR) error {
 		ir.Script = script
-		words, src, werr := s.deriveWords(ctx, ir, script)
-		if werr != nil {
-			return werr
+		if pre.staleAgainst(ir) {
+			// Voice track changed between the phases: aligner words are
+			// pinned to the old audio — drop to estimate (always safe).
+			s.log.Info("setscript: voice changed during derivation; falling back to estimate", "project_id", projectID)
+			ir.Words = EstimateWords(script, ir.Meta.DurationSec)
+			source = WordSourceEstimated
+			return nil
 		}
-		ir.Words = words
-		source = src
+		ir.Words = pre.words
+		ir.Audio = pre.audio
 		return nil
 	})
 	if err != nil {
@@ -461,51 +511,94 @@ func (s *ProjectService) SetScript(ctx context.Context, p *webx.Principal, proje
 	return newVersion, resolutions, source, nil
 }
 
+// derivedWords is the phase-1 payload: the words/audio computed outside the
+// lock, plus the observation they were based on (staleAgainst detects
+// concurrent voice-track edits).
+type derivedWords struct {
+	words            []Word
+	audio            *Audio
+	observedVoiceKey string
+}
+
+// staleAgainst reports whether the locked-phase IR drifted from the state
+// the phase-1 derivation assumed: a different voice key invalidates aligner
+// words (TTS words carry their own fresh audio, so only the aligner path
+// with a pre-existing key can go stale).
+func (d *derivedWords) staleAgainst(ir *IR) bool {
+	cur := ""
+	if ir.Audio != nil && ir.Audio.Voice != nil {
+		cur = ir.Audio.Voice.Key
+	}
+	return d.observedVoiceKey != cur
+}
+
 // deriveWords runs the degrade matrix (§4.10.2): Synth → Aligner(existing
 // voice) → EstimateWords. Returns the chosen word source.
-func (s *ProjectService) deriveWords(ctx context.Context, ir *IR, script string) ([]Word, string, error) {
+//
+// Runs OUTSIDE any row lock (two-phase SetScript, audit P6): it mutates a
+// THROWAWAY copy of the IR (the caller's phase-0 snapshot), never the
+// locked row. TTS results (fresh audio + words) are self-consistent; the
+// aligner path reads the observed voice key into the payload so phase 2 can
+// detect drift and fall back.
+func (s *ProjectService) deriveWordsUnlocked(ctx context.Context, ir *IR, script string) (*derivedWords, string, error) {
+	work := &derivedWords{observedVoiceKey: ""}
+	// Work on a detached copy so no phase-1 mutation can leak into the
+	// locked phase's IR (the closure applies pre.audio explicitly).
+	scratch := *ir
+	if ir.Audio != nil && ir.Audio.Voice != nil {
+		work.observedVoiceKey = ir.Audio.Voice.Key
+		vc := *ir.Audio.Voice
+		scratch.Audio = &Audio{Voice: &vc, BGM: ir.Audio.BGM}
+	}
 	if s.ports.Synth != nil {
 		tctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
-		vr, serr := s.ports.Synth.Synthesize(tctx, script, ir.voiceName(), 1.0)
+		vr, serr := s.ports.Synth.Synthesize(tctx, script, scratch.voiceName(), 1.0)
 		if serr != nil {
 			s.log.Warn("tts synthesize failed; falling back", "err", serr)
 		} else {
 			if len(vr.AudioData) > 0 && s.ports.Store != nil {
-				key := fmt.Sprintf("%s/assets/voice/tts-%s.mp3", ir.voiceKeyPrefix(ctx), ids.NewV7())
+				key := fmt.Sprintf("%s/assets/voice/tts-%s.mp3", scratch.voiceKeyPrefix(ctx), ids.NewV7())
 				obj, perr := s.ports.Store.Put(tctx, key, "audio/mpeg", bytesReader(vr.AudioData))
 				if perr == nil {
 					vr.AudioKey = obj.Key
 				}
 			}
-			if vr.AudioKey != "" {
-				if ir.Audio == nil {
-					ir.Audio = &Audio{}
-				}
-				ir.Audio.Voice = &AudioTrack{Key: vr.AudioKey, DurationSec: vr.DurationSec}
-			}
 			words := vr.Words
 			if len(words) == 0 {
-				words = EstimateWords(script, vr.durationOr(ir.Meta.DurationSec))
+				words = EstimateWords(script, vr.durationOr(scratch.Meta.DurationSec))
 			} else {
 				words = s.stampSource(words, WordSourceTTS)
 			}
-			return words, WordSourceTTS, nil
+			// Fresh TTS audio rides with the words (phase 2 applies both).
+			if vr.AudioKey != "" {
+				if scratch.Audio == nil {
+					scratch.Audio = &Audio{}
+				}
+				scratch.Audio.Voice = &AudioTrack{Key: vr.AudioKey, DurationSec: vr.DurationSec}
+			}
+			work.words = words
+			work.audio = scratch.Audio
+			return work, WordSourceTTS, nil
 		}
 	}
-	if s.ports.Aligner != nil && ir.Audio != nil && ir.Audio.Voice != nil && ir.Audio.Voice.Key != "" {
+	if s.ports.Aligner != nil && scratch.Audio != nil && scratch.Audio.Voice != nil && scratch.Audio.Voice.Key != "" {
 		tctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
-		words, aerr := s.ports.Aligner.Align(tctx, ir.Audio.Voice.Key, script)
+		words, aerr := s.ports.Aligner.Align(tctx, scratch.Audio.Voice.Key, script)
 		if aerr == nil && len(words) > 0 {
 			words = s.stampSource(words, WordSourceAligner)
-			return words, WordSourceAligner, nil
+			work.words = words
+			work.audio = scratch.Audio // unchanged voice; audio carried for parity
+			return work, WordSourceAligner, nil
 		}
 		if aerr != nil {
 			s.log.Warn("aligner failed; falling back", "err", aerr)
 		}
 	}
-	return EstimateWords(script, ir.Meta.DurationSec), WordSourceEstimated, nil
+	work.words = EstimateWords(script, scratch.Meta.DurationSec)
+	work.audio = scratch.Audio // keep any pre-existing voice/bgm as observed
+	return work, WordSourceEstimated, nil
 }
 
 func renumber(words []Word) {
@@ -742,7 +835,7 @@ func (s *ProjectService) SubmitRender(ctx context.Context, p *webx.Principal, pr
 		RETURNING id, project_id, workspace_id, status, params, frames_done, frames_total, output_key, error,
 		          created_by, created_at, updated_at, finished_at`,
 		renderID, projectID, p.WorkspaceID, RenderQueued, mustJSON(params), irBytes(pr.IR),
-		int(pr.IR.Meta.DurationSec*float64(params.FPS)), p.UserID, submissionKey, period).
+		DurationFrames(pr.IR, params.FPS), p.UserID, submissionKey, period).
 		Scan(&r.ID, &r.ProjectID, &r.Workspace, &r.Status, &paramsDest{&r.Params}, &r.FramesDone, &r.FramesTotal,
 			&r.OutputKey, &r.Error, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt, &r.FinishedAt)
 	if err != nil {
@@ -788,6 +881,31 @@ func (s *ProjectService) renderBySubmissionKey(ctx context.Context, wsID, key st
 		return nil, err
 	}
 	return &r, nil
+}
+
+// DurationFrames is the SINGLE source of the frame-count formula (audit
+// Â§4 P8: Go truncated on meta-only, Go truncated on voice-extended, and JS
+// rounded on voice-extended â three diverging calendars for one number):
+//
+//	ceil(max(meta.durationSec, voice.durationSec) * fps), at least 1
+//
+// The voice duration extends the timeline when it runs past meta; every
+// consumer (service persistence, worker fallback, pipeline fallback, and
+// timeline-builder.js â which must Math.ceil the same value) derives its
+// number from this definition.
+func DurationFrames(ir *IR, fps int) int {
+	if fps <= 0 {
+		fps = ir.Meta.FPS
+	}
+	d := ir.Meta.DurationSec
+	if ir.Audio != nil && ir.Audio.Voice != nil && ir.Audio.Voice.DurationSec > d {
+		d = ir.Audio.Voice.DurationSec
+	}
+	n := int(math.Ceil(d * float64(fps)))
+	if n < 1 {
+		n = 1
+	}
+	return n
 }
 
 // paramsDest adapts *RenderParams for row scanning.

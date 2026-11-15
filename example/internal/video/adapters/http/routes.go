@@ -180,10 +180,17 @@ func (d Deps) handlePreview(w http.ResponseWriter, r *http.Request, p *webx.Prin
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-store")
-	if hash, herr := videoapp.InlineScriptHash(); herr == nil {
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src "+hash+
-			"; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self'; frame-ancestors 'self'")
+	hash, herr := videoapp.InlineScriptHash()
+	if herr != nil {
+		// A preview without the CSP is not servable: the whole document is
+		// inline scripts, so serving it hash-less would be a policy failure,
+		// not a degradation (audit P10: silent skip -> explicit error).
+		webx.WriteErr(w, videoapp.ErrInternalPreview)
+		return
 	}
+	h.Set("Content-Security-Policy", "default-src 'none'; script-src "+hash+
+		"; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self';"+
+		" frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(html)
 }

@@ -177,12 +177,10 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 	}
 
 	total := row.FramesTotal
-	if total <= 0 && ir.Meta.DurationSec > 0 {
-		fps := row.Params.FPS
-		if fps == 0 {
-			fps = ir.Meta.FPS
-		}
-		total = int(ir.Meta.DurationSec * float64(fps))
+	if total <= 0 {
+		// Single-source formula (audit Â§4 P8) â persisted rows normally
+		// carry frames_total already.
+		total = videoapp.DurationFrames(ir, row.Params.FPS)
 	}
 
 	onFrame := func(frame int) {
@@ -212,6 +210,13 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[videoapp.RenderArgs]) 
 			}
 			if row.releaseClaim {
 				w.releaseQuota(compCtx, &row)
+			}
+			// interrupted is its own audit action (v2.0 Â§13): drain/timeouts
+			// are operationally distinct from genuine failures.
+			if w.deps.Audit != nil {
+				w.deps.Audit.Record(compCtx, &row.WorkspaceID, row.CreatedBy,
+					videoapp.AuditRenderInterrupt, "video_render", row.ID,
+					map[string]any{"project_id": row.ProjectID, "reason": ctx.Err().Error()})
 			}
 			w.pushState(compCtx, &row, "interrupted")
 			return ctx.Err() // river retries from the deterministic snapshot

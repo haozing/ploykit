@@ -317,12 +317,21 @@ func mcpAdd[In any](s *mcp.Server, name, description, scope string, fn func(cont
 		})
 }
 
-// requireToolScope mirrors devx/tools.go:157: only PAT principals are
-// scope-bounded; sessions pass (role checks live with the product).
+// requireToolScope enforces the PAT-only contract for the video MCP surface
+// (v2.0 D6; delivery audit Â§5 P12): browser sessions are REJECTED, not
+// scope-checked and passed. Rationale: /mcp sits in the CSRF-exempt prefix
+// list, so a session cookie plus same-site XSS could otherwise invoke
+// agent-grade tools with the user's privileges; PAT possession is the
+// agent-capability boundary. (devx keeps its session-passing shape because
+// its surface is the developer's own log/job tooling, not a production
+// write path.)
 func requireToolScope(ctx context.Context, scope string) error {
 	p := webx.PrincipalFrom(ctx)
-	if p == nil || p.Source != webx.SourcePAT {
-		return nil
+	if p == nil {
+		return fmt.Errorf("%w: no principal", ErrScopeDenied)
+	}
+	if p.Source != webx.SourcePAT {
+		return fmt.Errorf("%w: video MCP tools require a PAT (session callers use the REST surface)", ErrScopeDenied)
 	}
 	if !p.Scope.Allows(scope) {
 		return fmt.Errorf("%w: PAT scope does not include %s", ErrScopeDenied, scope)

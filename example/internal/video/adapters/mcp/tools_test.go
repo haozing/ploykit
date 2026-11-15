@@ -48,8 +48,14 @@ func TestRequireToolScope_PATAllowed(t *testing.T) {
 	assert.NoError(t, requireToolScope(patCtx("video:read", "video:render"), ScopeRender))
 }
 
-func TestRequireToolScope_SessionPasses(t *testing.T) {
-	assert.NoError(t, requireToolScope(sessionCtx(), ScopeRender), "sessions are role-checked elsewhere")
+func TestRequireToolScope_SessionRejected(t *testing.T) {
+	// PAT-only contract (v2.0 D6 / audit P12): sessions must use the REST
+	// surface; /mcp is CSRF-exempt so a session cookie must not reach
+	// agent-grade tools.
+	err := requireToolScope(sessionCtx(), ScopeRender)
+	require.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), ErrScopeDenied.Error()))
+	assert.True(t, strings.Contains(err.Error(), "PAT"))
 }
 
 func TestRequireToolScope_WildcardDomain(t *testing.T) {

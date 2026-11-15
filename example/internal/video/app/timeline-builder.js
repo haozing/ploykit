@@ -31,7 +31,10 @@
   if (IR.audio && IR.audio.voice && IR.audio.voice.durationSec > durationSec) {
     durationSec = IR.audio.voice.durationSec; // render baseline (§4.2.2 C5)
   }
-  var durationFrames = Math.max(1, Math.round(durationSec * fps));
+  // Frame-count parity with the Go service (DurationFrames, delivery audit
+  // P8): ceil, not round — round diverged by a frame on fractional totals
+  // (e.g. 8.04s @ 30fps = 241.2 → 241 vs Go's 242).
+  var durationFrames = Math.max(1, Math.ceil(durationSec * fps));
 
   var stage = document.getElementById('stage');
   var canvas = document.getElementById('canvas');
