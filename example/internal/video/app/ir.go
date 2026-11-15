@@ -142,16 +142,37 @@ type Audio struct {
 	BGM   *AudioTrack `json:"bgm,omitempty"`
 }
 
+// IRSchemaVersion is the contract version of the IR document itself
+// (v2.0 §5.1 / delivery audit A-item): the row-level project version (the
+// optimistic lock) lives in video_project.version and is NOT part of the
+// document — the two numbers must never be conflated. Readers accept the
+// current schema; documents persisted before the schemaVersion field
+// existed (and legacy documents still embedding the row-level `version`)
+// are stamped/stripped by normalizeSchema on read and on write.
+const IRSchemaVersion = 1
+
 // IR is the full intermediate representation persisted in video_project.ir.
+// It deliberately has NO row-version field: before the cleanup, a stale
+// embedded `version` coexisted with video_project.version (two truths that
+// drift); normalizeSchema strips the legacy key from old documents.
 type IR struct {
-	Version  int                 `json:"version"`
-	Meta     Meta                `json:"meta"`
-	Script   string              `json:"script"`
-	Words    []Word              `json:"words"`
-	Effects  []Effect            `json:"effects"`
-	Elements []Element           `json:"elements"`
-	Audio    *Audio              `json:"audio,omitempty"`
-	unknown  map[string]struct{} // reserved: read-time tolerance marker
+	SchemaVersion int                 `json:"schemaVersion"`
+	Meta          Meta                `json:"meta"`
+	Script        string              `json:"script"`
+	Words         []Word              `json:"words"`
+	Effects       []Effect            `json:"effects"`
+	Elements      []Element           `json:"elements"`
+	Audio         *Audio              `json:"audio,omitempty"`
+	unknown       map[string]struct{} // reserved: read-time tolerance marker
+}
+
+// normalizeSchema stamps the current schema version and removes the legacy
+// row-level `version` key from documents persisted before the cleanup.
+// Cheap enough to call on every read and before every persist, so any
+// document becomes clean the next time it is written regardless of age.
+func (ir *IR) normalizeSchema() {
+	ir.SchemaVersion = IRSchemaVersion
+	delete(ir.unknown, "version")
 }
 
 // Limits (docs plan §4.2.2).

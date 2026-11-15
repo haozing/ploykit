@@ -318,6 +318,7 @@ func originOf(ctx context.Context) string {
 // irBytes marshals with sorted deterministic output (encoding/json map order
 // is already deterministic for structs).
 func irBytes(ir *IR) []byte {
+	ir.normalizeSchema()
 	b, _ := json.Marshal(ir)
 	return b
 }
@@ -343,7 +344,7 @@ func (s *ProjectService) Create(ctx context.Context, p *webx.Principal, title st
 		VALUES ($1,$2,$3,$4,$5,$5,$6,$6)
 		RETURNING id, workspace_id, title, script, ir, version, created_by, updated_by, created_at, updated_at`,
 		id, p.WorkspaceID, title, irBytes(ir), p.UserID, now).
-		Scan(&pr.ID, &pr.Workspace, &pr.Title, &pr.Script, &irDest{&pr.IR}, &pr.Version,
+		Scan(&pr.ID, &pr.Workspace, &pr.Title, &irDest{&pr.IR}, &pr.Version,
 			&pr.CreatedBy, &pr.UpdatedBy, &pr.CreatedAt, &pr.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -369,6 +370,7 @@ func (d irDest) Scan(src any) error {
 			return err
 		}
 	}
+	ir.normalizeSchema()
 	*d.dst = ir
 	return nil
 }
@@ -407,9 +409,9 @@ func (s *ProjectService) Get(ctx context.Context, p *webx.Principal, projectID s
 	// a missing id — no existence leak, and the membership check ordering
 	// cannot turn it into a distinguishable 403.
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, workspace_id, title, script, ir, version, created_by, updated_by, created_at, updated_at
+		SELECT id, workspace_id, title, ir, version, created_by, updated_by, created_at, updated_at
 		FROM video_project WHERE id=$1 AND workspace_id=$2`, projectID, p.WorkspaceID).
-		Scan(&pr.ID, &pr.Workspace, &pr.Title, &pr.Script, &irDest{&pr.IR}, &pr.Version,
+		Scan(&pr.ID, &pr.Workspace, &pr.Title, &irDest{&pr.IR}, &pr.Version,
 			&pr.CreatedBy, &pr.UpdatedBy, &pr.CreatedAt, &pr.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrProjectNotFound

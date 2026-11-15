@@ -175,8 +175,12 @@ func (p *Projector) HTML(ctx context.Context, ir *IR, _ string) ([]byte, error) 
 		}
 		elements = append(elements, m)
 	}
+	schemaVersion := ir.SchemaVersion
+	if schemaVersion == 0 {
+		schemaVersion = IRSchemaVersion // in-memory IRs predate stamping
+	}
 	payload := map[string]any{
-		"version":  ir.Version,
+		"schemaVersion": schemaVersion,
 		"meta":     ir.Meta,
 		"script":   ir.Script,
 		"words":    ir.Words,

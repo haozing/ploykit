@@ -196,6 +196,16 @@ func (inst *browserInstance) render(ctx context.Context, doc Doc, spec FrameSpec
 		res, err := cdp.Call(tabCtx, cdpCtx.Target, page.CaptureScreenshot, page.CaptureScreenshotParams{
 			Format:      page.CaptureScreenshotFormatPng,
 			FromSurface: boolPtr(true),
+			// Pin the capture geometry (v2.0 Â§9.2: defaults are not a
+			// contract â a Chrome update changing any of them would silently
+			// alter pixel output).
+			Clip: &page.Viewport{
+				X: 0, Y: 0,
+				Width:  float64(spec.Width),
+				Height: float64(spec.Height),
+				Scale:  1,
+			},
+			CaptureBeyondViewport: boolPtr(false),
 		})
 		if err != nil {
 			return fmt.Errorf("capx: frame %d: capture: %w", i, err)
@@ -216,6 +226,17 @@ func (inst *browserInstance) render(ctx context.Context, doc Doc, spec FrameSpec
 func awaitReady(ctx context.Context, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
+		// Fail-closed resource gate (audit Q3 / Remotion delayRender
+		// semantics): the player records the FIRST fatal resource failure on
+		// __player.error and keeps ready=false — surface the root cause
+		// instead of an opaque 60s timeout. Probe errors are non-fatal: the
+		// ready-timeout reports those instead.
+		playerError, perr := chromedp.Run(ctx,
+			chromedp.Evaluate[string]("String(window.__player && window.__player.error || '')"))
+		_ = perr
+		if playerError != "" {
+			return fmt.Errorf("capx: player resource failure: %s", playerError)
+		}
 		ready, err := chromedp.Run(ctx,
 			chromedp.Evaluate[bool]("window.__player && window.__player.ready === true"))
 		if err == nil && ready {

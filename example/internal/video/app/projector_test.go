@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -145,3 +146,22 @@ func TestInlineScriptHash_MatchesEmittedScript(t *testing.T) {
 	require.Greater(t, len(b), 1000)
 }
 
+func TestProjector_PayloadCarriesSchemaVersion(t *testing.T) {
+	// The IR document carries its own contract version (schemaVersion); the
+	// row-level optimistic-lock version is NOT part of the document
+	// (delivery audit A-item: no double truth). Verified structurally via
+	// JSON round-trip, not substring matching ("version" is a prefix of
+	// "schemaVersion").
+	html, err := NewProjector(nil).HTML(t.Context(), validIR(), "")
+	require.NoError(t, err)
+	str := string(html)
+	marker := "id=\"ploykit-ir\">"
+	start := strings.Index(str, marker) + len(marker)
+	end := strings.Index(str[start:], "</script>")
+	require.GreaterOrEqual(t, end, 0)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(str[start:start+end]), &payload))
+	assert.Equal(t, float64(IRSchemaVersion), payload["schemaVersion"], "contract version present")
+	_, hasBare := payload["version"]
+	assert.False(t, hasBare, "no bare row-version key")
+}

@@ -146,7 +146,18 @@
       if (!el || !el.id) return;
       var node = buildClipDOM(el);
       if (el.type === 'image' && node.decode) {
-        decodePromises.push(node.decode().catch(function () { /* broken asset: render continues */ }));
+        // Resource failure is FAIL-CLOSED (Remotion delayRender semantics;
+        // delivery audit Q3): a broken asset must NOT yield a "successful"
+        // video with holes. The rejection is recorded on __player.error and
+        // keeps ready=false, so the renderer aborts with the root cause.
+        decodePromises.push(node.decode().catch(function (e) {
+          var msg = 'image decode failed: ' + (el.src || el.id) + (e ? ': ' + e : '');
+          if (window.console) console.error('ploykit-video: ' + msg);
+          if (window.__player && !window.__player.error) {
+            window.__player.error = msg;
+          }
+          throw e; // keep the all-decode gate rejecting → ready stays false
+        }));
       }
       (el.animations || []).forEach(function (an) {
         var builder = animBuilders[an.type];
@@ -187,6 +198,7 @@
 
     window.__player = {
       ready: false,
+      error: null, // first fatal resource failure (fail-closed, audit Q3)
       seek: seek,
       play: play,
       pause: pause,
