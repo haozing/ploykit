@@ -1,0 +1,20 @@
+{
+ "case": "SHUIJING-PROMO",
+ "spec": {
+  "w": 1080,
+  "h": 1920,
+  "fps": 30,
+  "duration": 30
+ },
+ "status": "pass",
+ "elements": 14,
+ "words": 10,
+ "effects": 3,
+ "mp4_bytes": 238995,
+ "render_ms_per_frame": 118.4,
+ "findings": [
+  "x/y dual-tag Go marshal bug (fixed by splitting fields)",
+  "counter host overlays text element (known X-series degradation)",
+  "bracelet ring = circle of image elements (IR capability ceiling showcase)"
+ ]
+}

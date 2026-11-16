@@ -1,0 +1,366 @@
+{
+ "schemaVersion": 1,
+ "meta": {
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "durationSec": 30
+ },
+ "script": "一颗水晶五种心情。五珠成串一见倾心。三十九种天然水晶，在线圆形编辑器拖拽即成串。到手价七十九。打开在线编辑器，定制你的水晶手串。",
+ "words": [
+  {
+   "index": 0,
+   "text": "水晶",
+   "start": 1,
+   "end": 1.5,
+   "source": "manual"
+  },
+  {
+   "index": 1,
+   "text": "心情",
+   "start": 1.6,
+   "end": 2.4,
+   "source": "manual"
+  },
+  {
+   "index": 2,
+   "text": "成串",
+   "start": 5.2,
+   "end": 6,
+   "source": "manual"
+  },
+  {
+   "index": 3,
+   "text": "三十九种",
+   "start": 10.2,
+   "end": 11.2,
+   "source": "manual"
+  },
+  {
+   "index": 4,
+   "text": "水晶",
+   "start": 11.3,
+   "end": 11.9,
+   "source": "manual"
+  },
+  {
+   "index": 5,
+   "text": "拖拽",
+   "start": 12.1,
+   "end": 12.8,
+   "source": "manual"
+  },
+  {
+   "index": 6,
+   "text": "到手价",
+   "start": 16.2,
+   "end": 17,
+   "source": "manual"
+  },
+  {
+   "index": 7,
+   "text": "七十九",
+   "start": 17.1,
+   "end": 18.4,
+   "source": "manual"
+  },
+  {
+   "index": 8,
+   "text": "编辑器",
+   "start": 24.2,
+   "end": 25.2,
+   "source": "manual"
+  },
+  {
+   "index": 9,
+   "text": "手串",
+   "start": 25.4,
+   "end": 26.2,
+   "source": "manual"
+  }
+ ],
+ "effects": [
+  {
+   "id": "fx_counter",
+   "anchor": {
+    "Text": "到手价",
+    "Occurrence": 0
+   },
+   "type": "counter",
+   "params": {
+    "color": "#FF6A3D",
+    "from": 100,
+    "to": 79
+   },
+   "targetElementId": "price"
+  },
+  {
+   "id": "fx_hl_title",
+   "anchor": {
+    "Text": "水晶",
+    "Occurrence": 0
+   },
+   "type": "highlight",
+   "params": {
+    "color": "#FFD166"
+   },
+   "targetElementId": "title"
+  },
+  {
+   "id": "fx_pulse_bead",
+   "anchor": {
+    "Text": "成串",
+    "Occurrence": 0
+   },
+   "type": "pulse",
+   "params": {
+    "scale": 1.08
+   },
+   "targetElementId": "sj_bead_rose"
+  }
+ ],
+ "elements": [
+  {
+   "id": "bg",
+   "type": "shape",
+   "x": 0,
+   "y": 0,
+   "w": 1080,
+   "h": 1920,
+   "z": 0,
+   "color": "#1A1423",
+   "startFrame": 0,
+   "endFrame": 900
+  },
+  {
+   "id": "hero_bead",
+   "type": "image",
+   "src": "video/ws-shuijing/bead-peach.webp",
+   "x": 340,
+   "y": 560,
+   "w": 400,
+   "h": 400,
+   "z": 2,
+   "startFrame": 0,
+   "endFrame": 120,
+   "animations": [
+    {
+     "id": "hero_in",
+     "type": "scaleIn",
+     "fromValue": 0.6,
+     "toValue": 1,
+     "durationFrames": 20,
+     "easing": "power2.out"
+    }
+   ]
+  },
+  {
+   "id": "title",
+   "type": "text",
+   "text": "一颗水晶\n五种心情",
+   "x": 240,
+   "y": 1080,
+   "w": 600,
+   "h": 260,
+   "z": 2,
+   "color": "#F5EED8",
+   "fontSize": 76,
+   "startFrame": 0,
+   "endFrame": 120
+  },
+  {
+   "id": "sj_bead_rose",
+   "type": "image",
+   "src": "video/ws-shuijing/bead-peach.webp",
+   "x": 455,
+   "y": 535,
+   "w": 170,
+   "h": 170,
+   "z": 3,
+   "startFrame": 120,
+   "endFrame": 900,
+   "animations": [
+    {
+     "id": "bead_in_0",
+     "type": "scaleIn",
+     "fromValue": 0,
+     "toValue": 1,
+     "durationFrames": 14,
+     "easing": "back.out"
+    }
+   ]
+  },
+  {
+   "id": "sj_bead_amethyst",
+   "type": "image",
+   "src": "video/ws-shuijing/bead-amethyst.webp",
+   "x": 702,
+   "y": 714,
+   "w": 170,
+   "h": 170,
+   "z": 4,
+   "startFrame": 120,
+   "endFrame": 900,
+   "animations": [
+    {
+     "id": "bead_in_1",
+     "type": "scaleIn",
+     "fromValue": 0,
+     "toValue": 1,
+     "durationFrames": 14,
+     "easing": "back.out"
+    }
+   ]
+  },
+  {
+   "id": "sj_bead_moon",
+   "type": "image",
+   "src": "video/ws-shuijing/bead-moon.webp",
+   "x": 607,
+   "y": 1005,
+   "w": 170,
+   "h": 170,
+   "z": 5,
+   "startFrame": 120,
+   "endFrame": 900,
+   "animations": [
+    {
+     "id": "bead_in_2",
+     "type": "scaleIn",
+     "fromValue": 0,
+     "toValue": 1,
+     "durationFrames": 14,
+     "easing": "back.out"
+    }
+   ]
+  },
+  {
+   "id": "sj_bead_obsidian",
+   "type": "image",
+   "src": "video/ws-shuijing/bead-obsidian.webp",
+   "x": 302,
+   "y": 1005,
+   "w": 170,
+   "h": 170,
+   "z": 6,
+   "startFrame": 120,
+   "endFrame": 900,
+   "animations": [
+    {
+     "id": "bead_in_3",
+     "type": "scaleIn",
+     "fromValue": 0,
+     "toValue": 1,
+     "durationFrames": 14,
+     "easing": "back.out"
+    }
+   ]
+  },
+  {
+   "id": "sj_bead_peach2",
+   "type": "image",
+   "src": "video/ws-shuijing/bead-rose.webp",
+   "x": 207,
+   "y": 714,
+   "w": 170,
+   "h": 170,
+   "z": 7,
+   "startFrame": 120,
+   "endFrame": 900,
+   "animations": [
+    {
+     "id": "bead_in_4",
+     "type": "scaleIn",
+     "fromValue": 0,
+     "toValue": 1,
+     "durationFrames": 14,
+     "easing": "back.out"
+    }
+   ]
+  },
+  {
+   "id": "bracelet_label",
+   "type": "text",
+   "text": "五珠成串 · 一见倾心",
+   "x": 290,
+   "y": 1450,
+   "w": 500,
+   "h": 100,
+   "z": 5,
+   "color": "#F5EED8",
+   "fontSize": 52,
+   "startFrame": 150,
+   "endFrame": 330
+  },
+  {
+   "id": "sell1",
+   "type": "text",
+   "text": "39 种天然水晶",
+   "x": 290,
+   "y": 820,
+   "w": 500,
+   "h": 100,
+   "z": 6,
+   "color": "#FFD166",
+   "fontSize": 60,
+   "startFrame": 330,
+   "endFrame": 480
+  },
+  {
+   "id": "sell2",
+   "type": "text",
+   "text": "在线圆形编辑器\n拖拽即成串",
+   "x": 240,
+   "y": 960,
+   "w": 600,
+   "h": 200,
+   "z": 6,
+   "color": "#F5EED8",
+   "fontSize": 48,
+   "startFrame": 360,
+   "endFrame": 480
+  },
+  {
+   "id": "price",
+   "type": "text",
+   "text": "到手价 79",
+   "x": 340,
+   "y": 880,
+   "w": 400,
+   "h": 120,
+   "z": 7,
+   "color": "#FF6A3D",
+   "fontSize": 88,
+   "startFrame": 480,
+   "endFrame": 720
+  },
+  {
+   "id": "cta",
+   "type": "text",
+   "text": "打开在线编辑器\n定制你的水晶手串",
+   "x": 240,
+   "y": 860,
+   "w": 600,
+   "h": 200,
+   "z": 8,
+   "color": "#F5EED8",
+   "fontSize": 56,
+   "startFrame": 720,
+   "endFrame": 900
+  },
+  {
+   "id": "cta_sub",
+   "type": "text",
+   "text": "shuijing · Online Bracelet Maker",
+   "x": 290,
+   "y": 1100,
+   "w": 500,
+   "h": 80,
+   "z": 8,
+   "color": "#8A8098",
+   "fontSize": 32,
+   "startFrame": 750,
+   "endFrame": 900
+  }
+ ]
+}
