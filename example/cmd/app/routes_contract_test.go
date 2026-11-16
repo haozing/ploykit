@@ -45,7 +45,9 @@ import (
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-const expectedRouteCount = 172
+// 174 = 172 + 2（剧本→视频生成器 2026-11：GET /api/video/templates、
+// POST /api/video/projects/{id}/compose）。
+const expectedRouteCount = 174
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.

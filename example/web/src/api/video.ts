@@ -95,6 +95,56 @@ export interface VideoProjectDetail {
 }
 
 // ---------------------------------------------------------------------------
+// 模板 + 组合（批B 端点：GET /api/video/templates、
+// POST /api/video/projects/{id}/compose）。字段名以任务说明为准，批B 落地
+// 后与 docs/openapi.yaml 对齐（主会话对接时核对，见页面文件顶部假设清单）。
+// ---------------------------------------------------------------------------
+
+/** 组合主题（色板 + 字号缩放）。 */
+export interface VideoTheme {
+  key: string;
+  name: string;
+  /** CSS 可直接消费的颜色（#hex / hsl 均可，前端只透传到 style）。 */
+  bg: string;
+  fg: string;
+  accent: string;
+  muted: string;
+  /** 字号缩放系数（1 = 基准）。 */
+  fontScale: number;
+}
+
+/** 组合模板：画布规格 + 可选主题列表 + 一句话描述。 */
+export interface VideoTemplate {
+  key: string;
+  name: string;
+  description: string;
+  canvasW: number;
+  canvasH: number;
+  fps: number;
+  themes: VideoTheme[];
+}
+
+export interface VideoTemplatesResponse {
+  templates: VideoTemplate[];
+  themes: VideoTheme[];
+}
+
+/** compose 响应：新版本号 + 组合出的卡片 + 词条来源。 */
+export interface VideoComposeResponse {
+  version: number;
+  cards: unknown[];
+  words_source: string;
+}
+
+export interface VideoComposeParams {
+  script: string;
+  template: string;
+  theme: string;
+  /** 乐观锁：编辑器内重组必带；创建流首次组合可不带（刚建的项目无并发方）。 */
+  expected_version?: number;
+}
+
+// ---------------------------------------------------------------------------
 // 渲染
 // ---------------------------------------------------------------------------
 
@@ -134,6 +184,16 @@ export const videoApi = {
 
   createProject: (title: string) => api.post<{ id: string; version: number }>('/api/video/projects', { title }),
 
+  /** 模板目录（批B）。404/501 视为「模板服务未部署」，调用方降级到空白项目。 */
+  listTemplates: () => api.get<VideoTemplatesResponse>('/api/video/templates'),
+
+  /**
+   * 模板组合（批B）：把 script + template + theme 组合成 IR 卡片并写入项目。
+   * 409 E_VIDEO_VERSION_CONFLICT 语义与 putIR 一致（expected_version 不匹配）。
+   */
+  compose: (id: string, params: VideoComposeParams) =>
+    api.post<VideoComposeResponse>(`/api/video/projects/${id}/compose`, params),
+
   getProject: (id: string) => api.get<VideoProjectDetail>(`/api/video/projects/${id}`),
 
   /**
@@ -149,9 +209,11 @@ export const videoApi = {
   previewUrl: (id: string) => `/api/video/projects/${id}/preview.html`,
 
   submitRender: (id: string, params: VideoRenderParams = {}) =>
-    api.post<{ render_id: string; status: VideoRenderStatus }>(`/api/video/projects/${id}/renders`, params),
+    // 契约是 {params:{...}} 嵌套（openapi createVideoRender；L3 冒烟 F1 修了
+    // 契约但漏了这里——界面点渲染报 json unknown field 的根因）。
+    api.post<{ render_id: string; status: VideoRenderStatus }>(`/api/video/projects/${id}/renders`, { params }),
 
-  listRenders: (id: string) => api.get<{ renders: VideoRender[] }>(`/api/video/projects/${id}/renders`),
+  listRenders: (id: string) => api.get<{ items: VideoRender[] }>(`/api/video/projects/${id}/renders`),
 
   getRender: (renderId: string) =>
     api.get<{ status: VideoRenderStatus; frames_done: number; frames_total: number; output_url?: string; error?: string }>(

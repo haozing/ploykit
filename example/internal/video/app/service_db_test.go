@@ -532,6 +532,69 @@ func TestIntegration_ValidateAssetRefs(t *testing.T) {
 	require.NoError(t, err)
 	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, Element{ID: "el_shape", Type: ElementShape, X: 0, Y: 0, W: 10, H: 10}, nil)
 	require.NoError(t, err)
+
+	// 8. Audio keys (G-01c): an unregistered voice/bgm key is rejected at
+	// write time with the audio.<track>.key field path — the render-time
+	// tempFile failure moves to write time.
+	_, err = e.svc.SetAudio(ctx, p, pr.ID, &Audio{
+		Voice: &AudioTrack{Key: dangling, Volume: 1},
+	}, nil)
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_IR_INVALID", we.Code)
+	assert.Contains(t, we.Message, "audio.voice.key")
+
+	_, err = e.svc.SetAudio(ctx, p, pr.ID, &Audio{
+		BGM: &AudioTrack{Key: dangling, Volume: 0.5},
+	}, nil)
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Contains(t, we.Message, "audio.bgm.key")
+
+	// 9. Registered audio key passes (the upload path registers).
+	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "bgm.mp3", "audio/mpeg", []byte("mp3-bytes"))
+	require.NoError(t, err)
+	_, err = e.svc.SetAudio(ctx, p, pr.ID, &Audio{
+		Voice: &AudioTrack{Key: audioKey, DurationSec: 2, Volume: 1},
+		BGM:   &AudioTrack{Key: audioKey, Volume: 0.3},
+	}, nil)
+	require.NoError(t, err, "registered audio keys must pass the write-time gate")
+}
+
+// TestIntegration_ComposeProject_PreservesAudio anchors the G-01b patch: the
+// composer assembles an IR without the Audio field, and the wholesale
+// replacement in the Mutate closure must carry the old audio over (set_card
+// would otherwise drop the BGM on every copy edit).
+func TestIntegration_ComposeProject_PreservesAudio(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	e.svc.ports.Store = newFakeStore()
+	p := e.principal(e.wsID)
+	pr, err := e.svc.Create(ctx, p, "compose 保音频")
+	require.NoError(t, err)
+
+	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "bgm.mp3", "audio/mpeg", []byte("mp3-bytes"))
+	require.NoError(t, err)
+	_, err = e.svc.SetAudio(ctx, p, pr.ID, &Audio{
+		BGM: &AudioTrack{Key: audioKey, Volume: 0.4},
+	}, nil)
+	require.NoError(t, err)
+
+	e.svc.WithScriptComposer(func(script, templateKey, themeKey string, words []Word) (IR, error) {
+		// composer 产物（scriptgen.Compose 同形态）不带 Audio 字段。
+		return IR{Meta: Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 3}, Script: script}, nil
+	}, func(script string) ([]CardInfo, error) { return nil, nil })
+
+	_, err = e.svc.ComposeProject(ctx, p, pr.ID, ComposeInput{Script: "第一段\n\n第二段", TemplateKey: "t", ThemeKey: "dark"})
+	require.NoError(t, err)
+
+	got, gerr := e.svc.Get(ctx, p, pr.ID)
+	require.NoError(t, gerr)
+	require.NotNil(t, got.IR.Audio, "compose 后音频轨必须存活")
+	require.NotNil(t, got.IR.Audio.BGM)
+	assert.Equal(t, audioKey, got.IR.Audio.BGM.Key)
+	assert.InDelta(t, 0.4, got.IR.Audio.BGM.Volume, 1e-9)
+	assert.Nil(t, got.IR.Audio.Voice, "旧 IR 未挂的轨不凭空出现")
 }
 
 const httpStatusUnavailable = 503

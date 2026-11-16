@@ -117,9 +117,11 @@ import (
 	"myproduct/internal/devtools"
 	"myproduct/internal/eventsdemo"
 	"myproduct/internal/task"
-	videoapp "myproduct/internal/video/app"
 	videohttp "myproduct/internal/video/adapters/http"
 	videomcp "myproduct/internal/video/adapters/mcp"
+	videoapp "myproduct/internal/video/app"
+	"myproduct/internal/video/app/scriptgen"
+	"myproduct/internal/video/app/template"
 	videorender "myproduct/internal/video/render"
 )
 
@@ -1239,6 +1241,11 @@ func main() {
 	// assigner; CapxRuntime lives behind the capx build tag, so the default
 	// build has no such symbol and pipeline callers are tag-gated to match.
 	videorender.SetCapxRuntime(capxRuntime)
+	// Same injection for the single-frame snapshot bridge (video_snapshot_frame
+	// MCP tool — the agent's visual feedback loop): the capx build stores a
+	// runtime-backed cached snapshotter, the default build discards it and the
+	// tool degrades to E_NOT_CONFIGURED. Tag-portable like SetCapxRuntime.
+	videorender.SetSnapshotter(capxRuntime)
 
 	videoMembership := videomcpMemberAdapter{repo: wsRepo}
 	videoAud := videoAuditAdapter{rec: auditor}
@@ -1255,6 +1262,42 @@ func main() {
 		Store:      videoStore,
 		Cap:        videoCapProbe{rt: capxRuntime},
 	}, log)
+
+	// 剧本→视频生成器（2026-11 批次）：scriptgen/template 注入（app 不能
+	// import scriptgen/template——包环，函数注入是官方对接点）。未注入时
+	// POST compose 返回 503 E_NOT_CONFIGURED、模板目录返回空目录。
+	videoSvc.WithScriptComposer(scriptgen.Prepare, func(script string) ([]videoapp.CardInfo, error) {
+		cis, err := scriptgen.SplitCardInfos(script)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]videoapp.CardInfo, 0, len(cis))
+		for _, ci := range cis {
+			out = append(out, videoapp.CardInfo{Role: ci.Role, Title: ci.Title})
+		}
+		return out, nil
+	})
+	videoSvc.WithTemplateCatalog(
+		func() []videoapp.TemplateCatalogEntry {
+			var out []videoapp.TemplateCatalogEntry
+			for _, tp := range template.Catalog() {
+				out = append(out, videoapp.TemplateCatalogEntry{
+					Key: tp.Key, Name: tp.Name, Description: tp.Description,
+					CanvasW: tp.CanvasW, CanvasH: tp.CanvasH, FPS: tp.FPS, SafeMargin: tp.SafeMargin,
+				})
+			}
+			return out
+		},
+		func() []videoapp.ThemeCatalogEntry {
+			var out []videoapp.ThemeCatalogEntry
+			for _, th := range template.ThemeCatalog() {
+				out = append(out, videoapp.ThemeCatalogEntry{
+					Key: th.Key, Name: th.Name, BG: th.BG, FG: th.FG,
+					Accent: th.Accent, Muted: th.Muted, FontScale: th.FontScale,
+				})
+			}
+			return out
+		})
 
 	videoSvcForAccess = videoSvc
 	// wsMW fills principal.WorkspaceID from the X-Workspace-Id header
@@ -1331,6 +1374,15 @@ func main() {
 		videomcp.RegisterTools(mcpServer, videomcp.Deps{
 			Svc: videoSvc,
 			Cap: videoCapProbe{rt: capxRuntime},
+			// video_snapshot_frame 的两条腿：Store 内联资产 data URI（与渲染
+			// 路径同款零网络文档）；Snapshot 读 videorender 的桥接槽（capx
+			// 构建有真实现，stub 构建为 nil → 工具报 E_NOT_CONFIGURED）。
+			Store:    videoStore,
+			Snapshot: videorender.SnapshotterFor,
+			// video_render_frames（批G G-07 成品抽帧眼）的第三条腿：FrameExtract
+			// 读 videorender 的抽帧桥接槽（SetSnapshotter 一并安装，同一个
+			// capx.Runtime；stub 构建为 nil → 工具报 E_NOT_CONFIGURED）。
+			FrameExtract: videorender.FrameExtractorFor,
 		})
 	}
 
@@ -1509,7 +1561,17 @@ func main() {
 			})
 		}
 	}
-	apiBodyLimitMW := pathGate(webx.BodyLimit(1<<20), "/api/", "/auth/", "/dev/", "/mcp")
+	// 资产上传走 BodyLimitExcept 豁免（AGENTS.md 挂载陷阱 #2）：pathGate 的
+	// /api/ 1MiB 门罩住 POST /api/video/assets（multipart）。豁免语义 = 绕过
+	// 1MiB reader，由 service.UploadLimit 上限校验兜住真实大小（视频资产：
+	// 一首 3 分钟 BGM ≈3MB，700KB MCP 路径与 1MiB REST 门双双进不来——批G
+	// G-01d）。50MiB 上限靠 webx.BodyLimitExcept 单层（绝不嵌套两层
+	// MaxBytesReader——有效上限取最小值）。豁免后缀需同步豁免请求超时：
+	// 读大 body 消耗请求超时预算（陷阱 #2 配对规则），Timeouts 表给
+	// /api/video/assets 单独 120s（multi-tier 最长前缀优先；上传 handler
+	// 自身仍有 multipart 解析与 storagex 限额兜底）。
+	videoAssetLimit := webx.BodyLimitExcept(50<<20, "/api/video/assets")
+	apiBodyLimitMW := pathGate(videoAssetLimit, "/api/", "/auth/", "/dev/", "/mcp")
 
 	authRateLimitMW := func(next http.Handler) http.Handler { return next }
 	if rlPerIP > 0 {
@@ -1537,9 +1599,13 @@ func main() {
 	// (e.g. a 30s generation route) add entries here instead of nesting a
 	// second TimeoutExcept, whose outer cap can kill a handler that manages
 	// its own internal deadline.
+	// /api/video/assets gets a 120s tier (G-01d pairing rule): reading a
+	// large multipart body consumes the request-timeout budget, and the 5s
+	// base would bisect slow BGM uploads regardless of the raised body limit.
 	chainInner := webx.Timeouts(5*time.Second, map[string]time.Duration{
-		"/ws":  0,
-		"/mcp": 0,
+		"/ws":               0,
+		"/mcp":              0,
+		"/api/video/assets": 120 * time.Second,
 	})(
 		webx.CORS([]string{frontendOrigin}, true)(
 			csrfMW(
@@ -1757,7 +1823,6 @@ type videoRunner struct {
 }
 
 func newVideoRunner(client *river.Client[pgx.Tx]) *videoRunner { return &videoRunner{client: client} }
-
 
 func (r *videoRunner) Name() string { return "video_render_queue" }
 

@@ -209,8 +209,9 @@ func TestWorkspaceFromKey(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestMount_RegistersAll11Routes(t *testing.T) {
+func TestMount_RegistersAll13Routes(t *testing.T) {
 	// Route registration smoke: Mount on a recording mux, count video routes.
+	// 13 = 11 条 §4.7 契约路由 + 2 条剧本→视频生成器路由（templates/compose）。
 	mux := webx.NewMux()
 	Mount(mux, Deps{Authz: testAuthorizer()}, func(next http.Handler) http.Handler { return next })
 	routes := mux.Routes()
@@ -220,7 +221,15 @@ func TestMount_RegistersAll11Routes(t *testing.T) {
 			video++
 		}
 	}
-	assert.Equal(t, 11, video, "exactly the 11 §4.7 routes registered")
+	assert.Equal(t, 13, video, "exactly the 11 §4.7 routes + 2 scriptgen routes registered")
+	paths := map[string]bool{}
+	for _, rt := range routes {
+		if strings.Contains(rt.Path, "/api/video/") {
+			paths[rt.Method+" "+rt.Path] = true
+		}
+	}
+	assert.True(t, paths["GET /api/video/templates"], "GET /api/video/templates registered")
+	assert.True(t, paths["POST /api/video/projects/{id}/compose"], "POST compose registered")
 }
 
 func TestMount_NilAuthz_Panics(t *testing.T) {
@@ -243,4 +252,100 @@ func TestDispositionFor(t *testing.T) {
 	assert.Equal(t, "attachment", dispositionFor("text/html"))
 	assert.Equal(t, "inline", dispositionFor("image/png"))
 	assert.Equal(t, "inline", dispositionFor("video/mp4"))
+}
+
+// --- 剧本→视频生成器（compose / templates）handler 测试 ---
+
+func TestHandleVideoTemplates_EmptyWhenNotWired(t *testing.T) {
+	// composer/目录未接线：目录仍可读（空目录，200），不是 5xx。
+	d := Deps{Svc: svc(true)}
+	p := principal("ws1", false)
+	w := run(d.handleVideoTemplates, http.MethodGet, "/api/video/templates", "", p, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var body videoapp.TemplateCatalogResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Empty(t, body.Templates)
+	assert.Empty(t, body.Themes)
+}
+
+func TestHandleVideoTemplates_CatalogPassthrough(t *testing.T) {
+	s := svc(true)
+	s.WithTemplateCatalog(
+		func() []videoapp.TemplateCatalogEntry {
+			return []videoapp.TemplateCatalogEntry{{
+				Key: "t1", Name: "模板一", Description: "测试模板",
+				CanvasW: 1080, CanvasH: 1920, FPS: 30, SafeMargin: 64,
+			}}
+		},
+		func() []videoapp.ThemeCatalogEntry {
+			return []videoapp.ThemeCatalogEntry{{
+				Key: "dark", Name: "暗色", BG: "#111", FG: "#eee",
+				Accent: "#4f8", Muted: "#888", FontScale: 1.0,
+			}}
+		})
+	d := Deps{Svc: s}
+	p := principal("ws1", false)
+	w := run(d.handleVideoTemplates, http.MethodGet, "/api/video/templates", "", p, nil)
+	require.Equal(t, http.StatusOK, w.Code)
+	var body videoapp.TemplateCatalogResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Len(t, body.Templates, 1)
+	assert.Equal(t, "t1", body.Templates[0].Key)
+	assert.Equal(t, 1080, body.Templates[0].CanvasW)
+	require.Len(t, body.Themes, 1)
+	assert.Equal(t, "#4f8", body.Themes[0].Accent)
+}
+
+func TestHandleComposeProject_Validation(t *testing.T) {
+	d := Deps{Svc: svc(true)}
+	p := principal("ws1", false)
+	for _, tc := range []struct{ name, body, want string }{
+		{"missing script", `{"template":"a","theme":"b"}`, "script"},
+		{"blank script", `{"script":"   ","template":"a","theme":"b"}`, "script"},
+		{"missing template", `{"script":"第一段\n\n第二段"}`, "template"},
+		{"missing theme", `{"script":"第一段\n\n第二段","template":"a"}`, "theme"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := run(d.handleComposeProject, http.MethodPost, "/api/video/projects/p1/compose", tc.body, p,
+				map[string]string{"id": "p1"})
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			var body webx.ErrorBody
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			assert.Contains(t, body.Message, tc.want)
+		})
+	}
+}
+
+func TestHandleComposeProject_ScriptTooLong(t *testing.T) {
+	d := Deps{Svc: svc(true)}
+	p := principal("ws1", false)
+	long := strings.Repeat("长", videoapp.MaxScriptChars+1)
+	w := run(d.handleComposeProject, http.MethodPost, "/api/video/projects/p1/compose",
+		`{"script":"`+long+`","template":"a","theme":"b"}`, p, map[string]string{"id": "p1"})
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandleComposeProject_ComposerNotWired_Is503(t *testing.T) {
+	// 能力未接线（main.go 没调 WithScriptComposer）→ E_NOT_CONFIGURED，
+	// 与渲染能力未接线同族（不新增错误码）。
+	d := Deps{Svc: svc(true)}
+	p := principal("ws1", false)
+	w := run(d.handleComposeProject, http.MethodPost, "/api/video/projects/p1/compose",
+		`{"script":"第一段\n\n第二段","template":"a","theme":"b"}`, p, map[string]string{"id": "p1"})
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var body webx.ErrorBody
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "E_NOT_CONFIGURED", body.Code)
+}
+
+func TestHandleComposeProject_MembershipDenied_Is403(t *testing.T) {
+	// composer 未接线时 503 先于 403（ComposeProject 的 composer 门在
+	// canAccess 之前）；接线后的成员拒绝由 service 层 canAccess 完成，
+	// 与 SetScript 同源。本上下文 nil pool 无法走完 Get，故在 service
+	// 边界断言成员检查（handler 级 403 由 DB 集成套件覆盖）。
+	s := svc(false)
+	p := principal("ws1", false)
+	ok, err := s.CanAccess(context.Background(), p, "ws1")
+	require.NoError(t, err)
+	assert.False(t, ok, "denied membership must not pass the compose gate")
 }

@@ -4383,6 +4383,131 @@ paths:
                 $ref: '#/components/schemas/ErrorBody'
         default:
           $ref: '#/components/responses/DefaultError'
+  /api/video/templates:
+    get:
+      operationId: listVideoTemplates
+      tags: [video]
+      summary: 模板/主题目录（video:read；剧本→视频生成器的选择面板数据，一次返回两目录）
+      description: |
+        服务端模板管线（剧本→视频生成器）的静态目录：模板（画布尺寸/FPS/安全边距）
+        与主题（配色/字号缩放）。目录数据无 DB 依赖；合成器能力未接线时返回空目录
+        （200，非 5xx）。POST /api/video/projects/{id}/compose 的 template/theme
+        参数取值域即本目录的 key。
+      responses:
+        '200':
+          description: 模板目录 + 主题目录
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates, themes]
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VideoTemplateInfo'
+                  themes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VideoThemeInfo'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /api/video/projects/{id}/compose:
+    post:
+      operationId: composeVideoProject
+      tags: [video]
+      summary: 一键合成 IR（video:write；剧本文案 + 模板 + 主题 → 完整可渲染 IR，乐观锁 version++）
+      description: |
+        服务端剧本→视频管线（零 IR 手写）：分卡（空行/小标题分段，首卡 cover、
+        bullet 段 listicle、末卡 endcard，卡片数 2-20）→ 关键词高亮（数字/百分比
+        优先，锚文本必为 script 原词）→ 时间窗口（词表非空按词表 ceil 帧口径换算，
+        否则按字数比例估算；窗口互不重叠顺序衔接）→ 各卡模板×主题布局拼接 →
+        全量 Validate 后整体替换 IR（Mutate：校验 + 锚点重解析 + version++ + 审计 + WS）。
+        词表沿 SetScript 降级链（TTS → Aligner → EstimateWords，§8.5a：永不因
+        TTS/Aligner 缺失失败），words_source 如实反映来源。合成器能力未接线
+        → 503 E_NOT_CONFIGURED。参数错误（剧本段数不足/超限、未知模板/主题 key）
+        → 400 E_VIDEO_IR_INVALID（可读中文文案）。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: 项目 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [script, template, theme]
+              properties:
+                script:
+                  type: string
+                  description: 剧本文案（空行/小标题分段；≤5000 字符）
+                template:
+                  type: string
+                  description: 模板 key（GET /api/video/templates 目录）
+                theme:
+                  type: string
+                  description: 主题 key（GET /api/video/templates 目录）
+                expected_version:
+                  type: integer
+                  description: 可选乐观锁校验；不符 409
+      responses:
+        '200':
+          description: 已合成并持久化（返回新版本号、卡片摘要、词表来源）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, cards, words_source]
+                properties:
+                  version: { type: integer, description: 合成后的乐观锁版本号 }
+                  cards:
+                    type: array
+                    description: 分卡摘要（role/title，验视用）
+                    items:
+                      type: object
+                      required: [role, title]
+                      properties:
+                        role: { type: string, description: cover|feature|listicle|endcard }
+                        title: { type: string }
+                  words_source:
+                    type: string
+                    enum: [tts, aligner, estimated]
+                    description: 词表来源（沿 SetScript 语义）
+                  resolutions:
+                    type: array
+                    description: 锚点解析结果（Mutate 全量重解析的审计视图）
+                    items:
+                      $ref: '#/components/schemas/VideoAnchorResolution'
+        '400':
+          description: 参数错误（E_VALIDATION script/template/theme 缺失；E_VIDEO_IR_INVALID
+            分卡边界（段数 2-20）与未知模板/主题 key——文案自述原因）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 乐观锁冲突（E_VIDEO_VERSION_CONFLICT，details.current_version）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /api/video/projects/{id}/preview.html:
     get:
       operationId: getVideoProjectPreview
@@ -6291,6 +6416,30 @@ components:
           description: |
             exact=文本与 occurrence 都命中；same_text=文本存在但 occurrence 越界（取同文本最近邻）；
             nearest=文本不存在（取全词表最近邻）；missing=words 为空（unresolved，投影跳过）
+    VideoTemplateInfo:
+      type: object
+      description: 服务端合成模板（剧本→视频生成器；POST compose 的 template 取值域）
+      required: [key, name, canvas_w, canvas_h, fps]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        canvas_w: { type: integer, description: 画布宽（360-2160） }
+        canvas_h: { type: integer, description: 画布高（360-2160） }
+        fps: { type: integer, enum: [24, 25, 30, 50, 60] }
+        safe_margin: { type: integer, description: 安全边距（px） }
+    VideoThemeInfo:
+      type: object
+      description: 合成主题（POST compose 的 theme 取值域；bg/fg/accent/muted 为 CSS 颜色）
+      required: [key, name, bg, fg, accent]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        bg: { type: string }
+        fg: { type: string }
+        accent: { type: string }
+        muted: { type: string }
+        font_scale: { type: number, description: 字号缩放系数 }
     VideoProjectSummary:
       type: object
       required: [id, title, version, updated_at]

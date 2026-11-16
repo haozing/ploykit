@@ -125,11 +125,18 @@ type Render struct {
 	FramesDone  int          `json:"frames_done"`
 	FramesTotal int          `json:"frames_total"`
 	OutputKey   string       `json:"output_key"`
-	Error       string       `json:"error"`
-	CreatedBy   string       `json:"created_by"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
-	FinishedAt  *time.Time   `json:"finished_at,omitempty"`
+	// OutputURL/ThumbURL are REST-derived convenience fields required by the
+	// openapi VideoRender schema: direct /api/video/files/ links for the
+	// finished MP4 and its first-frame thumbnail. MCP video_get_render has
+	// always assembled the same prefix inline; the REST rows were missing it
+	// (caught by the UI walkthrough — the download column rendered "—").
+	OutputURL  string     `json:"output_url,omitempty"`
+	ThumbURL   string     `json:"thumb_url,omitempty"`
+	Error      string     `json:"error"`
+	CreatedBy  string     `json:"created_by"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
 
 	// submissionKey/quotaPeriod serve idempotency and period-fixed release
 	// (migration 1009); not part of the API payload.
@@ -177,6 +184,14 @@ type ProjectService struct {
 	ports Ports
 	log   *slog.Logger
 	now   func() time.Time
+
+	// 剧本→视频生成器（2026-11 批次）：合成器/分卡摘要/目录数据源由
+	// scriptgen/template 包经 WithScriptComposer / WithTemplateCatalog
+	// 注入（app 不能 import 它们——包环）；nil = 能力未接线。
+	composer        ScriptComposer
+	cardSplitter    CardSplitter
+	templateCatalog func() []TemplateCatalogEntry
+	themeCatalog    func() []ThemeCatalogEntry
 }
 
 func NewProjectService(pool *pgxpool.Pool, ports Ports, log *slog.Logger) *ProjectService {
@@ -332,7 +347,10 @@ func fieldMsg(field, msg string) string {
 }
 
 // validateAssetRefs enforces write-time existence for every image element src
-// (§8.5a.2 proposal, option B adopted): src must trace to a video_asset
+// and every audio track key (§8.5a.2 proposal, option B adopted; audio side is
+// G-01c — the batch-G plan's finding that validateAudio checked key SHAPE only
+// while an unregistered BGM failed a full render cycle later at the worker's
+// tempFile fetch): a reference must trace to a video_asset
 // registry row (the migration-1011 ownership credential — the same query
 // CanAccessKey runs for the serving gate), OR the storagex object itself must
 // exist. The OR branch is the legacy-compatibility window: assets uploaded
@@ -341,15 +359,16 @@ func fieldMsg(field, msg string) string {
 // uploads always register (UploadAsset aborts on a failed registration), so
 // the row branch covers everything created after round 8 and the storage
 // probe only serves the stock. Returns E_VIDEO_IR_INVALID with
-// details.field = elements[N].src so HTTP and MCP surface the same detail as
-// every other IR validation failure.
+// details.field = elements[N].src / audio.voice.key / audio.bgm.key so HTTP
+// and MCP surface the same detail as every other IR validation failure.
 //
 // The storage probe costs one Open on the local backend (stat-like) or one
-// GetObject head on S3; elements are capped at MaxElements (64), so the
-// worst-case probe count per write is bounded and only reached when NO src is
-// registered — the legacy window, not the steady state. DB is consulted
-// first and short-circuits per key (one statement per distinct src; the
-// common case is 0-2 image elements per project).
+// GetObject head on S3; elements are capped at MaxElements (64) and audio
+// adds at most 2 keys, so the worst-case probe count per write is bounded and
+// only reached when NO reference is registered — the legacy window, not the
+// steady state. DB is consulted first and short-circuits per key (one
+// statement per distinct reference; the common case is 0-2 image elements
+// per project).
 func (s *ProjectService) validateAssetRefs(ctx context.Context, wsID string, ir *IR) error {
 	if s.pool == nil {
 		// Nil-pool unit contexts exercise the pure paths only; existence is
@@ -362,37 +381,66 @@ func (s *ProjectService) validateAssetRefs(ctx context.Context, wsID string, ir 
 		if el.Type != ElementImage || el.Src == "" {
 			continue
 		}
-		// Registry first (the round-8+ path; also the ownership credential).
-		var n int
-		if err := s.pool.QueryRow(ctx,
-			`SELECT count(*) FROM video_asset WHERE key=$1 AND workspace_id=$2`,
-			el.Src, wsID).Scan(&n); err != nil {
+		if err := s.assetRefExists(ctx, wsID, el.Src,
+			fmt.Sprintf("elements[%d].src", i)); err != nil {
 			return err
 		}
-		if n > 0 {
-			continue
-		}
-		// Legacy window: unregistered but physically present. A storage
-		// failure reads as absence (fail-closed: the write is rejected with
-		// the same "asset not registered" verdict — a flaky backend must not
-		// silently admit a reference that cannot be served).
-		if s.ports.Store != nil {
-			body, _, oerr := s.ports.Store.Open(ctx, el.Src)
-			if oerr == nil {
-				if body != nil {
-					body.Close()
-				}
+	}
+	// Audio tracks (G-01c): same registry-or-storage contract as image src.
+	// SetAudio's MCP tool pre-checks CanAccessKey before the mutate, so this
+	// gate is the backstop for the REST/PUT-IR surfaces.
+	if ir.Audio != nil {
+		for _, t := range []struct {
+			field string
+			track *AudioTrack
+		}{
+			{"audio.voice.key", ir.Audio.Voice},
+			{"audio.bgm.key", ir.Audio.BGM},
+		} {
+			if t.track == nil || t.track.Key == "" {
 				continue
 			}
-			if !errors.Is(oerr, os.ErrNotExist) {
-				s.log.Warn("video src existence probe failed; rejecting as unregistered",
-					"key", el.Src, "err", oerr)
+			if err := s.assetRefExists(ctx, wsID, t.track.Key, t.field); err != nil {
+				return err
 			}
 		}
-		return webx.NewError(400, "E_VIDEO_IR_INVALID",
-			fieldMsg(fmt.Sprintf("elements[%d].src", i), "asset not registered (upload via video_upload_asset / POST /api/video/assets first)"))
 	}
 	return nil
+}
+
+// assetRefExists enforces the registry-or-storage contract for one reference
+// (image src or audio key). Field feeds the E_VIDEO_IR_INVALID details.field
+// surface (same shape as every pure Validate error).
+func (s *ProjectService) assetRefExists(ctx context.Context, wsID, key, field string) error {
+	// Registry first (the round-8+ path; also the ownership credential).
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM video_asset WHERE key=$1 AND workspace_id=$2`,
+		key, wsID).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	// Legacy window: unregistered but physically present. A storage
+	// failure reads as absence (fail-closed: the write is rejected with
+	// the same "asset not registered" verdict — a flaky backend must not
+	// silently admit a reference that cannot be served).
+	if s.ports.Store != nil {
+		body, _, oerr := s.ports.Store.Open(ctx, key)
+		if oerr == nil {
+			if body != nil {
+				body.Close()
+			}
+			return nil
+		}
+		if !errors.Is(oerr, os.ErrNotExist) {
+			s.log.Warn("video src existence probe failed; rejecting as unregistered",
+				"key", key, "err", oerr)
+		}
+	}
+	return webx.NewError(400, "E_VIDEO_IR_INVALID",
+		fieldMsg(field, "asset not registered (upload via video_upload_asset / POST /api/video/assets first)"))
 }
 
 type originKey struct{}
@@ -1131,7 +1179,22 @@ func (s *ProjectService) GetRender(ctx context.Context, p *webx.Principal, rende
 	if err != nil {
 		return nil, err
 	}
+	r.deriveURLs()
 	return &r, nil
+}
+
+// deriveURLs fills the REST convenience fields from OutputKey (openapi
+// VideoRender schema). Thumb: the pipeline writes <render>/thumb.png next to
+// output.mp4 (§4.9.6 — first frame of the encoded deliverable via
+// capx.ExtractFrameAt); absent when the render never succeeded or the
+// best-effort extraction failed.
+func (r *Render) deriveURLs() {
+	if r.OutputKey != "" {
+		r.OutputURL = "/api/video/files/" + r.OutputKey
+		if thumb := strings.Replace(r.OutputKey, "output.mp4", "thumb.png", 1); thumb != r.OutputKey {
+			r.ThumbURL = "/api/video/files/" + thumb
+		}
+	}
 }
 
 // ListRenders lists a project's render history, newest first.
@@ -1161,6 +1224,7 @@ func (s *ProjectService) ListRenders(ctx context.Context, p *webx.Principal, pro
 			&r.OutputKey, &r.Error, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt, &r.FinishedAt); err != nil {
 			return nil, err
 		}
+		r.deriveURLs()
 		out = append(out, r)
 	}
 	return out, rows.Err()

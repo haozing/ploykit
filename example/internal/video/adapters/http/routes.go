@@ -86,6 +86,9 @@ func Mount(mux webx.Router, d Deps, wsMW func(http.Handler) http.Handler) {
 	mux.Handle("GET /api/video/renders/{id}", wsMW(read(webx.P(d.handleGetRender))))
 	mux.Handle("POST /api/video/assets", wsMW(write(webx.P(d.handleUploadAsset))))
 	mux.Handle("GET /api/video/files/{key...}", wsMW(read(webx.P(d.handleFile))))
+	// 剧本→视频生成器（2026-11 批次）：模板/主题目录 + 一键合成 IR。
+	mux.Handle("GET /api/video/templates", wsMW(read(webx.P(d.handleVideoTemplates))))
+	mux.Handle("POST /api/video/projects/{id}/compose", wsMW(write(webx.P(d.handleComposeProject))))
 }
 
 func (d Deps) handleList(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
@@ -226,7 +229,9 @@ func (d Deps) handleListRenders(w http.ResponseWriter, r *http.Request, p *webx.
 		writeSvcErr(w, err)
 		return
 	}
-	webx.WriteJSON(w, http.StatusOK, items)
+	// 契约形状 {items:[...]}（openapi listVideoRenders required:[items]）——
+	// 曾直接 WriteJSON(items) 返回裸数组，与契约和前端双双漂移（界面走查抓出）。
+	webx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (d Deps) handleGetRender(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
@@ -364,6 +369,77 @@ func contentTypeFor(key string) string {
 		return mime.TypeByExtension(key[i:])
 	}
 	return ""
+}
+
+// handleVideoTemplates 返回模板 + 主题目录（一次返回两目录，前端画模板
+// 选择卡片用）。目录数据由 scriptgen/template 侧注入（app.TemplateCatalog
+// 透传）；composer 未接线时目录仍可读（空目录响应）。
+func (d Deps) handleVideoTemplates(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	cat := d.Svc.TemplateCatalog(r.Context())
+	webx.WriteJSON(w, http.StatusOK, cat)
+}
+
+// handleComposeProject 一键合成：剧本文案 + 模板 + 主题 → 完整可渲染 IR
+// （服务端管线，词表沿 SetScript 降级链派生，永不因 TTS 缺失失败）。
+// script 非空校验在 handler；模板/主题 key 校验与分卡边界在 scriptgen
+// （映射为 400 E_VIDEO_IR_INVALID 可读文案）。
+func (d Deps) handleComposeProject(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
+	var req struct {
+		Script          string `json:"script"`
+		Template        string `json:"template"`
+		Theme           string `json:"theme"`
+		ExpectedVersion *int   `json:"expected_version"`
+	}
+	if !webx.DecodeJSON(w, r, &req) {
+		return
+	}
+	script := strings.TrimSpace(req.Script)
+	if script == "" {
+		webx.ErrValidation(w, "script is required")
+		return
+	}
+	if len([]rune(script)) > videoapp.MaxScriptChars {
+		webx.ErrValidation(w, "script exceeds "+itoa(videoapp.MaxScriptChars)+" characters")
+		return
+	}
+	if strings.TrimSpace(req.Template) == "" || strings.TrimSpace(req.Theme) == "" {
+		webx.ErrValidation(w, "template and theme are required (see GET /api/video/templates)")
+		return
+	}
+	res, err := d.Svc.ComposeProject(r.Context(), p, r.PathValue("id"), videoapp.ComposeInput{
+		Script:          script,
+		TemplateKey:     strings.TrimSpace(req.Template),
+		ThemeKey:        strings.TrimSpace(req.Theme),
+		ExpectedVersion: req.ExpectedVersion,
+	})
+	if err != nil {
+		writeSvcErr(w, err)
+		return
+	}
+	webx.WriteJSON(w, http.StatusOK, res)
+}
+
+// itoa 是本包最小的 int→string 助手（避免仅为一个数字引入 strconv 段）。
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 
 // writeSvcErr maps domain errors to HTTP responses (WriteErr handles

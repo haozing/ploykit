@@ -4,18 +4,22 @@ import { Link } from '@ploykit/ui/router'
 import {
   PageHeader, PageLoading, PageError, PageEmpty, Button, Textarea, Input, Label,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider,
-  DataTable, StatusBadge, Badge, Progress, ProgressValue,
-  toast, apiErrorMessage, cn, formatDateTime, shortID, STATUS_TONE_CLASS, type StatusTone, type Column,
+  DataTable, StatusBadge, Badge, Progress, ProgressTrack, ProgressIndicator, ProgressValue,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Popover, PopoverContent, PopoverTrigger,
+  Spinner, toast, apiErrorMessage, cn, formatDateTime, shortID, STATUS_TONE_CLASS, type StatusTone, type Column,
 } from '@ploykit/ui'
 import {
-  ArrowLeft, Clapperboard, Download, Pause, Play, RefreshCw, Sparkles, Upload,
+  ArrowLeft, Clapperboard, Download, Pause, Play, RefreshCw, Sparkles, Upload, Wand2,
 } from 'lucide-react'
 import { useWorkspace, useWsStatus, useWsScope, useWsFrame, bridgeWsToQuery } from '@ploykit/hooks'
 import type { WsStatus } from '@ploykit/client'
 import { videoApi, E_VIDEO_VERSION_CONFLICT, isApiError } from '../api/video'
 import type {
   VideoIR, VideoRender, VideoRenderParams, VideoRenderStatus, VideoWord,
+  VideoTemplate, VideoTheme,
 } from '../api/video'
+import { TemplateThumbnail, ThemeDot } from './VideoStudioListPage'
 import { wsClient } from '../ws'
 
 /**
@@ -103,6 +107,205 @@ function wordSpan(w: VideoWord): number {
   return Math.max(0.4, w.end - w.start)
 }
 
+// ---------------------------------------------------------------------------
+// 重新组合（POST /compose，批B）：新文案/换模板/换主题 → 一键重排 IR。
+// - 必带 expected_version（页面当前 version）乐观锁；409 提示刷新，不静默覆盖。
+// - 模板目录打不开（批B 未部署）时入口禁用 + title 提示。
+// - script 默认预填当前 IR script（用户/Agent 改文案后一键重排的主路径）。
+// ---------------------------------------------------------------------------
+
+function RecomposeDialog({
+  projectId,
+  currentVersion,
+  currentScript,
+  open,
+  onOpenChange,
+}: {
+  projectId: string
+  currentVersion: number
+  currentScript: string
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const qc = useQueryClient()
+
+  const templatesQ = useQuery({
+    queryKey: ['video', 'templates'],
+    queryFn: () => videoApi.listTemplates(),
+    enabled: open,
+    staleTime: 5 * 60_000,
+  })
+  const templates = templatesQ.data?.templates ?? []
+
+  const [templateKey, setTemplateKey] = useState('')
+  const [themeKey, setThemeKey] = useState('')
+  const [script, setScript] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const scriptValue = script ?? currentScript
+
+  // 弹层每次打开复位选择（模板目录带 staleTime，不重复请求）。
+  useEffect(() => {
+    if (open) {
+      setTemplateKey('')
+      setThemeKey('')
+      setScript(null)
+    }
+  }, [open])
+
+  const selected = templates.find((t) => t.key === templateKey) ?? null
+
+  const pickTemplate = (t: VideoTemplate) => {
+    setTemplateKey(t.key)
+    setThemeKey(t.themes[0]?.key ?? '')
+  }
+
+  const close = (v: boolean) => onOpenChange(v)
+
+  const submitRecompose = async () => {
+    if (!selected) return
+    if (!scriptValue.trim()) {
+      toast.error('请输入剧本文案')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await videoApi.compose(projectId, {
+        script: scriptValue.trim(),
+        template: selected.key,
+        theme: themeKey || selected.themes[0]?.key || '',
+        expected_version: currentVersion,
+      })
+      toast.success('已重新组合')
+      // 复用页面既有 IR 刷新路径：invalidate 后 WS/previewKey 效应重置播放器。
+      await qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
+      close(false)
+    } catch (err: unknown) {
+      if (isApiError(err, E_VIDEO_VERSION_CONFLICT)) {
+        // 乐观锁冲突：Agent 同期改了项目，不静默覆盖，让用户先看最新版。
+        toast.error('项目已更新，请刷新后重试')
+        await qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
+      } else {
+        toast.error(apiErrorMessage(err, '重新组合失败'))
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>重新组合</DialogTitle>
+          <DialogDescription>
+            改文案、换模板或主题，按 v{currentVersion} 乐观锁一键重排整条时间线。
+          </DialogDescription>
+        </DialogHeader>
+        {templatesQ.isPending ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Spinner />
+            加载模板…
+          </div>
+        ) : templatesQ.isError ? (
+          <div className="space-y-3 py-6 text-center">
+            <p className="text-sm text-muted-foreground">模板服务暂不可用（{apiErrorMessage(templatesQ.error, '加载失败')}）</p>
+            <Button variant="outline" size="sm" onClick={() => void templatesQ.refetch()}>
+              重试
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div role="radiogroup" aria-label="模板选择" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {templates.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={t.key === templateKey}
+                  data-testid="recompose-template-card"
+                  onClick={() => pickTemplate(t)}
+                  className={cn(
+                    'flex h-full flex-col gap-2 rounded-lg border p-2.5 text-left transition-colors',
+                    'hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    t.key === templateKey ? 'border-primary bg-primary/5' : 'border-border bg-card',
+                  )}
+                >
+                  <TemplateThumbnail template={t} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{t.name}</p>
+                    <p className="mt-1 font-mono text-[11px] text-muted-foreground/80">
+                      {t.canvasW}×{t.canvasH} · {t.fps}fps
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {selected && selected.themes.length > 0 && (
+              <div role="radiogroup" aria-label="主题选择" className="flex flex-wrap gap-2">
+                {selected.themes.map((th: VideoTheme) => {
+                  const active = th.key === themeKey
+                  return (
+                    <button
+                      key={th.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      data-testid="recompose-theme-option"
+                      onClick={() => setThemeKey(th.key)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        active ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40',
+                      )}
+                    >
+                      <ThemeDot theme={th} />
+                      {th.name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="recompose-script">剧本文案</Label>
+              <Textarea
+                id="recompose-script"
+                value={scriptValue}
+                onChange={(e) => setScript(e.target.value)}
+                rows={6}
+                maxLength={5000}
+                placeholder="输入口播脚本…（默认预填当前脚本）"
+                className="min-h-32 font-mono text-sm"
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={submitting} onClick={() => close(false)}>
+            取消
+          </Button>
+          <Button
+            type="button"
+            disabled={submitting || templatesQ.isPending || templatesQ.isError || !selected}
+            onClick={() => void submitRecompose()}
+          >
+            {submitting ? (
+              <>
+                <Spinner />
+                组合中…
+              </>
+            ) : (
+              <>
+                <Wand2 size={14} aria-hidden="true" />
+                重新组合
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function VideoStudioPage({ projectId }: { projectId: string }) {
   const qc = useQueryClient()
   const { current: workspace } = useWorkspace()
@@ -127,7 +330,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
     queryFn: () => videoApi.listRenders(projectId),
   })
   const renders = useMemo(
-    () => [...(rendersQ.data?.renders ?? [])].sort(
+    () => [...(rendersQ.data?.items ?? [])].sort(
       (a, b) => (b.created_at > a.created_at ? 1 : -1),
     ),
     [rendersQ.data],
@@ -241,14 +444,14 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
 
   // 渲染进度帧 → 更新历史行（就地 merge，省一次列表 refetch；终态再失效一次拉全量）
   const mergeRenderFrame = useCallback((p: RenderUpdatedPayload) => {
-    qc.setQueryData<{ renders: VideoRender[] }>(['video', 'renders', projectId], (old) => {
+    qc.setQueryData<{ items: VideoRender[] }>(['video', 'renders', projectId], (old) => {
       if (!old) return old
-      const renders2 = old.renders.map((r) =>
+      const items = old.items.map((r) =>
         r.id === p.render_id
           ? { ...r, status: p.status, frames_done: p.frames_done, frames_total: p.frames_total, error: p.error }
           : r,
       )
-      return { renders: renders2 }
+      return { items }
     })
     if (p.status === 'succeeded' || p.status === 'failed' || p.status === 'interrupted') {
       qc.invalidateQueries({ queryKey: ['video', 'renders', projectId] })
@@ -397,8 +600,14 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
         const pct = r.frames_total > 0 ? Math.round((r.frames_done / r.frames_total) * 100) : 0
         return (
           <div className="flex min-w-40 items-center gap-2">
-            <Progress value={pct} className="flex-1" aria-label={`渲染进度 ${pct}%`} />
-            <ProgressValue className="w-10 shrink-0 text-xs">{(v) => `${v}%`}</ProgressValue>
+            {/* ProgressValue 是 ProgressPrimitive.Value，必须作为 Progress(Root) 子元素渲染——
+                平级兄弟会抛 ProgressRootContext missing 把整页炸掉（界面走查实拍）。 */}
+            <Progress value={pct} className="flex-1" aria-label={`渲染进度 ${pct}%`}>
+              <ProgressTrack>
+                <ProgressIndicator />
+              </ProgressTrack>
+              <ProgressValue className="w-10 shrink-0 text-xs">{(v) => `${v}%`}</ProgressValue>
+            </Progress>
             <span className="text-xs text-muted-foreground whitespace-nowrap">
               {r.frames_done}/{r.frames_total || '—'} 帧
             </span>
@@ -433,6 +642,12 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
         ),
     },
   ]
+
+  // -------------------------------------------------------------------------
+  // 重新组合（POST /compose，批B）：入口弹层状态
+  // -------------------------------------------------------------------------
+
+  const [recomposeOpen, setRecomposeOpen] = useState(false)
 
   // -------------------------------------------------------------------------
   // 渲染
@@ -473,10 +688,32 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
           </Link>
         }
         actions={
-          <Badge className={cn('gap-1.5', agentOnline ? STATUS_TONE_CLASS.positive : STATUS_TONE_CLASS.neutral)}>
-            <Sparkles size={13} aria-hidden="true" />
-            Agent {agentOnline ? '在线' : '离线'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={cn('gap-1.5', agentOnline ? STATUS_TONE_CLASS.positive : STATUS_TONE_CLASS.neutral)}>
+              <Sparkles size={13} aria-hidden="true" />
+              Agent {agentOnline ? '在线' : '离线'}
+            </Badge>
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <Button size="sm" variant="outline" aria-label="更多项目操作" />
+                }
+              >
+                <Wand2 size={14} aria-hidden="true" />
+                重新组合
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-52 p-1">
+                <button
+                  type="button"
+                  onClick={() => setRecomposeOpen(true)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Wand2 size={14} aria-hidden="true" />
+                  重新组合…
+                </button>
+              </PopoverContent>
+            </Popover>
+          </div>
         }
       />
 
@@ -726,6 +963,15 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
           empty={<PageEmpty label="暂无渲染记录" hint="点击右栏「渲染」提交第一次云端渲染" />}
         />
       </section>
+
+      {/* 重新组合（批B compose） */}
+      <RecomposeDialog
+        projectId={projectId}
+        currentVersion={project.version}
+        currentScript={ir.script}
+        open={recomposeOpen}
+        onOpenChange={setRecomposeOpen}
+      />
     </div>
   )
 }
