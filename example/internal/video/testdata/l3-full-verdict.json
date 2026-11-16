@@ -1,0 +1,229 @@
+{
+  "layer": "L3-full-9case-verdict",
+  "run_id": "20261116-l3-full-batch9",
+  "date": "2026-11-16",
+  "scope": "Video Studio 测试第 9 批：§7.4 L3 完整成片九案全量质检汇总。本文件为独立质检方（QC agent）产出，与渲染 agent 的 report.json 断言相互独立。判定依据 = ffprobe（-count_packets 帧数，frag MP4 无 nb_frames 盒）+ 全解码复验（ffmpeg -v error stderr 空）+ 首中尾三时点抽帧墨迹复验（非全黑全白、非空内容）。规格对照 docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §7.0 定稿表。",
+  "case_spec_table": {
+    "VS-C01": {"resolution": "1080x1920", "fps": 30, "duration_sec": 15, "frames": 450},
+    "VS-C02": {"resolution": "1920x1080", "fps": 25, "duration_sec": 30, "frames": 750},
+    "VS-C03": {"resolution": "1080x1920", "fps": 30, "duration_sec": 45, "frames": 1350},
+    "VS-C04": {"resolution": "1920x1080", "fps": 30, "duration_sec": 60, "frames": 1800},
+    "VS-C05": {"resolution": "1080x1920", "fps": 30, "duration_sec": 30, "frames": 900},
+    "VS-C06": {"resolution": "1920x1080", "fps": 25, "duration_sec": 90, "frames": 2250},
+    "VS-C07": {"resolution": "1920x1080", "fps": 30, "duration_sec": 40, "frames": 1200},
+    "VS-C08": {"resolution": "1080x1080", "fps": 30, "duration_sec": 20, "frames": 600},
+    "VS-C09": {"resolution": "1920x1080", "fps": 30, "duration_sec": 50, "frames": 1500}
+  },
+  "cases": {
+    "VS-C01": {
+      "geometry": {"got": "1080x1920", "want": "1080x1920", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 15.066667, "video_stream_sec": 15.0, "want_sec": 15, "delta_frames": 0, "pass": true, "note": "容器时长 15.067s 系音轨 AAC 帧填充（audio 15.067s）；视频流精确 15.000s"},
+      "frames": {"packets": 450, "want": 450, "pass": true},
+      "audio": {"present": true, "codec": "aac", "channels": 1, "sample_rate": 44100},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_7.5s": "content-ok", "tail_14.9s": "content-ok", "ink_pass": true, "note": "中帧实测有完整版式内容（标题/卡片/CTA）"},
+      "size_bytes": 415705,
+      "verdict": "pass"
+    },
+    "VS-C02": {
+      "geometry": {"got": "1920x1080", "want": "1920x1080", "pass": true},
+      "fps": {"got": "25/1", "want": 25, "pass": true},
+      "duration": {"container_sec": 30.0, "video_stream_sec": 30.0, "want_sec": 30, "delta_frames": 0, "pass": true},
+      "frames": {"packets": 750, "want": 750, "pass": true},
+      "audio": {"present": false},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_15s": "content-ok", "tail_29.9s": "content-ok", "ink_pass": true, "note": "深色底浅色字版式，三时点均有墨迹（YAVG 22.7/32.1/27.2，非全黑：YMAX 211/253/217）"},
+      "size_bytes": 238505,
+      "verdict": "pass"
+    },
+    "VS-C03": {
+      "geometry": {"got": "1080x1920", "want": "1080x1920", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 45.0, "video_stream_sec": 45.0, "want_sec": 45, "delta_frames": 0, "pass": true},
+      "frames": {"packets": 1350, "want": 1350, "pass": true},
+      "audio": {"present": false},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_22.5s": "content-ok", "tail_44.9s": "solid-dark-bg-only", "ink_pass": true, "note": "首/中帧有内容（标题'天空为什么是蓝色的?'/'散射强度∝1/λ⁴'版式）；尾帧为深蓝底纯色（YMAX 27）= 出场后空底设计基线，非编码故障——同案中帧内容完整，与渲染侧 C08 F0 纯色判定同口径（单采样纯平不判 fail）"},
+      "size_bytes": 375063,
+      "verdict": "pass"
+    },
+    "VS-C04": {
+      "geometry": {"got": "1920x1080", "want": "1920x1080", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 60.0, "video_stream_sec": 60.0, "want_sec": 60, "delta_frames": 0, "pass": true},
+      "frames": {"packets": 1800, "want": 1800, "pass": true},
+      "audio": {"present": false},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_30s": "content-ok", "tail_59.9s": "content-ok", "ink_pass": true, "note": "数据可视化版式三时点齐全（中帧 '1349084 亿元'+三柱图；尾帧 counter 数字过渡态'53?4084 亿元'+56.7% 橙块——counter 递增中，恰证动画真在跑）"},
+      "size_bytes": 672829,
+      "verdict": "pass"
+    },
+    "VS-C05": {
+      "geometry": {"got": "1080x1920", "want": "1080x1920", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 30.066667, "video_stream_sec": 30.0, "want_sec": 30, "delta_frames": 0, "pass": true, "note": "音轨 30.067s 帧填充；视频流精确 30.000s"},
+      "frames": {"packets": 900, "want": 900, "pass": true},
+      "audio": {"present": true, "codec": "aac", "channels": 1, "sample_rate": 44100},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_15s": "content-ok", "tail_29.9s": "content-ok", "ink_pass": true, "note": "旅行版式：中帧图片位+白框、尾帧橙线元素，三时点均有结构墨迹"},
+      "size_bytes": 495415,
+      "verdict": "pass"
+    },
+    "VS-C06": {
+      "geometry": {"got": "1920x1080", "want": "1920x1080", "pass": true},
+      "fps": {"got": "25/1", "want": 25, "pass": true},
+      "duration": {"container_sec": 90.0, "video_stream_sec": 90.0, "want_sec": 90, "delta_frames": 0, "pass": true},
+      "frames": {"packets": 2250, "want": 2250, "pass": true},
+      "audio": {"present": false},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_45s": "content-ok", "tail_89.9s": "content-ok", "ink_pass": true, "note": "访谈双栏版式全程有文字墨迹。专项甄别：45.0s 与 89.8s 抽样帧字节级相同（freezedetect 1.08s 起 freeze 无 end）——定性为 degraded IR 设计基线：interview 卡片元素全片常驻 + 词锚 miss 的元素按 F-ANC-01 口径条款（§7.0 第 4 条）静默落 t=0 常显、不判 fail（已登记 open 项）。首 10.5s 每采样帧均不同（intro scaleIn 连续动画真实存在）"},
+      "size_bytes": 447704,
+      "verdict": "pass"
+    },
+    "VS-C07": {
+      "geometry": {"got": "1920x1080", "want": "1920x1080", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 40.0, "video_stream_sec": 40.0, "want_sec": 40, "delta_frames": 0, "pass": true},
+      "frames": {"packets": 1200, "want": 1200, "pass": true},
+      "audio": {"present": false},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_20s": "content-ok", "tail_39.9s": "content-ok", "ink_pass": true, "note": "招聘版式：顶栏'云栖技术 YUNQI'、中帧 '320人/300+项目' 数字过渡态、尾帧数字落定，三时点墨迹齐全"},
+      "size_bytes": 379942,
+      "verdict": "pass"
+    },
+    "VS-C08": {
+      "geometry": {"got": "1080x1080", "want": "1080x1080", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 30.066667, "video_stream_sec": 20.0, "want_sec": 20, "delta_frames": 0, "pass": true, "note": "视频流精确 20.000s/600 帧 = §7.0 定稿精确命中；容器 30.07s 全部来自音轨超挂（见 findings F-AUD-01）"},
+      "frames": {"packets": 600, "want": 600, "pass": true},
+      "audio": {"present": true, "codec": "aac", "channels": 1, "sample_rate": 44100},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "solid-red-bg", "mid_10s": "content-ok", "tail_19.9s": "content-ok", "ink_pass": true, "note": "首帧红底纯色（YMIN 65=YMAX 81-16，C08 F0 红底设计基线，渲染侧已记录同判定）；中帧三券卡片+倒计时'0s'、尾帧内容齐全"},
+      "size_bytes": 531480,
+      "verdict": "pass"
+    },
+    "VS-C09": {
+      "geometry": {"got": "1920x1080", "want": "1920x1080", "pass": true},
+      "fps": {"got": "30/1", "want": 30, "pass": true},
+      "duration": {"container_sec": 50.0, "video_stream_sec": 50.0, "want_sec": 50, "delta_frames": 0, "pass": true},
+      "frames": {"packets": 1500, "want": 1500, "pass": true},
+      "audio": {"present": false},
+      "decode_verify": {"stderr_empty": true, "pass": true},
+      "frame_sampling": {"head_0.05s": "content-ok", "mid_25s": "content-ok", "tail_49.9s": "content-ok", "ink_pass": true, "note": "产品演示版式：中帧四图标+取景框+'12 项已完成'，三时点墨迹齐全"},
+      "size_bytes": 245026,
+      "verdict": "pass"
+    }
+  },
+  "findings": [
+    {
+      "id": "F-AUD-01",
+      "severity": "minor-open",
+      "case": "VS-C08",
+      "detail": "音轨超挂：audio 流 30.067s vs 视频流 20.000s（+10.07s）。根因：MuxAV 复用了 30.04s 的共享 fixture voice-440.mp3（_fixtures/voice-440.mp3），未按 IR voice.durationSec=20.0 裁剪（C08 IR 声明专有 voice key video/c08/voice-zh-CN-xiaoxiao-promo.m4a durationSec 20.0，渲染侧降级用共享 fixture）。视频流本身精确命中 20.000s/600 帧，不影响 §7.4 时长判定（视频口径）。20s 后音频仍有内容（mean -21.5dB），播放器表现取决于容器（容器时长被拉到 30.07s）。同类 C01/C05 音轨仅 +0.067s（AAC 帧填充，benign）。",
+      "suggested_fix": "MuxAV 对 voice 输入按 min(voice.durationSec, meta.durationSec) 做裁剪（atrim/-t），或在降级夹具生成时按案件时长截断 fixture"
+    },
+    {
+      "id": "N-C06-STATIC-TAIL",
+      "severity": "noted-not-a-fail",
+      "case": "VS-C06",
+      "detail": "45s 起至片尾画面像素级静止（含 85.2s 词锚 endline 本应出现的位置也早已在片头常显）。依据 §7.0 口径条款第 4 条：词锚 miss 时动画静默落 0 帧/元素常显，是已登记的 F-ANC-01 open 项的 documented 行为，L3 结构验收不判 fail；像素级时序断言归 L1/L2/M2 范围。",
+      "cross_ref": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §7.0 口径条款"
+    },
+    {
+      "id": "N-C03-TAIL-SOLID",
+      "severity": "noted-not-a-fail",
+      "case": "VS-C03",
+      "detail": "尾帧（44.9s）为深蓝空底纯色（YMAX 27）：同案首/中帧版式内容完整，判定为出场后空底设计基线（与渲染侧 C08 F0 单采样纯平不判 fail 同口径），非渲染故障。",
+      "cross_ref": "l3-full/VS-C06/report.json notes（渲染侧同口径先例）"
+    }
+  ],
+  "totals": {
+    "cases_total": 9,
+    "cases_pass": 9,
+    "cases_fail": 0,
+    "frames_total": 10800,
+    "frames_want_total": 10800,
+    "duration_sec_total": 380,
+    "mp4_size_bytes_total": 3801669,
+    "mp4_size_mb_total": 3.626,
+    "decode_verify_clean": 9,
+    "decode_verify_errors": 0
+  },
+  "cost_calibration": {
+    "section_ref": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §7.8",
+    "mp4_size": {
+      "estimated_range_mb": [190, 475],
+      "estimated_basis": "CRF 18 运动图形 4-10 Mbps × 380s / 8",
+      "actual_mb": 3.626,
+      "actual_overestimate_factor": "52-131x 高估",
+      "actual_avg_bitrate_kbps": 80.0,
+      "note": "与 round3 PNG 压缩比修正同构：扁平色运动图形在 CRF 18 下码率远低于 4-10 Mbps 工程估算，实测 37-147 kbps（均值 ~80 kbps，0.08 Mbps）。§7.8 MP4 系数应回填为 CRF18 扁平色运动图形 ≈ 0.04-0.15 Mbps 量级，L3 合计估算修正为 ≈ 2-7 MB",
+      "per_case_bitrate_kbps": {
+        "VS-C01": 220.7,
+        "VS-C02": 63.6,
+        "VS-C03": 66.7,
+        "VS-C04": 89.7,
+        "VS-C05": 132.1,
+        "VS-C06": 39.8,
+        "VS-C07": 76.0,
+        "VS-C08": 212.3,
+        "VS-C09": 60.9
+      }
+    },
+    "render_time": {
+      "estimated": "帧循环 50-150ms/帧截图 + 编码 20-50ms/帧；10800 帧全批 ≈ 15-40 分钟（§7.4 单次预期耗时）",
+      "actual_per_frame_ms": {
+        "VS-C06": {"render_ms_per_frame": 91.02, "total_ms": 206649},
+        "VS-C07": {"render_ms_per_frame": 96.96, "total_ms": 117669},
+        "VS-C08": {"render_ms_per_frame": 86.07, "total_ms": 52774},
+        "VS-C09": {"render_ms_per_frame": 95.61, "total_ms": 145623}
+      },
+      "actual_summary": "有渲染报告的 4 案 ms/帧 86-97ms 落在估算带内（截图约 50-150ms/帧带内偏中低），全程（观察 11:41 首进程启动至 12:20 C05 落盘）约 39 分钟串行九案，落在 §7.4 估算 15-40 分钟带上沿（本机 Windows 真机 + MaxWorkers=1 串行口径）",
+      "calibration": "ms/帧系数 86-97 实测可信，§7.4 估算带确认不需要修改；全批 wall-clock ≈ 39 min 建议作为 CI timeout 预算基准（L3-CI-PREREQUISITES.md 的 15min step timeout 不够 L3 全量，需 ≥45min）"
+    },
+    "png_frames_disk": {
+      "estimated": "L3 临时帧 10800 帧 ≈ 430 MB（round3 修正后）",
+      "actual": "本批未落临时帧目录（frag MP4 流式 pipe + 直接三时点抽样），抽样 PNG 单帧 6.5-150KB 与 round3 修正系数同量级"
+    }
+  },
+  "verdict": {
+    "l3_structural_acceptance": "PASS",
+    "criteria": "§7.4 通过阈值的结构子集（本批范围）：九案 MP4 存在且可解码、几何/fps/时长（±1 帧容差）/帧数（-count_packets 精确）全命中 §7.0 定稿表、音轨按案预期、全解码 stderr 空、三时点抽帧有内容墨迹",
+    "out_of_scope_this_batch": [
+      "端到端 DB 断言（终态 succeeded/审计事件/配额计数/ir_snapshot 字节一致）——归 §7.4 完整 L3 管道验收（TestL3Smoke 覆盖 C01 冒烟路径）",
+      "像素阈值断言（分区 MAE/SSIM）与 golden 对照——归 L1/L4",
+      "F-WKR-01 故障注入路径——归 §7.4 完整口径"
+    ],
+    "fail_list": [],
+    "open_findings": ["F-AUD-01 (minor)"]
+  },
+  "artifacts": {
+    "mp4_paths": {
+      "VS-C01": "example/internal/video/testdata/l3-full/VS-C01/output.mp4",
+      "VS-C02": "example/internal/video/testdata/l3-full/VS-C02/output.mp4",
+      "VS-C03": "example/internal/video/testdata/l3-full/VS-C03/output.mp4",
+      "VS-C04": "example/internal/video/testdata/l3-full/VS-C04/output.mp4",
+      "VS-C05": "example/internal/video/testdata/l3-full/VS-C05/output.mp4",
+      "VS-C06": "example/internal/video/testdata/l3-full/VS-C06/output.mp4",
+      "VS-C07": "example/internal/video/testdata/l3-full/VS-C07/output.mp4",
+      "VS-C08": "example/internal/video/testdata/l3-full/VS-C08/output.mp4",
+      "VS-C09": "example/internal/video/testdata/l3-full/VS-C09/output.mp4"
+    },
+    "render_agent_reports": [
+      "example/internal/video/testdata/l3-full/VS-C06/report.json",
+      "example/internal/video/testdata/l3-full/VS-C07/report.json",
+      "example/internal/video/testdata/l3-full/VS-C08/report.json",
+      "example/internal/video/testdata/l3-full/VS-C09/report.json"
+    ],
+    "render_agent_reports_missing": ["VS-C01", "VS-C02", "VS-C03", "VS-C04", "VS-C05（五案无 report.json，仅 output.mp4 + sample-*.png；本 QC 的独立质检为其补位）"],
+    "fixture": "example/internal/video/testdata/l3-full/_fixtures/voice-440.mp3",
+    "qc_extracted_frames": "（临时目录，未入仓库）/tmp/l3qc/"
+  },
+  "method_notes": [
+    "帧数用 -count_packets（round2 发现 frag MP4 无 nb_frames 盒，本批全部 frag_keyframe+empty_moov+default_base_moof 编码，nb_frames 均缺省，-count_packets 为唯一精确口径）",
+    "抽帧三时点取 0.05s / dur/2 / dur-0.1s，独立于渲染 agent 的 sample-*.png（路径与断言均独立，md5 不同源）",
+    "墨迹判定 = signalstats YMIN/YMAX/YAVG 分离度 + 人工查看关键帧图像（非全黑 YMAX、非全白 YMIN、结构内容存在）",
+    "C08 音轨超挂定性证据链：_fixtures/voice-440.mp3 时长 30.04s → C08 audio 流 30.067s；C08 IR voice.durationSec=20.0"
+  ]
+}

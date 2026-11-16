@@ -3339,10 +3339,12 @@ F-SEE-01 帧数口径已统一；NaN / 类型校验 ──→ L1 / L3 seek 输�
 ### 8.5 未决项（有结论才算解决，这里都还没有结论）
 
 > **[状态标注 2026-11-16 round8]** 十条逐项复核：已解决 2 条（#5、#8），提案待拍板 1 条（#1，见 §8.5a），维持 open 7 条（#2/#3/#4/#6/#7/#9/#10）。每行末注状态；本轮新增取证已并入行内。
+>
+> **[裁定落地 2026-11-16 round9 实施批]** 未决项 1 **已解决**——§8.5a 两案按"方案 A 变体 + 方案 B"组合裁定并落地：素材子集归 `E_VIDEO_IR_INVALID` 写时校验（悬空 src 400 + details.field=elements[N].src，src 存在性检查在 ProjectService.Mutate 全量校验路径，app/service.go validateAssetRefs；登记行 OR storagex 对象存在二者其一，兼容 round8 前存量素材），`E_TTS_UNAVAILABLE` / `E_ALIGNER_UNAVAILABLE` 定值为"永不返回"（降级矩阵兜底语义已在 openapi.yaml video 节定值表 + video_set_script MCP 工具描述文字化）。错误码定值表落 openapi.yaml video 节头注释（9 个实际码逐一 file:line）；架构文档 10.5 错误码表已同批回写（预留行加注），两份文档不再分叉。素材缺失类故障用例自此可写成确定性断言（§4.2.6/§4.4.6 的"人工核验"口径解除）。
 
 | # | 未决项 | 阻塞什么 | 需要的输入 | 状态 **[round8]** |
 |---|---|---|---|---|
-| 1 | 三个错误码未定值（`E_VIDEO_INVALID_PARAMS` 的素材子集、`E_TTS_UNAVAILABLE`、`E_ALIGNER_UNAVAILABLE`） | 对应故障用例只能人工核验，不能写成自动化断言 | 错误码表定稿 | **提案已备，待拍板**——两案利弊与影响面已成表（§8.5a），拍板后由实施批落地并回写 |
+| 1 | 三个错误码未定值（`E_VIDEO_INVALID_PARAMS` 的素材子集、`E_TTS_UNAVAILABLE`、`E_ALIGNER_UNAVAILABLE`） | 对应故障用例只能人工核验，不能写成自动化断言 | 错误码表定稿 | **已解决（round9 实施批，裁定落地）**——素材子集：悬空 src 写时校验 → `E_VIDEO_IR_INVALID`（方案 B；service.go validateAssetRefs 登记行 OR 对象存在，存量兼容窗口），与 targetElementId 悬空引用同构；TTS/Aligner：两码定值"永不返回"，降级矩阵兜底语义文字化进 MCP 描述与 openapi（方案 A 变体）。定值表：openapi.yaml video 节头注释；架构文档 10.5 已回写。自动化断言已可写（TestIntegration_ValidateAssetRefs 7 组） |
 | 2 | IR 与 recipe 的服务层字段划分未落地（附录 A.4 只给了文档侧口径） | 改了 crf 是否产生一次 IR 变更，语义未定 | 架构侧决定 | 维持 open（round8 未触及；assets[] DB 侧登记 round8 in-flight 与本条的 recipe 归属判定互不影响） |
 | 3 | 封面帧验收判据只有定性描述 | 缩略图无法进 L1/L2 自动化 | 主体 bbox 覆盖率 / 文字截断判据 | 维持 open（T-15 端到端半边仍 ⛔：firstThumb stub render_pipeline.go:325） |
 | 4 | 双语字幕缺第二字幕轨的时间结构 | C06 的中英对齐无法自动判定 | IR 扩展 | 维持 open |
@@ -3353,13 +3355,27 @@ F-SEE-01 帧数口径已统一；NaN / 类型校验 ──→ L1 / L3 seek 输�
 | 9 | 代码基线时点与并发改写 | 本轮期间仓库被另一会话提交过（`timeline-builder.js` 13:15，工作区 git clean），file:line 以该时点为锚 | 每次改能力后重跑 §1.8 | 维持 open——且 round8 即为例证：工作区当前有 1011 迁移等未提交改动（git status 脏），A.1 回填行号以本日工作区状态为锚，下次重算需重跑 |
 | 10 | golden 更新流程缺责任人与触发阈值 | 基线会随环境漂移无人审批 | 评审责任人 + 触发条件 | 维持 open（工作区 golden meta.json 当前即有未提交漂移——责任缺口正在发生） |
 
-### 8.5a 错误码定值提案（§8.5 未决项 1；提案待架构侧拍板，拍板后由实施批落地并回写本表）
+### 8.5a 错误码定值提案（§8.5 未决项 1；~~提案待架构侧拍板~~ **已裁定落地，round9 实施批回写**）
 
 > **[提案 2026-11-16 round8]** 本节只提案、不拍板。现状取证（round8 实测）：video 域现存错误码全集为 9 个——`E_VIDEO_ANCHOR_NOT_FOUND`（400，service.go:31）、`E_VIDEO_ASSET_TOO_LARGE`（400，service.go:35）、`E_VIDEO_ASSET_UNSUPPORTED`（400，service.go:36）、`E_VIDEO_IR_INVALID`（400，service.go:291）、`E_VIDEO_PREVIEW_INTERNAL`（500，service.go:34）、`E_VIDEO_PROJECT_NOT_FOUND`（404，service.go:28）、`E_VIDEO_RENDER_NOT_FOUND`（404，service.go:29）、`E_VIDEO_VERSION_CONFLICT`（409，service.go:30/280）、`E_NOT_CONFIGURED`（503，service.go:32，仅渲染管线 stub/未配置路径使用）。架构文档错误码表另定义了 4 个代码侧从未返回的码：`E_VIDEO_UNSUPPORTED_SCHEMA`、`E_VIDEO_ASSET_NOT_FOUND`、`E_VIDEO_RENDER_ACTIVE`、`E_VIDEO_PAYLOAD_TOO_LARGE`（plan-agent-video-studio-architecture-2026-11-14.md:605-615）以及 502 行 `E_TTS_UNAVAILABLE`/`E_ALIGNER_UNAVAILABLE`（:613）。
 
+> **[裁定 2026-11-16 round9 实施批]** 采纳 **8.5a.1 方案 A 变体 + 8.5a.2 方案 B** 的组合，理由：
+> - 8.5a.1 采 A 变体（不新增码）：提案时已论证两码实际永远不会返回（降级矩阵永不阻塞），
+>   新增即"先定值后接线"的静默枚举；降级语义改由文档/描述文字承载——video_set_script MCP
+>   工具描述与 openapi.yaml video 节定值表均已注明"永不返回 + words_source 判断来源"。
+>   B 案的预留定值保留在架构文档 10.5（加注"永不返回，待 allowEstimated 闸门"）。
+> - 8.5a.2 采 B（写时引用校验）：与 targetElementId 悬空引用先例完全同构（fail-fast、
+>   不建 render 行不扣配额），零新码；A 案的 404 挂点问题（触发点在渲染期而非查询期）
+>   恰是其最大成本，留作 render 终态 error_code 的 P1 提案。
+> 落地证据：app/service.go `validateAssetRefs`（Mutate 全量校验路径，src = video_asset
+> 登记行 OR storagex 对象存在，兼容 round8 前存量素材）；测试 `TestIntegration_ValidateAssetRefs`
+> 7 组断言全过（含 DB 真路径）。
+
 #### 8.5a.1 `E_TTS_UNAVAILABLE` / `E_ALIGNER_UNAVAILABLE`（502 供应商失败 vs 503 未配置）
 
-**现状行为**：两个码在代码侧**从未返回**。TTS/Aligner 走的是"永不阻塞"降级矩阵（service.go:537-604 deriveWordsUnlocked）：Synth 失败 → Aligner → EstimateWords（source=estimated），每次失败仅 log.Warn（service.go:560-561,583-584），调用方拿到的永远是成功的 SetScript 响应。"未配置"与"配置了但调用失败"在当前代码里不可区分——未配置时 adapter 返回普通 error（tts.go:61 "tts: VIDEO_TTS_URL not configured"；aligner.go:54 同构），同样被降级矩阵吞掉。`allowEstimated` 闸门（架构文档 :349"仅 allowEstimated=true 时显式降级"）在代码侧**不存在**（grep 全仓零命中）。
+**现状行为 [round9 裁定后]**：两个码定值为**永不返回**。TTS/Aligner 走"永不阻塞"降级矩阵（service.go deriveWordsUnlocked）：Synth 失败 → Aligner → EstimateWords（source=estimated），每次失败仅 log.Warn，调用方拿到的永远是成功的 SetScript 响应；来源以响应 words_source（tts|aligner|estimated）判断。该语义已文字化：video_set_script MCP 工具描述（adapters/mcp/tools.go，"There is NO E_TTS_UNAVAILABLE / E_ALIGNER_UNAVAILABLE error code..."）+ openapi.yaml video 节定值表降级注记。架构文档 10.5 的 502 行加注"预留定值，待 allowEstimated 闸门落地时再接线"。
+
+**[round8 提案原文]** 两个码在代码侧**从未返回**。"未配置"与"配置了但调用失败"在当前代码里不可区分——未配置时 adapter 返回普通 error（tts.go:61；aligner.go:54 同构），同样被降级矩阵吞掉。`allowEstimated` 闸门（架构文档 :349）在代码侧**不存在**（grep 全仓零命中）。
 
 | 方案 | 提案码 | 利 | 弊 |
 |---|---|---|---|
@@ -3370,7 +3386,9 @@ F-SEE-01 帧数口径已统一；NaN / 类型校验 ──→ L1 / L3 seek 输�
 
 #### 8.5a.2 素材子集错误码（`E_VIDEO_INVALID_PARAMS` 的素材分支）
 
-**现状行为**：素材缺失**没有任何 typed 错误码**。写时：`src` 仅做前缀/协议白名单校验（`video/` 前缀、禁 `://`/`data:`），不校验 storage 对象存在性——悬空 src 畅通通过 Validate。渲染时：坏图 decode fail-closed（timeline-builder.js:374-386 记录 `__player.error` 并 rethrow → ready=false → 渲染中止），但中止原因以裸字符串冒出，无错误码、无 4xx 面。上传侧已有两个素材码：`E_VIDEO_ASSET_TOO_LARGE`/`E_VIDEO_ASSET_UNSUPPORTED`（均 400，service.go:35-36）。
+**现状行为 [round9 裁定后]**：悬空 src 走**写时校验**（方案 B 落地）：image 元素 src 须有 video_asset 登记行（迁移 1011）或 storagex 对象物理存在（round8 前存量素材兼容窗口——登记行 OR 对象存在二者其一），二者皆无 → 400 `E_VIDEO_IR_INVALID` + details.field=elements[N].src，文案 "asset not registered"。实现位置：app/service.go `validateAssetRefs`（ProjectService.Mutate 全量校验路径，PUT IR 与全部 MCP 变更工具共用；纯函数 Validate 不做存在性检查——L0 fixture 门与离线渲染快照不受影响）。src 前缀/协议白名单校验仍在 ir.go validateElement（先跑）。渲染期"IR 合法但对象事后被删/损坏"仍走 render 终态 error 字段（无 typed 码，P1 提案范围不变）。测试：TestIntegration_ValidateAssetRefs（app/service_db_test.go，7 组：悬空 UpsertElement/悬空 PUT-IR 不落行/登记通过/legacy 窗口通过/elements[N] 索引/跨工作区登记行不互认/非 image 豁免）。
+
+**[round8 提案原文]** 素材缺失**没有任何 typed 错误码**。写时：`src` 仅做前缀/协议白名单校验，不校验 storage 对象存在性——悬空 src 畅通通过 Validate。渲染时：坏图 decode fail-closed（timeline-builder.js 记录 `__player.error` 并 rethrow → ready=false → 渲染中止），但中止原因以裸字符串冒出，无错误码、无 4xx 面。上传侧已有两个素材码：`E_VIDEO_ASSET_TOO_LARGE`/`E_VIDEO_ASSET_UNSUPPORTED`（均 400）。
 
 | 方案 | 提案码 | 利 | 弊 |
 |---|---|---|---|
@@ -3381,9 +3399,9 @@ F-SEE-01 帧数口径已统一；NaN / 类型校验 ──→ L1 / L3 seek 输�
 
 #### 8.5a.3 采纳方式
 
-- 本节所有提案**待架构侧拍板**；拍板结果（A 或 B 或第三案）由实施批落地代码与 openapi/MCP 同步变更，落地后在 §8.5 未决项 1 行与 §8.5a 各表"现状行为"列回写新现状与 file:line。
-- 拍板前，涉及故障用例（§4.2.6/§4.4.6 素材缺失类、TTS 不可用类）的断言维持"人工核验"口径，不得提前按任一方案写成自动化断言。
-- 架构文档（plan-agent-video-studio-architecture-2026-11-14.md 错误码表）若采方案 B 类（复用既有码），该表对应行须同批修订，保持两份文档不再分叉。
+- ~~本节所有提案**待架构侧拍板**~~ **已裁定（2026-11-16 round9 实施批）：8.5a.1 方案 A 变体（不新增码，降级语义文字化）+ 8.5a.2 方案 B（悬空 src 写时校验归 E_VIDEO_IR_INVALID）**；§8.5 未决项 1 行与 §8.5a.1/8.5a.2 现状列已回写新现状与 file:line。
+- ~~拍板前，涉及故障用例（§4.2.6/§4.4.6 素材缺失类、TTS 不可用类）的断言维持"人工核验"口径，不得提前按任一方案写成自动化断言。~~ **口径解除**：素材缺失类故障用例自此可写成确定性断言（写时 400 E_VIDEO_IR_INVALID）；TTS 不可用类断言口径 = "SetScript 永不失败 + words_source=estimated"（无错误码面）。
+- 架构文档（plan-agent-video-studio-architecture-2026-11-14.md 错误码表 10.5）**已同批修订**（设计期草案加注裁定回写，两份文档不再分叉）。
 
 ### 8.6 这套文档什么时候失效
 

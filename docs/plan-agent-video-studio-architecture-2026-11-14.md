@@ -598,20 +598,30 @@ iframe → parent: {type:"player:state", frame, t, durationFrames, ready, error?
 
 ### 10.5 统一错误语义
 
+> **[裁定回写 2026-11-16（案例库 §8.5a 采纳，round9 实施批）]** 本表为设计期草案；
+> 实际返回的错误码以**代码 + openapi.yaml video 节定值表**为准（代码侧 9 个码，逐一
+> file:line 见 openapi.yaml video 节头注释）。两案裁定：`E_TTS_UNAVAILABLE` /
+> `E_ALIGNER_UNAVAILABLE` **永不返回**（降级矩阵 Synth→Aligner→Estimate 兜底，
+> 供应商失败仅记日志，调用方以 words_source 判断来源）——本表 502 行仅作
+> "未来 allowEstimated 闸门落地时"的预留定值保留。素材缺失按方案 B 收口：
+> 悬空 image src 走写时校验 → `E_VIDEO_IR_INVALID`（details.field=elements[N].src），
+> `E_VIDEO_ASSET_NOT_FOUND` 404 行**不接线**（该行随 render 终态 error_code 的
+> P1 提案另议）。下表保留原始草案供对照，与实现分叉的行已加注。
+
 | HTTP | code | 场景 |
 |---:|---|---|
-| 400 | `E_VIDEO_INVALID_IR` / `E_VIDEO_INVALID_PARAMS` | 结构、尺寸、帧率、锚点或参数非法 |
-| 400 | `E_VIDEO_ANCHOR_NOT_FOUND` / `E_VIDEO_ANCHOR_AMBIGUOUS` | 精确锚点不存在或重复词缺少 occurrence |
-| 400 | `E_VIDEO_UNSUPPORTED_SCHEMA` | render 遇到未知类型 / schemaVersion |
+| 400 | `E_VIDEO_INVALID_IR` / `E_VIDEO_INVALID_PARAMS` | 设计期名——实际定值为 `E_VIDEO_IR_INVALID`（400，含 details.field；素材悬空 src 同挂此码，"asset not registered"） |
+| 400 | `E_VIDEO_ANCHOR_NOT_FOUND` / `E_VIDEO_ANCHOR_AMBIGUOUS` | 实际仅 `E_VIDEO_ANCHOR_NOT_FOUND`（occurrence 越界落 same_text 最近候选，不报 ambiguous） |
+| 400 | `E_VIDEO_UNSUPPORTED_SCHEMA` | 未接线（读时宽容跳过未知类型并 warn，前向兼容）——预留行 |
 | 402 | `E_QUOTA_EXCEEDED` | hard quota 阻断 |
-| 403 | `E_ACCESS_DENIED` / `E_WORKSPACE_SCOPE` | 角色、PAT scope 或 workspace 越权 |
-| 404 | `E_VIDEO_PROJECT_NOT_FOUND` / `E_VIDEO_RENDER_NOT_FOUND` / `E_VIDEO_ASSET_NOT_FOUND` | 资源不存在或对调用方不可见 |
+| 403 | `E_ACCESS_DENIED` / `E_WORKSPACE_SCOPE` | 设计期名——实际定值为 `E_FORBIDDEN`（workspace 成员校验）+ PAT scope 门（MCP requireToolScope） |
+| 404 | `E_VIDEO_PROJECT_NOT_FOUND` / `E_VIDEO_RENDER_NOT_FOUND` / `E_VIDEO_ASSET_NOT_FOUND` | 前两者已接线；`E_VIDEO_ASSET_NOT_FOUND` 未接线（素材缺失归 `E_VIDEO_IR_INVALID` 写时校验，见上方裁定回写）——预留行 |
 | 409 | `E_VIDEO_VERSION_CONFLICT` | expectedVersion 冲突 |
-| 409 | `E_VIDEO_RENDER_ACTIVE` | 删除有 active render 的项目 |
-| 413 | `E_VIDEO_PAYLOAD_TOO_LARGE` | IR、base64、multipart 或解码资源超限 |
+| 409 | `E_VIDEO_RENDER_ACTIVE` | 未接线（项目删除级联 renders，无 active render 拦截）——预留行 |
+| 413 | `E_VIDEO_PAYLOAD_TOO_LARGE` | 设计期名——IR 总量超限归 `E_VIDEO_IR_INVALID`（256KiB 校验）；body 超限归全局 `E_PAYLOAD_TOO_LARGE` 闸门 |
 | 429 | `E_RATE_LIMITED` | MCP / API / workspace 并发限制 |
-| 502 | `E_TTS_UNAVAILABLE` / `E_ALIGNER_UNAVAILABLE` | 已配置供应商调用失败且未允许估算 |
-| 503 | `E_CAPABILITY_NOT_CONFIGURED` | capx 或必需能力未配置 |
+| 502 | `E_TTS_UNAVAILABLE` / `E_ALIGNER_UNAVAILABLE` | **永不返回**（降级矩阵兜底；见上方裁定回写）——预留定值，待 allowEstimated 闸门 |
+| 503 | `E_CAPABILITY_NOT_CONFIGURED` | 设计期名——实际定值为 `E_NOT_CONFIGURED`（渲染提交门；不建行不扣额） |
 | 500 | `E_INTERNAL` | 未分类内部错误，仅返回脱敏信息 |
 
 MCP tool result / error data 保留相同 `code`、可展示 message 和 `retryable`，不直接把 `webx.Error` 的 JSON tag 误当成 HTTP status 输出；REST 使用与项目现有错误信封一致的字段。

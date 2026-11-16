@@ -1,0 +1,73 @@
+{
+  "case_id": "VS-C08",
+  "ir_file": "ir/c08.degraded.json",
+  "status": "ok",
+  "frames_want": 600,
+  "frames_got": 600,
+  "geometry_want": "1080x1080@30",
+  "geometry_got": "1080x1080@30",
+  "duration_want_sec": 20,
+  "duration_got_sec": 20,
+  "ftyp": true,
+  "samples": [
+    {
+      "at_sec": 0,
+      "file": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C08\\frame-000.0.png",
+      "non_empty": true,
+      "solid_color": true,
+      "distinct_vs_first": true,
+      "color_stddev": 0
+    },
+    {
+      "at_sec": 10,
+      "file": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C08\\frame-010.0.png",
+      "non_empty": true,
+      "solid_color": false,
+      "distinct_vs_first": true,
+      "color_stddev": 0
+    },
+    {
+      "at_sec": 19.8,
+      "file": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C08\\frame-019.8.png",
+      "non_empty": true,
+      "solid_color": false,
+      "distinct_vs_first": true,
+      "color_stddev": 0
+    }
+  ],
+  "audio_rms": {
+    "present": true,
+    "mean_volume_db": -21.5,
+    "max_volume_db": -18.1
+  },
+  "decode_verify": {
+    "stderr_empty": true
+  },
+  "size_bytes": 531480,
+  "artifact": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C08\\output.mp4",
+  "render_ms": 51639,
+  "encode_ms": 51778,
+  "total_ms": 52774,
+  "images_served": 0,
+  "packets_per_sec": 30,
+  "notes": [
+    "voice fixture reused: l3-full/_fixtures/voice-440.mp3 (440 Hz sine)",
+    "MuxAV voice-only (440 Hz sine, gain 0.3): 270ms",
+    "frame @0.0s near-solid color (stddev \u003c 1.0) — recorded, single-sample flatness is a legitimate design baseline (e.g. C08 red F0)"
+  ],
+  "assertions": {
+    "codec": "h264",
+    "duration_formula_sec": 20,
+    "duration_frames_formula": 600,
+    "html_bytes": 398130,
+    "render_ms_per_frame": 86.065,
+    "samples_distinct": true,
+    "size_bytes": 531480,
+    "stddev@0.0": 0.9999469699368851,
+    "stddev@10.0": 69.92062321583605,
+    "stddev@19.8": 75.85056646962391,
+    "validate": "ok",
+    "voice_rms_max_db": -18.1,
+    "voice_rms_mean_db": -21.5
+  }
+}

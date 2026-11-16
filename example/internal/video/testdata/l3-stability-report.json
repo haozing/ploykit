@@ -1,0 +1,147 @@
+{
+  "report": "l3-stability-report",
+  "date": "2026-11-16",
+  "batch": 9,
+  "scope": "真服务端 L3 验证 — TestL3Smoke 多案多次（-count=3 × 3 批）服务端全链路稳定性 + reconciler 首次真机实地验证 + 并发提交小验证",
+  "test": "example/internal/video/testdata/l3_smoke_test.go (TestL3Smoke, go test -tags capx -count=3)",
+  "environment": {
+    "postgres": "postgres:16-alpine docker 容器",
+    "batch1_db": "pk-video-l3b-db :5437 (上一批残留容器，迁移链 1011 已就位)",
+    "batch2_db": "同 batch1 容器",
+    "batch3_db": "pk-video-l3-stab-db :5441 (全新空库，server 启动时自建迁移链)",
+    "chrome": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "ffmpeg": "C:/Program Files/ffmpeg/bin/ffmpeg.exe",
+    "server": "go build -tags capx ./cmd/app 真实二进制，随机端口，PLOYKIT_MCP_ENABLED=1",
+    "batch3_extra_env": "CAPX_RECONCILE_INTERVAL=10s (默认 5min 在 ~60s 的测试 server 生命期内永远打不到第一个 tick；10s interval 让 reconciler 在每次 server 生命周期内真正执行 4-6 轮对账)"
+  },
+
+  "batches": [
+    {
+      "batch": 1,
+      "db": "pk-video-l3b-db:5437 (复用容器)",
+      "runs": [
+        { "run": 1, "result": "FAIL", "duration_ms": 11510, "failure": "GET /config -> 504 E_TIMEOUT (服务端 webx.Timeouts(5s) 中间件超时, l3_smoke_test.go:333)", "note": "每批首个 server 进程冷启动后首个请求吃到 5s 预算" },
+        { "run": 2, "result": "PASS", "duration_ms": 27790 },
+        { "run": 3, "result": "PASS", "duration_ms": 23400 }
+      ],
+      "summary": "1 FAIL / 2 PASS (66.7%)"
+    },
+    {
+      "batch": 2,
+      "db": "pk-video-l3b-db:5437 (复用容器)",
+      "runs": [
+        { "run": 1, "result": "FAIL", "duration_ms": 60080, "failure": "l3cleanDB DELETE FROM video_render -> pgx 连接被远端重置 (wsarecv: connection forcibly closed, [::1]:5437 与 127.0.0.1:5437 双栈双腿同挂)", "note": "Docker Desktop 端口转发层 RST；postgres 日志同时段仅有 'invalid length of startup packet'（pgx 双栈并发拨号的正常败者腿痕迹），容器无重启、无 OOM、RestartCount=0" },
+        { "run": 2, "result": "PASS", "duration_ms": 54950 },
+        { "run": 3, "result": "PASS", "duration_ms": 22940 }
+      ],
+      "summary": "1 FAIL / 2 PASS (66.7%)"
+    },
+    {
+      "batch": 3,
+      "db": "pk-video-l3-stab-db:5441 (全新空库)",
+      "runs": [
+        { "run": 1, "result": "PASS", "duration_ms": 45720, "note": "含全新库迁移链自建（~20s）" },
+        { "run": 2, "result": "PASS", "duration_ms": 24000 },
+        { "run": 3, "result": "PASS", "duration_ms": 23960 }
+      ],
+      "summary": "3 PASS / 3 (100%) — go test 总时长 93.859s, 总体 PASS",
+      "render_evidence_db": [
+        { "id": "01a1e27e-d0d1-71fc-b171-58c3ba42094a", "status": "succeeded", "frames_total": 150, "submission_key": "l3-smoke-test-001", "render_wall_seconds": 16.4 },
+        { "id": "01a1e285-3d74-71b3-91d3-5a47e60fd9ab", "status": "succeeded", "frames_total": 150, "submission_key": "l3conc-key-A", "render_wall_seconds": 16.9 },
+        { "id": "01a1e285-3d75-7dca-a02b-2a7232a4aea2", "status": "succeeded", "frames_total": 150, "submission_key": "l3conc-key-B", "render_wall_seconds": 31.6, "note": "MaxWorkers=1 排队等待证据：B 在 A 之后完成，墙钟差 ≈ 一个完整渲染时长" }
+      ],
+      "audit_evidence": {
+        "video.render.created": 3,
+        "video.render.completed": 3,
+        "video.project.created": 2,
+        "video.ir.updated": 2
+      }
+    }
+  ],
+
+  "stability_summary": {
+    "total_runs": 9,
+    "pass": 7,
+    "fail": 2,
+    "pass_rate_excluding_first_run_per_batch": "6/6 (每批 run1 挂、run2/3 全绿的模式 2/2 批复现)",
+    "pattern": "两批失败都落在每批的第一次执行，且失败模式不同（batch1=服务端 5s 超时；batch2=Docker 端口代理连接重置）——均为环境级竞态，非业务代码回归；换全新容器后（batch3）首跑即绿",
+    "repeatability_verified": {
+      "random_email": "每次运行独立 email（l3-smoke-<unixnano>@test.local），三跑后 quota_consume_idem 按键各 1 行、无跨跑污染",
+      "idempotency_key": "固定键 l3-smoke-test-001 每跑清库后重用，idem ledger 恰 1 行、render 行恰 1 行",
+      "quota_zeroed_by_cleanup": "l3cleanDB 清 video_render/video_project/quota_counter/quota_consume_idem/audit_event 后每跑 used 从 0 → 1，三跑互不影响"
+    }
+  },
+
+  "failure_analysis": [
+    {
+      "batch": 1,
+      "run": 1,
+      "symptom": "GET /config 504 E_TIMEOUT after exactly 5s",
+      "root_cause_chain": [
+        "server 进程每 run 全新启动；run1 是批内首个 server，冷启动叠加（pool 建连 + 迁移检查 + 15 个 worker 启动）",
+        "GET /config 的 Extra 回调调 settings.Store.Effective()（settings/keys.go:250）——逐 key 串行单条 QueryRow（无缓存、无批量查询），30+ 内建 key + 产品注册 key = 30+ 次往返",
+        "webx.Timeouts(5s)（main.go:1540）对该请求计满 5s 判超时回 504",
+        "run2/3 的 server 二进制与页面缓存已在 OS 文件缓存中，启动更快不再触顶"
+      ],
+      "classification": "环境/性能竞态，非功能回归；潜在的 /config 性能改进点（Effective 可批量化或缓存），记录不修（纪律：不改业务代码）"
+    },
+    {
+      "batch": 2,
+      "run": 1,
+      "symptom": "pgx 连接在 DELETE 时被远端 RST（IPv4+IPv6 双腿同时）",
+      "root_cause_chain": [
+        "Docker Desktop (WSL2) 端口转发层对长闲连接的间歇性重置",
+        "postgres 侧无任何 FATAL/termination 记录；容器 State.Running=true, OOMKilled=false, RestartCount=0",
+        "日志中的 'invalid length of startup packet' 是 pgx 对 localhost 双栈并发拨号败者腿的正常痕迹，与 RST 无关"
+      ],
+      "classification": "纯环境抖动；换新容器（batch3）后不再复现。正式化测试对 'connection reset' 类失败无重试，如实报告"
+    }
+  ],
+
+  "reconciler_field_validation": {
+    "first_real_machine_run": true,
+    "how": "批 3 注入 CAPX_RECONCILE_INTERVAL=10s——默认 5min tick 在 ~60s 的测试 server 生命期内永远打不到第一轮；10s interval 让每 run 的 server 执行 4-6 轮 reconcileOnce",
+    "server_log_evidence": "l3conc-run/server.log: 'video render reconciler started interval=10s'（main.go:1320 注册的 Reconciler 实地启动）",
+    "zero_false_positive_evidence": {
+      "post_batch3_status_distribution": { "succeeded": 3, "queued": 0, "running": 0, "failed": 0, "interrupted": 0 },
+      "drift_join_query": "SELECT count(*) FROM video_render vr JOIN river_job rj ON rj.kind='video_render' AND rj.args->>'render_id'=vr.id::text AND rj.state IN ('discarded','cancelled') WHERE vr.status IN ('queued','running') → 0",
+      "no_row_misplaced_to_failed": "video_render 无一行被 reconciler 误置 failed（error 列无 'reconciled: river job terminal'）",
+      "no_wrong_quota_release": "全部 3 行 released_at IS NULL（succeeded 不释放配额，符合契约）；quota_period 全部 '2026-11'",
+      "audit_check": "video.render.created=3 / video.render.completed=3，无多余 video.render.failed 事件（reconciler 关行时会记 AuditRenderFailed——未出现，即从未误判）"
+    },
+    "caveat": "本轮验证的是 reconciler 的'零误判'半边（正常行不受影响）；'补救'半边（真 discarded 行被正确关闭+释放配额）由 render/reconciler_test.go 单测覆盖，真机注入 discarded 行的混沌路径不在本轮范围"
+  },
+
+  "concurrency_validation": {
+    "performed": true,
+    "method": "独立 Node 驱动脚本（C:/Users/bzlih/AppData/Local/Temp/l3conc/l3_conc.js，未进仓库）驱动真实二进制：同一项目、两个不同 Idempotency-Key（l3conc-key-A / l3conc-key-B）经 Promise.all 几乎同时提交（CAPX_RENDER_WORKERS=1 默认）",
+    "results": {
+      "both_submitted_201": true,
+      "distinct_render_ids": ["01a1e285-3d74-71b3-91d3-5a47e60fd9ab", "01a1e285-3d75-7dca-a02b-2a7232a4aea2"],
+      "not_idempotent_replay": "两行 submission_key 分别为 l3conc-key-A / l3conc-key-B——独立渲染而非重放",
+      "both_succeeded": true,
+      "frames": "两个均 150/150",
+      "queueing_evidence": "B 的 render_wall=31.6s ≈ A 的 16.9s + 一个完整渲染时长——MaxWorkers=1 下第二个排队等待",
+      "quota_used": 2,
+      "quota_consume_idem_rows": 2,
+      "video_render_rows": 2,
+      "released_at_all_null": true
+    },
+    "verdict": "并发路径全契约通过：非幂等重放、独立配额计费、串行执行不丢行"
+  },
+
+  "artifacts": {
+    "this_report": "example/internal/video/testdata/l3-stability-report.json",
+    "batch1_log": "宿主 /tmp/l3_stability_run.log",
+    "batch2_log": "宿主 /tmp/l3_stability_run2.log",
+    "batch3_log": "宿主 /tmp/l3_stability_run3.log",
+    "concurrence_result": "宿主 C:/Users/bzlih/AppData/Local/Temp/l3conc/conc-result.json",
+    "concurrency_driver_script": "宿主 C:/Users/bzlih/AppData/Local/Temp/l3conc/l3_conc.js（独立验证脚本，刻意不入库）"
+  },
+
+  "cleanup": {
+    "containers_stopped": ["pk-video-l3-stab-db (:5441, 本批新建)"],
+    "containers_kept": ["pk-video-l3b-db (:5437, 上一批遗留——本轮未新建也未删除，留给批次所有者处置)"],
+    "processes_killed": ["app.exe (并发验证 server, PID 38704 与 PID 12000)"]
+  }
+}

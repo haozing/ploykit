@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -257,6 +258,13 @@ func (s *ProjectService) Mutate(ctx context.Context, p *webx.Principal, projectI
 	if verr := Validate(ir); verr != nil {
 		return 0, nil, irInvalid(verr)
 	}
+	// Asset-reference existence check (§8.5a.2 ruling, option B): a dangling
+	// image src is rejected at write time, mirroring the targetElementId
+	// precedent (fail-fast at commit, no render row, no quota spend). Runs
+	// AFTER the pure Validate so field-shape errors keep their precedence.
+	if rerr := s.validateAssetRefs(ctx, p.WorkspaceID, ir); rerr != nil {
+		return 0, nil, rerr
+	}
 
 	// Full anchor re-resolution after every change (§4.3): prev resolved
 	// indexes feed drift measurement, results write back resolvedFrom.
@@ -321,6 +329,70 @@ func fieldMsg(field, msg string) string {
 		return msg
 	}
 	return field + ": " + msg
+}
+
+// validateAssetRefs enforces write-time existence for every image element src
+// (§8.5a.2 proposal, option B adopted): src must trace to a video_asset
+// registry row (the migration-1011 ownership credential — the same query
+// CanAccessKey runs for the serving gate), OR the storagex object itself must
+// exist. The OR branch is the legacy-compatibility window: assets uploaded
+// before round 8 have no registry row, and rejecting them would break every
+// existing project's IR on its next edit. The window is one-directional — new
+// uploads always register (UploadAsset aborts on a failed registration), so
+// the row branch covers everything created after round 8 and the storage
+// probe only serves the stock. Returns E_VIDEO_IR_INVALID with
+// details.field = elements[N].src so HTTP and MCP surface the same detail as
+// every other IR validation failure.
+//
+// The storage probe costs one Open on the local backend (stat-like) or one
+// GetObject head on S3; elements are capped at MaxElements (64), so the
+// worst-case probe count per write is bounded and only reached when NO src is
+// registered — the legacy window, not the steady state. DB is consulted
+// first and short-circuits per key (one statement per distinct src; the
+// common case is 0-2 image elements per project).
+func (s *ProjectService) validateAssetRefs(ctx context.Context, wsID string, ir *IR) error {
+	if s.pool == nil {
+		// Nil-pool unit contexts exercise the pure paths only; existence is
+		// unknowable without the registry, so fail open here (Mutate itself
+		// cannot run without a pool anyway — this keeps direct callers safe).
+		return nil
+	}
+	for i := range ir.Elements {
+		el := &ir.Elements[i]
+		if el.Type != ElementImage || el.Src == "" {
+			continue
+		}
+		// Registry first (the round-8+ path; also the ownership credential).
+		var n int
+		if err := s.pool.QueryRow(ctx,
+			`SELECT count(*) FROM video_asset WHERE key=$1 AND workspace_id=$2`,
+			el.Src, wsID).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		// Legacy window: unregistered but physically present. A storage
+		// failure reads as absence (fail-closed: the write is rejected with
+		// the same "asset not registered" verdict — a flaky backend must not
+		// silently admit a reference that cannot be served).
+		if s.ports.Store != nil {
+			body, _, oerr := s.ports.Store.Open(ctx, el.Src)
+			if oerr == nil {
+				if body != nil {
+					body.Close()
+				}
+				continue
+			}
+			if !errors.Is(oerr, os.ErrNotExist) {
+				s.log.Warn("video src existence probe failed; rejecting as unregistered",
+					"key", el.Src, "err", oerr)
+			}
+		}
+		return webx.NewError(400, "E_VIDEO_IR_INVALID",
+			fieldMsg(fmt.Sprintf("elements[%d].src", i), "asset not registered (upload via video_upload_asset / POST /api/video/assets first)"))
+	}
+	return nil
 }
 
 type originKey struct{}

@@ -4191,6 +4191,27 @@ paths:
   # 所有写方法 CSRF 由全局中间件覆盖（PAT 豁免）。
   # 渲染受配额 video_renders_monthly 门控（fail-closed；402 E_QUOTA_EXCEEDED）。
   # capx（Chrome/ffmpeg）未配置时渲染提交 503 E_NOT_CONFIGURED。
+  #
+  # ---- video 域错误码定值表（案例库 §8.5a 采纳版 2026-11-16；与代码逐一对应） ----
+  # 400 E_VIDEO_IR_INVALID          service.go irInvalid——IR 结构/枚举/引用校验失败（details.field 指明字段；
+  #                                 含素材引用写时校验：elements[N].src 悬空 = "asset not registered"）
+  # 400 E_VIDEO_ANCHOR_NOT_FOUND    service.go ErrAnchorNotFound——锚点词不存在于 words[]（AddEffect/Animate 写时）
+  # 400 E_VIDEO_ASSET_TOO_LARGE     service.go ErrAssetTooLarge——素材超出 UploadLimit（700KB）
+  # 400 E_VIDEO_ASSET_UNSUPPORTED   service.go ErrAssetUnsupported——素材 content-type 不在白名单
+  # 402 E_QUOTA_EXCEEDED            quota 域——月度渲染配额用尽（video_renders_monthly）
+  # 403 E_FORBIDDEN                 service.go ErrForbidden——非本工作区成员（平台管理员豁免）
+  # 404 E_VIDEO_PROJECT_NOT_FOUND   service.go ErrProjectNotFound——项目不存在或跨工作区（无存在性泄露）
+  # 404 E_VIDEO_RENDER_NOT_FOUND    service.go ErrRenderNotFound——渲染不存在或跨工作区
+  # 409 E_VIDEO_VERSION_CONFLICT    service.go conflict——乐观锁版本不符
+  # 503 E_NOT_CONFIGURED            service.go ErrNotConfigured——渲染能力未接线（capx 缺配置；不建行不扣额）
+  # 500 E_VIDEO_PREVIEW_INTERNAL    service.go ErrInternalPreview——预览 CSP 哈希不可用（内部错误）
+  # 降级语义（§8.5a.1 裁定：不新增 502 码）：SetScript 词推导永不阻塞——Synth → Aligner →
+  # EstimateWords 逐级兜底，供应商失败仅记日志；"未配置/配置了但失败"不可区分，调用方以响应的
+  # words_source（tts|aligner|estimated）判断来源。E_TTS_UNAVAILABLE / E_ALIGNER_UNAVAILABLE
+  # 按方案 A 变体**永不返回**，仅在架构文档预留（未来 allowEstimated 闸门落地时再定值）。
+  # 架构文档 10.5 中 E_VIDEO_UNSUPPORTED_SCHEMA / E_VIDEO_ASSET_NOT_FOUND /
+  # E_VIDEO_RENDER_ACTIVE / E_VIDEO_PAYLOAD_TOO_LARGE 同为代码侧未返回的预留行
+  # （前者读时宽容跳过、后三者分别归入 400 校验面/级联删除语义/全局 413 闸门）。
   /api/video/projects:
     get:
       operationId: listVideoProjects
@@ -4299,6 +4320,11 @@ paths:
         IR 是唯一真相源：MCP 工具、人肉 UI、预览 iframe、渲染 worker 全部读写同一份
         `video_project.ir`。写入时全量校验（§4.2.2 规则）并重解析全部词锚点
         （resolvedFrom 供审计）；校验失败 400（E_VIDEO_IR_INVALID + details.field）。
+        素材引用写时校验（案例库 §8.5a.2 裁定，方案 B）：image 元素的 src 必须可溯源——
+        有 video_asset 登记行（迁移 1011）或 storagex 对象物理存在（round8 之前上传的
+        存量素材兼容窗口）二者其一；悬空 src 拒绝为 400 E_VIDEO_IR_INVALID
+        （details.field = elements[N].src，文案 "asset not registered"）——
+        fail-fast 在提交期拒绝，不建 render 行、不扣配额。
       parameters:
         - name: id
           in: path
@@ -4334,7 +4360,11 @@ paths:
                     items:
                       $ref: '#/components/schemas/VideoAnchorResolution'
         '400':
-          description: IR 校验失败（E_VIDEO_IR_INVALID，details.field 指明字段）
+          description: |
+            IR 校验失败（E_VIDEO_IR_INVALID，details.field 指明字段）。触发面：
+            结构/枚举/参数非法（含 image 元素缺 src、src 非本域 key）、
+            effect.targetElementId 悬空引用、素材引用不可溯源
+            （elements[N].src 无 video_asset 登记行且 storagex 无对象——文案 "asset not registered"）。
           content:
             application/json:
               schema:
@@ -4395,6 +4425,10 @@ paths:
         提交即 `Quota.ConsumeWith(idempotency=render_id)`；渲染失败/中断自动 Release。
         capx 未配置（Chrome/ffmpeg 缺失）→ 503 E_NOT_CONFIGURED（不建 render 行、不扣配额）；
         配额用尽 → 402 E_QUOTA_EXCEEDED。渲染在 river `video` 队列串行（MaxWorkers 默认 1）。
+        400 E_VIDEO_IR_INVALID 的素材分支（§8.5a.2 方案 B）：快照 IR 含悬空 image src
+        （无登记行且无对象）同样在提交期拒绝——素材须先经 POST /api/video/assets
+        或 video_upload_asset 上传登记。渲染期素材损坏/被删走 render 终态 error 字段
+        （非本 4xx 面；归 P1 排期另提案）。
       parameters:
         - name: id
           in: path
@@ -6180,7 +6214,12 @@ components:
                 description: 未知 type 投影层跳过并 warn
               src:
                 type: string
-                description: 只允许本域 storagex key（video/<ws>/...）；外部 URL 拒绝（SSRF 面收窄）
+                description: |
+                  只允许本域 storagex key（video/<ws>/...）；外部 URL 拒绝（SSRF 面收窄）。
+                  写时存在性校验（§8.5a.2 方案 B）：须有 video_asset 登记行（迁移 1011，
+                  即先经 POST /api/video/assets 或 video_upload_asset 上传）或 storagex 对象
+                  物理存在（round8 前存量素材兼容窗口）；悬空 src → 400 E_VIDEO_IR_INVALID
+                  （details.field = elements[N].src）。
               x: { type: number }
               y: { type: number }
               w: { type: number }

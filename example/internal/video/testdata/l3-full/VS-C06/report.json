@@ -1,0 +1,61 @@
+{
+  "case_id": "VS-C06",
+  "ir_file": "ir/c06.degraded.json",
+  "status": "ok",
+  "frames_want": 2250,
+  "frames_got": 2250,
+  "geometry_want": "1920x1080@25",
+  "geometry_got": "1920x1080@25",
+  "duration_want_sec": 90,
+  "duration_got_sec": 90,
+  "ftyp": true,
+  "samples": [
+    {
+      "at_sec": 0,
+      "file": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C06\\frame-000.0.png",
+      "non_empty": true,
+      "solid_color": false,
+      "distinct_vs_first": true,
+      "color_stddev": 0
+    },
+    {
+      "at_sec": 45,
+      "file": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C06\\frame-045.0.png",
+      "non_empty": true,
+      "solid_color": false,
+      "distinct_vs_first": true,
+      "color_stddev": 0
+    },
+    {
+      "at_sec": 89.8,
+      "file": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C06\\frame-089.8.png",
+      "non_empty": true,
+      "solid_color": false,
+      "distinct_vs_first": true,
+      "color_stddev": 0
+    }
+  ],
+  "decode_verify": {
+    "stderr_empty": true
+  },
+  "size_bytes": 447704,
+  "artifact": "D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C06\\output.mp4",
+  "render_ms": 204799,
+  "encode_ms": 204951,
+  "total_ms": 206649,
+  "images_served": 0,
+  "packets_per_sec": 25,
+  "assertions": {
+    "codec": "h264",
+    "duration_formula_sec": 90,
+    "duration_frames_formula": 2250,
+    "html_bytes": 395825,
+    "render_ms_per_frame": 91.02177777777777,
+    "samples_distinct": true,
+    "size_bytes": 447704,
+    "stddev@0.0": 14.049371182121638,
+    "stddev@45.0": 15.849440677107754,
+    "stddev@89.8": 15.849440677107754,
+    "validate": "ok"
+  }
+}

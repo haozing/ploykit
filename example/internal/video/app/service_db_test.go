@@ -435,6 +435,105 @@ func TestIntegration_AssetRegistry_DeleteSweepFailOpen(t *testing.T) {
 	require.Len(t, store.puts, 1, "object itself survived the failed sweep (soft-delete acceptable)")
 }
 
+// imageEl is an image element referencing key (geometry valid per §4.2.2).
+func imageEl(id, key string) Element {
+	return Element{ID: id, Type: ElementImage, Src: key, X: 0, Y: 0, W: 100, H: 100, Z: 1}
+}
+
+// TestIntegration_ValidateAssetRefs covers the §8.5a.2 option-B ruling: a
+// dangling image src (no video_asset row AND no storage object) is rejected
+// at write time with E_VIDEO_IR_INVALID + details.field=elements[N].src;
+// a registered src (round-8+ path) and a physically-present but unregistered
+// src (legacy window) both pass. All Mutate callers (PUT IR + every MCP
+// mutation tool) flow through this check.
+func TestIntegration_ValidateAssetRefs(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	store := newFakeStore()
+	e.svc.ports.Store = store
+
+	p := e.principal(e.wsID)
+	pr, err := e.svc.Create(ctx, p, "素材引用校验")
+	require.NoError(t, err)
+
+	dangling := "video/" + e.wsID + "/assets/" + pr.ID + "/dangling.png"
+
+	// 1. Dangling src via UpsertElement → E_VIDEO_IR_INVALID.
+	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, imageEl("el_bad", dangling), nil)
+	require.Error(t, err)
+	var we *webx.Error
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_IR_INVALID", we.Code)
+	assert.Contains(t, we.Message, "elements[0].src", "field path embedded in the message (details.field surface)")
+	assert.Contains(t, we.Message, "asset not registered")
+
+	// 2. Dangling src via wholesale PUT-IR Mutate → same rejection (the
+	// REST PUT /ir path), and the row is untouched (fail before UPDATE).
+	_, _, err = e.svc.Mutate(ctx, p, pr.ID, nil, func(ir *IR) error {
+		ir.Elements = append(ir.Elements, imageEl("el_bad2", dangling))
+		return nil
+	})
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_IR_INVALID", we.Code)
+	got, gerr := e.svc.Get(ctx, p, pr.ID)
+	require.NoError(t, gerr)
+	assert.Len(t, got.IR.Elements, 0, "rejected write must not persist the element")
+
+	// 3. Registered src passes the write (the round-8+ upload path).
+	regKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", []byte("png-bytes"))
+	require.NoError(t, err)
+	v1, _, err := e.svc.UpsertElement(ctx, p, pr.ID, imageEl("el_ok", regKey), nil)
+	require.NoError(t, err, "registered src must pass")
+	assert.Equal(t, 2, v1)
+
+	// 4. Legacy window: physically present but unregistered → passes.
+	legacyKey := "video/" + e.wsID + "/assets/" + pr.ID + "/legacy.png"
+	_, lerr := store.Put(ctx, legacyKey, "image/png", strings.NewReader("legacy-bytes"))
+	require.NoError(t, lerr)
+	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, imageEl("el_legacy", legacyKey), nil)
+	require.NoError(t, err, "unregistered but present object passes the legacy window")
+
+	// 5. Offending element index surfaces in the field path: after the three
+	// appends above (el_ok / el_legacy / el_legacy2) the bad element lands
+	// at elements[3].
+	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, imageEl("el_legacy2", legacyKey), nil)
+	require.NoError(t, err)
+	// append a bad element through wholesale mutation
+	_, _, err = e.svc.Mutate(ctx, p, pr.ID, nil, func(ir *IR) error {
+		ir.Elements = append(ir.Elements, imageEl("el_bad3", dangling))
+		return nil
+	})
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Contains(t, we.Message, "elements[3].src", "index of the offending element in the field path")
+
+	// 6. Foreign workspace row cannot satisfy the check (workspace-scoped).
+	// The env fake denies wsForeign membership, so seed the row directly.
+	var foreignWsID, foreignProjID string
+	foreignWsID = e.wsForeign
+	require.NoError(t, e.pool.QueryRow(ctx, `
+		INSERT INTO video_project (id, workspace_id, title, ir, created_by, updated_by)
+		VALUES ($1, $2, '他域项目', '{}'::jsonb, 'tester', 'tester') RETURNING id`,
+		ids.NewV7().String(), foreignWsID).Scan(&foreignProjID))
+	foreignKey := "video/" + foreignWsID + "/assets/" + foreignProjID + "/f.png"
+	_, err = e.pool.Exec(ctx, `
+		INSERT INTO video_asset (id, workspace_id, project_id, key, kind, bytes, sha256, content_type)
+		VALUES ($1, $2, $3, $4, 'image', 2, 'beef', 'image/png')`,
+		ids.NewV7().String(), foreignWsID, foreignProjID, foreignKey)
+	require.NoError(t, err)
+	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, imageEl("el_foreign", foreignKey), nil)
+	require.Error(t, err, "another workspace's registered key is not a credential here")
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_IR_INVALID", we.Code)
+
+	// 7. Non-image elements and empty src stay exempt (shape rules only).
+	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, Element{ID: "el_text", Type: ElementText, Text: "hi", X: 0, Y: 0, W: 10, H: 10}, nil)
+	require.NoError(t, err)
+	_, _, err = e.svc.UpsertElement(ctx, p, pr.ID, Element{ID: "el_shape", Type: ElementShape, X: 0, Y: 0, W: 10, H: 10}, nil)
+	require.NoError(t, err)
+}
+
 const httpStatusUnavailable = 503
 
 func errorAsWebx(err error, target **webx.Error) bool {

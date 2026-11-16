@@ -1,0 +1,607 @@
+{
+  "layer": "L3-full",
+  "run_id": "20261116-115203-l3-full",
+  "method": "§7.4 full-length: degraded IR (C01 built in-code c01IR(), C02-C05 ir/c0X.degraded.json) → Validate → Projector.HTML (image elements = gray 64×64 placeholder data-URIs via DataURIResolver) → capx RenderFrames FULL duration (real headless Chrome) → FrameWriter/EncodePNGStream (libx264 CRF18 medium) → C01/C05 MuxAV +440Hz sine voice (duration-aligned mp3) / C02-C04 direct → l3-full/\u003ccase\u003e/output.mp4; assertions: ftyp, geometry/fps, video-stream duration ±1 frame, -count_packets exact frames, 3-point frame extraction (not black / not white / has ink), C01/C05 mean_volume\u003e-50dB, ffmpeg -v error full decode re-verify, size/bitrate calibration records",
+  "env": [
+    "os=windows/amd64",
+    "host=DESKTOP-IGMKJLG",
+    "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "ffmpeg=C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe",
+    "go=go1.27.0",
+    "ffprobe=C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe"
+  ],
+  "cases": [
+    {
+      "case_id": "VS-C01",
+      "ir_file": "(in-code c01IR() — l1_render_test.go degraded projection; el_product image removed, recorded conversion)",
+      "recorded_at": "2026-11-16T12:21:08+08:00",
+      "status": "pass",
+      "notes": [
+        "DurationFrames=450 (ceil(15x30)), silent-degradation audio block kept as-is (full length, no truncation — voice duration drives DurationFrames when longer)",
+        "voice branch: 440 Hz sine mp3 15s (duration-aligned), voice-only mux (capx MuxAV, video stream-copied)"
+      ],
+      "spec": {
+        "duration_frames": 450,
+        "duration_sec": 15,
+        "expects_image_elements": false,
+        "fps": 30,
+        "height": 1920,
+        "voice": true,
+        "width": 1080
+      },
+      "duration_frames_planned": 450,
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 15,
+        "nb_frames": 0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "duration": 15
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 15.066667
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 230400,\r\n            \"duration\": \"15.000000\",\r\n            \"bit_rate\": \"147157\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.…(truncated)"
+      },
+      "nb_read_packets": 450,
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18.1,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C01\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:15.07, start: 0.000000, bitrate: 220 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1080x1920, 147 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 68 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 000002c8c8c95280] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 000002c8c8c95280] n_samples: 662528\n[Parsed_volumedetect_0 @ 000002c8c8c95280] mean_volume: -21.5 dB\n[Parsed_volumedetect_0 @ 000002c8c8c95280] max_volume: -18.1 dB\n[Parsed_volumedetect_0 @ 000002c8c8c95280] histogram_18db: 140154\n[out#0/null @ 000002c8c8c94a00] video:0KiB audio:1294KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:15.06 bitrate=N/A speed=1.53e+03x    \n"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "samples": [
+        {
+          "label": "start",
+          "frame": 45,
+          "time_sec": 1.5,
+          "png_bytes": 58381,
+          "png_compression_ratio": 0.009384805812757201,
+          "stats": {
+            "mean_lum": 182.79819963328453,
+            "std_lum": 16.909950043687914,
+            "dark_ratio": 0.0035074266975308644,
+            "bright_ratio": 0,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "middle",
+          "frame": 225,
+          "time_sec": 7.5,
+          "png_bytes": 67518,
+          "png_compression_ratio": 0.010853587962962962,
+          "stats": {
+            "mean_lum": 242.35671993256713,
+            "std_lum": 25.759341630176927,
+            "dark_ratio": 0.003562885802469136,
+            "bright_ratio": 0.9468711419753086,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "tail",
+          "frame": 448,
+          "time_sec": 14.933333333333334,
+          "png_bytes": 91087,
+          "png_compression_ratio": 0.01464232896090535,
+          "stats": {
+            "mean_lum": 241.06594890569878,
+            "std_lum": 30.31570057173252,
+            "dark_ratio": 0.009266975308641975,
+            "bright_ratio": 0.9402464313271605,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        }
+      ],
+      "pairwise_deltas": [
+        {
+          "pair": "start-middle",
+          "mean_lum_delta": 59.558520299282605,
+          "std_lum_delta": 8.849391586489013
+        },
+        {
+          "pair": "middle-tail",
+          "mean_lum_delta": 1.2907710268683559,
+          "std_lum_delta": 4.556358941555594
+        }
+      ],
+      "render_ms": 41470,
+      "render_ms_per_frame": 92.15555555555555,
+      "total_ms": 42744,
+      "mp4_bytes": 415705,
+      "video_only_bytes": 280855,
+      "voice_bytes": 120598,
+      "mp4_bitrate_kbps": 221.70933333333332,
+      "images_served": 0,
+      "artifact": "l3-full/VS-C01/output.mp4"
+    },
+    {
+      "case_id": "VS-C02",
+      "ir_file": "ir/c02.degraded.json",
+      "recorded_at": "2026-11-16T12:08:31+08:00",
+      "status": "pass",
+      "notes": [
+        "DurationFrames=750 (ceil(30x25)), silent-degradation audio block kept as-is (full length, no truncation — voice duration drives DurationFrames when longer)",
+        "image elements served 4 gray 64×64 placeholder PNGs via DataURIResolver (no-network document, §4.4.5)",
+        "silent clip (no audio mux — C01/C05 carry this batch's audio branch)"
+      ],
+      "spec": {
+        "duration_frames": 750,
+        "duration_sec": 30,
+        "expects_image_elements": true,
+        "fps": 25,
+        "height": 1080,
+        "voice": false,
+        "width": 1920
+      },
+      "duration_frames_planned": 750,
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 30,
+        "nb_frames": 0,
+        "width": 1920,
+        "height": 1080,
+        "fps": 25,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 25,
+            "duration": 30
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"25/1\",\r\n            \"avg_frame_rate\": \"25/1\",\r\n            \"time_base\": \"1/12800\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.080000\",\r\n            \"duration_ts\": 384000,\r\n            \"duration\": \"30.000000\",\r\n            \"bit_rate\": \"61645\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.2…(truncated)"
+      },
+      "nb_read_packets": 750,
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "samples": [
+        {
+          "label": "start",
+          "frame": 75,
+          "time_sec": 3,
+          "png_bytes": 63916,
+          "png_compression_ratio": 0.010274562757201646,
+          "stats": {
+            "mean_lum": 23.011098905983346,
+            "std_lum": 23.427081425857885,
+            "dark_ratio": 0.9906823881172839,
+            "bright_ratio": 0.006553337191358024,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "middle",
+          "frame": 375,
+          "time_sec": 15,
+          "png_bytes": 67236,
+          "png_compression_ratio": 0.010808256172839505,
+          "stats": {
+            "mean_lum": 32.20028704937522,
+            "std_lum": 23.66448989520891,
+            "dark_ratio": 0.9946855709876543,
+            "bright_ratio": 0.0021412037037037038,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "tail",
+          "frame": 748,
+          "time_sec": 29.92,
+          "png_bytes": 45785,
+          "png_compression_ratio": 0.007359985853909465,
+          "stats": {
+            "mean_lum": 27.460056942264586,
+            "std_lum": 21.11728339071173,
+            "dark_ratio": 0.9962075617283951,
+            "bright_ratio": 0,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        }
+      ],
+      "pairwise_deltas": [
+        {
+          "pair": "start-middle",
+          "mean_lum_delta": 9.189188143391874,
+          "std_lum_delta": 0.2374084693510241
+        },
+        {
+          "pair": "middle-tail",
+          "mean_lum_delta": 4.740230107110634,
+          "std_lum_delta": 2.5472065044971792
+        }
+      ],
+      "render_ms": 70183,
+      "render_ms_per_frame": 93.57733333333333,
+      "total_ms": 71565,
+      "mp4_bytes": 238505,
+      "video_only_bytes": 238505,
+      "mp4_bitrate_kbps": 63.60133333333333,
+      "images_served": 4,
+      "artifact": "l3-full/VS-C02/output.mp4"
+    },
+    {
+      "case_id": "VS-C03",
+      "ir_file": "ir/c03.degraded.json",
+      "recorded_at": "2026-11-16T12:13:59+08:00",
+      "status": "pass",
+      "notes": [
+        "DurationFrames=1350 (ceil(45x30)), silent-degradation audio block kept as-is (full length, no truncation — voice duration drives DurationFrames when longer)",
+        "silent clip (no audio mux — C01/C05 carry this batch's audio branch)",
+        "tail sample placed at F1092 (last IR window endFrame=1094 minus 2; hide rule [startFrame+1,endFrame] closes content at endFrame exactly — the designed absolute tail F1349 is the bare-background end state; MP4 duration/count_packets still assert the full 1350 frames)"
+      ],
+      "spec": {
+        "duration_frames": 1350,
+        "duration_sec": 45,
+        "expects_image_elements": false,
+        "fps": 30,
+        "height": 1920,
+        "voice": false,
+        "width": 1080
+      },
+      "duration_frames_planned": 1350,
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 45,
+        "nb_frames": 0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "duration": 45
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 691200,\r\n            \"duration\": \"45.000000\",\r\n            \"bit_rate\": \"64474\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.2…(truncated)"
+      },
+      "nb_read_packets": 1350,
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "samples": [
+        {
+          "label": "start",
+          "frame": 135,
+          "time_sec": 4.5,
+          "png_bytes": 65134,
+          "png_compression_ratio": 0.010470357510288067,
+          "stats": {
+            "mean_lum": 28.283998866120147,
+            "std_lum": 28.735563273095927,
+            "dark_ratio": 0.9795944251543209,
+            "bright_ratio": 0.00419994212962963,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "middle",
+          "frame": 675,
+          "time_sec": 22.5,
+          "png_bytes": 81434,
+          "png_compression_ratio": 0.01309059927983539,
+          "stats": {
+            "mean_lum": 43.768992132266135,
+            "std_lum": 61.187956702902596,
+            "dark_ratio": 0.9055907600308643,
+            "bright_ratio": 0.08676408179012346,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "tail",
+          "frame": 1092,
+          "time_sec": 36.4,
+          "png_bytes": 44752,
+          "png_compression_ratio": 0.007193930041152263,
+          "stats": {
+            "mean_lum": 26.910980800365962,
+            "std_lum": 18.65165826976138,
+            "dark_ratio": 0.9780811149691359,
+            "bright_ratio": 0,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        }
+      ],
+      "pairwise_deltas": [
+        {
+          "pair": "start-middle",
+          "mean_lum_delta": 15.484993266145988,
+          "std_lum_delta": 32.45239342980667
+        },
+        {
+          "pair": "middle-tail",
+          "mean_lum_delta": 16.858011331900173,
+          "std_lum_delta": 42.53629843314121
+        }
+      ],
+      "render_ms": 123405,
+      "render_ms_per_frame": 91.41111111111111,
+      "total_ms": 125022,
+      "mp4_bytes": 375063,
+      "video_only_bytes": 375063,
+      "mp4_bitrate_kbps": 66.67786666666666,
+      "images_served": 0,
+      "artifact": "l3-full/VS-C03/output.mp4"
+    },
+    {
+      "case_id": "VS-C04",
+      "ir_file": "ir/c04.degraded.json",
+      "recorded_at": "2026-11-16T12:16:16+08:00",
+      "status": "pass",
+      "notes": [
+        "DurationFrames=1800 (ceil(60x30)), silent-degradation audio block kept as-is (full length, no truncation — voice duration drives DurationFrames when longer)",
+        "silent clip (no audio mux — C01/C05 carry this batch's audio branch)"
+      ],
+      "spec": {
+        "duration_frames": 1800,
+        "duration_sec": 60,
+        "expects_image_elements": false,
+        "fps": 30,
+        "height": 1080,
+        "voice": false,
+        "width": 1920
+      },
+      "duration_frames_planned": 1800,
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 60,
+        "nb_frames": 0,
+        "width": 1920,
+        "height": 1080,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "duration": 60
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1920,\r\n            \"height\": 1080,\r\n            \"coded_width\": 1920,\r\n            \"coded_height\": 1080,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 921600,\r\n            \"duration\": \"60.000000\",\r\n            \"bit_rate\": \"87543\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.2…(truncated)"
+      },
+      "nb_read_packets": 1800,
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "samples": [
+        {
+          "label": "start",
+          "frame": 180,
+          "time_sec": 6,
+          "png_bytes": 68347,
+          "png_compression_ratio": 0.010986850565843621,
+          "stats": {
+            "mean_lum": 242.33272948674178,
+            "std_lum": 12.612435368475865,
+            "dark_ratio": 0.0036376350308641977,
+            "bright_ratio": 0.9937509645061728,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "middle",
+          "frame": 900,
+          "time_sec": 30,
+          "png_bytes": 128290,
+          "png_compression_ratio": 0.020622749485596708,
+          "stats": {
+            "mean_lum": 226.50579745225747,
+            "std_lum": 45.05611907083509,
+            "dark_ratio": 0.012329282407407407,
+            "bright_ratio": 0.8731172839506173,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "tail",
+          "frame": 1798,
+          "time_sec": 59.93333333333333,
+          "png_bytes": 144704,
+          "png_compression_ratio": 0.023261316872427985,
+          "stats": {
+            "mean_lum": 223.51998568650734,
+            "std_lum": 46.69177172451091,
+            "dark_ratio": 0.014041280864197531,
+            "bright_ratio": 0.8338749035493828,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        }
+      ],
+      "pairwise_deltas": [
+        {
+          "pair": "start-middle",
+          "mean_lum_delta": 15.826932034484315,
+          "std_lum_delta": 32.44368370235922
+        },
+        {
+          "pair": "middle-tail",
+          "mean_lum_delta": 2.985811765750128,
+          "std_lum_delta": 1.6356526536758196
+        }
+      ],
+      "render_ms": 164840,
+      "render_ms_per_frame": 91.57777777777778,
+      "total_ms": 166547,
+      "mp4_bytes": 672829,
+      "video_only_bytes": 672829,
+      "mp4_bitrate_kbps": 89.71053333333333,
+      "images_served": 0,
+      "artifact": "l3-full/VS-C04/output.mp4"
+    },
+    {
+      "case_id": "VS-C05",
+      "ir_file": "ir/c05.degraded.json",
+      "recorded_at": "2026-11-16T12:19:13+08:00",
+      "status": "pass",
+      "notes": [
+        "DurationFrames=900 (ceil(30x30)), silent-degradation audio block kept as-is (full length, no truncation — voice duration drives DurationFrames when longer)",
+        "image elements served 2 gray 64×64 placeholder PNGs via DataURIResolver (no-network document, §4.4.5)",
+        "voice branch: 440 Hz sine mp3 30s (duration-aligned), voice-only mux (capx MuxAV, video stream-copied)",
+        "tail sample placed at F897 (last IR window endFrame=899 minus 2; hide rule [startFrame+1,endFrame] closes content at endFrame exactly — the designed absolute tail F899 is the bare-background end state; MP4 duration/count_packets still assert the full 900 frames)"
+      ],
+      "spec": {
+        "duration_frames": 900,
+        "duration_sec": 30,
+        "expects_image_elements": true,
+        "fps": 30,
+        "height": 1920,
+        "voice": true,
+        "width": 1080
+      },
+      "duration_frames_planned": 900,
+      "ffprobe": {
+        "tool": "ffprobe",
+        "duration": 30,
+        "nb_frames": 0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30,
+        "has_ftyp": true,
+        "streams": [
+          {
+            "kind": "video",
+            "codec": "h264",
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "duration": 30
+          },
+          {
+            "kind": "audio",
+            "codec": "aac",
+            "duration": 30.066667
+          }
+        ],
+        "raw_output": "{\r\n    \"streams\": [\r\n        {\r\n            \"index\": 0,\r\n            \"codec_name\": \"h264\",\r\n            \"codec_long_name\": \"H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\",\r\n            \"profile\": \"High\",\r\n            \"codec_type\": \"video\",\r\n            \"codec_tag_string\": \"avc1\",\r\n            \"codec_tag\": \"0x31637661\",\r\n            \"width\": 1080,\r\n            \"height\": 1920,\r\n            \"coded_width\": 1080,\r\n            \"coded_height\": 1920,\r\n            \"closed_captions\": 0,\r\n            \"film_grain\": 0,\r\n            \"has_b_frames\": 2,\r\n            \"pix_fmt\": \"yuv420p\",\r\n            \"level\": 40,\r\n            \"chroma_location\": \"left\",\r\n            \"field_order\": \"progressive\",\r\n            \"refs\": 1,\r\n            \"is_avc\": \"true\",\r\n            \"nal_length_size\": \"4\",\r\n            \"id\": \"0x1\",\r\n            \"r_frame_rate\": \"30/1\",\r\n            \"avg_frame_rate\": \"30/1\",\r\n            \"time_base\": \"1/15360\",\r\n            \"start_pts\": 1024,\r\n            \"start_time\": \"0.066667\",\r\n            \"duration_ts\": 460800,\r\n            \"duration\": \"30.000000\",\r\n            \"bit_rate\": \"58041\",\r\n            \"bits_per_raw_sample\": \"8\",\r\n            \"extradata_size\": 47,\r\n            \"disposition\": {\r\n                \"default\": 1,\r\n                \"dub\": 0,\r\n                \"original\": 0,\r\n                \"comment\": 0,\r\n                \"lyrics\": 0,\r\n                \"karaoke\": 0,\r\n                \"forced\": 0,\r\n                \"hearing_impaired\": 0,\r\n                \"visual_impaired\": 0,\r\n                \"clean_effects\": 0,\r\n                \"attached_pic\": 0,\r\n                \"timed_thumbnails\": 0,\r\n                \"non_diegetic\": 0,\r\n                \"captions\": 0,\r\n                \"descriptions\": 0,\r\n                \"metadata\": 0,\r\n                \"dependent\": 0,\r\n                \"still_image\": 0,\r\n                \"multilayer\": 0\r\n            },\r\n            \"tags\": {\r\n                \"language\": \"und\",\r\n                \"handler_name\": \"VideoHandler\",\r\n                \"vendor_id\": \"[0][0][0][0]\",\r\n                \"encoder\": \"Lavc61.2…(truncated)"
+      },
+      "nb_read_packets": 900,
+      "audio": {
+        "present": true,
+        "mean_volume_db": -21.5,
+        "max_volume_db": -18.1,
+        "volumedetect_raw": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\\code\\ploykit\\example\\internal\\video\\testdata\\l3-full\\VS-C05\\output.mp4':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Duration: 00:00:30.07, start: 0.000000, bitrate: 131 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1080x1920, 58 kb/s, 30 fps, 30 tbr, 15360 tbn (default)\n    Metadata:\n      handler_name    : VideoHandler\n      vendor_id       : [0][0][0][0]\n      encoder         : Lavc61.24.100 libx264\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 69 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 00000152583e4680] n_samples: 0\nStream mapping:\n  Stream #0:1 -\u003e #0:0 (aac (native) -\u003e pcm_s16le (native))\nPress [q] to stop, [?] for help\nOutput #0, null, to 'pipe:':\n  Metadata:\n    major_brand     : iso5\n    minor_version   : 512\n    compatible_brands: iso5iso6mp41\n    encoder         : Lavf61.9.100\n  Stream #0:0(und): Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s (default)\n    Metadata:\n      encoder         : Lavc61.24.100 pcm_s16le\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[Parsed_volumedetect_0 @ 00000152583e4240] n_samples: 1324032\n[Parsed_volumedetect_0 @ 00000152583e4240] mean_volume: -21.5 dB\n[Parsed_volumedetect_0 @ 00000152583e4240] max_volume: -18.1 dB\n[Parsed_volumedetect_0 @ 00000152583e4240] histogram_18db: 279967\n[out#0/null @ 00000152583e3cc0] video:0KiB audio:2586KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown\nsize=N/A time=00:00:30.06 bitrate=N/A speed=1.73e+03x    \n"
+      },
+      "decode_verify": {
+        "stderr_empty": true
+      },
+      "samples": [
+        {
+          "label": "start",
+          "frame": 90,
+          "time_sec": 3,
+          "png_bytes": 49109,
+          "png_compression_ratio": 0.007894322273662551,
+          "stats": {
+            "mean_lum": 37.85535989411101,
+            "std_lum": 32.42574755050709,
+            "dark_ratio": 0.9947593557098765,
+            "bright_ratio": 0.0032267554012345677,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "middle",
+          "frame": 450,
+          "time_sec": 15,
+          "png_bytes": 20395,
+          "png_compression_ratio": 0.0032785172325102883,
+          "stats": {
+            "mean_lum": 40.05263725522539,
+            "std_lum": 36.006579276456876,
+            "dark_ratio": 0.9887750771604938,
+            "bright_ratio": 0.010341435185185184,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        },
+        {
+          "label": "tail",
+          "frame": 897,
+          "time_sec": 29.9,
+          "png_bytes": 12858,
+          "png_compression_ratio": 0.002066936728395062,
+          "stats": {
+            "mean_lum": 38.29093281078482,
+            "std_lum": 29.97133222112157,
+            "dark_ratio": 0.9983815586419753,
+            "bright_ratio": 0,
+            "pixels": 2073600
+          },
+          "verdict": "ok"
+        }
+      ],
+      "pairwise_deltas": [
+        {
+          "pair": "start-middle",
+          "mean_lum_delta": 2.1972773611143808,
+          "std_lum_delta": 3.5808317259497855
+        },
+        {
+          "pair": "middle-tail",
+          "mean_lum_delta": 1.761704444440575,
+          "std_lum_delta": 6.035247055335304
+        }
+      ],
+      "render_ms": 91047,
+      "render_ms_per_frame": 101.16333333333333,
+      "total_ms": 92701,
+      "mp4_bytes": 495415,
+      "video_only_bytes": 226320,
+      "voice_bytes": 240552,
+      "mp4_bitrate_kbps": 132.11066666666667,
+      "images_served": 2,
+      "artifact": "l3-full/VS-C05/output.mp4"
+    }
+  ],
+  "totals": {
+    "pass": 5,
+    "fail": 0
+  },
+  "evidence": [
+    "[方法] L3 不做逐像素 golden 比较——只断言成片结构完整（每案 3 个时间点抽帧非黑非白且有墨迹）；样本对间统计差记录为『内容随时间变化』证据，降级 IR 的长静态段如实记 note",
+    "[报告] cases[] 按 case_id 合并——每个案可单独重跑（go test -run TestL3FullC0X），报告增量更新",
+    "[校准] round3 数据对齐：mp4_bytes / mp4_bitrate_kbps / 抽帧 png_bytes + png_compression_ratio（png_bytes ÷ w×h×3 裸像素字节）"
+  ]
+}

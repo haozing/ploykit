@@ -106,7 +106,10 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		ExpectedVersion *int   `json:"expected_version,omitempty" jsonschema:"optimistic-lock version; omit to skip the check"`
 	}
 	mcpAdd(s, "video_set_script",
-		"Replace the narration script. Words are re-derived and every effect/animation anchor is re-resolved; the response lists which anchors drifted.",
+		"Replace the narration script. Words are re-derived and every effect/animation anchor is re-resolved; the response lists which anchors drifted. "+
+			"Word derivation degrades and never fails: when TTS is unwired or its vendor call errors, the aligner is tried next; when neither succeeds "+
+			"the words fall back to the char-proportional estimate (words_source=\"estimated\"). There is NO E_TTS_UNAVAILABLE / E_ALIGNER_UNAVAILABLE error "+
+			"code — a missing or failing voice capability is not an error surface; check words_source in the response instead (§8.5a ruling).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in setScriptIn) (any, error) {
 			version, resolutions, source, err := deps.Svc.SetScript(ctx, webx.PrincipalFrom(ctx),
 				in.ProjectID, in.Script, in.ExpectedVersion)
@@ -149,11 +152,11 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	// ---- video_upsert_element (video:write) ----
 	type upsertElementIn struct {
 		ProjectID       string         `json:"project_id" jsonschema:"project id"`
-		Element         map[string]any `json:"element" jsonschema:"element object {id,type:image|text|shape,src?,x,y,w,h,z,animations?}; src must be a video/<workspace>/ storage key"`
+		Element         map[string]any `json:"element" jsonschema:"element object {id,type:image|text|shape,src?,x,y,w,h,z,animations?}; src must be a video/<workspace>/ storage key uploaded first (unregistered src = 400 E_VIDEO_IR_INVALID details.field elements[N].src)"`
 		ExpectedVersion *int           `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 	}
 	mcpAdd(s, "video_upsert_element",
-		"Insert or replace one canvas element by id.",
+		"Insert or replace one canvas element by id. Image src must reference an uploaded asset (video_upload_asset first); a dangling src is rejected at write time with E_VIDEO_IR_INVALID (asset not registered).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in upsertElementIn) (any, error) {
 			el, err := decodeElement(in.Element)
 			if err != nil {
