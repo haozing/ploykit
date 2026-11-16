@@ -16,3 +16,5 @@ example/web/cookies.txt
 !test-docs/**/*.log
 .zcode/
 packages/ui/.vitest/
+# video 域素材/成片落盘（VIDEO_DATA_DIR 默认 data/video）：用户数据不入库
+example/data/video/
