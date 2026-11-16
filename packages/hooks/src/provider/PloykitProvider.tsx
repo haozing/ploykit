@@ -1,7 +1,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError, setWorkspaceIdProvider } from '@ploykit/client'
+import { api, ApiError, armWorkspaceGate, signalWorkspaceReady, setWorkspaceIdProvider } from '@ploykit/client'
 import { fetchMeNullable } from '../hooks/useAuthState'
 import type {
   APIUser, APIWorkspace, APISubscription, APIOrder, APIPlan,
@@ -371,18 +371,34 @@ function WorkspaceLayer({ children, workspaceHeaderSource }: {
   const headerId = workspaceHeaderSource === 'kit' ? current?.id ?? null : null
   const registeredHeaderId = useRef<string | null | undefined>(undefined)
   useLayoutEffect(() => {
+    // kit 模式先武装 gate（同一次 layout effect 内先 arm 后 signal，避免
+    // useEffect 版 arm 晚于 signal 执行造成 arm-signal 死锁——layout effect
+    // 先于 useEffect 是 React 语义）。consumer 模式不武装。
+    if (workspaceHeaderSource === 'kit' && registeredHeaderId.current === undefined) {
+      armWorkspaceGate()
+    }
     if (workspaceHeaderSource !== 'kit') {
       // 中途切到 consumer 模式：撤回自己的注册，把全局缝让给消费方。
       if (registeredHeaderId.current !== undefined) {
         registeredHeaderId.current = undefined
         setWorkspaceIdProvider(() => null)
+        signalWorkspaceReady() // gate 若被武装（武装只发生在 kit 模式），放行等待中的请求
       }
       return
     }
     if (registeredHeaderId.current === headerId) return
     registeredHeaderId.current = headerId
     setWorkspaceIdProvider(() => headerId)
+    // header 值就位（含首次 null→real 与 real→null）：放行 client 侧 hydration gate。
+    // 工作区查询不再裸发无头 400（studio 首开走查实拍：gate 前 400 会被
+    // react-query 缓存成首屏错误）。
+    signalWorkspaceReady()
   }, [headerId, workspaceHeaderSource])
+
+  // 卸载兜底放行，避免卸载后残留挂起的请求（测试环境尤其会挂死）。
+  useEffect(() => {
+    return () => signalWorkspaceReady()
+  }, [])
 
   // 卸载时清掉自己的注册，避免留下指向已卸载树状态的陈旧 getter。
   useEffect(() => {

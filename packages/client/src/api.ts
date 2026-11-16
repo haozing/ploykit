@@ -60,10 +60,33 @@ let csrfHeal: Promise<void> | null = null
 
 type WorkspaceIdProvider = () => string | null
 let workspaceIdProvider: WorkspaceIdProvider = () => null
-
+// Set by PloykitProvider's kit mode (workspaceHeaderSource==='kit'): while
+// registered, a null workspace id means "provider not hydrated yet" (auth +
+// workspaces queries still in flight), NOT "no workspace" — the backend
+// rejects header-less /api calls with 400 E_VALIDATION and react-query
+// caches that failure as the page's first impression (studio first-open
+// walkthrough). Await one microtask-drained gate instead of sending bare.
+let providerGate: Promise<void> | null = null
 
 export function setWorkspaceIdProvider(provider: WorkspaceIdProvider): void {
   workspaceIdProvider = provider
+}
+
+/** Test/consumer seam: arm the hydration gate before first render. */
+export function armWorkspaceGate(): void {
+  providerGate = new Promise((resolve) => { providerGateResolve = resolve })
+}
+let providerGateResolve: (() => void) | null = null
+
+/** Called by the kit provider once the workspace header value is real. */
+export function signalWorkspaceReady(): void {
+  providerGateResolve?.()
+  providerGateResolve = null
+  providerGate = null
+}
+
+async function waitForWorkspaceGate(): Promise<void> {
+  if (providerGate) await providerGate
 }
 
 
@@ -243,6 +266,10 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (isWrite) await ensureCsrfToken(timeoutMs)
 
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  // Workspace hydration gate: if the kit provider armed the gate, wait until
+  // the header value is real before sending (prevents the header-less 400
+  // first-open race described at the gate's declaration).
+  await waitForWorkspaceGate()
   // Serialize the body once, before the send loop below: a retry must re-send
   // the exact same payload, and JSON.stringify output is a plain string that
   // is safely reusable (the raw FormData object is passed through untouched).

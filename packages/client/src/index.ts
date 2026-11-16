@@ -6,6 +6,8 @@ export {
   ApiError,
   isApiError,
   setWorkspaceIdProvider,
+  armWorkspaceGate,
+  signalWorkspaceReady,
   DEFAULT_TIMEOUT_MS,
   __resetApiForTests,
 } from './api'
