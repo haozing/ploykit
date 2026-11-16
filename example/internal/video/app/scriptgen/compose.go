@@ -2,6 +2,7 @@ package scriptgen
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 
 	"myproduct/internal/video/app"
@@ -97,12 +98,17 @@ func Compose(script, templateKey, themeKey string, words []videoapp.Word) (video
 	// resolvedFrom 携带（渲染端 anchorTime(resolvedFrom) 直读）。ID 加序号
 	// 去重（同一关键词可能在多卡重复出现，Validate 要求 id 唯一性由去重
 	// 效果保证——Validate 本身只查非空，但 MCP/审计视图按 id 归属）。
-	for i, a := range KeywordAnchors(script, cards) {
+	// TargetElementID = 该卡 title 元素：无 target 的 highlight 走 X-4 全画布
+	// overlay（z=10000 accent 色罩整帧淡出），成片里读作"整帧褪色"（真调
+	// preview_frames f100 实拍）；元素级化后高亮只闪 title 区域。
+	for i, ka := range KeywordAnchorsLocated(script, cards) {
+		c := cards[ka.CardIdx]
 		ir.Effects = append(ir.Effects, videoapp.Effect{
-			ID:     "fx_kw_" + itoa(i),
-			Anchor: a,
-			Type:   videoapp.EffectHighlight,
-			Params: mustParams(`{"color":"` + th.Accent + `"}`),
+			ID:              "fx_kw_" + itoa(i),
+			Anchor:          ka.Anchor,
+			Type:            videoapp.EffectHighlight,
+			TargetElementID: fmt.Sprintf("tpl_%s_%02d_title", c.Role, ka.CardIdx+1),
+			Params:          mustParams(`{"color":"` + th.Accent + `"}`),
 		})
 	}
 	videoapp.ResolveAll(&ir, nil)

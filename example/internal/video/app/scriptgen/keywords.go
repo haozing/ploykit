@@ -205,8 +205,26 @@ func cjkNumberRunes(runes []rune) bool {
 // 卡片没有可抽文本（空卡）时静默跳过——高亮是增强项，不是必需品。
 // 返回的锚文本必然是 script 的 substring（原词），nil = 全部卡都无候选词。
 func KeywordAnchors(script string, cards []template.Card) []videoapp.Anchor {
-	var out []videoapp.Anchor
-	for _, c := range cards {
+	located := KeywordAnchorsLocated(script, cards)
+	out := make([]videoapp.Anchor, len(located))
+	for i, ka := range located {
+		out[i] = ka.Anchor
+	}
+	return out
+}
+
+// KeywordAnchorLocated 是带卡归属的锚点：CardIdx 是 0 基卡序号，供 compose 把
+// highlight 定位到该卡的 title 元素（TargetElementID）——无 target 的 highlight
+// 会走 X-4 全画布 overlay（z=10000 accent 色闪整帧），在成片里读作"整帧褪色罩"。
+type KeywordAnchorLocated struct {
+	Anchor  videoapp.Anchor
+	CardIdx int // 0 基卡序号
+}
+
+// KeywordAnchorsLocated 与 KeywordAnchors 同算法，额外携带卡归属。
+func KeywordAnchorsLocated(script string, cards []template.Card) []KeywordAnchorLocated {
+	var out []KeywordAnchorLocated
+	for ci, c := range cards {
 		taken := 0
 		for _, kw := range keywordRunner(cardText(c)) {
 			if taken >= maxKeywordsPerCard {
@@ -216,7 +234,7 @@ func KeywordAnchors(script string, cards []template.Card) []videoapp.Anchor {
 			if orig == "" {
 				continue
 			}
-			out = append(out, videoapp.Anchor{Text: orig})
+			out = append(out, KeywordAnchorLocated{Anchor: videoapp.Anchor{Text: orig}, CardIdx: ci})
 			taken++
 		}
 	}

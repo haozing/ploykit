@@ -156,6 +156,27 @@ func titleLines(s string, maxChars float64, maxLines int) []string {
 	if len(lines) > maxLines {
 		return nil
 	}
+	// 禁则处理：行首不得出现收尾标点（，。、！？；：）等）——断行断在标点前
+	// 时把标点拉回上一行行尾（上一行轻微超宽半字，可接受的排版让步）。
+	// 实拍教训：封面标题"…手串，十条…"断行后逗号顶行首（promo f40）。
+	const forbiddenLead = "，。、！？；：）】」”’,.!?:;)]}"
+	for i := 1; i < len(lines); i++ {
+		for lines[i] != "" {
+			r := []rune(lines[i])
+			if !strings.ContainsRune(forbiddenLead, r[0]) {
+				break
+			}
+			lines[i-1] += string(r[0])
+			lines[i] = string(r[1:])
+		}
+		if lines[i] == "" {
+			lines = append(lines[:i], lines[i+1:]...)
+			i--
+		}
+	}
+	if len(lines) > maxLines {
+		return nil
+	}
 	return lines
 }
 

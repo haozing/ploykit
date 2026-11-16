@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -858,9 +859,38 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				}
 			}
 			sortFloats(times)
+			// capx 的 ffmpeg 走 `-i <path>`（需要真实文件路径），而 storagex
+			// 接口只暴露流（本地 FS / S3 皆然）——storage key 不能直接当路径
+			// 传（首调实拍 exit -2 的根因：相对路径在进程 CWD 下不存在）。
+			// 把产物物化到临时文件，逐帧抽完即删；Store 未接线时明确报错。
+			if deps.Store == nil {
+				return nil, errors.New("render frame extraction unavailable: storage not wired for materializing the output file")
+			}
+			src, obj, err := deps.Store.Open(ctx, r.OutputKey)
+			if err != nil {
+				return nil, fmt.Errorf("open render output: %w", err)
+			}
+			_ = obj
+			tmp, err := os.CreateTemp("", "video-frames-*.mp4")
+			if err != nil {
+				src.Close()
+				return nil, fmt.Errorf("materialize render output: %w", err)
+			}
+			tmpName := tmp.Name()
+			defer os.Remove(tmpName)
+			if _, err := io.Copy(tmp, src); err != nil {
+				tmp.Close()
+				src.Close()
+				return nil, fmt.Errorf("materialize render output: %w", err)
+			}
+			if err := tmp.Close(); err != nil {
+				src.Close()
+				return nil, fmt.Errorf("materialize render output: %w", err)
+			}
+			src.Close()
 			outFrames := make([]map[string]any, 0, len(times))
 			for _, t := range times {
-				png, err := extract.ExtractFrame(ctx, r.OutputKey, t)
+				png, err := extract.ExtractFrame(ctx, tmpName, t)
 				if err != nil {
 					return nil, err
 				}
