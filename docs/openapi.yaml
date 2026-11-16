@@ -4513,6 +4513,9 @@ paths:
         storagex.ParseUpload 解析；key 形如 `video/<wsID>/assets/<projectID>/<sha256>.<ext>`
         （内容寻址，同内容重复上传幂等）。/api/ 全局 body limit 1MiB 继承——更大素材
         需产品侧为该前缀放宽（webx.BodyLimitExcept 单前缀，不叠层）。
+        上传同时写一行 video_asset 登记表（迁移 1011）：该行是文件下载的归属凭据，
+        workspace 成员身份本身不再授予任意 key 的读取权（F-AUTH-01）。
+        project_id 必须是本工作区内已存在的项目，否则 404 E_VIDEO_PROJECT_NOT_FOUND。
       requestBody:
         required: true
         content:
@@ -4555,13 +4558,19 @@ paths:
     get:
       operationId: getVideoFile
       tags: [video]
-      summary: 素材/成片下载（video:read + membership；Range/If-Range/HEAD 全支持——mp4 拖动必需）
+      summary: 素材/成片下载（video:read + membership + 登记归属校验；Range/If-Range/HEAD 全支持——mp4 拖动必需）
       description: |
-        key 形如 `video/<wsID>/...`：先解析前缀得 wsID，校验 membership（平台管理员豁免）再下发，
-        绝不匿名暴露。Local 后端 storagex.Open → http.ServeContent（**206 Partial Content**
+        三层授权（F-AUTH-01/F-TRA-01）：① key 形如 `video/<wsID>/...` 前缀解析（fail-fast，
+        非本域 key 直接 404）；② membership 校验（平台管理员豁免），403 E_FORBIDDEN；
+        ③ 登记归属校验——素材 key 须有 video_asset 登记行（迁移 1011），渲染产物
+        `video/<wsID>/renders/<renderID>/...` 须有对应 video_render 行。三层任一不过：
+        前缀/归属不过为 404（与不存在不可区分，无存在性泄露），非成员为 403。
+        项目删除 CASCADE 登记行 → 对象立即不可读（撤销即时生效）。
+        Local 后端 storagex.Open → http.ServeContent（**206 Partial Content**
         按 Range 切片、304 If-Range、HEAD 全支持）；S3 后端 storagex.Presign 302。
         响应头：Content-Type 取上传 meta、X-Content-Type-Options: nosniff、
-        `Cache-Control: private, max-age=31536000, immutable`（key 内容寻址；禁止 public 缓存——内容私密）。
+        `Cache-Control: private, max-age=300`（内容私密且授权可撤销——不长期缓存，
+        round4 Q1；禁止 public 缓存）。
       parameters:
         - name: key
           in: path

@@ -1313,6 +1313,17 @@ func main() {
 	wk.Add(&videoRunner{client: videoClient,
 		StopWait: envDuration("CAPX_RENDER_JOB_TIMEOUT", 15*time.Minute) + time.Minute})
 	videoWorker.SweepOrphans(ctx)
+	// Reconciler (round4 §4 P5 / F-WKR-01): closes queued/running renders
+	// whose river job already reached discarded/cancelled — releases quota on
+	// the frozen quota_period, audits, pushes. Same lifecycle as the worker;
+	// CAPX_RECONCILE_INTERVAL tunes the tick (default 5min).
+	wk.Add(videorender.NewReconciler(videorender.ReconcilerDeps{
+		Pool:         pool,
+		QuotaRelease: videoQuota,
+		Publish:      videoPub,
+		Audit:        videoAud,
+		Log:          log,
+	}, 0))
 
 	// video MCP tools: registered on the same server as devx (the registration
 	// callback captured the server above). No-op when PLOYKIT_MCP_ENABLED=0.

@@ -22,6 +22,9 @@ var gsapFS embed.FS
 //go:embed timeline-builder.js
 var builderFS embed.FS
 
+//go:embed assets/fonts/notosanssc-vf-subset.woff2
+var fontVFSubset []byte
+
 // AssetResolver maps a storagex key to the URL form the projected document
 // should use. The render path and the preview path share one projector: the
 // ONLY difference between them is this resolver (§4.4.1 — DOM and timeline
@@ -100,6 +103,24 @@ func GSAPJS() ([]byte, error) { return gsapFS.ReadFile("assets/gsap.min.js") }
 // BuilderJS returns the timeline builder source.
 func BuilderJS() ([]byte, error) { return builderFS.ReadFile("timeline-builder.js") }
 
+// FontSubset returns the vendored Noto Sans SC variable-font subset (OFL 1.1;
+// see assets/fonts/FONTS-README.md for source, license and charset digest).
+func FontSubset() []byte { return fontVFSubset }
+
+// FontFaceCSS returns the @font-face rule inlining the subset font as a data
+// URI. Projection stays self-contained (§4.4.5 zero-network): the document
+// never fetches the font over the network. The variable wght axis (100–900)
+// survives subsetting, so one rule covers every weight without synthetic bold.
+// The 'Noto Sans SC Sub' family name is prepended to the CSS fallback chain in
+// the template, making glyph rasterization identical across machines that
+// lack (or differ in) system CJK fonts — the F-FNT-01 determinism fix.
+func FontFaceCSS() string {
+	return "@font-face{font-family:'Noto Sans SC Sub';" +
+		"src:url(data:font/woff2;base64," +
+		base64.StdEncoding.EncodeToString(fontVFSubset) +
+		") format('woff2');font-weight:400 900;font-style:normal;font-display:block;}"
+}
+
 // InlineScriptHash returns the 'sha256-...' CSP source expression covering
 // the exact inline script the projector emits (gsap + builder + boot). §4.4.4:
 // constant scripts pass by hash; the IR data block is a non-executable
@@ -141,6 +162,9 @@ type projection struct {
 	// under a hash-pinned CSP (§4.4.4) and its bytes are locked by
 	// TestInlineScriptHash_MatchesEmittedScript.
 	InlineScript string
+	// FontFaceCSS is the @font-face rule inlining the Noto Sans SC subset as
+	// a data URI (F-FNT-01). Non-user content: vendored font bytes.
+	FontFaceCSS string
 }
 
 // bootJS starts the builder; the builder installs window.__player itself.
@@ -201,6 +225,7 @@ func (p *Projector) HTML(ctx context.Context, ir *IR, _ string) ([]byte, error) 
 		FPS:          ir.Meta.FPS,
 		IRJSON:       escapeJSONBlock(irJSON),
 		InlineScript: string(append(append(append([]byte{}, gsap...), builder...), bootJS...)),
+		FontFaceCSS:  FontFaceCSS(),
 	})
 	if err != nil {
 		return nil, err
@@ -291,6 +316,7 @@ const playerTemplate = `<!DOCTYPE html>
 <meta charset="utf-8">
 <title>ploykit video preview</title>
 <style>
+  {{.FontFaceCSS}}
   html, body { margin: 0; padding: 0; background: #111; }
   #stage {
     position: relative;
@@ -304,7 +330,7 @@ const playerTemplate = `<!DOCTYPE html>
   .el { position: absolute; will-change: transform; }
   .el img, img.el { width: 100%; height: 100%; object-fit: contain; }
   .el-text {
-    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: "Noto Sans SC Sub", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
     white-space: pre-wrap; line-height: 1.35; font-size: 48px; color: #fff;
   }
   .el-text.counter { font-size: 96px; font-weight: 700; }

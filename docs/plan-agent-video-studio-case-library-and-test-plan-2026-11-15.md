@@ -3338,18 +3338,52 @@ F-SEE-01 帧数口径已统一；NaN / 类型校验 ──→ L1 / L3 seek 输�
 
 ### 8.5 未决项（有结论才算解决，这里都还没有结论）
 
-| # | 未决项 | 阻塞什么 | 需要的输入 |
+> **[状态标注 2026-11-16 round8]** 十条逐项复核：已解决 2 条（#5、#8），提案待拍板 1 条（#1，见 §8.5a），维持 open 7 条（#2/#3/#4/#6/#7/#9/#10）。每行末注状态；本轮新增取证已并入行内。
+
+| # | 未决项 | 阻塞什么 | 需要的输入 | 状态 **[round8]** |
+|---|---|---|---|---|
+| 1 | 三个错误码未定值（`E_VIDEO_INVALID_PARAMS` 的素材子集、`E_TTS_UNAVAILABLE`、`E_ALIGNER_UNAVAILABLE`） | 对应故障用例只能人工核验，不能写成自动化断言 | 错误码表定稿 | **提案已备，待拍板**——两案利弊与影响面已成表（§8.5a），拍板后由实施批落地并回写 |
+| 2 | IR 与 recipe 的服务层字段划分未落地（附录 A.4 只给了文档侧口径） | 改了 crf 是否产生一次 IR 变更，语义未定 | 架构侧决定 | 维持 open（round8 未触及；assets[] DB 侧登记 round8 in-flight 与本条的 recipe 归属判定互不影响） |
+| 3 | 封面帧验收判据只有定性描述 | 缩略图无法进 L1/L2 自动化 | 主体 bbox 覆盖率 / 文字截断判据 | 维持 open（T-15 端到端半边仍 ⛔：firstThumb stub render_pipeline.go:325） |
+| 4 | 双语字幕缺第二字幕轨的时间结构 | C06 的中英对齐无法自动判定 | IR 扩展 | 维持 open |
+| 5 | CJK 禁则字符集未列全 | 字幕断行断言只能抽查 | 禁则字符集清单 | **已解决（round3 代码化，round8 补引用）**——行头禁则 `lineHeadForbidden` / 行尾禁则 `lineTailForbidden` 常量（subtitle.go:28-33，函数 isLineHeadForbidden/isLineTailForbidden subtitle.go:35-41）；isCJKPunct 标点集（subtitle.go:351-358）；kinsokuMaxAdjust=2 容差（subtitle.go:23）+ kinsokuShift/kinsokuPenalty（subtitle.go:226+,251+）。5/5 样本 + subtitle_kinsoku_test.go 9 组测试 |
+| 6 | 音频时长边界四例（末词 `end` > 时长 / BGM 短于 voice / voice 短于 BGM / 恰好相等）未进故障集 | 出片尾部黑屏或截断风险未被覆盖 | 四个用例 + `apad/atrim` 现状 | 维持 open（第一例已有写时校验兜底：末词 end > voice.durationSec 拒绝，ir.go:320-327——但四例仍未成故障用例，`apad/atrim` 在 encode.go 仍零命中） |
+| 7 | `anchor.status` 与 `resolvedFrom` 的枚举全集未定义 | 案例只用到 `resolved/exact` 等少数值 | IR 契约补枚举 | 维持 open（代码侧 `reason` 枚举事实上是 exact/same_text/nearest/missing 四值——ir.go:574-578 ResolveAnchors 返回口径，但 IR 契约层未定枚举类型；`status` 字段目标 schema 扩展草案维持 ⛔） |
+| 8 | 素材缺 sha256 | L2/L3 不可复现，"同一素材"只能靠文件名 | 素材清单补哈希 | **已解决（round8 in-flight 落地，补引用）**——`UploadAsset` 内容寻址：key 即 `<sha256>.<ext>`（service.go:1008-1059，sha256Hex service.go:662-664）；迁移 1011 `video_asset` 表含 `sha256` 列（example/cmd/app/migrations/1011_video_asset.up.sql:17）。哈希在库不在案例素材清单文档侧，L2/L3 复现断言可从 DB 侧取哈希 |
+| 9 | 代码基线时点与并发改写 | 本轮期间仓库被另一会话提交过（`timeline-builder.js` 13:15，工作区 git clean），file:line 以该时点为锚 | 每次改能力后重跑 §1.8 | 维持 open——且 round8 即为例证：工作区当前有 1011 迁移等未提交改动（git status 脏），A.1 回填行号以本日工作区状态为锚，下次重算需重跑 |
+| 10 | golden 更新流程缺责任人与触发阈值 | 基线会随环境漂移无人审批 | 评审责任人 + 触发条件 | 维持 open（工作区 golden meta.json 当前即有未提交漂移——责任缺口正在发生） |
+
+### 8.5a 错误码定值提案（§8.5 未决项 1；提案待架构侧拍板，拍板后由实施批落地并回写本表）
+
+> **[提案 2026-11-16 round8]** 本节只提案、不拍板。现状取证（round8 实测）：video 域现存错误码全集为 9 个——`E_VIDEO_ANCHOR_NOT_FOUND`（400，service.go:31）、`E_VIDEO_ASSET_TOO_LARGE`（400，service.go:35）、`E_VIDEO_ASSET_UNSUPPORTED`（400，service.go:36）、`E_VIDEO_IR_INVALID`（400，service.go:291）、`E_VIDEO_PREVIEW_INTERNAL`（500，service.go:34）、`E_VIDEO_PROJECT_NOT_FOUND`（404，service.go:28）、`E_VIDEO_RENDER_NOT_FOUND`（404，service.go:29）、`E_VIDEO_VERSION_CONFLICT`（409，service.go:30/280）、`E_NOT_CONFIGURED`（503，service.go:32，仅渲染管线 stub/未配置路径使用）。架构文档错误码表另定义了 4 个代码侧从未返回的码：`E_VIDEO_UNSUPPORTED_SCHEMA`、`E_VIDEO_ASSET_NOT_FOUND`、`E_VIDEO_RENDER_ACTIVE`、`E_VIDEO_PAYLOAD_TOO_LARGE`（plan-agent-video-studio-architecture-2026-11-14.md:605-615）以及 502 行 `E_TTS_UNAVAILABLE`/`E_ALIGNER_UNAVAILABLE`（:613）。
+
+#### 8.5a.1 `E_TTS_UNAVAILABLE` / `E_ALIGNER_UNAVAILABLE`（502 供应商失败 vs 503 未配置）
+
+**现状行为**：两个码在代码侧**从未返回**。TTS/Aligner 走的是"永不阻塞"降级矩阵（service.go:537-604 deriveWordsUnlocked）：Synth 失败 → Aligner → EstimateWords（source=estimated），每次失败仅 log.Warn（service.go:560-561,583-584），调用方拿到的永远是成功的 SetScript 响应。"未配置"与"配置了但调用失败"在当前代码里不可区分——未配置时 adapter 返回普通 error（tts.go:61 "tts: VIDEO_TTS_URL not configured"；aligner.go:54 同构），同样被降级矩阵吞掉。`allowEstimated` 闸门（架构文档 :349"仅 allowEstimated=true 时显式降级"）在代码侧**不存在**（grep 全仓零命中）。
+
+| 方案 | 提案码 | 利 | 弊 |
 |---|---|---|---|
-| 1 | 三个错误码未定值（`E_VIDEO_INVALID_PARAMS` 的素材子集、`E_TTS_UNAVAILABLE`、`E_ALIGNER_UNAVAILABLE`） | 对应故障用例只能人工核验，不能写成自动化断言 | 错误码表定稿 |
-| 2 | IR 与 recipe 的服务层字段划分未落地（附录 A.4 只给了文档侧口径） | 改了 crf 是否产生一次 IR 变更，语义未定 | 架构侧决定 |
-| 3 | 封面帧验收判据只有定性描述 | 缩略图无法进 L1/L2 自动化 | 主体 bbox 覆盖率 / 文字截断判据 |
-| 4 | 双语字幕缺第二字幕轨的时间结构 | C06 的中英对齐无法自动判定 | IR 扩展 |
-| 5 | CJK 禁则字符集未列全 | 字幕断行断言只能抽查 | 禁则字符集清单 |
-| 6 | 音频时长边界四例（末词 `end` > 时长 / BGM 短于 voice / voice 短于 BGM / 恰好相等）未进故障集 | 出片尾部黑屏或截断风险未被覆盖 | 四个用例 + `apad/atrim` 现状 |
-| 7 | `anchor.status` 与 `resolvedFrom` 的枚举全集未定义 | 案例只用到 `resolved/exact` 等少数值 | IR 契约补枚举 |
-| 8 | 素材缺 sha256 | L2/L3 不可复现，"同一素材"只能靠文件名 | 素材清单补哈希 |
-| 9 | 代码基线时点与并发改写 | 本轮期间仓库被另一会话提交过（`timeline-builder.js` 13:15，工作区 git clean），file:line 以该时点为锚 | 每次改能力后重跑 §1.8 |
-| 10 | golden 更新流程缺责任人与触发阈值 | 基线会随环境漂移无人审批 | 评审责任人 + 触发条件 |
+| A（复用现语义族） | 不新增码；未配置路径统一挂 `E_NOT_CONFIGURED`（503）族——如需区分来源用 message/details 承载（`details.capability: "tts"/"aligner"`） | 零新码；openapi.yaml:4193/4396 与 MCP 工具描述（adapters/mcp/tools.go:269）已有 E_NOT_CONFIGURED 先例，前端 api-error.ts 无需动 | 与架构文档 :613 的 502 语义冲突（"已配置供应商调用失败"≠"未配置"）；丢失"可降级 vs 不可降级"的信号；架构文档表需回改 |
+| B（按架构文档新增） | `E_TTS_UNAVAILABLE`（502）/`E_ALIGNER_UNAVAILABLE`（502），仅在未来落地 `allowEstimated` 闸门时启用；当前降级矩阵维持，两码作为"降级被禁用且供应商失败"的预留定值 | 架构文档保真；502/503 语义分层清晰；故障用例（F-<域>-NN 中 TTS 不可用类）可写成确定性断言 | 新码进入 openapi.yaml 错误码描述 + MCP 工具描述更新；当前无消费路径（降级矩阵总吞错），属"先定值后接线"——有静默枚举风险 |
+
+**影响面（两案同）**：openapi.yaml 错误描述节；`adapters/mcp/tools.go` 工具描述文案（E_NOT_CONFIGURED 提法处）；packages/ui `KNOWN_CODES`（api-error.ts:48-60）目前无任何 E_VIDEO_*/E_TTS_* 条目——新码走 fallback 文案渲染，不阻断。
+
+#### 8.5a.2 素材子集错误码（`E_VIDEO_INVALID_PARAMS` 的素材分支）
+
+**现状行为**：素材缺失**没有任何 typed 错误码**。写时：`src` 仅做前缀/协议白名单校验（`video/` 前缀、禁 `://`/`data:`），不校验 storage 对象存在性——悬空 src 畅通通过 Validate。渲染时：坏图 decode fail-closed（timeline-builder.js:374-386 记录 `__player.error` 并 rethrow → ready=false → 渲染中止），但中止原因以裸字符串冒出，无错误码、无 4xx 面。上传侧已有两个素材码：`E_VIDEO_ASSET_TOO_LARGE`/`E_VIDEO_ASSET_UNSUPPORTED`（均 400，service.go:35-36）。
+
+| 方案 | 提案码 | 利 | 弊 |
+|---|---|---|---|
+| A（按架构文档新增 404） | `E_VIDEO_ASSET_NOT_FOUND`（404，架构文档 :607 已列） | 架构文档保真；404 语义符合"引用的资源不存在"直觉；与上传侧两码构成完整素材码族 | 现实触发点在渲染期而非 REST 查询期——"404"挂在哪个接口上需要另定（render 行终态 error_code?提交 400?）；需 storage HEAD 存在性检查或 decode 失败路径回填码，均为新接线 |
+| B（复用写时引用校验惯例） | 悬空 src → `E_VIDEO_IR_INVALID`（400 + `details.field: "elements[i].src"`），对齐 targetElementId 先例（ir.go:306-309 悬空引用写时即拒）；渲染期 decode 失败另议（render 终态 error 字段，非本提案范围） | 零新码；与既有"写时引用校验"模式完全一致（targetElementId/锚点同构）；fail-fast 提交期拒绝、不建 render 行不扣配额（与 E_NOT_CONFIGURED 同一提交门语义，openapi.yaml:4396） | 与架构文档 404 行冲突（需回改 :607）；"IR 合法但 storage 对象事后被删"的场景仍无 typed 面（该场景归 render 终态 error_code，建议随 P1 排期另提案） |
+
+**影响面（两案同）**：openapi.yaml render 提交错误描述（4337 附近）+ IR schema src 字段描述（6087 附近）；MCP submit/update 工具描述；前端无存量 E_VIDEO_* 消费，fallback 渲染即可。
+
+#### 8.5a.3 采纳方式
+
+- 本节所有提案**待架构侧拍板**；拍板结果（A 或 B 或第三案）由实施批落地代码与 openapi/MCP 同步变更，落地后在 §8.5 未决项 1 行与 §8.5a 各表"现状行为"列回写新现状与 file:line。
+- 拍板前，涉及故障用例（§4.2.6/§4.4.6 素材缺失类、TTS 不可用类）的断言维持"人工核验"口径，不得提前按任一方案写成自动化断言。
+- 架构文档（plan-agent-video-studio-architecture-2026-11-14.md 错误码表）若采方案 B 类（复用既有码），该表对应行须同批修订，保持两份文档不再分叉。
 
 ### 8.6 这套文档什么时候失效
 
@@ -3429,28 +3463,28 @@ A.1 目标 IR（架构文档 §5.1，案例按此书写）
 
 | 字段 | 类型 | 语义 | 现实现状态 |
 |---|---|---|---|
-| `schemaVersion` | int | IR 结构版本，与行级 `version` 不得混用 | ⛔ 缺失（`ir.go` 只有 `version`） |
-| `meta.width/height` | int | 产品白名单 1080×1920 / 1920×1080 / 1080×1080，且须偶数 | ⚠️ 仅校验 360–2160，未强制偶数与白名单（`ir.go:310`） |
-| `meta.fps` | int | 24/25/30/50/60 | ✅ `ir.go:161` |
-| `meta.durationSec` | float | 验收口径 `durationFrames = ceil(durationSec*fps)` | ✅ Go 与 Player 均已 `ceil`（`timeline-builder.js:37`，HEAD `d25362e`） |
-| `meta.background` | string | 画布底色 | ⛔ 缺失（模板固定 `#000`，`projector.go` 模板） |
-| `voice{provider,voice,rate,audioKey}` | object | TTS 参数与产物引用 | ⚠️ 现为 `audio.voice{key,durationSec,volume}`（`ir.go:136`） |
-| `words[].id` | string | 稳定词身份（锚点唯一权威） | ⛔ 缺失（只有 `index`，`ir.go:64`） |
-| `words[].start/end` | float | 词级时间，须单调不重叠 | ✅ `ir.go:225` |
-| `words[].source` | enum | `tts/aligner/manual/estimated` | ⚠️ 文档 §5.1 示例写 `aligned`，代码是 `aligner`，须统一为后者 |
-| `words[].confidence` | float | 对齐置信度 | ⛔ 缺失 |
-| `words[].scriptStart/scriptEnd` | int | Unicode code point 偏移 | ⛔ 缺失 |
-| `tracks[]` | array | 轨道（main/overlay/bgm），含 `z` 与 `volume` | ⛔ 缺失（层级靠 `element.z` 单点表达） |
-| `elements[].trackId` | string | 归属轨道 | ⛔ 缺失 |
-| `elements[].startFrame/endFrame` | int | 元素可见时间窗 | ⛔ 缺失（元素整片可见，`timeline-builder.js:143`） |
-| `elements[].params{...}` | object | 类型相关参数（text/x/y/fontSize/color…） | ⚠️ 现为扁平字段（`ir.go:118`） |
-| `animations[]`（顶层） | array | 含 `targetElementId` | ⚠️ 现内嵌在 `element.animations`，无 `targetElementId` |
-| `effects[].targetElementId` | string | 视觉作用目标 | ⛔ 缺失；现 pulse/highlight/shake/fade 一律打 `#canvas`（`timeline-builder.js:190`） |
-| `anchor{wordId,lastText,lastIndex,resolvedFrom,status}` | object | 锚点与解析状态 | ⚠️ 现只有 `{text,occurrence}` + `resolvedFrom{wordIndex,reason}`（`ir.go:74`） |
-| `assets[]` | array | 资产登记（key/类型/字节/许可） | ⛔ 缺失 |
-| `render{}` | object | 渲染配方（crf/preset/pixFmt/音频/字幕/缩略图） | ⛔ 缺失（不外显，无法复现） |
+| `schemaVersion` | int | IR 结构版本，与行级 `version` 不得混用 | ✅ **[回填 2026-11-16 round8]** 已落地（d25362e）：`IRSchemaVersion = 1`（ir.go:174），`IR.SchemaVersion` 字段（ir.go:181），读/写经 `normalizeSchema` 盖章并剥离遗留行级 `version` 键（ir.go:191-198）。未知/未来版本仍读时容忍、非 fail-closed（不返回 `E_VIDEO_UNSUPPORTED_SCHEMA`）——该半边维持 §8.9 待人工裁定 1 |
+| `meta.width/height` | int | 产品白名单 1080×1920 / 1920×1080 / 1080×1080，且须偶数 | ⚠️（两层拆分 **[回填 2026-11-16 round8]**）：IR 产品层仍未做白名单与偶数强制——仅校验 360–2160（ir.go:344-350，原引 ir.go:310 行号漂移）；但 **capx 通用层偶数校验已落地**：`FrameSpec.Validate` 显式拒绝奇数（capx/renderer.go:76-81），编码侧另有 trunc-to-even scale 兜底（capx/encode.go:78）。产品白名单半边维持 ⚠️ |
+| `meta.fps` | int | 24/25/30/50/60 | ✅ `ir.go:210`（validFPS 白名单 + 校验 ir.go:341；缺省 30，ir.go:339）**[回填 2026-11-16 round8：行号核准]** |
+| `meta.durationSec` | float | 验收口径 `durationFrames = ceil(durationSec*fps)` | ✅ Go 单源 `DurationFrames`（service.go:901-916，ceil(max(meta, voice)×fps)）与 Player 均已 `ceil`（timeline-builder.js:37 附近，HEAD `d25362e`）**[回填 2026-11-16 round8：补 Go 单源引用]** |
+| `meta.background` | string | 画布底色 | ⛔ 缺失（模板固定 `#000`，projector.go:299 `background: #000`）**[回填 2026-11-16 round8：行号核准]** |
+| `voice{provider,voice,rate,audioKey}` | object | TTS 参数与产物引用 | ⚠️ 现为 `audio.voice{key,durationSec,volume}`（ir.go:154-164）；`voiceName()` 恒返回空串（service.go:636-637），TTS 语速/音色不可由 IR 指定 **[回填 2026-11-16 round8：行号核准+补 voiceName]** |
+| `words[].id` | string | 稳定词身份（锚点唯一权威） | ⛔ 缺失（Word 只有 `index/text/start/end/source` 五字段，ir.go:63-69）；锚点仍靠"文本+出现序号"（`Anchor{text,occurrence}`，ir.go:71-75）**[回填 2026-11-16 round8：行号核准]** |
+| `words[].start/end` | float | 词级时间，须单调不重叠 | ✅ 字段（ir.go:66-67）+ 单调不重叠校验（ir.go:270-271）**[回填 2026-11-16 round8：行号核准]** |
+| `words[].source` | enum | `tts/aligner/manual/estimated` | ✅ **[回填 2026-11-16 round8：升格]** 枚举四值已在代码定死（ir.go:36-42）+ 白名单校验（ir.go:229-231,264-266）——"文档示例写 `aligned`" 的不一致已按代码口径（`aligner`）在 §5.1 示例侧消化；本行从 ⚠️ 升 ✅ |
+| `words[].confidence` | float | 对齐置信度 | ⛔ 缺失（Word 结构无此字段，ir.go:63-69）**[回填 2026-11-16 round8：复核维持]** |
+| `words[].scriptStart/scriptEnd` | int | Unicode code point 偏移 | ⛔ 缺失（同上）**[回填 2026-11-16 round8：复核维持]** |
+| `tracks[]` | array | 轨道（main/overlay/bgm），含 `z` 与 `volume` | ⛔ 缺失（IR 顶层仅 `schemaVersion/meta/script/words/effects/elements/audio` 七键，ir.go:180-189；层级靠 `element.z` 单点表达，映射 `zIndex = 1+el.z`，timeline-builder.js:72）**[回填 2026-11-16 round8：复核维持+行号核准]** |
+| `elements[].trackId` | string | 归属轨道 | ⛔ 缺失（Element 结构无 trackId，ir.go:131-151）**[回填 2026-11-16 round8：复核维持]** |
+| `elements[].startFrame/endFrame` | int | 元素可见时间窗 | ✅ **[回填 2026-11-16 round8：⛔→✅]** round5 P0-1 落地：指针字段（ir.go:148-149，区分缺省与 0）+ 校验（非负/start≤end/以 `DurationFrames` 封顶，ir.go:455-484）+ builder 窗口 set（timeline-builder.js:355-373，round6 F0 黑帧修复后 visible set 落帧内 ε=1/2f 处）。窗口边界规则 [startFrame+1, endFrame] 见 §7.0 口径条款（实测三证据：C02 F262/F263、C03 F1094、C05 F899）；l2 时间窗 6/6 + 批6a 三案窗口零泄漏 |
+| `elements[].params{...}` | object | 类型相关参数（text/x/y/fontSize/color…） | ⚠️ 现为扁平字段（Element 直挂 `text/color/fontSize/x/y/w/h/z`，ir.go:131-151；无 params 容器；M-C06-06 登记的 `extra` 投影仪不输出）**[回填 2026-11-16 round8：行号核准]** |
+| `animations[]`（顶层） | array | 含 `targetElementId` | ⚠️ 现内嵌在 `element.animations`（ir.go:151）且动画自带 `targetElementId`（案例书写口径，round1 X-3 实测 projector 丢弃顶层动画数组——顶层结构仍未落地）**[回填 2026-11-16 round8：表述精确化]** |
+| `effects[].targetElementId` | string | 视觉作用目标 | ✅ **[回填 2026-11-16 round8：⛔→✅]** round4 X-4 落地：`TargetElementID` 字段（ir.go:96）+ 写时引用校验（悬空引用 400 `E_VIDEO_IR_INVALID`，ir.go:306-309）+ builder 五特效全量消费（effectTarget 解析 timeline-builder.js:143-152；counter 走 counterHost 定位到目标 bbox timeline-builder.js:414/528-529；highlight 对 text 元素词窗口着色 timeline-builder.js:230；pulse/shake/fade 均接受元素级 target，timeline-builder.js:410-428）。无 target 时 highlight/fade 兜底 z-10000 全画布 overlay（可见）、pulse/shake 保持 legacy canvas——legacy 半径行为见 §8.9 |
+| `anchor{wordId,lastText,lastIndex,resolvedFrom,status}` | object | 锚点与解析状态 | ⚠️ 现只有 `Anchor{text,occurrence}`（ir.go:71-75）+ `ResolvedFrom{wordIndex,reason}`（ir.go:78-82）；`wordId`/`status`/`lastText`/`lastIndex` 均为目标 schema 扩展草案（§8.5 未决项 7 维持）**[回填 2026-11-16 round8：行号核准]** |
+| `assets[]` | array | 资产登记（key/类型/字节/许可） | ⛔（IR 内）——**in-flight round8**：产品迁移 1011 `video_asset` 表已建（example/cmd/app/migrations/1011_video_asset.up.sql：key/kind/bytes/sha256/content_type），`UploadAsset` 内容寻址落盘 + sha256 计算（service.go:1008-1059，sha256Hex service.go:662-664）已落地，但 IR 文档内的 `assets[]` 数组仍未进 IR 结构——登记在 DB 侧而非 IR 侧，案例 IR 书写的 `assets[]` 块仍读作 recipe 草案（A.4 口径维持）**[回填 2026-11-16 round8]** |
+| `render{}` | object | 渲染配方（crf/preset/pixFmt/音频/字幕/缩略图） | ⛔ 缺失（不外显，无法复现；随 render 行持久化的只有输出 key 与 error 注记）**[回填 2026-11-16 round8：复核维持]** |
 
-> 结论：案例按目标 IR 书写是对的，但**任何"照此 IR 就能出片"的表述都是错的**。每个案例必须带「现状降级映射」，把每一行映射到上表的现实现状态。
+> 结论（**[回填 2026-11-16 round8 后修订]**）：A.1 四个 ⛔ 已转 ✅（schemaVersion、startFrame/endFrame、targetElementId、words[].source 升格），assets[] 半落地（DB 侧 in-flight round8）。案例按目标 IR 书写仍需「现状降级映射」——⛔/⚠️ 行（words[].id、tracks、params、顶层 animations、meta.background、confidence、render{} 等）在每案降级映射里依旧逐行有效；✅ 行的降级映射条目可移除，以本表 + §8.9 终检表为准。
 
 A.2 现实现独有的字段（目标 IR 未定义，但代码在用）
 

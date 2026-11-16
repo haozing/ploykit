@@ -2,7 +2,7 @@
   "case": "VS-C04",
   "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
   "d01_status": {
-    "checked_at": "2026-11-16T09:29:48+08:00",
+    "checked_at": "2026-11-16T11:29:06+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
@@ -159,11 +159,11 @@
         "word_start_sec": 18.3
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1800 frames in 3m9.648s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1800 frames in 3m10.447s",
     "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
     "frames_table": "example/internal/video/testdata/ir/c04.frames.json",
     "golden_dir": "example/internal/video/testdata/golden/c04/",
-    "html_bytes": 108246,
+    "html_bytes": 397954,
     "ir_sha256": "9613004ca75b5881a6ead340317225bc3cb2df942de38b865f5f25d6d37b9c5a",
     "meta_json": "example/internal/video/testdata/golden/c04/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
@@ -191,7 +191,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 20051
+      "duration_ms": 18478
     },
     {
       "frame": 198,
@@ -216,7 +216,7 @@
         "frames_json_claimed_entry": "186±2",
         "png_decoded": true
       },
-      "duration_ms": 20222
+      "duration_ms": 18655
     },
     {
       "frame": 200,
@@ -227,7 +227,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 20424
+      "duration_ms": 18823
     },
     {
       "frame": 204,
@@ -238,7 +238,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 20788
+      "duration_ms": 19172
     },
     {
       "frame": 210,
@@ -249,7 +249,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 21385
+      "duration_ms": 19682
     },
     {
       "frame": 916,
@@ -264,7 +264,7 @@
         "verdict": "VISIBLE-OUTSIDE-RING",
         "window_math": "ef_hl_growth 锚 产业@30.3s→F909；上冲 0.25s(7.5f)→峰值 ≈F916.5；回落至 ≈F934。环自身从 F909 scaleIn（同为 #F5A623），全帧统计须排除环矩形"
       },
-      "duration_ms": 100583
+      "duration_ms": 90643
     }
   ],
   "recipe": {
@@ -276,7 +276,7 @@
     "ir_source_file": "example/internal/video/testdata/ir/c04.degraded.json",
     "width": 1920
   },
-  "run_id": "l1-04-20261116-092638-69b4",
+  "run_id": "l1-04-20261116-112555-71e4",
   "samples": [
     {
       "frame": 0,
@@ -299,7 +299,7 @@
         "ring_amber_share": 0,
         "title_navy_share": 0
       },
-      "duration_ms": 1378,
+      "duration_ms": 1227,
       "artifact": "example/internal/video/testdata/golden/c04/frame-000.png",
       "notes": [
         "全部元素已挂载 DOM（C04-D6 无显隐区间），最早锚点 6.2s→F186"
@@ -318,7 +318,7 @@
         "png_magic_ok": true,
         "title_navy_share": 0.1262
       },
-      "duration_ms": 3718,
+      "duration_ms": 3375,
       "artifact": "example/internal/video/testdata/golden/c04/frame-024.png"
     },
     {
@@ -336,7 +336,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 18489,
+      "duration_ms": 17057,
       "artifact": "example/internal/video/testdata/golden/c04/frame-180.png",
       "notes": [
         "期望 vs 实际：帧表把生长锚写成 w05'总量'第2次出现≈6.2s→186；降级 IR 实际生长锚是'二零二二'(w05, 6.6s)→F198。锚词标注与 IR 不一致，M2 需统一口径（相机 pan 锚'总量'occ1=6.2s→F186 才与帧表一致）"
@@ -361,7 +361,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 21894,
+      "duration_ms": 20210,
       "artifact": "example/internal/video/testdata/golden/c04/frame-216.png",
       "notes": [
         "期望 vs 实际：帧表称 F216 三柱全可见（柱高比例 180:240:330）；实际仅 bar22 可见（share=0.45，b23=0.000 b24=0.000）——bar23 生长锚 8.7s→F261、bar24 锚 10.1s→F303 都未到；三柱最早同屏 ≈F327（10.9s，bar24 落定）",
@@ -385,7 +385,7 @@
         "png_magic_ok": true,
         "ring_amber_share": 0
       },
-      "duration_ms": 55219,
+      "duration_ms": 50693,
       "artifact": "example/internal/video/testdata/golden/c04/frame-540.png",
       "notes": [
         "三柱此时全部立起；camera pan（186→546，末端 -60px）进行至 98%，柱位偏左 ≈59px",
@@ -406,7 +406,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 79841,
+      "duration_ms": 68298,
       "artifact": "example/internal/video/testdata/golden/c04/frame-720.png",
       "notes": [
         "降级（重要）：el_line 是 440×300 实心矩形 shape，非折线——三点几何完全丢失，A-C04-03 '点2(5.2%) y 高于点1/点3' 降级不适用（区域几何无点可判）",
@@ -428,7 +428,7 @@
         "ring_amber_share": 0,
         "ring_num_navy_share": 0
       },
-      "duration_ms": 99016,
+      "duration_ms": 88683,
       "artifact": "example/internal/video/testdata/golden/c04/frame-900.png",
       "notes": [
         "期望 vs 实际：文档选 900 为封面候选，但锚点使环 F909 才入场——封面帧取 900 得到的是'标题+三柱+实心矩形'无环画面；M2 若要环入封面需改锚词或取 F939+",
@@ -450,7 +450,7 @@
         "ring_amber_share": 0.9818,
         "ring_num_navy_share": 0.0885
       },
-      "duration_ms": 104860,
+      "duration_ms": 95952,
       "artifact": "example/internal/video/testdata/golden/c04/frame-960.png",
       "notes": [
         "D-01 状态：seekTimeline pause(t,false) 双参已落地（渲染前由并行 agent 修入）——counter onUpdate 在 seek 中触发，数字滚动可见",
@@ -478,7 +478,7 @@
         "png_magic_ok": true,
         "ring_amber_share": 0.9818
       },
-      "duration_ms": 135226,
+      "duration_ms": 131742,
       "artifact": "example/internal/video/testdata/golden/c04/frame-1260.png",
       "notes": [
         "期望 vs 实际（更强）：高亮在其窗口内也不可见——作用目标为 #canvas 整层（timeline-builder.js target=canvas），被全画布 el_bg #F2F5F9 完全遮挡；F916 探针证明峰值帧除环外全画布 amber≈0（C04-D8 实测强于文档'整屏闪现'——闪现根本穿不透）",
@@ -500,7 +500,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 171341,
+      "duration_ms": 172030,
       "artifact": "example/internal/video/testdata/golden/c04/frame-1620.png",
       "notes": [
         "A-C04-04 降级不适用（hard prompt #1）；说明卡灰色文字可见",
@@ -522,7 +522,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 189387,
+      "duration_ms": 190135,
       "artifact": "example/internal/video/testdata/golden/c04/frame-1799.png",
       "notes": [
         "BGM 淡出/loudnorm/amix 截断不属本链路（L1 still 无音轨；L2 已单独覆盖）"
@@ -535,8 +535,8 @@
     "full_loop_under_8min": true,
     "keyframes_kept": 11,
     "probe_frames_kept": 6,
-    "render_ms_per_frame": 105.36,
-    "render_total_ms": 189647,
+    "render_ms_per_frame": 105.8,
+    "render_total_ms": 190447,
     "render_wall_clock": "3m10s",
     "samples_degraded_na": 1,
     "samples_fail": 0,

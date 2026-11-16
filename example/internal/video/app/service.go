@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -135,6 +136,28 @@ type Render struct {
 	quotaPeriod   string
 	releasedAt    *time.Time
 }
+
+// Asset is the REST-facing projection of one video_asset registry row
+// (migration 1011, F-AUTH-01/F-TRA-01): the DB ownership credential for an
+// uploaded storagex object. Render outputs are NOT registered here — the
+// video_render row itself is their ownership credential.
+type Asset struct {
+	ID          string    `json:"id"`
+	Workspace   string    `json:"workspace_id"`
+	ProjectID   string    `json:"project_id"`
+	Key         string    `json:"key"`
+	Kind        string    `json:"kind"`
+	Bytes       int64     `json:"bytes"`
+	SHA256      string    `json:"sha256"`
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Asset kinds (migration 1011 kind column).
+const (
+	AssetKindImage = "image"
+	AssetKindAudio = "audio"
+)
 
 // Render statuses (§4.9.1).
 const (
@@ -431,7 +454,12 @@ func (s *ProjectService) Get(ctx context.Context, p *webx.Principal, projectID s
 	return &pr, nil
 }
 
-// Delete removes a project (renders cascade via FK).
+// Delete removes a project (renders and registered assets cascade via FK).
+// After the commit the registered asset objects are deleted from storagex
+// (synchronous, best-effort: a failed delete only warns — storagex Local
+// treats a missing object as success and the reference list is gone with the
+// rows, so a missed object degrades to a storage-side orphan, not a
+// readable-but-unauthorized one: the next access loses its registry row).
 func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectID string) error {
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
@@ -439,6 +467,14 @@ func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectI
 	}
 	if !ok {
 		return ErrForbidden
+	}
+	// Collect the asset keys BEFORE the delete: once video_asset rows
+	// cascade, the reference list is unrecoverable (render outputs keep
+	// their rows' trace in the audit trail, so only asset keys are needed).
+	keys, kerr := s.assetKeysForProject(ctx, p.WorkspaceID, projectID)
+	if kerr != nil {
+		s.log.Warn("video delete: asset key collection failed; storage objects may orphan", "project_id", projectID, "err", kerr)
+		keys = nil
 	}
 	tag, err := s.pool.Exec(ctx,
 		`DELETE FROM video_project WHERE id=$1 AND workspace_id=$2`, projectID, p.WorkspaceID)
@@ -448,13 +484,46 @@ func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectI
 	if tag.RowsAffected() == 0 {
 		return ErrProjectNotFound
 	}
-	// Delete IS an audited lifecycle event (v2.0 Â§13): renders cascade via
+	// Delete IS an audited lifecycle event (v2.0 §13): renders cascade via
 	// FK, so this record is the only trace the project ever existed.
 	if s.ports.Audit != nil {
 		s.ports.Audit.Record(ctx, &p.WorkspaceID, p.UserID,
-			AuditProjectDeleted, "video_project", projectID, nil)
+			AuditProjectDeleted, "video_project", projectID,
+			map[string]any{"asset_objects": len(keys)})
+	}
+	// Storage sweep AFTER the DB rows are gone (same commit ordering as the
+	// registry: DB first, object second — a crash between the two leaves an
+	// unreachable object, never an authorized-but-missing one).
+	if len(keys) > 0 && s.ports.Store != nil {
+		if derr := s.ports.Store.DeleteMulti(ctx, keys...); derr != nil {
+			// Soft-delete semantics acceptable: storage is eventually
+			// consistent and the keys lost their registry rows, so the
+			// objects can no longer be served through /api/video/files.
+			s.log.Warn("video delete: storage sweep failed; objects orphaned in storage", "project_id", projectID, "err", derr)
+		}
 	}
 	return nil
+}
+
+// assetKeysForProject lists the storage keys registered for one project
+// (the video_asset reference list, migration 1011). Called before the
+// project delete cascades the rows away.
+func (s *ProjectService) assetKeysForProject(ctx context.Context, wsID, projectID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT key FROM video_asset WHERE project_id=$1 AND workspace_id=$2`, projectID, wsID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
 }
 
 // --- mutation methods (one per MCP tool / REST route pair, §4.3) ---
@@ -510,16 +579,40 @@ func (s *ProjectService) SetScript(ctx context.Context, p *webx.Principal, proje
 	if err != nil {
 		return 0, nil, "", err
 	}
+	// Fresh TTS voice key adopted into the IR: the storage object exists, so
+	// its video_asset row must too (F-AUTH-01) — otherwise the preview/render
+	// download of the voice key fails CanAccessKey. Written after the mutate
+	// committed; the scratch object outlives a failed registration (the row
+	// is re-attempted on the next SetScript, which re-derives the voice).
+	if pre.ttsAsset != nil {
+		if rerr := s.registerAsset(ctx, nil, p.WorkspaceID, projectID,
+			pre.ttsAsset.key, AssetKindAudio, pre.ttsAsset.size, pre.ttsAsset.sha,
+			pre.ttsAsset.contentType); rerr != nil {
+			s.log.Warn("setscript: tts voice asset registration failed", "project_id", projectID, "err", rerr)
+		}
+	}
 	return newVersion, resolutions, source, nil
 }
 
 // derivedWords is the phase-1 payload: the words/audio computed outside the
 // lock, plus the observation they were based on (staleAgainst detects
-// concurrent voice-track edits).
+// concurrent voice-track edits). ttsAsset carries the storage facts of a
+// freshly persisted TTS voice so the locked phase can write its video_asset
+// registry row in the same transaction that adopts the key into the IR.
 type derivedWords struct {
 	words            []Word
 	audio            *Audio
 	observedVoiceKey string
+	ttsAsset         *ttsAssetMeta
+}
+
+// ttsAssetMeta is the video_asset registration payload for one fresh TTS
+// voice object (migration 1011).
+type ttsAssetMeta struct {
+	key         string
+	size        int64
+	sha         string
+	contentType string
 }
 
 // staleAgainst reports whether the locked-phase IR drifted from the state
@@ -564,6 +657,16 @@ func (s *ProjectService) deriveWordsUnlocked(ctx context.Context, ir *IR, script
 				obj, perr := s.ports.Store.Put(tctx, key, "audio/mpeg", bytesReader(vr.AudioData))
 				if perr == nil {
 					vr.AudioKey = obj.Key
+					// Registry facts for the SetScript locked phase: the TTS
+					// scratch object needs its video_asset row (F-AUTH-01 —
+					// otherwise the fresh voice key fails CanAccessKey and
+					// the preview/render download breaks).
+					work.ttsAsset = &ttsAssetMeta{
+						key:         obj.Key,
+						size:        obj.Size,
+						sha:         sha256Hex(vr.AudioData),
+						contentType: "audio/mpeg",
+					}
 				}
 			}
 			words := vr.Words
@@ -1004,7 +1107,11 @@ func (s *ProjectService) ProjectHTML(ctx context.Context, ir *IR) ([]byte, error
 
 // UploadAsset persists one asset under the content-addressed layout
 // (§4.9.4): video/<wsID>/assets/<projectID>/<sha256>.<ext>. Idempotent per
-// content. Returns the storage key.
+// content. Returns the storage key. The upload also writes one video_asset
+// registry row (migration 1011, F-AUTH-01): the row is the ownership
+// credential the file handler checks — workspace membership alone no longer
+// grants read on any key. MCP video_upload_asset and REST /api/video/assets
+// share this method, so both surfaces register.
 func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, projectID, filename, contentType string, data []byte) (string, error) {
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
@@ -1024,6 +1131,23 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 	}
 	if s.ports.Store == nil {
 		return "", fmt.Errorf("video: storage port not wired")
+	}
+	if s.pool == nil {
+		// No DB = no registry = no upload: the registry row is the
+		// ownership credential (F-AUTH-01), so an upload that cannot
+		// register must not store either.
+		return "", fmt.Errorf("video: asset registration unavailable (no database)")
+	}
+	// The project must exist and belong to the caller's workspace before any
+	// storage/registry write (the FK alone would surface a bad id as a 500).
+	var projExists bool
+	if err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM video_project WHERE id=$1 AND workspace_id=$2)`,
+		projectID, p.WorkspaceID).Scan(&projExists); err != nil {
+		return "", err
+	}
+	if !projExists {
+		return "", ErrProjectNotFound
 	}
 	ext := "bin"
 	switch contentType {
@@ -1048,9 +1172,111 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 	if err != nil {
 		return "", err
 	}
+	kind := AssetKindImage
+	if strings.HasPrefix(contentType, "audio/") {
+		kind = AssetKindAudio
+	}
+	// Registry row (ON CONFLICT no-op = content-addressed idempotency: the
+	// same bytes re-uploaded keep the first registration). Failure here
+	// aborts the upload — an object served without its ownership credential
+	// is exactly the F-AUTH-01 hole this table closes.
+	if rerr := s.registerAsset(ctx, nil, p.WorkspaceID, projectID, obj.Key, kind,
+		obj.Size, sha, contentType); rerr != nil {
+		return "", fmt.Errorf("video: asset registration failed: %w", rerr)
+	}
 	if s.ports.Audit != nil {
 		s.ports.Audit.Record(ctx, &p.WorkspaceID, p.UserID, AuditAssetUploaded, "video_asset", obj.Key,
 			map[string]any{"size": obj.Size, "origin": originOf(ctx)})
 	}
 	return obj.Key, nil
+}
+
+// registerAsset inserts one video_asset row (migration 1011). tx nil = own
+// statement (pool Exec); non-nil = join the caller's transaction (TTS voice
+// registration rides SetScript's locked phase).
+func (s *ProjectService) registerAsset(ctx context.Context, tx pgx.Tx, wsID, projectID, key, kind string, size int64, sha, contentType string) error {
+	const q = `INSERT INTO video_asset
+		(id, workspace_id, project_id, key, kind, bytes, sha256, content_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (key) DO NOTHING`
+	if tx != nil {
+		_, err := tx.Exec(ctx, q, ids.NewV7().String(), wsID, projectID, key, kind, size, sha, contentType)
+		return err
+	}
+	_, err := s.pool.Exec(ctx, q, ids.NewV7().String(), wsID, projectID, key, kind, size, sha, contentType)
+	return err
+}
+
+// ListAssets lists a project's registered assets (migration 1011 reference
+// list), newest first.
+func (s *ProjectService) ListAssets(ctx context.Context, p *webx.Principal, projectID string) ([]Asset, error) {
+	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
+	if aerr != nil {
+		return nil, aerr
+	}
+	if !ok {
+		return nil, ErrForbidden
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, workspace_id, project_id, key, kind, bytes, sha256, content_type, created_at
+		FROM video_asset WHERE project_id=$1 AND workspace_id=$2
+		ORDER BY created_at DESC LIMIT 200`, projectID, p.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Asset{}
+	for rows.Next() {
+		var a Asset
+		if err := rows.Scan(&a.ID, &a.Workspace, &a.ProjectID, &a.Key, &a.Kind, &a.Bytes,
+			&a.SHA256, &a.ContentType, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// CanAccessKey decides whether the principal may serve one storagex key
+// through /api/video/files (F-AUTH-01/F-TRA-01). Layered authorization:
+// (1) the video/<wsID>/ prefix parse stays the fail-fast first gate (the
+// handler checks it before membership); (2) workspace membership is the
+// handler's second gate (CanAccess); (3) THIS check is the third gate — the
+// key must trace to a registered credential: a video_asset row (uploads and
+// TTS voice scratch), or a video_render row (outputs and thumbnails share
+// the render id namespace — the render row is the render product's
+// ownership credential, per §11.4 "render output + project"). Rows die with
+// their project via CASCADE, so "workspace member" no longer implies "read
+// every object in the workspace prefix".
+func (s *ProjectService) CanAccessKey(ctx context.Context, p *webx.Principal, key string) (bool, error) {
+	// Fail closed without a pool: no registry, no credential, no access.
+	// (Also keeps the nil-pool handler unit tests meaningful — they assert
+	// the 404 on an unregistered key.)
+	if s.pool == nil {
+		return false, nil
+	}
+	// Render outputs / thumbnails: video/<ws>/renders/<renderID>/<file>.
+	if rest, ok := strings.CutPrefix(key, "video/"); ok {
+		wsSeg, tail, _ := strings.Cut(rest, "/")
+		if wsSeg == p.WorkspaceID && strings.HasPrefix(tail, "renders/") {
+			renderID, _, _ := strings.Cut(strings.TrimPrefix(tail, "renders/"), "/")
+			if renderID != "" {
+				var n int
+				if err := s.pool.QueryRow(ctx,
+					`SELECT count(*) FROM video_render WHERE id=$1 AND workspace_id=$2`,
+					renderID, p.WorkspaceID).Scan(&n); err != nil {
+					return false, err
+				}
+				return n > 0, nil
+			}
+		}
+	}
+	// Assets (uploads + TTS voice scratch): registered video_asset rows.
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM video_asset WHERE key=$1 AND workspace_id=$2`,
+		key, p.WorkspaceID).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }

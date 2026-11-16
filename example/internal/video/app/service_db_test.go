@@ -1,12 +1,17 @@
 package videoapp
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/haozing/ploykit/migrations"
+	"github.com/haozing/ploykit/platform/ids"
 	"github.com/haozing/ploykit/platform/pgmigrate"
+	"github.com/haozing/ploykit/platform/storagex"
 	"github.com/haozing/ploykit/platform/webx"
 )
 
@@ -232,6 +239,200 @@ func TestIntegration_SubmitRender_GateOrder(t *testing.T) {
 	items, err := e.svc.ListRenders(ctx, e.principal(e.wsID), pr.ID)
 	require.NoError(t, err)
 	assert.Empty(t, items)
+}
+
+// fakeStore is the minimal storagex.Store double for the asset registry
+// suite (puts land in memory; DeleteMulti records keys and can fail on
+// demand). Mirrors the render package's memStore pattern.
+type fakeStore struct {
+	puts    map[string][]byte
+	deleted []string
+	failDel bool
+}
+
+func newFakeStore() *fakeStore { return &fakeStore{puts: map[string][]byte{}} }
+
+func (f *fakeStore) Put(_ context.Context, key, _ string, r io.Reader) (storagex.Object, error) {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return storagex.Object{}, err
+	}
+	f.puts[key] = b
+	return storagex.Object{Key: key, Size: int64(len(b))}, nil
+}
+
+func (f *fakeStore) Open(_ context.Context, key string) (io.ReadCloser, storagex.Object, error) {
+	if b, ok := f.puts[key]; ok {
+		return io.NopCloser(bytes.NewReader(b)), storagex.Object{Key: key, Size: int64(len(b))}, nil
+	}
+	return nil, storagex.Object{}, fs.ErrNotExist
+}
+
+func (f *fakeStore) List(_ context.Context, prefix string) ([]storagex.Object, error) {
+	return nil, nil
+}
+
+func (f *fakeStore) Delete(_ context.Context, key string) error {
+	if f.failDel {
+		return errors.New("storage down")
+	}
+	delete(f.puts, key)
+	f.deleted = append(f.deleted, key)
+	return nil
+}
+
+func (f *fakeStore) DeleteMulti(ctx context.Context, keys ...string) error {
+	for _, k := range keys {
+		if err := f.Delete(ctx, k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *fakeStore) URL(key string) string { return "/uploads/" + key }
+func (f *fakeStore) Presign(_ context.Context, key string, _ time.Duration) (string, error) {
+	return f.URL(key), nil
+}
+
+// TestIntegration_AssetRegistry_Lifecycle covers F-AUTH-01/F-TRA-01 end to
+// end: upload → registry row → CanAccessKey grants; project delete → rows
+// cascade + storage sweep → CanAccessKey revokes (the key prefix parse can
+// no longer rescue it: the key itself is gone from every credential table).
+func TestIntegration_AssetRegistry_Lifecycle(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	store := newFakeStore()
+	e.svc.ports.Store = store // test-only injection; NewProjectService kept for the other ports
+
+	pr, err := e.svc.Create(ctx, e.principal(e.wsID), "资产登记")
+	require.NoError(t, err)
+
+	p := e.principal(e.wsID)
+	key, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", []byte("png-bytes-1"))
+	require.NoError(t, err)
+	require.Contains(t, key, "/assets/"+pr.ID+"/")
+	require.NotEmpty(t, store.puts[key], "object persisted to storage")
+
+	// Registry row exists with the content hash + kind.
+	assets, err := e.svc.ListAssets(ctx, p, pr.ID)
+	require.NoError(t, err)
+	require.Len(t, assets, 1)
+	a := assets[0]
+	assert.Equal(t, key, a.Key)
+	assert.Equal(t, AssetKindImage, a.Kind)
+	assert.Equal(t, int64(len("png-bytes-1")), a.Bytes)
+	assert.Equal(t, sha256Hex([]byte("png-bytes-1")), a.SHA256)
+	assert.Equal(t, "image/png", a.ContentType)
+
+	// Audio content-type maps to kind=audio.
+	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "v.mp3", "audio/mpeg", []byte("mp3-bytes"))
+	require.NoError(t, err)
+	assets, err = e.svc.ListAssets(ctx, p, pr.ID)
+	require.NoError(t, err)
+	require.Len(t, assets, 2)
+	byKey := map[string]Asset{assets[0].Key: assets[0], assets[1].Key: assets[1]}
+	assert.Equal(t, AssetKindAudio, byKey[audioKey].Kind)
+
+	// Content-addressed idempotency: same bytes → same key, one row.
+	dupKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", []byte("png-bytes-1"))
+	require.NoError(t, err)
+	assert.Equal(t, key, dupKey)
+	assets, _ = e.svc.ListAssets(ctx, p, pr.ID)
+	require.Len(t, assets, 2, "ON CONFLICT keeps the first registration")
+
+	// CanAccessKey: member + registered → true (render/asset branches).
+	ok, err := e.svc.CanAccessKey(ctx, p, key)
+	require.NoError(t, err)
+	assert.True(t, ok, "registered asset key grants access")
+
+	// Foreign key with another workspace prefix → denied even for a member.
+	ok, err = e.svc.CanAccessKey(ctx, p, "video/"+e.wsForeign+"/assets/other/abc.png")
+	require.NoError(t, err)
+	assert.False(t, ok, "another workspace's key never matches the caller's workspace predicate")
+
+	// Unregistered key inside the same workspace prefix → 404-equivalent (false).
+	ok, err = e.svc.CanAccessKey(ctx, p, e.wsID+"/assets/"+pr.ID+"/unregistered.png")
+	require.NoError(t, err)
+	assert.False(t, ok, "membership alone does not grant an unregistered key")
+
+	// Bad project id → E_VIDEO_PROJECT_NOT_FOUND (explicit check, not FK 500).
+	_, err = e.svc.UploadAsset(ctx, p, "00000000-0000-0000-0000-000000000000", "x.png", "image/png", []byte("m"))
+	require.Error(t, err)
+	var we *webx.Error
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
+
+	// Foreign workspace principal cannot touch this project's assets.
+	_, err = e.svc.UploadAsset(ctx, e.principal(e.wsForeign), pr.ID, "x.png", "image/png", []byte("m"))
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_FORBIDDEN", we.Code)
+
+	// Project delete: registry rows cascade + storage sweep deletes the objects.
+	require.NoError(t, e.svc.Delete(ctx, p, pr.ID))
+	assert.ElementsMatch(t, []string{key, audioKey}, store.deleted, "storage sweep collected exactly the registered keys")
+
+	// Revocation: the key prefix still parses, but no registry/render row
+	// survives → CanAccessKey false (the file handler maps this to 404).
+	ok, err = e.svc.CanAccessKey(ctx, p, key)
+	require.NoError(t, err)
+	assert.False(t, ok, "CASCADE-deleted asset revokes access")
+
+	// Render products: a succeeded render row grants its output key WITHOUT
+	// a video_asset row; deleting the project cascades the render row too.
+	// The row id doubles as the key segment (render_pipeline.go builds
+	// video/<ws>/renders/<rowID>/output.mp4 from the row), so the fixture
+	// inserts the row first and derives the key from the RETURNING id.
+	pr2, err := e.svc.Create(ctx, p, "渲染产物归属")
+	require.NoError(t, err)
+	var renderID string
+	require.NoError(t, e.pool.QueryRow(ctx, `
+		INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, output_key, created_by)
+		VALUES ($1, $2, $3, 'succeeded', '{}'::jsonb, '', 'tester') RETURNING id`,
+		ids.NewV7().String(), pr2.ID, e.wsID).Scan(&renderID))
+	outKey := "video/" + e.wsID + "/renders/" + renderID + "/output.mp4"
+	_, xerr := e.pool.Exec(ctx,
+		`UPDATE video_render SET output_key=$2 WHERE id=$1`, renderID, outKey)
+	require.NoError(t, xerr)
+	ok, err = e.svc.CanAccessKey(ctx, p, outKey)
+	require.NoError(t, err)
+	assert.True(t, ok, "render output key granted by the render row (no asset row)")
+	// render thumbnail shares the render id namespace → same grant.
+	thumbKey := strings.TrimSuffix(outKey, "output.mp4") + "thumb.jpg"
+	ok, err = e.svc.CanAccessKey(ctx, p, thumbKey)
+	require.NoError(t, err)
+	assert.True(t, ok, "thumbnail resolves through the same render row")
+
+	// Fake render id under the prefix (forged path) → denied.
+	ok, err = e.svc.CanAccessKey(ctx, p, "video/"+e.wsID+"/renders/"+ids.NewV7().String()+"/output.mp4")
+	require.NoError(t, err)
+	assert.False(t, ok, "forged render id has no row")
+}
+
+// TestIntegration_AssetRegistry_DeleteSweepFailOpen covers the storage-sweep
+// failure contract: the DB rows are authoritative (delete succeeds), a
+// storage outage only orphans the objects (they lose their credential rows,
+// so they can no longer be served).
+func TestIntegration_AssetRegistry_DeleteSweepFailOpen(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	store := newFakeStore()
+	e.svc.ports.Store = store
+	store.failDel = true
+
+	p := e.principal(e.wsID)
+	pr, err := e.svc.Create(ctx, p, "清扫失败")
+	require.NoError(t, err)
+	key, err := e.svc.UploadAsset(ctx, p, pr.ID, "a.png", "image/png", []byte("aaa"))
+	require.NoError(t, err)
+
+	// Delete still succeeds (storage failure is warn-only).
+	require.NoError(t, e.svc.Delete(ctx, p, pr.ID))
+	ok, err := e.svc.CanAccessKey(ctx, p, key)
+	require.NoError(t, err)
+	assert.False(t, ok, "credential row is gone even when the object survives")
+	require.Len(t, store.puts, 1, "object itself survived the failed sweep (soft-delete acceptable)")
 }
 
 const httpStatusUnavailable = 503

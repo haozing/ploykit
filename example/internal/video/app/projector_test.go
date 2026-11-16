@@ -196,3 +196,65 @@ func TestProjector_ElementTimeWindow_Projection(t *testing.T) {
 	_, has = payload.Elements[1]["endFrame"]
 	assert.False(t, has, "no endFrame key on windowless element")
 }
+
+func TestProjector_FontFace_DataURI(t *testing.T) {
+	// F-FNT-01: the projector inlines the Noto Sans SC subset @font-face as a
+	// data URI — glyph rasterization must not depend on which system CJK fonts
+	// the render machine happens to have. The document stays self-contained
+	// (§4.4.5): the data URI IS the font, no network fetch.
+	ir := validIR()
+	ir.Elements = []Element{
+		{ID: "title_1", Type: ElementText, Text: "标题", X: 0, Y: 0, W: 800, H: 120},
+	}
+	html, err := NewProjector(nil).HTML(t.Context(), ir, "")
+	require.NoError(t, err)
+	s := string(html)
+
+	assert.Contains(t, s, "@font-face", "font-face rule present")
+	assert.Contains(t, s, "font-family:'Noto Sans SC Sub'", "subset family declared")
+	assert.Contains(t, s, `font-weight:400 900`, "variable weight range declared")
+	assert.Contains(t, s, "format('woff2')", "woff2 format hint")
+
+	// The data URI payload is present, non-empty, and decodes to woff2 bytes
+	// (magic "wOF2", §WOFF2 spec: first 4 bytes of the table directory).
+	const marker = "url(data:font/woff2;base64,"
+	start := strings.Index(s, marker)
+	require.GreaterOrEqual(t, start, 0, "data URI prefix present")
+	start += len(marker)
+	end := strings.Index(s[start:], ")")
+	require.Greater(t, end, 0, "data URI terminated")
+	b64 := s[start : start+end]
+	require.NotEmpty(t, b64, "font payload non-empty")
+	raw, derr := base64.StdEncoding.DecodeString(b64)
+	require.NoError(t, derr, "payload is valid base64")
+	require.Greater(t, len(raw), 1000, "payload is a real font, not a stub")
+	require.Equal(t, "wOF2", string(raw[:4]), "woff2 magic bytes")
+
+	// The subset family heads the CSS fallback chain so it wins over system
+	// fonts even if a machine has real Noto/PingFang/YaHei installed.
+	assert.Contains(t, s,
+		`font-family: "Noto Sans SC Sub", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif`,
+		"subset family first in the fallback chain")
+
+	// Zero-network invariant: the font never appears as an external URL. The
+	// check targets the font-face rule, not the whole document — the vendored
+	// gsap bundle legitimately contains license-banner URLs and SVG namespace
+	// strings (constants, never fetched), and base64 payloads can contain
+	// incidental "http" substrings.
+	assert.NotContains(t, FontFaceCSS(), "http://", "font-face is data-URI only")
+	assert.NotContains(t, FontFaceCSS(), "https://", "font-face is data-URI only")
+	// Exactly one url() in the rule and it is the inline data URI.
+	assert.Equal(t, 1, strings.Count(FontFaceCSS(), "url("), "single url() = the data URI")
+
+	// FontSubset() exposes the same bytes the projection inlines.
+	require.Equal(t, raw, FontSubset(), "embedded asset matches inlined payload")
+}
+
+func TestFontSubset_Woff2Magic(t *testing.T) {
+	// The vendored asset itself: exists (go:embed compile-time guarantees the
+	// path), non-trivial, and starts with the woff2 magic. Guards against the
+	// file being replaced by an empty/corrupt artifact.
+	raw := FontSubset()
+	require.Greater(t, len(raw), 100_000, "subset has real content (expected ~217KB)")
+	require.Equal(t, "wOF2", string(raw[:4]), "woff2 magic")
+}

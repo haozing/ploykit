@@ -177,6 +177,28 @@ func TestHandleFile_KeyPrefixAuthorization(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestHandleFile_UnregisteredKey_Is404(t *testing.T) {
+	// F-AUTH-01: membership alone is no longer sufficient — a key inside the
+	// caller's own workspace prefix WITHOUT a video_asset / video_render
+	// registry row is a generic 404 (indistinguishable from nonexistent).
+	// CanAccessKey fails closed on the nil pool here, which is exactly the
+	// "no registry, no access" posture (the DB-backed grant is covered by
+	// the app integration suite).
+	d := Deps{Svc: svc(true)}
+	p := principal("ws1", false)
+	w := run(d.handleFile, http.MethodGet, "/api/video/files/video/ws1/assets/p1/whatever.png", "", p,
+		map[string]string{"key": "video/ws1/assets/p1/whatever.png"})
+	assert.Equal(t, http.StatusNotFound, w.Code, "unregistered key must not be served to a workspace member")
+
+	// The membership gate still runs first (403 on foreign workspace) —
+	// unchanged fail-fast ordering.
+	dDeny := Deps{Svc: svc(false)}
+	pForeign := principal("ws2", false)
+	w = run(dDeny.handleFile, http.MethodGet, "/api/video/files/video/ws1/assets/p1/x.png", "", pForeign,
+		map[string]string{"key": "video/ws1/assets/p1/x.png"})
+	assert.Equal(t, http.StatusForbidden, w.Code, "foreign workspace still 403 before the registry gate")
+}
+
 func TestWorkspaceFromKey(t *testing.T) {
 	ws, ok := workspaceFromKey("video/abc-123/assets/p1/x.png")
 	assert.True(t, ok)

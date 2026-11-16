@@ -6,7 +6,7 @@
   "ffmpeg": "ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
   "fps": 25,
   "frame_basis": "ceil(durationSec*fps), videoapp.DurationFrames = 2250",
-  "generated_at": "2026-11-16T09:33:28+08:00",
+  "generated_at": "2026-11-16T11:32:53+08:00",
   "go": "go1.27.0",
   "height": 1080,
   "ir_sha256": "d7335f18708bb9056b8fce192ee8c88df98ef595edde4cc6994d2f8e9ed14a4b",
@@ -54,7 +54,7 @@
     46
   ],
   "render_mode": "full 2250-frame loop; keyframes + probes kept",
-  "render_total_ms": 218394,
-  "run_id": "l1-06-20261116-092948-c1e5",
+  "render_total_ms": 225229,
+  "run_id": "l1-06-20261116-112906-dddf",
   "width": 1920
 }

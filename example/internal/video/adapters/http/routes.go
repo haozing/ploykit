@@ -188,8 +188,10 @@ func (d Deps) handlePreview(w http.ResponseWriter, r *http.Request, p *webx.Prin
 		webx.WriteErr(w, videoapp.ErrInternalPreview)
 		return
 	}
+	// font-src data: — the projector inlines the Noto Sans SC subset as a
+	// data URI @font-face (F-FNT-01); default-src 'none' would block it.
 	h.Set("Content-Security-Policy", "default-src 'none'; script-src "+hash+
-		"; style-src 'unsafe-inline'; img-src 'self' data:; media-src 'self';"+
+		"; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; media-src 'self';"+
 		" frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(html)
@@ -264,11 +266,16 @@ func (d Deps) handleUploadAsset(w http.ResponseWriter, r *http.Request, p *webx.
 	})
 }
 
-// handleFile serves one storage object with authorization derived from the
-// key itself (§D8): key prefix video/<wsID>/ parses the workspace, then
-// membership is checked BEFORE any byte is served. Local backend streams via
-// http.ServeContent (Range/HEAD/If-Range — mp4 scrubbing); S3 presigns a 302
-// through Deps.FileServer.
+// handleFile serves one storage object with THREE-layer authorization
+// (§D8 + F-AUTH-01/F-TRA-01): (1) the key must carry the video/<wsID>/
+// prefix (fail-fast — a foreign key is a 404 before any DB work); (2)
+// workspace membership on the prefix-derived wsID, checked BEFORE any byte
+// is served; (3) the key must trace to a registered ownership credential
+// (video_asset row / video_render row) via Svc.CanAccessKey — workspace
+// membership alone no longer grants read on every object under the prefix
+// ("member ≠ all-readable"), and project deletion revokes access with the
+// CASCADEd rows. Local backend streams via http.ServeContent (Range/HEAD/
+// If-Range — mp4 scrubbing); S3 presigns a 302 through Deps.FileServer.
 func (d Deps) handleFile(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
 	key := r.PathValue("key")
 	wsID, ok := workspaceFromKey(key)
@@ -279,6 +286,18 @@ func (d Deps) handleFile(w http.ResponseWriter, r *http.Request, p *webx.Princip
 	ok, err := d.Svc.CanAccess(r.Context(), p, wsID)
 	if err != nil || !ok {
 		webx.ErrForbidden(w, "not a member of this workspace")
+		return
+	}
+	// Registry gate (F-AUTH-01): membership is necessary but not sufficient.
+	// An unregistered (or CASCADE-deleted) key is indistinguishable from a
+	// nonexistent one: generic 404, no existence leak.
+	ok, aerr := d.Svc.CanAccessKey(r.Context(), p, key)
+	if aerr != nil {
+		webx.ErrInternal(w)
+		return
+	}
+	if !ok {
+		webx.ErrNotFound(w, "object not found")
 		return
 	}
 	if d.FileServer != nil {
@@ -292,8 +311,11 @@ func (d Deps) handleFile(w http.ResponseWriter, r *http.Request, p *webx.Princip
 		}
 		return
 	}
-	// Local path: open + ServeContent (Range etc.), private immutable cache
-	// (content-addressed keys but private content — never public caches).
+	// Local path: open + ServeContent (Range etc.). Content is PRIVATE and
+	// revocable (project delete CASCADEs the registry row that authorizes
+	// it), so the cache window is short (round4 Q1: the year-long immutable
+	// window outlived the revocation — max-age=300 keeps mp4 scrubbing snappy
+	// while letting an authorization change stick within minutes).
 	body, obj, err := d.Store.Open(r.Context(), key)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -314,8 +336,8 @@ func (d Deps) handleFile(w http.ResponseWriter, r *http.Request, p *webx.Princip
 	h := w.Header()
 	h.Set("Content-Type", ct)
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Cache-Control", "private, max-age=31536000, immutable")
-	h.Set("Last-Modified", time.Unix(obj.Size, 0).UTC().Format(http.TimeFormat)) // obj has no mtime; now is fine for immutable keys
+	h.Set("Cache-Control", "private, max-age=300")
+	h.Set("Last-Modified", time.Unix(obj.Size, 0).UTC().Format(http.TimeFormat)) // obj has no mtime; now is fine for content-addressed keys
 	if dispositionFor(ct) == "attachment" {
 		h.Set("Content-Disposition", "attachment")
 	}
