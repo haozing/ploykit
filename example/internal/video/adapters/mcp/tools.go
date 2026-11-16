@@ -6,6 +6,7 @@
 // code (E_VIDEO_* / E_NOT_CONFIGURED / E_QUOTA_EXCEEDED); /mcp routes are
 // contract-exempt (ADR 0014) so these tools do not appear in openapi.yaml.
 package videomcp
+
 import (
 	"context"
 	"encoding/base64"
@@ -42,14 +43,22 @@ var ErrScopeDenied = errors.New("videomcp: scope denied")
 // can pin the wire shape). TargetElementID is the optional element-level
 // target of the IR extension (T-10): it lands on Effect.TargetElementID
 // (targetElementId in the IR document) and is write-time validated there.
+//
+// Params is map[string]any (批2 P1-2 catch-22)：此前是 json.RawMessage——
+// jsonschema 库把 []byte 推成 "null|array of integer 0-255"，而服务端校验
+// 又要求 JSON object（"params must be a JSON object"），两边互斥、任何
+// params 都传不进去。object 化后 schema 与服务端语义一致；handler 再 marshal
+// 回 Effect.Params 存的 RawMessage。有意保持 map 而非 per-type 结构体：效果
+// 参数形状由 effect type 决定，工具层不做形状校验（服务端 ir.go Validate
+// 才是 strict gate）。
 type addEffectIn struct {
-	ProjectID       string          `json:"project_id" jsonschema:"project id"`
-	AnchorText      string          `json:"anchor_text" jsonschema:"anchor word text (must exist in words[]; miss = error)"`
-	Occurrence      int             `json:"occurrence,omitempty" jsonschema:"0-based occurrence of the text among words (default 0)"`
-	Type            string          `json:"type" jsonschema:"effect type: pulse|counter|highlight|shake|fade"`
-	Params          json.RawMessage `json:"params,omitempty" jsonschema:"effect params object, validated per type"`
-	TargetElementID string          `json:"target_element_id,omitempty" jsonschema:"optional element id the effect targets (must exist in elements[]; counter positions its host at that element's bbox)"`
-	ExpectedVersion *int            `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
+	ProjectID       string         `json:"project_id" jsonschema:"project id"`
+	AnchorText      string         `json:"anchor_text" jsonschema:"anchor word text (must exist in words[]; miss = error)"`
+	Occurrence      int            `json:"occurrence,omitempty" jsonschema:"0-based occurrence of the text among words (default 0)"`
+	Type            string         `json:"type" jsonschema:"effect type: pulse|counter|highlight|shake|fade"`
+	Params          map[string]any `json:"params,omitempty" jsonschema:"effect params as a JSON OBJECT (shape depends on type) — highlight: {\"color\":\"#5FB3B3\"}, counter: {\"from\":0,\"to\":100}; omit for per-type defaults"`
+	TargetElementID string         `json:"target_element_id,omitempty" jsonschema:"optional element id the effect targets (must exist in elements[]; counter positions its host at that element's bbox)"`
+	ExpectedVersion *int           `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 }
 
 // Deps carries the service plus the capability probe (no capx import: the
@@ -139,12 +148,14 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	// ---- video_upsert_element (video:write) ----
 	type upsertElementIn struct {
 		ProjectID       string         `json:"project_id" jsonschema:"project id"`
-		Element         map[string]any `json:"element" jsonschema:"element object {id,type:image|text|shape,src?,x,y,w,h,z,animations?}; src must be a video/<workspace>/ storage key uploaded first (unregistered src = 400 E_VIDEO_IR_INVALID details.field elements[N].src)"`
+		Element         map[string]any `json:"element" jsonschema:"element object {id,type:image|text|shape,src?,x,y,w,h,z,startFrame/endFrame (start_frame/end_frame accepted as aliases),animations?}; src must be a video/<workspace>/ storage key uploaded first (unregistered src = 400 E_VIDEO_IR_INVALID details.field elements[N].src)"`
 		ExpectedVersion *int           `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 		WorkspaceID     string         `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 	}
 	mcpAdd(s, "video_upsert_element",
-		"Insert or replace one canvas element by id. Image src must reference an uploaded asset (video_upload_asset first); a dangling src is rejected at write time with E_VIDEO_IR_INVALID (asset not registered). "+
+		"Insert or replace one canvas element by id. REPLACE-WHOLESALE semantics: the existing element is discarded wholesale — animations and the startFrame/endFrame window on the existing element are dropped unless included in the new element (this is upsert, not a patch). "+
+			"Frame-window and font-size fields accept both camelCase (startFrame/endFrame/fontSize, canonical) and snake_case aliases (start_frame/end_frame/font_size — matching list_elements' response field names); camelCase wins if both are sent. "+
+			"Image src must reference an uploaded asset (video_upload_asset first); a dangling src is rejected at write time with E_VIDEO_IR_INVALID (asset not registered). "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in upsertElementIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
@@ -176,6 +187,9 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in moveElementIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
+				return nil, err
+			}
+			if err := requireElementArg(ctx, deps, p, in.ProjectID, in.ElementID); err != nil {
 				return nil, err
 			}
 			version, err := deps.Svc.MoveElement(ctx, p, in.ProjectID, in.ElementID, in.X, in.Y, in.ExpectedVersion)
@@ -222,6 +236,9 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			if in.StartAnchor != "" {
 				an.StartAnchor = &videoapp.Anchor{Text: in.StartAnchor, Occurrence: in.Occurrence}
 			}
+			if err := requireElementArg(ctx, deps, p, in.ProjectID, in.ElementID); err != nil {
+				return nil, err
+			}
 			version, rf, err := deps.Svc.AnimateElement(ctx, p, in.ProjectID, in.ElementID, an, in.ExpectedVersion)
 			if err != nil {
 				return nil, err
@@ -236,15 +253,22 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	}
 	mcpAdd(s, "video_add_effect_at_word",
 		"Add a motion effect anchored at a word. Resolved word index + reason come back in resolvedFrom. Pass target_element_id to bind the effect to an existing element (counter renders at that element's position). "+
+			"params is a JSON OBJECT whose shape depends on type — highlight: {\"color\":\"#5FB3B3\"}, counter: {\"from\":0,\"to\":100}; omit it for per-type defaults. "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in addEffectWorkspaceIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
+			// params map → Effect.Params 的 RawMessage（省略时保持 nil，效果走
+			// per-type 默认值——与旧行为一致）。
+			params, err := effectParamsRaw(in.Params)
+			if err != nil {
+				return nil, err
+			}
 			version, rf, err := deps.Svc.AddEffectAtWord(ctx, p,
 				in.ProjectID, videoapp.Anchor{Text: in.AnchorText, Occurrence: in.Occurrence},
-				in.Type, in.Params, in.TargetElementID, in.ExpectedVersion)
+				in.Type, params, in.TargetElementID, in.ExpectedVersion)
 			if err != nil {
 				return nil, err
 			}
@@ -274,7 +298,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			if ct == "" {
 				ct = contentTypeFromName(in.Filename)
 			}
-			key, err := deps.Svc.UploadAsset(ctx, p, in.ProjectID, in.Filename, ct, data)
+			key, err := deps.Svc.UploadAsset(ctx, p, in.ProjectID, in.Filename, ct, data, videoapp.UploadLimit)
 			if err != nil {
 				return nil, err
 			}
@@ -352,7 +376,8 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		WorkspaceID     string       `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 	}
 	mcpAdd(s, "video_render",
-		"Submit a render of the project's IR snapshot. Fails with E_NOT_CONFIGURED when the render capability is offline (no quota spent), E_QUOTA_EXCEEDED when the monthly quota is out.",
+		"Submit a render of the project's IR snapshot. Fails with E_NOT_CONFIGURED when the render capability is offline (no quota spent), E_QUOTA_EXCEEDED when the monthly quota is out. "+
+			"Once video_get_render reports succeeded, fetch the finished file's output_url with Authorization: Bearer <PAT> PLUS the X-Workspace-Id header (workspace member) — a bare PAT GET returns 400 E_VALIDATION.",
 		ScopeRender, func(ctx context.Context, _ *mcp.CallToolRequest, in renderIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
@@ -553,11 +578,11 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			outFrames := make([]map[string]any, 0, len(results))
 			for _, res := range results {
 				entry := map[string]any{
-					"frame":     res.Frame,
+					"frame":      res.Frame,
 					"png_base64": base64.StdEncoding.EncodeToString(res.PNG),
-					"width":     res.Width,
-					"height":    res.Height,
-					"cached":    res.Cached,
+					"width":      res.Width,
+					"height":     res.Height,
+					"cached":     res.Cached,
 				}
 				if clampedSet[res.Frame] {
 					entry["frame_clamped"] = true
@@ -600,6 +625,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	}
 	mcpAdd(s, "video_set_script",
 		"Replace the narration script. Words are re-derived and every effect/animation anchor is re-resolved; the response lists which anchors drifted. "+
+			"An empty/whitespace script is rejected at the tool layer (an empty script would clear the word table — there is no legitimate clear-by-empty path; word timing is always re-derived from real text). "+
 			"Word derivation degrades and never fails: when TTS is unwired or its vendor call errors, the aligner is tried next; when neither succeeds "+
 			"the words fall back to the char-proportional estimate (words_source=\"estimated\"). There is NO E_TTS_UNAVAILABLE / E_ALIGNER_UNAVAILABLE error "+
 			"code — a missing or failing voice capability is not an error surface; check words_source in the response instead (§8.5a ruling).",
@@ -607,6 +633,13 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
+			}
+			// 空串门禁（批2 P2-5）：服务层 SetScript 对空 script 静默接受并把
+			// 词表清成空（E2E 实拍）——编排 agent 拼错参数名（script 落到别的
+			// 字段上）时无任何反馈，锚点全灭。MCP 工具层 fail-closed；REST 面
+			// 的 service 语义本批不动。
+			if strings.TrimSpace(in.Script) == "" {
+				return nil, errors.New("script is required (empty script would clear the word table)")
 			}
 			version, resolutions, source, err := deps.Svc.SetScript(ctx, p, in.ProjectID, in.Script, in.ExpectedVersion)
 			if err != nil {
@@ -670,7 +703,8 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		WorkspaceID string `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 	}
 	mcpAdd(s, "video_get_render",
-		"Fetch one render's status/progress/output (queued|running|succeeded|failed|interrupted + frames counters + output_url when done).",
+		"Fetch one render's status/progress/output (queued|running|succeeded|failed|interrupted + frames counters + output_url when done). "+
+			"output_url must be fetched with Authorization: Bearer <PAT> PLUS the X-Workspace-Id header (workspace member) — a bare PAT GET returns 400 E_VALIDATION.",
 		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in getRenderIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
@@ -695,6 +729,8 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	// 已保证存量 IR 合法）。增量只有五块：能力探针、帧数预览、锚点汇总、
 	// 音频摘要、末词截断告警（真校验盲区：无配音时 words 超时长会被
 	// DurationFrames 静默截掉）。全只读，不建 render 行不扣配额。
+	// e2e agent2 P2-7 追加第六块：零元素项目 → renderable=false + 告警
+	// （此前空项目被判 renderable=true，烧配额渲出 26KB 空白片）。
 	mcpAdd(s, "video_validate",
 		"Read-only pre-render check (dry-run): what would happen if you submitted video_render right now. Returns the render capability status, the frame "+
 			"count the render would produce, an anchor-resolution summary (exact/nearest/missing counts + the missing list — missing anchors will NOT appear), "+
@@ -752,16 +788,22 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			if len(pr.IR.Words) == 0 {
 				warnings = append(warnings, "no word table: subtitles and word-anchored effects/animations have nothing to anchor to")
 			}
+			renderable, noElements := validateRenderable(pr.IR, capOnline)
+			if noElements != nil {
+				warnings = append(warnings, *noElements)
+			}
 			out := map[string]any{
-				"renderable":     capOnline,
+				"renderable":        renderable,
 				"capability_online": capOnline,
-				"frames_total":   total,
-				"resolutions":    map[string]any{"counts": counts, "missing": missingList},
-				"audio":          audio,
-				"warnings":       warnings,
+				"frames_total":      total,
+				"resolutions":       map[string]any{"counts": counts, "missing": missingList},
+				"audio":             audio,
+				"warnings":          warnings,
 			}
 			if !capOnline {
 				out["hint"] = "render capability offline: video_render will fail with E_NOT_CONFIGURED (no quota spent)"
+			} else if !renderable {
+				out["hint"] = "no canvas elements: submitting video_render now would burn quota and produce an empty video"
 			}
 			return out, nil
 		})
@@ -907,12 +949,12 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				})
 			}
 			return map[string]any{
-				"frames":        outFrames,
-				"render_id":     r.ID,
-				"output_key":    r.OutputKey,
-				"frames_total":  r.FramesTotal,
-				"frames_done":   r.FramesDone,
-				"params":        r.Params,
+				"frames":       outFrames,
+				"render_id":    r.ID,
+				"output_key":   r.OutputKey,
+				"frames_total": r.FramesTotal,
+				"frames_done":  r.FramesDone,
+				"params":       r.Params,
 			}, nil
 		})
 
@@ -998,12 +1040,17 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				Script: script, TemplateKey: tpl, ThemeKey: th,
 			})
 			if err != nil {
-				return map[string]any{"project_id": pr.ID, "stage": "compose", "error": err.Error()}, nil
+				// stage 失败必须 isError=true（批2 P2-4，E2E 实拍：compose 阶段
+				// 失败曾以 isError=false + error 字段返回——编排 agent 可能当作
+				// 成功收尾）。项目保留（可能想重试），错误文本带 project_id 与
+				// 清理路径。
+				return nil, generateStageErr("compose", "fix the cause and re-run video_generate_video", err, pr.ID)
 			}
 			params := videoapp.RenderParams{FPS: in.FPS, Width: in.Width, Height: in.Height}
 			r, err := deps.Svc.SubmitRender(ctx, p, pr.ID, params, &res.Version, pr.ID)
 			if err != nil {
-				return map[string]any{"project_id": pr.ID, "stage": "render_submit", "cards": res.Cards, "words_source": res.WordsSource, "error": err.Error()}, nil
+				return nil, generateStageErr("render_submit",
+					"the composed IR survives — submit video_render on the same project_id to retry", err, pr.ID)
 			}
 			out := map[string]any{
 				"project_id": pr.ID, "render_id": r.ID, "status": r.Status,
@@ -1019,9 +1066,10 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				time.Sleep(1 * time.Second)
 				cur, err := deps.Svc.GetRender(ctx, p, r.ID)
 				if err != nil {
-					out["stage"] = "poll_error"
-					out["error"] = err.Error()
-					return out, nil
+					// 轮询失败同样是失败面（isError=true）：渲染行还在，agent
+					// 拿 render_id 去 video_get_render 查真值。
+					return nil, fmt.Errorf("video_generate_video failed at stage poll: %v — project_id %s, render_id %s; "+
+						"the render row survives — poll video_get_render with that render_id for ground truth", err, pr.ID, r.ID)
 				}
 				out["status"] = cur.Status
 				out["frames_done"] = cur.FramesDone
@@ -1029,11 +1077,18 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				switch cur.Status {
 				case "succeeded":
 					out["output_url"] = "/api/video/files/" + cur.OutputKey
-					out["download_hint"] = "GET output_url with the same credentials (PAT; workspace member)"
+					out["download_hint"] = "GET output_url with the same credentials — Authorization: Bearer <PAT> plus the X-Workspace-Id header (workspace member; bare PAT GET = 400 E_VALIDATION)"
 					return out, nil
 				case "failed", "interrupted":
-					out["error"] = cur.Error
-					return out, nil
+					// 终态失败也 isError=true（与 stage 失败同理由：isError=false +
+					// "error" 字段会被编排 agent 当成功收尾）。项目保留。
+					detail := cur.Error
+					if strings.TrimSpace(detail) == "" {
+						detail = "(no error detail recorded)"
+					}
+					return nil, fmt.Errorf("render %s ended with status %s: %s — project_id %s kept for retry "+
+						"(inspect with video_inspect, resubmit video_render when fixed; delete the project via REST DELETE /api/video/projects/%s if unwanted)",
+						r.ID, cur.Status, detail, pr.ID, pr.ID)
 				}
 				if time.Now().After(deadline) {
 					out["stage"] = "poll_timeout"
@@ -1228,6 +1283,59 @@ func resolveWorkspacePrincipal(p *webx.Principal, workspaceID string) (*webx.Pri
 	return &p2, nil
 }
 
+// requireElement is the pure element-existence check (批2 P1-3)：service 层
+// MoveElement/AnimateElement 对未知元素 id 复用 ErrAnchorNotFound（"anchor
+// text not found in words"——E2E 实拍：move_element 传不存在的 element_id
+// 被报成锚词缺失，agent 自修复被带去改剧本）。本批不碰 app/service.go，
+// 所以在 MCP 层先查元素存在再进 Mutate；错误码沿用 targetElementId 校验的
+// E_VIDEO_IR_INVALID（同一类引用不存在错误），文案与锚词完全解耦。
+func requireElement(ir *videoapp.IR, elementID string) error {
+	for i := range ir.Elements {
+		if ir.Elements[i].ID == elementID {
+			return nil
+		}
+	}
+	return webx.NewError(400, "E_VIDEO_IR_INVALID",
+		"element "+elementID+" not found (discover existing ids with video_list_elements)")
+}
+
+// requireElementArg is move_element / animate_element's precondition: the
+// element must exist in the project's current IR before the mutate runs.
+// Costs one read-only Get per call — acceptable for surgical-edit cadence.
+// The check-then-mutate window is benign: elements have no delete primitive
+// (compose rebuilds them wholesale but compose takes its own caller), so the
+// worst case is a stale error text, never a wrong write.
+func requireElementArg(ctx context.Context, deps Deps, p *webx.Principal, projectID, elementID string) error {
+	if strings.TrimSpace(elementID) == "" {
+		return errors.New("element_id is required")
+	}
+	pr, err := deps.Svc.Get(ctx, p, projectID)
+	if err != nil {
+		return err
+	}
+	return requireElement(pr.IR, elementID)
+}
+
+// generateStageErr builds the isError=true failure text for the shortcut
+// pipeline (批2 P2-4)：stage 失败曾以 isError=false + 结构化字段返回，编排
+// agent 可能当作成功。所有失败面（compose / render_submit / poll / 终态）
+// 统一为一行带 stage、cause、project 去向的文本；项目保留（agent 可能想
+// 重试），清理路径（REST DELETE）写进文本。
+func generateStageErr(stage, next string, cause error, projectID string) error {
+	return fmt.Errorf("video_generate_video failed at stage %s: %v — project_id %s kept for retry; %s "+
+		"(delete the project via REST DELETE /api/video/projects/%s if unwanted)", stage, cause, projectID, next, projectID)
+}
+
+// effectParamsRaw converts the tool's params map into the RawMessage shape
+// Effect.Params stores (nil map = nil = per-type defaults). Extracted so the
+// decode contract is unit-testable without a database.
+func effectParamsRaw(p map[string]any) (json.RawMessage, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return json.Marshal(p)
+}
+
 // mcpAdd is the shared tool skeleton (§4.6): scope gate is literally the
 // first line inside the wrapped handler.
 func mcpAdd[In any](s *mcp.Server, name, description, scope string, fn func(context.Context, *mcp.CallToolRequest, In) (any, error)) {
@@ -1267,9 +1375,59 @@ func requireToolScope(ctx context.Context, scope string) error {
 	return nil
 }
 
+// elementKeyAliases maps the snake_case spellings agents naturally send onto
+// the IR document's camelCase json keys (批2 P1-1：E2E 实拍——list_elements
+// 的响应字段是 snake_case（start_frame/end_frame），编排 agent 按响应字段名
+// 反推输入名是最自然的动作；此前这些键被静默丢弃，元素窗口丢失无任何反馈）。
+var elementKeyAliases = map[string]string{
+	"start_frame": "startFrame",
+	"end_frame":   "endFrame",
+	"font_size":   "fontSize",
+}
+
+// animationKeyAliases is the same alias pass for nested animations[] entries
+// (animate_element 的顶层入参用 duration_frames，upsert_element 内嵌动画的
+// IR 键却是 durationFrames——同一族不一致，一并兜底).
+var animationKeyAliases = map[string]string{
+	"duration_frames": "durationFrames",
+	"from_value":      "fromValue",
+	"to_value":        "toValue",
+	"start_anchor":    "startAnchor",
+	"resolved_from":   "resolvedFrom",
+}
+
+// applyKeyAliases moves snake_case alias keys onto their camelCase canonical
+// keys, in place. camelCase wins when both spellings appear (snake 兜底、
+// 不做冲突检测——刻意最简，见批2 修复清单第 1 条；冲突值静默丢弃与现状的
+// 静默丢弃等价，但至少 canonical 语义可达).
+func applyKeyAliases(m map[string]any, aliases map[string]string) {
+	for snake, camel := range aliases {
+		v, ok := m[snake]
+		if !ok {
+			continue
+		}
+		if _, exists := m[camel]; !exists {
+			m[camel] = v
+		}
+		delete(m, snake)
+	}
+}
+
 // decodeElement converts the tool's map into the typed Element (explicit
 // keys; unknown keys silently dropped — the IR Validate is the strict gate).
+// snake_case alias keys (elementKeyAliases / animationKeyAliases) are
+// normalized onto the camelCase IR keys first, so an agent mirroring
+// list_elements' response field names gets the element it asked for instead
+// of a silently window-less element.
 func decodeElement(m map[string]any) (videoapp.Element, error) {
+	applyKeyAliases(m, elementKeyAliases)
+	if anims, ok := m["animations"].([]any); ok {
+		for _, a := range anims {
+			if am, ok := a.(map[string]any); ok {
+				applyKeyAliases(am, animationKeyAliases)
+			}
+		}
+	}
 	b, err := json.Marshal(m)
 	if err != nil {
 		return videoapp.Element{}, err

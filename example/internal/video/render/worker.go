@@ -293,20 +293,68 @@ func (w *Worker) pushState(ctx context.Context, row *renderRow, errMsg string) {
 // SweepOrphans implements the boot cleanup (§4.9.2): running rows whose
 // updated_at is older than OrphanAfter belong to a dead process; mark them
 // failed. Best-effort: errors are logged, not fatal.
+//
+// e2e agent3 Bug-2 fix (quota tail): the sweep now also RELEASES the quota
+// slot per reclaimed row — the boot-only sweep was missing rows younger than
+// the window (crash → quick restart) AND silently kept their quota spent;
+// the reconciler's stale-running branch (StaleAfter) is the safety net for
+// rows the sweep's one-shot boot pass missed, and this release is the
+// compensation the sweep owes for the rows it does close.
+//
+// Release claim: one atomic statement (CTE + FOR UPDATE SKIP LOCKED) reads
+// released_at's pre-state and stamps it when NULL — the same one-shot
+// release-claim contract as pgStore.update / failWithReleaseClaim (audit
+// §4 P3): a row that already released on an earlier interrupted attempt
+// (released_at NOT NULL) re-entering running before the crash is failed but
+// NOT re-released. Compensation then goes through the shared
+// releaseRenderQuota helper (period-fixed, legacy-month fallback).
 func (w *Worker) SweepOrphans(ctx context.Context) {
 	if w.deps.Pool == nil {
 		return
 	}
 	cutoff := w.now().Add(-OrphanAfter)
-	tag, err := w.deps.Pool.Exec(ctx, `
-		UPDATE video_render SET status='failed',
-		  error='interrupted: process restarted', finished_at=now()
-		WHERE status='running' AND updated_at < $1`, cutoff)
+	rows, err := w.deps.Pool.Query(ctx, `
+		WITH stale AS (
+			SELECT id, workspace_id, project_id, created_by, quota_period,
+			       to_char(created_at, 'YYYY-MM') AS created_month,
+			       released_at IS NULL AS release_claim
+			FROM video_render
+			WHERE status='running' AND updated_at < $1
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE video_render vr
+		SET status='failed', error='interrupted: process restarted', finished_at=now(),
+		  released_at = CASE WHEN vr.released_at IS NULL THEN now() ELSE vr.released_at END
+		FROM stale s
+		WHERE vr.id = s.id AND vr.status='running'
+		RETURNING s.workspace_id, s.project_id, s.created_by, vr.id::text, s.quota_period, s.created_month, s.release_claim`, cutoff)
 	if err != nil {
 		w.deps.Log.Warn("video render orphan sweep failed", "err", err)
 		return
 	}
-	if n := tag.RowsAffected(); n > 0 {
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		var wsID, projectID, createdBy, id, quotaPeriod, createdMonth string
+		var claim bool
+		if err := rows.Scan(&wsID, &projectID, &createdBy, &id, &quotaPeriod, &createdMonth, &claim); err != nil {
+			w.deps.Log.Warn("video render orphan sweep scan failed", "err", err)
+			return
+		}
+		n++
+		if claim {
+			releaseRenderQuota(ctx, w.deps.QuotaRelease, w.deps.Log, id, wsID, quotaPeriod, createdMonth)
+		}
+		if w.deps.Audit != nil {
+			w.deps.Audit.Record(ctx, &wsID, createdBy, videoapp.AuditRenderInterrupt, "video_render", id,
+				map[string]any{"project_id": projectID, "reason": "interrupted: process restarted"})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		w.deps.Log.Warn("video render orphan sweep rows failed", "err", err)
+		return
+	}
+	if n > 0 {
 		w.deps.Log.Warn("video render orphan sweep", "reclaimed", n)
 	}
 }

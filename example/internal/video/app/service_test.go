@@ -1,6 +1,7 @@
 package videoapp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -205,10 +206,12 @@ func TestDegradeMatrix_SetScriptSources(t *testing.T) {
 
 func TestMutate_PortsNotWired(t *testing.T) {
 	// Mutate against a nil pool must fail cleanly (not panic) — membership is
-	// consulted first.
+	// consulted first. The id is well-formed so the uuid shape gate passes
+	// and the membership port check is what fires.
 	svc := &ProjectService{log: testLogger()}
 	svc.ports = Ports{}
-	_, _, err := svc.Mutate(context.Background(), principal(), "p1", nil, func(_ *IR) error { return nil })
+	_, _, err := svc.Mutate(context.Background(), principal(),
+		"00000000-0000-0000-0000-000000000000", nil, func(_ *IR) error { return nil })
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "membership port not wired")
 }
@@ -271,18 +274,166 @@ func TestSubmitRender_GateOrder(t *testing.T) {
 }
 
 func TestUploadAsset_Validation(t *testing.T) {
-	// Type and size gates run before any store call.
+	// Type, size and magic gates run before any store call.
 	svc := NewProjectService(nil, Ports{Membership: fakeMembership{allow: true}}, testLogger())
-	_, err := svc.UploadAsset(context.Background(), principal(), "p1", "x.exe", "application/exe", []byte("m"))
-	require.Error(t, err)
 	var we *webx.Error
+	_, err := svc.UploadAsset(context.Background(), principal(), "p1", "x.exe", "application/exe", []byte("m"), UploadLimit)
+	require.Error(t, err)
 	require.True(t, errorAs(err, &we))
 	assert.Equal(t, "E_VIDEO_ASSET_UNSUPPORTED", we.Code)
+	assert.NotContains(t, we.Message, "does not match", "whitelist reject, not a magic mismatch")
 
-	_, err = svc.UploadAsset(context.Background(), principal(), "p1", "big.png", "image/png", make([]byte, UploadLimit+1))
+	// Channel cap: the caller-supplied limit decides (MCP 700KB vs REST 50MB).
+	_, err = svc.UploadAsset(context.Background(), principal(), "p1", "big.png", "image/png", make([]byte, UploadLimit+1), UploadLimit)
 	require.Error(t, err)
 	require.True(t, errorAs(err, &we))
 	assert.Equal(t, "E_VIDEO_ASSET_TOO_LARGE", we.Code)
+
+	// A 2MB+ real-header body still rejects at UploadLimitLarge (the large
+	// cap is a real gate, not a no-op) — assertable on the nil pool because
+	// the size gate runs before any storage/pool work.
+	big := append(append([]byte{}, pngFixture...), make([]byte, UploadLimitLarge+1)...)
+	_, err = svc.UploadAsset(context.Background(), principal(), "p1", "big.png", "image/png", big, UploadLimitLarge)
+	require.Error(t, err)
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_ASSET_TOO_LARGE", we.Code)
+
+	// Magic mismatch (agent2 P2-5): "hello" posing as image/png is rejected
+	// before any store/pool work. The project id is well-formed (zero uuid)
+	// so the flow reaches the magic gate — the shape gate runs first.
+	_, err = svc.UploadAsset(context.Background(), principal(), "00000000-0000-0000-0000-000000000000",
+		"hello.png", "image/png", []byte("hello"), UploadLimit)
+	require.Error(t, err)
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_ASSET_UNSUPPORTED", we.Code)
+	assert.Contains(t, we.Message, "does not match")
+}
+
+// pngFixture is a minimal real-header PNG body for the nil-pool unit tests
+// (the integration suite's pngBytes lives in service_db_test.go).
+var pngFixture = append([]byte{0x89, 'P', 'N', 'G'}, "\r\n\x1a\nfixture"...)
+
+// TestRenderParamsValidate anchors e2e agent3 Bug-3 at the unit level: the
+// render-parameter range gate (bgm_volume ∈ [0,1], fps whitelist) fails
+// closed, and fps=0 stays the documented inherit-from-meta sentinel.
+func TestRenderParamsValidate(t *testing.T) {
+	var we *webx.Error
+	err := (&RenderParams{FPS: 30, BGMVolume: 1.5}).validate()
+	require.Error(t, err)
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_RENDER_PARAMS_INVALID", we.Code)
+	assert.Equal(t, 400, we.Status)
+	assert.Contains(t, we.Message, "params.bgm_volume")
+
+	err = (&RenderParams{FPS: 30, BGMVolume: -0.1}).validate()
+	require.True(t, errorAs(err, &we))
+	assert.Contains(t, we.Message, "params.bgm_volume")
+
+	err = (&RenderParams{FPS: 23}).validate()
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_RENDER_PARAMS_INVALID", we.Code)
+	assert.Contains(t, we.Message, "params.fps")
+
+	for _, fps := range []int{24, 25, 30, 50, 60} {
+		require.NoError(t, (&RenderParams{FPS: fps}).validate(), "whitelisted fps")
+	}
+	require.NoError(t, (&RenderParams{FPS: 0}).validate(), "fps=0 = inherit meta (checked pre-normalize)")
+
+	// Boundary values are legal.
+	require.NoError(t, (&RenderParams{FPS: 30, BGMVolume: 0}).validate())
+	require.NoError(t, (&RenderParams{FPS: 30, BGMVolume: 1}).validate())
+}
+
+// TestRenderParamsValidateThenNormalize pins the SubmitRender order: the
+// range gate runs on the RAW params (fps=0 passes), normalize then maps 0 →
+// the IR meta fps, and the normalized fps is whitelisted.
+func TestRenderParamsValidateThenNormalize(t *testing.T) {
+	ir := &IR{Meta: Meta{FPS: 25, Width: 1080, Height: 1920, DurationSec: 10}}
+	p := RenderParams{BGMVolume: 0.8}
+	require.NoError(t, p.validate())
+	p.normalize(ir)
+	assert.Equal(t, 25, p.FPS, "fps=0 inherited the meta fps")
+	require.NoError(t, (&RenderParams{FPS: p.FPS, BGMVolume: p.BGMVolume}).validate(),
+		"the normalized params re-validate clean")
+}
+
+// TestUUIDShapeGuard anchors the malformed-id entry points: a non-UUID id
+// returns the same 404 a missing row would — never a SQL-cast 500 — and the
+// shape check fires BEFORE membership/pool access (nil-pool-safe here).
+func TestUUIDShapeGuard(t *testing.T) {
+	ctx := context.Background()
+	p := principal()
+	svc := NewProjectService(nil, Ports{Membership: fakeMembership{allow: true}}, testLogger())
+
+	_, err := svc.Get(ctx, p, "not-a-uuid")
+	require.Error(t, err)
+	var we *webx.Error
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
+	assert.Equal(t, 404, we.Status)
+
+	_, err = svc.GetRender(ctx, p, "not-a-uuid")
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_RENDER_NOT_FOUND", we.Code)
+
+	_, err = svc.ListRenders(ctx, p, "not-a-uuid")
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
+
+	err = svc.Delete(ctx, p, "not-a-uuid")
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
+
+	_, _, err = svc.Mutate(ctx, p, "not-a-uuid", nil, func(_ *IR) error { return nil })
+	require.True(t, errorAs(err, &we))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
+
+	// A well-formed UUID passes the shape gate (then hits the nil pool — the
+	// shape gate itself must not reject it).
+	ok := uuidShape("00000000-0000-0000-0000-000000000000")
+	assert.True(t, ok, "well-formed uuid passes the shape gate")
+}
+
+// TestMagicMatches is the table-driven magic-byte contract (agent2 P2-5):
+// every whitelisted content type must match its real header and reject
+// foreign/garbage bodies.
+func TestMagicMatches(t *testing.T) {
+	pngHdr := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}
+	jpgHdr := []byte{0xFF, 0xD8, 0xFF, 0xE0}
+	cases := []struct {
+		ct    string
+		data  []byte
+		match bool
+	}{
+		{"image/png", pngHdr, true},
+		{"image/png", append(append([]byte{}, pngHdr...), bytes.Repeat([]byte{0}, 64)...), true},
+		{"image/png", []byte("hello"), false},
+		{"image/png", []byte{0x89}, false},
+		{"image/png", nil, false},
+		{"image/jpeg", jpgHdr, true},
+		{"image/jpeg", []byte{0xFF, 0xD8}, false}, // too short for the marker
+		{"image/jpeg", []byte("GIF89a"), false},
+		{"image/gif", []byte("GIF89a..."), true},
+		{"image/gif", []byte("GIF87a..."), true},
+		{"image/gif", []byte("GIF80a..."), false},
+		{"image/gif", pngHdr, false},
+		{"image/webp", append([]byte("RIFF"), append(bytes.Repeat([]byte{0}, 4), []byte("WEBP")...)...), true},
+		{"image/webp", []byte("RIFFxxxxWAVEfmt "), false},
+		{"audio/mpeg", append([]byte("ID3"), []byte("0303...")...), true},
+		{"audio/mpeg", []byte{0xFF, 0xFB, 0x90, 0x00}, true}, // bare frame sync
+		{"audio/mpeg", []byte{0xFF, 0x00, 0x00}, false},
+		{"audio/mpeg", []byte("ID"), false},
+		{"audio/mp4", append([]byte{0x00, 0x00, 0x00, 0x20}, append([]byte("ftyp"), []byte("M4A ")...)...), true},
+		{"audio/mp4", []byte("RIFFxxxxWEBP"), false},
+		{"audio/wav", []byte("RIFFxxxxWAVE"), true},
+		{"audio/x-wav", []byte("RIFFxxxxWAVE"), true},
+		{"audio/wav", []byte("RIFFxxxxAVI "), false},
+		{"application/exe", []byte("MZ"), false}, // non-whitelisted: no magic defined
+	}
+	for _, c := range cases {
+		got := magicMatches(c.ct, c.data)
+		assert.Equal(t, c.match, got, "%s %q", c.ct, c.data)
+	}
 }
 
 func TestOriginContext(t *testing.T) {

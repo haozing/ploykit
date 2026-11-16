@@ -4196,8 +4196,12 @@ paths:
   # 400 E_VIDEO_IR_INVALID          service.go irInvalid——IR 结构/枚举/引用校验失败（details.field 指明字段；
   #                                 含素材引用写时校验：elements[N].src 悬空 = "asset not registered"）
   # 400 E_VIDEO_ANCHOR_NOT_FOUND    service.go ErrAnchorNotFound——锚点词不存在于 words[]（AddEffect/Animate 写时）
-  # 400 E_VIDEO_ASSET_TOO_LARGE     service.go ErrAssetTooLarge——素材超出 UploadLimit（700KB）
-  # 400 E_VIDEO_ASSET_UNSUPPORTED   service.go ErrAssetUnsupported——素材 content-type 不在白名单
+  # 400 E_VIDEO_RENDER_PARAMS_INVALID service.go renderParamInvalid——渲染参数范围越界（bgm_volume ∉ [0,1]、
+  #                                 fps 非 0 且不在 24|25|30|50|60 白名单；message 以 params.<field>: 前缀指明字段）
+  # 400 E_VIDEO_ASSET_TOO_LARGE     service.go ErrAssetTooLarge——素材超出通道上限（MCP base64 通道 700KB，
+  #                                 REST multipart 通道 50MB；双通道拆分见 UploadLimit/UploadLimitLarge）
+  # 400 E_VIDEO_ASSET_UNSUPPORTED   service.go ErrAssetUnsupported——素材 content-type 不在白名单；同码另一文案
+  #                                 （ErrAssetMismatch）：声明类型与文件头魔数不符（防伪装文件，含空/过短 body）
   # 402 E_QUOTA_EXCEEDED            quota 域——月度渲染配额用尽（video_renders_monthly）
   # 403 E_FORBIDDEN                 service.go ErrForbidden——非本工作区成员（平台管理员豁免）
   # 404 E_VIDEO_PROJECT_NOT_FOUND   service.go ErrProjectNotFound——项目不存在或跨工作区（无存在性泄露）

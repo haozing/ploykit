@@ -146,6 +146,54 @@ func TestReconciler_CrossMonthRelease(t *testing.T) {
 	assert.Equal(t, errReconciled, store.failedMsg("r-cross"))
 }
 
+// TestReconciler_StaleRunning_FailAndRelease anchors the e2e agent3 Bug-2
+// zombie branch: a render row whose river job is STILL 'running' (river has
+// no cross-restart cleanup for a job killed mid-flight) but whose
+// updated_at went stale past StaleAfter enters the reconcile set with the
+// running(stale) label, is failed with errReconciledStale and releases the
+// quota on the row-frozen period — same compensation path as the terminal
+// branch.
+func TestReconciler_StaleRunning_FailAndRelease(t *testing.T) {
+	store := &fakeReconcileStore{rows: []reconcilableRow{{
+		ID: "r-stale", ProjectID: "p1", WorkspaceID: "ws1", Status: videoapp.RenderRunning,
+		FramesTotal: 300, CreatedBy: "u1",
+		QuotaPeriod:  "2026-10",
+		CreatedMonth: "2026-10",
+		LastJobState: staleRunningLabel, // the stale branch's marker, set by the SQL CASE
+	}}}
+	qr := &reconcileQuotaRelease{}
+	pub := &fakePub{}
+	aud := &fakeAuditor{}
+	rc := NewReconciler(ReconcilerDeps{
+		store: store, QuotaRelease: qr, Publish: pub, Audit: aud, Log: testLogger(),
+	}, time.Minute)
+
+	n, err := rc.reconcileOnce(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	assert.Equal(t, errReconciledStale, store.failedMsg("r-stale"),
+		"the stale branch carries its own error detail (distinguishable from terminal drift)")
+	assert.Equal(t, []string{"ws1:" + videoapp.QuotaKey + "@2026-10"}, qr.recorded(),
+		"quota released on the frozen period, same as the terminal branch")
+	aud.mu.Lock()
+	assert.Contains(t, aud.recorded, videoapp.AuditRenderFailed)
+	aud.mu.Unlock()
+	pub.mu.Lock()
+	assert.Contains(t, pub.events, videoapp.EventRenderUpdated, "WS frame reuses the terminal path")
+	pub.mu.Unlock()
+
+	// A terminal-drift row keeps the original error detail — the two causes
+	// stay distinguishable in the row's error column.
+	terminal := &fakeReconcileStore{rows: []reconcilableRow{{
+		ID: "r-term", WorkspaceID: "ws1", QuotaPeriod: "2026-10", LastJobState: "discarded",
+	}}}
+	rc2 := NewReconciler(ReconcilerDeps{store: terminal, QuotaRelease: qr, Log: testLogger()}, time.Minute)
+	_, err = rc2.reconcileOnce(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, errReconciled, terminal.failedMsg("r-term"))
+}
+
 // TestReconciler_LegacyRow_FallsBackToCreatedMonth: pre-1009 rows carry no
 // quota_period; the fallback is the row's creation month — still not "now".
 func TestReconciler_LegacyRow_FallsBackToCreatedMonth(t *testing.T) {
@@ -407,6 +455,92 @@ func TestReconciler_DBIntegration(t *testing.T) {
 
 	// Cleanup (best effort; FK cascade handles the renders).
 	_, _ = pool.Exec(ctx, `DELETE FROM river_job WHERE args->>'render_id' IN ($1,$2,$3)`, renderID, healthyID, crossKindID)
+	_, _ = pool.Exec(ctx, `DELETE FROM video_render WHERE project_id=$1`, projID)
+	_, _ = pool.Exec(ctx, `DELETE FROM video_project WHERE id=$1`, projID)
+	_, _ = pool.Exec(ctx, `DELETE FROM workspace WHERE id=$1`, wsID)
+	_, _ = pool.Exec(ctx, `DELETE FROM "user" WHERE id=$1`, uid)
+}
+
+// TestReconciler_DBIntegration_StaleRunning anchors the e2e agent3 Bug-2
+// zombie signature against the real JOIN: a running render row with a STALE
+// updated_at (2h without progress) and a river_job STILL in 'running' (river
+// never cleaned it across the process kill) is reconciled — failed with
+// errReconciledStale, released_at stamped, quota released on the frozen
+// period — while a running row with FRESH updated_at (a healthy render mid-
+// flight) is left untouched.
+func TestReconciler_DBIntegration_StaleRunning(t *testing.T) {
+	pool := newReconcileEnv(t)
+	ctx := context.Background()
+
+	uniq := time.Now().UnixNano()
+	var uid, wsID, projID string
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO "user" (email, display_name) VALUES ($1, 'reconcile stale test') RETURNING id`,
+		fmt.Sprintf("recon-stale-%d@test.local", uniq)).Scan(&uid))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO workspace (slug, name, created_by) VALUES ($1, $2, $3) RETURNING id`,
+		fmt.Sprintf("recon-stale-%d", uniq), "reconcile-stale", uid).Scan(&wsID))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO video_project (id, workspace_id, title, created_by) VALUES ($1,$2,$3,$4) RETURNING id`,
+		ids.NewV7(), wsID, "reconcile stale proj", uid).Scan(&projID))
+
+	// The zombie: running render, no progress update for 2h (> StaleAfter),
+	// river job still 'running' — the hard-kill signature.
+	zombieID := ids.NewV7()
+	mustExec(t, pool, `
+		INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period, updated_at)
+		VALUES ($1,$2,$3,'running','{}'::jsonb,300,$4,'2026-10', now() - interval '2 hours')`,
+		zombieID, projID, wsID, uid)
+	mustExec(t, pool, `
+		INSERT INTO river_job (kind, args, state, queue, max_attempts)
+		VALUES ('video_render', $1::jsonb, 'running', 'video', 2)`,
+		fmt.Sprintf(`{"render_id":%q}`, zombieID))
+
+	// Healthy control: running row with fresh updated_at + running job must
+	// NOT match the stale branch (progress updates keep updated_at fresh).
+	healthyID := ids.NewV7()
+	mustExec(t, pool, `
+		INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period)
+		VALUES ($1,$2,$3,'running','{}'::jsonb,300,$4,'2026-10')`,
+		healthyID, projID, wsID, uid)
+	mustExec(t, pool, `
+		INSERT INTO river_job (kind, args, state, queue, max_attempts)
+		VALUES ('video_render', $1::jsonb, 'running', 'video', 2)`,
+		fmt.Sprintf(`{"render_id":%q}`, healthyID))
+
+	qr := &reconcileQuotaRelease{}
+	rc := NewReconciler(ReconcilerDeps{
+		Pool: pool, QuotaRelease: qr,
+		Publish: &fakePub{}, Audit: &fakeAuditor{}, Log: testLogger(),
+	}, time.Minute)
+
+	n, err := rc.reconcileOnce(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "exactly the stale-running zombie reconciled")
+
+	var status, errMsg string
+	var releasedAt *time.Time
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT status, error, released_at FROM video_render WHERE id=$1`, zombieID).
+		Scan(&status, &errMsg, &releasedAt))
+	assert.Equal(t, videoapp.RenderFailed, status)
+	assert.Equal(t, errReconciledStale, errMsg)
+	require.NotNil(t, releasedAt, "released_at CAS must be stamped")
+
+	var ctrlStatus string
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT status FROM video_render WHERE id=$1`, healthyID).Scan(&ctrlStatus))
+	assert.Equal(t, videoapp.RenderRunning, ctrlStatus, "fresh running row must stay running")
+
+	assert.Equal(t, []string{wsID + ":" + videoapp.QuotaKey + "@2026-10"}, qr.recorded())
+
+	// Idempotency: the second round reconciles nothing further.
+	n2, err := rc.reconcileOnce(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n2, "the failed zombie left the drift surface")
+	assert.Empty(t, qr.recorded()[1:], "no double release")
+
+	_, _ = pool.Exec(ctx, `DELETE FROM river_job WHERE args->>'render_id' IN ($1,$2)`, zombieID, healthyID)
 	_, _ = pool.Exec(ctx, `DELETE FROM video_render WHERE project_id=$1`, projID)
 	_, _ = pool.Exec(ctx, `DELETE FROM video_project WHERE id=$1`, projID)
 	_, _ = pool.Exec(ctx, `DELETE FROM workspace WHERE id=$1`, wsID)

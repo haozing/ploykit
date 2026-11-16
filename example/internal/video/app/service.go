@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -36,6 +37,12 @@ var (
 	ErrInternalPreview  = webx.NewError(500, "E_VIDEO_PREVIEW_INTERNAL", "preview CSP hash unavailable")
 	ErrAssetTooLarge    = webx.NewError(400, "E_VIDEO_ASSET_TOO_LARGE", "asset exceeds the size limit")
 	ErrAssetUnsupported = webx.NewError(400, "E_VIDEO_ASSET_UNSUPPORTED", "asset content type not allowed")
+	// ErrAssetMismatch carries the SAME contract code as ErrAssetUnsupported
+	// (400 E_VIDEO_ASSET_UNSUPPORTED — the declared type is not servable)
+	// with a distinct message: the magic-byte check found the declared
+	// content type does not match the file header (agent2 P2-5, 防伪装文件).
+	ErrAssetMismatch = webx.NewError(400, "E_VIDEO_ASSET_UNSUPPORTED",
+		"file content does not match the declared content type (magic-byte check)")
 )
 
 // QuotaKey is the monthly render quota key (declared in migration 1008).
@@ -60,10 +67,20 @@ const (
 	AuditMutationFailed  = "video.project.mutation_failed"
 )
 
-// UploadLimit is the asset size cap for the MCP upload path (~700KB inside
-// the /mcp 1MiB body limit). Large assets go through the REST multipart
-// endpoint which inherits the same /api 1MiB gate by default.
+// UploadLimit is the asset size cap for the MCP base64 upload path (~700KB
+// inside the /mcp 1MiB body limit — base64 inflates 4/3, so 700KB raw ≈ 933KB
+// on the wire). Large assets go through the REST multipart endpoint, which
+// main.go gates at 50MiB (BodyLimitExcept + 120s timeout) and whose service
+// cap is UploadLimitLarge below. The two-channel split (e2e agent2 P2-3):
+// one shared ~1MiB cap made the REST channel's 50MB body-limit exemption
+// dead code and rejected ~2MB PNGs the documented escape hatch promised to
+// accept.
 const UploadLimit = 700 << 10
+
+// UploadLimitLarge is the REST multipart asset cap — matched to main.go's
+// webx.BodyLimitExcept(50<<20, "/api/video/assets") so the route's body-limit
+// exemption is real end to end (parse gate and service gate agree).
+const UploadLimitLarge = 50 << 20
 
 // RenderParams are the render-time overrides persisted with ir_snapshot
 // (§4.9.5): params + snapshot jointly reproduce output_key.
@@ -99,6 +116,34 @@ func (p *RenderParams) normalize(ir *IR) {
 	default:
 		p.SubtitleMode = "none"
 	}
+}
+
+// renderParamInvalid maps a render-parameter range violation to the 400 the
+// REST/MCP surfaces share (same fieldMsg shape as the E_VIDEO_IR_INVALID
+// family; the code is distinct because these are render-time overrides, not
+// IR shape errors).
+func renderParamInvalid(field, msg string) error {
+	return webx.NewError(400, "E_VIDEO_RENDER_PARAMS_INVALID", fieldMsg(field, msg))
+}
+
+// validate enforces the render-parameter ranges SubmitRender accepts (e2e
+// agent3 Bug-3: bgm_volume=1.5 and fps=23 were silently persisted and
+// rendered — params must fail closed instead of being coerced).
+//
+// Runs BEFORE the project snapshot / normalize: it is a pure check (no IR,
+// no pool) so a bad submission is rejected before any quota/tx side effect,
+// and fps=0 stays the documented "inherit the project fps" sentinel here.
+// Width/height keep their own even-and-range validation in Validate — not
+// duplicated.
+func (p *RenderParams) validate() error {
+	if p.BGMVolume < 0 || p.BGMVolume > 1 {
+		return renderParamInvalid("params.bgm_volume", "must be between 0 and 1")
+	}
+	if p.FPS != 0 && !validFPS[p.FPS] {
+		return renderParamInvalid("params.fps",
+			"unsupported (valid: 24, 25, 30, 50, 60, or 0 to inherit the project's fps)")
+	}
+	return nil
 }
 
 // Project is the REST-facing projection of one video_project row.
@@ -204,6 +249,15 @@ func NewProjectService(pool *pgxpool.Pool, ports Ports, log *slog.Logger) *Proje
 // SetClock overrides the time source (tests).
 func (s *ProjectService) SetClock(now func() time.Time) { s.now = now }
 
+// uuidShape guards the id-typed SQL entry points (e2e agent1/2: a malformed
+// id reached Postgres's uuid cast as E_INTERNAL 500). A non-UUID id parses
+// to nothing here and returns the same 404 a missing row would (no existence
+// leak, no enumeration oracle — the "not found" shape is identical).
+func uuidShape(id string) bool {
+	_, err := uuid.Parse(id)
+	return err == nil
+}
+
 // canAccess implements the membership check with the platform-admin
 // exemption: admins bypass Membership; everyone else must pass the port.
 func (s *ProjectService) canAccess(ctx context.Context, wsID, userID string, isPlatformAdmin bool) (bool, error) {
@@ -229,6 +283,14 @@ func (s *ProjectService) Mutate(ctx context.Context, p *webx.Principal, projectI
 	}
 	if !ok {
 		return 0, nil, ErrForbidden
+	}
+	// Malformed id → 404 semantics before any SQL (uuidShape; a raw cast would
+	// surface E_INTERNAL to UpsertElement/MoveElement/AnimateElement/SetAudio/
+	// AddEffectAtWord/SetWords callers). Kept AFTER the membership gate — the
+	// write path's documented first gate is membership (403), unlike Get's
+	// workspace-predicate-first read shape.
+	if !uuidShape(projectID) {
+		return 0, nil, ErrProjectNotFound
 	}
 
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
@@ -547,6 +609,11 @@ func (s *ProjectService) List(ctx context.Context, p *webx.Principal) ([]Project
 
 // Get loads one project (ownership enforced).
 func (s *ProjectService) Get(ctx context.Context, p *webx.Principal, projectID string) (*Project, error) {
+	// Malformed id reads as the generic 404 (uuidShape; same shape as a
+	// missing row — no 500, no enumeration oracle).
+	if !uuidShape(projectID) {
+		return nil, ErrProjectNotFound
+	}
 	pr := Project{IR: &IR{}}
 	// Workspace predicate FIRST: a cross-workspace id yields the same 404 as
 	// a missing id — no existence leak, and the membership check ordering
@@ -587,6 +654,11 @@ func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectI
 	}
 	if !ok {
 		return ErrForbidden
+	}
+	// Malformed id → 404 semantics before any SQL (uuidShape), after the
+	// documented membership-first write gate (same shape as Mutate).
+	if !uuidShape(projectID) {
+		return ErrProjectNotFound
 	}
 	// Collect the asset keys BEFORE the delete: once video_asset rows
 	// cascade, the reference list is unrecoverable (render outputs keep
@@ -1023,6 +1095,11 @@ func (s *ProjectService) SubmitRender(ctx context.Context, p *webx.Principal, pr
 	if s.ports.Cap == nil || !s.ports.Cap.CapAvailable() {
 		return nil, ErrNotConfigured
 	}
+	// 1b. render-parameter range gate (e2e agent3 Bug-3): pure check, no pool
+	// touch — a bad submission must fail closed before the quota transaction.
+	if perr := params.validate(); perr != nil {
+		return nil, perr
+	}
 	// snapshot the project (also validates ownership)
 	pr, err := s.Get(ctx, p, projectID)
 	if err != nil {
@@ -1159,6 +1236,9 @@ func mustJSON(v any) []byte {
 
 // GetRender loads one render (membership enforced through the workspace).
 func (s *ProjectService) GetRender(ctx context.Context, p *webx.Principal, renderID string) (*Render, error) {
+	if !uuidShape(renderID) {
+		return nil, ErrRenderNotFound
+	}
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
 		return nil, aerr
@@ -1199,6 +1279,9 @@ func (r *Render) deriveURLs() {
 
 // ListRenders lists a project's render history, newest first.
 func (s *ProjectService) ListRenders(ctx context.Context, p *webx.Principal, projectID string) ([]Render, error) {
+	if !uuidShape(projectID) {
+		return nil, ErrProjectNotFound
+	}
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
 		return nil, aerr
@@ -1248,7 +1331,18 @@ func (s *ProjectService) ProjectHTML(ctx context.Context, ir *IR) ([]byte, error
 // credential the file handler checks — workspace membership alone no longer
 // grants read on any key. MCP video_upload_asset and REST /api/video/assets
 // share this method, so both surfaces register.
-func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, projectID, filename, contentType string, data []byte) (string, error) {
+//
+// limit is the CHANNEL cap (e2e agent2 P2-3): the MCP base64 tool passes
+// UploadLimit (~700KB — /mcp body limit), the REST multipart handler passes
+// UploadLimitLarge (50MB — matched to main.go's BodyLimitExcept). The size
+// gate runs before any storage/registry write.
+//
+// Magic-byte sniffing (e2e agent2 P2-5): the declared content type must
+// match the file header — a 5-byte "hello" posing as image/png is rejected
+// instead of being registered as an image asset. Both channels share the
+// gate (the MCP tool sniffs content-type from the filename when omitted;
+// the REST handler takes the multipart part's declared type).
+func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, projectID, filename, contentType string, data []byte, limit int64) (string, error) {
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
 		return "", aerr
@@ -1256,7 +1350,7 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 	if !ok {
 		return "", ErrForbidden
 	}
-	if len(data) > UploadLimit {
+	if int64(len(data)) > limit {
 		return "", ErrAssetTooLarge
 	}
 	switch contentType {
@@ -1264,6 +1358,18 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 		"audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav":
 	default:
 		return "", ErrAssetUnsupported
+	}
+	if !uuidShape(projectID) {
+		// Malformed id → 404 semantics before any content/storage work
+		// (uuidShape; the EXISTS probe below would otherwise surface the
+		// bad id as a 500). Consistent with Get: identity first, body
+		// validation after.
+		return "", ErrProjectNotFound
+	}
+	// Magic mismatch = the declared type is a lie (agent2 P2-5): reject with
+	// the same 400 family, message distinguishes the cause.
+	if !magicMatches(contentType, data) {
+		return "", ErrAssetMismatch
 	}
 	if s.ports.Store == nil {
 		return "", fmt.Errorf("video: storage port not wired")
@@ -1327,6 +1433,39 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 	return obj.Key, nil
 }
 
+// magicMatches reports whether data's file header carries the magic bytes of
+// the declared content type (e2e agent2 P2-5). Unknown-to-the-whitelist
+// types never reach here (the caller's whitelist switch runs first). An
+// empty/too-short body matches nothing — a 5-byte "hello" cannot pass as a
+// PNG.
+func magicMatches(contentType string, data []byte) bool {
+	switch contentType {
+	case "image/png":
+		// \x89PNG\r\n\x1a\n — the 4-byte \x89PNG prefix pins the family.
+		return len(data) >= 4 && data[0] == 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G'
+	case "image/jpeg":
+		// SOI + first marker byte: every JPEG starts \xFF\xD8\xFF.
+		return len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+	case "image/gif":
+		// GIF87a / GIF89a signature.
+		return len(data) >= 6 && (string(data[:6]) == "GIF87a" || string(data[:6]) == "GIF89a")
+	case "image/webp":
+		// RIFF container, WEBP fourcc at offset 8.
+		return len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP"
+	case "audio/mpeg":
+		// ID3v2 tag, or a bare MPEG audio frame sync (0xFF Ex: 11-bit sync).
+		return (len(data) >= 3 && string(data[:3]) == "ID3") ||
+			(len(data) >= 2 && data[0] == 0xFF && data[1]&0xE0 == 0xE0)
+	case "audio/mp4":
+		// ISO-BMFT: size box then 'ftyp' at offset 4 (m4a/mp4 containers).
+		return len(data) >= 12 && string(data[4:8]) == "ftyp"
+	case "audio/wav", "audio/x-wav":
+		// RIFF container, WAVE form identifier at offset 8.
+		return len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WAVE"
+	}
+	return false
+}
+
 // registerAsset inserts one video_asset row (migration 1011). tx nil = own
 // statement (pool Exec); non-nil = join the caller's transaction (TTS voice
 // registration rides SetScript's locked phase).
@@ -1346,6 +1485,9 @@ func (s *ProjectService) registerAsset(ctx context.Context, tx pgx.Tx, wsID, pro
 // ListAssets lists a project's registered assets (migration 1011 reference
 // list), newest first.
 func (s *ProjectService) ListAssets(ctx context.Context, p *webx.Principal, projectID string) ([]Asset, error) {
+	if !uuidShape(projectID) {
+		return nil, ErrProjectNotFound
+	}
 	ok, aerr := s.canAccess(ctx, p.WorkspaceID, p.UserID, p.IsPlatformAdmin)
 	if aerr != nil {
 		return nil, aerr

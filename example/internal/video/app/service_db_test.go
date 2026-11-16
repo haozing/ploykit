@@ -241,6 +241,98 @@ func TestIntegration_SubmitRender_GateOrder(t *testing.T) {
 	assert.Empty(t, items)
 }
 
+// TestIntegration_SubmitRender_ParamsRanges anchors e2e agent3 Bug-3: the
+// render-parameter range gate must fail closed (400) instead of silently
+// persisting bgm_volume=1.5 / fps=23, while fps=0 keeps the documented
+// inherit-from-meta normalization end to end.
+func TestIntegration_SubmitRender_ParamsRanges(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	p := e.principal(e.wsID)
+	e.svc.ports.Cap = fakeCap{available: true}
+	pr, err := e.svc.Create(ctx, p, "参数范围")
+	require.NoError(t, err)
+
+	var we *webx.Error
+	// bgm_volume out of [0,1] → 400, no row, no quota spend.
+	_, err = e.svc.SubmitRender(ctx, p, pr.ID, RenderParams{FPS: 30, BGMVolume: 1.5}, nil, "")
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_RENDER_PARAMS_INVALID", we.Code)
+	assert.Equal(t, 400, we.Status)
+	assert.Contains(t, we.Message, "bgm_volume")
+
+	// fps=23 not in the whitelist → rejected, not coerced.
+	_, err = e.svc.SubmitRender(ctx, p, pr.ID, RenderParams{FPS: 23}, nil, "")
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_RENDER_PARAMS_INVALID", we.Code)
+	assert.Contains(t, we.Message, "fps")
+
+	// fps=0 → inherit the project meta fps (Create's default is 30) and
+	// normalize lands in the persisted params.
+	r, err := e.svc.SubmitRender(ctx, p, pr.ID, RenderParams{}, nil, "")
+	require.NoError(t, err)
+	assert.Equal(t, 30, r.Params.FPS, "fps=0 normalized to the IR meta fps")
+	assert.Equal(t, DurationFrames(pr.IR, 30), r.FramesTotal)
+
+	// Negative bgm_volume is equally out of range.
+	_, err = e.svc.SubmitRender(ctx, p, pr.ID, RenderParams{FPS: 30, BGMVolume: -0.1}, nil, "")
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Contains(t, we.Message, "bgm_volume")
+}
+
+// TestIntegration_UploadAsset_LimitChannels anchors e2e agent2 P2-3: the
+// REST multipart channel accepts ~2MB images under UploadLimitLarge (the
+// size the documented escape hatch promised), while the MCP base64 channel
+// keeps its ~700KB cap on the same body.
+func TestIntegration_UploadAsset_LimitChannels(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	e.svc.ports.Store = newFakeStore()
+	p := e.principal(e.wsID)
+	pr, err := e.svc.Create(ctx, p, "大资产")
+	require.NoError(t, err)
+
+	// ~2MB PNG (real header, agent2's probe size) passes the REST cap.
+	big := append(append([]byte{}, pngBytes...), bytes.Repeat([]byte{0}, 2<<20)...)
+	_, err = e.svc.UploadAsset(ctx, p, pr.ID, "big.png", "image/png", big, UploadLimitLarge)
+	require.NoError(t, err, "REST channel cap is 50MB — a 2MB upload must pass")
+
+	// The same body through the MCP base64 channel cap is rejected.
+	var we *webx.Error
+	_, err = e.svc.UploadAsset(ctx, p, pr.ID, "big.png", "image/png", big, UploadLimit)
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_ASSET_TOO_LARGE", we.Code)
+}
+
+// TestIntegration_UploadAsset_MagicMismatch anchors e2e agent2 P2-5 against
+// the real registry/store path: a non-PNG body declared image/png is
+// rejected and registers nothing.
+func TestIntegration_UploadAsset_MagicMismatch(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	store := newFakeStore()
+	e.svc.ports.Store = store
+	p := e.principal(e.wsID)
+	pr, err := e.svc.Create(ctx, p, "魔数")
+	require.NoError(t, err)
+
+	var we *webx.Error
+	_, err = e.svc.UploadAsset(ctx, p, pr.ID, "hello.png", "image/png", []byte("hello"), UploadLimit)
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_ASSET_UNSUPPORTED", we.Code)
+	assert.Contains(t, we.Message, "does not match", "mismatch message distinguishes the cause")
+	assert.Empty(t, store.puts, "nothing stored for a rejected upload")
+
+	assets, err := e.svc.ListAssets(ctx, p, pr.ID)
+	require.NoError(t, err)
+	assert.Empty(t, assets, "no registry row for a rejected upload")
+}
+
 // fakeStore is the minimal storagex.Store double for the asset registry
 // suite (puts land in memory; DeleteMulti records keys and can fail on
 // demand). Mirrors the render package's memStore pattern.
@@ -249,6 +341,12 @@ type fakeStore struct {
 	deleted []string
 	failDel bool
 }
+
+// pngBytes / mp3Bytes carry REAL file headers: the upload magic-byte gate
+// (e2e agent2 P2-5) rejects declared-type-mismatched bodies, so asset
+// fixtures must be genuine PNG/MP3-shaped bytes.
+var pngBytes = append([]byte{0x89, 'P', 'N', 'G'}, "\r\n\x1a\nfixture"...)
+var mp3Bytes = append([]byte("ID3"), "fixture"...)
 
 func newFakeStore() *fakeStore { return &fakeStore{puts: map[string][]byte{}} }
 
@@ -309,7 +407,7 @@ func TestIntegration_AssetRegistry_Lifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	p := e.principal(e.wsID)
-	key, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", []byte("png-bytes-1"))
+	key, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", pngBytes, UploadLimit)
 	require.NoError(t, err)
 	require.Contains(t, key, "/assets/"+pr.ID+"/")
 	require.NotEmpty(t, store.puts[key], "object persisted to storage")
@@ -321,12 +419,12 @@ func TestIntegration_AssetRegistry_Lifecycle(t *testing.T) {
 	a := assets[0]
 	assert.Equal(t, key, a.Key)
 	assert.Equal(t, AssetKindImage, a.Kind)
-	assert.Equal(t, int64(len("png-bytes-1")), a.Bytes)
-	assert.Equal(t, sha256Hex([]byte("png-bytes-1")), a.SHA256)
+	assert.Equal(t, int64(len(pngBytes)), a.Bytes)
+	assert.Equal(t, sha256Hex(pngBytes), a.SHA256)
 	assert.Equal(t, "image/png", a.ContentType)
 
 	// Audio content-type maps to kind=audio.
-	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "v.mp3", "audio/mpeg", []byte("mp3-bytes"))
+	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "v.mp3", "audio/mpeg", mp3Bytes, UploadLimit)
 	require.NoError(t, err)
 	assets, err = e.svc.ListAssets(ctx, p, pr.ID)
 	require.NoError(t, err)
@@ -335,7 +433,7 @@ func TestIntegration_AssetRegistry_Lifecycle(t *testing.T) {
 	assert.Equal(t, AssetKindAudio, byKey[audioKey].Kind)
 
 	// Content-addressed idempotency: same bytes → same key, one row.
-	dupKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", []byte("png-bytes-1"))
+	dupKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", pngBytes, UploadLimit)
 	require.NoError(t, err)
 	assert.Equal(t, key, dupKey)
 	assets, _ = e.svc.ListAssets(ctx, p, pr.ID)
@@ -357,14 +455,21 @@ func TestIntegration_AssetRegistry_Lifecycle(t *testing.T) {
 	assert.False(t, ok, "membership alone does not grant an unregistered key")
 
 	// Bad project id → E_VIDEO_PROJECT_NOT_FOUND (explicit check, not FK 500).
-	_, err = e.svc.UploadAsset(ctx, p, "00000000-0000-0000-0000-000000000000", "x.png", "image/png", []byte("m"))
+	_, err = e.svc.UploadAsset(ctx, p, "00000000-0000-0000-0000-000000000000", "x.png", "image/png", pngBytes, UploadLimit)
 	require.Error(t, err)
 	var we *webx.Error
 	require.True(t, errorAsWebx(err, &we))
 	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
 
+	// Malformed (non-UUID) project id → same 404 semantics, no SQL cast 500
+	// (e2e uuid-shape guard).
+	_, err = e.svc.UploadAsset(ctx, p, "not-a-uuid", "x.png", "image/png", pngBytes, UploadLimit)
+	require.Error(t, err)
+	require.True(t, errorAsWebx(err, &we))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", we.Code)
+
 	// Foreign workspace principal cannot touch this project's assets.
-	_, err = e.svc.UploadAsset(ctx, e.principal(e.wsForeign), pr.ID, "x.png", "image/png", []byte("m"))
+	_, err = e.svc.UploadAsset(ctx, e.principal(e.wsForeign), pr.ID, "x.png", "image/png", pngBytes, UploadLimit)
 	require.Error(t, err)
 	require.True(t, errorAsWebx(err, &we))
 	assert.Equal(t, "E_FORBIDDEN", we.Code)
@@ -424,7 +529,7 @@ func TestIntegration_AssetRegistry_DeleteSweepFailOpen(t *testing.T) {
 	p := e.principal(e.wsID)
 	pr, err := e.svc.Create(ctx, p, "清扫失败")
 	require.NoError(t, err)
-	key, err := e.svc.UploadAsset(ctx, p, pr.ID, "a.png", "image/png", []byte("aaa"))
+	key, err := e.svc.UploadAsset(ctx, p, pr.ID, "a.png", "image/png", pngBytes, UploadLimit)
 	require.NoError(t, err)
 
 	// Delete still succeeds (storage failure is warn-only).
@@ -481,7 +586,7 @@ func TestIntegration_ValidateAssetRefs(t *testing.T) {
 	assert.Len(t, got.IR.Elements, 0, "rejected write must not persist the element")
 
 	// 3. Registered src passes the write (the round-8+ upload path).
-	regKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", []byte("png-bytes"))
+	regKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "banner.png", "image/png", pngBytes, UploadLimit)
 	require.NoError(t, err)
 	v1, _, err := e.svc.UpsertElement(ctx, p, pr.ID, imageEl("el_ok", regKey), nil)
 	require.NoError(t, err, "registered src must pass")
@@ -552,7 +657,7 @@ func TestIntegration_ValidateAssetRefs(t *testing.T) {
 	assert.Contains(t, we.Message, "audio.bgm.key")
 
 	// 9. Registered audio key passes (the upload path registers).
-	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "bgm.mp3", "audio/mpeg", []byte("mp3-bytes"))
+	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "bgm.mp3", "audio/mpeg", mp3Bytes, UploadLimit)
 	require.NoError(t, err)
 	_, err = e.svc.SetAudio(ctx, p, pr.ID, &Audio{
 		Voice: &AudioTrack{Key: audioKey, DurationSec: 2, Volume: 1},
@@ -573,7 +678,7 @@ func TestIntegration_ComposeProject_PreservesAudio(t *testing.T) {
 	pr, err := e.svc.Create(ctx, p, "compose 保音频")
 	require.NoError(t, err)
 
-	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "bgm.mp3", "audio/mpeg", []byte("mp3-bytes"))
+	audioKey, err := e.svc.UploadAsset(ctx, p, pr.ID, "bgm.mp3", "audio/mpeg", mp3Bytes, UploadLimit)
 	require.NoError(t, err)
 	_, err = e.svc.SetAudio(ctx, p, pr.ID, &Audio{
 		BGM: &AudioTrack{Key: audioKey, Volume: 0.4},

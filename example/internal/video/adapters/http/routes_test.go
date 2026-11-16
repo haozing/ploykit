@@ -1,6 +1,7 @@
 package videohttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -189,14 +190,102 @@ func TestHandleFile_UnregisteredKey_Is404(t *testing.T) {
 	w := run(d.handleFile, http.MethodGet, "/api/video/files/video/ws1/assets/p1/whatever.png", "", p,
 		map[string]string{"key": "video/ws1/assets/p1/whatever.png"})
 	assert.Equal(t, http.StatusNotFound, w.Code, "unregistered key must not be served to a workspace member")
+}
 
-	// The membership gate still runs first (403 on foreign workspace) —
-	// unchanged fail-fast ordering.
-	dDeny := Deps{Svc: svc(false)}
+// TestHandleFile_ForeignWorkspace_Is404 anchors the existence erasure (e2e
+// agent2 P2-1): a key under a FOREIGN workspace prefix reads as the same 404
+// a fake key gets — the old 403 confirmed "this key exists in another
+// tenant's workspace", leaking against the project/render routes' all-404
+// posture. Membership denial and registry denial are indistinguishable.
+func TestHandleFile_ForeignWorkspace_Is404(t *testing.T) {
+	d := Deps{Svc: svc(false)}
 	pForeign := principal("ws2", false)
-	w = run(dDeny.handleFile, http.MethodGet, "/api/video/files/video/ws1/assets/p1/x.png", "", pForeign,
+	w := run(d.handleFile, http.MethodGet, "/api/video/files/video/ws1/assets/p1/x.png", "", pForeign,
 		map[string]string{"key": "video/ws1/assets/p1/x.png"})
-	assert.Equal(t, http.StatusForbidden, w.Code, "foreign workspace still 403 before the registry gate")
+	assert.Equal(t, http.StatusNotFound, w.Code, "foreign-workspace key must erase existence (404, not 403)")
+	var body webx.ErrorBody
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "E_NOT_FOUND", body.Code)
+}
+
+// capProbe is the minimal capability double for the render-submission
+// handler tests (the Cap gate fires before the parameter range gate).
+type capProbe struct{ available bool }
+
+func (c capProbe) CapAvailable() bool { return c.available }
+
+func svcWithCap() *videoapp.ProjectService {
+	return videoapp.NewProjectService(nil, videoapp.Ports{
+		Membership: denyAll{allow: true},
+		Cap:        capProbe{available: true},
+	}, nil)
+}
+
+// TestHandleCreateRender_ParamsRanges anchors e2e agent3 Bug-3 at the REST
+// boundary: bgm_volume=1.5 and fps=23 are rejected with
+// E_VIDEO_RENDER_PARAMS_INVALID (400) instead of being silently persisted;
+// fps=0 passes the range gate (the request then proceeds to the project
+// lookup — "p1" is not a UUID, so the 404 E_VIDEO_PROJECT_NOT_FOUND response
+// proves the param gate let it through; the inherit-meta normalization
+// itself is pinned in TestRenderParamsValidateThenNormalize and the DB
+// integration suite).
+func TestHandleCreateRender_ParamsRanges(t *testing.T) {
+	d := Deps{Svc: svcWithCap()}
+	p := principal("ws1", false)
+	for _, tc := range []struct {
+		name, body, wantMsg string
+	}{
+		{"bgm_volume above range", `{"params":{"fps":30,"bgm_volume":1.5}}`, "bgm_volume"},
+		{"bgm_volume below range", `{"params":{"fps":30,"bgm_volume":-0.5}}`, "bgm_volume"},
+		{"fps not whitelisted", `{"params":{"fps":23}}`, "fps"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := run(d.handleCreateRender, http.MethodPost, "/api/video/projects/p1/renders", tc.body, p,
+				map[string]string{"id": "p1"})
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			var body webx.ErrorBody
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			assert.Equal(t, "E_VIDEO_RENDER_PARAMS_INVALID", body.Code)
+			assert.Contains(t, body.Message, tc.wantMsg)
+		})
+	}
+
+	// fps=0 passes the gate: the response is the project-lookup 404, not the
+	// parameter 400.
+	w := run(d.handleCreateRender, http.MethodPost, "/api/video/projects/p1/renders",
+		`{"params":{"fps":0,"bgm_volume":0.8}}`, p, map[string]string{"id": "p1"})
+	require.Equal(t, http.StatusNotFound, w.Code, "fps=0 must pass the range gate")
+	var body webx.ErrorBody
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", body.Code)
+}
+
+// TestHandleUploadAsset_LargeMultipartChannel anchors e2e agent2 P2-3 at the
+// REST boundary: a ~2MB PNG (the exact size agent2's probe used) passes the
+// widened parse+service gate — the failure it hits afterwards is the
+// project-lookup 404, NOT the old E_VIDEO_ASSET_TOO_LARGE the 700KB shared
+// cap produced.
+func TestHandleUploadAsset_LargeMultipartChannel(t *testing.T) {
+	d := Deps{Svc: svc(true)}
+	p := principal("ws1", false)
+	png := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, make([]byte, 2<<20)...)
+
+	var buf bytes.Buffer
+	buf.WriteString("--BOUNDARY\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.png\"\r\n")
+	buf.WriteString("Content-Type: image/png\r\n\r\n")
+	buf.Write(png)
+	buf.WriteString("\r\n--BOUNDARY\r\nContent-Disposition: form-data; name=\"project_id\"\r\n\r\np1\r\n--BOUNDARY--\r\n")
+	r := httptest.NewRequest(http.MethodPost, "/api/video/assets", &buf)
+	r.Header.Set("Content-Type", "multipart/form-data; boundary=BOUNDARY")
+	r = r.WithContext(webx.WithPrincipal(r.Context(), p))
+	w := httptest.NewRecorder()
+	d.handleUploadAsset(w, r, p)
+
+	require.NotEqual(t, http.StatusBadRequest, w.Code, "2MB must pass the widened parse + service gates")
+	var body webx.ErrorBody
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(t, "E_VIDEO_PROJECT_NOT_FOUND", body.Code,
+		"the upload flow reached the project lookup — size gates passed")
 }
 
 func TestWorkspaceFromKey(t *testing.T) {

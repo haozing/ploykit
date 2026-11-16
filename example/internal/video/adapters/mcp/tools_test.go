@@ -127,13 +127,15 @@ func TestDecodePoint(t *testing.T) {
 
 // addEffectIn carries the optional element-level target (IR extension T-10):
 // the wire key is target_element_id and it maps onto Effect.TargetElementID
-// (targetElementId in the IR document) through AddEffectAtWord.
+// (targetElementId in the IR document) through AddEffectAtWord. Params is a
+// JSON object on the wire (批2 P1-2：修复前 json.RawMessage 被 jsonschema 推成
+// "null|array of int"，与服务端 object 校验互斥死锁).
 func TestAddEffectArgsTargetElementRoundtrip(t *testing.T) {
 	in := map[string]any{
 		"project_id":        "p1",
 		"anchor_text":       "三倍",
 		"type":              "counter",
-		"params":            json.RawMessage(`{"from":0,"to":100}`),
+		"params":            map[string]any{"from": 0, "to": 100},
 		"target_element_id": "el_price",
 	}
 	b, err := json.Marshal(in)
@@ -142,11 +144,18 @@ func TestAddEffectArgsTargetElementRoundtrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &out))
 	assert.Equal(t, "el_price", out.TargetElementID)
 	assert.Equal(t, "counter", out.Type)
+	require.NotNil(t, out.Params)
+	assert.InDelta(t, 100.0, out.Params["to"].(float64), 1e-9)
 
-	// omitted target_element_id decodes to "" — the back-compat origin path
+	// omitted target_element_id decodes to "" — the back-compat origin path;
+	// omitted params decodes to a nil map — per-type defaults (RawMessage nil).
 	var bare addEffectIn
 	require.NoError(t, json.Unmarshal([]byte(`{"project_id":"p1","anchor_text":"x","type":"pulse"}`), &bare))
 	assert.Empty(t, bare.TargetElementID)
+	assert.Nil(t, bare.Params)
+	raw, err := effectParamsRaw(bare.Params)
+	require.NoError(t, err)
+	assert.Nil(t, raw, "omitted params must stay nil (per-type defaults)")
 }
 
 // --- video_snapshot_frame ---
@@ -436,4 +445,212 @@ type snapOK struct{}
 
 func (snapOK) Snapshot(_ context.Context, _ videorender.SnapshotDoc, spec videorender.SnapshotSpec) (*videorender.SnapshotResult, error) {
 	return &videorender.SnapshotResult{Frame: spec.Frame, PNG: []byte("PNG"), Width: spec.Width, Height: spec.Height}, nil
+}
+
+// ==================== 批2 E2E 契约修复（P1-1/P1-2/P1-3/P2-4/P2-5） ====================
+
+// --- P1-1 upsert_element snake_case 兜底 ---
+
+// TestDecodeElement_SnakeCaseWindowFallback: 编排 agent 按 list_elements 的
+// snake_case 响应字段名（start_frame/end_frame）反推输入名是最自然的动作——
+// 修复前这些键被静默丢弃、元素窗口丢失无任何反馈（E2E 三连实验实拍）。修复后
+// snake 别名归一到 IR 的 camelCase 键。
+func TestDecodeElement_SnakeCaseWindowFallback(t *testing.T) {
+	el, err := decodeElement(map[string]any{
+		"id": "img_scene_half", "type": "image",
+		"x": 96.0, "y": 150.0, "w": 888.0, "h": 500.0,
+		"start_frame": 165.0, "end_frame": 210.0,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, el.StartFrame, "start_frame must land on StartFrame (was silently dropped)")
+	assert.Equal(t, 165, *el.StartFrame)
+	require.NotNil(t, el.EndFrame)
+	assert.Equal(t, 210, *el.EndFrame)
+}
+
+// camelCase 是 canonical：两种拼写同时出现时 camel 胜（snake 兜底、不做冲突
+// 检测——刻意最简，工具描述已写明）。
+func TestDecodeElement_CamelCaseWinsOnConflict(t *testing.T) {
+	el, err := decodeElement(map[string]any{
+		"id": "e1", "type": "text",
+		"startFrame": 100.0, "start_frame": 165.0,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, el.StartFrame)
+	assert.Equal(t, 100, *el.StartFrame, "camelCase canonical wins when both spellings are sent")
+}
+
+// 嵌套动画的 snake 别名（animate_element 顶层入参同款命名：duration_frames）。
+func TestDecodeElement_AnimationSnakeAliases(t *testing.T) {
+	el, err := decodeElement(map[string]any{
+		"id": "t1", "type": "text", "text": "hi",
+		"animations": []any{
+			map[string]any{"type": "fadeIn", "duration_frames": 30.0},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, el.Animations, 1)
+	assert.Equal(t, 30, el.Animations[0].DurationFrames, "duration_frames must map onto DurationFrames")
+}
+
+// fontSize 的 snake 别名顺带覆盖（嵌套字段同族问题）。
+func TestDecodeElement_FontSizeAlias(t *testing.T) {
+	el, err := decodeElement(map[string]any{"id": "t1", "type": "text", "font_size": 42.0})
+	require.NoError(t, err)
+	assert.InDelta(t, 42, el.FontSize, 1e-9)
+}
+
+// --- P1-2 add_effect_at_word params object 化 ---
+
+// TestEffectParamsRaw_ObjectShape: params {"color":"#5FB3B3"} 进 → map 落地 →
+// marshal 回 Effect.Params 存储的 object RawMessage；nil → nil（per-type 默认）。
+func TestEffectParamsRaw_ObjectShape(t *testing.T) {
+	raw, err := effectParamsRaw(map[string]any{"color": "#5FB3B3"})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"color":"#5FB3B3"}`, string(raw))
+	var effect videoapp.Effect
+	require.NoError(t, json.Unmarshal([]byte(`{"params":`+string(raw)+`}`), &effect))
+	assert.JSONEq(t, `{"color":"#5FB3B3"}`, string(effect.Params), "params must land on Effect.Params as a JSON object")
+
+	empty, err := effectParamsRaw(nil)
+	require.NoError(t, err)
+	assert.Nil(t, empty)
+}
+
+// TestAddEffectParams_SchemaGate: 走真 transport 驱动工具 handler——params
+// 传对象要过得了 SDK 的 jsonschema 门（修复前：schema "null|array of int" 拒
+// object、server 拒数组，任何 params 都传不进去），然后到达 service 边界
+// （nil-pool 服务在 canAccess 优雅报错，不 panic）。isError=true 且文本是
+// service 边界错误（而非 "validating"）= schema 门已放行 object。
+func TestAddEffectParams_ObjectPassesSchemaGate(t *testing.T) {
+	// project_id 用合法 UUID：Mutate 的 uuidShape 守卫（服务层）先于
+	// canAccess，非 UUID id 会在 service 边界前被 404 拦下、拿不到稳定的服务
+	// 层错误文本（nil-pool + nil-membership 下的确定性边界错误）。
+	res := runToolViaTransport(t, Deps{Svc: videoapp.NewProjectService(nil, videoapp.Ports{}, nil)},
+		"video_add_effect_at_word", map[string]any{
+			"project_id":  "00000000-0000-0000-0000-000000000001",
+			"anchor_text": "三倍", "type": "highlight",
+			"params": map[string]any{"color": "#5FB3B3"},
+		}, "video:write")
+	require.NotNil(t, res)
+	text := resultText(t, res)
+	assert.True(t, res.IsError, "nil-pool service boundary error")
+	assert.Contains(t, text, "membership port not wired", "object params passed the schema gate and the handler ran to the service boundary")
+	assert.NotContains(t, text, "validating", "object params must not be rejected by the jsonschema gate")
+	assert.NotContains(t, text, "has type", "the old catch-22 schema error shape must be gone")
+}
+
+// 对照：params 传数组（修复前 agent 按 schema 的 array-of-int 传法）现在被
+// schema 拒——两端口径统一为 object。
+func TestAddEffectParams_ArrayRejectedBySchema(t *testing.T) {
+	res := runToolViaTransport(t, Deps{Svc: videoapp.NewProjectService(nil, videoapp.Ports{}, nil)},
+		"video_add_effect_at_word", map[string]any{
+			"project_id":  "00000000-0000-0000-0000-000000000001",
+			"anchor_text": "x", "type": "highlight",
+			"params": []any{62, 193, 211},
+		}, "video:write")
+	require.True(t, res.IsError)
+	assert.Contains(t, resultText(t, res), "validating", "array params must be rejected by the schema gate")
+}
+
+// --- P1-3 move/animate 元素不存在报 "element <id> not found" ---
+
+// 纯函数面：错误码 E_VIDEO_IR_INVALID（与 targetElementId 校验同类）、文案与
+// 锚词完全解耦。
+func TestRequireElement(t *testing.T) {
+	ir := &videoapp.IR{Elements: []videoapp.Element{{ID: "e1"}, {ID: "e2"}}}
+	require.NoError(t, requireElement(ir, "e1"))
+
+	err := requireElement(ir, "ghost_el")
+	require.Error(t, err)
+	var wxErr *webx.Error
+	require.True(t, errors.As(err, &wxErr), "want *webx.Error, got %T: %v", err, err)
+	assert.Equal(t, "E_VIDEO_IR_INVALID", wxErr.Code)
+	assert.Contains(t, wxErr.Message, "element ghost_el not found")
+	assert.NotContains(t, wxErr.Message, "anchor", "误导文案（anchor text not found）必须消失")
+}
+
+// handler 面：element_id 空值守卫先于 Svc.Get（nil-pool 安全路径），证明
+// move/animate 两个 handler 都接上了前置校验（存在性分支的 Get+Mutate 真值
+// 由 DB 集成套件承担）。
+func TestMoveAnimateElement_EmptyElementIDRejected(t *testing.T) {
+	deps := Deps{Svc: videoapp.NewProjectService(nil, videoapp.Ports{}, nil)}
+	res := runToolViaTransport(t, deps, "video_move_element",
+		map[string]any{"project_id": "p1", "element_id": "", "x": 10.0, "y": 20.0}, "video:write")
+	require.NotNil(t, res)
+	assert.True(t, res.IsError)
+	assert.Contains(t, resultText(t, res), "element_id is required")
+
+	res = runToolViaTransport(t, deps, "video_animate_element",
+		map[string]any{"project_id": "p1", "element_id": "", "type": "fadeIn", "duration_frames": 30}, "video:write")
+	require.NotNil(t, res)
+	assert.True(t, res.IsError)
+	assert.Contains(t, resultText(t, res), "element_id is required")
+}
+
+// --- P2-4 generate_video stage 失败文本 ---
+
+// TestGenerateStageErr: stage、cause、project 去向（kept for retry）、清理
+// 路径全在文本里（handler 返回该 error → mcpAdd → SDK isError=true）。
+func TestGenerateStageErr(t *testing.T) {
+	err := generateStageErr("render_submit", "retry hint here", errors.New("quota out"), "proj-1")
+	require.Error(t, err)
+	msg := err.Error()
+	assert.Contains(t, msg, "stage render_submit")
+	assert.Contains(t, msg, "quota out")
+	assert.Contains(t, msg, "project_id proj-1 kept for retry")
+	assert.Contains(t, msg, "retry hint here")
+	assert.Contains(t, msg, "DELETE /api/video/projects/proj-1")
+}
+
+// --- P2-5 set_script 空 script fail-closed ---
+
+// TestSetScript_EmptyScriptRejected: 空/全空白 script 在工具层拒（修复前
+// 服务层静默接受并把词表清空、锚点全灭无反馈）。门禁先于 SetScript，nil-pool
+// 服务可安全驱动到该分支。
+func TestSetScript_EmptyScriptRejected(t *testing.T) {
+	deps := Deps{Svc: videoapp.NewProjectService(nil, videoapp.Ports{}, nil)}
+	for _, script := range []string{"", "   ", "\n\t"} {
+		res := runToolViaTransport(t, deps, "video_set_script",
+			map[string]any{"project_id": "p1", "script": script}, "video:write")
+		require.NotNil(t, res)
+		assert.True(t, res.IsError, "empty script %q must surface isError=true", script)
+		assert.Contains(t, resultText(t, res), "script is required")
+		assert.Contains(t, resultText(t, res), "word table")
+	}
+}
+
+// --- 真 transport 驱动基建 ---
+
+// runToolViaTransport spins a full MCP server + client over the SDK's
+// in-memory transports: the PAT principal rides the server Run ctx exactly
+// the way the stateless /mcp transport carries it (Authenticate-installed
+// principal → handler ctx), so the scope gate, the jsonschema argument gate
+// and the handler closure all execute for real. Returns the raw
+// CallToolResult (isError + text) without any database dependency — handlers
+// under test here error out before (or gracefully at) the service boundary.
+func runToolViaTransport(t *testing.T, deps Deps, name string, args map[string]any, scopes ...string) *mcp.CallToolResult {
+	t.Helper()
+	ctx := patCtx(scopes...)
+	ct, st := mcp.NewInMemoryTransports()
+	s := mcp.NewServer(&mcp.Implementation{Name: "test"}, nil)
+	RegisterTools(s, deps)
+	go func() { _ = s.Run(ctx, st) }() //nolint:errcheck — in-memory transport errors only on teardown
+	c := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	cs, err := c.Connect(ctx, ct, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	require.NoError(t, err, "tool execution errors come back as isError=true results, not transport errors")
+	return res
+}
+
+// resultText extracts the first text content of a CallToolResult (the
+// mcpAdd skeleton wraps every payload/error as TextContent JSON).
+func resultText(t *testing.T, res *mcp.CallToolResult) string {
+	t.Helper()
+	require.NotEmpty(t, res.Content)
+	tc, ok := res.Content[0].(*mcp.TextContent)
+	require.True(t, ok, "want *mcp.TextContent, got %T", res.Content[0])
+	return tc.Text
 }

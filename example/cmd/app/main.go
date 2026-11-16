@@ -1563,9 +1563,11 @@ func main() {
 	}
 	// 资产上传走 BodyLimitExcept 豁免（AGENTS.md 挂载陷阱 #2）：pathGate 的
 	// /api/ 1MiB 门罩住 POST /api/video/assets（multipart）。豁免语义 = 绕过
-	// 1MiB reader，由 service.UploadLimit 上限校验兜住真实大小（视频资产：
-	// 一首 3 分钟 BGM ≈3MB，700KB MCP 路径与 1MiB REST 门双双进不来——批G
-	// G-01d）。50MiB 上限靠 webx.BodyLimitExcept 单层（绝不嵌套两层
+	// 1MiB reader，真实大小由 service 分通道上限校验兜住（视频资产：一首
+	// 3 分钟 BGM ≈3MB，700KB MCP base64 路径与 1MiB REST 门双双进不来——
+	// 批G G-01d；E2E 后 UploadLimitLarge=50MB 为 REST multipart 专享大件
+	// 通道，MCP base64 维持 UploadLimit 小限）。50MiB 上限靠
+	// webx.BodyLimitExcept 单层（绝不嵌套两层
 	// MaxBytesReader——有效上限取最小值）。豁免后缀需同步豁免请求超时：
 	// 读大 body 消耗请求超时预算（陷阱 #2 配对规则），Timeouts 表给
 	// /api/video/assets 单独 120s（multi-tier 最长前缀优先；上传 handler

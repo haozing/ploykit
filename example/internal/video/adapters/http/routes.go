@@ -244,10 +244,11 @@ func (d Deps) handleGetRender(w http.ResponseWriter, r *http.Request, p *webx.Pr
 }
 
 // handleUploadAsset parses one multipart part (storagex.ParseUpload; the
-// /api body limit is the product's global 1MiB gate — no layering here,
-// five-pitfalls #2) and persists content-addressed.
+// route's 50MiB body-limit exemption in main.go is matched by
+// UploadLimitLarge here — the single-layer BodyLimitExcept pairs with the
+// 120s timeout tier; five-pitfalls #2) and persists content-addressed.
 func (d Deps) handleUploadAsset(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
-	up, err := storagex.ParseUpload(r, videoapp.UploadLimit)
+	up, err := storagex.ParseUpload(r, videoapp.UploadLimitLarge)
 	if err != nil {
 		if errors.Is(err, storagex.ErrUploadTooLarge) {
 			webx.WriteErr(w, videoapp.ErrAssetTooLarge)
@@ -261,7 +262,7 @@ func (d Deps) handleUploadAsset(w http.ResponseWriter, r *http.Request, p *webx.
 		webx.ErrValidation(w, "project_id form field required")
 		return
 	}
-	key, err := d.Svc.UploadAsset(r.Context(), p, projectID, up.Filename, up.ContentType, up.Data)
+	key, err := d.Svc.UploadAsset(r.Context(), p, projectID, up.Filename, up.ContentType, up.Data, videoapp.UploadLimitLarge)
 	if err != nil {
 		writeSvcErr(w, err)
 		return
@@ -275,12 +276,16 @@ func (d Deps) handleUploadAsset(w http.ResponseWriter, r *http.Request, p *webx.
 // (§D8 + F-AUTH-01/F-TRA-01): (1) the key must carry the video/<wsID>/
 // prefix (fail-fast — a foreign key is a 404 before any DB work); (2)
 // workspace membership on the prefix-derived wsID, checked BEFORE any byte
-// is served; (3) the key must trace to a registered ownership credential
-// (video_asset row / video_render row) via Svc.CanAccessKey — workspace
-// membership alone no longer grants read on every object under the prefix
-// ("member ≠ all-readable"), and project deletion revokes access with the
-// CASCADEd rows. Local backend streams via http.ServeContent (Range/HEAD/
-// If-Range — mp4 scrubbing); S3 presigns a 302 through Deps.FileServer.
+// is served — a membership failure reads as the SAME 404 as a missing key
+// (existence erasure, e2e agent2 isolation matrix: the old 403 confirmed
+// the key exists in another tenant's workspace, leaking against the
+// project/render routes' all-404 posture); (3) the key must trace to a
+// registered ownership credential (video_asset row / video_render row) via
+// Svc.CanAccessKey — workspace membership alone no longer grants read on
+// every object under the prefix ("member ≠ all-readable"), and project
+// deletion revokes access with the CASCADEd rows. Local backend streams via
+// http.ServeContent (Range/HEAD/If-Range — mp4 scrubbing); S3 presigns a
+// 302 through Deps.FileServer.
 func (d Deps) handleFile(w http.ResponseWriter, r *http.Request, p *webx.Principal) {
 	key := r.PathValue("key")
 	wsID, ok := workspaceFromKey(key)
@@ -289,8 +294,14 @@ func (d Deps) handleFile(w http.ResponseWriter, r *http.Request, p *webx.Princip
 		return
 	}
 	ok, err := d.Svc.CanAccess(r.Context(), p, wsID)
-	if err != nil || !ok {
-		webx.ErrForbidden(w, "not a member of this workspace")
+	if err != nil {
+		webx.ErrInternal(w)
+		return
+	}
+	if !ok {
+		// Existence erasure: a key under a foreign workspace prefix is the
+		// same 404 a nonexistent key is (agent2 P2-1).
+		webx.ErrNotFound(w, "object not found")
 		return
 	}
 	// Registry gate (F-AUTH-01): membership is necessary but not sufficient.

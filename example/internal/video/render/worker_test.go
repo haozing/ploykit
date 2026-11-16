@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -14,6 +15,8 @@ import (
 	"github.com/riverqueue/river/rivertype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/haozing/ploykit/platform/ids"
 
 	videoapp "myproduct/internal/video/app"
 )
@@ -278,6 +281,108 @@ func TestWorker_StubPipeline_DefaultBuild(t *testing.T) {
 func TestWorker_SweepOrphans_NilPoolSafe(t *testing.T) {
 	w := NewWorker(WorkerDeps{Log: testLogger()})
 	assert.NotPanics(t, func() { w.SweepOrphans(t.Context()) })
+}
+
+// TestWorker_SweepOrphans_DBIntegration anchors the e2e agent3 Bug-2 quota
+// tail against real SQL: the boot sweep now RELEASES the quota slot per
+// reclaimed row (it used to fail rows while silently keeping the slot
+// spent). Cases: (1) a stale running row is failed + released on its frozen
+// quota_period; (2) a stale running row whose released_at is ALREADY stamped
+// (interrupted attempt released, river retry re-entered running, then the
+// process died) is failed but NOT re-released — the one-shot release claim;
+// (3) a fresh running row is untouched. Uses newReconcileEnv (reconciler_test.go,
+// same package) for the migration bootstrap.
+func TestWorker_SweepOrphans_DBIntegration(t *testing.T) {
+	pool := newReconcileEnv(t)
+	ctx := context.Background()
+
+	uniq := time.Now().UnixNano()
+	var uid, wsID, projID string
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO "user" (email, display_name) VALUES ($1, 'sweep test') RETURNING id`,
+		fmt.Sprintf("sweep-%d@test.local", uniq)).Scan(&uid))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO workspace (slug, name, created_by) VALUES ($1, $2, $3) RETURNING id`,
+		fmt.Sprintf("sweep-%d", uniq), "sweep", uid).Scan(&wsID))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO video_project (id, workspace_id, title, created_by) VALUES ($1,$2,$3,$4) RETURNING id`,
+		ids.NewV7(), wsID, "sweep proj", uid).Scan(&projID))
+
+	mkRender := func(status string, released bool) string {
+		id := ids.NewV7()
+		if released {
+			mustExec(t, pool, `
+				INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period, updated_at, released_at)
+				VALUES ($1,$2,$3,$4,'{}'::jsonb,300,$5,'2026-10', now() - interval '2 hours', now() - interval '3 hours')`,
+				id, projID, wsID, status, uid)
+		} else {
+			mustExec(t, pool, `
+				INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period, updated_at)
+				VALUES ($1,$2,$3,$4,'{}'::jsonb,300,$5,'2026-10', now() - interval '2 hours')`,
+				id, projID, wsID, status, uid)
+		}
+		return id.String()
+	}
+
+	// (1) plain zombie: running, 2h stale → swept + released.
+	zombie := mkRender(videoapp.RenderRunning, false)
+	// (2) already-released zombie: interrupted attempt released earlier, the
+	// river retry re-entered running, then the process died → swept, NOT re-released.
+	alreadyReleased := mkRender(videoapp.RenderRunning, true)
+	// (3) fresh running row (a healthy render mid-flight in another live
+	// process) → untouched.
+	fresh := ids.NewV7()
+	mustExec(t, pool, `
+		INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period)
+		VALUES ($1,$2,$3,'running','{}'::jsonb,300,$4,'2026-10')`,
+		fresh, projID, wsID, uid)
+
+	qr := &fakeQuotaRelease{}
+	aud := &fakeAuditor{}
+	w := NewWorker(WorkerDeps{
+		Pool: pool, QuotaRelease: qr, Audit: aud, Log: testLogger(),
+	})
+	w.SetClock(func() time.Time { return time.Now() })
+	w.SweepOrphans(ctx)
+
+	// Both stale rows closed with the interrupted detail.
+	for _, id := range []string{zombie, alreadyReleased} {
+		var status, errMsg string
+		var releasedAt *time.Time
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT status, error, released_at FROM video_render WHERE id=$1`, id).
+			Scan(&status, &errMsg, &releasedAt))
+		assert.Equal(t, videoapp.RenderFailed, status, id)
+		assert.Equal(t, "interrupted: process restarted", errMsg, id)
+		require.NotNil(t, releasedAt, "released_at CAS stamped: %s", id)
+	}
+
+	// Fresh row untouched (still running, no error).
+	var ctrlStatus string
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT status FROM video_render WHERE id=$1`, fresh).Scan(&ctrlStatus))
+	assert.Equal(t, videoapp.RenderRunning, ctrlStatus)
+
+	// Exactly ONE release: the already-released zombie keeps its claim.
+	assert.Equal(t,
+		[]string{wsID + ":" + videoapp.QuotaKey + "@2026-10"},
+		qr.released, "one release on the frozen period; the pre-released row is not re-released")
+
+	// Audit recorded the interruption per reclaimed row.
+	aud.mu.Lock()
+	n := 0
+	for _, a := range aud.recorded {
+		if a == videoapp.AuditRenderInterrupt {
+			n++
+		}
+	}
+	aud.mu.Unlock()
+	assert.Equal(t, 2, n, "one interrupted audit per reclaimed row")
+
+	_, _ = pool.Exec(ctx, `DELETE FROM video_render WHERE project_id=$1`, projID)
+	_, _ = pool.Exec(ctx, `DELETE FROM video_project WHERE id=$1`, projID)
+	_, _ = pool.Exec(ctx, `DELETE FROM workspace WHERE id=$1`, wsID)
+	_, _ = pool.Exec(ctx, `DELETE FROM "user" WHERE id=$1`, uid)
 }
 
 // --- quota release port wiring (worker-side compensation) ---
