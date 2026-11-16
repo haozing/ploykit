@@ -499,6 +499,19 @@ func TestL3Smoke(t *testing.T) {
 		}
 		t.Fatalf("MP4 ftyp header missing: first bytes %.16q", head)
 	}
+	// ftyp major brand (round4 §1.2 recorded "ftyp isom"; current ffmpeg
+	// emits iso5 — the brand is the ENCODER's choice, not an app contract).
+	// Assert the ISO-BMFF family instead: any isoN/isom/mp4x/MSNV major
+	// brand pins "a real MP4 container" without pinning the ffmpeg version.
+	switch {
+	case len(mp4) >= 12 && bytes.Equal(mp4[8:11], []byte("iso")): // iso2/iso5/iso6...
+	case len(mp4) >= 12 && bytes.Equal(mp4[8:12], []byte("isom")),
+		len(mp4) >= 12 && bytes.Equal(mp4[8:12], []byte("mp41")),
+		len(mp4) >= 12 && bytes.Equal(mp4[8:12], []byte("mp42")),
+		len(mp4) >= 12 && bytes.Equal(mp4[8:12], []byte("MSNV")):
+	default:
+		t.Fatalf("MP4 ftyp major brand = %.4q (want an ISO-BMFF family brand: iso*/isom/mp4x/MSNV)", mp4[8:12])
+	}
 
 	rresp := fileResp("bytes=0-99")
 	rangeBytes, err := io.ReadAll(io.LimitReader(rresp.Body, 4096))
@@ -512,6 +525,24 @@ func TestL3Smoke(t *testing.T) {
 	if len(rangeBytes) != 100 {
 		t.Fatalf("Range bytes=0-99 returned %d bytes (want 100)", len(rangeBytes))
 	}
+	// 206 is only correct together with an accurate Content-Range: the
+	// scrubber (video element seeking) trusts "bytes 0-99/total" to size the
+	// media. Round4 recorded 206 without checking the header.
+	if cr := rresp.Header.Get("Content-Range"); cr != fmt.Sprintf("bytes 0-99/%d", len(mp4)) {
+		t.Fatalf("Content-Range = %q (want \"bytes 0-99/%d\" — the full-file size from the 200 response)", cr, len(mp4))
+	}
+	// And the 206 body must be the SAME bytes as the head of the 200 body —
+	// ServeContent slicing the wrong region (or a different object) would
+	// still produce a well-formed 206.
+	if !bytes.Equal(rangeBytes, mp4[:100]) {
+		t.Fatalf("Range body differs from the head of the full download")
+	}
+	// MP4 size sanity (round4 recorded 18.3KB for this 5s/1080x1920 render):
+	// not a magic constant, just a plausibility floor — a bare-box header or
+	// a truncated encode would come out far smaller.
+	if len(mp4) < 4096 {
+		t.Fatalf("MP4 suspiciously small: %d bytes (round4 full render ≈18KB)", len(mp4))
+	}
 
 	// ---- DB direct checks (round4 §1.2 DB row + quota + audit) ----
 	var (
@@ -519,18 +550,26 @@ func TestL3Smoke(t *testing.T) {
 		quotaPeriod  string
 		releasedAt   sql.NullString
 		submissionKy string
+		framesDoneDB int
+		framesTotDB  int
+		finishedAt   sql.NullString
 	)
 	err = db.QueryRowContext(ctx,
-		`SELECT status, quota_period, released_at::text, submission_key FROM video_render WHERE id = $1`, renderID).
-		Scan(&rowStatus, &quotaPeriod, &releasedAt, &submissionKy)
+		`SELECT status, quota_period, released_at::text, submission_key, frames_done, frames_total, finished_at::text
+		 FROM video_render WHERE id = $1`, renderID).
+		Scan(&rowStatus, &quotaPeriod, &releasedAt, &submissionKy, &framesDoneDB, &framesTotDB, &finishedAt)
 	if err != nil {
 		t.Fatalf("query video_render row: %v", err)
 	}
 	if rowStatus != "succeeded" {
 		t.Fatalf("DB video_render.status = %s (want succeeded)", rowStatus)
 	}
-	if quotaPeriod == "" {
-		t.Fatalf("DB video_render.quota_period is empty (want the fixed period)")
+	// The period is a FORMAT contract, not just non-empty: quota.Period is
+	// UTC "2006-01" and releaseQuota matches on it verbatim — a wrong format
+	// would make every future compensation match zero rows silently.
+	wantPeriod := time.Now().UTC().Format("2006-01")
+	if quotaPeriod != wantPeriod {
+		t.Fatalf("DB video_render.quota_period = %q (want %q — quota.Period format 2006-01 UTC)", quotaPeriod, wantPeriod)
 	}
 	if !releasedAt.Valid || releasedAt.String == "" {
 		// released_at::text of NULL scans as !Valid — correct on success:
@@ -542,6 +581,15 @@ func TestL3Smoke(t *testing.T) {
 	if submissionKy != l3IDemKey {
 		t.Fatalf("DB video_render.submission_key = %q (want %q)", submissionKy, l3IDemKey)
 	}
+	// Terminal-state completeness: frames in the DB must agree with the API
+	// payload, and a succeeded row carries finished_at (update() sets it for
+	// succeeded|failed; the HTTP body alone can't prove the row did).
+	if framesDoneDB != final.FramesDone || framesTotDB != final.FramesTotal {
+		t.Fatalf("DB frames %d/%d disagree with API %d/%d", framesDoneDB, framesTotDB, final.FramesDone, final.FramesTotal)
+	}
+	if !finishedAt.Valid || finishedAt.String == "" {
+		t.Fatalf("succeeded render has NULL finished_at (update must stamp it on succeeded)")
+	}
 
 	var used int64
 	if err := db.QueryRowContext(ctx,
@@ -552,15 +600,49 @@ func TestL3Smoke(t *testing.T) {
 	if used != 1 {
 		t.Fatalf("quota_counter.used = %d (want 1: one successful render, replay must not double charge)", used)
 	}
-
-	var auditCount int
+	// The idempotency ledger itself: exactly ONE idem row for this key
+	// (round4 "同一行" — the unique index makes two impossible, but a
+	// same-period replay that INSERTed anyway would still be a bug).
+	var idemCount int
 	if err := db.QueryRowContext(ctx,
-		`SELECT count(*) FROM audit_event WHERE action IN ('video.render.created','video.render.completed')
-		 AND resource_id = $1`, renderID).Scan(&auditCount); err != nil {
-		t.Fatalf("query audit_event: %v", err)
+		`SELECT count(*) FROM quota_consume_idem WHERE workspace_id = $1 AND counter_key = 'video_renders_monthly' AND idem_key = $2`,
+		s.workspaceID, l3IDemKey).Scan(&idemCount); err != nil {
+		t.Fatalf("query quota_consume_idem: %v", err)
 	}
-	if auditCount != 2 {
-		t.Fatalf("audit events for render %s: got %d (want 2: video.render.created + video.render.completed)", renderID, auditCount)
+	if idemCount != 1 {
+		t.Fatalf("quota_consume_idem rows for key %q: got %d (want 1 — replay reused the ledger row)", l3IDemKey, idemCount)
+	}
+	// No second render row under the same key: the unique index enforces it,
+	// but assert it explicitly so a future index regression fails HERE.
+	var rowCount int
+	if err := db.QueryRowContext(ctx,
+		`SELECT count(*) FROM video_render WHERE workspace_id = $1 AND submission_key = $2`,
+		s.workspaceID, l3IDemKey).Scan(&rowCount); err != nil {
+		t.Fatalf("count video_render by submission_key: %v", err)
+	}
+	if rowCount != 1 {
+		t.Fatalf("video_render rows with submission_key %q: got %d (want 1 — idempotent replay must not create a second row)", l3IDemKey, rowCount)
+	}
+
+	// Audit: BOTH actions must be present — a bare count(2) would also pass
+	// with created+created (a lost completed event is exactly the bug class
+	// the audit trail exists to catch). Check per-action, plus resource_type.
+	var auditCreated, auditCompleted int
+	if err := db.QueryRowContext(ctx,
+		`SELECT count(*) FROM audit_event WHERE action = 'video.render.created' AND resource_id = $1 AND resource_type = 'video_render'`,
+		renderID).Scan(&auditCreated); err != nil {
+		t.Fatalf("query audit_event (created): %v", err)
+	}
+	if err := db.QueryRowContext(ctx,
+		`SELECT count(*) FROM audit_event WHERE action = 'video.render.completed' AND resource_id = $1 AND resource_type = 'video_render'`,
+		renderID).Scan(&auditCompleted); err != nil {
+		t.Fatalf("query audit_event (completed): %v", err)
+	}
+	if auditCreated != 1 {
+		t.Fatalf("audit video.render.created for render %s: got %d (want 1)", renderID, auditCreated)
+	}
+	if auditCompleted != 1 {
+		t.Fatalf("audit video.render.completed for render %s: got %d (want 1)", renderID, auditCompleted)
 	}
 }
 

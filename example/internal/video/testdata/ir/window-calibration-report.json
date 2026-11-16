@@ -1,0 +1,130 @@
+{
+  "adjusted": [
+    {
+      "case": "c02",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "case": "c02",
+      "old": 75,
+      "new": 76
+    },
+    {
+      "case": "c02",
+      "old": 200,
+      "new": 201
+    },
+    {
+      "case": "c02",
+      "old": 262,
+      "new": 263
+    },
+    {
+      "case": "c02",
+      "old": 325,
+      "new": 326
+    },
+    {
+      "case": "c02",
+      "old": 450,
+      "new": 451
+    },
+    {
+      "case": "c03",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "case": "c03",
+      "old": 540,
+      "new": 541
+    },
+    {
+      "case": "c03",
+      "old": 735,
+      "new": 736
+    },
+    {
+      "case": "c05",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "case": "c05",
+      "old": 150,
+      "new": 151
+    },
+    {
+      "case": "c05",
+      "old": 720,
+      "new": 721
+    },
+    {
+      "case": "c07",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "case": "c07",
+      "old": 270,
+      "new": 271
+    },
+    {
+      "case": "c07",
+      "old": 810,
+      "new": 811
+    },
+    {
+      "case": "c08",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "case": "c08",
+      "old": 90,
+      "new": 91
+    },
+    {
+      "case": "c08",
+      "old": 130,
+      "new": 131
+    },
+    {
+      "case": "c08",
+      "old": 210,
+      "new": 211
+    },
+    {
+      "case": "c08",
+      "old": 330,
+      "new": 331
+    },
+    {
+      "case": "c08",
+      "old": 450,
+      "new": 451
+    },
+    {
+      "case": "c09",
+      "old": 0,
+      "new": 1
+    },
+    {
+      "case": "c09",
+      "old": 120,
+      "new": 121
+    },
+    {
+      "case": "c09",
+      "old": 960,
+      "new": 961
+    },
+    {
+      "case": "c09",
+      "old": 1260,
+      "new": 1261
+    }
+  ],
+  "note": "window boundary [startFrame+1, endFrame] per round6 §0.1; word-anchor derived frames (ceil(word.start*fps)) are NOT adjusted"
+}

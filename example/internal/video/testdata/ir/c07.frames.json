@@ -6,17 +6,68 @@
   "anchor_formula": "锚点命中帧 = ceil(word.start × fps)；元素窗口 = 文档分镜/elements 表 startFrame/endFrame 原值（P0-1 已落地，全局帧时钟一致）",
   "capability_upgrade_note": "本帧表按并行 agent 已落地的 P0-1（元素时间窗）+T-12 升级：右栏五段内容切换（infobar 0-599 → steps 270-419 → kpi 600-809 → quote 810-989 → cta 990-1199）全部恢复文档原窗口——初版降级 IR 的最大缺口（镜 4 福利段缺元素/内容切换断链）在 P0-1 下按文档 elements 表直接修复。",
   "frames": [
-    {"frame": 0, "time_sec": 0.0, "expect": "开场三层依次入场：el_brandbar scaleIn（0-15 帧）+ 品牌文字同锚（窗口 0-1199 全程）；el_photo 窗口 0-989 + 锚帧 0 起播（文档 an_photo_in startFrame=8 降级为帧 0 隐式开始——8 帧偏移为镜头内微错峰，词表无对应，可见差异 8 帧）；el_infobar/el_infotitle/el_infocount 窗口 0-599。A-C07-04 品牌条 (0,40,1920,80) 深蓝 ≥85% 自帧 15 起、全程到 1199。P0-1 红利：steps/kpi/quote/cta 窗口未开段全部 visibility:hidden——'流程列表透出到镜 1'类风险消除"},
-    {"frame": 22, "time_sec": 0.73, "expect": "el_infotitle 锚 '二零一六年' 0.72s→帧 22 scaleIn；el_infobar 主卡锚 '在这里' 4.0s→帧 120（窗口 0 起可见，卡体入场动画 120 起——文档 an_info_in startFrame=16 的错峰节奏降级为词锚，卡体晚于标题文字入场是可见时序差异，L1 帧差窗口按 120 修正）。ef_headcount counter 同 '三百二十人' 1.54s→帧 47 启动"},
-    {"frame": 47, "time_sec": 1.57, "expect": "人数 counter 滚动开始（from 0 to 320，suffix ' 人'）。能力升级红利（round4）：counter 挂 targetElementId=el_infobar——数字 div 定位到信息卡 bbox 左上 (860,160)，不再是画布原点 (0,0)；可见差异保留：96px/700 固定字号（压过 el_infocount 静态兜底文本区域上方），数字只在滚动期出现，落定后保持最终值"},
-    {"frame": 60, "time_sec": 2.0, "expect": "人数落定进行中（counter 最长 1.2s：47+36=83 帧内完成；power1.out 前快后慢，帧 60 数值 ∈ [200,280] 待缓动标定）；A-C07 静态兜底 el_infocount '团队 320 人' scaleIn 18 帧落定中。双呈现：counter 滚动 + 静态文本兜底，数字口径同源（320 与 S1 一致）"},
-    {"frame": 131, "time_sec": 4.36, "expect": "镜 2：el_infobar 卡体 scaleIn（锚 '在这里' 4.0s→帧 120，18 帧落定 138）；重复词 '工程师' occurrence=0（w05 4.36s）/1（w21 27.24s）由锚点显式区分——ef_quote_hl 取 occurrence=1 保证高亮落引言段；F-C07-02 注入场景（无 occurrence）的现行行为是 same_text 取最近候选，降级 IR 已预防性显式标注"},
-    {"frame": 270, "time_sec": 9.0, "expect": "镜 3 流程层：el_steps/el_step_list startFrame=270 窗口开启（文档 an_steps_in startFrame=270 精确对位）+ el_steps 锚 '招聘流程' 9.0s→帧 270 同帧起播；el_step_list 锚 '简历筛选' 9.42s→帧 283。P0-1 红利：steps 出现的同时 infobar 三元素仍在窗口内（0-599）——文档语义'信息条与流程层共存'（steps z12 叠在 infobar z10 上），帧 270-419 右栏 = 信息卡+流程卡叠放。降级差异保留：steps/staggerFrames ⛔——五步为一条静态文本整体入场，T-09 步骤级 12 帧错峰不可见，A-C07-02 'F270/F282/F294/F306/F318 依次出现'降级为'整卡 F283–F313 可见'（文档 3.3.6 同款裁决）"},
-    {"frame": 420, "time_sec": 14.0, "expect": "镜 4 福利段：el_steps/el_step_list endFrame=419 半开关闭（流程层退场）——P0-1 红利核心帧：右栏回到 infobar（窗口至 599）。降级差异（保留）：福利四条两列排布仍无对应元素（文档 el_infobar params 更新语义='同一张卡换内容'，现 IR 无法表达元素内容切换——可见差异：F420–F599 右栏显示'成立 2016/320 人'信息卡而非福利四条；跨词锚 '弹性工作制' w14+w15 由旁白+字幕承载；L1 将 F425 段标记为降级内容——比初版进步：不再有流程列表残留，但福利卡仍缺）"},
-    {"frame": 606, "time_sec": 20.2, "expect": "镜 5 KPI：el_kpi/el_kpi_text startFrame=600 窗口开启（文档 an_kpi_in startFrame=600 精确对位）+ 锚 '四十多家企业' 20.18s→帧 606 起播（back.out 24 帧）；ef_projects counter 锚 '三百多个项目' 20.88s→帧 627 启动（0→300，'+ 项目'），挂 targetElementId=el_kpi 定位到 KPI 卡 bbox (860,200)；infobar 窗口 599 关闭——右栏干净切换为 KPI"},
-    {"frame": 660, "time_sec": 22.0, "expect": "KPI 落定：三格 '40+ 企业 · 300+ 项目 · 82% 复购率' 静态文本可辨（A-C07-03 数字同源断言对象为 el_kpi_text）；counter ∈ [200,280] 待标定（627+36=663 帧内完成滚动）；复购率 82% 静态呈现（counter 只做项目数）"},
-    {"frame": 810, "time_sec": 27.0, "expect": "镜 6 引言段：el_photo/el_kpi endFrame=809/989——el_kpi 窗口 809 关闭、el_photo2 头像窗口 810-989 开启覆盖左栏（z6>z5）；el_quote/el_quote_text 窗口 810 开启 + 锚 '林娜' 27.5s→帧 825 scaleIn；ef_quote_hl 同 '林娜' 锚（帧 825）。T-12 红利：el_quote 是 shape 元素 → highlight 走背景闪分支（#FFD166 0.25s 闪卡背景）——text 着色分支只对 text 类型生效；引言文本在 el_quote_text（text）上，若要词着色应把 targetElementId 改指 el_quote_text——按文档 effects 表 targetElementId=el_quote 忠实保留（闪卡背景），差异记录：'工程师'词变色仍 ⛔（T-12 元素粒度=整元素，'引言卡'粒度已是最接近表达）"},
-    {"frame": 1019, "time_sec": 33.97, "expect": "镜 7 footer：el_cta/el_cta_text/el_qr startFrame=990 窗口开启（文档 an_cta_in startFrame=990 精确对位）+ an_cta_in 锚 'jobs@yunqi.example' 33.94s→帧 1019 move 上移 1000→940（16 帧）；el_qr (1580,950,80,80) 常驻窗口内静态可见（990 起无入场动画，可见差异：二维码无入场过渡直接出现）；A-C07-05 黑白占比断言窗口 [1019,1199]；quote/photo2 窗口 989 关闭——右栏只剩 footer。F1185 整片轻 fade 不可实现（fade effect 是遮罩语义；P0-2 可给全元素挂 fadeOut，本轮按忠实原则不加）"},
-    {"frame": 1199, "time_sec": 39.97, "expect": "尾帧：品牌条 + footer + 二维码同屏；bbox 全在界内；DurationFrames=ceil(40×30)=1200；MP4 40.00s±0.1s/30fps/1920×1080。BGM 无 loop/loudnorm（amix duration=first 截 40s）；字幕烧录走 RenderParams，el_caption 空 text 占位（窗口 0-1199，y860–920 带，footer 段让位降级未实现——字幕带固定）"}
+    {
+      "frame": 1,
+      "time_sec": 0.0,
+      "expect": "开场三层依次入场：el_brandbar scaleIn（0-15 帧）+ 品牌文字同锚（窗口 0-1199 全程）；el_photo 窗口 0-989 + 锚帧 0 起播（文档 an_photo_in startFrame=8 降级为帧 0 隐式开始——8 帧偏移为镜头内微错峰，词表无对应，可见差异 8 帧）；el_infobar/el_infotitle/el_infocount 窗口 0-599。A-C07-04 品牌条 (0,40,1920,80) 深蓝 ≥85% 自帧 15 起、全程到 1199。P0-1 红利：steps/kpi/quote/cta 窗口未开段全部 visibility:hidden——'流程列表透出到镜 1'类风险消除",
+      "window_adjusted": true
+    },
+    {
+      "frame": 22,
+      "time_sec": 0.73,
+      "expect": "el_infotitle 锚 '二零一六年' 0.72s→帧 22 scaleIn；el_infobar 主卡锚 '在这里' 4.0s→帧 120（窗口 0 起可见，卡体入场动画 120 起——文档 an_info_in startFrame=16 的错峰节奏降级为词锚，卡体晚于标题文字入场是可见时序差异，L1 帧差窗口按 120 修正）。ef_headcount counter 同 '三百二十人' 1.54s→帧 47 启动"
+    },
+    {
+      "frame": 47,
+      "time_sec": 1.57,
+      "expect": "人数 counter 滚动开始（from 0 to 320，suffix ' 人'）。能力升级红利（round4）：counter 挂 targetElementId=el_infobar——数字 div 定位到信息卡 bbox 左上 (860,160)，不再是画布原点 (0,0)；可见差异保留：96px/700 固定字号（压过 el_infocount 静态兜底文本区域上方），数字只在滚动期出现，落定后保持最终值"
+    },
+    {
+      "frame": 60,
+      "time_sec": 2.0,
+      "expect": "人数落定进行中（counter 最长 1.2s：47+36=83 帧内完成；power1.out 前快后慢，帧 60 数值 ∈ [200,280] 待缓动标定）；A-C07 静态兜底 el_infocount '团队 320 人' scaleIn 18 帧落定中。双呈现：counter 滚动 + 静态文本兜底，数字口径同源（320 与 S1 一致）"
+    },
+    {
+      "frame": 131,
+      "time_sec": 4.36,
+      "expect": "镜 2：el_infobar 卡体 scaleIn（锚 '在这里' 4.0s→帧 120，18 帧落定 138）；重复词 '工程师' occurrence=0（w05 4.36s）/1（w21 27.24s）由锚点显式区分——ef_quote_hl 取 occurrence=1 保证高亮落引言段；F-C07-02 注入场景（无 occurrence）的现行行为是 same_text 取最近候选，降级 IR 已预防性显式标注"
+    },
+    {
+      "frame": 271,
+      "time_sec": 9.0,
+      "expect": "镜 3 流程层：el_steps/el_step_list startFrame=270 窗口开启（文档 an_steps_in startFrame=270 精确对位）+ el_steps 锚 '招聘流程' 9.0s→帧 270 同帧起播；el_step_list 锚 '简历筛选' 9.42s→帧 283。P0-1 红利：steps 出现的同时 infobar 三元素仍在窗口内（0-599）——文档语义'信息条与流程层共存'（steps z12 叠在 infobar z10 上），帧 270-419 右栏 = 信息卡+流程卡叠放。降级差异保留：steps/staggerFrames ⛔——五步为一条静态文本整体入场，T-09 步骤级 12 帧错峰不可见，A-C07-02 'F270/F282/F294/F306/F318 依次出现'降级为'整卡 F283–F313 可见'（文档 3.3.6 同款裁决）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 420,
+      "time_sec": 14.0,
+      "expect": "镜 4 福利段：el_steps/el_step_list endFrame=419 半开关闭（流程层退场）——P0-1 红利核心帧：右栏回到 infobar（窗口至 599）。降级差异（保留）：福利四条两列排布仍无对应元素（文档 el_infobar params 更新语义='同一张卡换内容'，现 IR 无法表达元素内容切换——可见差异：F420–F599 右栏显示'成立 2016/320 人'信息卡而非福利四条；跨词锚 '弹性工作制' w14+w15 由旁白+字幕承载；L1 将 F425 段标记为降级内容——比初版进步：不再有流程列表残留，但福利卡仍缺）"
+    },
+    {
+      "frame": 606,
+      "time_sec": 20.2,
+      "expect": "镜 5 KPI：el_kpi/el_kpi_text startFrame=600 窗口开启（文档 an_kpi_in startFrame=600 精确对位）+ 锚 '四十多家企业' 20.18s→帧 606 起播（back.out 24 帧）；ef_projects counter 锚 '三百多个项目' 20.88s→帧 627 启动（0→300，'+ 项目'），挂 targetElementId=el_kpi 定位到 KPI 卡 bbox (860,200)；infobar 窗口 599 关闭——右栏干净切换为 KPI"
+    },
+    {
+      "frame": 660,
+      "time_sec": 22.0,
+      "expect": "KPI 落定：三格 '40+ 企业 · 300+ 项目 · 82% 复购率' 静态文本可辨（A-C07-03 数字同源断言对象为 el_kpi_text）；counter ∈ [200,280] 待标定（627+36=663 帧内完成滚动）；复购率 82% 静态呈现（counter 只做项目数）"
+    },
+    {
+      "frame": 811,
+      "time_sec": 27.0,
+      "expect": "镜 6 引言段：el_photo/el_kpi endFrame=809/989——el_kpi 窗口 809 关闭、el_photo2 头像窗口 810-989 开启覆盖左栏（z6>z5）；el_quote/el_quote_text 窗口 810 开启 + 锚 '林娜' 27.5s→帧 825 scaleIn；ef_quote_hl 同 '林娜' 锚（帧 825）。T-12 红利：el_quote 是 shape 元素 → highlight 走背景闪分支（#FFD166 0.25s 闪卡背景）——text 着色分支只对 text 类型生效；引言文本在 el_quote_text（text）上，若要词着色应把 targetElementId 改指 el_quote_text——按文档 effects 表 targetElementId=el_quote 忠实保留（闪卡背景），差异记录：'工程师'词变色仍 ⛔（T-12 元素粒度=整元素，'引言卡'粒度已是最接近表达）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 1019,
+      "time_sec": 33.97,
+      "expect": "镜 7 footer：el_cta/el_cta_text/el_qr startFrame=990 窗口开启（文档 an_cta_in startFrame=990 精确对位）+ an_cta_in 锚 'jobs@yunqi.example' 33.94s→帧 1019 move 上移 1000→940（16 帧）；el_qr (1580,950,80,80) 常驻窗口内静态可见（990 起无入场动画，可见差异：二维码无入场过渡直接出现）；A-C07-05 黑白占比断言窗口 [1019,1199]；quote/photo2 窗口 989 关闭——右栏只剩 footer。F1185 整片轻 fade 不可实现（fade effect 是遮罩语义；P0-2 可给全元素挂 fadeOut，本轮按忠实原则不加）"
+    },
+    {
+      "frame": 1199,
+      "time_sec": 39.97,
+      "expect": "尾帧：品牌条 + footer + 二维码同屏；bbox 全在界内；DurationFrames=ceil(40×30)=1200；MP4 40.00s±0.1s/30fps/1920×1080。BGM 无 loop/loudnorm（amix duration=first 截 40s）；字幕烧录走 RenderParams，el_caption 空 text 占位（窗口 0-1199，y860–920 带，footer 段让位降级未实现——字幕带固定）"
+    }
   ]
 }

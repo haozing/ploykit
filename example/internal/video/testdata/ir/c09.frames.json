@@ -6,18 +6,74 @@
   "anchor_formula": "锚点命中帧 = ceil(word.start × fps)；元素窗口 = 文档分镜/elements 表 startFrame/endFrame 原值（P0-1 已落地，全局帧时钟一致）",
   "capability_upgrade_note": "本帧表按并行 agent 已落地的 P0-1（元素时间窗）升级：标题（0-119）/取景框（120-959）/光标（120-1259）/菜单（360-599）/面板（600-1259）/状态栏（960-1259）/片尾行（1260-1499）显隐区间全部恢复文档原窗口——§4.5.7 点名的头号风险'菜单/面板提前透出'随窗口机制整体消除（此前完全依赖 z 层叠正确性）。",
   "frames": [
-    {"frame": 0, "time_sec": 0.0, "expect": "开场：el_ui 文件列表截图 scaleIn 0.96→1（20 帧，窗口 0-1499 全程）+ el_title '批量重命名 · 四步流程'（窗口 0-119）+ step1 badge（scaleIn 帧级 0 起，18 帧）。P0-1 红利：取景框/光标/菜单/面板/状态栏/片尾行窗口未开段全部 visibility:hidden。badge 错峰降级保留：文档 an_badges_in staggerFrames:400 无解析 ⛔——step1 帧级 0 + step2/3/4 词锚 29/366/606（'批量'/'第二步'/'第三步'），badge 亮起语义='步骤进行中'（见帧 36 条时序差异记录）"},
-    {"frame": 36, "time_sec": 1.2, "expect": "文档帧表 36 处 badge 全可见——降级 IR 此帧仅 step1/step2 可见（step2 窗口 0-1259 + 锚 29 scaleIn 进行中，step3/4 未入场）。帧表对位差异记录：badgesIn 完成帧由 36 改为 47（step2 落定）；A-C09-01 取景框断言与此无耦合；A-C09-04 badge y 240/380/520/660 垂直间距 140px 断言不受影响（坐标精确，四 badge 窗口均 0-1259）"},
-    {"frame": 120, "time_sec": 4.0, "expect": "镜 2：el_title endFrame=119 半开关闭（标题退场——P0-1 精确对位文档 0-119）；取景框四边 el_zoom_* startFrame=120 窗口开启（文档 120-959 精确对位）+ an_zoom1-4_in 锚 '第一步' w04 4.2s→帧 126 起播（18 帧）；el_cursor 窗口 120 开 + an_cursor_1 同锚 126 起播（90 帧直线 300,200→520,420）。降级差异保留：T-03 shape:'frame'/zoom:1.25 ⛔——框为四条 4px 蓝 shape（x300-1500/y240-720 边界几何精确，A-C09-01 可达），框内放大不可实现"},
-    {"frame": 149, "time_sec": 4.97, "expect": "光标行进中：an_cursor_1 至 216 落定；'框选' w05 4.95s→帧 149 在光标行进中旁白。降级差异保留：T-08 path:'polyline' ⛔——两段折线拆三条 move（cursor_1/2/3），词锚衔接；单帧位移 ≤60px 断言可达（90 帧 305px ≈3.4px/帧）"},
-    {"frame": 366, "time_sec": 12.2, "expect": "镜 3 菜单弹出：el_menu startFrame=360 窗口开启（文档 360-599 精确对位——P0-1 消除'菜单提前透出'头号风险，帧 360 前菜单区域零像素）+ an_menu_in 锚 '第二步' 12.2s→帧 366 同锚起播（16 帧）；an_cursor_2 同锚 366 起播（45 帧 700,340→860,380）；badge step3 同锚亮起。P0-1+词锚双驱动：窗口先开 6 帧（菜单静态可见 360-365）、入场缩放随后——文档语义'菜单弹出'的缩放入场在 366-382"},
-    {"frame": 413, "time_sec": 13.77, "expect": "ef_hl_op 生效窗口：锚 '重命名' occurrence=2 = w10 13.75s→帧 413（文档 crossWord '批量重命名' 按 w10 解析的现行等价表达；全表出现序 w02=occ0/w06=occ1/w10=occ2/w16=occ3，Validate 后 ResolveAll 全部 exact）。T-12 核对：el_menu 是 image 元素 → highlight 走背景闪分支（菜单截图卡背景 → #FFD54A，词窗口 413→w10 end 14.15s→帧 425 着色——注意 image 元素走的是背景闪 0.25s 节奏而非词窗口节奏，背景闪分支 unchanged：0.25s 升+0.6s 回落，L1 帧差窗口 [413,434]）。降级差异保留：'批量重命名'菜单项逐词变黄 ⛔（菜单是截图位图，无文本节点可着色——T-12 词级对 image 目标天然不可达，素材侧可换文本元素实现）"},
-    {"frame": 599, "time_sec": 19.97, "expect": "镜 3→4 边界：el_menu endFrame=599 半开关闭（菜单退场）；el_panel startFrame=600 窗口开启（文档 600-1259 精确对位）+ an_panel_in 锚 '第三步' w11 20.2s→帧 606 起播（20 帧）——P0-1 硬切保证菜单/面板无同帧共存；badge step4 同 '第三步' 锚亮起（606）；'前缀' w12 21.1s→帧 633 旁白输入段。降级差异保留：面板文本（前缀 '旅行-2026'/预览列表）在截图内，DOM 断言需 OCR 或素材自证"},
-    {"frame": 705, "time_sec": 23.5, "expect": "预览段：'预览' w14 23.2s→帧 696；面板落定（626 起）+ 取景框常驻（窗口 120-959 覆盖镜 4）。降级差异保留：'取景框切到面板区'不可实现（框固定列表区，zoom 元素无第二组——可见差异记录：镜 4/5 面板区无框）；'规则文字 前缀+原序号' 在面板截图内（素材自证）"},
-    {"frame": 960, "time_sec": 32.0, "expect": "镜 5 确认段：取景框 endFrame=959 半开关闭（退场）；el_status startFrame=960 窗口开启（文档 960-1259 精确对位）+ an_status_in 锚 '第四步' w15 32.2s→帧 966 scaleIn（18 帧）；an_cursor_3 同锚 966 起播（60 帧 1080,560→1180,660，1026 落定）——光标窗口 120-1259 跨五镜持续（文档 cursor 120-1259 原值保留）"},
-    {"frame": 1002, "time_sec": 33.4, "expect": "ef_pulse_btn：锚 '重命名' occurrence=3（w16 33.4s→帧 1002，对应文档 w17 '重命名' pulse）。pulse 挂 targetElementId=el_panel（元素级 1.05，能力升级红利——不整画布缩放）；降级差异保留：'确认按钮'在面板截图内无独立节点，脉冲作用于整面板卡（按钮级目标不可达）"},
-    {"frame": 1056, "time_sec": 35.2, "expect": "ef_cnt_done counter 启动：锚 '完成' w18 35.2s→帧 1056（0→12，suffix ' 项已完成'，最长 1.2s→1092 帧到 12）。能力升级红利（round4）：counter 挂 targetElementId=el_status——数字定位到状态栏 bbox (1300,820,380,44)，96px 固定字形大于 28px 状态栏位（可见差异保留：字形压到 y820 上方 UI 区）；静态 '12 项已完成' 绿色兜底文本（text）同位保持——A-C09-03 绿色断言对象为 el_status 静态文本；counter 单调递增窗口 [1056,1092] 不倒续不跳变可达"},
-    {"frame": 1260, "time_sec": 42.0, "expect": "镜 6 结果校验：el_panel/el_status/el_cursor endFrame=1259 半开关闭（操作层退场——P0-1 精确对位）+ el_endline startFrame=1260 窗口开启（文档 an_endline_in startFrame=1260 精确对位）+ 锚 '目录' w19 42.3s→帧 1269 scaleIn（18 帧）。片尾说明行 '流程结束：文件未被移动，目录结构保持不变' 顶部 y120 带出现；目录树保持（el_ui 截图常驻承载'未变'语义——前后对照图切换仍 ⛔ 需素材）"},
-    {"frame": 1499, "time_sec": 49.97, "expect": "尾帧：UI + 片尾说明行保持；DurationFrames=ceil(50×30)=1500；MP4 50.0s±0.1s/30fps/1920×1080；BGM 淡出不可实现（amix duration=first 截 50s——P0-2 fadeIn/fadeOut 是元素级 opacity 动画不适用音频轨）；字幕烧录走 RenderParams（y950–1020 带，el_caption 占位）；操作音效对齐 ⚠️（无独立音效轨，前置混入 voice——IR 不可表达）"}
+    {
+      "frame": 1,
+      "time_sec": 0.0,
+      "expect": "开场：el_ui 文件列表截图 scaleIn 0.96→1（20 帧，窗口 0-1499 全程）+ el_title '批量重命名 · 四步流程'（窗口 0-119）+ step1 badge（scaleIn 帧级 0 起，18 帧）。P0-1 红利：取景框/光标/菜单/面板/状态栏/片尾行窗口未开段全部 visibility:hidden。badge 错峰降级保留：文档 an_badges_in staggerFrames:400 无解析 ⛔——step1 帧级 0 + step2/3/4 词锚 29/366/606（'批量'/'第二步'/'第三步'），badge 亮起语义='步骤进行中'（见帧 36 条时序差异记录）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 36,
+      "time_sec": 1.2,
+      "expect": "文档帧表 36 处 badge 全可见——降级 IR 此帧仅 step1/step2 可见（step2 窗口 0-1259 + 锚 29 scaleIn 进行中，step3/4 未入场）。帧表对位差异记录：badgesIn 完成帧由 36 改为 47（step2 落定）；A-C09-01 取景框断言与此无耦合；A-C09-04 badge y 240/380/520/660 垂直间距 140px 断言不受影响（坐标精确，四 badge 窗口均 0-1259）"
+    },
+    {
+      "frame": 121,
+      "time_sec": 4.0,
+      "expect": "镜 2：el_title endFrame=119 半开关闭（标题退场——P0-1 精确对位文档 0-119）；取景框四边 el_zoom_* startFrame=120 窗口开启（文档 120-959 精确对位）+ an_zoom1-4_in 锚 '第一步' w04 4.2s→帧 126 起播（18 帧）；el_cursor 窗口 120 开 + an_cursor_1 同锚 126 起播（90 帧直线 300,200→520,420）。降级差异保留：T-03 shape:'frame'/zoom:1.25 ⛔——框为四条 4px 蓝 shape（x300-1500/y240-720 边界几何精确，A-C09-01 可达），框内放大不可实现",
+      "window_adjusted": true
+    },
+    {
+      "frame": 149,
+      "time_sec": 4.97,
+      "expect": "光标行进中：an_cursor_1 至 216 落定；'框选' w05 4.95s→帧 149 在光标行进中旁白。降级差异保留：T-08 path:'polyline' ⛔——两段折线拆三条 move（cursor_1/2/3），词锚衔接；单帧位移 ≤60px 断言可达（90 帧 305px ≈3.4px/帧）"
+    },
+    {
+      "frame": 366,
+      "time_sec": 12.2,
+      "expect": "镜 3 菜单弹出：el_menu startFrame=360 窗口开启（文档 360-599 精确对位——P0-1 消除'菜单提前透出'头号风险，帧 360 前菜单区域零像素）+ an_menu_in 锚 '第二步' 12.2s→帧 366 同锚起播（16 帧）；an_cursor_2 同锚 366 起播（45 帧 700,340→860,380）；badge step3 同锚亮起。P0-1+词锚双驱动：窗口先开 6 帧（菜单静态可见 360-365）、入场缩放随后——文档语义'菜单弹出'的缩放入场在 366-382"
+    },
+    {
+      "frame": 413,
+      "time_sec": 13.77,
+      "expect": "ef_hl_op 生效窗口：锚 '重命名' occurrence=2 = w10 13.75s→帧 413（文档 crossWord '批量重命名' 按 w10 解析的现行等价表达；全表出现序 w02=occ0/w06=occ1/w10=occ2/w16=occ3，Validate 后 ResolveAll 全部 exact）。T-12 核对：el_menu 是 image 元素 → highlight 走背景闪分支（菜单截图卡背景 → #FFD54A，词窗口 413→w10 end 14.15s→帧 425 着色——注意 image 元素走的是背景闪 0.25s 节奏而非词窗口节奏，背景闪分支 unchanged：0.25s 升+0.6s 回落，L1 帧差窗口 [413,434]）。降级差异保留：'批量重命名'菜单项逐词变黄 ⛔（菜单是截图位图，无文本节点可着色——T-12 词级对 image 目标天然不可达，素材侧可换文本元素实现）"
+    },
+    {
+      "frame": 599,
+      "time_sec": 19.97,
+      "expect": "镜 3→4 边界：el_menu endFrame=599 半开关闭（菜单退场）；el_panel startFrame=600 窗口开启（文档 600-1259 精确对位）+ an_panel_in 锚 '第三步' w11 20.2s→帧 606 起播（20 帧）——P0-1 硬切保证菜单/面板无同帧共存；badge step4 同 '第三步' 锚亮起（606）；'前缀' w12 21.1s→帧 633 旁白输入段。降级差异保留：面板文本（前缀 '旅行-2026'/预览列表）在截图内，DOM 断言需 OCR 或素材自证"
+    },
+    {
+      "frame": 705,
+      "time_sec": 23.5,
+      "expect": "预览段：'预览' w14 23.2s→帧 696；面板落定（626 起）+ 取景框常驻（窗口 120-959 覆盖镜 4）。降级差异保留：'取景框切到面板区'不可实现（框固定列表区，zoom 元素无第二组——可见差异记录：镜 4/5 面板区无框）；'规则文字 前缀+原序号' 在面板截图内（素材自证）"
+    },
+    {
+      "frame": 961,
+      "time_sec": 32.0,
+      "expect": "镜 5 确认段：取景框 endFrame=959 半开关闭（退场）；el_status startFrame=960 窗口开启（文档 960-1259 精确对位）+ an_status_in 锚 '第四步' w15 32.2s→帧 966 scaleIn（18 帧）；an_cursor_3 同锚 966 起播（60 帧 1080,560→1180,660，1026 落定）——光标窗口 120-1259 跨五镜持续（文档 cursor 120-1259 原值保留）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 1002,
+      "time_sec": 33.4,
+      "expect": "ef_pulse_btn：锚 '重命名' occurrence=3（w16 33.4s→帧 1002，对应文档 w17 '重命名' pulse）。pulse 挂 targetElementId=el_panel（元素级 1.05，能力升级红利——不整画布缩放）；降级差异保留：'确认按钮'在面板截图内无独立节点，脉冲作用于整面板卡（按钮级目标不可达）"
+    },
+    {
+      "frame": 1056,
+      "time_sec": 35.2,
+      "expect": "ef_cnt_done counter 启动：锚 '完成' w18 35.2s→帧 1056（0→12，suffix ' 项已完成'，最长 1.2s→1092 帧到 12）。能力升级红利（round4）：counter 挂 targetElementId=el_status——数字定位到状态栏 bbox (1300,820,380,44)，96px 固定字形大于 28px 状态栏位（可见差异保留：字形压到 y820 上方 UI 区）；静态 '12 项已完成' 绿色兜底文本（text）同位保持——A-C09-03 绿色断言对象为 el_status 静态文本；counter 单调递增窗口 [1056,1092] 不倒续不跳变可达"
+    },
+    {
+      "frame": 1261,
+      "time_sec": 42.0,
+      "expect": "镜 6 结果校验：el_panel/el_status/el_cursor endFrame=1259 半开关闭（操作层退场——P0-1 精确对位）+ el_endline startFrame=1260 窗口开启（文档 an_endline_in startFrame=1260 精确对位）+ 锚 '目录' w19 42.3s→帧 1269 scaleIn（18 帧）。片尾说明行 '流程结束：文件未被移动，目录结构保持不变' 顶部 y120 带出现；目录树保持（el_ui 截图常驻承载'未变'语义——前后对照图切换仍 ⛔ 需素材）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 1499,
+      "time_sec": 49.97,
+      "expect": "尾帧：UI + 片尾说明行保持；DurationFrames=ceil(50×30)=1500；MP4 50.0s±0.1s/30fps/1920×1080；BGM 淡出不可实现（amix duration=first 截 50s——P0-2 fadeIn/fadeOut 是元素级 opacity 动画不适用音频轨）；字幕烧录走 RenderParams（y950–1020 带，el_caption 占位）；操作音效对齐 ⚠️（无独立音效轨，前置混入 voice——IR 不可表达）"
+    }
   ]
 }

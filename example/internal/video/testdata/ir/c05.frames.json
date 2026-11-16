@@ -6,16 +6,63 @@
   "anchor_formula": "锚点命中帧 = ceil(word.start × fps)；元素窗口 = 文档分镜 startFrame/endFrame 原值（P0-1 已落地，全局帧时钟一致）",
   "capability_upgrade_note": "本帧表按并行 agent 已落地的 P0-1（元素时间窗）升级：photo1（0-329）/photo2（330-899）/取景框四边（330-719）/标题（0-329）/地点卡（150-329）/色卡（540-719）/路径线（720-899）显隐区间全部恢复文档原语义——'菜单/面板提前透出'类风险（§4.3.7 点名）在 P0-1 下整体消除。",
   "frames": [
-    {"frame": 0, "time_sec": 0.0, "expect": "钩子帧：el_photo1 水渠红叶大图铺满 1080×1920（A-C05-01 暖色像素占比 ≥30% 依赖素材本身）；上下信箱条 el_bar_top/el_bar_bot #0E1418 各 120px（窗口 0-899 全程）；el_title scaleIn 起始（窗口 0-329，0.8s 内可读）。P0-1 红利：photo2/取景框/色卡/路径线在窗口未开段全部 visibility:hidden——帧 0 画面 = 大图+信箱条+标题，与文档镜 1 完全对位；photo2 透出旧图边缘的风险（§4.3.4 '场景切换'行）随窗口机制消除"},
-    {"frame": 26, "time_sec": 0.87, "expect": "ef_hl_maple 生效窗口开始：锚 '红叶' w02 occurrence=0 0.85s→帧 26。T-12 完整形态红利：el_title 是 text 元素 → highlight 词窗口着色（title 全行 → #C8553D，0.25s 升、词尾 1.15s→帧 35 回落）；重复词 '红叶' w02/w12 用 occurrence=0/1 显式区分（F-C05-04 注入场景的现行答案）"},
-    {"frame": 150, "time_sec": 5.0, "expect": "镜 2：el_place1 startFrame=150 窗口开启（文档帧表对位）+ an_place1_in 锚 '哲学' 5.2s→帧 156 起播（窗口先开 6 帧、入场随后——可见差异：150-155 地点卡静态可见无入场缩放）；an_photo1_pan 锚 '水渠' 5.85s→帧 176 起播（120 帧直线 -40→0，至 296 落定）。A-C05-04 位移区间断言窗口按词锚修正为 [176,296]（文档 [150,270] 偏移 26 帧，词表自洽优先）。降级差异保留：T-08 path 曲线 ⛔ 直线近似"},
-    {"frame": 181, "time_sec": 6.03, "expect": "ef_pulse_frame 峰值：锚 '水渠' 5.85s→帧 176 + pulse 0.18s→峰值 ≈帧 181。pulse 挂 targetElementId=el_vig_top——但取景框窗口 330-719 未开，el_vig_top 在帧 181 仍 visibility:hidden！pulse 作用于隐藏节点=不可见（builder 注释明示 counter host 不继承目标可见性，但 pulse 直接作用于目标节点本身——隐藏节点脉冲无像素）。降级记录：本 pulse 在窗口开启（330）前不可见，文档锚 '之道'（w05 5.6s）本就落在镜 1 时段——这是文档 effects 表自身的时序错位（pulse 取景框却锚在镜 1 词上），降级 IR 保留文档锚值并把该脉冲标记为'窗口前无效'；若 L1 要观测脉冲需把锚改到 '通天桥'（帧 348+）或把取景框窗口提前——按'忠实文档'原则不改"},
-    {"frame": 336, "time_sec": 11.2, "expect": "镜 2→3 切换：el_photo1 endFrame=329 半开关闭（329 帧后隐藏）；el_photo2 startFrame=330 窗口开启 + an_photo2_in 锚 '东福寺' 11.2s→帧 336 起播（窗口先开 6 帧——可见差异：330-335 通天桥静态满幅可见无入场缩放）；场景切换帧差断言窗口 329→330（文档对位，P0-1 后硬切干净无旧图残留）。el_dim 已从降级 IR 移除（P0-1 窗口切换使'切换瞬间压暗旧图'的近似不再需要——photo1 在 329 帧后 visibility:hidden）"},
-    {"frame": 348, "time_sec": 11.6, "expect": "取景框四边入场：el_vig_* startFrame=330 窗口开启 + an_vig1-4_in 锚 '通天桥' 11.6s→帧 348 起播（24 帧）。降级差异保留：T-03 shape:'frame'/outsideDim/stroke ⛔ 框外压暗不可表达——A-C05-02 '框内比框外亮 1.2 倍' 降级不适用；框内 1.25× 放大（zoom 键）⛔——只画框不放大"},
-    {"frame": 549, "time_sec": 18.3, "expect": "镜 4 色卡：el_pal_* startFrame=540 窗口开启（文档帧表 548 对位近似——文档 an_place2_in startFrame=548，降级 IR 用文档 elements 表的 540 统一）+ an_pal1_in 锚 '饱和度' 18.3s→帧 549 起播；三块错峰锚 549/579/588（饱和度/橙红@occ1/苔藓）。降级差异保留：swatches 复合键 ⛔ 拆三块独立 shape"},
-    {"frame": 579, "time_sec": 19.3, "expect": "金褐块入场（'橙红' occurrence=1 w16 19.3s——S4 复述色名的第二个橙红）；A-C05-03 三块 ΔE≤8 检查窗口 [588,719]（三块全部落定后、窗口 719 关闭前）"},
-    {"frame": 720, "time_sec": 24.0, "expect": "镜 5：色卡+取景框 endFrame=719 半开关闭（图解元素退场）+ el_path_line startFrame=720 窗口开启（文档帧表 720 精确对位）+ an_path_grow 锚 '路径' 24.3s→帧 729 起播（40 帧 scaleIn）。降级差异保留：from{w:0}→to{w:840} 宽度生长 ⛔——scaleIn 中心展开，'自左向右生长'定向感丢失；满宽 840px 落定帧 769 不受影响；el_title 已在 329 退场（P0-1 红利：标题不再常驻片尾）"},
-    {"frame": 768, "time_sec": 25.6, "expect": "ef_fade_bars：锚 '取景框' w19 25.6s→帧 768。fade 挂 targetElementId=el_bar_top（元素级，round4）——信箱上条 opacity 单向降至 0.9 即轻微透出红叶；可见差异保留：下条与全片不淡化；文档 'F585 起整片轻 fade' 若要复现可给全部在屏元素挂 fadeOut（P0-2 语义可用）——本轮按文档 effects 表只挂一处，不改"},
-    {"frame": 899, "time_sec": 29.97, "expect": "尾帧：路径线满宽 + 地点行（el_place1 窗口 329 已关——注意：文档 place1 endFrame=329，片尾'地点行就位'由路径线段承载，文档帧表 720 '片尾地点行就位'与 elements 表 place1 0-329 自相矛盾，降级 IR 忠实 elements 表：片尾无地点卡，可见差异记录）+ el_caption 空 text 占位（烧录走 RenderParams.SubtitleMode=burn）；DurationFrames=ceil(30×30)=900；MP4 30.0s±0.1s/30fps/1080×1920。BGM 27s 起淡出不可实现（无 fade 音频滤镜，amix duration=first 截 30s）；降级差异保留：饱和度 −15% 全局调色 ⛔ 素材侧预处理"}
+    {
+      "frame": 1,
+      "time_sec": 0.0,
+      "expect": "钩子帧：el_photo1 水渠红叶大图铺满 1080×1920（A-C05-01 暖色像素占比 ≥30% 依赖素材本身）；上下信箱条 el_bar_top/el_bar_bot #0E1418 各 120px（窗口 0-899 全程）；el_title scaleIn 起始（窗口 0-329，0.8s 内可读）。P0-1 红利：photo2/取景框/色卡/路径线在窗口未开段全部 visibility:hidden——帧 0 画面 = 大图+信箱条+标题，与文档镜 1 完全对位；photo2 透出旧图边缘的风险（§4.3.4 '场景切换'行）随窗口机制消除",
+      "window_adjusted": true
+    },
+    {
+      "frame": 26,
+      "time_sec": 0.87,
+      "expect": "ef_hl_maple 生效窗口开始：锚 '红叶' w02 occurrence=0 0.85s→帧 26。T-12 完整形态红利：el_title 是 text 元素 → highlight 词窗口着色（title 全行 → #C8553D，0.25s 升、词尾 1.15s→帧 35 回落）；重复词 '红叶' w02/w12 用 occurrence=0/1 显式区分（F-C05-04 注入场景的现行答案）"
+    },
+    {
+      "frame": 151,
+      "time_sec": 5.0,
+      "expect": "镜 2：el_place1 startFrame=150 窗口开启（文档帧表对位）+ an_place1_in 锚 '哲学' 5.2s→帧 156 起播（窗口先开 6 帧、入场随后——可见差异：150-155 地点卡静态可见无入场缩放）；an_photo1_pan 锚 '水渠' 5.85s→帧 176 起播（120 帧直线 -40→0，至 296 落定）。A-C05-04 位移区间断言窗口按词锚修正为 [176,296]（文档 [150,270] 偏移 26 帧，词表自洽优先）。降级差异保留：T-08 path 曲线 ⛔ 直线近似",
+      "window_adjusted": true
+    },
+    {
+      "frame": 181,
+      "time_sec": 6.03,
+      "expect": "ef_pulse_frame 峰值：锚 '水渠' 5.85s→帧 176 + pulse 0.18s→峰值 ≈帧 181。pulse 挂 targetElementId=el_vig_top——但取景框窗口 330-719 未开，el_vig_top 在帧 181 仍 visibility:hidden！pulse 作用于隐藏节点=不可见（builder 注释明示 counter host 不继承目标可见性，但 pulse 直接作用于目标节点本身——隐藏节点脉冲无像素）。降级记录：本 pulse 在窗口开启（330）前不可见，文档锚 '之道'（w05 5.6s）本就落在镜 1 时段——这是文档 effects 表自身的时序错位（pulse 取景框却锚在镜 1 词上），降级 IR 保留文档锚值并把该脉冲标记为'窗口前无效'；若 L1 要观测脉冲需把锚改到 '通天桥'（帧 348+）或把取景框窗口提前——按'忠实文档'原则不改"
+    },
+    {
+      "frame": 336,
+      "time_sec": 11.2,
+      "expect": "镜 2→3 切换：el_photo1 endFrame=329 半开关闭（329 帧后隐藏）；el_photo2 startFrame=330 窗口开启 + an_photo2_in 锚 '东福寺' 11.2s→帧 336 起播（窗口先开 6 帧——可见差异：330-335 通天桥静态满幅可见无入场缩放）；场景切换帧差断言窗口 329→330（文档对位，P0-1 后硬切干净无旧图残留）。el_dim 已从降级 IR 移除（P0-1 窗口切换使'切换瞬间压暗旧图'的近似不再需要——photo1 在 329 帧后 visibility:hidden）"
+    },
+    {
+      "frame": 348,
+      "time_sec": 11.6,
+      "expect": "取景框四边入场：el_vig_* startFrame=330 窗口开启 + an_vig1-4_in 锚 '通天桥' 11.6s→帧 348 起播（24 帧）。降级差异保留：T-03 shape:'frame'/outsideDim/stroke ⛔ 框外压暗不可表达——A-C05-02 '框内比框外亮 1.2 倍' 降级不适用；框内 1.25× 放大（zoom 键）⛔——只画框不放大"
+    },
+    {
+      "frame": 549,
+      "time_sec": 18.3,
+      "expect": "镜 4 色卡：el_pal_* startFrame=540 窗口开启（文档帧表 548 对位近似——文档 an_place2_in startFrame=548，降级 IR 用文档 elements 表的 540 统一）+ an_pal1_in 锚 '饱和度' 18.3s→帧 549 起播；三块错峰锚 549/579/588（饱和度/橙红@occ1/苔藓）。降级差异保留：swatches 复合键 ⛔ 拆三块独立 shape"
+    },
+    {
+      "frame": 579,
+      "time_sec": 19.3,
+      "expect": "金褐块入场（'橙红' occurrence=1 w16 19.3s——S4 复述色名的第二个橙红）；A-C05-03 三块 ΔE≤8 检查窗口 [588,719]（三块全部落定后、窗口 719 关闭前）"
+    },
+    {
+      "frame": 721,
+      "time_sec": 24.0,
+      "expect": "镜 5：色卡+取景框 endFrame=719 半开关闭（图解元素退场）+ el_path_line startFrame=720 窗口开启（文档帧表 720 精确对位）+ an_path_grow 锚 '路径' 24.3s→帧 729 起播（40 帧 scaleIn）。降级差异保留：from{w:0}→to{w:840} 宽度生长 ⛔——scaleIn 中心展开，'自左向右生长'定向感丢失；满宽 840px 落定帧 769 不受影响；el_title 已在 329 退场（P0-1 红利：标题不再常驻片尾）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 768,
+      "time_sec": 25.6,
+      "expect": "ef_fade_bars：锚 '取景框' w19 25.6s→帧 768。fade 挂 targetElementId=el_bar_top（元素级，round4）——信箱上条 opacity 单向降至 0.9 即轻微透出红叶；可见差异保留：下条与全片不淡化；文档 'F585 起整片轻 fade' 若要复现可给全部在屏元素挂 fadeOut（P0-2 语义可用）——本轮按文档 effects 表只挂一处，不改"
+    },
+    {
+      "frame": 899,
+      "time_sec": 29.97,
+      "expect": "尾帧：路径线满宽 + 地点行（el_place1 窗口 329 已关——注意：文档 place1 endFrame=329，片尾'地点行就位'由路径线段承载，文档帧表 720 '片尾地点行就位'与 elements 表 place1 0-329 自相矛盾，降级 IR 忠实 elements 表：片尾无地点卡，可见差异记录）+ el_caption 空 text 占位（烧录走 RenderParams.SubtitleMode=burn）；DurationFrames=ceil(30×30)=900；MP4 30.0s±0.1s/30fps/1080×1920。BGM 27s 起淡出不可实现（无 fade 音频滤镜，amix duration=first 截 30s）；降级差异保留：饱和度 −15% 全局调色 ⛔ 素材侧预处理"
+    }
   ]
 }

@@ -6,17 +6,68 @@
   "anchor_formula": "锚点命中帧 = ceil(word.start × fps)；元素窗口 = 文档分镜 startFrame/endFrame 原值（P0-1 已落地，全局帧时钟一致）",
   "capability_upgrade_note": "本帧表按并行 agent 已落地的 P0-1（元素时间窗）+T-12（text 元素 highlight 词窗口着色）升级：太阳/标题（0-539）、光谱（135-539）、分子+注释（315-929）、公式（540-929）、双柱（720/735-1094）显隐区间全部恢复文档原语义。",
   "frames": [
-    {"frame": 0, "time_sec": 0.0, "expect": "首帧钩子：el_bg #0B1B3A 铺满（A-C03-04 渐变降级为纯色——shape 渐变键 gradient 不可消费，⛔ 素材侧预置），el_sun 左上 y120（窗口 0-539），el_title '天空为什么是蓝色的？' scaleIn 0.8→1 起始（0.5s 内可读，窗口 0-539）。P0-1 红利：光谱/分子/公式/柱图/注释在窗口未开段全部 visibility:hidden，帧 0 画面 = 渐变底+太阳+标题+问号，与文档镜 1 完全对位"},
-    {"frame": 26, "time_sec": 0.87, "expect": "ef_hl_blue 生效窗口开始：锚 '蓝色' w02 0.86s→帧 26。T-12 完整形态红利：el_title 是 text 元素 → highlight 不再闪背景，而是 TEXT 着色（color → #4D96FF，0.25s 上升，持续到词尾 1.18s→帧 35 回落）——标题中'蓝色'两字所在文本元素整体变蓝 9 帧（builder 粒度=整个 text 元素，无逐词 span；标题整行为单元素，全行变蓝）。降级差异保留：全行着色而非单字"},
-    {"frame": 150, "time_sec": 5.0, "expect": "光谱六色带 T-09 错峰入场（P0-1 窗口 135-539 全开 + 逐条 startFrame 135/141/147/153/159/165 六帧间隔——文档 6 帧节奏精确恢复，词锚只驱动 scaleIn 入场变换）：帧 150 时 band1-3 已入场、band4 窗口已开入场中、band5/6 未入场——A-C03-01 前置'至少 5 条可见'在帧 167 后达成（band6 落定 183）。P0-1 红利：6 帧错峰不再依赖词锚近似"},
-    {"frame": 325, "time_sec": 10.83, "expect": "镜 3：分子点阵窗口开启（startFrame=315，文档对位）+ an_molecules 锚 '空气' 10.8s→帧 324 move 升至 y820（45 帧）；an_note_in 同锚（注释窗口 315-1094 开）。A-C03-02 注释层上沿 1260 ≥1240、图解层（分子 820+300=1120）下沿 ≤1200，间距 140px 达标。ef_hl_cross 锚 '分子' w07 11.1s→帧 333，注释条（text）着色 #FFD54A 至词尾 11.46s→帧 344"},
-    {"frame": 366, "time_sec": 12.2, "expect": "ef_pulse_dot：锚 '散射' w10 12.2s→帧 366，pulse 1.12 挂 targetElementId=el_molecules（元素级呼吸）。降级差异保留：dotGrid/dots 复合键不可消费（⛔），12 点阵为一块浅色 shape 占位"},
-    {"frame": 540, "time_sec": 18.0, "expect": "镜 4：分子+注释窗口关闭（endFrame=929 未到——注意分子窗口 315-929 跨镜 3-5 持续，公式窗口 540-929 开启）+ el_sun/el_title endFrame=539 半开关闭（半开区间：539 帧后隐藏）——太阳与标题在镜 4 退场，与文档'镜 1 限定'完全一致。P0-1 红利核心帧：无窗口时代标题会常驻全片遮住公式区。an_formula_in 锚 '瑞利' 18.3s→帧 549 起播（窗口先开 9 帧、入场随后——可见差异：540-548 公式静态可见无入场缩放）"},
-    {"frame": 586, "time_sec": 19.53, "expect": "'四次方' w14 19.52s→帧 586 在旁白中；公式条完整可见。词级强调由 T-12 词窗口机制覆盖'蓝色/分子'两处（text 元素），公式（text）未挂 highlight——如需强调可后续补 ef（词窗口着色），本轮按文档 effects 表只挂三处"},
-    {"frame": 729, "time_sec": 24.3, "expect": "镜 5 双柱：el_bar_red startFrame=720 窗口开启（文档对位）+ an_bar_red_grow 锚 '红光' 24.3s→帧 729 起播（30 帧生长）。降级差异保留：T-11 axis=vertical ⛔——整柱中心 scaleIn 而非底部立起，A-C03-01 红柱区域像素检查在入场进行中帧的 y 边界对称偏移，落定帧（759）不受影响"},
-    {"frame": 735, "time_sec": 24.5, "expect": "el_bar_blue startFrame=735 窗口开启——文档 stagger 15 帧精确恢复（P0-1 红利：蓝柱窗口独立于词锚）；an_bar_blue_grow 锚 '蓝光' 25.4s→帧 762 起播（窗口先开 27 帧——蓝柱静态可见于 735-761，入场缩放 762-791；可见差异：文档预期'窗口开即生长'，词锚在句中'蓝光'处，两时钟错位 27 帧；L1 按窗口 735 判可见、762 判生长中段）"},
-    {"frame": 750, "time_sec": 25.0, "expect": "文档封面帧候选位（atSec=25）：红柱生长中（729-759）、蓝柱已可见未生长（735 窗口开）——与文档帧表'红柱矮蓝柱高'接近（蓝柱 scale=1 静态满高先于生长动画可见）。降级差异保留：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1，firstThumb stub），封面候选需 L1 帧渲染器单独截取；ef_cnt_ratio counter 仍移除（96px 字形压柱顶标签）"},
-    {"frame": 1094, "time_sec": 36.47, "expect": "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场，进入 S7 晚霞旁白段（画面只剩背景+字幕），文档镜 6'左右对照小框'目标语义仍 ⛔（需素材），但 P0-1 使'图解退场'本身可表达（无窗口时代图解会常驻到片尾）。'蓝色' occurrence=1（w18 36.8s）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载"},
-    {"frame": 1349, "time_sec": 44.97, "expect": "尾帧：结论卡元素保持（el_caption 空 text 占位，烧录走 RenderParams.SubtitleMode=burn）；DurationFrames=ceil(45×30)=1350；MP4 45.0s±0.1s/30fps/1080×1920。BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截到 voice 45s）——P0-2 的 fadeIn/fadeOut 是元素级 opacity 动画，不适用于音频轨"}
+    {
+      "frame": 1,
+      "time_sec": 0.0,
+      "expect": "首帧钩子：el_bg #0B1B3A 铺满（A-C03-04 渐变降级为纯色——shape 渐变键 gradient 不可消费，⛔ 素材侧预置），el_sun 左上 y120（窗口 0-539），el_title '天空为什么是蓝色的？' scaleIn 0.8→1 起始（0.5s 内可读，窗口 0-539）。P0-1 红利：光谱/分子/公式/柱图/注释在窗口未开段全部 visibility:hidden，帧 0 画面 = 渐变底+太阳+标题+问号，与文档镜 1 完全对位",
+      "window_adjusted": true
+    },
+    {
+      "frame": 26,
+      "time_sec": 0.87,
+      "expect": "ef_hl_blue 生效窗口开始：锚 '蓝色' w02 0.86s→帧 26。T-12 完整形态红利：el_title 是 text 元素 → highlight 不再闪背景，而是 TEXT 着色（color → #4D96FF，0.25s 上升，持续到词尾 1.18s→帧 35 回落）——标题中'蓝色'两字所在文本元素整体变蓝 9 帧（builder 粒度=整个 text 元素，无逐词 span；标题整行为单元素，全行变蓝）。降级差异保留：全行着色而非单字"
+    },
+    {
+      "frame": 150,
+      "time_sec": 5.0,
+      "expect": "光谱六色带 T-09 错峰入场（P0-1 窗口 135-539 全开 + 逐条 startFrame 135/141/147/153/159/165 六帧间隔——文档 6 帧节奏精确恢复，词锚只驱动 scaleIn 入场变换）：帧 150 时 band1-3 已入场、band4 窗口已开入场中、band5/6 未入场——A-C03-01 前置'至少 5 条可见'在帧 167 后达成（band6 落定 183）。P0-1 红利：6 帧错峰不再依赖词锚近似"
+    },
+    {
+      "frame": 325,
+      "time_sec": 10.83,
+      "expect": "镜 3：分子点阵窗口开启（startFrame=315，文档对位）+ an_molecules 锚 '空气' 10.8s→帧 324 move 升至 y820（45 帧）；an_note_in 同锚（注释窗口 315-1094 开）。A-C03-02 注释层上沿 1260 ≥1240、图解层（分子 820+300=1120）下沿 ≤1200，间距 140px 达标。ef_hl_cross 锚 '分子' w07 11.1s→帧 333，注释条（text）着色 #FFD54A 至词尾 11.46s→帧 344"
+    },
+    {
+      "frame": 366,
+      "time_sec": 12.2,
+      "expect": "ef_pulse_dot：锚 '散射' w10 12.2s→帧 366，pulse 1.12 挂 targetElementId=el_molecules（元素级呼吸）。降级差异保留：dotGrid/dots 复合键不可消费（⛔），12 点阵为一块浅色 shape 占位"
+    },
+    {
+      "frame": 541,
+      "time_sec": 18.0,
+      "expect": "镜 4：分子+注释窗口关闭（endFrame=929 未到——注意分子窗口 315-929 跨镜 3-5 持续，公式窗口 540-929 开启）+ el_sun/el_title endFrame=539 半开关闭（半开区间：539 帧后隐藏）——太阳与标题在镜 4 退场，与文档'镜 1 限定'完全一致。P0-1 红利核心帧：无窗口时代标题会常驻全片遮住公式区。an_formula_in 锚 '瑞利' 18.3s→帧 549 起播（窗口先开 9 帧、入场随后——可见差异：540-548 公式静态可见无入场缩放）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 586,
+      "time_sec": 19.53,
+      "expect": "'四次方' w14 19.52s→帧 586 在旁白中；公式条完整可见。词级强调由 T-12 词窗口机制覆盖'蓝色/分子'两处（text 元素），公式（text）未挂 highlight——如需强调可后续补 ef（词窗口着色），本轮按文档 effects 表只挂三处"
+    },
+    {
+      "frame": 729,
+      "time_sec": 24.3,
+      "expect": "镜 5 双柱：el_bar_red startFrame=720 窗口开启（文档对位）+ an_bar_red_grow 锚 '红光' 24.3s→帧 729 起播（30 帧生长）。降级差异保留：T-11 axis=vertical ⛔——整柱中心 scaleIn 而非底部立起，A-C03-01 红柱区域像素检查在入场进行中帧的 y 边界对称偏移，落定帧（759）不受影响"
+    },
+    {
+      "frame": 736,
+      "time_sec": 24.5,
+      "expect": "el_bar_blue startFrame=735 窗口开启——文档 stagger 15 帧精确恢复（P0-1 红利：蓝柱窗口独立于词锚）；an_bar_blue_grow 锚 '蓝光' 25.4s→帧 762 起播（窗口先开 27 帧——蓝柱静态可见于 735-761，入场缩放 762-791；可见差异：文档预期'窗口开即生长'，词锚在句中'蓝光'处，两时钟错位 27 帧；L1 按窗口 735 判可见、762 判生长中段）",
+      "window_adjusted": true
+    },
+    {
+      "frame": 750,
+      "time_sec": 25.0,
+      "expect": "文档封面帧候选位（atSec=25）：红柱生长中（729-759）、蓝柱已可见未生长（735 窗口开）——与文档帧表'红柱矮蓝柱高'接近（蓝柱 scale=1 静态满高先于生长动画可见）。降级差异保留：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1，firstThumb stub），封面候选需 L1 帧渲染器单独截取；ef_cnt_ratio counter 仍移除（96px 字形压柱顶标签）"
+    },
+    {
+      "frame": 1094,
+      "time_sec": 36.47,
+      "expect": "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场，进入 S7 晚霞旁白段（画面只剩背景+字幕），文档镜 6'左右对照小框'目标语义仍 ⛔（需素材），但 P0-1 使'图解退场'本身可表达（无窗口时代图解会常驻到片尾）。'蓝色' occurrence=1（w18 36.8s）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载"
+    },
+    {
+      "frame": 1349,
+      "time_sec": 44.97,
+      "expect": "尾帧：结论卡元素保持（el_caption 空 text 占位，烧录走 RenderParams.SubtitleMode=burn）；DurationFrames=ceil(45×30)=1350；MP4 45.0s±0.1s/30fps/1080×1920。BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截到 voice 45s）——P0-2 的 fadeIn/fadeOut 是元素级 opacity 动画，不适用于音频轨"
+    }
   ]
 }
