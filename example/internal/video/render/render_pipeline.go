@@ -244,9 +244,9 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 			"render_id", row.ID, "note", subNote)
 	}
 
-	thumbKey := fmt.Sprintf("video/%s/renders/%s/thumb.jpg", row.WorkspaceID, row.ID)
-	if thumb, terr := firstThumb(ctx, w.deps.Store, ir); terr == nil && thumb != nil {
-		if _, err := w.deps.Store.Put(ctx, thumbKey, "image/jpeg", bytes.NewReader(thumb)); err != nil {
+	thumbKey := fmt.Sprintf("video/%s/renders/%s/thumb.png", row.WorkspaceID, row.ID)
+	if thumb, terr := firstThumb(ctx, w, finalPath); terr == nil && thumb != nil {
+		if _, err := w.deps.Store.Put(ctx, thumbKey, "image/png", bytes.NewReader(thumb)); err != nil {
 			w.deps.Log.Warn("thumb put failed (non-fatal)", "render_id", row.ID, "err", err)
 		}
 	}
@@ -320,13 +320,16 @@ func (w *Worker) tempFile(ctx context.Context, key string) (string, error) {
 	return f.Name(), f.Close()
 }
 
-// firstThumb extracts the composition's first frame as JPEG. v1 re-renders
-// frame 0 through the same deterministic pipeline (cheap: one frame).
-func firstThumb(ctx context.Context, store storagex.Store, ir *videoapp.IR) ([]byte, error) {
-	_ = ctx
-	_ = store
-	_ = ir
-	return nil, nil // v1: thumb deferred to integration; non-fatal when absent
+// firstThumb extracts the deliverable's first frame (sec 0) as PNG via the
+// parameterized capx.ExtractFrameAt — the encoded frame, not a re-render,
+// so the thumb is pixel-faithful to what the player will show (burned subs
+// included when mode=burn). deriveURLs promises /thumb.png next to
+// output.mp4; the stub-era jpg name never landed, so the key aligns with
+// deriveURLs and the promise stops being a permanent 404. Best-effort: a
+// failed extraction is a logged warning (the render stays succeeded), the
+// caller treats nil as "no thumb".
+func firstThumb(ctx context.Context, w *Worker, finalPath string) ([]byte, error) {
+	return runtimeFrameExtractor{rt: CapxRuntime}.ExtractFrame(ctx, finalPath, 0)
 }
 
 func copyFile(dst string, r io.Reader) error {

@@ -24,3 +24,10 @@ func pickPipeline(deps WorkerDeps) pipeline { return stubPipeline{} }
 // whole capx pipeline) only exists under the capx tag, so main.go can call
 // this unconditionally and the default build simply discards the injection.
 func SetCapxRuntime(_ any) {}
+
+// SetSnapshotter is the matching no-op for the snapshot bridge (default
+// build): the tool layer's SnapshotterFor() stays nil and the
+// video_snapshot_frame tool degrades to ErrSnapshotNotConfigured. The `any`
+// parameter mirrors SetCapxRuntime: the capx build takes *capx.Runtime here,
+// so the main.go call site stays tag-portable.
+func SetSnapshotter(_ any) {}

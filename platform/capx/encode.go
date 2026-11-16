@@ -296,6 +296,41 @@ func (r *Runtime) ExtractThumbnail(ctx context.Context, videoPath string, w io.W
 	return runFFMpegPipe(ctx, ffmpeg, args, w)
 }
 
+// ExtractFrameAt writes the single video frame at sec seconds into w as PNG:
+//
+//	ffmpeg -ss <sec> -i video -frames:v 1 -c:v png -f image2 -
+//
+// sec may be fractional; input seeking (-ss before -i) is fast and
+// frame-accurate on every supported ffmpeg release. The output codec is PNG
+// so callers get a lossless frame with a deterministic content type —
+// ExtractThumbnail above keeps its legacy fixed-1s JPEG behavior untouched.
+// The PNG bytes are streamed to w (stdout pipe); nothing touches disk. A sec
+// past the end of the stream makes ffmpeg produce zero frames: the call
+// succeeds with an empty write, and callers should treat that as "no frame
+// at that time". The ffmpeg process is killed when ctx is canceled.
+func (r *Runtime) ExtractFrameAt(ctx context.Context, videoPath string, sec float64, w io.Writer) error {
+	if !r.Available() {
+		return ErrNotConfigured
+	}
+	if videoPath == "" {
+		return errors.New("capx: ExtractFrameAt requires videoPath")
+	}
+	if sec < 0 {
+		return errors.New("capx: ExtractFrameAt requires sec >= 0")
+	}
+	ffmpeg := r.encoderPath()
+	args := []string{
+		"-y",
+		"-ss", strconv.FormatFloat(sec, 'f', -1, 64),
+		"-i", videoPath,
+		"-frames:v", "1",
+		"-c:v", "png",
+		"-f", "image2",
+		"-",
+	}
+	return runFFMpegPipe(ctx, ffmpeg, args, w)
+}
+
 // ffmpegHasSubtitles reports whether the ffmpeg build exposes the subtitles
 // filter (i.e. was compiled with libass).
 func ffmpegHasSubtitles(ctx context.Context, ffmpeg string) (bool, error) {

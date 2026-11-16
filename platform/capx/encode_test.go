@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
+	"image/png"
 	"io"
 	"os"
 	"os/exec"
@@ -168,6 +170,63 @@ func TestExtractThumbnail_JPEG(t *testing.T) {
 	}
 	if out.Len() == 0 || !bytes.HasPrefix(out.Bytes(), []byte{0xff, 0xd8}) {
 		t.Error("thumbnail is not a JPEG")
+	}
+}
+
+// TestExtractFrameAt_PNG: the parameterized frame extraction returns a
+// lossless PNG at a fractional seek point (the video_render_frames MCP tool
+// and the pipeline's first-frame thumb both sit on this path).
+func TestExtractFrameAt_PNG(t *testing.T) {
+	r := newChromeRuntime(t)
+	path := encodeVideo(t, t.TempDir()) // 12 frames @ 10fps = 1.2s
+	var out bytes.Buffer
+	if err := r.ExtractFrameAt(t.Context(), path, 0.5, &out); err != nil {
+		t.Fatalf("ExtractFrameAt: %v", err)
+	}
+	if out.Len() == 0 {
+		t.Fatal("ExtractFrameAt produced no frame")
+	}
+	if !bytes.HasPrefix(out.Bytes(), []byte{0x89, 'P', 'N', 'G'}) {
+		t.Error("ExtractFrameAt output is not a PNG")
+	}
+}
+
+// TestExtractFrameAt_SecondFrameDecodes: two seeks 100ms apart must both
+// decode as images (the frame payload is real, not padded bytes).
+func TestExtractFrameAt_SecondFrameDecodes(t *testing.T) {
+	r := newChromeRuntime(t)
+	path := encodeVideo(t, t.TempDir())
+	for _, sec := range []float64{0, 0.1} {
+		var out bytes.Buffer
+		if err := r.ExtractFrameAt(t.Context(), path, sec, &out); err != nil {
+			t.Fatalf("ExtractFrameAt(%.1f): %v", sec, err)
+		}
+		if _, err := png.Decode(bytes.NewReader(out.Bytes())); err != nil {
+			t.Errorf("ExtractFrameAt(%.1f) did not decode as PNG: %v", sec, err)
+		}
+	}
+}
+
+// TestExtractFrameAt_Guards: empty path and negative sec rejected without
+// spawning ffmpeg; an inert runtime returns ErrNotConfigured before any exec.
+func TestExtractFrameAt_Guards(t *testing.T) {
+	r := newChromeRuntime(t)
+	var out bytes.Buffer
+	if err := r.ExtractFrameAt(t.Context(), "", 1, &out); err == nil ||
+		!strings.Contains(err.Error(), "requires videoPath") {
+		t.Errorf("empty path: got %v, want requires-videoPath error", err)
+	}
+	if err := r.ExtractFrameAt(t.Context(), "v.mp4", -1, &out); err == nil ||
+		!strings.Contains(err.Error(), "sec >= 0") {
+		t.Errorf("negative sec: got %v, want the sec>=0 error", err)
+	}
+	// capx_test.go:132 同款：惰性运行时（Enabled 缺省）在任何 exec 之前降级。
+	inert, err := capx.New(capx.Config{})
+	if err != nil {
+		t.Fatalf("inert runtime: %v", err)
+	}
+	if err := inert.ExtractFrameAt(t.Context(), "v.mp4", 1, &out); !errors.Is(err, capx.ErrNotConfigured) {
+		t.Errorf("inert runtime: got %v, want ErrNotConfigured", err)
 	}
 }
 

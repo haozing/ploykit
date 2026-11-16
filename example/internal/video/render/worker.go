@@ -18,17 +18,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
-	videoapp "myproduct/internal/video/app"
 	"github.com/haozing/ploykit/platform/ids"
 	"github.com/haozing/ploykit/platform/storagex"
+	videoapp "myproduct/internal/video/app"
 )
 
 // WorkerTuning mirrors §4.9.2: dedicated queue, MaxWorkers from env, orphan
 // sweep window, and river MaxAttempts semantics.
 const (
-	QueueName        = videoapp.RenderQueue // "video" — isolated from events/schedule queues
-	ProgressEveryN   = 15                   // frames between progress UPDATE + WS push
-	OrphanAfter      = 10 * time.Minute     // running rows older than this at boot → failed
+	QueueName      = videoapp.RenderQueue // "video" — isolated from events/schedule queues
+	ProgressEveryN = 15                   // frames between progress UPDATE + WS push
+	OrphanAfter    = 10 * time.Minute     // running rows older than this at boot → failed
 	// Lifecycle knobs live at client construction in main.go (river.Config):
 	// JobTimeout = CAPX_RENDER_JOB_TIMEOUT (default 15min — river's 1min
 	// default killed every >60s render), MaxAttempts = 2 (river's default is
