@@ -1,6 +1,6 @@
 {
   "layer": "L2-timewindow (P0-1 element startFrame/endFrame, case library §5.16 + §3.1.4 T-09)",
-  "run_id": "20261115-205839-timewindow",
+  "run_id": "20261116-205029-timewindow",
   "env": [
     "os=windows/amd64",
     "host=DESKTOP-IGMKJLG",
@@ -69,8 +69,8 @@
   ],
   "notes": [
     "boundary probe F44 (extract 1.450s, sampling PTS 1.4667s): want background — region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238) — as expected",
-    "boundary probe F45 (extract 1.483s, sampling PTS 1.5000s): want element A color — region(80,400,500,400) mean RGB (253,105,60) vs #FF6A3D (255,106,61) — as expected",
-    "boundary probe F105 (extract 3.483s, sampling PTS 3.5000s): want background — region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238) — as expected",
+    "boundary probe F45 (extract 1.483s, sampling PTS 1.5000s): want element A color — region(80,400,500,400) mean RGB (254,245,237) vs #FF6A3D (255,106,61) — UNEXPECTED",
+    "boundary probe F105 (extract 3.483s, sampling PTS 3.5000s): want background — region(80,400,500,400) mean RGB (253,105,60) vs #FFF7EE (255,247,238) — UNEXPECTED",
     "boundary probe F106 (extract 3.517s, sampling PTS 3.5333s): want background — region(80,400,500,400) mean RGB (254,245,237) vs #FFF7EE (255,247,238) — as expected"
   ],
   "totals": {
@@ -83,5 +83,5 @@
     "timewindow/VS-TW/frame-F060.png",
     "timewindow/VS-TW/frame-F120.png"
   ],
-  "duration_ms": 16932
+  "duration_ms": 18794
 }

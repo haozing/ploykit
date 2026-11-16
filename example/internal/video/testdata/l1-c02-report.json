@@ -2,7 +2,7 @@
   "case": "VS-C02",
   "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
   "d01_status": {
-    "checked_at": "2026-11-16T10:32:24+08:00",
+    "checked_at": "2026-11-16T21:37:31+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
@@ -140,11 +140,11 @@
         "word_start_sec": 24.7
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 750 frames in 1m14.233s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 750 frames in 1m9.346s",
     "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
     "frames_table": "example/internal/video/testdata/ir/c02.frames.json",
     "golden_dir": "example/internal/video/testdata/golden/c02/",
-    "html_bytes": 108983,
+    "html_bytes": 401925,
     "ir_sha256": "6294f2bee53ba90f8d1b291deae447eeaf2831a4981e24700bfe12234249be63",
     "meta_json": "example/internal/video/testdata/golden/c02/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
@@ -166,7 +166,7 @@
         "lightbar_cyan_at_shifted": 0.4896,
         "png_decoded": true
       },
-      "duration_ms": 7598
+      "duration_ms": 7482
     },
     {
       "frame": 76,
@@ -179,7 +179,7 @@
         "lightbar_cyan_at_76": 0,
         "png_decoded": true
       },
-      "duration_ms": 8136
+      "duration_ms": 7983
     },
     {
       "frame": 198,
@@ -192,7 +192,7 @@
         "scene1_share_pre": 0,
         "scene2_share_pre": 0
       },
-      "duration_ms": 19932
+      "duration_ms": 19086
     },
     {
       "frame": 205,
@@ -205,7 +205,7 @@
         "scene1_share": 1,
         "window_math": "窗口 200 开（可见性恢复）+ an_scene1_in 锚 通勤地铁 F204 起播（fromTo immediateRender 使 200-203 保持 scale=0.92 from 值? 否——from=0.92 非零，但 visibility:hidden 挡住 200 前；200-203 窗口开而动画未播 → 0.92 缩放静帧可见）"
       },
-      "duration_ms": 20586
+      "duration_ms": 19719
     },
     {
       "frame": 215,
@@ -217,7 +217,7 @@
         "png_decoded": true,
         "scene1_share": 1
       },
-      "duration_ms": 21516
+      "duration_ms": 20659
     },
     {
       "frame": 240,
@@ -229,7 +229,7 @@
         "png_decoded": true,
         "scene1_share": 1
       },
-      "duration_ms": 23968
+      "duration_ms": 23124
     },
     {
       "frame": 259,
@@ -241,7 +241,7 @@
         "png_decoded": true,
         "scene1_share": 1
       },
-      "duration_ms": 25854
+      "duration_ms": 24850
     },
     {
       "frame": 263,
@@ -254,7 +254,7 @@
         "scene1_share_gone": 0,
         "scene2_share": 1
       },
-      "duration_ms": 26220
+      "duration_ms": 25235
     },
     {
       "frame": 447,
@@ -266,7 +266,7 @@
         "png_decoded": true,
         "scene2_share": 1
       },
-      "duration_ms": 44991
+      "duration_ms": 42852
     },
     {
       "frame": 452,
@@ -279,7 +279,7 @@
         "png_decoded": true,
         "scene2_share": 0
       },
-      "duration_ms": 45486
+      "duration_ms": 43337
     },
     {
       "frame": 323,
@@ -292,7 +292,7 @@
         "png_decoded": true,
         "stat1_text_pre": 0
       },
-      "duration_ms": 32425
+      "duration_ms": 30838
     },
     {
       "frame": 327,
@@ -308,7 +308,7 @@
         "strip_share_tol14": 1,
         "window_math": "窗口 325 开 + an_stats_in 锚 四十五 F325 同帧（scaleIn from=0 → 精确帧不可见，像素自 F326 起）；stat1 锚 续航 F334（immediateRender from=0 → 327 时仍 scale=0）"
       },
-      "duration_ms": 32826
+      "duration_ms": 31234
     },
     {
       "frame": 334,
@@ -323,7 +323,7 @@
         "strip_share": 0.9027,
         "strip_share_tol14": 0.9984
       },
-      "duration_ms": 33525
+      "duration_ms": 31853
     },
     {
       "frame": 360,
@@ -338,7 +338,7 @@
         "strip_share": 1,
         "strip_share_tol14": 1
       },
-      "duration_ms": 36207
+      "duration_ms": 34352
     },
     {
       "frame": 430,
@@ -353,7 +353,7 @@
         "strip_share": 1,
         "strip_share_tol14": 1
       },
-      "duration_ms": 43287
+      "duration_ms": 41152
     },
     {
       "frame": 640,
@@ -366,7 +366,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 63014
+      "duration_ms": 59599
     },
     {
       "frame": 700,
@@ -379,7 +379,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 68793
+      "duration_ms": 64836
     },
     {
       "frame": 452,
@@ -392,7 +392,7 @@
         "png_decoded": true,
         "scene2_share": 0
       },
-      "duration_ms": 45486
+      "duration_ms": 43337
     },
     {
       "frame": 455,
@@ -415,7 +415,7 @@
         "f467_logo_out_strip_bg": 1,
         "png_decoded": true
       },
-      "duration_ms": 45787
+      "duration_ms": 43632
     },
     {
       "frame": 458,
@@ -426,7 +426,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 46084
+      "duration_ms": 43897
     },
     {
       "frame": 467,
@@ -437,7 +437,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 46898
+      "duration_ms": 44667
     }
   ],
   "recipe": {
@@ -449,7 +449,7 @@
     "ir_source_file": "example/internal/video/testdata/ir/c02.degraded.json",
     "width": 1920
   },
-  "run_id": "l1-02-20261116-103110-7ae9",
+  "run_id": "l1-02-20261116-213621-32c0",
   "samples": [
     {
       "frame": 0,
@@ -468,7 +468,7 @@
         "scene1_pre_share": 0,
         "slogan_text_share": 0
       },
-      "duration_ms": 1145,
+      "duration_ms": 1217,
       "artifact": "example/internal/video/testdata/golden/c02/frame-000.png",
       "notes": [
         "A-C02-04 暗底基调成立（bg_dark 见 report totals）"
@@ -488,7 +488,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 4467,
+      "duration_ms": 4571,
       "artifact": "example/internal/video/testdata/golden/c02/frame-037.png"
     },
     {
@@ -504,7 +504,7 @@
         "scene_pre_share": 0,
         "slogan_text_share": 0
       },
-      "duration_ms": 8049,
+      "duration_ms": 7895,
       "artifact": "example/internal/video/testdata/golden/c02/frame-075.png",
       "notes": [
         "帧表'镜 2 窗口开启@75'与渲染差 1 帧偏移——结构成立，M2 统一窗口边界口径"
@@ -523,7 +523,7 @@
         "png_magic_ok": true,
         "slogan_text_share": 0.088
       },
-      "duration_ms": 10014,
+      "duration_ms": 9652,
       "artifact": "example/internal/video/testdata/golden/c02/frame-095.png"
     },
     {
@@ -541,7 +541,7 @@
         "probe_f240": 1,
         "scene1_share_at_open": 0
       },
-      "duration_ms": 20098,
+      "duration_ms": 19266,
       "artifact": "example/internal/video/testdata/golden/c02/frame-200.png",
       "notes": [
         "P0-1 红利：scene2（窗口 262）在镜 3 期间完全隐藏——帧差断言'场景区色温切换'可直接判定"
@@ -565,7 +565,7 @@
         "scene1_share": 1,
         "scene2_share": 0
       },
-      "duration_ms": 21698,
+      "duration_ms": 20855,
       "artifact": "example/internal/video/testdata/golden/c02/frame-217.png",
       "notes": [
         "帧表注记的锚/窗错位（an_scene2_in 锚 F217 早于窗口 262）：immediateRender 使 scene2 以 0.92 缩放静帧等待——262 窗口开时入场动画已过半，'无入场缩放过程'与帧表预判一致"
@@ -585,7 +585,7 @@
         "scene1_share": 0,
         "scene2_share": 0
       },
-      "duration_ms": 26132,
+      "duration_ms": 25137,
       "artifact": "example/internal/video/testdata/golden/c02/frame-262.png",
       "notes": [
         "P0-1 边界渲染发现（新）：帧表 261→262 一帧翻转的理想语义与渲染差 1 帧——结构成立（无泄漏、无叠影），M2 统一窗口边界口径；C03/C05 同规则适用"
@@ -614,7 +614,7 @@
         "probe_f430_text": 0.0071,
         "strip_share": 0
       },
-      "duration_ms": 32628,
+      "duration_ms": 31036,
       "artifact": "example/internal/video/testdata/golden/c02/frame-325.png",
       "notes": [
         "帧表 A-C02-02：三列文本独立 text（T-02 降级拆分），词锚错峰 immediateRender 锚前 scale=0——列依次浮现节奏保留"
@@ -637,7 +637,7 @@
         "probe_f467_in": 0.6167,
         "scene2_gone": 0
       },
-      "duration_ms": 45289,
+      "duration_ms": 43148,
       "artifact": "example/internal/video/testdata/golden/c02/frame-450.png",
       "notes": [
         "an_logo_in（scaleIn from=0）与 pulse 同轴：builder overwrite:auto 下 pulse 于 F450 接管 scale——几何路径按 pulse 走（记录，不判缺陷）"
@@ -657,7 +657,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 45787,
+      "duration_ms": 43632,
       "artifact": "example/internal/video/testdata/golden/c02/frame-455.png",
       "notes": [
         "A-C02-03 按元素级判定：el_logo bbox 内缩放呼吸成立；文档 F474 观测位在第二拍回落段，帧差窗口 [450,470] 由探针序列承载"
@@ -682,7 +682,7 @@
         "probe_f700_ink": 0.6163,
         "probe_f700_text": 0.1208
       },
-      "duration_ms": 60937,
+      "duration_ms": 57746,
       "artifact": "example/internal/video/testdata/golden/c02/frame-618.png",
       "notes": [
         "降级注记：dateText/dateY/dateColor 复合键不可消费（⛔）——日期拆独立 text；重复词 AURA 用 occurrence=0/1 区分（w15/w19）"
@@ -703,7 +703,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 66371,
+      "duration_ms": 62633,
       "artifact": "example/internal/video/testdata/golden/c02/frame-675.png"
     },
     {
@@ -713,16 +713,16 @@
       "expect": "尾帧：Logo + 日期 + 字幕区占位（el_caption 空 text，文本由 RenderParams.SubtitleMode=hard 烧录路径注入）；DurationFrames=ceil(30×25)=750；MP4 30.00s±0.1s/25fps。降级差异：F735 整片轻 fade 仍不可实现（fade effect 是遮罩语义非渐隐；P0-2 fadeIn/fadeOut 是元素级 opacity——若要整片渐隐需给全部元素挂 fadeOut 或等 builder 加整片语义，本轮不采用）；BGM 无淡出/loop/loudnorm（amix duration=first 截断）",
       "actual": "尾帧：Logo（窗口 450-749 含尾帧）+ 日期可见；DurationFrames=ceil(30×25)=750 帧循环完整",
       "structure_checks": {
-        "date_ink": 0.5,
-        "date_text": 0,
+        "date_ink": 0.6163,
+        "date_text": 0.1208,
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "duration_frames_rendered": 750,
-        "logo_center": 0.5,
+        "logo_center": 1,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 73835,
+      "duration_ms": 69065,
       "artifact": "example/internal/video/testdata/golden/c02/frame-749.png",
       "notes": [
         "F735 整片轻 fade 不可实现（fade 是遮罩语义；P0-2 fadeIn/fadeOut 是元素级——本轮不采用）；BGM 无淡出/loop/loudnorm（amix duration=first 截断）——L2 口径",
@@ -736,9 +736,9 @@
     "full_loop_under_8min": true,
     "keyframes_kept": 13,
     "probe_frames_kept": 21,
-    "render_ms_per_frame": 98.98,
-    "render_total_ms": 74233,
-    "render_wall_clock": "1m14s",
+    "render_ms_per_frame": 92.46,
+    "render_total_ms": 69345,
+    "render_wall_clock": "1m9s",
     "samples_degraded_na": 0,
     "samples_fail": 0,
     "samples_mismatch": 4,

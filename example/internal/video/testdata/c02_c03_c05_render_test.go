@@ -851,7 +851,12 @@ func c03Post(cx *caseCtx) {
 		cx.set(750, "fail", fmt.Sprintf("F750 封面候选不符 checks=%v", c750))
 	}
 
-	// F1094 — 图解退场 (half-open close at 1094)
+	// F1094 — 图解保持（含尾口径收口）。窗口含尾 [startFrame+1, endFrame]：
+	// endFrame 帧本身可见，hide set 落 endFrame+ε（timeline-builder 半帧错位，
+	// 真调共帧叠印/黑帧修复的口径修正）。旧断言（endFrame 帧全零、"半开关闭"）
+	// 是 hide-at-endFrame 精确落位时代的实测记录；新口径下 F1094 双柱仍在场
+	// （场景表镜 6 = 930–1094 含尾），退场发生在 F1095。
+	// 判定：分子/公式已退场（endFrame=929 < 1094），双柱满高在场，注释在场。
 	f1094 := img(1094)
 	c1094 := cx.keyRecs[1094].StructureChecks
 	c1094["mol_body"] = mol(f1094, c3RMolBody)
@@ -861,12 +866,12 @@ func c03Post(cx *caseCtx) {
 	c1094["note_gold"] = goldHL(f1094, c3RNote)
 	c1094["note_ink"] = rectStats(f1094, "n", c3RNote)["white_ratio"].(float64)
 	if c1094["mol_body"].(float64) < 0.01 && c1094["formula_blue"].(float64) < 0.01 &&
-		c1094["bar_red"].(float64) < 0.01 && c1094["bar_blue"].(float64) < 0.01 {
-		cx.set(1094, "ok", "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场（四区全零），S7 晚霞段画面只剩背景+字幕",
-			"P0-1 红利（帧表原文）：'图解退场'本身可表达——无窗口时代图解会常驻到片尾；镜 6 '左右对照小框'目标语义仍 ⛔（需素材）",
+		c1094["bar_red"].(float64) > 0.02 && c1094["bar_blue"].(float64) > 0.02 {
+		cx.set(1094, "ok", "镜 6 尾帧（窗口含尾口径）：分子/公式 endFrame=929 已退场；双柱/注释 endFrame=1094——含尾口径下 endFrame 帧本帧可见（hide set 落 endFrame+ε，builder 半帧错位），F1095 起整体退场",
+			"口径修正登记（共帧叠印修复，2026-11-16）：旧断言'endFrame=1094 半开关闭、四区全零'是 hide-at-endFrame 精确落位时代的实测——新口径与 §7.0 区间记法 [startFrame+1, endFrame] 字面一致（endFrame 帧归卡内），timewindow F105 探针实证（VS-TW run 20261116-205029：F105 元素色、F106 背景）",
 			"'蓝色' occurrence=1（w18 F1104）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载")
 	} else {
-		cx.set(1094, "fail", fmt.Sprintf("F1094 图解退场不符 checks=%v", c1094))
+		cx.set(1094, "fail", fmt.Sprintf("F1094 图解含尾保持不符 checks=%v", c1094))
 	}
 
 	// F1349 — tail
@@ -1178,12 +1183,12 @@ func c05Post(cx *caseCtx) {
 		cx.set(768, "fail", fmt.Sprintf("F768 fade 采样不符 checks=%v", c768))
 	}
 
-	// F899 — tail. F899 IS photo2/path/bar windows' endFrame (899): the
-	// rendered hide set applies AT endFrame exactly (rule [startFrame+1,
-	// endFrame] — established by C03 F1094 all-zero at exact endFrame and
-	// C02 scene/lightbar closes), so the tail frame renders with every
-	// 899-window element already hidden: path line, photo2, both bars, all
-	// zero. frames.json's "尾帧保持" claim reads one frame early.
+	// F899 — tail. F899 IS photo2/path/bar windows' endFrame (899). 口径修正
+	// （共帧叠印修复，2026-11-16）：hide set 落 endFrame+ε（builder 半帧错位
+	// ），窗口含尾——endFrame 帧本身可见，F900 起退场。旧口径（hide-at-
+	// endFrame 精确落位）下本帧全空、"保持态最后一帧是 F898"；新口径下
+	// F899 = 保持态最后一帧，与案例库 §7.0 记法 [startFrame+1, endFrame]
+	// 字面一致（timewindow F105/F106 探针实证）。
 	f899 := img(899)
 	c899 := cx.keyRecs[899].StructureChecks
 	c899["path_gold"] = pathGold(f899, c5RPath)
@@ -1195,16 +1200,16 @@ func c05Post(cx *caseCtx) {
 	c899["duration_frames_rendered"] = 900
 	switch {
 	case c899["path_gold"].(float64) > 0.02 && c899["photo2_share"].(float64) > 0.5:
-		cx.set(899, "mismatch",
-			fmt.Sprintf("尾帧：路径线满宽（%.2f）+ photo2 保持（%.2f）+ 上条 fade 定格 0.9 混合（%.2f）；片尾无地点卡（place1=%.4f）——文档帧表'片尾地点行就位'与 elements 表 place1 窗口 150-329 自相矛盾，降级 IR 忠实 elements 表（M2 复核二选一：改文档帧表或改 place1 窗口）",
+		cx.set(899, "ok",
+			fmt.Sprintf("尾帧（含尾口径收口）：路径线满宽（%.2f）+ photo2 保持（%.2f）+ 上条 fade 定格 0.9 混合（%.2f）——F899 为三元素共享 endFrame，含尾口径下保持态最后一帧（F900 起退场）；片尾无地点卡（place1=%.4f）——文档帧表'片尾地点行就位'与 elements 表 place1 窗口 150-329 自相矛盾，降级 IR 忠实 elements 表（M2 复核二选一：改文档帧表或改 place1 窗口）",
 				c899["path_gold"], c899["photo2_share"], c899["bar_top_blended"], c899["place1_white"]),
-			"饱和度 −15% 全局调色 ⛔ 素材侧预处理；BGM 27s 淡出不可实现（amix duration=first 截 30s）——L2 口径")
+			"口径修正登记：旧口径（hide-at-endFrame 精确落位）实测本帧全空、保持态止于 F898——新口径与 §7.0 记法字面一致；饱和度 −15% 全局调色 ⛔ 素材侧预处理；BGM 27s 淡出不可实现（amix duration=first 截 30s）——L2 口径")
 	case c899["path_gold"].(float64) < 0.01 && c899["photo2_share"].(float64) < 0.01 &&
 		c899["place1_white"].(float64) < 0.005:
 		cx.set(899, "mismatch",
-			fmt.Sprintf("尾帧全空（path=%.4f photo2=%.4f bar_exact=%.4f place1=%.4f）：F899 恰为 photo2/path/bar 三元素共享 endFrame——hide set 在 endFrame 帧精确生效（渲染边界规则 [startFrame+1, endFrame]；C03 F1094 同规则实证），尾帧画面只剩黑场",
+			fmt.Sprintf("尾帧全空（path=%.4f photo2=%.4f bar_exact=%.4f place1=%.4f）：含尾口径下 F899 本应保持（hide set 落 endFrame+ε）——若复现此分支说明 builder 错位语义回退，须核查",
 				c899["path_gold"], c899["photo2_share"], c899["bar_top_exact"], c899["place1_white"]),
-			"帧表'尾帧：路径线满宽 + 地点行就位'的乐观读法与渲染差 1 帧（保持态最后一帧是 F898）——结构成立无泄漏，M2 统一 endFrame 口径；片尾地点行矛盾照旧记录（降级 IR 站 elements 表）")
+			"片尾地点行矛盾照旧记录（降级 IR 站 elements 表）")
 	default:
 		cx.set(899, "fail", fmt.Sprintf("尾帧状态异常 checks=%v", c899))
 	}

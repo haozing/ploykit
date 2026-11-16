@@ -1,6 +1,6 @@
 {
   "layer": "L2-subtitle (T-14)",
-  "run_id": "20261115-184122-subtitle-e2e",
+  "run_id": "20261116-205636-subtitle-e2e",
   "mode_tests": [
     {
       "mode": "burn",
@@ -35,6 +35,79 @@
       ],
       "artifact": "subtitle/burn.mp4",
       "detail": "libass burn verified: cue1 @1.4s 49174 band px (rows 928–1039), cue2 @4.6s 19804 band px (rows 988–1040). NOTE: cue 1 as shipped severs 怎么做 at the line break (see cjk_break_examples) — the defect is visible in the retained frame."
+    },
+    {
+      "mode": "soft",
+      "status": "pass",
+      "srt_cues": 2,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        },
+        {
+          "kind": "subtitle",
+          "codec": "mov_text",
+          "duration": 5.88
+        }
+      ],
+      "artifact": "subtitle/soft.mp4",
+      "detail": "soft 模式交付成立：SRT 经 capx.SoftSubtitles 封装为 mov_text 字幕轨（ffprobe 证实），视频流 h264 流复制未重编码。round2 确认的「soft 整体不存在」缺口已闭环。"
+    },
+    {
+      "mode": "none",
+      "status": "pass",
+      "srt_cues": 0,
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/none.mp4",
+      "detail": "no subtitle track, as expected"
+    },
+    {
+      "mode": "burn",
+      "status": "pass",
+      "srt_cues": 2,
+      "burned_pixels_found": 69344,
+      "burned_pixel_samples": [
+        {
+          "at_sec": 1.4,
+          "band_pixels": 49540,
+          "total_diff": 49540,
+          "band_top_y": 928,
+          "band_bottom_y": 1039
+        },
+        {
+          "at_sec": 4.6,
+          "band_pixels": 19804,
+          "total_diff": 19804,
+          "band_top_y": 988,
+          "band_bottom_y": 1040
+        }
+      ],
+      "ffprobe_streams": [
+        {
+          "kind": "video",
+          "codec": "h264",
+          "width": 1920,
+          "height": 1080,
+          "fps": 25,
+          "duration": 5
+        }
+      ],
+      "artifact": "subtitle/burn.mp4",
+      "detail": "libass burn verified: cue1 @1.4s 49540 band px (rows 928–1039), cue2 @4.6s 19804 band px (rows 988–1040). Round-3 fix: cue 1's line break no longer severs 怎么做 (break-point selection keeps words whole and honours kinsoku — see cjk_break_examples, all broken=false now)."
     },
     {
       "mode": "soft",
@@ -464,6 +537,41 @@
       "srt_output": "1\n00:00:00,000 --\u003e 00:00:03,976\n我们把这个超长词组一直延续下去用\n来验证单个词超过三十二个字符的\n\n2\n00:00:03,976 --\u003e 00:00:05,900\n时候折行兜底缺失的具体表现如何\n\n",
       "broken": false,
       "detail": "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text | 46-rune single word \u003e 32 capacity; round-2 emitted 23+23 over-limit lines — round-3 hard-splits into 16/15/15 chunks across 2 cues"
+    },
+    {
+      "name": "shiwubei-word-severed (§5.14 risk: midpoint lands inside 十五杯)",
+      "script_snippet": "防水杯身一次冲净快十五杯奶泡多不用擦也干净",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,900\n防水杯身一次冲净快\n十五杯奶泡多不用擦也干净\n\n",
+      "broken": false,
+      "detail": "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text | 21-rune CJK run; round-2 layoutLines midpoint best=10 severed 十五杯 — round-3 break falls between words"
+    },
+    {
+      "name": "doc-5.14-sample (产品上线之后口碑暴涨用户复购率翻倍留存提升)",
+      "script_snippet": "产品上线之后口碑暴涨用户复购率翻倍留存提升",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:05,500\n产品上线之后口碑暴涨用\n户复购率翻倍留存提升\n\n",
+      "broken": false,
+      "detail": "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text | the doc's own error sample (doc claims 22 runes, best=11); round-3 hard-splits it at unit boundaries: 11|10"
+    },
+    {
+      "name": "xiaotuandui-25rune-run (E2E cue 1 first 6 words: midpoint severs 怎么做)",
+      "script_snippet": "很多人问两个人的小团队怎么做工具产品",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:02,800\n很多人问两个人的\n小团队怎么做工具产品\n\n",
+      "broken": false,
+      "detail": "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text | 18-rune run; round-2 midpoint best=9 severed 小团队 into 小 | 团队 — round-3 break falls before 小团队"
+    },
+    {
+      "name": "line-initial-punctuation (kinsoku)",
+      "script_snippet": "前面九个字加逗号，后面还有十个字了",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:04,000\n前面九个字加逗号，\n后面还有十个字了\n\n",
+      "broken": false,
+      "detail": "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text | 17-rune single word; round-2 midpoint best=8 put ，at the head of line 2 — round-3 kinsoku pulls it back (cut 9)"
+    },
+    {
+      "name": "over-32-rune-single-word (round-1 P1: no oversized-word fallback)",
+      "script_snippet": "我们把这个超长词组一直延续下去用来验证单个词超过三十二个字符的时候折行兜底缺失的具体表现如何",
+      "srt_output": "1\n00:00:00,000 --\u003e 00:00:03,976\n我们把这个超长词组一直延续下去用\n来验证单个词超过三十二个字符的\n\n2\n00:00:03,976 --\u003e 00:00:05,900\n时候折行兜底缺失的具体表现如何\n\n",
+      "broken": false,
+      "detail": "no defect: ≤16 runes/line, ≤2 lines, no line-initial punctuation, no severed whole word (oversized words hard-split by design); cues reassemble the joined text | 46-rune single word \u003e 32 capacity; round-2 emitted 23+23 over-limit lines — round-3 hard-splits into 16/15/15 chunks across 2 cues"
     }
   ],
   "srt_format": {
@@ -505,6 +613,13 @@
     "subtitle/nolibass.mp4"
   ],
   "evidence": [
+    "[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
+    "[代码] burn/soft 分支：example/internal/video/render/render_pipeline.go finishSubtitles（mode==burn 走 BurnSubtitles；mode==soft 走 SoftSubtitles；ErrNoLibass 自动降级 soft）",
+    "[代码] soft 实现：platform/capx/encode.go SoftSubtitles——`-i video -i srt -map 0:v -map 1:s -c:v copy -c:s mov_text`（视频流复制，不重编码）",
+    "[代码] 降级链：finishSubtitles 捕获 errors.Is(err, capx.ErrNoLibass) → 转 SoftSubtitles → 返回非致命 note \"subtitle degraded: burn→soft (no libass)\" → worker.go 成功行写入 error 字段注记 + 日志 warn + audit meta.degradation（状态机仅按 status 判定，非空 error 注记不影响 succeeded）",
+    "[文档] 期望行为：案例库文档 §5.14/§4.4.4/F-C06-01 —— 无 libass 自动降级软字幕（mov_text）交付；round2 判定的 soft 整体缺失与降级目标无处可去两项缺口，本轮实现后复测",
+    "[实测] ffmpeg -version: ffmpeg version N-117763-ge35587250c-20241113 Copyright (c) 2000-2024 the FFmpeg developers",
+    "[实测] ffmpeg -filters 含 subtitles=true（ffmpegHasSubtitles 的判定同一依据）",
     "[实测] 本机 ffmpeg 带 libass：-filters 同时列出 ass 与 subtitles（TestSubtitleL2E2E 烧录真机通过）",
     "[代码] burn/soft 分支：example/internal/video/render/render_pipeline.go finishSubtitles（mode==burn 走 BurnSubtitles；mode==soft 走 SoftSubtitles；ErrNoLibass 自动降级 soft）",
     "[代码] soft 实现：platform/capx/encode.go SoftSubtitles——`-i video -i srt -map 0:v -map 1:s -c:v copy -c:s mov_text`（视频流复制，不重编码）",

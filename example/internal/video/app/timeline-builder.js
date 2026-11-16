@@ -164,6 +164,42 @@
     return null;
   }
 
+  // element record for an id (the raw IR element, window fields included) —
+  // fadeAnchorTime reads the owning element's startFrame/endFrame off it to
+  // anchor window-scoped fadeIn/fadeOut (scriptgen windowFades contract).
+  // Null when the id is not an element (overlay/counter hosts).
+  function elementRecordOf(id) {
+    var els = IR.elements || [];
+    for (var i = 0; i < els.length; i++) {
+      if (els[i] && els[i].id === id) return els[i];
+    }
+    return null;
+  }
+
+  // Anchor time (seconds) for one fadeIn/fadeOut:
+  //   1. word-anchored (resolvedFrom wordIndex >= 0) → the word time (legacy
+  //      behavior, unchanged — fade_highlight L2 fixtures pin this path);
+  //   2. unanchored + the owning element carries a window → fadeIn starts at
+  //      the window's startFrame, fadeOut ENDS at the window's endFrame
+  //      (scriptgen contract: fades follow the card instead of piling on
+  //      t=0 — the f0 double-exposure / f60 all-black root cause);
+  //   3. unanchored + no window → the dispatch-computed default (0), the
+  //      legacy back-compat path for hand-authored IRs.
+  function fadeAnchorTime(an, node, at, isFadeIn) {
+    if (an.resolvedFrom && an.resolvedFrom.wordIndex >= 0) return at;
+    var el = elementRecordOf(node.id);
+    if (!el) return at;
+    var hasWin = typeof el.startFrame === 'number' || typeof el.endFrame === 'number';
+    if (!hasWin) return at;
+    if (isFadeIn) {
+      return typeof el.startFrame === 'number' ? el.startFrame / fps : 0;
+    }
+    var endF = typeof el.endFrame === 'number' ? el.endFrame : durationFrames;
+    var dur = (an.durationFrames || 0) / fps;
+    var t = endF / fps - dur;
+    return t > 0 ? t : 0;
+  }
+
   // full-canvas overlay host for target-less highlight/fade (X-4). One overlay
   // per effect id, z-index 10000 (elements are 1+el.z; the counter host is
   // 9999), pointer-events none, so the flash paints over everything. The
@@ -292,6 +328,17 @@
     // out of hit-testing while faded and visibility restores cleanly on
     // reverse seeks; renders identically to plain opacity in screenshots.
     //
+    // ANCHORING RULE (scriptgen windowFades contract): a fadeIn/fadeOut with
+    // NO startAnchor is anchored at the OWNING ELEMENT's time window —
+    // fadeIn at the window's startFrame, fadeOut ending at the window's
+    // endFrame — instead of t=0. The unanchored-t=0 legacy produced the two
+    // live-compos symptoms: fadeOut's fromTo immediateRender wrote
+    // autoAlpha=1 on EVERY card at build time (f0 double-exposure) and its
+    // finished state autoAlpha=0 pressed everything invisible after the
+    // tween's 0.4s (f60 all-black). Elements never carrying a window
+    // (startFrame/endFrame both absent) keep the legacy t=0 anchoring
+    // (back-compat with hand-authored IRs).
+    //
     // Coordination rule with the P0-1 element time window (the tl.set
     // visibility calls in the element loop): ORTHOGONAL AXES BY DESIGN.
     //   - The window owns VISIBILITY (set at startFrame/endFrame); fadeIn/
@@ -299,24 +346,32 @@
     //     them independently — a hidden window phase gates the element
     //     regardless of opacity, and inside the open window the opacity
     //     tween plays without touching visibility.
+    //   - immediateRender:false on BOTH directions: a fromTo with the
+    //     default true restyles its from-values at BUILD time — the fadeIn
+    //     leg wrote autoAlpha=0 on elements whose fade lives later in the
+    //     timeline (pre-window leaks visible as a sudden transparent flash
+    //     on seek(0)), and the fadeOut leg wrote autoAlpha=1 over elements
+    //     still inside their hidden pre-window phase (the f0 double-exposure
+    //     twin). With false, from-values apply only when the playhead
+    //     reaches the tween, keeping seeks deterministic and build-time
+    //     state untouched.
     //   - One caveat: fromTo with autoAlpha writes visibility too (autoAlpha
-    //     drives opacity AND visibility when opacity hits 0). If a fadeIn
-    //     overlaps the window's hidden phase (anchor earlier than
-    //     startFrame), the tween's visibility write and the window's set are
-    //     both live at that frame — GSAP's overwrite:auto + write order (the
-    //     set sits at a later timeline position) lets the window set win
-    //     until startFrame, after which the tween re-owns both properties
-    //     every frame it is active. The documented combination — anchor the
-    //     fadeIn AT startFrame — never overlaps, so no conflict exists on
-    //     the intended authoring path. seeks re-evaluate the same order
-    //     deterministically.
+    //     drives opacity AND visibility when opacity hits 0). Anchoring the
+    //     fades INSIDE the open window (the documented combination) means
+    //     the tween is only ever live while the window set has already
+    //     made the element visible, so no conflict exists on the intended
+    //     authoring path. Seeks re-evaluate the same order deterministically.
     fadeIn: function (tl, node, an, at) {
+      var t = fadeAnchorTime(an, node, at, true);
       tl.fromTo(node, { autoAlpha: 0 },
-        { autoAlpha: 1, duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
+        { autoAlpha: 1, duration: an.durationFrames / fps, ease: an.easing || 'power2.out',
+          immediateRender: false }, t);
     },
     fadeOut: function (tl, node, an, at) {
+      var t = fadeAnchorTime(an, node, at, false);
       tl.fromTo(node, { autoAlpha: 1 },
-        { autoAlpha: 0, duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
+        { autoAlpha: 0, duration: an.durationFrames / fps, ease: an.easing || 'power2.out',
+          immediateRender: false }, t);
     }
   };
 
@@ -354,17 +409,21 @@
       if (typeof el.startFrame === 'number' || typeof el.endFrame === 'number') {
         var tStart = typeof el.startFrame === 'number' ? frameTime(el.startFrame) : 0;
         var tEnd = typeof el.endFrame === 'number' ? frameTime(el.endFrame) : frameTime(durationFrames);
-        // Half-frame epsilon on the visible set: GSAP's seek(0) does NOT
-        // apply a zero-duration set positioned exactly at t=0 (the playhead
-        // sits BEFORE the set at that instant), so a startFrame=0 element —
-        // e.g. C08's full-canvas el_bg — rendered black on the first frame
-        // while every later frame was correct (batch-6 finding, F0 black /
-        // F15+ red). Placing the set INSIDE frame 0 makes seek(0) land
-        // after it. The half-frame is below any seek grid (frame k seeks to
-        // k/fps, and epsilon < 1/fps), so no frame skips past it.
+        // Half-frame epsilon on BOTH window sets (§7.0 boundary rule, twin of
+        // the visible-set epsilon below). GSAP applies the sets whose time is
+        // <= the seek position; a hide set at the EXACT tEnd made the shared
+        // boundary frame F of adjacent windows (prev.endFrame == next
+        // startFrame, scriptgen's seamless hard-cut convention) render with
+        // BOTH cards hidden — the live-compos true-black bug. Offsetting the
+        // hide set half a frame AFTER the whole tEnd position keeps the
+        // boundary frame F showing the previous card (window is inclusive of
+        // endFrame), and the very next seek (F+1) shows the next card: every
+        // seek landing has exactly one card on stage. The epsilon stays below
+        // the seek grid (frame k seeks to k/fps, epsilon = 1/(2*fps)), so no
+        // frame skips past it — verified by the 4-window live-compos render.
         tl.set(node, { visibility: 'visible' }, tStart + 1 / (fps * 2));
         if (tEnd > tStart) {
-          tl.set(node, { visibility: 'hidden' }, tEnd);
+          tl.set(node, { visibility: 'hidden' }, tEnd + 1 / (fps * 2));
         } else {
           // collapsed/empty window (startFrame === endFrame): never visible;
           // hide right after the epsilon-visible set (one frame wide).

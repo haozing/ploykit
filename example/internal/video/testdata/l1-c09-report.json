@@ -2,7 +2,7 @@
   "case": "VS-C09",
   "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
   "d01_status": {
-    "checked_at": "2026-11-16T00:56:23+08:00",
+    "checked_at": "2026-11-16T21:52:13+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
@@ -175,11 +175,11 @@
         "word_start_sec": 42.3
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1500 frames in 2m26.811s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1500 frames in 2m16.262s",
     "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
     "frames_table": "example/internal/video/testdata/ir/c09.frames.json",
     "golden_dir": "example/internal/video/testdata/golden/c09/",
-    "html_bytes": 110521,
+    "html_bytes": 403463,
     "ir_sha256": "6cc3a83fe8a100621cb25e882705d5eba1a14e5f9ba67ce477a0774ab4fce5de",
     "meta_json": "example/internal/video/testdata/golden/c09/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
@@ -199,7 +199,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 34124
+      "duration_ms": 32546
     },
     {
       "frame": 370,
@@ -210,7 +210,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 35458
+      "duration_ms": 33828
     },
     {
       "frame": 595,
@@ -221,7 +221,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 56175
+      "duration_ms": 53561
     },
     {
       "frame": 605,
@@ -232,7 +232,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 57126
+      "duration_ms": 54436
     }
   ],
   "recipe": {
@@ -244,20 +244,19 @@
     "ir_source_file": "example/internal/video/testdata/ir/c09.degraded.json",
     "width": 1920
   },
-  "run_id": "l1-09-20261116-005356-f272",
+  "run_id": "l1-09-20261116-214956-8b46",
   "samples": [
     {
       "frame": 0,
       "time_sec": 0,
       "status": "",
-      "expect": "开场：el_ui 文件列表截图 scaleIn 0.96→1（20 帧，窗口 0-1499 全程）+ el_title '批量重命名 · 四步流程'（窗口 0-119）+ step1 badge（scaleIn 帧级 0 起，18 帧）。P0-1 红利：取景框/光标/菜单/面板/状态栏/片尾行窗口未开段全部 visibility:hidden。badge 错峰降级保留：文档 an_badges_in staggerFrames:400 无解析 ⛔——step1 帧级 0 + step2/3/4 词锚 29/366/606（'批量'/'第二步'/'第三步'），badge 亮起语义='步骤进行中'（见帧 36 条时序差异记录）",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 1143,
+      "duration_ms": 1202,
       "artifact": "example/internal/video/testdata/golden/c09/frame-000.png"
     },
     {
@@ -271,21 +270,20 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 4609,
+      "duration_ms": 4535,
       "artifact": "example/internal/video/testdata/golden/c09/frame-036.png"
     },
     {
       "frame": 120,
       "time_sec": 4,
       "status": "",
-      "expect": "镜 2：el_title endFrame=119 半开关闭（标题退场——P0-1 精确对位文档 0-119）；取景框四边 el_zoom_* startFrame=120 窗口开启（文档 120-959 精确对位）+ an_zoom1-4_in 锚 '第一步' w04 4.2s→帧 126 起播（18 帧）；el_cursor 窗口 120 开 + an_cursor_1 同锚 126 起播（90 帧直线 300,200→520,420）。降级差异保留：T-03 shape:'frame'/zoom:1.25 ⛔——框为四条 4px 蓝 shape（x300-1500/y240-720 边界几何精确，A-C09-01 可达），框内放大不可实现",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 12826,
+      "duration_ms": 12099,
       "artifact": "example/internal/video/testdata/golden/c09/frame-120.png"
     },
     {
@@ -299,7 +297,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 15496,
+      "duration_ms": 14696,
       "artifact": "example/internal/video/testdata/golden/c09/frame-149.png"
     },
     {
@@ -312,7 +310,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 34124,
+      "duration_ms": 32546,
       "artifact": "example/internal/video/testdata/golden/c09/frame-355.png"
     },
     {
@@ -326,7 +324,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 35058,
+      "duration_ms": 33495,
       "artifact": "example/internal/video/testdata/golden/c09/frame-366.png"
     },
     {
@@ -341,7 +339,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 35458,
+      "duration_ms": 33828,
       "artifact": "example/internal/video/testdata/golden/c09/frame-370.png",
       "notes": [
         "menu window: gray 1.0000 → 0.9871, no raise after startFrame=360"
@@ -358,7 +356,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 39274,
+      "duration_ms": 37462,
       "artifact": "example/internal/video/testdata/golden/c09/frame-413.png"
     },
     {
@@ -371,7 +369,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 56175,
+      "duration_ms": 53561,
       "artifact": "example/internal/video/testdata/golden/c09/frame-595.png"
     },
     {
@@ -385,7 +383,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 56545,
+      "duration_ms": 53896,
       "artifact": "example/internal/video/testdata/golden/c09/frame-599.png"
     },
     {
@@ -399,7 +397,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 57126,
+      "duration_ms": 54436,
       "artifact": "example/internal/video/testdata/golden/c09/frame-605.png"
     },
     {
@@ -413,21 +411,20 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 67202,
+      "duration_ms": 63510,
       "artifact": "example/internal/video/testdata/golden/c09/frame-705.png"
     },
     {
       "frame": 960,
       "time_sec": 32,
       "status": "",
-      "expect": "镜 5 确认段：取景框 endFrame=959 半开关闭（退场）；el_status startFrame=960 窗口开启（文档 960-1259 精确对位）+ an_status_in 锚 '第四步' w15 32.2s→帧 966 scaleIn（18 帧）；an_cursor_3 同锚 966 起播（60 帧 1080,560→1180,660，1026 落定）——光标窗口 120-1259 跨五镜持续（文档 cursor 120-1259 原值保留）",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 92491,
+      "duration_ms": 86480,
       "artifact": "example/internal/video/testdata/golden/c09/frame-960.png"
     },
     {
@@ -441,7 +438,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 96631,
+      "duration_ms": 90414,
       "artifact": "example/internal/video/testdata/golden/c09/frame-1002.png"
     },
     {
@@ -455,14 +452,13 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 102029,
+      "duration_ms": 95381,
       "artifact": "example/internal/video/testdata/golden/c09/frame-1056.png"
     },
     {
       "frame": 1260,
       "time_sec": 42,
       "status": "",
-      "expect": "镜 6 结果校验：el_panel/el_status/el_cursor endFrame=1259 半开关闭（操作层退场——P0-1 精确对位）+ el_endline startFrame=1260 窗口开启（文档 an_endline_in startFrame=1260 精确对位）+ 锚 '目录' w19 42.3s→帧 1269 scaleIn（18 帧）。片尾说明行 '流程结束：文件未被移动，目录结构保持不变' 顶部 y120 带出现；目录树保持（el_ui 截图常驻承载'未变'语义——前后对照图切换仍 ⛔ 需素材）",
       "structure_checks": {
         "dimensions": "1920x1080",
         "dimensions_ok": true,
@@ -470,7 +466,7 @@
         "png_magic_ok": true,
         "result_digits_ink": 0.6729
       },
-      "duration_ms": 122356,
+      "duration_ms": 113909,
       "artifact": "example/internal/video/testdata/golden/c09/frame-1260.png"
     }
   ],
@@ -480,9 +476,9 @@
     "full_loop_under_8min": true,
     "keyframes_kept": 16,
     "probe_frames_kept": 4,
-    "render_ms_per_frame": 97.87,
-    "render_total_ms": 146810,
-    "render_wall_clock": "2m27s",
+    "render_ms_per_frame": 90.84,
+    "render_total_ms": 136261,
+    "render_wall_clock": "2m16s",
     "samples_degraded_na": 0,
     "samples_fail": 0,
     "samples_mismatch": 1,

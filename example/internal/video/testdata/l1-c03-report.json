@@ -2,7 +2,7 @@
   "case": "VS-C03",
   "conversions_ref": "example/internal/video/testdata/spec-audit-report.json (cases[].degradations + cross_cutting_findings X-3/X-4) — conversion rules not duplicated here; this report records RENDER-OBSERVED deltas only",
   "d01_status": {
-    "checked_at": "2026-11-16T10:34:54+08:00",
+    "checked_at": "2026-11-16T21:39:32+08:00",
     "detail": "seekTimeline issues a two-argument pause (suppressEvents=false); counter onUpdate fires during seek renders — digits expected visible on seeked frames",
     "impact": "fixed =\u003e counter digits render on seeked frames in this run; counter expectations were asserted against the FIXED renderer",
     "seek_pause_line": "tl.pause(` + strconv.FormatFloat(tSec, 'f', -1, 64) + `, false);",
@@ -21,7 +21,7 @@
     "[F735] 帧表'蓝柱静态满高可见 735-761'的乐观读法不成立（15 帧窗口空档）——M2 复核：文档 stagger 15 帧在窗口轴恢复，但生长可见性仍由词锚决定；两时钟错位 27 帧与帧表预判一致",
     "[F735] 红柱此时生长中（F729+6/30 帧）",
     "[F750] 降级注记：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1）——封面候选需 L1 渲染器单独截取；ef_cnt_ratio counter 已移除（96px 字形压柱顶标签）——数字缺失，比值用柱高比 60:140≈6:1 静态呈现（落定后）",
-    "[F1094] P0-1 红利（帧表原文）：'图解退场'本身可表达——无窗口时代图解会常驻到片尾；镜 6 '左右对照小框'目标语义仍 ⛔（需素材）",
+    "[F1094] 口径修正登记（共帧叠印修复，2026-11-16）：旧断言'endFrame=1094 半开关闭、四区全零'是 hide-at-endFrame 精确落位时代的实测——新口径与 §7.0 区间记法 [startFrame+1, endFrame] 字面一致（endFrame 帧归卡内），timewindow F105 探针实证（VS-TW run 20261116-205029：F105 元素色、F106 背景）",
     "[F1094] '蓝色' occurrence=1（w18 F1104）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载",
     "[F1349] BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截 45s）——P0-2 fadeIn/fadeOut 是元素级 opacity，不适用音频轨——L2 口径"
   ],
@@ -162,11 +162,11 @@
         "word_start_sec": 10.8
       }
     ],
-    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1350 frames in 2m27.729s",
+    "chrome_real_render": "chrome=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe rendered 1350 frames in 1m59.805s",
     "delivery_audit": "docs/delivery-audit-video-studio-round1-2026-11-15.md §1.2/§2.1",
     "frames_table": "example/internal/video/testdata/ir/c03.frames.json",
     "golden_dir": "example/internal/video/testdata/golden/c03/",
-    "html_bytes": 109338,
+    "html_bytes": 402280,
     "ir_sha256": "effd26fd041a6506e5fc7c574054ae4d64ca46968a340b7a08520b20e3c9fa9c",
     "meta_json": "example/internal/video/testdata/golden/c03/meta.json",
     "plan_doc": "docs/plan-agent-video-studio-case-library-and-test-plan-2026-11-15.md §4.2/§4.4/§7.0/§7.2",
@@ -186,7 +186,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 3505
+      "duration_ms": 3354
     },
     {
       "frame": 28,
@@ -197,7 +197,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 3918
+      "duration_ms": 3725
     },
     {
       "frame": 32,
@@ -208,7 +208,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 4312
+      "duration_ms": 4076
     },
     {
       "frame": 34,
@@ -227,7 +227,7 @@
         "png_decoded": true,
         "window_math": "锚 蓝色 w02 0.86s→F26：rise 0.25s → F33.5 全色；hold 至词尾 1.18s→F35；fall 0.6s 自 max(at+0.3s=F35, end-0.6s=F17)=F35 起 → F53 回落"
       },
-      "duration_ms": 4511
+      "duration_ms": 4283
     },
     {
       "frame": 38,
@@ -238,7 +238,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 4887
+      "duration_ms": 4625
     },
     {
       "frame": 44,
@@ -249,7 +249,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 5457
+      "duration_ms": 5157
     },
     {
       "frame": 54,
@@ -260,7 +260,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 6409
+      "duration_ms": 5992
     },
     {
       "frame": 133,
@@ -271,7 +271,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 13836
+      "duration_ms": 12940
     },
     {
       "frame": 136,
@@ -282,7 +282,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 14121
+      "duration_ms": 13204
     },
     {
       "frame": 143,
@@ -293,7 +293,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 14825
+      "duration_ms": 13790
     },
     {
       "frame": 139,
@@ -304,7 +304,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 14427
+      "duration_ms": 13456
     },
     {
       "frame": 142,
@@ -315,7 +315,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 14722
+      "duration_ms": 13722
     },
     {
       "frame": 149,
@@ -326,7 +326,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 15424
+      "duration_ms": 14303
     },
     {
       "frame": 145,
@@ -337,7 +337,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 15026
+      "duration_ms": 13956
     },
     {
       "frame": 148,
@@ -348,7 +348,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 15323
+      "duration_ms": 14221
     },
     {
       "frame": 155,
@@ -359,7 +359,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 16048
+      "duration_ms": 14805
     },
     {
       "frame": 151,
@@ -370,7 +370,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 15656
+      "duration_ms": 14472
     },
     {
       "frame": 154,
@@ -381,7 +381,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 15946
+      "duration_ms": 14720
     },
     {
       "frame": 161,
@@ -416,7 +416,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 16692
+      "duration_ms": 15341
     },
     {
       "frame": 157,
@@ -427,7 +427,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 16248
+      "duration_ms": 14984
     },
     {
       "frame": 160,
@@ -438,7 +438,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 16593
+      "duration_ms": 15258
     },
     {
       "frame": 167,
@@ -449,7 +449,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 17281
+      "duration_ms": 15890
     },
     {
       "frame": 150,
@@ -460,7 +460,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 15554
+      "duration_ms": 14388
     },
     {
       "frame": 163,
@@ -471,7 +471,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 16877
+      "duration_ms": 15526
     },
     {
       "frame": 166,
@@ -482,7 +482,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 17182
+      "duration_ms": 15804
     },
     {
       "frame": 173,
@@ -493,7 +493,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 17941
+      "duration_ms": 16387
     },
     {
       "frame": 185,
@@ -504,7 +504,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 19361
+      "duration_ms": 17438
     },
     {
       "frame": 331,
@@ -515,7 +515,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 36400
+      "duration_ms": 29989
     },
     {
       "frame": 336,
@@ -526,7 +526,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 36980
+      "duration_ms": 30439
     },
     {
       "frame": 340,
@@ -543,7 +543,7 @@
         "png_decoded": true,
         "window_math": "锚 分子 w07 11.1s→F333：rise → F340.5 全色；fall 自 max(F335, end(F343.8)-0.6s=F325.8)=F342 起 → F360 回落"
       },
-      "duration_ms": 37448
+      "duration_ms": 30794
     },
     {
       "frame": 346,
@@ -554,7 +554,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 38180
+      "duration_ms": 31322
     },
     {
       "frame": 362,
@@ -565,7 +565,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 40081
+      "duration_ms": 32794
     },
     {
       "frame": 364,
@@ -576,7 +576,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 40312
+      "duration_ms": 32993
     },
     {
       "frame": 371,
@@ -596,7 +596,7 @@
         "png_decoded": true,
         "window_math": "锚 散射 w10 12.2s→F366：rise 0.18s→F371（scale 1.12，600 宽 bbox 顶缘上移 18px → 探针条 y806-816 变浅色）；fall 0.3s→F380 回落。an_molecules move（y880→820，锚 空气 F324+45f=F369 落定）走 x/y 轴与 scale 无冲突"
       },
-      "duration_ms": 41127
+      "duration_ms": 33679
     },
     {
       "frame": 377,
@@ -607,7 +607,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 41827
+      "duration_ms": 34243
     },
     {
       "frame": 383,
@@ -618,7 +618,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 42515
+      "duration_ms": 34791
     },
     {
       "frame": 537,
@@ -629,7 +629,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 60460
+      "duration_ms": 48659
     },
     {
       "frame": 543,
@@ -644,7 +644,7 @@
         "f543_title_blue": 0,
         "png_decoded": true
       },
-      "duration_ms": 61122
+      "duration_ms": 49189
     },
     {
       "frame": 737,
@@ -655,7 +655,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 83891
+      "duration_ms": 66169
     },
     {
       "frame": 750,
@@ -671,7 +671,7 @@
         "f800_barblue": 1,
         "png_decoded": true
       },
-      "duration_ms": 85397
+      "duration_ms": 67287
     },
     {
       "frame": 768,
@@ -682,7 +682,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 87456
+      "duration_ms": 68837
     },
     {
       "frame": 800,
@@ -693,7 +693,7 @@
         "dimensions_ok": true,
         "png_decoded": true
       },
-      "duration_ms": 91172
+      "duration_ms": 71739
     }
   ],
   "recipe": {
@@ -705,7 +705,7 @@
     "ir_source_file": "example/internal/video/testdata/ir/c03.degraded.json",
     "width": 1080
   },
-  "run_id": "l1-03-20261116-103225-d711",
+  "run_id": "l1-03-20261116-213732-e600",
   "samples": [
     {
       "frame": 0,
@@ -722,7 +722,7 @@
         "png_magic_ok": true,
         "sun_share": 0.9505
       },
-      "duration_ms": 1238,
+      "duration_ms": 1223,
       "artifact": "example/internal/video/testdata/golden/c03/frame-000.png",
       "notes": [
         "标题 scaleIn 无锚 → 起播 t=0，24 帧 power2.out → F24 落定可读"
@@ -744,7 +744,7 @@
         "probe_peak_blue": 0.1329,
         "probe_pre_blue": 0
       },
-      "duration_ms": 3709,
+      "duration_ms": 3532,
       "artifact": "example/internal/video/testdata/golden/c03/frame-026.png",
       "notes": [
         "降级注记：着色粒度=整个 text 元素（builder 无逐词 span）——标题整行 20 字全变蓝而非'蓝色'两字（frames.json 已记录）",
@@ -783,7 +783,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 15554,
+      "duration_ms": 14388,
       "artifact": "example/internal/video/testdata/golden/c03/frame-150.png",
       "notes": [
         "帧表'F150 时 band1-3 已入场、band4 入场中'与渲染差 1 条：band3 的锚（不同 w04 5.2s→F156）晚于其窗口（147）9 帧——窗口先开、入场后行的组合语义下 band3 在 F150 仍不可见；错峰节奏本身（6 帧窗口步进）成立，M2 复核口径为'窗口步进+锚分两簇（白光/不同/波长）'",
@@ -808,7 +808,7 @@
         "pulse_probe_pre": 0,
         "pulse_probe_settled": 0
       },
-      "duration_ms": 35704,
+      "duration_ms": 29473,
       "artifact": "example/internal/video/testdata/golden/c03/frame-325.png",
       "notes": [
         "A-C03-02 注释层间距：注释 an_note_in 同锚 F324（y1290→1260 滑入 20 帧）——注释窗 315 开、锚 324 起：窗口先开 9 帧（滑入 from 态 immediateRender 置底位 y1290 静帧）"
@@ -830,7 +830,7 @@
         "png_magic_ok": true,
         "pulse_peak_top": 1
       },
-      "duration_ms": 40539,
+      "duration_ms": 33190,
       "artifact": "example/internal/video/testdata/golden/c03/frame-366.png",
       "notes": [
         "降级注记：dotGrid/dots 复合键不可消费（⛔）——分子为一块浅色 shape 占位，12 点阵不可见"
@@ -850,7 +850,7 @@
         "probe_f537_sun": 0.9308,
         "probe_f543_sun": 0
       },
-      "duration_ms": 60782,
+      "duration_ms": 48935,
       "artifact": "example/internal/video/testdata/golden/c03/frame-540.png",
       "notes": [
         "P0-1 红利核心帧（帧表原文）：无窗口时代标题常驻全片遮住公式区——实测 539 后标题零像素"
@@ -869,7 +869,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 66209,
+      "duration_ms": 52906,
       "artifact": "example/internal/video/testdata/golden/c03/frame-586.png"
     },
     {
@@ -886,7 +886,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 82970,
+      "duration_ms": 65487,
       "artifact": "example/internal/video/testdata/golden/c03/frame-729.png",
       "notes": [
         "T-11 降级：整柱中心 scaleIn 非底部立起——柱顶/柱底对称偏移，落定帧（759/792）几何不受影响"
@@ -908,7 +908,7 @@
         "probe_f768_barblue": 0.3754,
         "probe_f800_barblue": 1
       },
-      "duration_ms": 83658,
+      "duration_ms": 66003,
       "artifact": "example/internal/video/testdata/golden/c03/frame-735.png",
       "notes": [
         "帧表'蓝柱静态满高可见 735-761'的乐观读法不成立（15 帧窗口空档）——M2 复核：文档 stagger 15 帧在窗口轴恢复，但生长可见性仍由词锚决定；两时钟错位 27 帧与帧表预判一致",
@@ -930,7 +930,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 85397,
+      "duration_ms": 67287,
       "artifact": "example/internal/video/testdata/golden/c03/frame-750.png",
       "notes": [
         "降级注记：thumbnail.atSec 无通路（ExtractThumbnail 固定 -ss 1）——封面候选需 L1 渲染器单独截取；ef_cnt_ratio counter 已移除（96px 字形压柱顶标签）——数字缺失，比值用柱高比 60:140≈6:1 静态呈现（落定后）"
@@ -941,10 +941,10 @@
       "time_sec": 36.46666666666667,
       "status": "ok",
       "expect": "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场，进入 S7 晚霞旁白段（画面只剩背景+字幕），文档镜 6'左右对照小框'目标语义仍 ⛔（需素材），但 P0-1 使'图解退场'本身可表达（无窗口时代图解会常驻到片尾）。'蓝色' occurrence=1（w18 36.8s）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载",
-      "actual": "镜 5→6 边界：分子/公式/双柱/注释 endFrame=1094 半开关闭——图解层整体退场（四区全零），S7 晚霞段画面只剩背景+字幕",
+      "actual": "镜 6 尾帧（窗口含尾口径）：分子/公式 endFrame=929 已退场；双柱/注释 endFrame=1094——含尾口径下 endFrame 帧本帧可见（hide set 落 endFrame+ε，builder 半帧错位），F1095 起整体退场",
       "structure_checks": {
-        "bar_blue": 0,
-        "bar_red": 0,
+        "bar_blue": 1,
+        "bar_red": 1,
         "dimensions": "1080x1920",
         "dimensions_ok": true,
         "formula_blue": 0,
@@ -954,10 +954,10 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 121804,
+      "duration_ms": 97687,
       "artifact": "example/internal/video/testdata/golden/c03/frame-1094.png",
       "notes": [
-        "P0-1 红利（帧表原文）：'图解退场'本身可表达——无窗口时代图解会常驻到片尾；镜 6 '左右对照小框'目标语义仍 ⛔（需素材）",
+        "口径修正登记（共帧叠印修复，2026-11-16）：旧断言'endFrame=1094 半开关闭、四区全零'是 hide-at-endFrame 精确落位时代的实测——新口径与 §7.0 区间记法 [startFrame+1, endFrame] 字面一致（endFrame 帧归卡内），timewindow F105 探针实证（VS-TW run 20261116-205029：F105 元素色、F106 背景）",
         "'蓝色' occurrence=1（w18 F1104）在旁白中——无 highlight 挂靠（effects 表只三处），字幕承载"
       ]
     },
@@ -975,7 +975,7 @@
         "png_decoded": true,
         "png_magic_ok": true
       },
-      "duration_ms": 147251,
+      "duration_ms": 119450,
       "artifact": "example/internal/video/testdata/golden/c03/frame-1349.png",
       "notes": [
         "BGM 淡出不可实现（无 fade-out 音频滤镜，amix duration=first 截 45s）——P0-2 fadeIn/fadeOut 是元素级 opacity，不适用音频轨——L2 口径"
@@ -988,9 +988,9 @@
     "full_loop_under_8min": true,
     "keyframes_kept": 12,
     "probe_frames_kept": 42,
-    "render_ms_per_frame": 109.43,
-    "render_total_ms": 147729,
-    "render_wall_clock": "2m28s",
+    "render_ms_per_frame": 88.74,
+    "render_total_ms": 119805,
+    "render_wall_clock": "2m0s",
     "samples_degraded_na": 0,
     "samples_fail": 0,
     "samples_mismatch": 4,
