@@ -308,17 +308,24 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			// （CanAccessKey——video_asset 行或 video_render 行）在写时预演，
 			// 把渲染期失败提前到写时（批G 提案 G-01a）。未接线（nil pool）
 			// 时 CanAccessKey 返回 false——语义正好是 fail-closed。
-			for label, key := range map[string]string{"voice_key": audio.Voice.Key, "bgm_key": audio.BGM.Key} {
-				if key == "" {
-					continue
-				}
+			// 注意：map 字面量会急切求值两个字段——单轨挂载时另一轨是 nil
+			// 指针，audio.BGM.Key 直接 panic 打死整个服务进程（E2E 真调
+			// 实拍：只传 voice_key → nil deref panic）。逐轨判空。
+			keysToCheck := make([]string, 0, 2)
+			if audio.Voice != nil && audio.Voice.Key != "" {
+				keysToCheck = append(keysToCheck, audio.Voice.Key)
+			}
+			if audio.BGM != nil && audio.BGM.Key != "" {
+				keysToCheck = append(keysToCheck, audio.BGM.Key)
+			}
+			for _, key := range keysToCheck {
 				ok, aerr := deps.Svc.CanAccessKey(ctx, p, key)
 				if aerr != nil {
 					return nil, aerr
 				}
 				if !ok {
 					return nil, webx.NewError(400, "E_VIDEO_IR_INVALID",
-						label+": audio key not registered (upload via video_upload_asset / POST /api/video/assets first)")
+						"audio key "+key+" not registered (upload via video_upload_asset / POST /api/video/assets first)")
 				}
 			}
 			version, err := deps.Svc.SetAudio(ctx, p, in.ProjectID, audio, in.ExpectedVersion)
