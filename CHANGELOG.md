@@ -9,6 +9,20 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.32.1] — 2026-11-17
+
+Go-only hotfix (no `packages/` code touched). Found within the hour by the
+first real chained consumer (the versus IR rewrite): the v0.32.0 `resize`
+builder kept GSAP's default `immediateRender: true`, which writes every
+fromTo's from-size at BUILD time — for chained segments the LAST segment's
+from value won and leaked into early frames (a progress bar showed 14/15
+full at frame 0). The builder now sets `immediateRender` per position:
+true when the tween starts at t=0 (a playhead parked exactly at the tween's
+start does not "enter" it, so the from state must be applied at build —
+measured as a full-width bar at F0 otherwise), false for any later start.
+The extended synthetic render test pins both semantics (F0 empty; chained
+segments step 200→400→600 across their frames).
+
 ## [0.32.0] — 2026-11-17
 
 Go-only release (no `packages/` code touched — npm sides stay put). Theme:

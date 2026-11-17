@@ -383,18 +383,26 @@
     // resize (v1 increment, versus pilot): width/height tween anchored
     // TOP-LEFT (progress-bar semantics — width grows rightward, height grows
     // downward; From/To Points carry (w,h) px pairs, unlike move's absolute
-    // position Points). immediateRender stays at the DEFAULT (true, same as
-    // move): fromTo writes the from-size at build time, which is harmless
-    // for an element inside its hidden pre-window phase (invisible anyway)
-    // and CORRECT for an always-mounted element — t=0 must sit at the from
-    // state (a progress bar starts empty). fadeIn/fadeOut disable
-    // immediateRender for opacity-specific reasons (build-time autoAlpha
-    // leaks, see above); size has no such leak.
+    // position Points).
+    //
+    // immediateRender: (at <= 0) — BOTH cases have a defined owner:
+    //   at == 0: TRUE. A tween starting at the very top must apply its from
+    //     size at build — with false, a playhead parked exactly at t=0 does
+    //     not "enter" the tween and the element's static w/h shows at F0
+    //     (measured: full-width bar at frame 0, the extended synthetic
+    //     test's F0 verdict).
+    //   at > 0: FALSE. resize is designed for CHAINED segments (one
+    //     element, N sequential resizes stepping a fill up — the
+    //     progress-bar choreography that motivated the type). With true,
+    //     EVERY fromTo writes its from-size at build and the LAST segment's
+    //     from wins, leaking a later state into early frames (v0.32.1 fix,
+    //     caught while authoring the first real chained consumer).
     resize: function (tl, node, an, at) {
       if (!an.from || !an.to) return; // write-time gate rejects this; skip = read-time tolerance
       tl.fromTo(node, { width: an.from.x, height: an.from.y },
         { width: an.to.x, height: an.to.y,
-          duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
+          duration: an.durationFrames / fps, ease: an.easing || 'power2.out',
+          immediateRender: !(at > 0) }, at);
     }
   };
 

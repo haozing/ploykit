@@ -115,6 +115,22 @@ func TestAtFrameResizeRender(t *testing.T) {
 					From: &videoapp.Point{X: 100, Y: 100}, To: &videoapp.Point{X: 100, Y: 500},
 					DurationFrames: 15, Easing: "linear", AtFrame: afIntPtr(15)},
 			}},
+		// v0.32.1 chained-resize element (the progress-bar choreography the
+		// type exists for): 3 sequential segments stepping the fill
+		// 0→200→400→600. Static w=0 (immediateRender:false keeps it until the
+		// first segment starts — the bug this pins: with the default true the
+		// LAST segment's from-size won the build-time application and F0
+		// showed a ~400-wide bar).
+		{ID: "el_chain", Type: videoapp.ElementShape, Color: "#ff0000",
+			X: 100, Y: 600, W: 0, H: 40, Z: 1,
+			Animations: []videoapp.ElementAnimation{
+				{ID: "an_c1", Type: "resize", From: &videoapp.Point{X: 0, Y: 40},
+					To: &videoapp.Point{X: 200, Y: 40}, DurationFrames: 2, Easing: "linear", AtFrame: afIntPtr(0)},
+				{ID: "an_c2", Type: "resize", From: &videoapp.Point{X: 200, Y: 40},
+					To: &videoapp.Point{X: 400, Y: 40}, DurationFrames: 2, Easing: "linear", AtFrame: afIntPtr(5)},
+				{ID: "an_c3", Type: "resize", From: &videoapp.Point{X: 400, Y: 40},
+					To: &videoapp.Point{X: 600, Y: 40}, DurationFrames: 2, Easing: "linear", AtFrame: afIntPtr(10)},
+			}},
 	}
 	require.NoError(t, videoapp.Validate(ir), "atFrame+resize IR must pass the write gate")
 	frames := videoapp.DurationFrames(ir, afFPS) // ceil(1.0*30) = 30
@@ -126,7 +142,7 @@ func TestAtFrameResizeRender(t *testing.T) {
 	html, err := proj.HTML(ctx, ir, "")
 	require.NoError(t, err)
 
-	// -- 3. render all 30 frames, keep F0/F7/F14/F22/F29 --
+	// -- 3. render all 30 frames, keep F0/F4/F7/F9/F14/F22/F29 --
 	spec := capx.FrameSpec{Width: afW, Height: afH, FPS: afFPS, DurationFrames: frames}
 	require.NoError(t, spec.Validate())
 
@@ -138,7 +154,7 @@ func TestAtFrameResizeRender(t *testing.T) {
 	rend, err := rt.Renderer()
 	require.NoError(t, err)
 
-	kept := map[int]bool{0: true, 7: true, 14: true, 22: true, 29: true}
+	kept := map[int]bool{0: true, 4: true, 7: true, 9: true, 14: true, 22: true, 29: true}
 	samples := map[int][]byte{}
 	t0 := time.Now()
 	renderErr := rend.RenderFrames(ctx,
@@ -150,7 +166,7 @@ func TestAtFrameResizeRender(t *testing.T) {
 			return nil
 		})
 	require.NoError(t, renderErr, "render failed")
-	require.Len(t, samples, 5, "kept frames 0/7/14/22/29")
+	require.Len(t, samples, 7, "kept frames 0/4/7/9/14/22/29")
 	t.Logf("ATFRAME/RESIZE: %d frames rendered in %.1fs", frames, time.Since(t0).Seconds())
 
 	// -- 4. pixel verdicts --
@@ -182,6 +198,22 @@ func TestAtFrameResizeRender(t *testing.T) {
 	require.Greater(t, lower(f29), 15000, "F29: bar moved DOWN (got %d red px in lower band)", lower(f29))
 	require.Equal(t, 0, upper(f29), "F29: upper band empty (reversal vs F14)")
 	require.NotEqual(t, samples[14], samples[29], "F14 != F29 bytes")
+
+	// chained resize (y∈[595,660] band, untouched by el_bar's move path):
+	// F0 ≈ empty (segment 1 barely started), F4 = 200 wide (segment 1 done),
+	// F7/F9 = 400 (segment 2 done @F7), F14/F29 = 600. The F0 assertion is
+	// the v0.32.1 regression pin: with immediateRender defaulting true, the
+	// LAST segment's from-size (400) leaked to build time and F0 showed a
+	// wide bar.
+	chain := func(img image.Image) int { return afCountRedBand(img, 595, 660) }
+	require.Less(t, chain(f0), 1500, "F0 chain: no build-time from-leak (got %d red px)", chain(f0))
+	c4, c7, c9, c14c, c29c := chain(afDecodePNG(t, samples[4])), chain(afDecodePNG(t, samples[7])),
+		chain(afDecodePNG(t, samples[9])), chain(f14), chain(f29)
+	require.InDelta(t, 200*40, c4, 3000, "F4 chain: segment 1 done → ≈200 wide (got %d)", c4)
+	require.InDelta(t, 400*40, c7, 3000, "F7 chain: segment 2 done → ≈400 wide (got %d)", c7)
+	require.InDelta(t, 400*40, c9, 3000, "F9 chain: segment 3 starts @F10, still 400 (got %d)", c9)
+	require.InDelta(t, 600*40, c14c, 3000, "F14 chain: all segments done → 600 wide (got %d)", c14c)
+	require.Equal(t, c14c, c29c, "F29 chain: unchanged after F14")
 
 	// -- 5. artifacts --
 	_, thisFile, _, _ := runtime.Caller(0)
