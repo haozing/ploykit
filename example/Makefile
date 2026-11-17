@@ -1,4 +1,4 @@
-.PHONY: db-up db-down backend frontend build clean test test-fast test-db
+.PHONY: db-up db-down backend frontend build build-stub clean test test-fast test-db
 
 # ---- Test lanes (carried with every product cloned from this template) ----
 # Gating discipline (docs/testing-strategy.md rule 8, zijianfang proposal 三):
@@ -44,8 +44,19 @@ build:
 	rm -rf cmd/app/frontend
 	cp -r web/dist cmd/app/frontend
 	touch cmd/app/frontend/.placeholder
-	CGO_ENABLED=0 go build -o app.exe ./cmd/app
+	CGO_ENABLED=0 go build -tags capx -o app.exe ./cmd/app
 	@echo "✅ 构建完成: ./app.exe (打开 http://localhost:8080)"
 
+# build-stub is the DEFAULT (untagged) build: same binary surface minus the
+# capx render pipeline. web/dist + prerender are skipped so it works without a
+# frontend toolchain — it exists to prove the product compiles and tests
+# without chromedp, and every render submission answers E_NOT_CONFIGURED
+# (render/stub.go, //go:build !capx). NOT a production artifact: rendering
+# only exists in `build` above (-tags capx). See docs/dev-environment.md
+# "Build shape" and ADR 0017.
+build-stub:
+	CGO_ENABLED=0 go build -o app-stub.exe ./cmd/app
+	@echo "构建完成: ./app-stub.exe（stub 构建——渲染恒 503 E_NOT_CONFIGURED；生产用 make build）"
+
 clean:
-	rm -rf web/dist cmd/app/frontend app.exe renderx-cache
+	rm -rf web/dist cmd/app/frontend app.exe app-stub.exe renderx-cache

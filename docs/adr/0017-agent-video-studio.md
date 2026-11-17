@@ -20,11 +20,42 @@ Not adopting an engine (Remotion was the considered alternative) is a decision, 
 
 4. **Async rendering on river, with snapshot freeze and transactional quota (D2, D9, D10).** Rendering runs on a dedicated river client (separate queue and drain window — minute-scale `SoftStopTimeout`, deliberately NOT events' 45s), executing at-least-once with idempotent workers. Submission freezes the render: IR snapshot + render recipe (schemaVersion, projector/capx versions, pinned chrome/ffmpeg, fonts, asset manifest, quota_period), so later edits cannot alter what an in-flight job renders. One short DB transaction covers quota `ConsumeWithTx` (the framework Tx variants — quota keeps its own tables and ledger semantics, video consumes via port), the render-row insert, and river `InsertTx` (mechanisms per the compat doc). Terminal failure releases in the same transaction against the original `quota_period` with release idempotency (conditional status UPDATE + affected-rows checks — a river retry must not release twice). Client-side submission idempotency (`Idempotency-Key` / `request_id`, `UNIQUE(workspace_id, submission_key)`) returns the same render row on network retry.
 
-5. **mcpx carries the agent face; REST carries the human face (D5).** Eleven `video_*` MCP tools give agents fine-grained writes (set_script, add_element, add_animation, add_effect_at_word, …) without one REST path per operation; REST carries the human editor surface (coarse-grained full-IR replace, preview, files, render history). Both funnel into the same domain-service `Mutate` path — one validation, one authorization check, one audit trail, one optimistic lock. This extends ADR 0014's mcpx from dev tooling to product capability, and 0014's dev-stage exemptions do not carry over: video tools are PAT-only (browser-session and pat-all credentials rejected), and production requires per-principal rate limits on /mcp.
+5. **mcpx carries the agent face; REST carries the human face (D5).** The `video_*` MCP tool family gives agents fine-grained writes (set_script, upsert_element, animate_element, add_effect_at_word, set_audio, render, snapshot_frame, …) without one REST path per operation; REST carries the human editor surface (coarse-grained full-IR replace, preview, files, render history) plus the script-to-video catalog/compose pair. Both funnel into the same domain-service `Mutate` path — one validation, one authorization check, one audit trail, one optimistic lock. This extends ADR 0014's mcpx from dev tooling to product capability, and 0014's dev-stage exemptions do not carry over: video tools are PAT-only (browser-session and pat-all credentials rejected — the implementation enforces this at entry in `requireToolScope` in `example/internal/video/adapters/mcp/tools.go`, which rejects any non-`webx.SourcePAT` principal and then checks `Principal.Scope.Allows(toolScope)`; a `Scope == nil` (pat-all) credential does not satisfy the scope check and is rejected), and production requires per-principal rate limits on /mcp. The tool count is deliberately not pinned in this ADR: it was 11 at acceptance and has grown since the agent-tool roadmap (docs/plan-video-studio-agent-tools-2026-11-16.md) landed — treat the registry in `example/internal/video/adapters/mcp/tools.go` as the source of truth (`grep -c "mcpAdd(" ...`), with the catalog summarized in docs/api-index.md.
 
 6. **Two-layer authorization: roles are the authority, membership is defense-in-depth (D6).** `authz.CanIn` over the role matrix (`video:read/write/render`) is the server-side authority at every entry point — REST, MCP tools, and file downloads alike; membership answers "is this principal in this workspace" and never substitutes for a role permission; PAT workspace scope is enforced at tool entry. The audit's N2 finding is the cautionary tale: a missing wsMW wrapper left principals without WorkspaceID, membership matched nothing, and video REST returned blanket 403 for everyone (fail-closed by accident), while registered-but-unconsumed permission keys let members bypass `video:render`. Both layers must be wired and actually consumed, or the authorization matrix is fiction.
 
 7. **Quota fail-closed, with a deployment-order constraint (D7).** A workspace whose plan does not declare `video_renders_monthly` is denied rendering — an undeclared key means "not entitled", not "unlimited" (deliberate capability gating; hard mode answers 402). The example migration lands the plan quota keys in the same release as the capability: deploying code before the `plan.limits` key turns every render into a rejection — that is the documented deployment order, not a defect. The one standing exception (`idempotency_recorded`) remains: the idempotency-record mechanism is itself part of quota accounting and must not self-lock.
+
+## Build shape and runtime boundary (2026-11-17)
+
+The render pipeline is **build-tag gated**: `example/internal/video/render/render_pipeline.go`
+and `snapshot.go` carry `//go:build capx`, and `stub.go` carries `//go:build !capx`.
+
+- **Production builds must use `-tags capx`** — `go build -tags capx ./cmd/app`
+  (example/Makefile `build`, example/Dockerfile, and the CI example job all do this).
+  Only the tagged build compiles `platform/capx` and the chromedp dependency tree, so only
+  it can actually render. `SetCapxRuntime` / `SetSnapshotter` are no-ops in the default
+  build, so the composition root in `main.go` is tag-portable and calls them unconditionally.
+- **The default (untagged) build is a stub by design** — `go build ./cmd/app` still builds
+  and every non-render path works, but every render attempt returns `ErrNotConfigured`
+  (503 `E_NOT_CONFIGURED`), and `video_snapshot_frame` degrades the same way. It exists so
+  the domain, HTTP surface and tests stay buildable without Chrome/chromedp in the
+  toolchain; it is not a deployable production shape. `example/Makefile` exposes it as
+  `build-stub` explicitly to keep the intent visible.
+- Capability is still gated **at runtime** on top of the build tag: `capx.Config.Enabled`
+  is wired from `PLOYKIT_MCP_ENABLED`, and Chrome/ffmpeg discovery (`CAPX_CHROME_PATH` →
+  PATH → platform install paths, `CAPX_FFMPEG_PATH` → PATH) can fail. A capx build on a
+  host without Chrome/ffmpeg therefore boots green and degrades per request — which is
+  why a capx-tagged build is safe to ship into an image that mounts the binaries later.
+- **Adapter boundary declaration (AGENTS.md boundary clause): the TTS and Aligner adapters
+  are implemented but not wired in example.** `example/internal/video/adapters/tts` and
+  `.../adapters/aligner` exist and are unit-tested behind their own constructors, but
+  `example/cmd/app/main.go` never constructs them and never assigns `Ports.Synth` /
+  `Ports.Aligner`, so `VIDEO_TTS_URL` / `VIDEO_TTS_KEY` / `VIDEO_TTS_VOICE` /
+  `VIDEO_ALIGNER_URL` **have no effect today** — `SetScript` always falls back through the
+  degrade chain to estimated word timings (`words_source=estimated`). Product consumers who
+  want real TTS/alignment must wire the adapters at their own composition root; example
+  deliberately declares this as an unwired boundary rather than shipping dead config.
 
 ## Implementation and testing lessons
 

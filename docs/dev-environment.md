@@ -399,6 +399,24 @@ either missing, `capx.Available()` is false, render submission answers `E_NOT_CO
 and everything else (project CRUD, preview, editing) works untouched. Readiness probes
 never check for them — the capability must not affect the health of video-less products.
 
+### Build shape: `-tags capx` is required for the real pipeline
+
+The render pipeline lives behind a build tag. `example/internal/video/render/render_pipeline.go`
+and `snapshot.go` are `//go:build capx`; `stub.go` is `//go:build !capx`.
+
+- **Real pipeline (production, CI compile check):** `go build -tags capx ./cmd/app`
+  (from `example/`). Only this build compiles `platform/capx` + chromedp, so only this
+  build can render. `example/Makefile`'s `build` target, `example/Dockerfile` and the
+  `example` job in `.github/workflows/verify.yml` all use `-tags capx`.
+- **Stub (default build):** `go build ./cmd/app` compiles without chromedp and boots fine,
+  but every render submission returns `E_NOT_CONFIGURED` and the render worker's state
+  machine (`running → failed → quota release → audit → WS`) still runs, so the failure is
+  observable rather than silent. `example/Makefile` exposes this as the explicit
+  `build-stub` target — use it when you want a minimal build without a Chrome toolchain,
+  never as a deployable production artifact.
+
+### Binaries and environment variables
+
 - **Chrome** (headless, frame capture): `CAPX_CHROME_PATH` wins if set; otherwise PATH
   lookup (`chrome` / `google-chrome` / `chromium` / `msedge`) plus the platform default
   install paths (Windows: `%ProgramFiles%\Google\Chrome\Application\chrome.exe`;
@@ -407,14 +425,35 @@ never check for them — the capability must not affect the health of video-less
   `ffmpeg` on PATH. Subtitle **burning** (`BurnSubtitles`) requires a build with libass
   (Debian `ffmpeg` ships it; some static builds do not) — without libass the render
   degrades to soft subs (`mov_text`) and the render error notes the downgrade.
+- **`PLOYKIT_MCP_ENABLED=1`**: the single agent-facing gate. It enables the `/mcp` mount
+  (the `video_*` tool family is PAT-only) **and** is what `main.go` passes as
+  `capx.Config.Enabled` — i.e. capx is off unless this is `1`. Known coupling: a product
+  that wants MCP without capx (or capx without MCP) cannot express it through env today;
+  split it into a dedicated `CAPX_ENABLED` if that case appears (ADR 0017 territory).
 
-Optional speech services (env-driven, silent degradation when unset):
+### Speech adapters are NOT wired in example (env vars currently inert)
 
-- `VIDEO_TTS_URL` (+ `VIDEO_TTS_KEY` / `VIDEO_TTS_VOICE`): a TTS provider that returns
-  word-level timestamps directly. Unset → `set_script` falls back to estimated word
-  timings (`source=estimated`); render still works, just without a voice track (BGM
-  still mixes).
-- `VIDEO_ALIGNER_URL`: a WhisperX sidecar exposing an HTTP align endpoint, needed only
-  for the "upload existing audio" path. Unset → alignment unavailable; the TTS path is
-  unaffected.
+`example/internal/video/adapters/tts` and `example/internal/video/adapters/aligner` are
+implemented and unit-tested, but `example/cmd/app/main.go` never constructs them and never
+fills `videoapp.Ports.Synth` / `Ports.Aligner`. **`VIDEO_TTS_URL`, `VIDEO_TTS_KEY`,
+`VIDEO_TTS_VOICE` and `VIDEO_ALIGNER_URL` therefore have no effect in example today** —
+setting them changes nothing. `set_script` / compose always fall back through the degrade
+chain to estimated word timings (`words_source=estimated`), which is never an error
+(§8.5a semantics: `E_TTS_UNAVAILABLE` / `E_ALIGNER_UNAVAILABLE` are never returned).
+
+To enable them, a product must wire the adapters at its own composition root:
+
+```go
+videoSvc := videoapp.NewProjectService(pool, videoapp.Ports{
+    // …
+    Synth:   tts.New(env("VIDEO_TTS_URL", ""), env("VIDEO_TTS_KEY", ""), env("VIDEO_TTS_VOICE", "")),
+    Aligner: aligner.New(env("VIDEO_ALIGNER_URL", "")),
+}, log)
+```
+
+Both ports are nil-tolerant (`ports.go`: `Synth` nil = degrade to estimated words;
+`Aligner` nil = degrade), so wiring one without the other is safe. This is the AGENTS.md
+boundary clause in action: adapters exist, example does not consume them, and the env
+variables are documented as reserved rather than as working configuration.
+
 

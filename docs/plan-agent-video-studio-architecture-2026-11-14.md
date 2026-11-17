@@ -637,6 +637,19 @@ MCP tool result / error data 保留相同 `code`、可展示 message 和 `retrya
 - 若这些 video 迁移尚未合入 / 部署：直接修订 1005 / 1006，新增 1009 资产模型，避免制造 corrective migrations。
 - 若任何环境已应用：不得修改已执行迁移；从当前最大编号之后新增 1009、1010……，并在实施前重新检查目录。
 
+> **现状（2026-11-17 回写）**：上文「新增 1009 资产模型」是设计期编号假设，与实际落地
+> 编号不符。`example/cmd/app/migrations/` 的实际占用是：
+>
+> | 编号 | 文件 | 内容 |
+> |---|---|---|
+> | 1009 | `1009_video_render_idem` | 渲染提交幂等 + 配额记账列（`submission_key` / `quota_period` / `UNIQUE(workspace_id, submission_key)`）；**不是**资产模型 |
+> | 1010 | `1010_video_drop_script_column` | 删除 `video_project.script` 冗余列（IR 为唯一真相源，即 §11.2 的目标态） |
+> | 1011 | `1011_video_asset` | 资产登记表 `video_asset`（F-AUTH-01 归属凭据） |
+>
+> 结论：§11 系列的编号以本表为权威，「1009 = 资产模型」的表述作废。后续新增产品迁移
+> 从 1012 起；`video_asset` 的登记语义是**下载授权凭据**（`handleFile` 第三层校验，
+> 缺登记行即 404），不是可选元数据索引——不要把它降级成"可选缓存"。
+
 ### 11.2 `video_project` 目标字段
 
 - `id / workspace_id / title / ir / version / created_by / created_at / updated_at`。

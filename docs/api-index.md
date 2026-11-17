@@ -44,15 +44,19 @@ HTTP endpoints (full contract in docs/openapi.yaml; workspace context via X-Work
 |---|---|
 | GET /api/video/projects | List video projects in the workspace (updated_at desc) |
 | POST /api/video/projects | Create a project (empty IR, version=1) |
-| GET /api/video/projects/{id} | Project detail: metadata + full IR + optimistic-lock version |
+| GET /api/video/projects/{id} | Project detail: metadata + full IR + optimistic-lock version (the version appears both inside `project` and at the envelope top level — same value) |
 | PUT /api/video/projects/{id}/ir | Full IR replacement; `expected_version` required — 409 E_VIDEO_VERSION_CONFLICT on mismatch |
 | DELETE /api/video/projects/{id} | Delete a project (renders cascade via DB) |
+| GET /api/video/templates | Template + theme catalog for the script-to-video generator (`{templates, themes}`; each template carries a `layout` text description — G-08a). Returns empty catalogs (200, not 5xx) when the composer is unwired |
+| POST /api/video/projects/{id}/compose | One-shot compose: script + template + theme → full renderable IR (server-side split / keyword-highlight / timing-window pipeline, optimistic lock version++). 503 E_NOT_CONFIGURED when the composer is unwired; unknown template/theme keys and out-of-range card counts are 400 E_VIDEO_IR_INVALID |
 | GET /api/video/projects/{id}/preview.html | Single-projection preview HTML (iframe embed; same projection the render worker consumes) |
-| POST /api/video/projects/{id}/renders | Submit a render (river `video` queue; snapshots ir_snapshot; video_renders_monthly quota; 503 E_NOT_CONFIGURED when capx lacks Chrome/ffmpeg) |
+| POST /api/video/projects/{id}/renders | Submit a render → **201 + the full Render object** (`id, project_id, status, frames_done, frames_total, output_url?, thumb_url?, error?` — not the legacy `{render_id, status}` envelope). River `video` queue; snapshots ir_snapshot; video_renders_monthly quota; 503 E_NOT_CONFIGURED when capx lacks Chrome/ffmpeg. Optional `Idempotency-Key` header (trimmed to 128 chars): a retry with the same key replays the first submission's render — no second row, no second quota charge |
 | GET /api/video/projects/{id}/renders | Render history for the project |
 | GET /api/video/renders/{id} | Render status / progress / output (polling fallback; live progress rides WS scope "video") |
-| POST /api/video/assets | Upload an asset (multipart, ≤1MiB, content-addressed storagex key) |
-| GET /api/video/files/{key} | Authorized download with Range support (membership checked off the key's workspace prefix; mp4 seeking requires 206) |
+| POST /api/video/assets | Upload an asset (multipart; `project_id` form field **required**; content-addressed storagex key, idempotent on identical bytes). **Two channels, two caps**: REST multipart ≤ **50MiB** (`UploadLimitLarge`, paired with main.go's single-layer `BodyLimitExcept` exemption + a 120s timeout tier), MCP base64 `video_upload_asset` ≤ **700KB** (`UploadLimit`, sized to the /mcp body limit) — same registration path, only the cap differs |
+| GET /api/video/files/{key} | Authorized download with Range support (membership checked off the key's workspace prefix, plus the video_asset / video_render registration row; mp4 seeking requires 206) |
+
+Agent face: **21 `video_*` MCP tools today** and growing (count verified by `grep -c "mcpAdd(" example/internal/video/adapters/mcp/tools.go`; the registry there is the source of truth — the count is deliberately not frozen in docs), **PAT-only**: `requireToolScope` rejects browser-session principals and enforces the per-tool scope (`video:read` / `video:write` / `video:render`). `/mcp` routes are contract-exempt (ADR 0014), so these tools do not appear in openapi.yaml. Rationale and the PAT-only decision: ADR 0017 (§5, D6).
 
 Hooks: **video has no hooks in v1** — hook extension slots are reserved in the
 `app/service.go` hooks shape (the domain's service layer is the single mutation entry; when

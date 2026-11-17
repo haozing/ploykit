@@ -82,6 +82,13 @@ jobs:
       - run: python tools/check_docs_language.py
 
   # Example standalone Go module (go.mod replace points to ../, buildable from the repo root).
+  # Two build shapes are compiled on purpose:
+  #   - default (untagged): render/stub.go — the product must build without chromedp;
+  #   - -tags capx: render_pipeline.go/snapshot.go — the ONLY shape that can render, and the
+  #     only one that type-checks platform/capx usage. Without this step a capx-only compile
+  #     error is invisible until someone builds a release image (ADR 0017 build shape).
+  # Tests run in the default shape only: the capx lanes need Chrome/ffmpeg/DB and self-skip
+  # via their own gates, so invoking them here would just add runtime without coverage.
   example:
     runs-on: ubuntu-latest
     defaults:
@@ -95,6 +102,8 @@ jobs:
           cache: true
           cache-dependency-path: example/go.sum
       - run: go build ./...
+      - run: go build -tags capx ./...
+      - run: go vet -tags capx ./internal/video/...
       - run: go test ./...
 
   # Frontend: npm workspaces monorepo (packages/client, runtime, ui + example/web).
@@ -108,6 +117,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Contract freshness gate: packages/client/src/types.ts must match docs/openapi.yaml
+      # byte-for-byte (openapi-typescript --check). Runs before the build so a drifted
+      # generated file fails fast with the generator's own diff message.
+      - run: npm run verify:types -w @ploykit/client
       - run: npm run build
       # Production-fidelity tarball lane (testing-strategy.md L2; lands with this batch): npm pack → scratch
       # install → integrity/import probe, exercising the dist of all four workspaces built by the step above.

@@ -4214,8 +4214,11 @@ paths:
   # words_source（tts|aligner|estimated）判断来源。E_TTS_UNAVAILABLE / E_ALIGNER_UNAVAILABLE
   # 按方案 A 变体**永不返回**，仅在架构文档预留（未来 allowEstimated 闸门落地时再定值）。
   # 架构文档 10.5 中 E_VIDEO_UNSUPPORTED_SCHEMA / E_VIDEO_ASSET_NOT_FOUND /
-  # E_VIDEO_RENDER_ACTIVE / E_VIDEO_PAYLOAD_TOO_LARGE 同为代码侧未返回的预留行
-  # （前者读时宽容跳过、后三者分别归入 400 校验面/级联删除语义/全局 413 闸门）。
+  # E_VIDEO_PAYLOAD_TOO_LARGE 仍为代码侧未返回的预留行（分别归入 400 校验面 /
+  # 400 校验面 / 全局 413 闸门）。
+  # E_VIDEO_RENDER_ACTIVE 已实现（2026-11-17）：DELETE /api/video/projects/{id}
+  # 在项目有 queued/running/interrupted 渲染时返回 409，避免级联删除抹掉在途
+  # 渲染行、孤立 river job 并永久留住配额消耗。
   /api/video/projects:
     get:
       operationId: listVideoProjects
@@ -4551,19 +4554,36 @@ paths:
       summary: 提交渲染（video:render；与 video_render MCP 工具同一服务方法；配额 video_renders_monthly 预扣）
       description: |
         渲染定格于提交时的 ir_snapshot：渲染过程中改 IR 不影响在途任务（出片可复现）。
-        提交即 `Quota.ConsumeWith(idempotency=render_id)`；渲染失败/中断自动 Release。
+        提交即 `Quota.ConsumeWithTx(idempotency=submission_key)`；渲染失败/中断自动 Release。
         capx 未配置（Chrome/ffmpeg 缺失）→ 503 E_NOT_CONFIGURED（不建 render 行、不扣配额）；
         配额用尽 → 402 E_QUOTA_EXCEEDED。渲染在 river `video` 队列串行（MaxWorkers 默认 1）。
         400 E_VIDEO_IR_INVALID 的素材分支（§8.5a.2 方案 B）：快照 IR 含悬空 image src
         （无登记行且无对象）同样在提交期拒绝——素材须先经 POST /api/video/assets
         或 video_upload_asset 上传登记。渲染期素材损坏/被删走 render 终态 error 字段
         （非本 4xx 面；归 P1 排期另提案）。
+
+        **提交幂等（`Idempotency-Key` 请求头）**：头值 trim 后截断至 128 字符，
+        `UNIQUE(workspace_id, submission_key)` 落库；同 key 的网络重试/agent 双调
+        返回首单已建的 render 行（同样 201），**不重复建行、不重复扣配额**。
+        头缺省 = 传统一次性提交流（无幂等保护）。注意：重放返回的 status 可能是
+        首单当前状态（如已 running），不是固定 queued。
+
+        **响应体即 Render 行**（VideoRender schema，与 GET renders 同构），
+        201 Created。历史契约曾用 `{render_id, status}` 信封（VideoRenderCreated，
+        已废弃但保留于 components 供旧客户端类型生成）。
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
           description: 项目 ID
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: |
+            提交幂等键（工作区内唯一；同 key 重放返回首单 render，不重复扣配额）。
+            服务端 trim 后截断至 128 字符；缺省 = 无幂等保护的一次性提交。
       requestBody:
         required: true
         content:
@@ -4584,12 +4604,14 @@ paths:
                     bgm_volume: { type: number, description: 覆盖 ir.audio.bgm.volume }
                 expected_version: { type: integer, description: 可选乐观锁校验；不符 409 }
       responses:
-        '202':
-          description: 已入队（status=queued）
+        '201':
+          description: |
+            已建渲染行并入队（新提交 status=queued；Idempotency-Key 重放返回首单
+            当前行，status 可能是 queued/running/终态之一）。响应体为完整 Render。
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VideoRenderCreated'
+                $ref: '#/components/schemas/VideoRender'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4671,29 +4693,42 @@ paths:
     post:
       operationId: uploadVideoAsset
       tags: [video]
-      summary: 上传素材（video:write；multipart/form-data；≤1MiB；内容寻址幂等覆盖）
+      summary: 上传素材（video:write；multipart/form-data；REST 通道 ≤50MiB；内容寻址幂等覆盖）
       description: |
         storagex.ParseUpload 解析；key 形如 `video/<wsID>/assets/<projectID>/<sha256>.<ext>`
-        （内容寻址，同内容重复上传幂等）。/api/ 全局 body limit 1MiB 继承——更大素材
-        需产品侧为该前缀放宽（webx.BodyLimitExcept 单前缀，不叠层）。
+        （内容寻址，同内容重复上传幂等，返回同一 key）。
+
+        **双通道容量**（`videoapp.UploadLimit` / `UploadLimitLarge` 两个常量）：
+        - REST multipart（本端点）：≤ **50MiB**（`UploadLimitLarge` = 50<<20）。该前缀在
+          main.go 以 `webx.BodyLimitExcept(50<<20, "/api/video/assets")` 单层豁免 /api/ 的
+          1MiB 默认门，并配套 120s timeout 档（大 body 读取会吃掉请求预算，AGENTS.md 挂载
+          陷阱 #2）。超过 50MiB → 全局 413 E_PAYLOAD_TOO_LARGE；50MiB 内但解码超限 →
+          400 E_VIDEO_ASSET_TOO_LARGE。
+        - MCP base64（`video_upload_asset` 工具）：≤ **700KB**（`UploadLimit` = 700<<10，
+          与 /mcp 请求体上限对齐）。两个通道共享同一登记/校验逻辑，只有上限不同。
+
         上传同时写一行 video_asset 登记表（迁移 1011）：该行是文件下载的归属凭据，
         workspace 成员身份本身不再授予任意 key 的读取权（F-AUTH-01）。
-        project_id 必须是本工作区内已存在的项目，否则 404 E_VIDEO_PROJECT_NOT_FOUND。
+        project_id 是**必填**表单字段，必须是本工作区内已存在的项目，否则
+        400 E_VALIDATION（缺字段）或 404 E_VIDEO_PROJECT_NOT_FOUND（项目不存在/跨工作区）。
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file]
+              required: [file, project_id]
               properties:
                 file:
                   type: string
                   format: binary
-                  description: 素材文件（image/audio；≤1MiB）
+                  description: 素材文件（image/audio；≤50MiB，REST 通道）
+                project_id:
+                  type: string
+                  description: 归属项目 ID（必填；key 形状 video/<wsID>/assets/<projectID>/...）
       responses:
-        '200':
-          description: 上传成功（返回 storagex key 与下载 URL）
+        '201':
+          description: 已创建（返回 storagex key 与下载 URL；同内容幂等返回同一 key）
           content:
             application/json:
               schema:
@@ -4710,7 +4745,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '413':
-          description: 超出 1MiB body limit（E_PAYLOAD_TOO_LARGE）
+          description: 超出 REST 通道 50MiB body limit（E_PAYLOAD_TOO_LARGE——全局 BodyLimitExcept 闸门先行）
           content:
             application/json:
               schema:
@@ -6428,6 +6463,14 @@ components:
         key: { type: string }
         name: { type: string }
         description: { type: string }
+        layout:
+          type: string
+          description: |
+            版式文字描述（G-08a）：按 card role 列元素构成，如 "cover: 标题条+副题+页码,
+            listicle: 题头条+条目行×N+页码"。供 agent 在 compose 前理解版式、避免盲选
+            （静态缩略图 G-08b 仍在 ROADMAP 触发制，未落地）。
+            注意：后端 TemplateInfo.Layout 字段与本 schema 条目同批落地；在字段真正返回前
+            该键缺席（前端须按可选字段处理）。
         canvas_w: { type: integer, description: 画布宽（360-2160） }
         canvas_h: { type: integer, description: 画布高（360-2160） }
         fps: { type: integer, enum: [24, 25, 30, 50, 60] }
@@ -6464,9 +6507,13 @@ components:
       properties:
         project:
           type: object
+          description: 项目元数据（workspace_id 之外的 UI 字段）；version 同时出现在 project 内与顶层（同一值）
           properties:
             id: { type: string }
             title: { type: string }
+            version:
+              type: integer
+              description: 乐观锁版本号（handler 直接透传 Project 行的 version；与顶层 version 相同——前端读它做乐观锁）
             created_by: { type: string }
             created_at: { type: string, format: date-time }
             updated_at: { type: string, format: date-time }
@@ -6475,10 +6522,14 @@ components:
         version: { type: integer }
     VideoRender:
       type: object
+      description: |
+        渲染行（videoapp.Render 的 REST 投影）。POST 提交（201）、GET 详情、
+        GET 列表三项同构返回本 schema。
       required: [id, project_id, status, frames_done, frames_total, created_at]
       properties:
         id: { type: string }
         project_id: { type: string }
+        workspace_id: { type: string, description: 所属工作区（handler 直出，前端一般不消费） }
         status:
           type: string
           enum: [queued, running, succeeded, failed, interrupted]
@@ -6488,6 +6539,7 @@ components:
           description: 渲染参数（fps/width/height/burn_subtitles/subtitle_mode/bgm_volume；与 ir_snapshot 共同定格）
         frames_done: { type: integer }
         frames_total: { type: integer }
+        output_key: { type: string, description: storagex key（成片 mp4；空 = 未产出） }
         output_url:
           type: string
           description: 成片下载 URL（/api/video/files/<key>；Range 支持——仅 workspace 成员可取）
@@ -6497,15 +6549,24 @@ components:
         error: { type: string, description: 失败明细（如 E_VIDEO_IR_INVALID；缺 libass 降级软封装注记） }
         created_by: { type: string }
         created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
         finished_at:
           type: string
           format: date-time
           nullable: true
     VideoRenderCreated:
       type: object
+      deprecated: true
+      description: |
+        **Deprecated（2026-11-17 契约对齐）**：`POST /api/video/projects/{id}/renders`
+        实际返回 201 + 完整 VideoRender 行（handler `handleCreateRender` →
+        `webx.WriteJSON(w, http.StatusCreated, render)`）。本 schema 描述的是旧的
+        `{render_id, status}` 信封，仅保留给既有客户端类型生成兼容；新代码读
+        VideoRender。`render_id` 不是任何现存响应字段——字段名在 VideoRender 里是 `id`。
       required: [render_id, status]
       properties:
-        render_id: { type: string }
+        render_id: { type: string, deprecated: true, description: 旧契约字段；实际响应用 VideoRender.id }
         status:
           type: string
           enum: [queued]
+          deprecated: true

@@ -2519,6 +2519,264 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/video/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 视频项目列表（video:read；X-Workspace-Id；updated_at 倒序） */
+        get: operations["listVideoProjects"];
+        put?: never;
+        /** 创建视频项目（video:write；空 IR 起步，version=1） */
+        post: operations["createVideoProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 视频项目详情（video:read；含完整 IR 与乐观锁版本号） */
+        get: operations["getVideoProject"];
+        put?: never;
+        post?: never;
+        /** 删除视频项目（video:write；204；renders 级联删——DB CASCADE） */
+        delete: operations["deleteVideoProject"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/projects/{id}/ir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 全量替换 IR（video:write；expected_version 必填——乐观锁，不符 409 E_VIDEO_VERSION_CONFLICT）
+         * @description IR 是唯一真相源：MCP 工具、人肉 UI、预览 iframe、渲染 worker 全部读写同一份
+         *     `video_project.ir`。写入时全量校验（§4.2.2 规则）并重解析全部词锚点
+         *     （resolvedFrom 供审计）；校验失败 400（E_VIDEO_IR_INVALID + details.field）。
+         *     素材引用写时校验（案例库 §8.5a.2 裁定，方案 B）：image 元素的 src 必须可溯源——
+         *     有 video_asset 登记行（迁移 1011）或 storagex 对象物理存在（round8 之前上传的
+         *     存量素材兼容窗口）二者其一；悬空 src 拒绝为 400 E_VIDEO_IR_INVALID
+         *     （details.field = elements[N].src，文案 "asset not registered"）——
+         *     fail-fast 在提交期拒绝，不建 render 行、不扣配额。
+         */
+        put: operations["putVideoProjectIR"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 模板/主题目录（video:read；剧本→视频生成器的选择面板数据，一次返回两目录）
+         * @description 服务端模板管线（剧本→视频生成器）的静态目录：模板（画布尺寸/FPS/安全边距）
+         *     与主题（配色/字号缩放）。目录数据无 DB 依赖；合成器能力未接线时返回空目录
+         *     （200，非 5xx）。POST /api/video/projects/{id}/compose 的 template/theme
+         *     参数取值域即本目录的 key。
+         */
+        get: operations["listVideoTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/projects/{id}/compose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 一键合成 IR（video:write；剧本文案 + 模板 + 主题 → 完整可渲染 IR，乐观锁 version++）
+         * @description 服务端剧本→视频管线（零 IR 手写）：分卡（空行/小标题分段，首卡 cover、
+         *     bullet 段 listicle、末卡 endcard，卡片数 2-20）→ 关键词高亮（数字/百分比
+         *     优先，锚文本必为 script 原词）→ 时间窗口（词表非空按词表 ceil 帧口径换算，
+         *     否则按字数比例估算；窗口互不重叠顺序衔接）→ 各卡模板×主题布局拼接 →
+         *     全量 Validate 后整体替换 IR（Mutate：校验 + 锚点重解析 + version++ + 审计 + WS）。
+         *     词表沿 SetScript 降级链（TTS → Aligner → EstimateWords，§8.5a：永不因
+         *     TTS/Aligner 缺失失败），words_source 如实反映来源。合成器能力未接线
+         *     → 503 E_NOT_CONFIGURED。参数错误（剧本段数不足/超限、未知模板/主题 key）
+         *     → 400 E_VIDEO_IR_INVALID（可读中文文案）。
+         */
+        post: operations["composeVideoProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/projects/{id}/preview.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 预览页直出（video:read + membership；IR 投影为自包含 HTML，text/html）
+         * @description 单一投影函数（Go）产出的自包含 HTML：内联 gsap + timeline-builder + IR JSON。
+         *     与渲染 worker 消费同一投影产物（预览=iframe 加载本页，渲染=SetDocumentContent）。
+         *     `Content-Type: text/html; charset=utf-8`、`Cache-Control: no-store`、
+         *     CSP（script-src 按哈希放行常量脚本、`frame-ancestors 'self'` 只许同源 iframe 嵌入）。
+         *     仅限浏览器会话消费（本端点不面向 PAT 调用方）。
+         */
+        get: operations["getVideoProjectPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/projects/{id}/renders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 渲染历史列表（video:read；created_at 倒序） */
+        get: operations["listVideoRenders"];
+        put?: never;
+        /**
+         * 提交渲染（video:render；与 video_render MCP 工具同一服务方法；配额 video_renders_monthly 预扣）
+         * @description 渲染定格于提交时的 ir_snapshot：渲染过程中改 IR 不影响在途任务（出片可复现）。
+         *     提交即 `Quota.ConsumeWithTx(idempotency=submission_key)`；渲染失败/中断自动 Release。
+         *     capx 未配置（Chrome/ffmpeg 缺失）→ 503 E_NOT_CONFIGURED（不建 render 行、不扣配额）；
+         *     配额用尽 → 402 E_QUOTA_EXCEEDED。渲染在 river `video` 队列串行（MaxWorkers 默认 1）。
+         *     400 E_VIDEO_IR_INVALID 的素材分支（§8.5a.2 方案 B）：快照 IR 含悬空 image src
+         *     （无登记行且无对象）同样在提交期拒绝——素材须先经 POST /api/video/assets
+         *     或 video_upload_asset 上传登记。渲染期素材损坏/被删走 render 终态 error 字段
+         *     （非本 4xx 面；归 P1 排期另提案）。
+         *
+         *     **提交幂等（`Idempotency-Key` 请求头）**：头值 trim 后截断至 128 字符，
+         *     `UNIQUE(workspace_id, submission_key)` 落库；同 key 的网络重试/agent 双调
+         *     返回首单已建的 render 行（同样 201），**不重复建行、不重复扣配额**。
+         *     头缺省 = 传统一次性提交流（无幂等保护）。注意：重放返回的 status 可能是
+         *     首单当前状态（如已 running），不是固定 queued。
+         *
+         *     **响应体即 Render 行**（VideoRender schema，与 GET renders 同构），
+         *     201 Created。历史契约曾用 `{render_id, status}` 信封（VideoRenderCreated，
+         *     已废弃但保留于 components 供旧客户端类型生成）。
+         */
+        post: operations["createVideoRender"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/renders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 渲染状态/进度/输出（video:read；轮询兜底——实时进度走 WS scope "video"） */
+        get: operations["getVideoRender"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上传素材（video:write；multipart/form-data；REST 通道 ≤50MiB；内容寻址幂等覆盖）
+         * @description storagex.ParseUpload 解析；key 形如 `video/<wsID>/assets/<projectID>/<sha256>.<ext>`
+         *     （内容寻址，同内容重复上传幂等，返回同一 key）。
+         *
+         *     **双通道容量**（`videoapp.UploadLimit` / `UploadLimitLarge` 两个常量）：
+         *     - REST multipart（本端点）：≤ **50MiB**（`UploadLimitLarge` = 50<<20）。该前缀在
+         *       main.go 以 `webx.BodyLimitExcept(50<<20, "/api/video/assets")` 单层豁免 /api/ 的
+         *       1MiB 默认门，并配套 120s timeout 档（大 body 读取会吃掉请求预算，AGENTS.md 挂载
+         *       陷阱 #2）。超过 50MiB → 全局 413 E_PAYLOAD_TOO_LARGE；50MiB 内但解码超限 →
+         *       400 E_VIDEO_ASSET_TOO_LARGE。
+         *     - MCP base64（`video_upload_asset` 工具）：≤ **700KB**（`UploadLimit` = 700<<10，
+         *       与 /mcp 请求体上限对齐）。两个通道共享同一登记/校验逻辑，只有上限不同。
+         *
+         *     上传同时写一行 video_asset 登记表（迁移 1011）：该行是文件下载的归属凭据，
+         *     workspace 成员身份本身不再授予任意 key 的读取权（F-AUTH-01）。
+         *     project_id 是**必填**表单字段，必须是本工作区内已存在的项目，否则
+         *     400 E_VALIDATION（缺字段）或 404 E_VIDEO_PROJECT_NOT_FOUND（项目不存在/跨工作区）。
+         */
+        post: operations["uploadVideoAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/video/files/{key...}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 素材/成片下载（video:read + membership + 登记归属校验；Range/If-Range/HEAD 全支持——mp4 拖动必需）
+         * @description 三层授权（F-AUTH-01/F-TRA-01）：① key 形如 `video/<wsID>/...` 前缀解析（fail-fast，
+         *     非本域 key 直接 404）；② membership 校验（平台管理员豁免），403 E_FORBIDDEN；
+         *     ③ 登记归属校验——素材 key 须有 video_asset 登记行（迁移 1011），渲染产物
+         *     `video/<wsID>/renders/<renderID>/...` 须有对应 video_render 行。三层任一不过：
+         *     前缀/归属不过为 404（与不存在不可区分，无存在性泄露），非成员为 403。
+         *     项目删除 CASCADE 登记行 → 对象立即不可读（撤销即时生效）。
+         *     Local 后端 storagex.Open → http.ServeContent（**206 Partial Content**
+         *     按 Range 切片、304 If-Range、HEAD 全支持）；S3 后端 storagex.Presign 302。
+         *     响应头：Content-Type 取上传 meta、X-Content-Type-Options: nosniff、
+         *     `Cache-Control: private, max-age=300`（内容私密且授权可撤销——不长期缓存，
+         *     round4 Q1；禁止 public 缓存）。
+         */
+        get: operations["getVideoFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3296,6 +3554,237 @@ export interface components {
              * @enum {string}
              */
             config_source: "db" | "env" | "";
+        };
+        /**
+         * @description 语义中间表示（IR）——项目唯一真相源。JSONB 总量 ≤ 256 KiB；
+         *     渲染定格于提交时的快照（ir_snapshot），在途渲染不受后续 IR 变更影响。
+         */
+        VideoIR: {
+            /** @description IR 结构版本（与 project 乐观锁 version 是两个维度——project version 由服务层维护） */
+            version: number;
+            meta: {
+                /**
+                 * @default 30
+                 * @enum {integer}
+                 */
+                fps: 24 | 25 | 30 | 50 | 60;
+                /** @description 画布宽（与 height 比例建议 9:16 / 16:9 / 1:1，不强限） */
+                width: number;
+                height: number;
+                /** @description 时长基准（渲染 frames_total = max(meta.durationSec, audio.voice.durationSec)） */
+                durationSec?: number;
+            };
+            /** @description 旁白脚本（CJK 按字符计） */
+            script?: string;
+            /** @description 词级时间戳（TTS 直出 / WhisperX 对齐 / 估算）；start<end、相邻不重叠、单调递增 */
+            words?: {
+                index: number;
+                text: string;
+                /** @description 秒 */
+                start: number;
+                /** @description 秒；必须 > start */
+                end: number;
+                /** @enum {string} */
+                source: "tts" | "aligner" | "manual" | "estimated";
+            }[];
+            effects?: {
+                id: string;
+                anchor: components["schemas"]["VideoWordAnchor"];
+                /**
+                 * @description 动效注册表（v1）；未知 type 投影层跳过并 warn
+                 * @enum {string}
+                 */
+                type: "pulse" | "counter" | "highlight" | "shake" | "fade";
+                /** @description 可选元素级目标——须引用 elements[] 中已存在的 id（写时校验，悬空引用 400 E_VIDEO_IR_INVALID）；counter 宿主定位到该元素 bbox，缺省保持画布原点（向后兼容） */
+                targetElementId?: string;
+                /** @description 按 type 校验（如 pulse{scale}, counter{from,to}） */
+                params: Record<string, never>;
+                resolvedFrom?: components["schemas"]["VideoAnchorResolution"];
+            }[];
+            elements?: {
+                id: string;
+                /**
+                 * @description 未知 type 投影层跳过并 warn
+                 * @enum {string}
+                 */
+                type: "image" | "text" | "shape";
+                /**
+                 * @description 只允许本域 storagex key（video/<ws>/...）；外部 URL 拒绝（SSRF 面收窄）。
+                 *     写时存在性校验（§8.5a.2 方案 B）：须有 video_asset 登记行（迁移 1011，
+                 *     即先经 POST /api/video/assets 或 video_upload_asset 上传）或 storagex 对象
+                 *     物理存在（round8 前存量素材兼容窗口）；悬空 src → 400 E_VIDEO_IR_INVALID
+                 *     （details.field = elements[N].src）。
+                 */
+                src?: string;
+                x?: number;
+                y?: number;
+                w?: number;
+                h?: number;
+                z?: number;
+                animations?: {
+                    id: string;
+                    /** @enum {string} */
+                    type: "move" | "scaleIn" | "rotate";
+                    from?: {
+                        x?: number;
+                        y?: number;
+                    };
+                    to?: {
+                        x?: number;
+                        y?: number;
+                    };
+                    startAnchor?: components["schemas"]["VideoWordAnchor"];
+                    durationFrames: number;
+                    /** @enum {string} */
+                    easing?: "linear" | "power1.out" | "power2.out" | "power3.out" | "back.out" | "expo.out";
+                }[];
+            }[];
+            audio?: {
+                voice?: {
+                    /** @description storagex key（本域） */
+                    key?: string;
+                    /** @description 存在时须 ≥ words 末词 end；作为渲染时长基准之一 */
+                    durationSec?: number;
+                };
+                bgm?: {
+                    /** @description storagex key（本域） */
+                    key?: string;
+                    volume?: number;
+                };
+            };
+        };
+        /** @description 词锚点——写入时经 ResolveAnchors 解析（解析失败 400 E_VIDEO_ANCHOR_NOT_FOUND；words 为空置 unresolved 并投影跳过） */
+        VideoWordAnchor: {
+            /** @description 目标词文本 */
+            text: string;
+            /** @description 同文本第 N 次出现（0 起） */
+            occurrence: number;
+        };
+        /** @description 锚点解析审计（写入时写回 effect.resolvedFrom；改稿重解析后 inspect 可见漂移） */
+        VideoAnchorResolution: {
+            /** @description 解析命中的词 index（missing 时为 -1） */
+            wordIndex: number;
+            /**
+             * @description exact=文本与 occurrence 都命中；same_text=文本存在但 occurrence 越界（取同文本最近邻）；
+             *     nearest=文本不存在（取全词表最近邻）；missing=words 为空（unresolved，投影跳过）
+             * @enum {string}
+             */
+            reason: "exact" | "same_text" | "nearest" | "missing";
+        };
+        /** @description 服务端合成模板（剧本→视频生成器；POST compose 的 template 取值域） */
+        VideoTemplateInfo: {
+            key: string;
+            name: string;
+            description?: string;
+            /**
+             * @description 版式文字描述（G-08a）：按 card role 列元素构成，如 "cover: 标题条+副题+页码,
+             *     listicle: 题头条+条目行×N+页码"。供 agent 在 compose 前理解版式、避免盲选
+             *     （静态缩略图 G-08b 仍在 ROADMAP 触发制，未落地）。
+             *     注意：后端 TemplateInfo.Layout 字段与本 schema 条目同批落地；在字段真正返回前
+             *     该键缺席（前端须按可选字段处理）。
+             */
+            layout?: string;
+            /** @description 画布宽（360-2160） */
+            canvas_w: number;
+            /** @description 画布高（360-2160） */
+            canvas_h: number;
+            /** @enum {integer} */
+            fps: 24 | 25 | 30 | 50 | 60;
+            /** @description 安全边距（px） */
+            safe_margin?: number;
+        };
+        /** @description 合成主题（POST compose 的 theme 取值域；bg/fg/accent/muted 为 CSS 颜色） */
+        VideoThemeInfo: {
+            key: string;
+            name: string;
+            bg: string;
+            fg: string;
+            accent: string;
+            muted?: string;
+            /** @description 字号缩放系数 */
+            font_scale?: number;
+        };
+        VideoProjectSummary: {
+            id: string;
+            title: string;
+            /** @description 乐观锁版本号（PUT ir / MCP 变更须携带） */
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        VideoProjectCreated: {
+            id: string;
+            version: number;
+        };
+        VideoProjectDetail: {
+            /** @description 项目元数据（workspace_id 之外的 UI 字段）；version 同时出现在 project 内与顶层（同一值） */
+            project: {
+                id?: string;
+                title?: string;
+                /** @description 乐观锁版本号（handler 直接透传 Project 行的 version；与顶层 version 相同——前端读它做乐观锁） */
+                version?: number;
+                created_by?: string;
+                /** Format: date-time */
+                created_at?: string;
+                /** Format: date-time */
+                updated_at?: string;
+            };
+            ir: components["schemas"]["VideoIR"];
+            version: number;
+        };
+        /**
+         * @description 渲染行（videoapp.Render 的 REST 投影）。POST 提交（201）、GET 详情、
+         *     GET 列表三项同构返回本 schema。
+         */
+        VideoRender: {
+            id: string;
+            project_id: string;
+            /** @description 所属工作区（handler 直出，前端一般不消费） */
+            workspace_id?: string;
+            /**
+             * @description interrupted=进程被 drain/杀掉（river 重试后回到 running）
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "interrupted";
+            /** @description 渲染参数（fps/width/height/burn_subtitles/subtitle_mode/bgm_volume；与 ir_snapshot 共同定格） */
+            params?: Record<string, never>;
+            frames_done: number;
+            frames_total: number;
+            /** @description storagex key（成片 mp4；空 = 未产出） */
+            output_key?: string;
+            /** @description 成片下载 URL（/api/video/files/<key>；Range 支持——仅 workspace 成员可取） */
+            output_url?: string;
+            /** @description 首帧缩略图 URL */
+            thumb_url?: string;
+            /** @description 失败明细（如 E_VIDEO_IR_INVALID；缺 libass 降级软封装注记） */
+            error?: string;
+            created_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: date-time */
+            finished_at?: string | null;
+        };
+        /**
+         * @deprecated
+         * @description **Deprecated（2026-11-17 契约对齐）**：`POST /api/video/projects/{id}/renders`
+         *     实际返回 201 + 完整 VideoRender 行（handler `handleCreateRender` →
+         *     `webx.WriteJSON(w, http.StatusCreated, render)`）。本 schema 描述的是旧的
+         *     `{render_id, status}` 信封，仅保留给既有客户端类型生成兼容；新代码读
+         *     VideoRender。`render_id` 不是任何现存响应字段——字段名在 VideoRender 里是 `id`。
+         */
+        VideoRenderCreated: {
+            /**
+             * @deprecated
+             * @description 旧契约字段；实际响应用 VideoRender.id
+             */
+            render_id: string;
+            /**
+             * @deprecated
+             * @enum {string}
+             */
+            status: "queued";
         };
     };
     responses: {
@@ -7996,6 +8485,525 @@ export interface operations {
             400: components["responses"]["DefaultError"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listVideoProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 项目列表（workspace 内） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["VideoProjectSummary"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createVideoProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 项目标题 */
+                    title: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoProjectCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getVideoProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 项目详情（project 元数据 + ir + version） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoProjectDetail"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    deleteVideoProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除（无响应体） */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    putVideoProjectIR: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ir: components["schemas"]["VideoIR"];
+                    /** @description 乐观锁预期版本；与服务端当前 version 不符即 409 */
+                    expected_version: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 已替换（返回新版本号与锚点解析结果） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description 替换后的乐观锁版本号 */
+                        version: number;
+                        /** @description 锚点解析结果（exact/same_text/nearest/missing 审计视图） */
+                        resolutions?: components["schemas"]["VideoAnchorResolution"][];
+                    };
+                };
+            };
+            /**
+             * @description IR 校验失败（E_VIDEO_IR_INVALID，details.field 指明字段）。触发面：
+             *     结构/枚举/参数非法（含 image 元素缺 src、src 非本域 key）、
+             *     effect.targetElementId 悬空引用、素材引用不可溯源
+             *     （elements[N].src 无 video_asset 登记行且 storagex 无对象——文案 "asset not registered"）。
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description 乐观锁冲突（E_VIDEO_VERSION_CONFLICT，details.current_version） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listVideoTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 模板目录 + 主题目录 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        templates: components["schemas"]["VideoTemplateInfo"][];
+                        themes: components["schemas"]["VideoThemeInfo"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    composeVideoProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 剧本文案（空行/小标题分段；≤5000 字符） */
+                    script: string;
+                    /** @description 模板 key（GET /api/video/templates 目录） */
+                    template: string;
+                    /** @description 主题 key（GET /api/video/templates 目录） */
+                    theme: string;
+                    /** @description 可选乐观锁校验；不符 409 */
+                    expected_version?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 已合成并持久化（返回新版本号、卡片摘要、词表来源） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description 合成后的乐观锁版本号 */
+                        version: number;
+                        /** @description 分卡摘要（role/title，验视用） */
+                        cards: {
+                            /** @description cover|feature|listicle|endcard */
+                            role: string;
+                            title: string;
+                        }[];
+                        /**
+                         * @description 词表来源（沿 SetScript 语义）
+                         * @enum {string}
+                         */
+                        words_source: "tts" | "aligner" | "estimated";
+                        /** @description 锚点解析结果（Mutate 全量重解析的审计视图） */
+                        resolutions?: components["schemas"]["VideoAnchorResolution"][];
+                    };
+                };
+            };
+            /** @description 参数错误（E_VALIDATION script/template/theme 缺失；E_VIDEO_IR_INVALID 分卡边界（段数 2-20）与未知模板/主题 key——文案自述原因） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description 乐观锁冲突（E_VIDEO_VERSION_CONFLICT，details.current_version） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getVideoProjectPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 预览 HTML（no-store；同源 iframe 嵌入） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listVideoRenders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 渲染历史 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["VideoRender"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createVideoRender: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description 提交幂等键（工作区内唯一；同 key 重放返回首单 render，不重复扣配额）。
+                 *     服务端 trim 后截断至 128 字符；缺省 = 无幂等保护的一次性提交。
+                 */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                /** @description 项目 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 渲染参数（嵌套对象；L3 冒烟 F1 契约修正——平铺字段会被拒绝） */
+                    params: {
+                        /** @description 缺省用 ir.meta.fps */
+                        fps?: number;
+                        /** @description 缺省用 ir.meta.width */
+                        width?: number;
+                        /** @description 缺省用 ir.meta.height */
+                        height?: number;
+                        /** @description 烧录字幕（需 ffmpeg libass；缺 libass 自动降级 soft mov_text——round3 已实现） */
+                        burn_subtitles?: boolean;
+                        /**
+                         * @description 字幕封装方式
+                         * @enum {string}
+                         */
+                        subtitle_mode?: "burn" | "soft" | "none";
+                        /** @description 覆盖 ir.audio.bgm.volume */
+                        bgm_volume?: number;
+                    };
+                    /** @description 可选乐观锁校验；不符 409 */
+                    expected_version?: number;
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description 已建渲染行并入队（新提交 status=queued；Idempotency-Key 重放返回首单
+             *     当前行，status 可能是 queued/running/终态之一）。响应体为完整 Render。
+             */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoRender"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            402: components["responses"]["QuotaExceeded"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description 乐观锁冲突（E_VIDEO_VERSION_CONFLICT，details.current_version） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getVideoRender: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 渲染 ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 渲染详情 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoRender"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    uploadVideoAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description 素材文件（image/audio；≤50MiB，REST 通道）
+                     */
+                    file: string;
+                    /** @description 归属项目 ID（必填；key 形状 video/<wsID>/assets/<projectID>/...） */
+                    project_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已创建（返回 storagex key 与下载 URL；同内容幂等返回同一 key） */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description storagex key（IR elements 的 src / audio 只接受本域 key） */
+                        key: string;
+                        /** @description /api/video/files/<key> 下载 URL */
+                        url: string;
+                        size: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description 超出 REST 通道 50MiB body limit（E_PAYLOAD_TOO_LARGE——全局 BodyLimitExcept 闸门先行） */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getVideoFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description storagex key（video/<wsID>/...） */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 对象内容（完整 body；二进制） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial Content（按 Range 请求头切片——mp4 拖动进度条必需） */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description S3 后端预签名重定向（storagex.Presign） */
+            302: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };
