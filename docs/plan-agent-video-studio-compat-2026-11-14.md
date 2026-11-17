@@ -4,6 +4,25 @@
 - **性质**：工作记录（process doc，中文），对应架构方案见同批讨论；正式决策将另落 `docs/adr/0017-agent-video-studio.md`（英文）
 - **回答的问题**：本特性会不会影响既有能力？会不会改变既有接口？老项目（框架消费方 / example 部署）升级有没有影响？
 
+> **状态注记（2026-11-17）**：本文写于 video 域实施之前；video 域现已落地（round9：L0-L3 全量达成、check_api 175:175、26 个 video_* MCP 工具），"零回归、纯增量"总结论经受住了实施检验。但**环境变量唯一口径以 [architecture 文档 §14](./plan-agent-video-studio-architecture-2026-11-14.md) 为准**，与本文表述分叉处一律按 §14 执行。
+>
+> **(a) 本文与 §14 的环境变量分叉点（逐条）**
+> 1. §1.2 / §5 的 `FFMPEG_PATH` → §14 口径为 `CAPX_FFMPEG_PATH`（默认 `ffmpeg`）；
+> 2. §1.2 的 `TTS_URL` → 实现契约为 `VIDEO_TTS_URL`（+ 可选 `VIDEO_TTS_KEY` / `VIDEO_TTS_VOICE`）；**§14 已于 2026-11-17 收敛为此口径**（原设计期三段式 `VIDEO_TTS_PROVIDER/ENDPOINT/API_KEY/MODEL` 从未实现，已从 §14 删除）；
+> 3. §1.2 的 `ALIGNER_URL` → 实现契约为 `VIDEO_ALIGNER_URL`；**§14 已于 2026-11-17 收敛**（原 `VIDEO_ALIGNER_PROVIDER/ENDPOINT/API_KEY` 已删除）；
+> 4. 本文只点名 4 个变量，§14 全表其余各项（`CAPX_ENABLED`、`CAPX_POOL_SIZE`、`CAPX_MAX_RENDER_SECONDS`、`VIDEO_WORKER_ENABLED`、`VIDEO_RENDER_QUEUE`/`MAX_WORKERS`/`JOB_TIMEOUT`/`SHUTDOWN_TIMEOUT`/`MAX_ATTEMPTS`、`VIDEO_MAX_IR_BYTES`、`VIDEO_MAX_UPLOAD_BYTES`、`VIDEO_MAX_ACTIVE_RENDERS_PER_WORKSPACE`、`PLOYKIT_MCP_RATE_LIMIT_PER_USER`）本文未覆盖——配置问题一律查 §14 全表。
+> 5. **[2026-11-17 更新] 分叉已闭合，但注意能力边界**：`adapters/tts/tts.go` 与 `adapters/aligner/aligner.go` 的变量名现在与 §14 一致。然而按 ADR 0017 的边界声明，**这两个适配器实现存在但 example 的 `main.go` 从不构造它们**（`Ports.Synth`/`Ports.Aligner` 恒 nil），因此这些变量在 example 部署里配置后**不生效**——`SetScript` 恒降级到 `words_source=estimated`。产品要在自己的组合根接线才会启用。
+>
+> **(b) v2 将新增/变更的环境变量**（提取自 plan-video-studio-ir-v2 §3.1/§3.3；**变量名与数值以 v2 spec `plan-video-studio-ir-v2-spec-2026-11-17.md` §2.12 资源预算与 §2.6 字体资产为准——spec 已落盘草稿，预算数值留待其 §5 开放问题裁决**）：解码资产总字节预算 + 像素预算（ir-v2 §3.1 第 8 条：元素计数闸门改为资源预算，`VIDEO_MAX_IR_BYTES` 256KiB 保留）；字体资产（ir-v2 §3.3 第 1 条：上传 woff2 → 内容寻址 → player 内联 @font-face + 子集检查，需配套资产预算/子集校验配置）。将随 v2 落地同批更新本文与 §14。
+>
+> **其他过时陈述（逐条列出；均为"写时正确、实施后漂移"，正文不再逐处修订）**
+> 1. §1.1 / §7 "platform 现有 23 个包" → 现 24 个（capx 已落地）；
+> 2. §2 / §5 "既有 161 个端点（139 个 path 条目）"与 §7 `expectedRouteCount = 161` → 现 175（`routes_contract_test.go:50`；check_api 175:175）；
+> 3. §1.3 `ScopePrefix` 加 `'video'`（"需加入、随下个 minor 发布"）→ 已落地（`packages/client/src/ws.ts:24`）；
+> 4. §4.1 "约 10 个 video_* 工具" → 实际 26 个（`example/internal/video/adapters/mcp/tools.go`）；
+> 5. §4.6 "素材 ≤1MiB（/api/ 1MiB body limit）" → 资产上传已按本文预留的 BodyLimitExcept 方案落地为 50MiB 豁免（`main.go:1609` `BodyLimitExcept(50<<20, "/api/video/assets")`）；
+> 6. 头注 "正式决策将另落 docs/adr/0017" → 已落地（`docs/adr/0017-agent-video-studio.md`）。
+
 ---
 
 ## 0. TL;DR

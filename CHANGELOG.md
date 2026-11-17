@@ -9,6 +9,65 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.31.0] — 2026-11-17
+
+Go-only release (no `packages/` code touched — npm sides stay put). Theme: the
+video studio's first real-project fallout batch — a P1 silent-audio fix found by
+the tool-site v4-assembly pilot, an element-cap raise the same pilot proved too
+tight, and a full documentation-system refactor of the video domain (v2 contract
+spec, status reconciliation across the doc family, and a docs map).
+
+### Fixed
+- **video: tracks written without a volume no longer render muted (P1)** —
+  `AudioTrack.Volume` is `omitempty`, so JSON cannot distinguish an explicit 0
+  from an absent field, and both decode to the Go zero value. The TTS assembly
+  path wrote voice tracks without a volume, and the render pipeline assigned
+  `Voice.Volume` unconditionally — so every TTS-voiced render mixed at ffmpeg
+  `volume=0`: a silent track, silently, while the MCP schema promised
+  "default 1" (and for BGM even documented the bug as "default 0 = muted").
+  New `videoapp.ResolveAudioVolumes` is the single source of mixer gain: zero
+  or absent resolves to the 1.0 default (a true mute is not expressible in v1;
+  v2 makes volume required and explicit). The render pipeline calls it, the
+  TTS write path documents the contract, both MCP volume-field descriptions
+  are corrected, and `ir_audio_volume_test.go` pins the semantics (6 tests,
+  including the omitempty round-trip that makes the limitation unavoidable).
+- **video: stale comment fixes surfaced by the IR v2 contract-spec pass** — the
+  half-open-window comment in `validateElement` (contradicted the struct
+  comment, the builder, and the §7.0 measured ruling; all inclusive), and the
+  "coords clamp at projection time" claims in `ir.go`/`service.go` (no clamp
+  exists; out-of-canvas coordinates render and are visually clipped by
+  `overflow: hidden`).
+
+### Changed
+- **video: `MaxElements` 64 → 128** — image-collage compositions (the
+  v4-assembly pilot needed 66: backdrop + 30 placed-pose stickers + tray pages
+  + check tiles + text layers) blow past the old cap on day one. The real
+  resource gates are the IR byte budget and per-asset budgets; the element
+  count was a rough proxy. Validation-error text follows the constant. The IR
+  v2 plan replaces the count gate with explicit byte/pixel budgets.
+
+### Docs
+- **video docs system refactor** — new `plan-video-studio-ir-v2-spec` (the
+  per-field IR v1→v2 contract with file:line code evidence, builder
+  simplification list, and the one-shot migration table; 15 open questions
+  recorded rather than silently decided), new `plan-video-studio-ir-v2` (the
+  refactor plan: root causes R0-R5, four-layer design, engine-as-renderer
+  path), and new `video-studio-docs-map` (English; authority ordering,
+  18-document inventory, reading paths). Existing family reconciled to the
+  2026-11-17 truth: architecture doc gains §0.5 status correction (the
+  "not wired, no closed loop" judgments are stale — 13 REST routes, 26 MCP
+  tools, check_api 175:175, L0-L3 fully green) and §14 converges the
+  TTS/Aligner env-var canon to the actual adapter contract
+  (`VIDEO_TTS_URL`/`VIDEO_TTS_KEY`/`VIDEO_TTS_VOICE`/`VIDEO_ALIGNER_URL` — the
+  designed three-part `PROVIDER/ENDPOINT/MODEL` split never existed in code;
+  per ADR 0017 the adapters remain implemented-but-unwired in example, so the
+  variables have no effect there); agent-tools doc reconciles G-01..G-11 as
+  landed with per-gap line evidence; ROADMAP marks the five landed rows;
+  case library and M3 gain status headers. A dedicated delivery audit
+  (`delivery-audit-video-studio-docs-refactor`) graded 32 items at 100%
+  coverage and independently re-verified the four v1 bugs the spec pass
+  surfaced — all four confirmed real, including the volume fix above.
+
 ## [0.30.0] — 2026-11-17
 
 Go-only release (no `packages/` code touched — npm sides stay put). Theme: closing

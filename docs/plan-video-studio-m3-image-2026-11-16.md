@@ -9,6 +9,10 @@
   - 实测记录：round1（157.0.8103.51）、round3（L5 100× 全等 = 同镜像语义；103ms/帧稳态）、round6（九案 golden 落盘、M2 未全收口、M3 起步清单）
   - 缺口台账：F-FNT-01（字体子集 + recipe，③ 缺失，P1）、F-DET-01（recipe digest 不足，② 部分在位）——案例库 §6
 
+> **状态注记（2026-11-17）**：三档进展——**P0 字体子集已落地**（round8，2026-11-16：Noto Sans SC 可变字体子集 217KB / 948 码位，`tools/fontsubset.py` + `app/assets/fonts/notosanssc-vf-subset.woff2`；超出本文 §3 的三档静态方案——一份 VF 覆盖 400-900 全字重；接入为 @font-face data URI 内嵌 + 预览 CSP 补 `font-src data:`，像素级探针已验证字体真加载）；**P1 镜像方案已定稿（即本文 §2/§3 选型）但未实施**（`tools/renderimage/` 尚不存在、`golden.yml` 尚未建立）；**P2 起全部待镜像**（镜像内 L5 复证、golden 整批迁移、CI 收口——round9 记录 L0-L3 全量达成、L4/L5 可执行部分已完成，其余受 M3 镜像前置）。
+>
+> **与 IR v2 的关系**：本文 §3 的字体子集能力（fontsubset 工具链、chars.txt 码位集、@font-face 内嵌、`document.fonts.ready` 资源门）将被 v2 字体资产机制**复用并升级**（plan-video-studio-ir-v2 §3.3 第 1 条：字体作为上传资产，内容寻址 + player 内联 @font-face + 子集检查）——§3.3 的核心取舍（投影侧 @font-face 内嵌而非镜像系统字体）在 v2 时代仍是正解，v2 只是把"仓库内嵌固定子集"推广为"任意上传字体的资产化"。P1 镜像（pinned Chrome/ffmpeg）与 v2 正交：v2 改变 IR 契约与资产层，不改变渲染环境的固化需求，golden 唯一基线来源 = 固定镜像的裁定不变。
+
 ---
 
 ## 1. 现状盘点：渲染依赖栈的固化方式与缺口

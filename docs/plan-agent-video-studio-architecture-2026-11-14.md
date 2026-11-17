@@ -2,7 +2,8 @@
 
 > **版本**：v2.0（2026-11-15 代码审计与业界实践修订）
 > **初始版本**：2026-11-14
-> **当前状态**：**部分实现，尚未形成可运行闭环，不满足部署验收条件**
+> **当前状态**：**部分实现，尚未形成可运行闭环，不满足部署验收条件**（2026-11-14 审计时状态，已过时——见 §0.5 现状校正）
+> **2026-11-17 状态更新**：v2 重构方向已立项（IR v2 契约 / 烘焙层 / 音频多轨 / 探针环 / 引擎渲染器），见 `plan-video-studio-ir-v2-2026-11-17.md` 与 `plan-video-studio-ir-v2-spec-2026-11-17.md`；本文 §5 IR 契约为 v1 现行契约，v2 落地后由 v2 spec 接管
 > **审计范围**：`platform/capx`、`example/internal/video`、example 装配与 OpenAPI、UI 路由、quota / authz / storagex / wsx / mcpx / events
 > **说明**：本次审计时相关代码仍处于工作区演进中。本文同时记录目标架构、已实现现状和合入阻断项；实施时以函数名和契约为准，不以旧行号为准。
 
@@ -61,6 +62,21 @@
 | `make verify` / `make verify-ui` / `make test-db` | 本次未运行；文档修订不代表这些门槛已通过 |
 
 > 因此，本文不把“已有文件”视为“阶段已完成”。阶段完成必须满足第 16 节验收门槛。
+
+### 0.5 现状校正（2026-11-17）
+
+本节校正 §0.3 / §0.4 / §10.2 / 第 17 节中已过时的审计判断。历史审计内容**原样保留**（作为 2026-11-14 审计基线的记录，不回改），以下逐条给出 2026-11-17 真值。总体结论：视频域已全链路闭环——round9（2026-11-16）L0–L3 全量达成，九案合计 10,800/10,800 帧精确命中、0 帧偏差。
+
+| 原审计判断（2026-11-14） | 出处 | 现状真值（2026-11-17） |
+|---|---|---|
+| “main.go 未装配，路由未注册，MCP / WS scope 未注册” | §0.3 表 HTTP / MCP / preview / WS 行 | 已装配：13 条 `/api/video` REST 路由（`example/internal/video/adapters/http/routes.go:78-91`，含 M3 批次的 templates / compose）、26 个唯一 `video_*` MCP 工具全部落地（30 个 mcpAdd 注册，见 `example/internal/video/adapters/mcp/tools.go`）；`python tools/check_api.py` = 175:175 零漂移 |
+| “render worker / TTS / Aligner 仅有 port 和默认值，无生产实现” | §0.3 表 render worker 行 | 已实现：`example/internal/video/render/worker.go`、`render_pipeline.go`、`reconciler.go`；TTS（`adapters/tts/tts.go`）与 Aligner（`adapters/aligner/aligner.go`）降级矩阵落地（Synth→Aligner→Estimate 兜底，round9 关闭案例库 §8.5 未决项 1） |
+| “UI 仅有页面骨架，后端未挂载，不能形成端到端验收” | §0.3 表 UI 行 | 已接线：`make verify-ui` 绿（round9 记录） |
+| “check_api 失败：11 条 spec-only，F2 未形成闭环” | §0.4 表、第 17 节 F2 行 | `python tools/check_api.py` = 175:175 零漂移，spec-only 清零 |
+| “F3 未实现生产 worker” | 第 17 节 F3 行 | round9 L3 九案全量 PASS（10,800/10,800 帧精确、合计 380s、几何 / fps 全对）；reconciler 真机首战零误判，并发提交、配额幂等台账验证通过 |
+| “F0 部分实现（迁移与授权 / 原子性需修订）；F1 奇数尺寸测试失败” | 第 17 节 F0 / F1 行 | 已闭合：迁移 1009 / 1010 / 1011 落地（见 §11.1 现状回写）；capx 编码（含 1×1 / 奇数尺寸）用例当前通过 |
+
+另两处注记：§10.2 的 MCP 工具表为设计期 11 工具子集（实际已落地 26 个，见 §10.2 头部注记）；第 17 节阶段表已逐行补「现状（2026-11-17）」列。§10.5 的裁定回写块（2026-11-16）保持不变。
 
 ---
 
@@ -274,7 +290,7 @@ example/web/
 4. **标识**：element / animation / effect / track / word ID 在各自命名空间唯一；word.index 必须等于数组下标。
 5. **版本**：`schemaVersion` 描述 IR 结构；项目行 `version` 描述乐观锁；两者不得混用。IR 内不再保存行级 version。
 6. **兼容**：读取未知字段可保留；preview 对未知类型显示警告并跳过；render 遇到未知类型或不支持的 schemaVersion 必须返回 `E_VIDEO_UNSUPPORTED_SCHEMA`。
-7. **上限**：IR ≤256KiB、elements ≤64、animations/effects ≤128、script ≤2000 Unicode code points、durationSec ∈ [0.04,300]、fps ∈ {24,25,30,50,60}。
+7. **上限**：IR ≤256KiB、elements ≤128（2026-11-17 自 64 上调，见 ir.go）、animations/effects ≤128、script ≤2000 Unicode code points、durationSec ∈ [0.04,300]、fps ∈ {24,25,30,50,60}。v2 计划以资源预算（IR 字节 / 解码资产字节 / 像素）替代元素计数闸门，见 v2 spec（`plan-video-studio-ir-v2-spec-2026-11-17.md`）。
 8. **资源上限**：单项目图片 ≤64，每个 data URI 解码后 ≤1MiB；总内联解码资产、上传文件、音频大小均有服务端上限，不能仅限制 JSON 字符串长度。
 9. **缩放**：渲染参数覆盖分辨率时必须保持原宽高比，或显式提供 `fit=contain|cover`；v1 默认拒绝宽高比变化。
 10. **规范化**：写库前使用统一 canonical JSON 生成 `ir_sha256`；不能只依赖 PostgreSQL JSONB 的键序行为。
@@ -555,6 +571,8 @@ Close() error
 
 ### 10.2 MCP 工具（共 11 个）
 
+> **[现状校正 2026-11-17]** 实际已落地 **26 个唯一 `video_*` MCP 工具**（30 个 mcpAdd 注册），完整清单见 `example/internal/video/adapters/mcp/tools.go` 与 `docs/plan-video-studio-agent-tools-2026-11-16.md`。下表为设计期子集，仅保留对照价值，不反映现状工具面。
+
 所有写工具除 create 外均接受 `expectedVersion`；service 可以兼容 optional，但 MCP schema 必须标记 required。所有响应包含最新 version 和 warnings。
 
 | 工具 | 权限 | 必要输入 / 说明 |
@@ -769,10 +787,13 @@ video_project_asset
 | `VIDEO_MAX_IR_BYTES` | 262144 | 服务端也校验 |
 | `VIDEO_MAX_UPLOAD_BYTES` | 10485760 | REST；MCP base64 更低 |
 | `VIDEO_MAX_ACTIVE_RENDERS_PER_WORKSPACE` | 1 | 防队列滥用 |
-| `VIDEO_TTS_PROVIDER` | 空 | 空 = 未配置，estimated |
-| `VIDEO_TTS_ENDPOINT / API_KEY / MODEL` | 空 | secret 只读 env / secret manager |
-| `VIDEO_ALIGNER_PROVIDER / ENDPOINT / API_KEY` | 空 | 空 = 未配置 |
+| `VIDEO_TTS_URL` | 空 | TTS vendor base URL（`adapters/tts` 契约：`POST {base}/synthesize`）；空 = 未配置，降级 estimated |
+| `VIDEO_TTS_KEY` | 空 | 可选 Authorization bearer（仅 env，不入库） |
+| `VIDEO_TTS_VOICE` | 空 | 默认音色（请求可覆盖） |
+| `VIDEO_ALIGNER_URL` | 空 | WhisperX sidecar base URL（`adapters/aligner` 契约：`POST {base}/align`）；空 = 未配置 |
 | `PLOYKIT_MCP_RATE_LIMIT_PER_USER` | 生产必须 >0 | `/mcp` 工具入口限流 |
+
+> **[2026-11-17 口径收敛]** 上表 TTS / Aligner 四行原写作 `VIDEO_TTS_PROVIDER` / `VIDEO_TTS_ENDPOINT / API_KEY / MODEL` / `VIDEO_ALIGNER_PROVIDER / ENDPOINT / API_KEY`（设计期设想的"供应商 + 端点 + 模型"三段式），但**实际适配器契约是单 URL 的 vendor/sidecar 协议**（`adapters/tts/tts.go:30-32`、`adapters/aligner/aligner.go:28`），设计期的三段式抽象从未实现。本表已改为实现真值，避免运维按未实现的变量名配置。另注（ADR 0017 边界声明）：这两个适配器**已实现但 example 不装配**——`main.go` 不构造它们，`Ports.Synth` / `Ports.Aligner` 恒 nil，故上述变量今天配置后**不生效**，`SetScript` 恒降级到 `words_source=estimated`；产品要在自己的组合根接线。
 
 本表为视频实现的环境变量唯一口径；配套 compat 文档若仍使用 `PLOYKIT_TTS_*`、`FFMPEG_PATH` 或“尚未实施”的旧状态，应在功能 PR 同步更新，避免运维配置分裂。
 
@@ -836,13 +857,13 @@ python tools/check_api.py
 
 ## 17. 实施阶段与当前差距
 
-| 阶段 | 合入内容 | 完成判据 | 当前判断 |
-|---|---|---|---|
-| F0 地基 | 迁移、IR、registry、字幕、authz、quota Tx port、repo | DB 集成测试 + 授权 / 幂等 / 配额原子性通过 | **部分实现**；app 单测过，但迁移与授权 / 原子性需修订 |
-| F1 capx | 自包含 Player、池、编码、混音、缩略图 | capx 全测试、race、100 帧 hash、资源失败测试通过 | **部分实现**；当前奇数尺寸测试失败 |
-| F2 API + MCP | REST、preview、MCP、文件授权、审计、WS | OpenAPI 零漂移，Agent 闭环和越权测试通过 | **未形成闭环**；11 条 spec-only |
-| F3 渲染闭环 | 独立 River client、worker、reconciler、TTS / Aligner、lifecycle | 故障注入、重试、配额、drain、Range 播放通过 | **未实现生产 worker** |
-| F4 UI | 路由、菜单、编辑器、播放器、渲染历史 | `make verify-ui` + Agent 编辑 → 浏览器预览 → MP4 端到端 | **仅有页面骨架，后端未接通** |
+| 阶段 | 合入内容 | 完成判据 | 当前判断 | 现状（2026-11-17） |
+|---|---|---|---|---|
+| F0 地基 | 迁移、IR、registry、字幕、authz、quota Tx port、repo | DB 集成测试 + 授权 / 幂等 / 配额原子性通过 | **部分实现**；app 单测过，但迁移与授权 / 原子性需修订 | 已闭合：迁移 1009 / 1010 / 1011 落地（见 §11.1 现状回写）；配额 / 幂等台账经 round9 并发提交验证 |
+| F1 capx | 自包含 Player、池、编码、混音、缩略图 | capx 全测试、race、100 帧 hash、资源失败测试通过 | **部分实现**；当前奇数尺寸测试失败 | 已闭合：capx 编码用例（含 1×1 / 奇数尺寸）当前通过；round9 九案几何全对 |
+| F2 API + MCP | REST、preview、MCP、文件授权、审计、WS | OpenAPI 零漂移，Agent 闭环和越权测试通过 | **未形成闭环**；11 条 spec-only | 已达成：check_api 175:175 零漂移；13 条 REST 路由 + 26 个 MCP 工具落地（见 §0.5） |
+| F3 渲染闭环 | 独立 River client、worker、reconciler、TTS / Aligner、lifecycle | 故障注入、重试、配额、drain、Range 播放通过 | **未实现生产 worker** | 已达成：round9 L3 九案全量 PASS（10,800/10,800 帧精确）；worker / reconciler 落地，reconciler 真机零误判 |
+| F4 UI | 路由、菜单、编辑器、播放器、渲染历史 | `make verify-ui` + Agent 编辑 → 浏览器预览 → MP4 端到端 | **仅有页面骨架，后端未接通** | 已接线：verify-ui 绿（round9 记录） |
 
 建议把当前工作拆成可回滚的小 PR：先修 F0 不变量，再修 capx，再接 API / worker，最后 OpenAPI / UI 同步合入；不要继续让 spec、页面和 doc.go 超前于可运行实现。
 

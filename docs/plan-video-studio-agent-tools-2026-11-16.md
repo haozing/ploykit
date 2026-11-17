@@ -2,9 +2,43 @@
 
 状态：提案（只读走查产物，本文档零业务代码改动）。
 范围：`example/internal/video` MCP 工具面 + app 服务面 + render/capx 底层。
-并行批说明：批E 在加 `video_snapshot_frame`（单帧截图眼）、批F 在清理工具描述；本文基于
-工作树当前态（`adapters/mcp/tools.go` 共 16 个 `mcpAdd` 注册，tools.go:62-487，未含批E），
-批E 合入后工具面 = 17。下文"现有工具"以 16+批E 为准。
+并行批说明（**历史背景；2026-11-17 对账见下文"落地对账"块**）：本文 §1 走查时的工树状态为
+`adapters/mcp/tools.go` 共 16 个 `mcpAdd` 注册（未含批E），批E 合入后预计 17。**实际最终落地
+26 个工具**——§1 表格的 16/17 基线仅作走查时点记录保留（当时各节"现有工具"描述亦以该基线为准），
+现状以下方对账块为准。
+
+---
+
+## 落地对账（2026-11-17）
+
+本文 §1 走查时的基线（16 个 `mcpAdd`、批E 合入后 17 工具）已增长到 **26 个唯一 `video_*` 工具**
+（`example/internal/video/adapters/mcp/tools.go` 内 `mcpAdd(s, ...)` 注册 26 处 = 26 个唯一工具；
+文件内 "mcpAdd" 字样共 30 处，另含 1 处函数定义与 3 处注释。REST 面 `adapters/http/routes.go:78-91`
+共 13 条路由，check_api 契约零漂移）。**§2 缺口提案 G-01~G-11 全部落地**（仅 G-08(b) 静态缩略图
+仍挂 ROADMAP 触发制），逐项行号证据：
+
+| 提案 | 落地工具 | 证据行号 |
+|---|---|---|
+| G-01 | `video_set_audio` | tools.go:312（compose 保音频补丁 service.go:994 `Audio == nil` 回填） |
+| G-02 | `video_preview_frames` | tools.go:510 |
+| G-03 | `video_validate` | tools.go:742（实现拆在 adapters/mcp/validate.go） |
+| G-04 | `video_list_elements` | tools.go:822 |
+| G-05 | `video_remove_element` | tools.go:875 |
+| G-06 | `video_set_meta` | tools.go:903 |
+| G-07 | `video_render_frames` | tools.go:986 |
+| G-08a | layout 字段并入 `video_list_templates` 目录投影 | tools.go:682；`app/template/template.go` Template struct `Layout` 字段（:54-57，中文版式摘要已随种子数据落地） |
+| G-09 | `video_list_assets` | tools.go:966 |
+| G-10 | `video_list_renders` | tools.go:928 |
+| G-11 | `video_delete_project` | tools.go:950 |
+
+- **G-08b（静态缩略图 24 张 golden PNG）仍挂 ROADMAP 触发制**，未落地——维持 §4 P2 的预
+  agreed 方案，触发条件不变（首个 agent 反馈"文字版式描述仍盲选"）。
+- **附带发现 #1 注释债复核**：tools.go:1-8 包注释已在批F 描述清理中重写，不再携带工具计数
+  （"12 video_* MCP tools" 字样已不存在，全仓 grep 无命中）——该债已顺带清偿，无需再排
+  代码批修。
+- 本文其余章节（§1 走查、§2 提案正文、§3 驳回记录、§4 拍板建议）保留 2026-11-16 原文作为
+  **设计记录**，仅加状态标记；文内行号引用以走查当时的工作树为准，与当前 26 工具态不对应，
+  落地态一律以上表为准。v2 重构对本工具面契约的影响见文末 §5。
 
 ---
 
@@ -44,7 +78,7 @@
 
 ## 2. 缺口提案
 
-### G-01 video_set_audio（挂载配音/BGM）
+### G-01 video_set_audio（挂载配音/BGM）【已落地 2026-11-17（tools.go:312）】
 - 旅程位置: 步骤6 音频（P0）
 - 缺口: 音频资产传得上去、永远挂不到片上；且 compose 抹音频、音频 key 无写时校验、大文件无上传通道。
 - 提案: `video_set_audio(project_id, voice{key,volume}|null, bgm{key,volume}|null, expected_version)`
@@ -61,7 +95,7 @@
 - 成本: 工具 ~40 行 + 服务补丁 ~5 行 + wiring 一处；小。
 - 依赖: `SetAudio`（已存在）、`Mutate` 全量门、`video_asset` 表（migration 1011）。
 
-### G-02 video_preview_frames（多帧批量截图）
+### G-02 video_preview_frames（多帧批量截图）【已落地 2026-11-17（tools.go:510）】
 - 旅程位置: 步骤4 视觉自查（P1，接近 P0 的提效）
 - 缺口: 自查一轮要 N 次单帧调用，每次重复投影文档（字体/资产内联是重头）+ 浏览器 seek，RTT 与算力双浪费；"卡与卡切换对比"天然需要 ≥2 帧一次拿到。
 - 提案: `video_preview_frames(project_id, times_sec[4..6], format=jpeg)` → 一次调用返回
@@ -74,7 +108,7 @@
 - 成本: ~80-120 行（含响应尺寸钳制）；中。
 - 依赖: 批E snapshot 通路、capx RenderFrames/seekTimeline、PreviewResolver。
 
-### G-03 video_validate（出片前预检门，dry-run）
+### G-03 video_validate（出片前预检门，dry-run）【已落地 2026-11-17（tools.go:742）】
 - 旅程位置: 步骤7 出片前检查（P1）
 - 缺口: agent 提交渲染前无法低成本回答"现在提交会发生什么"——渲染能力是否在线、大约出多少帧、锚点是否有 missing、音频轨摘要、词表是否会被静默截断。
 - 提案: `video_validate(project_id)` → 只读预检，**不建 render 行、不扣配额、不 version++**。
@@ -91,7 +125,7 @@
 - 成本: 服务 Preflight 方法 ~60 行 + 工具 ~30 行；小-中。
 - 依赖: Get、CapProbe、DurationFrames、ResolveAll（全部现成）。
 
-### G-04 video_list_elements（轻量元素清单）
+### G-04 video_list_elements（轻量元素清单）【已落地 2026-11-17（tools.go:822）】
 - 旅程位置: 步骤5 精修循环（P1）
 - 缺口: 精修需要 element id，唯一发现途径是 `video_inspect` 回全量 IR（≤256KiB，ir.go:207）+ resolutions，token 成本高；多数场景只需"id/type/几何/文本截断"。
 - 提案: `video_list_elements(project_id)` → `[{id,type,x,y,w,h,z,text(截64字),start_frame,end_frame,animation_count}]`。工具层直接 `Svc.Get` 后投影，**零服务改动**。
@@ -99,7 +133,7 @@
 - 成本: ~40 行（纯投影）；小。
 - 依赖: `Get`（service.go:516，现成）。
 
-### G-05 video_remove_element（元素删除）
+### G-05 video_remove_element（元素删除）【已落地 2026-11-17（tools.go:875）】
 - 旅程位置: 步骤3/5 填充与精修（P1）
 - 缺口: MCP 面只能 upsert/move，删不掉元素（手搭路放错一个 shape 只能 REST `PUT /ir` 全量替换，routes.go:81，MCP agent 不可达）。
 - 提案: `video_remove_element(project_id, element_id, expected_version)` → 新服务方法
@@ -110,7 +144,7 @@
 - 成本: 服务 ~15 行 + 工具 ~20 行；小。
 - 依赖: Mutate、现有 targetElementId 校验。
 
-### G-06 video_set_meta（画布/时长调整）
+### G-06 video_set_meta（画布/时长调整）【已落地 2026-11-17（tools.go:903）】
 - 旅程位置: 步骤3 填充内容·手搭路径（P1）
 - 缺口: 手搭项目初始 IR 固定 10s/1080×1920（service.go:446），MCP 无任何工具能改
   meta.durationSec/width/height；合成路由 composer 派生时长不受影响，手搭路则被钉死。
@@ -122,7 +156,7 @@
 - 成本: 服务 ~20 行 + 工具 ~25 行；小。
 - 依赖: Mutate、validateMeta、窗口校验（全部现成）。
 
-### G-07 video_render_frames（成品抽帧）
+### G-07 video_render_frames（成品抽帧）【已落地 2026-11-17（tools.go:986）】
 - 旅程位置: 步骤9 成片质检（P1）
 - 缺口: 拿到 output_url 后 agent 对"编码后的真实画面"零可见性——IR 截图（批E）看到的是
   投影文档，不是带字幕烧录/软字幕/音画合成/编码失真的最终 MP4。两者互补，缺后者则质检闭环
@@ -141,7 +175,7 @@
 - 成本: 平台 ~20 行 + 端口/adapter ~60 行 + 工具 ~50 行；中。
 - 依赖: capx ffmpeg 通路、storagex.Open、render 行的 OutputKey。
 
-### G-08 模板版式信息增强（设计卡片的眼）
+### G-08 模板版式信息增强（设计卡片的眼）【(a) 已落地 2026-11-17（template.go `Layout` 字段 + tools.go:682 目录投影）；(b) 静态缩略图【挂触发制】】
 - 旅程位置: 步骤2 设计卡片结构（P2）
 - 缺口: `video_list_templates` 只有文字描述 + 画布参数（compose.go:32-38 目录投影），agent
   盲选版式，选错只能 compose 后截图返工。
@@ -154,19 +188,19 @@
 - 成本: (a) ~30 行；(b) 构建脚本 + 24 资产，中。
 - 依赖: template 包 Apply、目录注入闭包（compose.go:72-76）。
 
-### G-09 video_list_assets（资产清单）
+### G-09 video_list_assets（资产清单）【已落地 2026-11-17（tools.go:966）】
 - 旅程位置: 步骤3/6 素材管理（P2）
 - 缺口: 上传后 key 只在当次响应里；断线重连/跨会话找资产只能翻历史。`ListAssets` 服务方法现成（service.go:1313）仅 REST 未挂（http/routes.go 无 assets GET）。
 - 提案: `video_list_assets(project_id)` → 薄包装（kind/key/bytes/content_type/created_at），~25 行。
 - 价值: low-medium。成本: 小。依赖: `ListAssets`（现成）。
 
-### G-10 video_list_renders（渲染历史）
+### G-10 video_list_renders（渲染历史）【已落地 2026-11-17（tools.go:928）】
 - 旅程位置: 步骤8 出片（P2）
 - 缺口: agent 只能按 render_id 查单条；"上一次渲染成功了吗"无查询路径。`ListRenders` 现成（service.go:1166，REST 已挂 routes.go:85）。
 - 提案: `video_list_renders(project_id)` → 薄包装（id/status/frames/output_url/error 摘要），~25 行。
 - 价值: low-medium。成本: 小。依赖: `ListRenders`（现成）。
 
-### G-11 video_delete_project（项目清理）
+### G-11 video_delete_project（项目清理）【已落地 2026-11-17（tools.go:950）】
 - 旅程位置: 全旅程收尾（P2）
 - 缺口: agent 试错会积累项目，无清理工具（`Delete` 现成 service.go:550，REST 已挂 routes.go:82；删除还带资产存储清扫）。MCP PAT 场景下的生命周期不完整。
 - 提案: `video_delete_project(project_id)` → 薄包装，~20 行；描述里写明级联语义（renders/assets FK 级联 + 存储清扫，service.go:558-592）。
@@ -193,32 +227,32 @@
 
 ### P0 —— 编排闭环必需（本批就做）
 
-| 项 | 建议批次 |
-|---|---|
-| **G-01 video_set_audio**（含 compose 保音频补丁 + 音频键写时校验 + REST 资产路由 body limit 放宽） | **本批/紧随批E 的实现批立即排**。它是唯一"上传承诺了但消费不到"的半接线断链，且卡死 aligner 降级链与 BGM 全流程；四件实现点均小 |
+| 项 | 建议批次 | 落地状态（2026-11-17 对账） |
+|---|---|---|
+| **G-01 video_set_audio**（含 compose 保音频补丁 + 音频键写时校验 + REST 资产路由 body limit 放宽） | **本批/紧随批E 的实现批立即排**。它是唯一"上传承诺了但消费不到"的半接线断链，且卡死 aligner 降级链与 BGM 全流程；四件实现点均小 | **已落地**（tools.go:312；compose 保音频补丁见 service.go:994） |
 
 P0 仅此一项：批E 落地后"眼"即闭环，其余缺口均为提效而非断链。
 
 ### P1 —— 显著提效（小批跟进，建议 G-02/G-07 一批、G-03/04/05/06 一批）
 
-| 项 | 建议批次 |
-|---|---|
-| G-02 video_preview_frames | 批E 合入后紧随（同文件 tools.go，必须串行） |
-| G-07 video_render_frames（成品抽帧 + thumb 接真） | 与 G-02 同批（共享 base64 图响应约定；capx 平台改动先行） |
-| G-03 video_validate / G-04 video_list_elements / G-05 video_remove_element / G-06 video_set_meta | 一个小批打包（合计 ~300 行，互相独立可拆） |
+| 项 | 建议批次 | 落地状态（2026-11-17 对账） |
+|---|---|---|
+| G-02 video_preview_frames | 批E 合入后紧随（同文件 tools.go，必须串行） | **已落地**（tools.go:510） |
+| G-07 video_render_frames（成品抽帧 + thumb 接真） | 与 G-02 同批（共享 base64 图响应约定；capx 平台改动先行） | **已落地**（tools.go:986） |
+| G-03 video_validate / G-04 video_list_elements / G-05 video_remove_element / G-06 video_set_meta | 一个小批打包（合计 ~300 行，互相独立可拆） | **已落地**（tools.go:742 / :822 / :875 / :903） |
 
 ### P2 —— 锦上添花（挂 ROADMAP 触发制）
 
 照 docs/ROADMAP.md「Video Rendering」节既有风格登记：
 
-| Area | Item | Trigger / Notes |
-|---|---|---|
-| `video` MCP | 模板静态缩略图（G-08b） | 首个 agent 反馈"文字版式描述仍盲选"（G-08a 文本层先行落地）。预 agreed：构建期 scriptgen.Prepare + 真实渲染器产 6×4 golden PNG 内嵌 template 包 |
-| `video` MCP | video_list_assets（G-09） | 首个跨会话资产复用需求（agent 在多项目间搬素材）。薄包装现成 |
-| `video` MCP | video_list_renders（G-10） | 首个"多轮渲染对比/审计"需求。薄包装现成 |
-| `video` MCP | video_delete_project（G-11） | 首个 agent 试错积累导致项目列表失序。薄包装现成（级联语义已在 Delete） |
-| `video` | validate 写时硬校验升级（末词 end ≤ max(meta, voice) 时长） | G-03 preflight 上线后若截断告警高频命中，再升写时门（契约变更，随 openapi 窗口） |
-| `quota` | QuotaPort 读方法（余量查询，G-03 配额字段从 unknown 变实数） | 首个 agent 需要在提交前规划配额时。端口加 `Remaining(ws, key, now)`，实现走 quota_counter 现行行 |
+| Area | Item | Trigger / Notes | 落地状态（2026-11-17 对账） |
+|---|---|---|---|
+| `video` MCP | 模板静态缩略图（G-08b） | 首个 agent 反馈"文字版式描述仍盲选"（G-08a 文本层先行落地）。预 agreed：构建期 scriptgen.Prepare + 真实渲染器产 6×4 golden PNG 内嵌 template 包 | **仍挂触发制**（未落地；G-08a 已落 template.go `Layout` 字段） |
+| `video` MCP | video_list_assets（G-09） | 首个跨会话资产复用需求（agent 在多项目间搬素材）。薄包装现成 | **已落地**（tools.go:966） |
+| `video` MCP | video_list_renders（G-10） | 首个"多轮渲染对比/审计"需求。薄包装现成 | **已落地**（tools.go:928） |
+| `video` MCP | video_delete_project（G-11） | 首个 agent 试错积累导致项目列表失序。薄包装现成（级联语义已在 Delete） | **已落地**（tools.go:950） |
+| `video` | validate 写时硬校验升级（末词 end ≤ max(meta, voice) 时长） | G-03 preflight 上线后若截断告警高频命中，再升写时门（契约变更，随 openapi 窗口） | **仍挂触发制**（preflight 已落 tools.go:742；写时门升级未做） |
+| `quota` | QuotaPort 读方法（余量查询，G-03 配额字段从 unknown 变实数） | 首个 agent 需要在提交前规划配额时。端口加 `Remaining(ws, key, now)`，实现走 quota_counter 现行行 | **仍挂触发制**（未落地；ports.go 尚无 `Remaining`） |
 
 ### 一段话结论
 
@@ -230,7 +264,35 @@ P0 仅此一项：批E 落地后"眼"即闭环，其余缺口均为提效而非�
 
 ### 走查附带发现（不立项，供批F/后续参考）
 
-1. tools.go:2 包注释仍写 "12 video_* MCP tools"，实为 16（批E 后 17）——批F 描述清理时可顺手改。
+1. tools.go:2 包注释仍写 "12 video_* MCP tools"，实为 16（批E 后 17）——批F 描述清理时可顺手改。（2026-11-17 对账：批F 重写包注释后已不再携带任何工具计数，本项注释债已顺带清偿，无需再排代码批。）
 2. `deriveURLs` 对外承诺 thumb_url（service.go:1156-1163）但管线从不产出 thumb（render_pipeline.go:323-330 stub）→ REST 响应里的 thumb_url 现恒 404；G-07 落地时一并接真。
 3. `validateAudio` 不查音频 key 的资产登记（ir.go:487-510 只查形状），image src 有写时校验而音频没有——不对称，G-01(a) 补齐。
 4. `video_generate_video` 的幂等键固定为 project_id（tools.go:447）→ 同一项目第二次调用 generate 永远返回首轮 render（重试安全，但"同项目再出一版"会被幂等挡住）；可在工具描述里补一句引导（改用 video_render + 自选 request_id）。
+
+---
+
+## 5. v2 对本工具面的影响（2026-11-17 附记）
+
+`docs/plan-video-studio-ir-v2-2026-11-17.md` 已立项（schemaVersion 2 一次性迁移、不做兼容层，
+builder 不保留 v1 推断路径）。本文的 26 工具面是 v1 IR 契约上的产物，v2 落地时以下工具契约
+会变，届时需随 v2 同步改入参：
+
+1. **时间锚第一类化（`at: {frame}|{wordId}`）**：v1 的词锚是分散的特殊入参
+   （`video_animate_element` 的词锚挂点、`video_add_effect_at_word` 的按词定位）。
+   IR v2 把时间锚升级为第一类联合类型后，两个工具的入参契约会收敛到统一的 `at` 字段
+   （帧锚/词锚同形），词锚不再是硬编码特例。
+2. **`audio.tracks[]` 多轨**（v2 §3.2）：v2 废除 `voice`/`bgm` 固定双轨，并入
+   `tracks[]`（`assetKey` / `kind: voice|bgm|sfx` / `inSec` / `outSec` / `volume` /
+   `fadeInSec` / `fadeOutSec`，轨内事件可 `at: {frame}` 锚定）→ `video_set_audio`
+   （tools.go:312）从 voice+bgm 两参数扩展为 tracks 数组语义（sfx 轨与帧锚落点一并入契约）；
+   v2 的写时资产登记校验对称 image src，本文 G-01(a) 的校验模式直接沿用。
+3. **scene 元素类型（引擎即渲染器，v2 §3.5）**：IR v2 引入 scene 元素承载引擎 canvas
+   分层合成（引擎 canvas z0 + IR 声明层 z10+，一个 IR、一个时钟、一套混音），工具面将新增
+   一个工具家族（渲染器注册、scene 元素 upsert/编排等），超出本文 v1 的
+   text/shape/image 三类元素范畴。
+4. **探针一等化（v2 §3.4）**：capx seekTimeline 包装为 video 域导出的 `ProbeFrames`，
+   harness 探针门与 MCP 的 `video_preview_frames`/`video_render_frames` 打通同一实现——
+   本文 G-02/G-07 确立的"返回 base64 图"响应约定可平移复用。
+5. **方法论复用**：本文的走查方法论（§1 编排旅程逐站对能力 → §2 缺口提案 G-xx →
+   §3 候选验证与驳回记录 → §4 拍板分层 P0/P1/P2）在 v2 工具面设计时整套复用——v2 落地后
+   按新 IR 契约重跑一轮 §1 走查，即可产出 v2 工具面缺口清单。
