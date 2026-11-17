@@ -314,20 +314,33 @@
       // format/decimals（2026-11-17，speedrun 摩擦：毫秒计时器 "0:23.87" 在
       // 整数 tween 下不可表达）：fmt 是数字格式模板，"{v}" 占位符替换为
       // toFixed(dec) 的值，字面文本允许（"0:{v}" → "0:23.87"）；dec=0 时
-      // toFixed(0) 兼容旧的 Math.round 行为（0.5 向上 vs 四舍五入的差异只在
-      // 0.5 档且被 suffix/整数路径的渲染容差吸收——首帧 from=0、末帧 from=to
-      // 都是精确值）。
+      // toFixed(0) 兼容旧的 Math.round 行为。
       var fmt = (fx.params && fx.params.format) || '';
       var dec = fx.params && typeof fx.params.decimals === 'number' ? fx.params.decimals : 0;
+      // SEEK-SAFETY (v0.33.1, the polished 31-segment chain): GSAP does NOT
+      // replay onUpdate callbacks for tweens the playhead JUMPS past
+      // (tl.pause(t) renders property values but suppresses events), so a
+      // seek-mode render (every capx frame) never sees the DOM write. The
+      // fix is the same zero-duration `tl.set` mechanism the element
+      // visibility windows use — deterministic under arbitrary seeks: the
+      // segment's END value is stamped at `at + dur`. For discrete counters
+      // (the n/30 chain, the PNG-chain semantics it replaces) this is
+      // exactly the original behavior (value flips at the event frame); the
+      // tween leg stays for play-mode smoothness (interpolated mid-values
+      // scrub visually) while seeks land on segment end values.
+      var dur = Math.min(1.2, Math.max(0.3, durationSec - at));
+      var finalText = fmt
+        ? fmt.replace('{v}', to.toFixed(dec)) + suffix
+        : to.toFixed(dec) + suffix;
       var obj = { v: from };
       tl.to(obj, {
-        v: to, duration: Math.min(1.2, Math.max(0.3, durationSec - at)),
-        ease: 'power1.out', onUpdate: function () {
+        v: to, duration: dur, ease: 'power1.out', onUpdate: function () {
           node.textContent = fmt
             ? fmt.replace('{v}', obj.v.toFixed(dec)) + suffix
             : obj.v.toFixed(dec) + suffix;
         }
       }, at);
+      tl.set(node, { textContent: finalText }, at + dur);
     },
     // highlight (T-12 complete form, case library §5.12 / §3.1.4 C01): on a
     // TEXT element the effect colors the node's TEXT — textColor tweens from
@@ -721,6 +734,19 @@
   // word-anchored stage effect that happens to borrow the target's geometry;
   // the target's animations continue to apply to the target itself only.
   function counterHost(fx) {
+    // Text-element targets HOST the counter directly (v0.33.1): the effect
+    // writes textContent on the target itself, so chained counter segments
+    // (progress counters stepping per event, all targeting one text element)
+    // share a single host and read as one continuous count. The polished
+    // pilot's 31-segment chain surfaced the v0.33.0 gap: a text target only
+    // POSITIONED the per-effect div, so every segment had its own invisible
+    // host and the visible element never advanced past its static text.
+    // Non-text targets and target-less effects keep the legacy self-hosted
+    // div (positioned onto a non-text target's bbox) — byte-compat.
+    var targetEl = fx.targetElementId ? document.getElementById(fx.targetElementId) : null;
+    if (targetEl && elementKindOf(fx.targetElementId) === 'text') {
+      return targetEl;
+    }
     var id = 'counter-' + fx.id;
     var node = document.getElementById(id);
     if (!node) {
@@ -729,7 +755,6 @@
       node.className = 'el el-text counter';
       node.style.color = (fx.params && fx.params.color) || '#2B2118';
       node.style.zIndex = '9999';
-      var targetEl = fx.targetElementId ? document.getElementById(fx.targetElementId) : null;
       if (targetEl) {
         // position onto the target element's bbox (IR geometry; the node is
         // appended to #canvas which is inset:0 of #stage, so left/top are

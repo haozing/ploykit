@@ -9,6 +9,33 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.33.1] — 2026-11-17
+
+Go-only hotfix, found by the first native-consumer migration within the
+hour (the polished pilot's 31-segment counter chain, part of the
+tool-site upgrade to v0.33.0):
+
+### Fixed
+- **video: counters are seek-safe now** — two gaps the polished chain
+  exposed. (1) A text `targetElementId` only POSITIONED the counter's
+  per-effect div; every chained segment therefore had its own invisible
+  host and the visible element never advanced. Text-element targets now
+  host the counter directly (textContent written on the target itself),
+  so chained segments share one host; non-text targets and target-less
+  effects keep the legacy self-hosted div, byte-compat. (2) GSAP does
+  not replay `onUpdate` for tweens the playhead JUMPS past — and capx
+  renders frame-by-frame via seek, so the DOM write never fired under
+  render at all (L3 cases never noticed: their counters sit at t≈0 with
+  short windows). The builder now also stamps the segment's end value
+  with a zero-duration `tl.set` — the same deterministic-under-seek
+  mechanism the element visibility windows use. Discrete counters land
+  exactly on their event frames (identical to the PNG-chain semantics
+  the native counter replaces); the tween leg stays for play-mode
+  smoothing. Verified: the polished chain renders 0→30/30 across its
+  31 segments, and the existing counter regression tests
+  (TestCounterL2, TestCounterL2_TargetElement, TestCounterFormatAtFrameRender)
+  stay green.
+
 ## [0.33.0] — 2026-11-17
 
 Go-only release (no `packages/` code touched). Theme: **closing the gap list
