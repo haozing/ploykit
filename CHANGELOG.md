@@ -9,6 +9,51 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.32.0] — 2026-11-17
+
+Go-only release (no `packages/` code touched — npm sides stay put). Theme:
+video authoring ergonomics — three additive capabilities the tool-site versus
+pilot paid for in hacks, plus the cap raise those hacks also proved tight. All
+changes are additive; no existing contract changes shape.
+
+### Added
+- **video: explicit frame anchoring for animations (`atFrame`)** — an element
+  animation may now carry an integer frame anchor on the global timeline (same
+  clock as word anchors) instead of a word anchor. The two anchoring modes are
+  mutually exclusive and validated at write time. This is the v1 bridge to the
+  v2 `at:{frame}` object: the versus pilot had to mint 37 fake `manual` anchor
+  words to give 30 stickers deterministic start times, and pairs meant to start
+  at the same instant had to be staggered +0.031s apart to dodge the word-table
+  monotonicity check — one integer field replaces both hacks.
+- **video: `resize` animation type** — tweens the element's width and height
+  with the top-left corner pinned (progress-bar semantics: width grows
+  rightward); `From`/`To` Points carry (w,h) in canvas pixels. The pilot's
+  progress bar had to be decomposed into 30 hand-computed window shapes, each
+  a separate element timed to the word table; a single element with a
+  15-segment resize chain plus a fade-out now does the same job (which is also
+  why the per-element animation cap below had to move).
+- **video: harness-side multi-frame probe** — a testdata probe test
+  demonstrating the `render.Snapshotter` bridge's `SnapshotMulti` entry:
+  sample a handful of key frames and assert on them before any full render.
+  Replaces the pilot's hand-rolled dump_html-plus-node scripts; with the
+  probe running first, the versus pilot's full renders dropped from 4
+  attempts to 1. Probe economics, measured honestly on the 66-element
+  studio-pilot document: N frames share one projection and page open and
+  the cost scales with the HIGHEST requested frame (the capture walk is
+  sequential, 0..lastTarget — probing frame 400 of 441 costs ≈ the full
+  render loop minus encoding), and cached repeats are ~free (5ms). Probe
+  early frames first; seek-only capture at arbitrary frames remains a
+  renderer-level change tracked with the v2 feedback layer.
+
+### Changed
+- **video: `MaxAnimationsPerElement` 16 → 32** — the progress-bar choreography
+  above (15 resize segments + a fade-out) exactly filled the old cap with zero
+  headroom. Same reasoning as `MaxElements`: the per-element animation count
+  is a rough proxy, not a resource gate.
+
+All additive, no contract break; the v2 spec (§2.8) promotes `atFrame` to the
+required `at` object at migration time.
+
 ## [0.31.0] — 2026-11-17
 
 Go-only release (no `packages/` code touched — npm sides stay put). Theme: the

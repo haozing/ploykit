@@ -41,7 +41,7 @@ When documents disagree, higher on this list wins:
 | File | Date | Language | Status | Role |
 |---|---|---|---|---|
 | plan-video-studio-ir-v2-spec-2026-11-17.md | 2026-11-17 | zh | draft contract (landed; 15 open questions) | IR v2 contract spec: per-field v1-to-v2 table, builder simplification list, one-shot migration table, code-evidenced v1 behavior |
-| plan-video-studio-ir-v2-2026-11-17.md | 2026-11-17 | zh | approved proposal (drives the docs refactor) | IR v2 and bake-layer refactor plan: contract, bake, audio, feedback layers; explicitly no v1 compat layer |
+| plan-video-studio-ir-v2-2026-11-17.md | 2026-11-17 | zh | approved proposal (drives the docs refactor); v1-bridge capabilities (atFrame/resize) landed in v0.32.0 | IR v2 and bake-layer refactor plan: contract, bake, audio, feedback layers; explicitly no v1 compat layer |
 | plan-agent-video-studio-architecture-2026-11-14.md | 2026-11-14 | zh | v1 current contract; Section 0.5 status correction landed 2026-11-17 | target architecture, invariants, error semantics, env var canon (Section 14) |
 | plan-agent-video-studio-compat-2026-11-14.md | 2026-11-14 | zh | written pre-implementation; env var names superseded by architecture Section 14 (see its status header) | compatibility impact assessment; upgrade paths for framework consumers and example deployments |
 | plan-video-studio-agent-tools-2026-11-16.md | 2026-11-16 | zh | reconciled against landed tools 2026-11-17 (G-01..G-11 landed, per-gap line evidence) | agent tool surface walk-through (26 video_* MCP tools) and gap proposals |
@@ -60,7 +60,11 @@ When documents disagree, higher on this list wins:
 
 Current implementation state (2026-11-17): round 9 reached L0-L3 fully green
 with check_api 175:175 and a 26-tool `video_*` MCP surface; MaxElements was
-raised from 64 to 128 in `ir.go` (2026-11-17).
+raised from 64 to 128 in `ir.go` (2026-11-17). The v0.32.0 ergonomics batch
+(same day) added the `atFrame` animation anchor and the `resize` animation
+type, raised MaxAnimationsPerElement from 16 to 32, and landed the first
+harness-side probe test (`testdata/probe_frames_test.go`, via the
+`render.Snapshotter` bridge's `SnapshotMulti` entry).
 
 ## Reading paths
 

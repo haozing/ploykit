@@ -79,6 +79,13 @@ move 的坐标系（绝对左上角）、无锚=t=0、窗口含尾+半帧 epsilo
 8. **上限改资源预算**：IR ≤256KiB 不变 + 解码资产总字节预算 + 像素预算；删除元素计数闸门（可留 256 级性能建议值，文档标注非正确性约束）。
 9. **JSON Schema 落盘**（`example/internal/video/app/ir.schema.json`，随 openapi 引用）：每个字段的坐标空间、单位、时钟、窗口语义进 description。**语义从代码注释升为契约**是本次重构的灵魂。
 
+> **[2026-11-17 注记] v1 桥接提前落地**：本节四项已在 v0.32.0 以 v1 加法形式先行发布——
+> ① `atFrame` 帧锚（动画级整数帧锚，与词锚互斥、写时校验；即第 1 条 `at:{frame}` 的 v1 桥）；
+> ② `resize` 动画类型（宽高 tween，左上角锚定；语义进第 5 条/schema description 的事先演练）；
+> ③ `MaxAnimationsPerElement` 16→32（第 8 条「计数闸门是粗代理」判断的又一次实证）；
+> ④ harness 探针示范（`testdata/probe_frames_test.go`，走 render.Snapshotter 桥的 `SnapshotMulti`——第 3.4 节 Probe 一等化的先声）。
+> **v2 迁移时的归宿**：`atFrame` 升格为必填 `at: {frame}|{wordId}`（第 1 条）；resize 的左上角语义写进 §2.8 契约表（v2 spec）；假锚词路径（manual words 纯作时间锚的用法）届时可整体删除——words 回归字幕/脚本本义。
+
 ### 3.2 音频层（消灭 R0 的音效半边）
 
 `ir.audio.tracks[]: {assetKey, kind: voice|bgm|sfx, inSec, outSec, volume, fadeInSec, fadeOutSec}`，轨内事件可 `at: {frame}` 锚定（SFX 与贴纸落点同帧）。现有 voice/bgm 字段废除并入 tracks。MuxAV 滤镜链按轨数生成（amix inputs=N），响度链不变。写时校验：每个 assetKey 必须有登记行（对称 image src 的 validateAssetRefs）。

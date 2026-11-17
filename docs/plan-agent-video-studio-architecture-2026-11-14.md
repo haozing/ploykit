@@ -290,7 +290,7 @@ example/web/
 4. **标识**：element / animation / effect / track / word ID 在各自命名空间唯一；word.index 必须等于数组下标。
 5. **版本**：`schemaVersion` 描述 IR 结构；项目行 `version` 描述乐观锁；两者不得混用。IR 内不再保存行级 version。
 6. **兼容**：读取未知字段可保留；preview 对未知类型显示警告并跳过；render 遇到未知类型或不支持的 schemaVersion 必须返回 `E_VIDEO_UNSUPPORTED_SCHEMA`。
-7. **上限**：IR ≤256KiB、elements ≤128（2026-11-17 自 64 上调，见 ir.go）、animations/effects ≤128、script ≤2000 Unicode code points、durationSec ∈ [0.04,300]、fps ∈ {24,25,30,50,60}。v2 计划以资源预算（IR 字节 / 解码资产字节 / 像素）替代元素计数闸门，见 v2 spec（`plan-video-studio-ir-v2-spec-2026-11-17.md`）。
+7. **上限**：IR ≤256KiB、elements ≤128（2026-11-17 自 64 上调，见 ir.go）、animations/element ≤32（2026-11-17 自 16 上调，见 ir.go；进度条编排 15 段+淡出恰好卡满旧限，与 MaxElements 同理——计数是粗代理，非资源闸门）、animations/effects ≤128、script ≤2000 Unicode code points、durationSec ∈ [0.04,300]、fps ∈ {24,25,30,50,60}。v2 计划以资源预算（IR 字节 / 解码资产字节 / 像素）替代元素计数闸门，见 v2 spec（`plan-video-studio-ir-v2-spec-2026-11-17.md`）。
 8. **资源上限**：单项目图片 ≤64，每个 data URI 解码后 ≤1MiB；总内联解码资产、上传文件、音频大小均有服务端上限，不能仅限制 JSON 字符串长度。
 9. **缩放**：渲染参数覆盖分辨率时必须保持原宽高比，或显式提供 `fit=contain|cover`；v1 默认拒绝宽高比变化。
 10. **规范化**：写库前使用统一 canonical JSON 生成 `ir_sha256`；不能只依赖 PostgreSQL JSONB 的键序行为。
@@ -316,6 +316,18 @@ example/web/
 - 最小显示时长、相邻 cue 间隔和跨句词组处理由单一 `BuildSRT` 规则决定。
 - `source=estimated` 强制 soft subtitle 或明确的低置信提示；真实 TTS 存在时禁止无提示地用 estimated 替换真实时间。
 - burn 失败可降级 soft，但写入 `warnings`，不能把正常降级塞进 `error`。
+
+### 5.4a 2026-11-17 增量能力（versus 试点驱动）
+
+> v0.32.0 落地的三项作者工效增量，全部为加法、不改既有契约；v2 语义归宿见 `plan-video-studio-ir-v2-spec-2026-11-17.md` §2.8。
+
+1. **atFrame 帧锚**：`ElementAnimation` 可带整数 `atFrame`（全局时间线帧号，与 §7.0 裁定的词锚同一时钟），作为词锚之外的显式锚定方式。语义要点：
+   - 与 `startAnchor` **互斥**，写时校验（两者同给或锚整体缺失 = `E_VIDEO_IR_INVALID` 硬错误）；
+   - 边界 `atFrame == F`（该动画合法的最后一个全局帧）**合法**；
+   - **v1 词锚路径原样保留**——未带 `atFrame` 的动画走既有词锚解析/回退，完全向后兼容；
+   - 试点动因：30 件贴纸被迫造 37 个 manual 假锚词，同刻起跳的对子还要 +0.031s 错峰绕开词表单调性校验。v2 迁移时升格为必填 `at: {frame} | {wordId}`（v2 spec §2.8.1）。
+2. **resize 动画类型**：宽高 tween，`From`/`To` Point 携 (w,h) 像素。**语义显式声明：左上角锚定，宽度增长向右扩展**（进度条语义）——与 `move` 的**中心坐标语义**刻意不同。这一原点不一致是 v2 要统一的历史包袱（v2 spec §2.8：move 定为绝对中心坐标，元素 x/y 维持角点原点），v1 期间两者并存、各自文档化。试点对照：进度条不再拆 30 个手算窗口 shape，单元素 15 段 resize 链 + 淡出即成（也是 MaxAnimationsPerElement 16→32 的直接动因，见 §5.2 第 7 条）。
+3. **target-less shake = 整画布相机的既有语义澄清**（X-4 语义钉住）：不带 `targetElementId` 的 `pulse`/`shake` 作用于 `#canvas` 整层（timeline-builder 的既有回退分支）——即「相机震动/全画布脉冲」在 v1 本就可表达，无需新能力。versus 试点曾误判「相机震动不可表达」而把震动烘焙进贴纸；实为既有能力，特此钉住——工具描述与后续文档不得再把它宣传为缺口。
 
 ---
 
