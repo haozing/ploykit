@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -38,6 +39,12 @@ func TestToolSiteAssembly(t *testing.T) {
 	if pilotDir == "" {
 		pilotDir = `D:\code\tool-site\.runtime\videos\studio-pilot`
 	}
+	expectFrames := 441
+	if v := os.Getenv("TOOLSITE_EXPECT_FRAMES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			expectFrames = n
+		}
+	}
 	assetDir := filepath.Join(pilotDir, "assets")
 	if _, err := os.Stat(filepath.Join(pilotDir, "ir.json")); err != nil {
 		t.Skipf("pilot assets not baked yet (%s): %v", pilotDir, err)
@@ -51,7 +58,7 @@ func TestToolSiteAssembly(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, ir))
 	require.NoError(t, videoapp.Validate(ir))
 	frames := videoapp.DurationFrames(ir, ir.Meta.FPS)
-	require.Equal(t, 441, frames, "ceil(14.67×30) = 441")
+	require.Equal(t, expectFrames, frames, "ceil(duration×fps)")
 	for _, r := range videoapp.ResolveAll(ir, nil) {
 		if r.WordIndex < 0 {
 			t.Errorf("anchor %s(%s) %q unresolved", r.OwnerID, r.Owner, r.AnchorText)
@@ -111,7 +118,7 @@ func TestToolSiteAssembly(t *testing.T) {
 	}()
 
 	frameT0 := time.Now()
-	kept := map[int]bool{8: true, 60: true, 200: true, 365: true, 430: true}
+	kept := map[int]bool{30: true, 100: true, 200: true, 290: true, 310: true}
 	samples := map[int][]byte{}
 	renderErr := rend.RenderFrames(context.Background(),
 		capx.Doc{HTML: string(html), TimelineID: "main"}, spec,
@@ -137,7 +144,7 @@ func TestToolSiteAssembly(t *testing.T) {
 	st, err := os.Stat(outPath)
 	require.NoError(t, err)
 	require.Greater(t, st.Size(), int64(200000), "MP4 should be substantial")
-	require.NotEqual(t, samples[8], samples[200], "content changes over time")
+	require.NotEqual(t, samples[30], samples[200], "content changes over time")
 
 	for fr, png := range samples {
 		gp := filepath.Join(outDir, fmt.Sprintf("studio-ir-f%03d.png", fr))

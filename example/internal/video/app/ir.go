@@ -103,15 +103,27 @@ type Point struct {
 	Y float64 `json:"y"`
 }
 
-// ElementAnimation moves/scales/rotates/fades one element, anchored at a word.
+// ElementAnimation moves/scales/rotates/fades/resizes one element, anchored
+// at a word or an explicit frame.
 type ElementAnimation struct {
-	ID             string          `json:"id"`
-	Type           string          `json:"type"` // move|scaleIn|rotate|fadeIn|fadeOut
-	From           *Point          `json:"from,omitempty"`
-	To             *Point          `json:"to,omitempty"`
-	FromValue      *float64        `json:"fromValue,omitempty"` // scale/rotate scalar
-	ToValue        *float64        `json:"toValue,omitempty"`
-	StartAnchor    *Anchor         `json:"startAnchor,omitempty"`
+	ID        string   `json:"id"`
+	Type      string   `json:"type"` // move|scaleIn|rotate|fadeIn|fadeOut|resize
+	From      *Point   `json:"from,omitempty"`
+	To        *Point   `json:"to,omitempty"`
+	FromValue *float64 `json:"fromValue,omitempty"` // scale/rotate scalar
+	ToValue   *float64 `json:"toValue,omitempty"`
+	// StartAnchor is the word-text anchor (v1 primary anchoring).
+	StartAnchor *Anchor `json:"startAnchor,omitempty"`
+	// AtFrame is an explicit frame anchor on the GLOBAL timeline — the same
+	// clock as the element window (§7.0: frame = ceil(t × fps)) — and the flat
+	// v1 bridge to the v2 `at:{frame}` object (spec §2.8.1): versus-pilot
+	// authors had no way to say "start this animation at frame N" without a
+	// word there, so they minted fake "manual" anchor words as a timeline
+	// (37 in one project). Mutually exclusive with StartAnchor (both set =
+	// 400). BOTH absent = the v1 fallbacks stay (unanchored animations
+	// resolve to t=0; fadeIn/fadeOut fall back to the owning element's
+	// window); v2 tightens this to "at is required, exactly one flavor".
+	AtFrame        *int            `json:"atFrame,omitempty"`
 	DurationFrames int             `json:"durationFrames"`
 	Easing         string          `json:"easing,omitempty"`
 	ResolvedFrom   *ResolvedFrom   `json:"resolvedFrom,omitempty"`
@@ -242,8 +254,11 @@ const (
 	// 128（2026-11-17 上调，原 64）：图像拼贴类合成（产品展示片=底图+30 张成片位姿贴纸
 	// + 托盘页+勾格+字效层）单项目就需要 ~66 元素；真正的资源闸门是 IR 总量与
 	// 单图尺寸上限，元素数只是粗代理。tool-site v4-assembly 试点实测超限。
-	MaxElements             = 128
-	MaxAnimationsPerElement = 16
+	MaxElements = 128
+	// 32（2026-11-17 上调，原 16）：进度条类编排单元素 15 段 resize + 淡出即满 16
+	// （versus 试点只能拆 30 个手算 shape 绕过）；与 MaxElements 同理，计数只是
+	// 粗代理，真正的资源闸门是 IR 总量。
+	MaxAnimationsPerElement = 32
 	MaxIRBytes              = 256 << 10 // 256 KiB
 )
 
@@ -259,6 +274,11 @@ var validElementTypes = map[string]bool{ElementImage: true, ElementText: true, E
 var validAnimationTypes = map[string]bool{
 	"move": true, "scaleIn": true, "rotate": true,
 	"fadeIn": true, "fadeOut": true, // P0-2: element-level opacity animation
+	// resize: width/height tween anchored top-left (progress-bar semantics:
+	// width grows rightward, height grows downward) — versus-pilot horizontal
+	// progress bars had to be hand-split into 30 static shapes without it.
+	// From/To Points carry (w,h) px pairs; both required at write time.
+	"resize": true,
 }
 
 var validEasings = map[string]bool{
@@ -482,7 +502,7 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 			return ve(af+".id", "id is required")
 		}
 		if !validAnimationTypes[an.Type] {
-			return ve(af+".type", "type must be move|scaleIn|rotate|fadeIn|fadeOut")
+			return ve(af+".type", "type must be move|scaleIn|rotate|fadeIn|fadeOut|resize")
 		}
 		if an.DurationFrames <= 0 {
 			return ve(af+".durationFrames", "durationFrames must be > 0")
@@ -497,6 +517,39 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 			if an.StartAnchor.Occurrence < 0 {
 				return ve(af+".startAnchor.occurrence", "occurrence must be >= 0")
 			}
+		}
+		// atFrame: explicit frame anchor on the global timeline — the flat v1
+		// bridge to the v2 `at:{frame}` object (spec §2.8.1). Mutually
+		// exclusive with startAnchor (both set = 400); bounded by the same
+		// DurationFrames rule as the element window (== F is legal, mirroring
+		// the window's endFrame == F allowance — same clock, same boundary).
+		// The ir == nil seam mirrors the window check below (direct unit
+		// calls only; Validate always passes a real ir).
+		if an.AtFrame != nil {
+			if an.StartAnchor != nil {
+				return ve(af+".atFrame", "atFrame and startAnchor are mutually exclusive")
+			}
+			if *an.AtFrame < 0 {
+				return ve(af+".atFrame", "atFrame must be >= 0")
+			}
+			if ir != nil {
+				maxFrames := DurationFrames(ir, meta.FPS)
+				if *an.AtFrame > maxFrames {
+					return ve(af+".atFrame",
+						fmt.Sprintf("atFrame must be <= durationFrames (%d)", maxFrames))
+				}
+			}
+		}
+		// resize requires BOTH endpoints: From/To Points carry (w,h) px pairs
+		// (width or height may stay constant across the tween, but both Points
+		// must be present — a half-specified resize is a write-time error, not
+		// a silent default). Numeric finiteness is the shared Point check
+		// below. Semantics: top-left anchored w/h tween — width grows
+		// rightward, height grows downward (progress-bar semantics); unlike
+		// move (whose Points are absolute top-left positions in v1), these
+		// Points are dimensions. The v2 schema descriptions unify the wording.
+		if an.Type == "resize" && (an.From == nil || an.To == nil) {
+			return ve(af, "resize requires both from and to (width/height px pairs)")
 		}
 		// NO coordinate clamping exists anywhere (an earlier revision of this
 		// comment claimed a projection-time clamp — it never did): out-of-

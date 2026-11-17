@@ -297,6 +297,14 @@ func elementMap(el Element) map[string]any {
 			if an.StartAnchor != nil {
 				am["startAnchor"] = an.StartAnchor
 			}
+			// atFrame (v1 bridge to v2 `at:{frame}`, spec §2.8.1): pointer
+			// projects as a number only when set, so legacy IRs produce no key
+			// and the builder's atFrame path never activates — byte-identical
+			// projection for old documents (same pattern as the element
+			// startFrame/endFrame passthrough above).
+			if an.AtFrame != nil {
+				am["atFrame"] = *an.AtFrame
+			}
 			if an.Easing != "" {
 				am["easing"] = an.Easing
 			}

@@ -186,6 +186,13 @@
   //   3. unanchored + no window → the dispatch-computed default (0), the
   //      legacy back-compat path for hand-authored IRs.
   function fadeAnchorTime(an, node, at, isFadeIn) {
+    // atFrame (v1 bridge to the v2 `at:{frame}` object, spec §2.8.1): an
+    // explicit frame anchor takes precedence over BOTH fallbacks below —
+    // the word anchor (write-time mutually exclusive with atFrame) and the
+    // owning element's window. At dispatch the caller already passes
+    // at = atFrame/fps; returning it here keeps this function independently
+    // correct for the fade path (which otherwise re-derives its own time).
+    if (typeof an.atFrame === 'number') return an.atFrame / fps;
     if (an.resolvedFrom && an.resolvedFrom.wordIndex >= 0) return at;
     var el = elementRecordOf(node.id);
     if (!el) return at;
@@ -372,6 +379,22 @@
       tl.fromTo(node, { autoAlpha: 1 },
         { autoAlpha: 0, duration: an.durationFrames / fps, ease: an.easing || 'power2.out',
           immediateRender: false }, t);
+    },
+    // resize (v1 increment, versus pilot): width/height tween anchored
+    // TOP-LEFT (progress-bar semantics — width grows rightward, height grows
+    // downward; From/To Points carry (w,h) px pairs, unlike move's absolute
+    // position Points). immediateRender stays at the DEFAULT (true, same as
+    // move): fromTo writes the from-size at build time, which is harmless
+    // for an element inside its hidden pre-window phase (invisible anyway)
+    // and CORRECT for an always-mounted element — t=0 must sit at the from
+    // state (a progress bar starts empty). fadeIn/fadeOut disable
+    // immediateRender for opacity-specific reasons (build-time autoAlpha
+    // leaks, see above); size has no such leak.
+    resize: function (tl, node, an, at) {
+      if (!an.from || !an.to) return; // write-time gate rejects this; skip = read-time tolerance
+      tl.fromTo(node, { width: an.from.x, height: an.from.y },
+        { width: an.to.x, height: an.to.y,
+          duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
     }
   };
 
@@ -450,7 +473,20 @@
           if (window.console) console.warn('ploykit-video: unknown animation type skipped: ' + an.type);
           return; // unknown animation type: skip (read-time tolerance)
         }
-        builder(tl, node, an, an.resolvedFrom && an.resolvedFrom.wordIndex >= 0 ? anchorTime(an.resolvedFrom) : 0);
+        // Anchor precedence (atFrame v1 bridge to the v2 `at:{frame}` object,
+        // spec §2.8.1): an explicit atFrame wins; without one the legacy
+        // word-anchor time applies (write-time the two are mutually
+        // exclusive — atFrame first keeps hand-edited IRs unambiguous).
+        // Neither present → 0 (fadeIn/fadeOut additionally fall back to the
+        // owning element's window inside fadeAnchorTime, which itself defers
+        // to atFrame first).
+        var at = 0;
+        if (typeof an.atFrame === 'number') {
+          at = an.atFrame / fps;
+        } else if (an.resolvedFrom && an.resolvedFrom.wordIndex >= 0) {
+          at = anchorTime(an.resolvedFrom);
+        }
+        builder(tl, node, an, at);
       });
     });
 

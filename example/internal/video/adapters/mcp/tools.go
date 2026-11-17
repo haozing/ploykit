@@ -203,9 +203,10 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	type animateIn struct {
 		ProjectID       string         `json:"project_id" jsonschema:"project id"`
 		ElementID       string         `json:"element_id" jsonschema:"element id to animate"`
-		Type            string         `json:"type" jsonschema:"animation type: move|scaleIn|rotate|fadeIn|fadeOut"`
-		From            map[string]any `json:"from,omitempty" jsonschema:"move start {x,y}"`
-		To              map[string]any `json:"to,omitempty" jsonschema:"move end {x,y}"`
+		Type            string         `json:"type" jsonschema:"animation type: move|scaleIn|rotate|fadeIn|fadeOut|resize"`
+		From            map[string]any `json:"from,omitempty" jsonschema:"move start {x,y}; resize start {w,h} px"`
+		To              map[string]any `json:"to,omitempty" jsonschema:"move end {x,y}; resize end {w,h} px"`
+		AtFrame         *int           `json:"at_frame,omitempty" jsonschema:"explicit frame anchor (global timeline); mutually exclusive with start_anchor — use this when timing to the beat instead of to a script word"`
 		FromValue       *float64       `json:"fromValue,omitempty" jsonschema:"scaleIn/rotate start value"`
 		ToValue         *float64       `json:"toValue,omitempty" jsonschema:"scaleIn/rotate end value"`
 		StartAnchor     string         `json:"start_anchor,omitempty" jsonschema:"anchor word text the animation starts at"`
@@ -216,7 +217,8 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		WorkspaceID     string         `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 	}
 	mcpAdd(s, "video_animate_element",
-		"Append a start-anchored animation to an element (move/scaleIn/rotate/fadeIn/fadeOut). "+
+		"Append an animation to an element (move/scaleIn/rotate/fadeIn/fadeOut/resize). "+
+			"Timing: start_anchor ties it to a script word; at_frame (0-based, global timeline, mutually exclusive with start_anchor) ties it to an explicit beat — resize is width/height px from {w,h} to {w,h}, top-left anchored. "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in animateIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
@@ -236,6 +238,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			if in.StartAnchor != "" {
 				an.StartAnchor = &videoapp.Anchor{Text: in.StartAnchor, Occurrence: in.Occurrence}
 			}
+			an.AtFrame = in.AtFrame
 			if err := requireElementArg(ctx, deps, p, in.ProjectID, in.ElementID); err != nil {
 				return nil, err
 			}
