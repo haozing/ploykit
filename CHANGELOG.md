@@ -9,6 +9,54 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.33.0] — 2026-11-17
+
+Go-only release (no `packages/` code touched). Theme: **closing the gap list
+the full-catalog replication run surfaced** — all eleven TikTok concept films
+were replicated on the IR pipeline (one pass each after probing, every render
+PSNR-gated), and every capability gap the run hit is now either fixed here
+(brand fonts, formatted counters, frame-anchored effects, probe entry point,
+in-out easing, legacy frame rates) or has its structural fix landing in this
+same release (transform origins, clip windows, blend modes).
+
+### Added
+- **video: brand fonts in the IR (`fontAssets`)** — the eleven-film run baked
+  every Baloo/Nunito text layer to PNG (the polished counter alone was 31 PNG
+  window elements out of 92). `fontAssets: [{key, family, weight}]` resolves
+  through the same asset pipeline as images (registered-key write gate, woff2
+  magic-byte + extension whitelist, upload kind `font`), and the projector
+  injects one `@font-face` per asset behind the existing `fonts.ready` gate —
+  preview CSP gains `font-src 'self'`. Old IRs project byte-identical
+  (fixture SHA-256 verified before/after).
+- **video: formatted counters with explicit frame anchors** — `counter`
+  effects accept `format` (a literal template, `"0:{v}"` → `"0:23.92"`) and
+  `decimals`, and effects now take `atFrame` (same mutual-exclusion and bounds
+  contract as animations): the speedrun timer no longer needs PNG stepping,
+  and counters no longer depend on word timing.
+- **video: `render.ProbeFrames` — the probe entry point, promoted** — the
+  eleven-film run's authors each hand-rolled the same dump-and-seek DOM probe;
+  it is now an exported function (`project → SnapshotMulti`, frame-bounds
+  validated, ErrNotConfigured stub on the default build). DOM-state
+  assertions stay with the inspectable-tab pattern for now (noted in code).
+- **video: element `transformOrigin`, `clip`, and `mixBlendMode`** — the three
+  structural gaps ranked worst by the replication run's friction logs. A
+  `clip` is a fixed camera window implemented as an untransformed wrapper
+  (clip-path on the node itself would ride the node's own transform — the
+  spotdiff "card frame + in-frame camera" pattern is one field now);
+  `mixBlendMode` is a safe-list with `#canvas isolation: isolate` (the day
+  color-grading system becomes 5 overlay elements instead of 5 baked states);
+  `transformOrigin` removes the hand-derived center-scale compensation math
+  two pilots had to do. Old IRs project byte-identical.
+
+### Changed
+- **video: easing whitelist gains `power2.inOut`** — three films hand-fit
+  in-out curves with three-segment polylines; the whitelist also had a latent
+  bug where the pulse effect's own second leg used an easing the write gate
+  rejected.
+- **video: fps whitelist gains 18 and 20** — four original films were 18/20fps;
+  replicating them at 30fps cost 50% extra frames and broke frame-number
+  alignment for PSNR sampling.
+
 ## [0.32.1] — 2026-11-17
 
 Go-only hotfix (no `packages/` code touched). Found within the hour by the

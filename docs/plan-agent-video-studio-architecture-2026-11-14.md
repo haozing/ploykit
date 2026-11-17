@@ -329,6 +329,18 @@ example/web/
 2. **resize 动画类型**：宽高 tween，`From`/`To` Point 携 (w,h) 像素。**语义显式声明：左上角锚定，宽度增长向右扩展**（进度条语义）——与 `move` 的**中心坐标语义**刻意不同。这一原点不一致是 v2 要统一的历史包袱（v2 spec §2.8：move 定为绝对中心坐标，元素 x/y 维持角点原点），v1 期间两者并存、各自文档化。试点对照：进度条不再拆 30 个手算窗口 shape，单元素 15 段 resize 链 + 淡出即成（也是 MaxAnimationsPerElement 16→32 的直接动因，见 §5.2 第 7 条）。
 3. **target-less shake = 整画布相机的既有语义澄清**（X-4 语义钉住）：不带 `targetElementId` 的 `pulse`/`shake` 作用于 `#canvas` 整层（timeline-builder 的既有回退分支）——即「相机震动/全画布脉冲」在 v1 本就可表达，无需新能力。versus 试点曾误判「相机震动不可表达」而把震动烘焙进贴纸；实为既有能力，特此钉住——工具描述与后续文档不得再把它宣传为缺口。
 
+### 5.4b 2026-11-17（晚）增量能力（11 片全量复刻摩擦驱动）
+
+> v0.33.0 落地的六项能力，来源是 11 个 TikTok 概念片全量复刻的 FRICTION.md 实测清单（`tool-site/.runtime/videos/*-pilot/FRICTION.md`）；全部为加法，**旧 IR 投影逐字节不变**（双 agent 各自以 fixture SHA-256 前后比对固化，`TestProjector_LegacyPayloadByteIdentical` 钉住）。
+
+1. **元素 `transformOrigin`**（CSS transform-origin 字符串，默认空=50% 50%）：scaleIn/rotate/pulse 继承节点 style——消灭「中心缩放锚点补偿数学」整类作者负担（turn/spotdiff 两个试点手推公式的教训；builder 中 scaleIn/rotate 写死的 '50% 50%' 已删）。
+2. **元素 `clip`**（固定相机窗）：`{x,y,w,h,radius}` 画布坐标。**实现为 untransformed wrapper**（`#clipwrap-<id>` 定位窗几何 + inset(0 round)，元素在内做 scaleIn/move/rotate——窗恒定）：实测 clip-path 挂节点会随节点自身 transform 移动（scale=2 时窗坐标被缩放），wrapper 是唯一正确形态。spotdiff 的「卡框+框内运镜」从每 punch 烘独立整卡变为单房间图+clip。**clip 与 mixBlendMode 组合时 blend 上移 wrapper**（clip-path 自成隔离组，组内 blend 静默失效——实测）。
+3. **元素 `mixBlendMode`**（15 值 CSS 白名单）+ `#canvas isolation: isolate`：day 的色温系统（multiply 调色+screen 光斑）从 5 张整卡状态烘焙变为 5 个全屏色罩元素。
+4. **品牌字体进 IR**：顶层 `fontAssets: [{key,family,weight}]`，key 走 video/ 登记校验（validateAssetRefs 纳入）、上传白名单 woff2（magic bytes "wOF2"）、projector 注入 @font-face（fonts.ready 门），preview CSP 补 `font-src 'self'`。polished 的计数场景从 31 张 PNG 窗口链（31/92 元素）变为原生 text。
+5. **counter 增强**：params 增 `format`（字面模板 `"0:{v}"`→"0:23.92"）与 `decimals`；**Effect 增 `atFrame`**（与动画同语义：与词锚互斥、ResolveAll 跳过词解析）——speedrun 计时器不再 PNG 步进、counter 不再绑词表。
+6. **`render.ProbeFrames` 转正**（探针一等化）：`ProbeFrames(ctx, ir, assets, frames, opts)` = 投影+SnapshotMulti 单入口（帧界校验、非 capx stub 返回 ErrNotConfigured）。DOM 断言暂留 inspectable-tab 模式（probe_types 注释指路）——11 片作者各自手搓 dump+seek 探针的时代结束。
+7. **杂项**：easing 白名单 + `power2.inOut`（顺手修了 pulse 第二腿用白名单外缓动的 v1 隐性 bug）；fps 白名单 + 18/20（原片帧号对齐，省 50% 升帧成本）。
+
 ---
 
 ## 6. app/service：所有入口的唯一写路径
