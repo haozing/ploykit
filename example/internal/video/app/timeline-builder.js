@@ -65,11 +65,57 @@
     }
     node.id = el.id;
     node.className = (node.className ? node.className + ' ' : '') + 'el';
-    node.style.left = el.x + 'px';
-    node.style.top = el.y + 'px';
+    // Clip wrapper (2026-11-17, camera gap — spotdiff hunt-drift / rain-pilot
+    // 运镜缓推): el.clip is a FIXED camera window in canvas coordinates. A
+    // clip-path on the element node itself would ride the element's own
+    // transform (browser-verified: at scale=2 a local clip [100,200]×[100,300]
+    // rendered as [0,200]×[0,400]), so the window is realized as an
+    // UNTRANSFORMED wrapper div positioned at the clip rect; the element
+    // mounts INSIDE it with left/top rebased by (clip.x, clip.y), and every
+    // animation (scaleIn/rotate/move/pulse) plays inside the fixed window —
+    // the "卡框内房间相机" semantics. z-index moves to the wrapper (painting
+    // order is a wrapper property now). Elements without el.clip mount bare
+    // exactly as before — zero behavior change for legacy IRs.
+    var mount = node;
+    if (el.clip) {
+      var wrap = document.createElement('div');
+      wrap.id = 'clipwrap-' + el.id;
+      wrap.className = 'el-clipwrap';
+      wrap.style.left = el.clip.x + 'px';
+      wrap.style.top = el.clip.y + 'px';
+      wrap.style.width = el.clip.w + 'px';
+      wrap.style.height = el.clip.h + 'px';
+      wrap.style.clipPath = 'inset(0px round ' + el.clip.radius + 'px)';
+      wrap.style.zIndex = String(1 + (el.z || 0));
+      node.style.left = (el.x - el.clip.x) + 'px';
+      node.style.top = (el.y - el.clip.y) + 'px';
+      wrap.appendChild(node);
+      mount = wrap;
+    } else {
+      node.style.left = el.x + 'px';
+      node.style.top = el.y + 'px';
+    }
     if (el.w) node.style.width = el.w + 'px';
     if (el.h) node.style.height = el.h + 'px';
-    node.style.zIndex = String(1 + (el.z || 0));
+    if (!el.clip) node.style.zIndex = String(1 + (el.z || 0));
+    // transformOrigin (2026-11-17, camera/group-transform gap): written to
+    // the element node's style; GSAP tweens inherit the node's
+    // transform-origin when their vars don't carry one (browser-verified), so
+    // scaleIn/rotate/pulse follow the element's own origin with zero changes
+    // in animBuilders. Empty = CSS default 50% 50% (v1 behavior unchanged).
+    if (el.transformOrigin) node.style.transformOrigin = el.transformOrigin;
+    // mixBlendMode (2026-11-17, day-pilot 色温 groundwork): the element
+    // blends with what it paints over. WITHOUT a clip wrapper it lands on
+    // the element node itself. WITH one it must move to the WRAPPER: a
+    // clip-path element forms an isolated group, so a blend on the inner
+    // node would only blend against the (transparent) wrapper interior and
+    // silently no-op (browser-verified: multiply-white showed opaque white
+    // instead of identity inside a clip-path wrapper). #canvas carries
+    // isolation:isolate (projector CSS) so blends never leak past the stage.
+    if (el.mixBlendMode) {
+      if (el.clip) mount.style.mixBlendMode = el.mixBlendMode;
+      else node.style.mixBlendMode = el.mixBlendMode;
+    }
     // Element time window (P0-1, case library §5.16 / T-09): a windowed
     // element starts INVISIBLE so frames before startFrame are clean — the
     // window sets on the timeline re-show it exactly at startFrame (below).
@@ -85,6 +131,9 @@
     // visibly mounted (the DOM default) or frame F0 renders without it
     // (C08's full-canvas el_bg went black at F0 — batch-6 finding). The
     // endFrame hide-set below still applies on every seek ≥ its position.
+    // The visibility style (and the timeline sets below) stay on the
+    // ELEMENT node even when a clip wrapper exists: hiding the child hides
+    // the wrapper's paint (an empty wrapper clips nothing visible).
     if (typeof el.startFrame === 'number' && el.startFrame > 0) {
       node.style.visibility = 'hidden';
     } else if (typeof el.startFrame !== 'number' && typeof el.endFrame === 'number') {
@@ -92,8 +141,21 @@
       // same reasoning — start mounted, the tl.set hides it at tEnd.
       node.style.visibility = 'visible';
     }
-    canvas.appendChild(node);
+    canvas.appendChild(mount);
     return node;
+  }
+
+  // clipOrigin returns the canvas-coordinate rebase a node's left/top carry
+  // when it mounts inside a clip wrapper (0,0 when bare-mounted). The wrapper
+  // is identified by the id buildClipDOM assigns; its parsed left/top ARE the
+  // clip window origin in canvas coordinates.
+  function clipOrigin(node) {
+    if (!node || !node.parentNode) return { x: 0, y: 0 };
+    var p = node.parentNode;
+    if (p.id && p.id.indexOf('clipwrap-') === 0) {
+      return { x: parseFloat(p.style.left || 0), y: parseFloat(p.style.top || 0) };
+    }
+    return { x: 0, y: 0 };
   }
 
   // Frame → seconds on the global timeline (§7.0 clock: frame = ceil(t ×
@@ -238,6 +300,10 @@
     // a full-frame breathing beat).
     pulse: function (tl, node, fx, at) {
       var scale = (fx.params && fx.params.scale) || 1.2;
+      // NOTE: the second leg's 'power2.inOut' spent all of v1 OUTSIDE the
+      // ir.go easing whitelist (a hidden bug — the builder used a value
+      // authors could not themselves declare); it was legalized 2026-11-17
+      // alongside the author-facing whitelist entry.
       tl.to(node, { scale: scale, duration: 0.18, ease: 'power2.out' }, at)
         .to(node, { scale: 1, duration: 0.3, ease: 'power2.inOut' }, at + 0.18);
     },
@@ -245,10 +311,22 @@
       var from = fx.params && typeof fx.params.from === 'number' ? fx.params.from : 0;
       var to = fx.params && typeof fx.params.to === 'number' ? fx.params.to : 100;
       var suffix = (fx.params && fx.params.suffix) || '';
+      // format/decimals（2026-11-17，speedrun 摩擦：毫秒计时器 "0:23.87" 在
+      // 整数 tween 下不可表达）：fmt 是数字格式模板，"{v}" 占位符替换为
+      // toFixed(dec) 的值，字面文本允许（"0:{v}" → "0:23.87"）；dec=0 时
+      // toFixed(0) 兼容旧的 Math.round 行为（0.5 向上 vs 四舍五入的差异只在
+      // 0.5 档且被 suffix/整数路径的渲染容差吸收——首帧 from=0、末帧 from=to
+      // 都是精确值）。
+      var fmt = (fx.params && fx.params.format) || '';
+      var dec = fx.params && typeof fx.params.decimals === 'number' ? fx.params.decimals : 0;
       var obj = { v: from };
       tl.to(obj, {
         v: to, duration: Math.min(1.2, Math.max(0.3, durationSec - at)),
-        ease: 'power1.out', onUpdate: function () { node.textContent = Math.round(obj.v) + suffix; }
+        ease: 'power1.out', onUpdate: function () {
+          node.textContent = fmt
+            ? fmt.replace('{v}', obj.v.toFixed(dec)) + suffix
+            : obj.v.toFixed(dec) + suffix;
+        }
       }, at);
     },
     // highlight (T-12 complete form, case library §5.12 / §3.1.4 C01): on a
@@ -310,24 +388,36 @@
   };
 
   var animBuilders = {
+    // move: From/To Points are ABSOLUTE canvas coordinates (v1 semantics).
+    // The element's own left/top carry that same absolute position when it
+    // mounts bare; inside a clip wrapper left/top are rebased by (clip.x,
+    // clip.y), so clipOrigin() reconstructs the absolute anchor (adds the
+    // rebase back). Legacy IRs (no wrapper) keep the exact old arithmetic.
     move: function (tl, node, an, at) {
-      var from = an.from || { x: parseFloat(node.style.left), y: parseFloat(node.style.top) };
+      var baseX = parseFloat(node.style.left || 0) + clipOrigin(node).x;
+      var baseY = parseFloat(node.style.top || 0) + clipOrigin(node).y;
+      var from = an.from || { x: baseX, y: baseY };
       var to = an.to || { x: from.x, y: from.y };
       tl.fromTo(node,
-        { x: from.x - parseFloat(node.style.left || 0), y: from.y - parseFloat(node.style.top || 0) },
-        { x: to.x - parseFloat(node.style.left || 0), y: to.y - parseFloat(node.style.top || 0),
+        { x: from.x - baseX, y: from.y - baseY },
+        { x: to.x - baseX, y: to.y - baseY,
           duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
     },
+    // scaleIn/rotate: NO transformOrigin in the vars — GSAP inherits the
+    // node's style transform-origin (browser-verified 2026-11-17), so the
+    // element's own el.transformOrigin (buildClipDOM) drives the pivot.
+    // Empty style = CSS default 50% 50% = the old hardcoded value, so legacy
+    // IRs render identically.
     scaleIn: function (tl, node, an, at) {
       var fromV = typeof an.fromValue === 'number' ? an.fromValue : 0;
       var toV = typeof an.toValue === 'number' ? an.toValue : 1;
-      tl.fromTo(node, { scale: fromV, transformOrigin: '50% 50%' },
+      tl.fromTo(node, { scale: fromV },
         { scale: toV, duration: an.durationFrames / fps, ease: an.easing || 'back.out' }, at);
     },
     rotate: function (tl, node, an, at) {
       var fromV = typeof an.fromValue === 'number' ? an.fromValue : 0;
       var toV = typeof an.toValue === 'number' ? an.toValue : 360;
-      tl.fromTo(node, { rotation: fromV, transformOrigin: '50% 50%' },
+      tl.fromTo(node, { rotation: fromV },
         { rotation: toV, duration: an.durationFrames / fps, ease: an.easing || 'linear' }, at);
     },
     // fadeIn/fadeOut (P0-2, case library §5.16): element-level opacity
@@ -506,8 +596,18 @@
         if (window.console) console.warn('ploykit-video: unknown effect type skipped: ' + fx.type);
         return;
       }
-      var at = anchorTime(fx.resolvedFrom);
-      if (fx.resolvedFrom && fx.resolvedFrom.reason === 'missing') return; // unresolved: skip (§4.2.4)
+      // Anchor precedence (effect-side atFrame, 2026-11-17 — the twin of the
+      // animation dispatch above): an explicit atFrame wins and the word
+      // resolution is not consulted at all (zero-word compositions are the
+      // motivating case — speedrun's timer). Without one, the legacy word
+      // anchor applies; an unresolved (missing) anchor still skips (§4.2.4).
+      var at = 0;
+      if (typeof fx.atFrame === 'number') {
+        at = fx.atFrame / fps;
+      } else {
+        if (fx.resolvedFrom && fx.resolvedFrom.reason === 'missing') return; // unresolved: skip (§4.2.4)
+        at = anchorTime(fx.resolvedFrom);
+      }
       // X-4 target dispatch: counter keeps its host builder; highlight/fade
       // fall back to the z-10000 canvas overlay when there is no element
       // target (visible whole-frame flash instead of the occluded #canvas
@@ -633,9 +733,13 @@
       if (targetEl) {
         // position onto the target element's bbox (IR geometry; the node is
         // appended to #canvas which is inset:0 of #stage, so left/top are
-        // stage-relative — identical coordinate space to buildClipDOM)
-        node.style.left = targetEl.style.left;
-        node.style.top = targetEl.style.top;
+        // stage-relative — identical coordinate space to buildClipDOM). A
+        // clip-wrapped target carries REBASED left/top; clipOrigin() restores
+        // the absolute canvas position so the counter lands on the element,
+        // not offset by the camera window.
+        var co = clipOrigin(targetEl);
+        node.style.left = (parseFloat(targetEl.style.left || 0) + co.x) + 'px';
+        node.style.top = (parseFloat(targetEl.style.top || 0) + co.y) + 'px';
       }
       canvas.appendChild(node);
     }

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -88,16 +89,45 @@ type ResolvedFrom struct {
 // when TargetElementID names an existing element the counter host is
 // positioned at that element's bbox instead. Write-time validated (must
 // reference an existing element id); absent = origin behavior (back-compat).
+//
+// AtFrame (2026-11-17, 11-clip replication friction — speedrun's timer
+// counter needed a timeline anchor with ZERO words in the composition) is
+// the effect-side twin of ElementAnimation.AtFrame: an explicit frame anchor
+// on the GLOBAL timeline (same clock, frame = ceil(t × fps)) so a counter can
+// start at frame N without a word there. Mutually exclusive with Anchor
+// (both set = 400; anchor.text is only required when AtFrame is nil); when
+// set, anchor resolution is skipped entirely (ResolveAll leaves ResolvedFrom
+// nil — the builder keys off atFrame and never reads word resolution).
 type Effect struct {
 	ID              string          `json:"id"`
 	Anchor          Anchor          `json:"anchor"`
 	Type            string          `json:"type"`
 	Params          json.RawMessage `json:"params,omitempty"`
 	TargetElementID string          `json:"targetElementId,omitempty"`
+	AtFrame         *int            `json:"atFrame,omitempty"`
 	ResolvedFrom    *ResolvedFrom   `json:"resolvedFrom,omitempty"`
 }
 
-// Point is a 2D canvas coordinate (also used for from/to animation endpoints).
+// FontAsset registers one brand font the composition depends on (2026-11-17,
+// 11-clip replication friction: every clip bakes its brand typography into
+// PNGs because the IR could not carry a font). Key is a storagex
+// video/<workspace>/ storage key (same prefix rule as image src — fonts ride
+// the same upload/registry lane); Family is the CSS font-family name authors
+// reference in their own tooling (and the projector emits in @font-face);
+// Weight is an optional CSS font-weight value ("800" or a "400 900" range).
+type FontAsset struct {
+	Key    string `json:"key"`
+	Family string `json:"family"`
+	Weight string `json:"weight,omitempty"`
+}
+
+// validFontFamilyRe is the Family charset: alphanumerics, spaces,
+// underscores and hyphens — enough for "My Brand Bold"/"Noto_Sans" style
+// names while excluding quotes/semicolons/braces (the projector splices
+// Family into a <style> @font-face rule, so CSS metacharacters are a
+// injection vector, same reasoning as the element src URL gate).
+var validFontFamilyRe = regexp.MustCompile(`^[A-Za-z0-9 _-]+$`)
+
 type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
@@ -129,6 +159,42 @@ type ElementAnimation struct {
 	ResolvedFrom   *ResolvedFrom   `json:"resolvedFrom,omitempty"`
 	Extra          json.RawMessage `json:"extra,omitempty"`
 }
+
+// Clip is a FIXED camera window in CANVAS coordinates (round-rect) — the
+// flat v1 form of "卡框内房间相机" (spotdiff hunt-drift promotion, rain-pilot
+// 运镜缓推): the element's content scales/moves/rotates INSIDE the window
+// while the window stays put on the canvas. The builder realizes this with
+// an untransformed wrapper node — a clip-path on the element node itself
+// would ride the element's own transform (browser-verified 2026-11-17: at
+// scale=2 a local clip [100,200]×[100,300] rendered as [0,200]×[0,400]).
+type Clip struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	W      float64 `json:"w"`
+	H      float64 `json:"h"`
+	Radius float64 `json:"radius"` // corner rounding; 0 = square window
+}
+
+// validMixBlendModes is the CSS compositing whitelist (safe set). This is
+// the day-pilot 色温 system's groundwork: a color-grade overlay element with
+// multiply/screen expresses morning→noon→dusk→night without baking 5-state
+// cards, and #canvas gets isolation:isolate so blends never leak past the
+// stage (projector CSS).
+var validMixBlendModes = map[string]bool{
+	"multiply": true, "screen": true, "overlay": true, "soft-light": true,
+	"hard-light": true, "color-dodge": true, "color-burn": true, "darken": true,
+	"lighten": true, "difference": true, "exclusion": true, "hue": true,
+	"saturation": true, "color": true, "luminosity": true,
+}
+
+// transformOriginRe accepts the CSS transform-origin forms this domain
+// allows: "X Y" pairs and the bare "center" shorthand. Axis values are
+// keywords (top|center|bottom first slot; top|center|bottom|left|right|
+// center second slot) or finite numbers with % / px unit. Empty = 50% 50%
+// (the v1 behavior before the field existed — GSAP inherits the node's
+// style transform-origin, browser-verified 2026-11-17).
+var transformOriginRe = regexp.MustCompile(
+	`^(?:(top|center|bottom|\d+(\.\d+)?(%|px)?) (top|center|bottom|left|right|center|\d+(\.\d+)?(%|px)?)|center)$`)
 
 // Element is one composable layer on the canvas.
 //
@@ -165,6 +231,23 @@ type Element struct {
 	// meta extended by voice duration — not meta-only).
 	StartFrame *int `json:"startFrame,omitempty"`
 	EndFrame   *int `json:"endFrame,omitempty"`
+
+	// TransformOrigin (2026-11-17, camera/group-transform gap): a CSS
+	// transform-origin value ("top center" / "50% 0" / "top left"…) the
+	// builder writes onto the element node's style. GSAP tweens inherit the
+	// node's transform-origin when their vars don't carry one, so
+	// scaleIn/rotate/pulse follow the element's own origin without touching
+	// animBuilders. Empty = 50% 50% (v1 behavior unchanged).
+	TransformOrigin string `json:"transformOrigin,omitempty"`
+	// Clip is the fixed camera window (see the Clip struct). Nil = no
+	// wrapper, the element mounts bare exactly as before (byte-identical
+	// projection for legacy IRs).
+	Clip *Clip `json:"clip,omitempty"`
+	// MixBlendMode is a whitelisted CSS mix-blend-mode (see
+	// validMixBlendModes). Blending is element-vs-below semantics and stays
+	// on the element node even when a clip wrapper exists (clip and blend
+	// are orthogonal axes).
+	MixBlendMode string `json:"mixBlendMode,omitempty"`
 
 	Animations []ElementAnimation `json:"animations,omitempty"`
 }
@@ -227,14 +310,18 @@ const IRSchemaVersion = 1
 // embedded `version` coexisted with video_project.version (two truths that
 // drift); normalizeSchema strips the legacy key from old documents.
 type IR struct {
-	SchemaVersion int                 `json:"schemaVersion"`
-	Meta          Meta                `json:"meta"`
-	Script        string              `json:"script"`
-	Words         []Word              `json:"words"`
-	Effects       []Effect            `json:"effects"`
-	Elements      []Element           `json:"elements"`
-	Audio         *Audio              `json:"audio,omitempty"`
-	unknown       map[string]struct{} // reserved: read-time tolerance marker
+	SchemaVersion int       `json:"schemaVersion"`
+	Meta          Meta      `json:"meta"`
+	Script        string    `json:"script"`
+	Words         []Word    `json:"words"`
+	Effects       []Effect  `json:"effects"`
+	Elements      []Element `json:"elements"`
+	// FontAssets（2026-11-17，品牌字体进 IR）：omitempty 让存量文档零变化——
+	// 无字体的 IR 序列化字节不变（回归硬规则）。Family 需在投影时唯一（校验
+	// 拒绝重复），Key 走 validateAssetRefs 的登记检查（同 image src）。
+	FontAssets []FontAsset         `json:"fontAssets,omitempty"`
+	Audio      *Audio              `json:"audio,omitempty"`
+	unknown    map[string]struct{} // reserved: read-time tolerance marker
 }
 
 // normalizeSchema stamps the current schema version and removes the legacy
@@ -260,9 +347,16 @@ const (
 	// 粗代理，真正的资源闸门是 IR 总量。
 	MaxAnimationsPerElement = 32
 	MaxIRBytes              = 256 << 10 // 256 KiB
+	// MaxFontAssets（2026-11-17）：品牌字体条目上限。每条只是一对
+	// key/family 字符串（字体字节本体在 storagex，不进 IR），上限防的是
+	// 注册表膨胀，不是资源——与 MaxElements 同理的粗代理。
+	MaxFontAssets = 16
 )
 
-var validFPS = map[int]bool{24: true, 25: true, 30: true, 50: true, 60: true}
+// 18/20（2026-11-17 新增，11 片复刻摩擦）：原片素材大量来自 20fps 录制
+// （speedrun/rain/disaster 三片全是），复刻被迫升 30fps 平白多付 50% 帧成本；
+// 18fps 是逐帧手绘/低帧率动画常见档。两档都是 capx 渲染时钟可整除的档位。
+var validFPS = map[int]bool{18: true, 20: true, 24: true, 25: true, 30: true, 50: true, 60: true}
 
 var validEffects = map[string]bool{
 	EffectPulse: true, EffectCounter: true, EffectHighlight: true,
@@ -284,6 +378,10 @@ var validAnimationTypes = map[string]bool{
 var validEasings = map[string]bool{
 	"linear": true, "power1.out": true, "power2.out": true, "power3.out": true,
 	"back.out": true, "expo.out": true,
+	// power2.inOut（2026-11-17 新增，11 片复刻摩擦）：builder 的 pulse 特效
+	// 第二腿早已写死 'power2.inOut'（GSAP 原生缓动）——v1 隐性 bug：特效内部
+	// 用的值本就不在校验白名单里，作者侧却无法显式选用同一族缓动。转正它。
+	"power2.inOut": true,
 }
 
 var validWordSources = map[string]bool{
@@ -342,10 +440,26 @@ func Validate(ir *IR) error {
 		if !validEffects[fx.Type] {
 			return ve(fmt.Sprintf("effects[%d].type", i), "type must be one of the registered effects (pulse|counter|highlight|shake|fade)")
 		}
-		if fx.Anchor.Text == "" {
-			return ve(fmt.Sprintf("effects[%d].anchor.text", i), "anchor text is required")
-		}
-		if fx.Anchor.Occurrence < 0 {
+		// atFrame (effect-side twin of ElementAnimation.AtFrame, same rules):
+		// mutually exclusive with the word anchor; the anchor-text requirement
+		// only applies to word-anchored effects (an atFrame effect needs no
+		// word, which is the point — speedrun's zero-word timer). Bounded by
+		// DurationFrames with the window-style <= allowance (== F legal).
+		if fx.AtFrame != nil {
+			if fx.Anchor.Text != "" || fx.Anchor.Occurrence != 0 {
+				return ve(fmt.Sprintf("effects[%d].atFrame", i), "atFrame and anchor are mutually exclusive")
+			}
+			if *fx.AtFrame < 0 {
+				return ve(fmt.Sprintf("effects[%d].atFrame", i), "atFrame must be >= 0")
+			}
+			maxFrames := DurationFrames(ir, ir.Meta.FPS)
+			if *fx.AtFrame > maxFrames {
+				return ve(fmt.Sprintf("effects[%d].atFrame", i),
+					fmt.Sprintf("atFrame must be <= durationFrames (%d)", maxFrames))
+			}
+		} else if fx.Anchor.Text == "" {
+			return ve(fmt.Sprintf("effects[%d].anchor.text", i), "anchor text is required (or set atFrame for a wordless frame anchor)")
+		} else if fx.Anchor.Occurrence < 0 {
 			return ve(fmt.Sprintf("effects[%d].anchor.occurrence", i), "occurrence must be >= 0")
 		}
 		if err := validateEffectParams(fx.Type, fx.Params); err != nil {
@@ -376,6 +490,9 @@ func Validate(ir *IR) error {
 	if err := validateAudio(ir.Audio); err != nil {
 		return err
 	}
+	if err := validateFontAssets(ir.FontAssets); err != nil {
+		return err
+	}
 	// voice duration must cover the last word (audit C5): word timestamps
 	// running past the audio would truncate on render.
 	if ir.Audio != nil && ir.Audio.Voice != nil && ir.Audio.Voice.DurationSec > 0 && len(ir.Words) > 0 {
@@ -400,7 +517,7 @@ func validateMeta(m *Meta) error {
 		m.FPS = 30 // default per §4.2.2
 	}
 	if !validFPS[m.FPS] {
-		return ve("meta.fps", "fps must be one of 24|25|30|50|60")
+		return ve("meta.fps", "fps must be one of 18|20|24|25|30|50|60")
 	}
 	if m.Width < 360 || m.Width > 2160 {
 		return ve("meta.width", "width must be within 360-2160")
@@ -443,6 +560,13 @@ func validateEffectParams(typ string, params json.RawMessage) error {
 		allowed["to"] = "number"
 		allowed["suffix"] = "string"
 		allowed["color"] = "string"
+		// format/decimals（2026-11-17，11 片复刻摩擦）：speedrun 的毫秒计时器
+		// "0:23.87" 在整数 tween + suffix 下不可表达——只能烘 11 张 0.5s 步进
+		// 窗口 PNG 近似（4.2s 时点 PSNR 差的主因）。format 是数字格式模板，
+		// "{v}" 占位符替换为 toFixed(decimals) 后的值（如 "0:{v}" → "0:23.87"，
+		// 字面文本允许）；decimals 是 toFixed 小数位（0 = 整数，兼容旧行为）。
+		allowed["format"] = "string"
+		allowed["decimals"] = "number"
 	case EffectHighlight:
 		allowed["color"] = "string"
 	case EffectShake:
@@ -508,7 +632,7 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 			return ve(af+".durationFrames", "durationFrames must be > 0")
 		}
 		if an.Easing != "" && !validEasings[an.Easing] {
-			return ve(af+".easing", "easing must be one of linear|power1.out|power2.out|power3.out|back.out|expo.out")
+			return ve(af+".easing", "easing must be one of linear|power1.out|power2.out|power3.out|back.out|expo.out|power2.inOut")
 		}
 		if an.StartAnchor != nil {
 			if an.StartAnchor.Text == "" {
@@ -601,6 +725,38 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 				fmt.Sprintf("endFrame must be <= durationFrames (%d)", maxFrames))
 		}
 	}
+	// transformOrigin: keyword/percentage/px CSS values only (the projector
+	// splices it into node.style.transformOrigin, so free text is an
+	// injection surface AND a silent no-op — the regex accepts exactly the
+	// documented forms; anything else names its mistake with examples).
+	if el.TransformOrigin != "" && !transformOriginRe.MatchString(el.TransformOrigin) {
+		return ve(field+".transformOrigin",
+			`must be a CSS transform-origin like "top left", "top center", "50% 0" or "center"`)
+	}
+	// clip: finite canvas-geometry numbers, positive extents, radius within
+	// the round-rect physical bound (a radius past min(W,H)/2 is not a
+	// round-rect — the browser would clamp it, so the write gate rejects it
+	// instead of silently rendering a different shape than authored).
+	if el.Clip != nil {
+		cf := field + ".clip"
+		c := el.Clip
+		if !isFinite(c.X) || !isFinite(c.Y) || !isFinite(c.W) || !isFinite(c.H) || !isFinite(c.Radius) {
+			return ve(cf, "clip geometry must be finite numbers")
+		}
+		if c.W <= 0 || c.H <= 0 {
+			return ve(cf+".w", "clip w and h must be > 0")
+		}
+		if c.Radius < 0 || c.Radius > math.Min(c.W, c.H)/2 {
+			return ve(cf+".radius",
+				fmt.Sprintf("clip radius must be within 0-%.2f (min(w,h)/2)", math.Min(c.W, c.H)/2))
+		}
+	}
+	// mixBlendMode: whitelist only (the builder splices it into
+	// node.style.mixBlendMode; unknown values are a silent CSS no-op).
+	if el.MixBlendMode != "" && !validMixBlendModes[el.MixBlendMode] {
+		return ve(field+".mixBlendMode",
+			"must be one of multiply|screen|overlay|soft-light|hard-light|color-dodge|color-burn|darken|lighten|difference|exclusion|hue|saturation|color|luminosity")
+	}
 	return nil
 }
 
@@ -624,6 +780,51 @@ func validateAudio(a *Audio) error {
 		}
 		if t.Volume < 0 || t.Volume > 1 {
 			return ve(name+".volume", "volume must be within 0-1")
+		}
+	}
+	return nil
+}
+
+// validateFontAssets enforces the write-time shape of the brand-font
+// registry: key follows the same storagex video/ prefix rule as image src
+// (fonts upload through the same lane); family is required, charset-limited
+// (CSS metacharacters would be an injection vector in the projected
+// @font-face) and unique (a duplicate family is ambiguous CSS); weight is
+// optional but charset-checked for the same reason. The KEY's existence is
+// not checked here — it rides validateAssetRefs (registry-or-storage probe,
+// same contract as image src / audio keys).
+func validateFontAssets(assets []FontAsset) error {
+	if len(assets) > MaxFontAssets {
+		return ve("fontAssets", fmt.Sprintf("fontAssets exceeds %d entries", MaxFontAssets))
+	}
+	families := make(map[string]bool, len(assets))
+	for i := range assets {
+		fa := &assets[i]
+		field := fmt.Sprintf("fontAssets[%d]", i)
+		if fa.Family == "" {
+			return ve(field+".family", "family is required")
+		}
+		if !validFontFamilyRe.MatchString(fa.Family) {
+			return ve(field+".family", "family must match ^[A-Za-z0-9 _-]+$ (no quotes/semicolons — it is spliced into the projected @font-face)")
+		}
+		if families[fa.Family] {
+			return ve(field+".family", "duplicate family "+fa.Family+" (a family may only be registered once)")
+		}
+		families[fa.Family] = true
+		if fa.Key == "" {
+			return ve(field+".key", "key is required")
+		}
+		if strings.Contains(fa.Key, "://") || strings.HasPrefix(fa.Key, "data:") {
+			return ve(field+".key", "key must be a video/<workspace_id>/ storage key; external URLs are rejected")
+		}
+		if !strings.HasPrefix(fa.Key, "video/") {
+			return ve(field+".key", "key must start with video/<workspace_id>/")
+		}
+		if fa.Weight != "" && !validFontFamilyRe.MatchString(fa.Weight) {
+			// weight shares the family charset with digits added by the same
+			// class — "800" and "400 900" both fit; the check exists to keep
+			// CSS metacharacters out of the projected rule.
+			return ve(field+".weight", `weight must look like "800" or "400 900" (digits and spaces only)`)
 		}
 	}
 	return nil
@@ -768,6 +969,12 @@ func ResolveAll(ir *IR, prevIndexes map[string]int) []AnchorResolution {
 	}
 	for i := range ir.Effects {
 		fx := &ir.Effects[i]
+		// atFrame-anchored effects skip word resolution entirely (the anchor
+		// is an explicit frame, not a word — writing a ResolvedFrom would be
+		// a fabricated audit trail; the builder keys off atFrame alone).
+		if fx.AtFrame != nil {
+			continue
+		}
 		if fx.ResolvedFrom == nil {
 			rf := ResolvedFrom{}
 			fx.ResolvedFrom = &rf

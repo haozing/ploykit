@@ -193,8 +193,11 @@ func (d Deps) handlePreview(w http.ResponseWriter, r *http.Request, p *webx.Prin
 	}
 	// font-src data: — the projector inlines the Noto Sans SC subset as a
 	// data URI @font-face (F-FNT-01); default-src 'none' would block it.
+	// 'self' — brand fonts (ir.fontAssets) resolve to the authorized
+	// same-origin /api/video/files URL on the preview path (render inlines
+	// them as data: URIs); without 'self' the preview CSP would block them.
 	h.Set("Content-Security-Policy", "default-src 'none'; script-src "+hash+
-		"; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; media-src 'self';"+
+		"; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self';"+
 		" frame-ancestors 'self'; base-uri 'none'; form-action 'none'")
 	h.Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(html)
@@ -377,7 +380,14 @@ func workspaceFromKey(key string) (string, bool) {
 
 func contentTypeFor(key string) string {
 	if i := strings.LastIndexByte(key, '.'); i >= 0 {
-		return mime.TypeByExtension(key[i:])
+		ext := key[i:]
+		if ext == ".woff2" {
+			// mime.TypeByExtension misses .woff2 on Windows (it consults the
+			// OS registry); brand fonts must serve as font/woff2 or the
+			// preview @font-face refuses to parse them.
+			return "font/woff2"
+		}
+		return mime.TypeByExtension(ext)
 	}
 	return ""
 }

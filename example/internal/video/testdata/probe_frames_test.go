@@ -162,4 +162,32 @@ func TestProbeFramesPilot(t *testing.T) {
 		require.NoError(t, os.WriteFile(p, res[i].PNG, 0o644))
 	}
 	t.Logf("artifacts: %s (probe-f030/f200/f400.png)", pilotDir)
+
+	// -- 7. the promoted entry: render.ProbeFrames (2026-11-17 转正) --
+	// Same IR, same bridge, one exported call — including the asset-loading
+	// projection (DataURIResolver) that the manual flow spelled out above.
+	// Byte identity with the manual probe above IS the promotion contract
+	// (ProbeFrames projects + captures through the same single source).
+	entry, err := videorender.ProbeFrames(ctx, ir, videoapp.DataURIResolver{
+		Loader: func(_ context.Context, key string) (io.ReadCloser, storagex.Object, error) {
+			p := filepath.Join(assetDir, filepath.Base(key))
+			b, rerr := os.ReadFile(p)
+			if rerr != nil {
+				return nil, storagex.Object{}, fmt.Errorf("asset %q: %w", key, rerr)
+			}
+			return io.NopCloser(bytes.NewReader(b)),
+				storagex.Object{Key: key, ContentType: "image/png", Size: int64(len(b))}, nil
+		},
+	}, []int{200}, videorender.ProbeOpts{})
+	require.NoError(t, err, "ProbeFrames entry must work over the same wired bridge")
+	require.Len(t, entry, 1)
+	require.Equal(t, 200, entry[0].Frame)
+	require.True(t, bytes.HasPrefix(entry[0].PNG, []byte{0x89, 'P', 'N', 'G'}),
+		"entry result is a PNG payload")
+	// The probe cache returns the manual f200 capture for this doc: same
+	// bytes (content-keyed, same projection) — determinism across the two
+	// call styles in one run.
+	manualF200 := res[1] // probeFrames = {30, 200, 400}
+	require.Equal(t, manualF200.PNG, entry[0].PNG,
+		"ProbeFrames f200 must be byte-identical to the manual multi capture")
 }

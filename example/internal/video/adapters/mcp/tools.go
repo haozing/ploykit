@@ -148,7 +148,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	// ---- video_upsert_element (video:write) ----
 	type upsertElementIn struct {
 		ProjectID       string         `json:"project_id" jsonschema:"project id"`
-		Element         map[string]any `json:"element" jsonschema:"element object {id,type:image|text|shape,src?,x,y,w,h,z,startFrame/endFrame (start_frame/end_frame accepted as aliases),animations?}; src must be a video/<workspace>/ storage key uploaded first (unregistered src = 400 E_VIDEO_IR_INVALID details.field elements[N].src)"`
+		Element         map[string]any `json:"element" jsonschema:"element object {id,type:image|text|shape,src?,x,y,w,h,z,startFrame/endFrame (start_frame/end_frame accepted as aliases),transformOrigin?,clip?,mixBlendMode?,animations?}; src must be a video/<workspace>/ storage key uploaded first (unregistered src = 400 E_VIDEO_IR_INVALID details.field elements[N].src); transformOrigin is a CSS transform-origin like \"top left\"/\"50% 0\"/\"center\" (default 50% 50%, drives scaleIn/rotate pivot); clip is a FIXED camera window {x,y,w,h,radius} in canvas coordinates (the element's animations play inside the window, e.g. 卡框内房间相机); mixBlendMode is one of multiply|screen|overlay|soft-light|hard-light|color-dodge|color-burn|darken|lighten|difference|exclusion|hue|saturation|color|luminosity"`
 		ExpectedVersion *int           `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 		WorkspaceID     string         `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 	}
@@ -282,12 +282,13 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	type uploadIn struct {
 		ProjectID   string `json:"project_id" jsonschema:"project id the asset belongs to"`
 		Filename    string `json:"filename" jsonschema:"original filename (extension informs content-type detection when content_type is omitted)"`
-		ContentType string `json:"content_type,omitempty" jsonschema:"image/png|image/jpeg|image/gif|image/webp|audio/mpeg|audio/mp4|audio/wav"`
+		ContentType string `json:"content_type,omitempty" jsonschema:"image/png|image/jpeg|image/gif|image/webp|audio/mpeg|audio/mp4|audio/wav|font/woff2"`
 		DataBase64  string `json:"data_base64" jsonschema:"file bytes, base64 (≤ ~700KB; large assets go through the REST multipart endpoint)"`
 		WorkspaceID string `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 	}
 	mcpAdd(s, "video_upload_asset",
-		"Upload one small asset (image/audio ≤700KB base64). Stored content-addressed under video/<workspace>/assets/<project>/. Returns the storage key for element src / audio keys (attach audio with video_set_audio).",
+		"Upload one small asset (image/audio/woff2-font ≤700KB base64). Stored content-addressed under video/<workspace>/assets/<project>/. Returns the storage key for element src / audio keys (attach audio with video_set_audio) / fontAssets entries "+
+			"(brand fonts: upload the woff2 with content_type font/woff2, then reference the returned key in the IR's fontAssets [{key,family,weight}] via PUT /api/video/projects/{id}/ir — the projector inlines it as an @font-face and validates the key like an image src).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
@@ -668,7 +669,10 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	}
 	mcpAdd(s, "video_set_words",
 		"Human/debug channel for manual word-timing refinement; orchestration agents should rely on set_script's automatic derivation "+
-			"(TTS → aligner → estimated) instead of hand-authoring timestamps. Replaces the word timing table wholesale; anchors are re-resolved against the new table.",
+			"(TTS → aligner → estimated) instead of hand-authoring timestamps. Replaces the word timing table wholesale; anchors are re-resolved against the new table. "+
+			"Brand fonts (2026-11-17): there is no dedicated font tool — upload the woff2 via video_upload_asset (content_type font/woff2), then set the IR's fontAssets "+
+			"array [{key: <returned key>, family: \"My Brand\", weight: \"800\"|\"400 900\"}] through PUT /api/video/projects/{id}/ir (expected_version required); "+
+			"fontAssets keys are validated like image src (unregistered key = 400) and the projector inlines each as an @font-face.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in setWordsIn) (any, error) {
 			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
@@ -1640,6 +1644,8 @@ func contentTypeFromName(name string) string {
 		return "audio/mp4"
 	case strings.HasSuffix(name, ".wav"):
 		return "audio/wav"
+	case strings.HasSuffix(name, ".woff2"):
+		return "font/woff2"
 	}
 	return ""
 }

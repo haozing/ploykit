@@ -45,3 +45,14 @@ type loopSnapStub struct{}
 func (loopSnapStub) Snapshot(_ context.Context, _ SnapshotDoc, spec SnapshotSpec) (*SnapshotResult, error) {
 	return &SnapshotResult{Frame: spec.Frame, PNG: []byte("stub"), Width: spec.Width, Height: spec.Height}, nil
 }
+
+// TestProbeFrames_StubNotConfigured: ProbeFrames（2026-11-17 转正入口）在
+// stub 构建必须返回与单帧/批量眼同一个降级信号——库调用方不该看到第二种
+// “能力未装配”错误。
+func TestProbeFrames_StubNotConfigured(t *testing.T) {
+	if _, err := ProbeFrames(context.Background(), nil, nil, []int{0}, ProbeOpts{}); err == nil {
+		t.Fatal("stub build ProbeFrames must fail")
+	} else if err != ErrSnapshotNotConfigured {
+		t.Fatalf("stub build ProbeFrames must return ErrSnapshotNotConfigured, got %v", err)
+	}
+}

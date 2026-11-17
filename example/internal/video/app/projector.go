@@ -8,10 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"text/template"
 	"io"
 	"net/url"
 	"strings"
+	"text/template"
 
 	"github.com/haozing/ploykit/platform/storagex"
 )
@@ -165,6 +165,14 @@ type projection struct {
 	// FontFaceCSS is the @font-face rule inlining the Noto Sans SC subset as
 	// a data URI (F-FNT-01). Non-user content: vendored font bytes.
 	FontFaceCSS string
+	// BrandFontCSS carries the @font-face rules of ir.FontAssets (2026-11-17,
+	// brand fonts in the IR): each Key is resolved through the SAME AssetResolver
+	// as image src (preview: authorized URL; render: data URI) and spliced into
+	// one style block after the subset rule. Family/Weight are write-time
+	// validated against a CSS-metacharacter-free charset (validateFontAssets),
+	// so the splice is not an injection surface. Empty for legacy IRs — the
+	// block is omitted and the document stays byte-identical (back-compat).
+	BrandFontCSS string
 }
 
 // bootJS starts the builder; the builder installs window.__player itself.
@@ -205,14 +213,19 @@ func (p *Projector) HTML(ctx context.Context, ir *IR, _ string) ([]byte, error) 
 	}
 	payload := map[string]any{
 		"schemaVersion": schemaVersion,
-		"meta":     ir.Meta,
-		"script":   ir.Script,
-		"words":    ir.Words,
-		"effects":  ir.Effects,
-		"elements": elements,
-		"audio":    ir.Audio,
+		"meta":          ir.Meta,
+		"script":        ir.Script,
+		"words":         ir.Words,
+		"effects":       ir.Effects,
+		"elements":      elements,
+		"audio":         ir.Audio,
 	}
 	irJSON, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	brandCSS, err := p.brandFontCSS(ctx, ir)
 	if err != nil {
 		return nil, err
 	}
@@ -226,11 +239,47 @@ func (p *Projector) HTML(ctx context.Context, ir *IR, _ string) ([]byte, error) 
 		IRJSON:       escapeJSONBlock(irJSON),
 		InlineScript: string(append(append(append([]byte{}, gsap...), builder...), bootJS...)),
 		FontFaceCSS:  FontFaceCSS(),
+		BrandFontCSS: brandCSS,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out.Bytes(), nil
+}
+
+// brandFontCSS renders the @font-face rules for ir.FontAssets (2026-11-17,
+// brand fonts in the IR). Each Key goes through the SAME AssetResolver as
+// image src — preview gets the authorized /api/video/files URL, render gets
+// the data: URI (DataURIResolver loads storagex bytes) — so both paths stay
+// self-contained per §4.4.5 (preview fetches same-origin under its CSP;
+// render inlines bytes). Family/Weight were write-time validated against
+// the CSS-metacharacter-free charset (validateFontAssets), so the splice
+// below carries no injection surface. font-display:block mirrors the subset
+// rule: the player's fonts.ready gate (already in timeline-builder.js)
+// covers these faces for free — same @font-face mechanism, same gate.
+func (p *Projector) brandFontCSS(ctx context.Context, ir *IR) (string, error) {
+	if len(ir.FontAssets) == 0 {
+		return "", nil // legacy IR: no block, byte-identical document
+	}
+	var b strings.Builder
+	for _, fa := range ir.FontAssets {
+		u, err := p.assets.URL(ctx, fa.Key)
+		if err != nil {
+			return "", fmt.Errorf("brand font %s: %w", fa.Family, err)
+		}
+		b.WriteString("@font-face{font-family:'")
+		b.WriteString(fa.Family)
+		b.WriteString("';src:url(")
+		b.WriteString(u)
+		b.WriteString(") format('woff2');font-style:normal;font-display:block;")
+		if fa.Weight != "" {
+			b.WriteString("font-weight:")
+			b.WriteString(fa.Weight)
+			b.WriteString(";")
+		}
+		b.WriteString("}")
+	}
+	return b.String(), nil
 }
 
 // escapeJSONBlock prevents </script> early closure inside the data block:
@@ -273,6 +322,19 @@ func elementMap(el Element) map[string]any {
 	}
 	if el.EndFrame != nil {
 		m["endFrame"] = *el.EndFrame
+	}
+	// transformOrigin / clip / mixBlendMode (2026-11-17, camera gap): values
+	// project only when set, so legacy IRs produce no keys and the builder's
+	// camera paths never activate — byte-identical projection for old
+	// documents (same pattern as the window passthrough above).
+	if el.TransformOrigin != "" {
+		m["transformOrigin"] = el.TransformOrigin
+	}
+	if el.Clip != nil {
+		m["clip"] = el.Clip
+	}
+	if el.MixBlendMode != "" {
+		m["mixBlendMode"] = el.MixBlendMode
 	}
 	if len(el.Animations) > 0 {
 		ans := make([]map[string]any, 0, len(el.Animations))
@@ -325,6 +387,7 @@ const playerTemplate = `<!DOCTYPE html>
 <title>ploykit video preview</title>
 <style>
   {{.FontFaceCSS}}
+  {{if .BrandFontCSS}}{{.BrandFontCSS}}{{end}}
   html, body { margin: 0; padding: 0; background: #111; }
   #stage {
     position: relative;
@@ -334,9 +397,10 @@ const playerTemplate = `<!DOCTYPE html>
     overflow: hidden;
     transform-origin: top left;
   }
-  #canvas { position: absolute; inset: 0; }
+  #canvas { position: absolute; inset: 0; isolation: isolate; }
   .el { position: absolute; will-change: transform; }
   .el img, img.el { width: 100%; height: 100%; object-fit: contain; }
+  .el-clipwrap { position: absolute; }
   .el-text {
     font-family: "Noto Sans SC Sub", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
     white-space: pre-wrap; line-height: 1.35; font-size: 48px; color: #fff;

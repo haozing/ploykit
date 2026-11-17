@@ -28,15 +28,15 @@ import (
 // Domain error codes (§4.6): HTTP maps them via *webx.Error; MCP tools pass
 // the code through as error text.
 var (
-	ErrProjectNotFound  = webx.NewError(404, "E_VIDEO_PROJECT_NOT_FOUND", "video project not found")
-	ErrRenderNotFound   = webx.NewError(404, "E_VIDEO_RENDER_NOT_FOUND", "video render not found")
-	ErrVersionConflict  = webx.NewError(409, "E_VIDEO_VERSION_CONFLICT", "ir version conflict")
-	ErrAnchorNotFound   = webx.NewError(400, "E_VIDEO_ANCHOR_NOT_FOUND", "anchor text not found in words")
+	ErrProjectNotFound = webx.NewError(404, "E_VIDEO_PROJECT_NOT_FOUND", "video project not found")
+	ErrRenderNotFound  = webx.NewError(404, "E_VIDEO_RENDER_NOT_FOUND", "video render not found")
+	ErrVersionConflict = webx.NewError(409, "E_VIDEO_VERSION_CONFLICT", "ir version conflict")
+	ErrAnchorNotFound  = webx.NewError(400, "E_VIDEO_ANCHOR_NOT_FOUND", "anchor text not found in words")
 	// ErrRenderActive blocks project deletion while a render is queued/running:
 	// the render row cascades away with the project, which would strand the
 	// river job, lose the terminal state and silently keep the quota spent
 	// (delivery audit P1). Reserved in the contract since v1.
-	ErrRenderActive = webx.NewError(409, "E_VIDEO_RENDER_ACTIVE", "a render is queued or running for this project; wait for it to finish or fail before deleting")
+	ErrRenderActive     = webx.NewError(409, "E_VIDEO_RENDER_ACTIVE", "a render is queued or running for this project; wait for it to finish or fail before deleting")
 	ErrNotConfigured    = webx.NewError(503, "E_NOT_CONFIGURED", "render capability not configured")
 	ErrForbidden        = webx.NewError(403, "E_FORBIDDEN", "not a member of this workspace")
 	ErrInternalPreview  = webx.NewError(500, "E_VIDEO_PREVIEW_INTERNAL", "preview CSP hash unavailable")
@@ -245,10 +245,16 @@ type Asset struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// Asset kinds (migration 1011 kind column).
+// Asset kinds (migration 1011 kind column). The column is free text (no
+// CHECK constraint), so the new font kind needs no migration — the comment
+// in 1011 says image|audio but the schema never enforced it.
 const (
 	AssetKindImage = "image"
 	AssetKindAudio = "audio"
+	// AssetKindFont（2026-11-17，品牌字体进 IR）：fonts ride the same
+	// video_asset registry lane as images/audio (upload registers, reference
+	// validates).
+	AssetKindFont = "font"
 )
 
 // Render statuses (§4.9.1).
@@ -508,8 +514,9 @@ func fieldMsg(field, msg string) string {
 	return field + ": " + msg
 }
 
-// validateAssetRefs enforces write-time existence for every image element src
-// and every audio track key (§8.5a.2 proposal, option B adopted; audio side is
+// validateAssetRefs enforces write-time existence for every image element src,
+// every brand-font key (fontAssets, 2026-11-17) and every audio track key
+// (§8.5a.2 proposal, option B adopted; audio side is
 // G-01c — the batch-G plan's finding that validateAudio checked key SHAPE only
 // while an unregistered BGM failed a full render cycle later at the worker's
 // tempFile fetch): a reference must trace to a video_asset
@@ -545,6 +552,15 @@ func (s *ProjectService) validateAssetRefs(ctx context.Context, wsID string, ir 
 		}
 		if err := s.assetRefExists(ctx, wsID, el.Src,
 			fmt.Sprintf("elements[%d].src", i)); err != nil {
+			return err
+		}
+	}
+	// FontAssets（品牌字体进 IR，2026-11-17）：same registry-or-storage
+	// contract as image src — a dangling font key would otherwise fail one
+	// full render cycle later at the projector's data-URI inline step.
+	for i := range ir.FontAssets {
+		if err := s.assetRefExists(ctx, wsID, ir.FontAssets[i].Key,
+			fmt.Sprintf("fontAssets[%d].key", i)); err != nil {
 			return err
 		}
 	}
@@ -1601,7 +1617,8 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 	}
 	switch contentType {
 	case "image/png", "image/jpeg", "image/gif", "image/webp",
-		"audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav":
+		"audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav",
+		"font/woff2": // 品牌字体（2026-11-17）：与图片同一条上传/登记车道
 	default:
 		return "", ErrAssetUnsupported
 	}
@@ -1653,6 +1670,8 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 		ext = "m4a"
 	case "audio/wav", "audio/x-wav":
 		ext = "wav"
+	case "font/woff2":
+		ext = "woff2"
 	}
 	sha := sha256Hex(data)
 	key := fmt.Sprintf("video/%s/assets/%s/%s.%s", p.WorkspaceID, projectID, sha, ext)
@@ -1663,6 +1682,9 @@ func (s *ProjectService) UploadAsset(ctx context.Context, p *webx.Principal, pro
 	kind := AssetKindImage
 	if strings.HasPrefix(contentType, "audio/") {
 		kind = AssetKindAudio
+	}
+	if contentType == "font/woff2" {
+		kind = AssetKindFont
 	}
 	// Registry row (ON CONFLICT no-op = content-addressed idempotency: the
 	// same bytes re-uploaded keep the first registration). Failure here
@@ -1708,6 +1730,11 @@ func magicMatches(contentType string, data []byte) bool {
 	case "audio/wav", "audio/x-wav":
 		// RIFF container, WAVE form identifier at offset 8.
 		return len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WAVE"
+	case "font/woff2":
+		// WOFF2 signature "wOF2" (the WOFF1 signature is "wOF " — a
+		// mislabeled WOFF1 is a mismatch, the projector only ever emits
+		// format('woff2')).
+		return len(data) >= 4 && string(data[:4]) == "wOF2"
 	}
 	return false
 }
