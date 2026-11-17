@@ -2,24 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '../deps'
 import { Link } from '@ploykit/ui/router'
 import {
-  PageHeader, PageLoading, PageError, PageEmpty, Button, Textarea, Input, Label,
+  PageHeader, PageLoading, PageError, PageEmpty, Button, Textarea, Label,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider,
-  DataTable, StatusBadge, Badge, Progress, ProgressTrack, ProgressIndicator, ProgressValue,
+  DataTable, StatusBadge, Badge, Progress, ProgressValue,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
   Popover, PopoverContent, PopoverTrigger,
   Spinner, toast, apiErrorMessage, cn, formatDateTime, shortID, STATUS_TONE_CLASS, type StatusTone, type Column,
 } from '@ploykit/ui'
 import {
-  ArrowLeft, Clapperboard, Download, Pause, Play, RefreshCw, Sparkles, Upload, Wand2,
+  ArrowLeft, Clapperboard, Download, Pause, Play, RefreshCw, Sparkles, Upload, Wand2, Copy,
 } from 'lucide-react'
 import { useWorkspace, useWsStatus, useWsScope, useWsFrame, bridgeWsToQuery } from '@ploykit/hooks'
-import type { WsStatus } from '@ploykit/client'
-import { videoApi, E_VIDEO_VERSION_CONFLICT, isApiError } from '../api/video'
+import { videoApi, E_VIDEO_VERSION_CONFLICT, isApiError, VIDEO_ASSET_MAX_BYTES } from '../api/video'
 import type {
   VideoIR, VideoRender, VideoRenderParams, VideoRenderStatus, VideoWord,
   VideoTemplate, VideoTheme,
 } from '../api/video'
 import { TemplateThumbnail, ThemeDot } from './VideoStudioListPage'
+import { hasPerm, radioNavProps } from '../lib/radio-nav'
+import { resolveDurationFrames } from '../lib/video-frames'
 import { wsClient } from '../ws'
 
 /**
@@ -30,11 +31,22 @@ import { wsClient } from '../ws'
  *   │ 脚本编辑 + 保存      │ iframe preview.html    │ 效果列表(click→seek)│
  *   │ 词条时间轴(chips)    │ 9:16 等比缩放           │ 渲染参数面板        │
  *   ├ scrub 条 + 播放/暂停 + 帧号 ──────────────────────────────────────┤
- *   ├ 渲染历史 DataTable（status / 进度 / 下载）────────────────────────┤
+ *   ├ 渲染历史 DataTable（status / 进度 / 下载 + 首帧缩略图）───────────┤
  *
  * WS：mount 时 connect（若未连），useWsScope('video', projectId) 订阅；
  * `video.ir.updated` → refetch 项目；`video.render.updated` → 更新渲染历史行
- * （bridgeWsToQuery 兜底失效 ['video','renders',id]，active 渲染另有 1s 轮询兜底）。
+ * （bridgeWsToQuery 兜底失效 ['video','renders',wsId,projectId]）。
+ *
+ * 轮询兜底（不只看 socket 是否 open）：存在活跃渲染时，若连接未开、订阅被
+ * 服务端拒绝（rejected:subscribe）、或超过 RENDER_WS_STALE_MS 没收到任何
+ * 渲染帧，就按 1s 拉一次渲染列表；没有活跃渲染则完全不轮询。
+ *
+ * 权限（role_perms，来自 useWorkspace().current）：
+ * - video:write  → 保存脚本 / 上传素材 / 重新组合
+ * - video:render → 提交渲染（member 没有；按钮保留并禁用 + 说明，而不是藏起来）
+ *
+ * 浏览器原生 GET（iframe / <a download> / <img>）带不了 X-Workspace-Id，
+ * previewUrl / fileUrl 统一追加 ?workspace_id=。
  */
 
 // ---------------------------------------------------------------------------
@@ -102,40 +114,65 @@ const RENDER_STATUS_LABEL: Record<VideoRenderStatus, string> = {
   interrupted: '已中断',
 }
 
+const TERMINAL_RENDER_STATUS: readonly VideoRenderStatus[] = ['succeeded', 'failed', 'interrupted']
+
+/** 活跃渲染时，WS 静默超过这个时长就启用轮询兜底（后端每 15 帧推一次进度）。 */
+const RENDER_WS_STALE_MS = 10_000
+
+/** 词条来源 → 人类可读（IR 的 source 值是开发术语，不进界面文案）。 */
+const WORD_SOURCE_LABEL: Record<VideoWord['source'], string> = {
+  tts: '配音识别',
+  aligner: '语音对齐',
+  manual: '手工标注',
+  estimated: '按字数估算',
+}
+
 /** 词 chip 在 words 时间轴上的宽度权重：时长 + 保底（可点击区不塌成点）。 */
 function wordSpan(w: VideoWord): number {
   return Math.max(0.4, w.end - w.start)
 }
 
+function newIdempotencyKey(): string {
+  const c = globalThis.crypto as Crypto | undefined
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  return `render-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+}
+
 // ---------------------------------------------------------------------------
-// 重新组合（POST /compose，批B）：新文案/换模板/换主题 → 一键重排 IR。
+// 重新组合（POST /compose）：新文案/换模板/换主题 → 一键重排 IR。
 // - 必带 expected_version（页面当前 version）乐观锁；409 提示刷新，不静默覆盖。
-// - 模板目录打不开（批B 未部署）时入口禁用 + title 提示。
+// - 模板目录（顶层 themes + snake_case 模板字段）随目录请求一起回来。
 // - script 默认预填当前 IR script（用户/Agent 改文案后一键重排的主路径）。
 // ---------------------------------------------------------------------------
 
 function RecomposeDialog({
   projectId,
+  wsId,
   currentVersion,
   currentScript,
   open,
   onOpenChange,
+  canWrite,
 }: {
   projectId: string
+  wsId: string | undefined
   currentVersion: number
   currentScript: string
   open: boolean
   onOpenChange: (v: boolean) => void
+  canWrite: boolean
 }) {
   const qc = useQueryClient()
 
   const templatesQ = useQuery({
     queryKey: ['video', 'templates'],
     queryFn: () => videoApi.listTemplates(),
-    enabled: open,
+    enabled: open && !!wsId,
     staleTime: 5 * 60_000,
   })
   const templates = templatesQ.data?.templates ?? []
+  const themes: VideoTheme[] = templatesQ.data?.themes ?? []
+  const defaultThemeKey = themes[0]?.key ?? ''
 
   const [templateKey, setTemplateKey] = useState('')
   const [themeKey, setThemeKey] = useState('')
@@ -156,7 +193,8 @@ function RecomposeDialog({
 
   const pickTemplate = (t: VideoTemplate) => {
     setTemplateKey(t.key)
-    setThemeKey(t.themes[0]?.key ?? '')
+    // 主题目录在顶层（模板不带 themes）：默认首项。
+    setThemeKey(defaultThemeKey)
   }
 
   const close = (v: boolean) => onOpenChange(v)
@@ -172,18 +210,17 @@ function RecomposeDialog({
       await videoApi.compose(projectId, {
         script: scriptValue.trim(),
         template: selected.key,
-        theme: themeKey || selected.themes[0]?.key || '',
+        theme: themeKey || defaultThemeKey,
         expected_version: currentVersion,
       })
       toast.success('已重新组合')
-      // 复用页面既有 IR 刷新路径：invalidate 后 WS/previewKey 效应重置播放器。
-      await qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
+      await qc.invalidateQueries({ queryKey: ['video', 'project', wsId, projectId] })
       close(false)
     } catch (err: unknown) {
       if (isApiError(err, E_VIDEO_VERSION_CONFLICT)) {
         // 乐观锁冲突：Agent 同期改了项目，不静默覆盖，让用户先看最新版。
-        toast.error('项目已更新，请刷新后重试')
-        await qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
+        toast.error('项目刚被其他人更新，已为你加载最新版本，请确认后重试')
+        await qc.invalidateQueries({ queryKey: ['video', 'project', wsId, projectId] })
       } else {
         toast.error(apiErrorMessage(err, '重新组合失败'))
       }
@@ -198,7 +235,7 @@ function RecomposeDialog({
         <DialogHeader>
           <DialogTitle>重新组合</DialogTitle>
           <DialogDescription>
-            改文案、换模板或主题，按 v{currentVersion} 乐观锁一键重排整条时间线。
+            改文案、换模板或主题即可整条时间线重排；若期间有其他人在编辑，会先提示你刷新。
           </DialogDescription>
         </DialogHeader>
         {templatesQ.isPending ? (
@@ -208,15 +245,17 @@ function RecomposeDialog({
           </div>
         ) : templatesQ.isError ? (
           <div className="space-y-3 py-6 text-center">
-            <p className="text-sm text-muted-foreground">模板服务暂不可用（{apiErrorMessage(templatesQ.error, '加载失败')}）</p>
+            <p className="text-sm text-muted-foreground">模板目录加载失败（{apiErrorMessage(templatesQ.error, '请稍后重试')}）</p>
             <Button variant="outline" size="sm" onClick={() => void templatesQ.refetch()}>
               重试
             </Button>
           </div>
+        ) : templates.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">当前没有可用的模板。</p>
         ) : (
           <div className="space-y-4">
             <div role="radiogroup" aria-label="模板选择" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {templates.map((t) => (
+              {templates.map((t, i) => (
                 <button
                   key={t.key}
                   type="button"
@@ -224,25 +263,34 @@ function RecomposeDialog({
                   aria-checked={t.key === templateKey}
                   data-testid="recompose-template-card"
                   onClick={() => pickTemplate(t)}
+                  {...radioNavProps({
+                    index: i,
+                    count: templates.length,
+                    checkedIndex: Math.max(0, templates.findIndex((x) => x.key === templateKey)),
+                    onSelect: (next) => {
+                      const hit = templates[next]
+                      if (hit) pickTemplate(hit)
+                    },
+                  })}
                   className={cn(
                     'flex h-full flex-col gap-2 rounded-lg border p-2.5 text-left transition-colors',
                     'hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     t.key === templateKey ? 'border-primary bg-primary/5' : 'border-border bg-card',
                   )}
                 >
-                  <TemplateThumbnail template={t} />
+                  <TemplateThumbnail template={t} theme={themes[0]} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{t.name}</p>
                     <p className="mt-1 font-mono text-[11px] text-muted-foreground/80">
-                      {t.canvasW}×{t.canvasH} · {t.fps}fps
+                      {t.canvas_w}×{t.canvas_h} · {t.fps}fps
                     </p>
                   </div>
                 </button>
               ))}
             </div>
-            {selected && selected.themes.length > 0 && (
+            {selected && themes.length > 0 && (
               <div role="radiogroup" aria-label="主题选择" className="flex flex-wrap gap-2">
-                {selected.themes.map((th: VideoTheme) => {
+                {themes.map((th, i) => {
                   const active = th.key === themeKey
                   return (
                     <button
@@ -252,6 +300,15 @@ function RecomposeDialog({
                       aria-checked={active}
                       data-testid="recompose-theme-option"
                       onClick={() => setThemeKey(th.key)}
+                      {...radioNavProps({
+                        index: i,
+                        count: themes.length,
+                        checkedIndex: Math.max(0, themes.findIndex((x) => x.key === themeKey)),
+                        onSelect: (next) => {
+                          const hit = themes[next]
+                          if (hit) setThemeKey(hit.key)
+                        },
+                      })}
                       className={cn(
                         'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -285,7 +342,7 @@ function RecomposeDialog({
           </Button>
           <Button
             type="button"
-            disabled={submitting || templatesQ.isPending || templatesQ.isError || !selected}
+            disabled={!canWrite || submitting || templatesQ.isPending || templatesQ.isError || !selected}
             onClick={() => void submitRecompose()}
           >
             {submitting ? (
@@ -310,23 +367,25 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   const qc = useQueryClient()
   const { current: workspace } = useWorkspace()
   const wsId = workspace?.id
+  const canWrite = hasPerm(workspace?.role_perms, 'video:write')
+  const canRender = hasPerm(workspace?.role_perms, 'video:render')
   const wsStatus = useWsStatus(wsClient)
 
   // -------------------------------------------------------------------------
-  // 数据
+  // 数据（查询键带 wsId：切工作区不串缓存，未水合不发请求）
   // -------------------------------------------------------------------------
 
   const projectQ = useQuery({
-    queryKey: ['video', 'project', projectId],
-    enabled: !!projectId,
+    queryKey: ['video', 'project', wsId, projectId],
+    enabled: !!wsId && !!projectId,
     queryFn: () => videoApi.getProject(projectId),
   })
   const project = projectQ.data?.project
   const ir = projectQ.data?.ir
 
   const rendersQ = useQuery({
-    queryKey: ['video', 'renders', projectId],
-    enabled: !!projectId,
+    queryKey: ['video', 'renders', wsId, projectId],
+    enabled: !!wsId && !!projectId,
     queryFn: () => videoApi.listRenders(projectId),
   })
   const renders = useMemo(
@@ -340,15 +399,12 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   const [player, setPlayer] = useState<PlayerState | null>(null)
   const [playing, setPlaying] = useState(false)
 
-  // scrub 帧号：优先播放器上报的 durationFrames；降级用 ir.meta 与 words 推算
-  const durationFrames = useMemo(() => {
-    if (player && player.durationFrames > 0) return Math.ceil(player.durationFrames)
-    if (!ir) return 0
-    const metaFrames = Math.ceil((ir.meta.durationSec ?? 0) * ir.meta.fps)
-    const lastWordEnd = ir.words.length > 0 ? ir.words[ir.words.length - 1]!.end : 0
-    const wordFrames = Math.ceil(lastWordEnd * ir.meta.fps)
-    return Math.max(metaFrames, wordFrames, 0)
-  }, [player, ir])
+  // scrub 帧号：优先播放器上报的 durationFrames；降级用后端同源公式
+  // （max(ceil(meta*fps), ceil(voice*fps), ceil(lastWord.end*fps))）。
+  const durationFrames = useMemo(
+    () => resolveDurationFrames(ir, player?.durationFrames),
+    [player, ir],
+  )
 
   const [frame, setFrame] = useState(0)
 
@@ -380,10 +436,10 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  // preview.html 换版（refetch 后 ir/version 变化）→ 重置播放器状态并向新文档
-  // 查询（拉 durationFrames）。iframe src 不带版本（preview.html no-store，
-  // IR 更新后走 key 重挂载），故用 dataUpdatedAt 触发的 key 重挂载来换版。
-  const previewKey = `${projectQ.dataUpdatedAt}`
+  // preview.html 换版（IR 版本变化）→ 重置播放器状态。iframe 的 key 就是
+  // project.version：版本不变时 refetch 不会重挂文档（旧实现用 dataUpdatedAt
+  // 当 key，同数据每次 refetch 都白掉一次播放器）。
+  const previewKey = project?.version ?? 0
   useEffect(() => {
     setPlayer(null)
     setPlaying(false)
@@ -391,7 +447,6 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   }, [previewKey])
 
   // 播放中本地帧号推进（播放器不逐帧推送；state 帧只在 seek/ready 等节点回）
-  // ——以 player.t 的最近回流为锚 + 本地 tick 估算，stop 由 getState 周期校准。
   useEffect(() => {
     if (!playing) return
     const timer = setInterval(() => {
@@ -435,16 +490,31 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
 
   useWsScope('video', projectId, wsClient)
 
+  // 订阅被拒 / 确认：服务端拒绝（未授权、id 非法、限流）时 socket 仍是 open，
+  // 只盯 open 会把「永远收不到帧」误判为健康——这就是单独记录拒绝的原因。
+  const [wsSubRejected, setWsSubRejected] = useState(false)
+  useEffect(() => { setWsSubRejected(false) }, [projectId])
+  useWsFrame('rejected:subscribe', (frameMsg) => {
+    const p = frameMsg.payload as { scope?: string } | undefined
+    if (!p || p.scope === undefined || p.scope === 'video') setWsSubRejected(true)
+  }, wsClient)
+  useWsFrame('confirmed:subscribe', (frameMsg) => {
+    const p = frameMsg.payload as { scope?: string } | undefined
+    if (!p || p.scope === 'video') setWsSubRejected(false)
+  }, wsClient)
+
   // Agent/其他端改了 IR → refetch（origin==='ui' 的自推也 refetch：幂等且对齐版本号）
   useWsFrame('video.ir.updated', (frameMsg) => {
     const p = frameMsg.payload as IrUpdatedPayload | undefined
     if (!p || p.project_id !== projectId) return
-    qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
+    qc.invalidateQueries({ queryKey: ['video', 'project', wsId, projectId] })
   }, wsClient)
 
   // 渲染进度帧 → 更新历史行（就地 merge，省一次列表 refetch；终态再失效一次拉全量）
+  const lastRenderFrameAt = useRef(0)
   const mergeRenderFrame = useCallback((p: RenderUpdatedPayload) => {
-    qc.setQueryData<{ items: VideoRender[] }>(['video', 'renders', projectId], (old) => {
+    lastRenderFrameAt.current = Date.now()
+    qc.setQueryData<{ items: VideoRender[] }>(['video', 'renders', wsId, projectId], (old) => {
       if (!old) return old
       const items = old.items.map((r) =>
         r.id === p.render_id
@@ -453,10 +523,10 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
       )
       return { items }
     })
-    if (p.status === 'succeeded' || p.status === 'failed' || p.status === 'interrupted') {
-      qc.invalidateQueries({ queryKey: ['video', 'renders', projectId] })
+    if (TERMINAL_RENDER_STATUS.includes(p.status)) {
+      qc.invalidateQueries({ queryKey: ['video', 'renders', wsId, projectId] })
     }
-  }, [qc, projectId])
+  }, [qc, wsId, projectId])
 
   useWsFrame('video.render.updated', (frameMsg) => {
     const p = frameMsg.payload as RenderUpdatedPayload | undefined
@@ -467,21 +537,36 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   // bridgeWsToQuery：WS 重连后的兜底失效（连接重建期间丢帧的补偿）
   useEffect(() => {
     return bridgeWsToQuery(wsClient, qc, [
-      { match: 'video.ir.updated', invalidate: [['video', 'project', projectId]] },
-      { match: 'video.render.updated', invalidate: [['video', 'renders', projectId]] },
+      { match: 'video.ir.updated', invalidate: [['video', 'project', wsId, projectId]] },
+      { match: 'video.render.updated', invalidate: [['video', 'renders', wsId, projectId]] },
     ])
-  }, [qc, projectId])
+  }, [qc, wsId, projectId])
 
-  // 降级轮询：存在活跃渲染但 WS 未连通时，1s 拉 GET renders（§5.2「useInterval 兜底」）
+  // 轮询兜底：有活跃渲染 +（连接未开 / 订阅被拒 / 超过 N 秒没收到渲染帧）。
+  // 没有活跃渲染 → 不轮询（保留原语义）。
   const hasActiveRender = renders.some((r) => r.status === 'queued' || r.status === 'running')
+  const [wsStale, setWsStale] = useState(false)
   useEffect(() => {
-    if (!hasActiveRender) return
-    if (wsStatus === 'open') return
+    if (!hasActiveRender) {
+      setWsStale(false)
+      return
+    }
+    // 进入活跃态先给一个宽限期（避免刚提交就因「还没收到帧」立刻轮询）。
+    lastRenderFrameAt.current = Date.now()
     const timer = setInterval(() => {
-      void qc.invalidateQueries({ queryKey: ['video', 'renders', projectId] })
+      setWsStale(Date.now() - lastRenderFrameAt.current > RENDER_WS_STALE_MS)
     }, 1000)
     return () => clearInterval(timer)
-  }, [hasActiveRender, wsStatus, qc, projectId])
+  }, [hasActiveRender])
+
+  const needsPolling = hasActiveRender && (wsStatus !== 'open' || wsSubRejected || wsStale)
+  useEffect(() => {
+    if (!needsPolling) return
+    const timer = setInterval(() => {
+      void qc.invalidateQueries({ queryKey: ['video', 'renders', wsId, projectId] })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [needsPolling, qc, wsId, projectId])
 
   // -------------------------------------------------------------------------
   // 脚本编辑 + 保存（PUT ir，乐观锁）
@@ -491,27 +576,33 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   const scriptValue = scriptDraft ?? ir?.script ?? ''
   const scriptDirty = scriptDraft !== null && scriptDraft !== (ir?.script ?? '')
 
-  useEffect(() => {
-    // 远端 IR 更新（WS refetch）时丢弃本地草稿——不静默覆盖远端，以远端为准。
-    setScriptDraft(null)
-  }, [previewKey])
+  // 草稿起点版本：第一次输入时记下当时的 version，保存时用它做 expected_version。
+  // 这样即使期间别人改过项目（refetch 把 version 推进了），这次保存也会得到
+  // 冲突提示而不是静默覆盖对方 —— 同时也意味着远端更新不会清掉用户正在输入的文字
+  // （旧实现按 dataUpdatedAt 清草稿，保存期间继续输入的内容会被吞掉）。
+  const draftBaseVersionRef = useRef<number | null>(null)
 
   const [saving, setSaving] = useState(false)
   const saveScript = async () => {
     if (!ir || !project) return
+    const submitted = scriptValue
+    const expectedVersion = draftBaseVersionRef.current ?? project.version
     setSaving(true)
     try {
-      const nextIR: VideoIR = { ...ir, script: scriptValue }
-      await videoApi.putIR(projectId, { ir: nextIR, expected_version: project.version })
-      setScriptDraft(null)
+      const nextIR: VideoIR = { ...ir, script: submitted }
+      await videoApi.putIR(projectId, { ir: nextIR, expected_version: expectedVersion })
+      // 只清掉「仍然是提交值」的草稿：保存期间用户继续输入的文字不能被吞。
+      setScriptDraft((prev) => (prev === submitted ? null : prev))
+      if (draftBaseVersionRef.current === expectedVersion) draftBaseVersionRef.current = null
       toast.success('已保存')
-      await qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
+      await qc.invalidateQueries({ queryKey: ['video', 'project', wsId, projectId] })
     } catch (err: unknown) {
       if (isApiError(err, E_VIDEO_VERSION_CONFLICT)) {
-        // 乐观锁冲突（Agent 同期写入了新版本）：提示刷新，以服务端为准。
-        toast.error('版本冲突：Agent 刚更新了该项目。正在为你加载最新版本…')
-        await qc.invalidateQueries({ queryKey: ['video', 'project', projectId] })
-        setScriptDraft(null)
+        // 乐观锁冲突（他人同期写入了新版本）：提示刷新，以服务端为准。
+        toast.error('项目刚被其他人更新，已为你加载最新版本，请确认后重试')
+        draftBaseVersionRef.current = null
+        await qc.invalidateQueries({ queryKey: ['video', 'project', wsId, projectId] })
+        setScriptDraft((prev) => (prev === submitted ? null : prev))
       } else {
         toast.error(apiErrorMessage(err, '保存失败'))
       }
@@ -527,9 +618,12 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   const [fps, setFps] = useState('')
   const [resPreset, setResPreset] = useState('meta')
   const [subtitleMode, setSubtitleMode] = useState<'burn' | 'soft' | 'none'>('burn')
-  const [bgmVolume, setBgmVolume] = useState('') // 空串 = 跟随 IR
+  const [bgmVolume, setBgmVolume] = useState('') // 空串 = 跟随项目默认
 
   const [rendering, setRendering] = useState(false)
+  // 幂等键在「一次提交尝试」内保持稳定：网络超时后重试会把同一个 key 发出去，
+  // 后端据此返回首单而不是再扣一次配额。成功 / 明确业务拒绝后重置。
+  const idempotencyRef = useRef<string | null>(null)
   const submitRender = async () => {
     if (!project) return
     const params: VideoRenderParams = { subtitle_mode: subtitleMode, burn_subtitles: subtitleMode === 'burn' }
@@ -542,37 +636,55 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
       }
     }
     if (bgmVolume !== '') params.bgm_volume = Number(bgmVolume) / 100
+    idempotencyRef.current ??= newIdempotencyKey()
     setRendering(true)
     try {
-      await videoApi.submitRender(projectId, params)
-      toast.success('已提交渲染')
-      await qc.invalidateQueries({ queryKey: ['video', 'renders', projectId] })
+      const render = await videoApi.submitRender(projectId, params, idempotencyRef.current)
+      // 已确认入队：本次尝试结束，下一次点击是新的提交。
+      idempotencyRef.current = null
+      lastRenderFrameAt.current = Date.now()
+      toast.success(`已提交渲染${render?.frames_total ? `（共 ${render.frames_total} 帧）` : ''}`)
+      await qc.invalidateQueries({ queryKey: ['video', 'renders', wsId, projectId] })
     } catch (err: unknown) {
+      if (isApiError(err) && err.kind === 'business') {
+        // 业务拒绝（400/402/403/409…）→ 服务端没有建渲染行，无需复用 key。
+        idempotencyRef.current = null
+      }
       toast.error(apiErrorMessage(err, '提交渲染失败'))
     } finally {
       setRendering(false)
     }
   }
 
-  // -------------------------------------------------------------------------
-  // 素材上传（POST /api/video/assets，multipart ≤1MiB）
-  // -------------------------------------------------------------------------
-
+  // 素材上传（POST /api/video/assets，multipart，后端上限 50MiB）
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [lastUpload, setLastUpload] = useState<{ key: string; url: string; size: number } | null>(null)
   const onUploadAsset = async (file: File) => {
-    if (file.size > 1024 * 1024) {
-      toast.error('素材上限 1MiB（v1），请压缩后再上传')
+    if (file.size > VIDEO_ASSET_MAX_BYTES) {
+      toast.error('素材上限 50MiB，请压缩后再上传')
       return
     }
     setUploading(true)
     try {
-      const res = await videoApi.uploadAsset(file)
-      toast.success(`素材已上传：${shortID(res.key, 24)}`)
+      // project_id 是后端必填的表单字段（归属登记），key 才会落到本项目名下。
+      const res = await videoApi.uploadAsset(file, projectId)
+      setLastUpload(res)
+      toast.success('素材已上传')
     } catch (err: unknown) {
       toast.error(apiErrorMessage(err, '上传失败'))
     } finally {
       setUploading(false)
+    }
+  }
+
+  const copyAssetKey = async () => {
+    if (!lastUpload) return
+    try {
+      await navigator.clipboard.writeText(lastUpload.key)
+      toast.success('已复制素材 key')
+    } catch {
+      toast.error('复制失败，请手动选中文本复制')
     }
   }
 
@@ -600,12 +712,9 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
         const pct = r.frames_total > 0 ? Math.round((r.frames_done / r.frames_total) * 100) : 0
         return (
           <div className="flex min-w-40 items-center gap-2">
-            {/* ProgressValue 是 ProgressPrimitive.Value，必须作为 Progress(Root) 子元素渲染——
-                平级兄弟会抛 ProgressRootContext missing 把整页炸掉（界面走查实拍）。 */}
+            {/* Progress 根组件自带 Track+Indicator（progress.tsx），调用方只补 Value。
+                再手写一层 ProgressTrack/ProgressIndicator 会叠出两条轨道。 */}
             <Progress value={pct} className="flex-1" aria-label={`渲染进度 ${pct}%`}>
-              <ProgressTrack>
-                <ProgressIndicator />
-              </ProgressTrack>
               <ProgressValue className="w-10 shrink-0 text-xs">{(v) => `${v}%`}</ProgressValue>
             </Progress>
             <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -625,14 +734,24 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
       header: '输出',
       render: (r) =>
         r.status === 'succeeded' && r.output_url ? (
-          <a
-            href={r.output_url}
-            download
-            className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
-          >
-            <Download size={14} aria-hidden="true" />
-            下载 mp4
-          </a>
+          <div className="flex items-center gap-3">
+            {r.thumb_url && (
+              <img
+                src={videoApi.fileUrl(r.thumb_url, wsId ?? '')}
+                alt="首帧缩略图"
+                loading="lazy"
+                className="h-14 w-10 shrink-0 rounded border border-border bg-muted object-cover"
+              />
+            )}
+            <a
+              href={videoApi.fileUrl(r.output_url, wsId ?? '')}
+              download
+              className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+            >
+              <Download size={14} aria-hidden="true" />
+              下载 mp4
+            </a>
+          </div>
         ) : r.status === 'failed' || r.status === 'interrupted' ? (
           <span className="text-xs text-destructive" title={r.error ?? ''}>
             {r.error ? r.error.slice(0, 60) : '—'}
@@ -644,7 +763,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   ]
 
   // -------------------------------------------------------------------------
-  // 重新组合（POST /compose，批B）：入口弹层状态
+  // 重新组合入口弹层状态
   // -------------------------------------------------------------------------
 
   const [recomposeOpen, setRecomposeOpen] = useState(false)
@@ -656,7 +775,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   if (!projectId) {
     return <PageError message="缺少项目 ID" />
   }
-  if (projectQ.isPending) {
+  if ((!wsId || projectQ.isPending) && !projectQ.isError) {
     return <PageLoading label="加载项目…" />
   }
   if (projectQ.isError) {
@@ -672,6 +791,8 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
   }
 
   const agentOnline = wsStatus === 'open'
+  const writeHintId = 'video-write-hint'
+  const renderHintId = 'video-render-hint'
 
   return (
     <div className="space-y-6">
@@ -696,7 +817,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
             <Popover>
               <PopoverTrigger
                 render={
-                  <Button size="sm" variant="outline" aria-label="更多项目操作" />
+                  <Button size="sm" variant="outline" disabled={!canWrite} aria-label="更多项目操作" />
                 }
               >
                 <Wand2 size={14} aria-hidden="true" />
@@ -724,19 +845,32 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
           <section className="space-y-2 rounded-lg border bg-card p-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground">脚本</h2>
-              <Button size="xs" variant={scriptDirty ? 'default' : 'outline'} onClick={() => void saveScript()} disabled={saving || !scriptDirty}>
+              <Button
+                size="xs"
+                variant={scriptDirty ? 'default' : 'outline'}
+                onClick={() => void saveScript()}
+                disabled={!canWrite || saving || !scriptDirty}
+              >
                 {saving ? '保存中…' : scriptDirty ? '保存' : '已同步'}
               </Button>
             </div>
             <Textarea
               value={scriptValue}
-              onChange={(e) => setScriptDraft(e.target.value)}
+              onChange={(e) => {
+                // 第一次输入时锚定当前 version：保存用它做乐观锁基准，
+                // 期间别人推进版本会得到冲突提示而不是静默覆盖。
+                if (draftBaseVersionRef.current === null) draftBaseVersionRef.current = project.version
+                setScriptDraft(e.target.value)
+              }}
               rows={10}
-              placeholder="输入口播脚本…（≤5000 字符；保存后由服务端重排词级时间戳并重解析效果锚点）"
+              maxLength={5000}
+              disabled={!canWrite}
+              placeholder="输入口播脚本…（≤5000 字符；保存后服务端会重新切分词级时间并更新动效位置）"
               className="min-h-40 font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              {scriptValue.length}/5000 字符 · 保存走 v{project.version} 乐观锁
+              {scriptValue.length}/5000 字符
+              {!canWrite && ' · 当前角色只能查看，保存需要编辑权限'}
             </p>
           </section>
 
@@ -744,7 +878,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
             <h2 className="text-sm font-semibold text-foreground">词条时间轴</h2>
             {ir.words.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                暂无词条。保存脚本后（TTS/对齐可用时）自动生成词级时间戳。
+                暂无词条。保存脚本后（配音或对齐可用时）会自动生成词级时间。
               </p>
             ) : (
               <div className="flex flex-wrap gap-1">
@@ -753,7 +887,8 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
                     key={w.index}
                     type="button"
                     onClick={() => seekToSec(w.start)}
-                    title={`${w.start.toFixed(2)}s–${w.end.toFixed(2)}s · ${w.source}`}
+                    style={{ minWidth: `${wordSpan(w) * 3}rem` }}
+                    title={`第 ${w.index + 1} 个词 · ${w.start.toFixed(2)}s–${w.end.toFixed(2)}s（${WORD_SOURCE_LABEL[w.source] ?? '未知来源'}）`}
                     className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-xs text-foreground hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {w.text}
@@ -763,8 +898,8 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
             )}
             {ir.audio?.voice && (
               <p className="text-xs text-muted-foreground">
-                配音：{ir.audio.voice.durationSec.toFixed(1)}s
-                {ir.audio.bgm ? ` · BGM vol ${ir.audio.bgm.volume}` : ''}
+                配音时长：{ir.audio.voice.durationSec.toFixed(1)} 秒
+                {ir.audio.bgm ? ` · 背景音乐音量 ${Math.round(ir.audio.bgm.volume * 100)}%` : ''}
               </p>
             )}
           </section>
@@ -778,7 +913,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
               <iframe
                 key={previewKey}
                 ref={iframeRef}
-                src={videoApi.previewUrl(projectId)}
+                src={videoApi.previewUrl(projectId, wsId ?? '')}
                 title={`预览：${project.title}`}
                 className="h-full w-full"
                 // 不加 sandbox：§4.4.4 的隔离面是 preview.html 响应自身
@@ -802,7 +937,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
               onValueChange={(v) => seek(Array.isArray(v) ? v[0] : v)}
               disabled={durationFrames === 0}
               className="w-full flex-1"
-              aria-label="时间线 scrub（帧）"
+              thumbAriaLabel="时间线位置（帧）"
             />
             <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
               {Math.min(frame, Math.max(0, durationFrames - 1))}/{durationFrames || '—'} 帧
@@ -816,13 +951,13 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
             <h2 className="text-sm font-semibold text-foreground">效果（{ir.effects.length}）</h2>
             {ir.effects.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                暂无效果。让 Agent 用 video_add_effect_at_word 添加，或在 MCP 侧编排。
+                暂无动效。可以让 Agent 在文案的指定位置添加动效。
               </p>
             ) : (
               <ul className="space-y-1.5">
                 {ir.effects.map((fx) => {
                   const word = fx.resolvedFrom ? ir.words[fx.resolvedFrom.wordIndex] : undefined
-                  const unresolved = fx.resolvedFrom?.reason === 'missing'
+                  const unresolved = !word
                   return (
                     <li key={fx.id}>
                       <button
@@ -833,10 +968,10 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
                       >
                         <Badge className={STATUS_TONE_CLASS.brand}>{fx.type}</Badge>
                         <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                          {word ? `@「${word.text}」 ${word.start.toFixed(2)}s` : '锚点未解析'}
+                          {word ? `在第 ${word.index + 1} 个词「${word.text}」（${word.start.toFixed(2)}s）` : '对应的词已不在文案中'}
                         </span>
                         {unresolved && (
-                          <Badge className={STATUS_TONE_CLASS.warning}>missing</Badge>
+                          <Badge className={STATUS_TONE_CLASS.warning}>待重新定位</Badge>
                         )}
                       </button>
                     </li>
@@ -853,10 +988,10 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
                 <Label htmlFor="video-fps">帧率</Label>
                 <Select value={fps} onValueChange={(v) => setFps(v)}>
                   <SelectTrigger id="video-fps" className="w-full">
-                    <SelectValue>{fps === '' ? `跟随 IR（${ir.meta.fps}）` : fps}</SelectValue>
+                    <SelectValue>{fps === '' ? `跟随项目（${ir.meta.fps}）` : fps}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">跟随 IR</SelectItem>
+                    <SelectItem value="">跟随项目</SelectItem>
                     <SelectItem value="24">24</SelectItem>
                     <SelectItem value="25">25</SelectItem>
                     <SelectItem value="30">30</SelectItem>
@@ -870,11 +1005,11 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
                 <Select value={resPreset} onValueChange={(v) => setResPreset(v)}>
                   <SelectTrigger id="video-res" className="w-full">
                     <SelectValue>
-                      {resPreset === 'meta' ? `跟随 IR（${ir.meta.width}×${ir.meta.height}）` : resPreset}
+                      {resPreset === 'meta' ? `跟随项目（${ir.meta.width}×${ir.meta.height}）` : resPreset}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="meta">跟随 IR</SelectItem>
+                    <SelectItem value="meta">跟随项目</SelectItem>
                     <SelectItem value="1080x1920">1080×1920（9:16）</SelectItem>
                     <SelectItem value="720x1280">720×1280（9:16）</SelectItem>
                     <SelectItem value="1920x1080">1920×1080（16:9）</SelectItem>
@@ -906,7 +1041,7 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
                     step={5}
                     value={bgmVolume === '' ? Math.round((ir.audio?.bgm?.volume ?? 0.3) * 100) : Number(bgmVolume)}
                     onValueChange={(v) => setBgmVolume(String(Array.isArray(v) ? v[0] : v))}
-                    aria-label="BGM 音量（%）"
+                    thumbAriaLabel="背景音乐音量（%）"
                   />
                   <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
                     {bgmVolume === '' ? `${Math.round((ir.audio?.bgm?.volume ?? 0.3) * 100)}%` : `${bgmVolume}%`}
@@ -928,13 +1063,20 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={uploading}
+                disabled={!canWrite || uploading}
+                aria-describedby={!canWrite ? writeHintId : undefined}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload size={14} aria-hidden="true" />
                 {uploading ? '上传中…' : '上传素材'}
               </Button>
-              <Button size="sm" onClick={() => void submitRender()} disabled={rendering}>
+              <Button
+                size="sm"
+                onClick={() => void submitRender()}
+                disabled={!canRender || rendering}
+                aria-describedby={!canRender ? renderHintId : undefined}
+                title={!canRender ? '渲染需要管理员/所有者权限' : undefined}
+              >
                 {rendering ? (
                   <>
                     <RefreshCw size={14} className="animate-spin" aria-hidden="true" />
@@ -948,6 +1090,30 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
                 )}
               </Button>
             </div>
+            {!canRender && (
+              <p id={renderHintId} className="text-xs text-muted-foreground">
+                渲染需要管理员/所有者权限：当前角色可编辑项目，但提交渲染会消耗工作区配额。
+              </p>
+            )}
+            {!canWrite && (
+              <p id={writeHintId} className="text-xs text-muted-foreground">
+                保存脚本与上传素材需要编辑权限。
+              </p>
+            )}
+            {lastUpload && (
+              <div className="space-y-1 rounded border border-border bg-muted/30 p-2">
+                <p className="text-xs text-muted-foreground">素材 key（可复制，供动效编排或 Agent 引用）</p>
+                <div className="flex items-start gap-2">
+                  <code className="min-w-0 flex-1 break-all font-mono text-xs text-foreground select-all">
+                    {lastUpload.key}
+                  </code>
+                  <Button size="xs" variant="outline" onClick={() => void copyAssetKey()}>
+                    <Copy size={12} aria-hidden="true" />
+                    复制
+                  </Button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </div>
@@ -955,22 +1121,31 @@ export function VideoStudioPage({ projectId }: { projectId: string }) {
       {/* 底部：渲染历史 */}
       <section className="space-y-3">
         <h2 className="text-base font-semibold text-foreground">渲染历史</h2>
-        <DataTable
-          columns={renderColumns}
-          rows={renders}
-          rowKey={(r) => r.id}
-          loading={rendersQ.isPending}
-          empty={<PageEmpty label="暂无渲染记录" hint="点击右栏「渲染」提交第一次云端渲染" />}
-        />
+        {rendersQ.isError ? (
+          <PageError
+            message={apiErrorMessage(rendersQ.error, '渲染历史加载失败')}
+            onRetry={() => void rendersQ.refetch()}
+          />
+        ) : (
+          <DataTable
+            columns={renderColumns}
+            rows={renders}
+            rowKey={(r) => r.id}
+            loading={rendersQ.isPending}
+            empty={<PageEmpty label="暂无渲染记录" hint="点击右栏「渲染」提交第一次云端渲染" />}
+          />
+        )}
       </section>
 
-      {/* 重新组合（批B compose） */}
+      {/* 重新组合（compose） */}
       <RecomposeDialog
         projectId={projectId}
+        wsId={wsId}
         currentVersion={project.version}
         currentScript={ir.script}
         open={recomposeOpen}
         onOpenChange={setRecomposeOpen}
+        canWrite={canWrite}
       />
     </div>
   )

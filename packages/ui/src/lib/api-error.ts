@@ -55,6 +55,12 @@ const KNOWN_CODES: Record<string, string> = {
 
   E_MALFORMED_RESPONSE: 'lib.api.malformedResponse',
 
+  // 503 capability-not-wired (video compose/render pipelines, optional
+  // integrations): the generic 5xx "server unavailable, retry later" copy is
+  // a lie here — retrying never helps until an operator configures the
+  // capability. Give it its own sentence.
+  E_NOT_CONFIGURED: 'lib.api.notConfigured',
+
   E_VALIDATION: 'lib.api.validation',
   E_TURNSTILE: 'lib.api.turnstile',
 

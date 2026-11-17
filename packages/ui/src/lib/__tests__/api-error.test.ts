@@ -76,6 +76,12 @@ describe('apiErrorMessage', () => {
       .toBe('The service is temporarily unavailable. Please retry later; if it persists, contact the platform administrator')
   })
 
+  it('503 E_NOT_CONFIGURED（能力未接线）→ 专用「未配置」文案，不是可重试的 5xx 兜底', () => {
+    const got = apiErrorMessage(new ApiError(503, 'E_NOT_CONFIGURED', 'render capability not configured'))
+    expect(got).toContain('has not been enabled on the server')
+    expect(got).not.toBe('The service is temporarily unavailable. Please retry later; if it persists, contact the platform administrator')
+  })
+
   it('4xx 未知 ApiError 保留原始 message；网络异常给可重试文案；其余走 fallback', () => {
 
     expect(apiErrorMessage(new ApiError(400, 'E_BAD_JSON', 'boom'))).toBe('boom')

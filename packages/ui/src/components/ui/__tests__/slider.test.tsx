@@ -61,4 +61,17 @@ describe('slider 冒烟', () => {
     expect(inputs[0]).toHaveValue('20')
     expect(inputs[1]).toHaveValue('80')
   })
+
+  it('thumbAriaLabel：role="slider" 的隐藏 input 拿到可访问名', () => {
+    render(<Slider defaultValue={40} thumbAriaLabel="BGM 音量" />)
+    const input = screen.getByRole('slider', { name: 'BGM 音量' }) as HTMLInputElement
+    expect(input).toHaveAttribute('type', 'range')
+    expect(input).toHaveAccessibleName('BGM 音量')
+  })
+
+  it('thumbAriaLabel 多 thumb：每个 input 的名字带序号（互不重名）', () => {
+    render(<Slider defaultValue={[20, 80]} thumbAriaLabel="裁剪" />)
+    expect(screen.getByRole('slider', { name: '裁剪 1' })).toHaveValue('20')
+    expect(screen.getByRole('slider', { name: '裁剪 2' })).toHaveValue('80')
+  })
 })

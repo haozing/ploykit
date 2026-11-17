@@ -8,8 +8,10 @@ import {
   Spinner, toast, apiErrorMessage, cn, formatDate,
 } from '@ploykit/ui'
 import { Clapperboard, Plus, Wand2, ArrowLeft, Palette } from 'lucide-react'
-import { videoApi } from '../api/video'
+import { useWorkspace } from '@ploykit/hooks'
+import { videoApi, isApiError, E_NOT_CONFIGURED, E_VIDEO_IR_INVALID, E_VIDEO_VERSION_CONFLICT } from '../api/video'
 import type { VideoTemplate, VideoTheme } from '../api/video'
+import { hasPerm, radioNavProps } from '../lib/radio-nav'
 
 /**
  * /studio 项目列表：卡片网格 + 新建对话框。
@@ -18,20 +20,23 @@ import type { VideoTemplate, VideoTheme } from '../api/video'
  * - 「从模板新建」（默认主路径）：两步对话框——选模板（CSS 缩略示意）→
  *   选主题 + 填剧本文案 → 先 POST /api/video/projects 建壳，成功后立刻
  *   POST /api/video/projects/{id}/compose 按模板组合 IR，跳 /studio/:id。
- *   compose 失败（批B 未部署/模板服务异常）优雅降级：toast 告知已创建
- *   空白项目，仍跳编辑器，不留死路。
- * - 「空白项目」（次级入口）：原有单字段对话框原样保留。
+ *   compose 失败按错误码区分文案：400 是模板/主题参数问题，503 是服务端
+ *   组合能力未配置；两种都降级为空白项目继续走（不留死路）。
+ * - 「空白项目」（次级入口）：单字段对话框。
  *
- * 数据经 react-query（['video','projects', wsId]；模板目录 ['video','templates']
- * 仅在对话框打开时拉取）。WS 不接（列表页为低频浏览面，ir/render 推送只在
- * 工作室页消费）。
- *
- * 批B 字段假设（对接 docs/openapi.yaml 时核对）：
- * - GET /api/video/templates → {templates:[{key,name,description,canvasW,
- *   canvasH,fps,themes:VideoTheme[]}], themes:VideoTheme[]}
+ * 契约（example/internal/video/app/compose.go TemplateCatalogResponse）：
+ * - GET /api/video/templates → {templates:[{key,name,description,canvas_w,
+ *   canvas_h,fps,safe_margin}], themes:[{key,name,bg,fg,accent,muted,font_scale}]}
+ * - 主题是顶层平级数组，模板自带 themes 字段是历史误读，已删除。
  * - POST /api/video/projects/{id}/compose body {script,template,theme,
  *   expected_version?} → {version,cards,words_source}
- * - theme 落在 template.themes[].key（顶层 themes 是全量目录，做兜底展示）。
+ *
+ * 数据经 react-query（['video','projects', wsId]；模板目录 ['video','templates']
+ * 仅在对话框打开时拉取）。查询键带 wsId：切换工作区后不复用上一个工作区的
+ * 缓存（否则会短暂显示别的 workspace 的项目）。
+ *
+ * 权限：video:write 缺失（role_perms 已知且不含）时隐藏两个新建入口；
+ * 模板目录为空时给「创建空白项目」按钮，而不是一条只有说明的死路。
  */
 
 /** 文案首行 → 默认项目标题（截 24 字符，去空行）。 */
@@ -52,19 +57,27 @@ export function ThemeDot({ theme, className }: { theme: VideoTheme; className?: 
 }
 
 /**
- * 模板迷你版式缩略图：纯 CSS div 按模板首个主题的色板画示意（bg 打底、
- * 标题条、文本条、accent 色块位置），不用图片资源。画布规格只决定宽高比
- * （竖版 9:16 / 横版 16:9 / 方版 1:1 三档示意）。
+ * 模板迷你版式缩略图：纯 CSS div 按主题色板画示意（bg 打底、标题条、文本条、
+ * accent 色块位置），不用图片资源。主题由调用方传入（顶层 themes 目录的
+ * 一项，模板本身不带 themes）；画布规格只决定宽高比（竖版 9:16 / 横版 16:9 /
+ * 方版 1:1 三档示意）。
  */
-export function TemplateThumbnail({ template, className }: { template: VideoTemplate; className?: string }) {
-  const theme = template.themes[0]
+export function TemplateThumbnail({
+  template,
+  theme,
+  className,
+}: {
+  template: VideoTemplate
+  theme?: VideoTheme
+  className?: string
+}) {
   const bg = theme?.bg ?? '#1b1b22'
   const fg = theme?.fg ?? '#f4f4f6'
   const accent = theme?.accent ?? '#7c5cff'
   const muted = theme?.muted ?? '#3d3d49'
-  const aspect = template.canvasH > template.canvasW
+  const aspect = template.canvas_h > template.canvas_w
     ? 'aspect-[9/16]'
-    : template.canvasH < template.canvasW
+    : template.canvas_h < template.canvas_w
       ? 'aspect-video'
       : 'aspect-square'
   return (
@@ -96,13 +109,25 @@ export function TemplateThumbnail({ template, className }: { template: VideoTemp
 /** 模板卡片：缩略图 + 名称/一句话描述/画布规格；选中态描边。 */
 export function TemplateCard({
   template,
-  selected,
+  theme,
+  selected = false,
+  index,
+  count,
   onSelect,
 }: {
   template: VideoTemplate
-  selected: boolean
+  theme?: VideoTheme
+  selected?: boolean
+  /** roving tabindex 的分组位置（不传则不参与组内键盘导航）。 */
+  index?: number
+  count?: number
   onSelect: () => void
 }) {
+  // 卡片是「选中即前进」的入口按钮：方向键只移动焦点，Enter/Space 才激活
+  // （onSelect 不传，radioNavProps 只做 roving tabindex + 焦点移动）。
+  const nav = index !== undefined && count !== undefined
+    ? radioNavProps({ index, count, checkedIndex: -1 })
+    : undefined
   return (
     <button
       type="button"
@@ -110,22 +135,37 @@ export function TemplateCard({
       aria-checked={selected}
       onClick={onSelect}
       data-testid="template-card"
+      {...nav}
       className={cn(
         'flex h-full flex-col gap-2 rounded-lg border p-2.5 text-left transition-colors',
         'hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected ? 'border-primary bg-primary/5' : 'border-border bg-card',
       )}
     >
-      <TemplateThumbnail template={template} />
+      <TemplateThumbnail template={template} theme={theme} />
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-foreground">{template.name}</p>
         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
         <p className="mt-1 font-mono text-[11px] text-muted-foreground/80">
-          {template.canvasW}×{template.canvasH} · {template.fps}fps
+          {template.canvas_w}×{template.canvas_h} · {template.fps}fps
         </p>
       </div>
     </button>
   )
+}
+
+/** compose 失败 → 面向人的提示（按错误码区分，不把真实原因吞成「暂不可用」）。 */
+export function composeFailureMessage(err: unknown): string {
+  if (isApiError(err, E_NOT_CONFIGURED)) {
+    return '服务端尚未启用模板组合能力，已创建空白项目'
+  }
+  if (isApiError(err, E_VIDEO_IR_INVALID) || (isApiError(err) && err.status === 400)) {
+    return `文案或模板参数不被接受：${apiErrorMessage(err, '请检查文案与所选模板')}`
+  }
+  if (isApiError(err, E_VIDEO_VERSION_CONFLICT)) {
+    return '项目刚被其他人更新，本次未组合，已创建空白项目'
+  }
+  return `按模板组合失败（${apiErrorMessage(err, '未知错误')}），已创建空白项目`
 }
 
 // ---------------------------------------------------------------------------
@@ -143,10 +183,13 @@ function TemplateCreateDialog({
   open,
   onOpenChange,
   onCreated,
+  onCreateBlank,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated: (id: string, composed: boolean) => Promise<void> | void
+  /** 模板目录为空时的出路：关掉本对话框并打开空白项目表单。 */
+  onCreateBlank: () => void
 }) {
   const [step, setStep] = useState<'template' | 'compose'>('template')
   const [selected, setSelected] = useState<VideoTemplate | null>(null)
@@ -158,6 +201,8 @@ function TemplateCreateDialog({
   const [creating, setCreating] = useState(false)
 
   // 模板目录仅在对话框打开时拉取；staleTime 内复用（模板目录是静态配置面）。
+  // 目录与主题是两个平级数组（后端 TemplateCatalogResponse）——主题不挂在
+  // 模板上，模板卡片只能借用顶层 themes[0] 的配色做示意。
   const templatesQ = useQuery({
     queryKey: ['video', 'templates'],
     queryFn: () => videoApi.listTemplates(),
@@ -165,6 +210,8 @@ function TemplateCreateDialog({
     staleTime: 5 * 60_000,
   })
   const templates = templatesQ.data?.templates ?? []
+  const themes = templatesQ.data?.themes ?? []
+  const defaultTheme = themes[0]
 
   const close = (v: boolean) => {
     if (!v) {
@@ -182,7 +229,8 @@ function TemplateCreateDialog({
 
   const pickTemplate = (t: VideoTemplate) => {
     setSelected(t)
-    setThemeKey(t.themes[0]?.key ?? '')
+    // 主题默认取顶层 themes[0].key（模板没有自己的主题列表）。
+    setThemeKey(defaultTheme?.key ?? '')
     setStep('compose')
   }
 
@@ -203,20 +251,21 @@ function TemplateCreateDialog({
     setScriptError(null)
     setCreating(true)
     try {
-      // 顺序契约：先建壳（既有端点），成功后立刻按模板组合（批B）。组合
-      // 失败不回滚建壳——降级为空白项目继续走，不留死路。
+      // 顺序契约：先建壳（既有端点），成功后立刻按模板组合。组合失败不回滚
+      // 建壳——降级为空白项目继续走，不留死路。
       const { id } = await videoApi.createProject(effectiveTitle)
       let composed = false
       try {
         await videoApi.compose(id, {
           script: script.trim(),
           template: selected.key,
-          theme: themeKey || selected.themes[0]?.key || '',
+          theme: themeKey || defaultTheme?.key || '',
         })
         composed = true
-      } catch {
-        // 批B 未部署（404/501）或模板服务异常：降级提示，项目仍可进编辑器。
-        toast.warning('模板服务暂不可用，已创建空白项目')
+      } catch (composeErr: unknown) {
+        // 按错误码区分（400 参数 / 503 未配置 / 其他），不把所有原因吞成
+        // 「模板服务暂不可用」。项目已建好，提示后进编辑器。
+        toast.warning(composeFailureMessage(composeErr))
       }
       await onCreated(id, composed)
       close(false)
@@ -245,25 +294,39 @@ function TemplateCreateDialog({
             ) : templatesQ.isError ? (
               <div className="space-y-3 py-6 text-center">
                 <p className="text-sm text-muted-foreground">
-                  模板服务暂不可用（{apiErrorMessage(templatesQ.error, '加载失败')}）
+                  模板目录加载失败（{apiErrorMessage(templatesQ.error, '请稍后重试')}）
                 </p>
-                <Button variant="outline" size="sm" onClick={() => void templatesQ.refetch()}>
-                  重试
-                </Button>
+                <div className="flex items-center justify-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void templatesQ.refetch()}>
+                    重试
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onCreateBlank}>
+                    创建空白项目
+                  </Button>
+                </div>
               </div>
             ) : templates.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">暂无可用模板，可先创建空白项目。</div>
+              <div className="space-y-3 py-6 text-center">
+                <p className="text-sm text-muted-foreground">当前没有可用的模板，可以先创建空白项目。</p>
+                <Button variant="outline" size="sm" onClick={onCreateBlank}>
+                  <Plus size={14} aria-hidden="true" />
+                  创建空白项目
+                </Button>
+              </div>
             ) : (
               <div
                 role="radiogroup"
                 aria-label="模板选择"
                 className="grid grid-cols-2 gap-3 sm:grid-cols-3"
               >
-                {templates.map((t) => (
+                {templates.map((t, i) => (
                   <TemplateCard
                     key={t.key}
                     template={t}
+                    theme={defaultTheme}
                     selected={false}
+                    index={i}
+                    count={templates.length}
                     onSelect={() => pickTemplate(t)}
                   />
                 ))}
@@ -279,16 +342,21 @@ function TemplateCreateDialog({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              {/* 主题选择：色板圆点 + 名称 */}
-              {selected.themes.length > 0 && (
+              {/* 主题选择：色板圆点 + 名称（顶层 themes 目录，方向键可切换） */}
+              {themes.length > 0 && (
                 <Field>
-                  <Label>
+                  <Label id="template-theme-label">
                     <Palette size={13} aria-hidden="true" className="mr-1 inline align-[-2px]" />
                     主题
                   </Label>
-                  <div role="radiogroup" aria-label="主题选择" className="flex flex-wrap gap-2">
-                    {selected.themes.map((th) => {
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="template-theme-label"
+                    className="flex flex-wrap gap-2"
+                  >
+                    {themes.map((th, i) => {
                       const active = th.key === themeKey
+                      const checkedIndex = Math.max(0, themes.findIndex((t) => t.key === themeKey))
                       return (
                         <button
                           key={th.key}
@@ -297,6 +365,15 @@ function TemplateCreateDialog({
                           aria-checked={active}
                           data-testid="theme-option"
                           onClick={() => setThemeKey(th.key)}
+                          {...radioNavProps({
+                            index: i,
+                            count: themes.length,
+                            checkedIndex,
+                            onSelect: (next) => {
+                              const hit = themes[next]
+                              if (hit) setThemeKey(hit.key)
+                            },
+                          })}
                           className={cn(
                             'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -338,6 +415,7 @@ function TemplateCreateDialog({
                     setTitle(e.target.value)
                     if (titleError) setTitleError(null)
                   }}
+                  maxLength={200}
                   placeholder={deriveTitleFromScript(script) || '默认取文案首行'}
                   aria-invalid={titleError ? true : undefined}
                   aria-describedby={titleError ? 'template-title-error' : undefined}
@@ -383,6 +461,9 @@ function TemplateCreateDialog({
 export function VideoStudioListPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const { current: workspace } = useWorkspace()
+  const wsId = workspace?.id
+  const canWrite = hasPerm(workspace?.role_perms, 'video:write')
   const [createOpen, setCreateOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [title, setTitle] = useState('')
@@ -390,10 +471,13 @@ export function VideoStudioListPage() {
   const [creating, setCreating] = useState(false)
 
   const projectsQ = useQuery({
-    queryKey: ['video', 'projects'],
+    // wsId 进键 + enabled：切换工作区既不命中上一个 ws 的缓存，也不在
+    // 工作区尚未水合时发无 X-Workspace-Id 的请求（否则后端 400 被缓存）。
+    queryKey: ['video', 'projects', wsId],
     queryFn: () => videoApi.listProjects(),
+    enabled: !!wsId,
   })
-  const projects = useMemo(() => projectsQ.data?.projects ?? [], [projectsQ.data])
+  const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data])
   const invalidateProjects = () => qc.invalidateQueries({ queryKey: ['video', 'projects'] })
 
   const openCreate = () => {
@@ -430,22 +514,30 @@ export function VideoStudioListPage() {
     void navigate(`/studio/${id}`)
   }
 
+  // 模板目录空/失败时的出路：关模板对话框，开空白项目表单。
+  const createBlankFromTemplate = () => {
+    setTemplateOpen(false)
+    openCreate()
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="视频工作室"
         description="把脚本变成 9:16 短视频：编辑脚本与效果，预览时间线，提交云端渲染。"
         actions={
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => setTemplateOpen(true)}>
-              <Wand2 aria-hidden="true" />
-              从模板新建
-            </Button>
-            <Button size="sm" variant="outline" onClick={openCreate}>
-              <Plus aria-hidden="true" />
-              空白项目
-            </Button>
-          </div>
+          canWrite ? (
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => setTemplateOpen(true)}>
+                <Wand2 aria-hidden="true" />
+                从模板新建
+              </Button>
+              <Button size="sm" variant="outline" onClick={openCreate}>
+                <Plus aria-hidden="true" />
+                空白项目
+              </Button>
+            </div>
+          ) : undefined
         }
       />
 
@@ -459,7 +551,7 @@ export function VideoStudioListPage() {
       ) : projects.length === 0 ? (
         <PageEmpty
           label="还没有视频项目"
-          hint="点击右上角「从模板新建」，选版式、填文案，一键成片"
+          hint={canWrite ? '点击右上角「从模板新建」，选版式、填文案，一键成片' : '当前角色只能浏览项目；新建需要编辑权限'}
         />
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -492,6 +584,7 @@ export function VideoStudioListPage() {
         open={templateOpen}
         onOpenChange={setTemplateOpen}
         onCreated={onTemplateCreated}
+        onCreateBlank={createBlankFromTemplate}
       />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -502,12 +595,15 @@ export function VideoStudioListPage() {
           </DialogHeader>
           <form className="space-y-4" onSubmit={submitCreate}>
             <Field data-invalid={!!titleError}>
+              <Label htmlFor="video-project-title">项目标题</Label>
               <Input
+                id="video-project-title"
                 value={title}
                 onChange={(e) => {
                   setTitle(e.target.value)
                   if (titleError) setTitleError(null)
                 }}
+                maxLength={200}
                 placeholder="项目标题…"
                 aria-invalid={titleError ? true : undefined}
                 aria-describedby={titleError ? 'video-project-title-error' : undefined}
