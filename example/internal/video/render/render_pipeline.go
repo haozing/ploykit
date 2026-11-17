@@ -130,7 +130,7 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 	// (delivery audit P1: "无声出片当成功"). Image assets already fail closed
 	// in the projector; audio now matches.
 	voicePath, bgmPath := "", ""
-	voiceVolume := 1.0
+	voiceVolume, bgmVolume := videoapp.ResolveAudioVolumes(ir)
 	if ir.Audio != nil {
 		if ir.Audio.Voice != nil && ir.Audio.Voice.Key != "" {
 			f, ferr := w.tempFile(ctx, ir.Audio.Voice.Key)
@@ -139,7 +139,6 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 			}
 			voicePath = f
 			defer os.Remove(f)
-			voiceVolume = ir.Audio.Voice.Volume
 		}
 		if ir.Audio.BGM != nil && ir.Audio.BGM.Key != "" {
 			f, ferr := w.tempFile(ctx, ir.Audio.BGM.Key)
@@ -149,10 +148,6 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 			bgmPath = f
 			defer os.Remove(f)
 		}
-	}
-	bgmVolume := 1.0
-	if ir.Audio != nil && ir.Audio.BGM != nil {
-		bgmVolume = ir.Audio.BGM.Volume
 	}
 	if params.BGMVolume > 0 {
 		bgmVolume = params.BGMVolume

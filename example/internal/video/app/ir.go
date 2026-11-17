@@ -158,6 +158,17 @@ type Element struct {
 }
 
 // AudioTrack references one audio object in storagex by key.
+//
+// Volume semantics (2026-11-17 P1 fix): the field is `omitempty`, so JSON
+// cannot distinguish "explicitly 0" from "absent" — and an absent field
+// unmarshals to the Go zero value 0. Before the fix, the render pipeline
+// assigned Voice.Volume unconditionally, so every track written without a
+// volume (the TTS assembly path did exactly that) rendered at volume=0 —
+// a silent track, silently. Resolution is centralized in
+// ResolveAudioVolumes: 0 (absent) means "use the track default of 1.0";
+// a genuine mute is not expressible in v1 and will be a v2 concern (v2
+// makes volume required and explicit). AudioTrack.Volume is validated to
+// the 0-1 range at write time, so 0 is the only ambiguous value.
 type AudioTrack struct {
 	Key         string  `json:"key,omitempty"`
 	DurationSec float64 `json:"durationSec,omitempty"`
@@ -168,6 +179,26 @@ type AudioTrack struct {
 type Audio struct {
 	Voice *AudioTrack `json:"voice,omitempty"`
 	BGM   *AudioTrack `json:"bgm,omitempty"`
+}
+
+// ResolveAudioVolumes is the SINGLE source of the effective voice/bgm
+// gain (mixer-side). A nil IR, nil track, or zero Volume resolves to the
+// default 1.0 — see the AudioTrack volume-semantics comment for why zero
+// cannot mean "muted" in v1. Callers must NOT read AudioTrack.Volume
+// directly for mixing (the TTS-write path leaves it unset by design).
+func ResolveAudioVolumes(ir *IR) (voice, bgm float64) {
+	const def = 1.0
+	voice, bgm = def, def
+	if ir == nil || ir.Audio == nil {
+		return voice, bgm
+	}
+	if ir.Audio.Voice != nil && ir.Audio.Voice.Volume > 0 {
+		voice = ir.Audio.Voice.Volume
+	}
+	if ir.Audio.BGM != nil && ir.Audio.BGM.Volume > 0 {
+		bgm = ir.Audio.BGM.Volume
+	}
+	return voice, bgm
 }
 
 // IRSchemaVersion is the contract version of the IR document itself
@@ -205,10 +236,13 @@ func (ir *IR) normalizeSchema() {
 
 // Limits (docs plan §4.2.2).
 const (
-	MaxScriptChars          = 5000
-	MaxWords                = 2000
-	MaxEffects              = 128
-	MaxElements             = 64
+	MaxScriptChars = 5000
+	MaxWords       = 2000
+	MaxEffects     = 128
+	// 128（2026-11-17 上调，原 64）：图像拼贴类合成（产品展示片=底图+30 张成片位姿贴纸
+	// + 托盘页+勾格+字效层）单项目就需要 ~66 元素；真正的资源闸门是 IR 总量与
+	// 单图尺寸上限，元素数只是粗代理。tool-site v4-assembly 试点实测超限。
+	MaxElements             = 128
 	MaxAnimationsPerElement = 16
 	MaxIRBytes              = 256 << 10 // 256 KiB
 )
@@ -464,8 +498,11 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 				return ve(af+".startAnchor.occurrence", "occurrence must be >= 0")
 			}
 		}
-		// coordinates clamp to the canvas at projection time; here we only
-		// reject obviously broken values (NaN/Inf, negative sizes).
+		// NO coordinate clamping exists anywhere (an earlier revision of this
+		// comment claimed a projection-time clamp — it never did): out-of-
+		// canvas coordinates render as-is and the out-of-canvas part is
+		// visually clipped by #stage's overflow:hidden (projector). Here we
+		// only reject obviously broken values (NaN/Inf).
 		for _, p := range []*Point{an.From, an.To} {
 			if p != nil && (!isFinite(p.X) || !isFinite(p.Y)) {
 				return ve(af, "animation coordinates must be finite numbers")
@@ -497,8 +534,9 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 	if ir != nil && (el.StartFrame != nil || el.EndFrame != nil) {
 		maxFrames := DurationFrames(ir, meta.FPS)
 		// Bound is <= DurationFrames (not < ): valid frames are [0, F-1] and
-		// the window is half-open [startFrame, endFrame) — the hide set lands
-		// exactly at endFrame, so endFrame == F expresses "visible to the
+		// the window is INCLUSIVE of endFrame ([StartFrame+1, EndFrame] — see
+		// the Element doc above; the builder's hide set lands at
+		// tEnd + 1/(2·fps)), so endFrame == F expresses "visible to the
 		// end" and is legal; anything beyond it references a frame past the
 		// timeline.
 		if el.StartFrame != nil && *el.StartFrame > maxFrames {

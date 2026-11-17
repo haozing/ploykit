@@ -1331,9 +1331,9 @@ type setAudioIn struct {
 	ProjectID       string  `json:"project_id" jsonschema:"project id"`
 	VoiceKey        *string `json:"voice_key,omitempty" jsonschema:"voice track storage key (video/<workspace>/... from video_upload_asset); omit or null = clear the voice track"`
 	VoiceDuration   float64 `json:"voice_duration_sec,omitempty" jsonschema:"voice duration seconds (extends the timeline when past meta.duration_sec)"`
-	VoiceVolume     float64 `json:"voice_volume,omitempty" jsonschema:"voice volume 0-1 (default 1)"`
+	VoiceVolume     float64 `json:"voice_volume,omitempty" jsonschema:"voice volume 0-1 (omit or 0 = default 1.0; a true mute is not expressible in v1)"`
 	BGMKey          *string `json:"bgm_key,omitempty" jsonschema:"bgm track storage key; omit or null = clear the bgm track"`
-	BGMVolume       float64 `json:"bgm_volume,omitempty" jsonschema:"bgm volume 0-1 (default 0 = muted bgm; render mixes with this)"`
+	BGMVolume       float64 `json:"bgm_volume,omitempty" jsonschema:"bgm volume 0-1 (omit or 0 = default 1.0; a true mute is not expressible in v1)"`
 	ExpectedVersion *int    `json:"expected_version,omitempty" jsonschema:"optimistic-lock version"`
 	WorkspaceID     string  `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
 }

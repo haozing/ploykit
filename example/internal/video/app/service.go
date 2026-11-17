@@ -525,7 +525,7 @@ func fieldMsg(field, msg string) string {
 // and MCP surface the same detail as every other IR validation failure.
 //
 // The storage probe costs one Open on the local backend (stat-like) or one
-// GetObject head on S3; elements are capped at MaxElements (64) and audio
+// GetObject head on S3; elements are capped at MaxElements (128) and audio
 // adds at most 2 keys, so the worst-case probe count per write is bounded and
 // only reached when NO reference is registered — the legacy window, not the
 // steady state. DB is consulted first and short-circuits per key (one
@@ -990,6 +990,9 @@ func (s *ProjectService) deriveWordsUnlocked(ctx context.Context, ir *IR, script
 				words = s.stampSource(words, WordSourceTTS)
 			}
 			// Fresh TTS audio rides with the words (phase 2 applies both).
+			// Volume is left unset on purpose: ResolveAudioVolumes treats a
+			// zero/absent volume as the 1.0 default (the field is omitempty,
+			// so 0 cannot mean "muted" in v1 — see AudioTrack).
 			if vr.AudioKey != "" {
 				if scratch.Audio == nil {
 					scratch.Audio = &Audio{}
@@ -1208,7 +1211,9 @@ type MetaPatch struct {
 	DurationSec *float64
 }
 
-// MoveElement repositions one element (coords clamp at projection; §4.2.2).
+// MoveElement repositions one element (§4.2.2). No clamping: coordinates
+// render as-is; out-of-canvas parts are visually clipped by the projector's
+// overflow:hidden stage.
 func (s *ProjectService) MoveElement(ctx context.Context, p *webx.Principal, projectID, elementID string, x, y float64, expectedVersion *int) (int, error) {
 	newVersion, _, err := s.Mutate(ctx, p, projectID, expectedVersion, func(ir *IR) error {
 		for i := range ir.Elements {
