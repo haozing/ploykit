@@ -27,6 +27,13 @@ type denyAll struct{ allow bool }
 
 func (d denyAll) IsMember(_ context.Context, _, _ string) (bool, error) { return d.allow, nil }
 
+func (d denyAll) RoleOf(_ context.Context, _, _ string) (string, bool, error) {
+	if !d.allow {
+		return "", false, nil
+	}
+	return "admin", true, nil
+}
+
 func svc(allow bool) *videoapp.ProjectService {
 	return videoapp.NewProjectService(nil, videoapp.Ports{
 		Membership: denyAll{allow},

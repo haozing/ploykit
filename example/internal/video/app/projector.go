@@ -340,9 +340,7 @@ const playerTemplate = `<!DOCTYPE html>
 <body>
 <div id="stage"><div id="canvas"></div></div>
 <script type="application/json" id="ploykit-ir">{{.IRJSON}}</script>
-<script>
-{{.InlineScript}}
-</script>
+<script>{{.InlineScript}}</script>
 </body>
 </html>
 `

@@ -144,12 +144,19 @@ func (f *FrameWriter) WriteFrame(png []byte) error {
 // (before mixing). Video is stream-copied, audio is mixed with amix:
 //
 //	-i video -i voice -i bgm \
-//	-filter_complex "[2:a]volume=<v>[bgm];[1:a][bgm]amix=inputs=2:duration=first[a]" \
+//	-filter_complex "[1:a]volume=<vv>[voice];[2:a]volume=<bv>[bgm];
+//	                 [voice][bgm]amix=inputs=2:duration=first:normalize=0,apad[a]" \
 //	-map 0:v -map "[a]" -c:v copy out.mp4
 //
 // Voice-only / bgm-only / silent variants drop the missing inputs from the
 // graph. Design §3.4.
-func (r *Runtime) MuxAV(ctx context.Context, out io.Writer, videoPath, voicePath, bgmPath string, bgmVolume float64) error {
+//
+// voiceVolume is applied (it used to be ignored — IR validated the field but
+// the mix never consumed it, so "voice_volume: 0" still produced audible
+// narration; delivery audit P1). normalize=0 keeps the declared gains intact:
+// ffmpeg's amix default divides by the input count, which silently halved
+// both tracks.
+func (r *Runtime) MuxAV(ctx context.Context, out io.Writer, videoPath, voicePath, bgmPath string, voiceVolume, bgmVolume float64) error {
 	if !r.Available() {
 		return ErrNotConfigured
 	}
@@ -163,17 +170,22 @@ func (r *Runtime) MuxAV(ctx context.Context, out io.Writer, videoPath, voicePath
 	switch {
 	case voicePath != "" && bgmPath != "":
 		args = append(args, "-i", voicePath, "-i", bgmPath)
-		fmt.Fprintf(&filter, "[2:a]volume=%s[bgm];[1:a][bgm]amix=inputs=2:duration=first[a]",
+		fmt.Fprintf(&filter, "[1:a]volume=%s[voice];[2:a]volume=%s[bgm];[voice][bgm]amix=inputs=2:duration=first:normalize=0,apad[a]",
+			strconv.FormatFloat(voiceVolume, 'f', -1, 64),
 			strconv.FormatFloat(bgmVolume, 'f', -1, 64))
 		args = append(args,
 			"-filter_complex", filter.String(),
 			"-map", "0:v", "-map", "[a]", "-c:v", "copy")
 	case voicePath != "":
-		args = append(args, "-i", voicePath,
-			"-map", "0:v", "-map", "1:a", "-c:v", "copy")
+		args = append(args, "-i", voicePath)
+		fmt.Fprintf(&filter, "[1:a]volume=%s,apad[a]",
+			strconv.FormatFloat(voiceVolume, 'f', -1, 64))
+		args = append(args,
+			"-filter_complex", filter.String(),
+			"-map", "0:v", "-map", "[a]", "-c:v", "copy")
 	case bgmPath != "":
 		args = append(args, "-i", bgmPath)
-		fmt.Fprintf(&filter, "[1:a]volume=%s[a]",
+		fmt.Fprintf(&filter, "[1:a]volume=%s,apad[a]",
 			strconv.FormatFloat(bgmVolume, 'f', -1, 64))
 		args = append(args,
 			"-filter_complex", filter.String(),
@@ -181,6 +193,12 @@ func (r *Runtime) MuxAV(ctx context.Context, out io.Writer, videoPath, voicePath
 	default:
 		args = append(args, "-map", "0:v", "-c:v", "copy")
 	}
+	// Cap the output at the VIDEO length. apad pads the mixed audio with
+	// silence to infinity, so -shortest ends exactly when the video ends: a
+	// 30s BGM under a 20s film no longer stretches the output (F-AUD-01), and
+	// a 5s voice track no longer truncates the video (which bare -shortest
+	// would do — the audio side is the one that must be padded, not cut).
+	args = append(args, "-shortest")
 	// Pipe-safe fragmented MP4 (same rationale as EncodePNGStream).
 	args = append(args, "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "-")
 

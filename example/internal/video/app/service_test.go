@@ -23,6 +23,13 @@ type fakeMembership struct{ allow bool }
 
 func (f fakeMembership) IsMember(_ context.Context, _, _ string) (bool, error) { return f.allow, nil }
 
+func (f fakeMembership) RoleOf(_ context.Context, _, _ string) (string, bool, error) {
+	if !f.allow {
+		return "", false, nil
+	}
+	return "admin", true, nil
+}
+
 type fakeSynth struct {
 	result VoiceResult
 	err    error

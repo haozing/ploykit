@@ -129,21 +129,42 @@ func TestProjector_HTML_DataURI(t *testing.T) {
 }
 
 func TestInlineScriptHash_MatchesEmittedScript(t *testing.T) {
-	// The CSP hash must cover exactly the inline script bytes the projector
-	// emits (gsap + builder + boot). Compute the hash from a rendered doc and
-	// compare with InlineScriptHash().
+	// The CSP hash must cover EXACTLY the inline-script bytes the projector
+	// emits. This test is deliberately NOT self-referential: it renders a real
+	// document, slices the executable <script> block out of the output bytes
+	// and hashes that. A hash computed from inlineScript() would stay green
+	// even if the template added whitespace around the interpolation — which
+	// is exactly how preview shipped a CSP that blocked every preview player
+	// (browser-verified: hash over trimmed bytes => script does not execute).
+	html, err := NewProjector(nil).HTML(t.Context(), validIR(), "")
+	require.NoError(t, err)
+
+	const open = "<script>"
+	const closeTag = "</script>"
+	start := bytes.Index(html, []byte(open))
+	require.GreaterOrEqual(t, start, 0, "projector must emit an executable inline script")
+	start += len(open)
+	end := bytes.Index(html[start:], []byte(closeTag))
+	require.Greater(t, end, 0, "inline script must be terminated")
+	emitted := html[start : start+end]
+
+	sum := sha256.Sum256(emitted)
+	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	got, err := InlineScriptHash()
+	require.NoError(t, err)
+	assert.Equal(t, want, got,
+		"CSP hash must cover the bytes actually emitted between <script> and </script>")
+
+	// The emitted block must be the full gsap + builder + boot concatenation
+	// (no template whitespace, no truncation).
 	g, err := GSAPJS()
 	require.NoError(t, err)
 	b, err := BuilderJS()
 	require.NoError(t, err)
-	sum := sha256.Sum256(inlineScript(g, b))
-	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
-	got, err := InlineScriptHash()
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-	// sanity: gsap is non-trivial and builder non-empty (embed wired)
-	require.Greater(t, len(g), 10000)
-	require.Greater(t, len(b), 1000)
+	require.Greater(t, len(g), 10000, "gsap embed wired")
+	require.Greater(t, len(b), 1000, "builder embed wired")
+	assert.Equal(t, inlineScript(g, b), emitted,
+		"emitted script must be byte-identical to inlineScript()")
 }
 
 func TestProjector_PayloadCarriesSchemaVersion(t *testing.T) {

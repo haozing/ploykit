@@ -12,7 +12,7 @@
 //	           lock + re-resolve + audit + committed WS push), projector
 //	           (IR → self-contained HTML), subtitle builder (words → SRT).
 //	adapters/  HTTP routes (REST + preview.html + Range file serving),
-//	           MCP tools (12 video_* tools), TTS/Aligner HTTP adapters.
+//	           MCP tools (the video_* tool family; register via adapters/mcp), TTS/Aligner HTTP adapters.
 //	render/    river worker driving the render pipeline (capx isolated behind
 //	           the "capx" build tag; default build returns ErrNotConfigured).
 //

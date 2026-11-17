@@ -144,6 +144,13 @@ func (inst *browserInstance) render(ctx context.Context, doc Doc, spec FrameSpec
 
 	tabCtx, tabCancel := chromedp.NewContext(inst.ctx)
 	defer tabCancel()
+	// Propagate the CALLER's cancellation into the tab context. Deriving from
+	// inst.ctx alone meant a job timeout / drain never interrupted the CDP
+	// calls: the loop kept capturing long after the caller gave up, and a hung
+	// protocol call held the only pool slot indefinitely — the interface
+	// contract promises "canceling ctx aborts the loop".
+	stop := context.AfterFunc(ctx, tabCancel)
+	defer stop()
 
 	// Eagerly create the target so configuration failures surface here
 	// rather than mid-loop, and configure viewport + network lock in the

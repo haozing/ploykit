@@ -119,9 +119,20 @@ func TestUsageRoute_Integration(t *testing.T) {
 	assert.Equal(t, wsID, body.WorkspaceID)
 	assert.Equal(t, "free", body.PlanCode)
 	assert.Equal(t, period, body.Period)
-	require.Len(t, body.Items, 2, "free 档两个维度（tasks_monthly/workspaces），key 排序稳定")
-	assert.Equal(t, quota.Status{Key: "tasks_monthly", Limit: 50, Used: 40, Granted: 0, Period: period}, body.Items[0])
-	assert.Equal(t, quota.Status{Key: "workspaces", Limit: 1, Used: 0, Granted: 0, Period: period}, body.Items[1])
+	// The framework's own free-tier dimensions must be present with the right
+	// values. Neither the count nor the position is asserted: products extend
+	// plan.limits with their own keys (example migration 1008 adds
+	// video_renders_monthly), so an exact-length or fixed-index assertion made
+	// this test fail the moment a product declared a quota. Look the items up
+	// by key instead.
+	byKey := map[string]quota.Status{}
+	for _, it := range body.Items {
+		byKey[it.Key] = it
+	}
+	require.Contains(t, byKey, "tasks_monthly")
+	require.Contains(t, byKey, "workspaces")
+	assert.Equal(t, quota.Status{Key: "tasks_monthly", Limit: 50, Used: 40, Granted: 0, Period: period}, byKey["tasks_monthly"])
+	assert.Equal(t, quota.Status{Key: "workspaces", Limit: 1, Used: 0, Granted: 0, Period: period}, byKey["workspaces"])
 }
 
 func TestUsageRoute_AccountScopedDims(t *testing.T) {

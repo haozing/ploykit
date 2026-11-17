@@ -32,13 +32,17 @@ type storagexStore = storagex.Store
 
 // SnapshotDoc is one snapshot job's inputs — everything needed to rebuild
 // the projected document deterministically (HTML 来自调用方的投影，
-// TimelineID 固定 "main" 与 render pipeline 相同的取法). CacheVersion is
-// the IR version string that keys the capture cache ("" = uncached caller;
-// the tool layer always passes the project version).
+// TimelineID 固定 "main" 与 render pipeline 相同的取法).
+//
+// CacheScope is the cache-identity component and MUST be unforgeable across
+// tenants: callers pass "<workspace_id>/<project_id>/<version>". It used to
+// be the bare project version (each project starts at 1), which made the
+// process-wide cache hand one tenant's frame to another (delivery audit P0:
+// version 1 + frame 0 is the most common key in the system). "" = uncached.
 type SnapshotDoc struct {
 	HTML         []byte
 	TimelineID   string
-	CacheVersion string
+	CacheScope   string
 }
 
 // SnapshotSpec is the capture geometry + timing (mirrors capx.FrameSpec

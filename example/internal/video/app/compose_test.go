@@ -137,3 +137,52 @@ func TestCarryAudio_NilOldIsNoop(t *testing.T) {
 	carryAudio(&IR{}, composed)
 	assert.Nil(t, composed.Audio)
 }
+
+// TestCarryAudio_ExtendsFilmForLongerVoice is the regression for the "black
+// tail" defect: the composer times the film by the word table, while the
+// render length is max(meta, voice). A carried voice longer than the spell-out
+// used to leave the tail outside every element's window -> pure black frames.
+func TestCarryAudio_ExtendsFilmForLongerVoice(t *testing.T) {
+	last := 299
+	oldIR := &IR{
+		Audio: &Audio{Voice: &AudioTrack{Key: "video/ws/a/voice.mp3", DurationSec: 20}},
+	}
+	composed := &IR{
+		Meta:      Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 10}, // 300 frames
+		Elements:  []Element{{ID: "bg", EndFrame: &last}},
+	}
+	carryAudio(oldIR, composed)
+
+	if composed.Audio == nil || composed.Audio.Voice == nil {
+		t.Fatal("voice track must be carried over")
+	}
+	if composed.Meta.DurationSec != 20 {
+		t.Fatalf("meta.durationSec = %v, want 20 (raised to the voice length)", composed.Meta.DurationSec)
+	}
+	wantLast := DurationFrames(composed, composed.Meta.FPS) - 1 // 599
+	if composed.Elements[0].EndFrame == nil || *composed.Elements[0].EndFrame != wantLast {
+		t.Fatalf("last window end = %v, want %d (film must end with content, not black)",
+			composed.Elements[0].EndFrame, wantLast)
+	}
+	if got := DurationFrames(composed, 30); got != 600 {
+		t.Fatalf("DurationFrames = %d, want 600", got)
+	}
+}
+
+// TestCarryAudio_ShorterVoiceDoesNotShrink: a voice shorter than the spell-out
+// must not shorten the film (the word table still drives the length).
+func TestCarryAudio_ShorterVoiceDoesNotShrink(t *testing.T) {
+	last := 599
+	oldIR := &IR{Audio: &Audio{Voice: &AudioTrack{Key: "video/ws/a/v.mp3", DurationSec: 5}}}
+	composed := &IR{
+		Meta:     Meta{FPS: 30, Width: 1080, Height: 1920, DurationSec: 20},
+		Elements: []Element{{ID: "bg", EndFrame: &last}},
+	}
+	carryAudio(oldIR, composed)
+	if composed.Meta.DurationSec != 20 {
+		t.Fatalf("meta.durationSec = %v, want 20 unchanged", composed.Meta.DurationSec)
+	}
+	if *composed.Elements[0].EndFrame != 599 {
+		t.Fatalf("window end = %d, want 599 unchanged", *composed.Elements[0].EndFrame)
+	}
+}

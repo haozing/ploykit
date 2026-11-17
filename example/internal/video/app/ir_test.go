@@ -1,6 +1,7 @@
 package videoapp
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -404,4 +405,63 @@ func TestBuildCues_PunctuationPreferred(t *testing.T) {
 
 func TestSRT_Empty(t *testing.T) {
 	assert.Empty(t, SRT(nil))
+}
+
+// TestValidate_MetaBounds covers the new upper bounds: an unbounded duration
+// or canvas let a single write pin the browser pool (delivery audit P2).
+func TestValidate_MetaBounds(t *testing.T) {
+	base := func() *IR {
+		ir := validIR()
+		return ir
+	}
+
+	t.Run("duration over the cap is rejected", func(t *testing.T) {
+		ir := base()
+		ir.Meta.DurationSec = MaxRenderDurationSec + 1
+		err := Validate(ir)
+		if err == nil {
+			t.Fatal("want a validation error for an over-long film")
+		}
+		if !strings.Contains(err.Error(), "durationSec") {
+			t.Fatalf("error should name meta.durationSec: %v", err)
+		}
+	})
+
+	t.Run("duration at the cap passes", func(t *testing.T) {
+		ir := base()
+		ir.Meta.DurationSec = MaxRenderDurationSec
+		if err := Validate(ir); err != nil {
+			t.Fatalf("the cap itself must be allowed: %v", err)
+		}
+	})
+}
+
+// TestValidate_EffectParamTypes: wrong value types used to pass the write gate
+// and be silently ignored by the builder (truthiness fallbacks).
+func TestValidate_EffectParamTypes(t *testing.T) {
+	cases := []struct {
+		name   string
+		typ    string
+		params string
+		ok     bool
+	}{
+		{"numeric scale", EffectPulse, `{"scale":1.4}`, true},
+		{"string scale rejected", EffectPulse, `{"scale":"huge"}`, false},
+		{"numeric string rejected", EffectPulse, `{"scale":"1.4"}`, false},
+		{"color string", EffectHighlight, `{"color":"#5FB3B3"}`, true},
+		{"color number rejected", EffectHighlight, `{"color":123}`, false},
+		{"counter numbers", EffectCounter, `{"from":0,"to":100,"suffix":"%"}`, true},
+		{"counter string from rejected", EffectCounter, `{"from":"0"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateEffectParams(tc.typ, json.RawMessage(tc.params))
+			if tc.ok && err != nil {
+				t.Fatalf("want accept, got %v", err)
+			}
+			if !tc.ok && err == nil {
+				t.Fatal("want a validation error")
+			}
+		})
+	}
 }

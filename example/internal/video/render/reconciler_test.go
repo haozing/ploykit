@@ -546,3 +546,62 @@ func TestReconciler_DBIntegration_StaleRunning(t *testing.T) {
 	_, _ = pool.Exec(ctx, `DELETE FROM workspace WHERE id=$1`, wsID)
 	_, _ = pool.Exec(ctx, `DELETE FROM "user" WHERE id=$1`, uid)
 }
+
+// TestStoreUpdate_ReleaseClaim_Sequence is the regression for the delivery
+// audit P0: the release claim used to be read AFTER the UPDATE, so the
+// interrupted transition (which stamps released_at itself) always produced
+// claim=false. Quota was therefore never released on drain/timeout, and both
+// the boot sweep and the reconciler trusted the wrong invariant.
+//
+// The sequence below is the real state machine: running -> interrupted (must
+// claim) -> running again on retry (must NOT claim) -> failed (must NOT
+// claim: the interrupted transition already compensated).
+func TestStoreUpdate_ReleaseClaim_Sequence(t *testing.T) {
+	pool := newReconcileEnv(t)
+	ctx := context.Background()
+	uniq := time.Now().UnixNano()
+
+	var uid, wsID, projID string
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO "user" (email, display_name) VALUES ($1, 'claim test') RETURNING id`,
+		fmt.Sprintf("claim-%d@test.local", uniq)).Scan(&uid))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO workspace (slug, name, created_by) VALUES ($1,$2,$3) RETURNING id`,
+		fmt.Sprintf("claim-%d", uniq), "claim", uid).Scan(&wsID))
+	require.NoError(t, pool.QueryRow(ctx,
+		`INSERT INTO video_project (id, workspace_id, title, created_by) VALUES ($1,$2,$3,$4) RETURNING id`,
+		ids.NewV7(), wsID, "claim proj", uid).Scan(&projID))
+
+	renderID := ids.NewV7()
+	mustExec(t, pool, `
+		INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period)
+		VALUES ($1,$2,$3,'queued','{}'::jsonb,300,$4,'2026-10')`, renderID, projID, wsID, uid)
+
+	w := NewWorker(WorkerDeps{Pool: pool, Log: testLogger()})
+	store := pgStore{w: w}
+
+	// 1. queued -> running (progress-style transition): never a claim.
+	claim, err := store.update(ctx, renderID.String(), videoapp.RenderRunning, "", 15, "")
+	require.NoError(t, err)
+	assert.False(t, claim, "charging states must never arm a release claim")
+
+	// 2. running -> interrupted (drain/timeout): THIS attempt owns the claim.
+	claim, err = store.update(ctx, renderID.String(), videoapp.RenderInterrupted, "interrupted: timeout", 30, "")
+	require.NoError(t, err)
+	assert.True(t, claim, "the interrupted transition must claim the release")
+
+	// 3. interrupted -> running (river retry): no claim.
+	claim, err = store.update(ctx, renderID.String(), videoapp.RenderRunning, "", 30, "")
+	require.NoError(t, err)
+	assert.False(t, claim, "a retry must not re-arm the claim")
+
+	// 4. running -> failed after an already-released interrupted attempt:
+	// the release already happened, so this must NOT claim again.
+	claim, err = store.update(ctx, renderID.String(), videoapp.RenderFailed, "boom", 40, "")
+	require.NoError(t, err)
+	assert.False(t, claim, "must not double-release a row that already released")
+
+	// 5. Any further transition on a terminal row is a stale-attempt no-op.
+	_, err = store.update(ctx, renderID.String(), videoapp.RenderSucceeded, "", 300, "k")
+	assert.ErrorIs(t, err, ErrTerminalSkip)
+}

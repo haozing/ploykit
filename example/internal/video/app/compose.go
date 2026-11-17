@@ -37,6 +37,10 @@ type TemplateInfo struct {
 	CanvasH     int    `json:"canvas_h"`
 	FPS         int    `json:"fps"`
 	SafeMargin  int    `json:"safe_margin"`
+	// Layout describes the版式 (card structure) in words so an agent can pick
+	// a template deliberately instead of composing blind and screenshotting to
+	// find out (plan G-08a: "video_list_templates 仅文字描述 + 尺寸参数").
+	Layout string `json:"layout"`
 }
 
 type ThemeInfo struct {
@@ -62,6 +66,7 @@ type TemplateCatalogEntry = struct {
 	Key, Name, Description string
 	CanvasW, CanvasH, FPS  int
 	SafeMargin             int
+	Layout                 string
 }
 
 type ThemeCatalogEntry = struct {
@@ -131,6 +136,41 @@ type ComposeResult struct {
 func carryAudio(old, composed *IR) {
 	if composed.Audio == nil && old.Audio != nil {
 		composed.Audio = old.Audio
+	}
+	// Reconcile the film length with the carried voice track. The composer
+	// derives Meta.DurationSec from the WORD TABLE, while DurationFrames()
+	// takes max(meta, voice). A carried voice longer than the spell-out (the
+	// normal case here: this example never wires TTS/aligner, and an uploaded
+	// narration keeps its real duration) made the render longer than every
+	// element's window — the elements were hidden and the tail decoded as pure
+	// black (delivery audit P1). Raising meta and stretching the last window
+	// makes both formulas agree.
+	if composed.Audio == nil || composed.Audio.Voice == nil {
+		return
+	}
+	voice := composed.Audio.Voice.DurationSec
+	if voice <= composed.Meta.DurationSec {
+		return
+	}
+	composed.Meta.DurationSec = voice
+	last := DurationFrames(composed, composed.Meta.FPS) - 1
+	if last < 0 {
+		last = 0
+	}
+	// Stretch the element that ends latest (usually the full-canvas background
+	// or the final card) to the new film end.
+	target := -1
+	for i := range composed.Elements {
+		e := &composed.Elements[i]
+		if e.EndFrame == nil {
+			continue
+		}
+		if target < 0 || *e.EndFrame > *composed.Elements[target].EndFrame {
+			target = i
+		}
+	}
+	if target >= 0 && *composed.Elements[target].EndFrame < last {
+		composed.Elements[target].EndFrame = &last
 	}
 }
 

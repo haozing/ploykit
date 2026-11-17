@@ -80,7 +80,7 @@ func snapshotTestRuntime(t *testing.T) *capx.Runtime {
 func TestSnapshotCache_HitThenExpire(t *testing.T) {
 	c := newSnapshotCache()
 	c.ttl = 30 * time.Millisecond
-	doc := SnapshotDoc{CacheVersion: "7", TimelineID: "main"}
+	doc := SnapshotDoc{CacheScope: "7", TimelineID: "main"}
 	spec := SnapshotSpec{Width: 64, Height: 64, Frame: 3}
 	k := snapshotCacheKey(doc, spec)
 
@@ -99,7 +99,7 @@ func TestSnapshotCache_HitThenExpire(t *testing.T) {
 	}
 
 	// 版本一变（agent 改了 IR）键就变——旧条目永远命不中。
-	newKey := snapshotCacheKey(SnapshotDoc{CacheVersion: "8", TimelineID: "main"}, spec)
+	newKey := snapshotCacheKey(SnapshotDoc{CacheScope: "8", TimelineID: "main"}, spec)
 	if got := c.get(newKey); got != nil {
 		t.Fatal("new version must miss the old version's entry")
 	}
@@ -115,7 +115,7 @@ func TestSnapshotCache_LRUEviction(t *testing.T) {
 	c := newSnapshotCache()
 	c.maxEnt = 2
 	mk := func(v string) (string, *SnapshotResult) {
-		doc := SnapshotDoc{CacheVersion: v, TimelineID: "main"}
+		doc := SnapshotDoc{CacheScope: v, TimelineID: "main"}
 		spec := SnapshotSpec{Width: 64, Height: 64, Frame: 1}
 		return snapshotCacheKey(doc, spec), &SnapshotResult{PNG: []byte(v), Frame: 1}
 	}
@@ -136,6 +136,64 @@ func TestSnapshotCache_LRUEviction(t *testing.T) {
 	}
 	if c.get(kA) == nil {
 		t.Fatal("recently touched A must survive")
+	}
+}
+
+// TestSnapshotCache_NoCrossTenantCollision is the regression for the delivery
+// audit P0: the cache key used to be the caller-supplied project version,
+// which every project starts at 1 — so two unrelated projects (or two
+// tenants) asking for "version 1, frame 0, 1080x1920" collided and one got
+// the other's pixels. Identity is now the document digest, so distinct
+// documents can never share an entry, even with identical scope/version
+// strings (a caller bug must not become a data leak).
+func TestSnapshotCache_NoCrossTenantCollision(t *testing.T) {
+	c := newSnapshotCache()
+	spec := SnapshotSpec{Width: 1080, Height: 1920, FPS: 30, Frame: 0, DurationFrames: 300}
+
+	tenantA := SnapshotDoc{
+		HTML:       []byte("<html><body>tenant A card</body></html>"),
+		TimelineID: "main",
+		CacheScope: "ws-a/proj-a/1",
+	}
+	tenantB := SnapshotDoc{
+		HTML:       []byte("<html><body>tenant B card</body></html>"),
+		TimelineID: "main",
+		CacheScope: "ws-b/proj-b/1",
+	}
+	kA, kB := snapshotCacheKey(tenantA, spec), snapshotCacheKey(tenantB, spec)
+	if kA == kB {
+		t.Fatalf("distinct documents must not share a cache key: %q", kA)
+	}
+	c.put(kA, &SnapshotResult{PNG: []byte("A"), Frame: 0})
+	if got := c.get(kB); got != nil {
+		t.Fatal("tenant B must not read tenant A's captured frame")
+	}
+
+	// Defence in depth: even when the caller passes an IDENTICAL scope string
+	// (impossible today, but the key must not depend on caller honesty) the
+	// differing document keeps the entries apart.
+	impostor := tenantB
+	impostor.CacheScope = tenantA.CacheScope
+	if got := c.get(snapshotCacheKey(impostor, spec)); got != nil {
+		t.Fatal("document digest must isolate entries independently of CacheScope")
+	}
+
+	// Same document + same scope + same geometry still hits (the cache works).
+	if got := c.get(snapshotCacheKey(tenantA, spec)); got == nil || !bytes.Equal(got.PNG, []byte("A")) {
+		t.Fatal("identical document must still hit")
+	}
+}
+
+// TestSnapshotCache_FPSIsPartOfIdentity: frame N is at t=N/fps, so two
+// projects with the same floor plan but different frame rates must never
+// share a capture under an equal version.
+func TestSnapshotCache_FPSIsPartOfIdentity(t *testing.T) {
+	doc := SnapshotDoc{HTML: []byte("<html>same</html>"), TimelineID: "main", CacheScope: "ws/p/1"}
+	a := SnapshotSpec{Width: 640, Height: 360, FPS: 30, Frame: 10}
+	b := a
+	b.FPS = 60
+	if snapshotCacheKey(doc, a) == snapshotCacheKey(doc, b) {
+		t.Fatal("FPS must participate in the cache key (frame N moves with fps)")
 	}
 }
 
@@ -162,7 +220,7 @@ func TestCapxSnapshotter_InertRuntime(t *testing.T) {
 func TestSnapshotBridge_SingleFrameCapture(t *testing.T) {
 	rt := snapshotTestRuntime(t)
 	bridge := cachedSnapshotter{inner: capxSnapshotter{rt: rt}, cache: newSnapshotCache()}
-	doc := SnapshotDoc{HTML: []byte(testSnapshotDoc()), TimelineID: "main", CacheVersion: "1"}
+	doc := SnapshotDoc{HTML: []byte(testSnapshotDoc()), TimelineID: "main", CacheScope: "1"}
 	spec := SnapshotSpec{Width: 160, Height: 90, FPS: 10, Frame: 3, DurationFrames: 30}
 
 	res, err := bridge.Snapshot(t.Context(), doc, spec)
@@ -194,7 +252,7 @@ func TestSnapshotBridge_SingleFrameCapture(t *testing.T) {
 	}
 
 	// 版本变了：同帧重照（不走旧缓存），仍非 cached。
-	doc.CacheVersion = "2"
+	doc.CacheScope = "2"
 	fresh, err := bridge.Snapshot(t.Context(), doc, spec)
 	if err != nil {
 		t.Fatalf("bumped-version snapshot: %v", err)
@@ -224,7 +282,7 @@ func TestSetSnapshotter_WiresBridge(t *testing.T) {
 		t.Fatal("SetSnapshotter must install the bridge")
 	}
 	_, err := bridge.Snapshot(t.Context(),
-		SnapshotDoc{HTML: []byte("<html></html>"), TimelineID: "main", CacheVersion: "1"},
+		SnapshotDoc{HTML: []byte("<html></html>"), TimelineID: "main", CacheScope: "1"},
 		SnapshotSpec{Frame: 0, Width: 64, Height: 64, FPS: 10, DurationFrames: 1})
 	if !errors.Is(err, ErrSnapshotNotConfigured) {
 		t.Fatalf("inert wired bridge: want ErrSnapshotNotConfigured, got %v", err)
@@ -247,7 +305,7 @@ func TestSetSnapshotter_WiresBridge(t *testing.T) {
 func TestCapxSnapshotter_MultiCapture(t *testing.T) {
 	rt := snapshotTestRuntime(t)
 	bridge := cachedSnapshotter{inner: capxSnapshotter{rt: rt}, cache: newSnapshotCache()}
-	doc := SnapshotDoc{HTML: []byte(testSnapshotDoc()), TimelineID: "main", CacheVersion: "1"}
+	doc := SnapshotDoc{HTML: []byte(testSnapshotDoc()), TimelineID: "main", CacheScope: "1"}
 	base := SnapshotSpec{Width: 160, Height: 90, FPS: 10, DurationFrames: 30}
 
 	res, err := bridge.SnapshotMulti(t.Context(), doc, base, []int{0, 5, 12})
@@ -303,7 +361,7 @@ func TestCapxSnapshotter_MultiCapture(t *testing.T) {
 func TestCapxSnapshotter_MultiLastFrame(t *testing.T) {
 	rt := snapshotTestRuntime(t)
 	bridge := cachedSnapshotter{inner: capxSnapshotter{rt: rt}, cache: newSnapshotCache()}
-	doc := SnapshotDoc{HTML: []byte(testSnapshotDoc()), TimelineID: "main", CacheVersion: "1"}
+	doc := SnapshotDoc{HTML: []byte(testSnapshotDoc()), TimelineID: "main", CacheScope: "1"}
 	base := SnapshotSpec{Width: 160, Height: 90, FPS: 10, DurationFrames: 30}
 
 	res, err := bridge.SnapshotMulti(t.Context(), doc, base, []int{28, 29})

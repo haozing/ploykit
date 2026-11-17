@@ -992,7 +992,12 @@ func main() {
 		if p == nil || videoSvcForAccess == nil {
 			return false
 		}
-		ok, err := videoSvcForAccess.CanAccess(ctx, p, id)
+		// id is the SCOPE ID, i.e. the project id ("video:<projectID>"), not a
+		// workspace id: resolve project → workspace and apply membership +
+		// video:read (delivery audit P1 — this used to pass the project id to a
+		// workspace-membership lookup, so every non-admin subscription was
+		// rejected and the live feed was dead).
+		ok, err := videoSvcForAccess.CanAccessProject(ctx, p, id)
 		if err != nil {
 			log.Warn("video ws authorize", "err", err)
 			return false
@@ -1261,6 +1266,10 @@ func main() {
 		Membership: videoMembership,
 		Store:      videoStore,
 		Cap:        videoCapProbe{rt: capxRuntime},
+		// MCP role enforcement: the tool face builds its own principal from a
+		// PAT (no role), so it resolves the role and asks the same authorizer
+		// the REST face uses (delivery audit P1: REST 403 vs MCP 200).
+		Authz: videoAuthorizeAdapter{a: authorizer},
 	}, log)
 
 	// 剧本→视频生成器（2026-11 批次）：scriptgen/template 注入（app 不能
@@ -1284,6 +1293,7 @@ func main() {
 				out = append(out, videoapp.TemplateCatalogEntry{
 					Key: tp.Key, Name: tp.Name, Description: tp.Description,
 					CanvasW: tp.CanvasW, CanvasH: tp.CanvasH, FPS: tp.FPS, SafeMargin: tp.SafeMargin,
+					Layout: tp.Layout,
 				})
 			}
 			return out
@@ -1355,6 +1365,11 @@ func main() {
 	// (delivery-audit-video-studio §4 P1).
 	wk.Add(&videoRunner{client: videoClient,
 		StopWait: envDuration("CAPX_RENDER_JOB_TIMEOUT", 15*time.Minute) + time.Minute})
+	// The video queue drains on its own window: the renderer refuses new jobs
+	// at once but must be allowed to finish (or interrupt) the in-flight one.
+	// A shared 45s window truncated the 16-minute StopWait every deploy
+	// (delivery audit P1); the budget makes Drain honour it.
+	wk.SetDrainBudget("video_render_queue", envDuration("CAPX_RENDER_JOB_TIMEOUT", 15*time.Minute)+time.Minute)
 	videoWorker.SweepOrphans(ctx)
 	// Reconciler (round4 §4 P5 / F-WKR-01): closes queued/running renders
 	// whose river job already reached discarded/cancelled — releases quota on
@@ -1508,6 +1523,9 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("rate limits", "per_user_per_min", rlPerUser, "per_ip_per_min", rlPerIP, "allowlist", rlAllowRaw)
+	// MCP gets its own bucket; a fraction of the API budget by default (tool
+	// calls are expensive: each snapshot spins Chrome). 0 disables.
+	mcpRatePerUser := envInt("PLOYKIT_MCP_RATE_PER_USER", rlPerUser/2)
 
 	var rlAllowNets []*net.IPNet
 	rlAllowIPs := map[string]bool{}
@@ -1593,6 +1611,28 @@ func main() {
 			})),
 			"/api/")
 	}
+	// /mcp gets its OWN per-principal bucket (ADR 0017 D5: "production
+	// requires per-principal rate limits on /mcp"). The API bucket does not
+	// cover it — a single PAT could otherwise drive snapshot/preview calls
+	// back-to-back and pin the (single) browser slot for every tenant. The
+	// bucket is keyed by PAT id when present so one agent's runaway loop does
+	// not throttle its user's other tooling.
+	mcpRateLimitMW := func(next http.Handler) http.Handler { return next }
+	if mcpRatePerUser > 0 {
+		mcpRateLimitMW = pathGate(
+			withAllowlist(webx.RateLimit(limiter, "mcp_user", mcpRatePerUser, func(r *http.Request) string {
+				if p := webx.PrincipalFromRequest(r); p != nil {
+					if p.PATID != "" {
+						return "pat:" + p.PATID
+					}
+					if p.UserID != "" {
+						return p.UserID
+					}
+				}
+				return "anon:" + webx.ClientIP(r)
+			})),
+			"/mcp")
+	}
 
 	// /mcp joins /ws on the timeout exemption: MCP sessions (and tool calls
 	// over the streamable transport) outlive the 5s default — pitfall #1 of
@@ -1613,7 +1653,7 @@ func main() {
 			csrfMW(
 				webx.Recover(log)(
 
-					webx.Authenticate(&authCfg, idRepo, idRepo)(apiUserRateLimitMW(mux))))))
+					webx.Authenticate(&authCfg, idRepo, idRepo)(apiUserRateLimitMW(mcpRateLimitMW(mux)))))))
 	handler := mnt.Middleware(authRateLimitMW(webx.PrincipalHolder()(
 		webx.RequestIDMiddleware(
 			// LC-3: client IP + metadata into ctx — the legal acceptance
@@ -1755,6 +1795,27 @@ type videomcpMemberAdapter struct{ repo *workspacepg.Repo }
 func (a videomcpMemberAdapter) IsMember(ctx context.Context, workspaceID, userID string) (bool, error) {
 	_, ok, err := a.repo.GetMember(ctx, workspaceID, userID)
 	return ok, err
+}
+
+// RoleOf resolves the caller's workspace role for the MCP face: a PAT
+// principal carries no role, so the tool layer fills p.Role from here and
+// then asks the shared authorizer (authz.CanIn) instead of trusting the
+// PAT's declared scope alone.
+func (a videomcpMemberAdapter) RoleOf(ctx context.Context, workspaceID, userID string) (string, bool, error) {
+	m, ok, err := a.repo.GetMember(ctx, workspaceID, userID)
+	if err != nil || !ok {
+		return "", false, err
+	}
+	return m.Role, true, nil
+}
+
+// videoAuthorizeAdapter exposes authz.CanIn to the video domain (MCP role
+// enforcement). Permission strings stay plain strings at the port boundary so
+// internal/video/app does not import authz.
+type videoAuthorizeAdapter struct{ a *authz.Authorizer }
+
+func (a videoAuthorizeAdapter) CanIn(ctx context.Context, p *webx.Principal, perm string) bool {
+	return a.a.CanIn(ctx, p, authz.Permission(perm))
 }
 
 type videoAuditAdapter struct{ rec *auditrec.Recorder }

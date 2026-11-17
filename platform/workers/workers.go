@@ -34,13 +34,24 @@ type Workers struct {
 	states  map[string]*runState
 	started bool
 	log     *slog.Logger
+	// drainBudgets overrides Drain's shared timeout per worker name. Some
+	// workers legitimately outlive ops' generic window (an event handler gets
+	// 30s+margin; a video render runs for minutes), and a single shared
+	// timeout silently truncates the longest one — the process then exits
+	// mid-job, which the worker's own SoftStopTimeout was sized to prevent.
+	drainBudgets map[string]time.Duration
 }
 
 func NewWorkers(log *slog.Logger) *Workers {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Workers{workers: map[string]Worker{}, states: map[string]*runState{}, log: log}
+	return &Workers{
+		workers:      map[string]Worker{},
+		states:       map[string]*runState{},
+		drainBudgets: map[string]time.Duration{},
+		log:          log,
+	}
 }
 
 func (r *Workers) Add(w Worker) *Workers {
@@ -110,6 +121,19 @@ func (r *Workers) lookup(name string) (Worker, bool) {
 	return w, ok
 }
 
+// SetDrainBudget gives one worker its own drain window. Call before Start.
+// Drain uses max(timeout, budget) for that worker, so a global window can
+// never truncate a worker that declared it needs longer.
+func (r *Workers) SetDrainBudget(name string, budget time.Duration) *Workers {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.drainBudgets == nil {
+		r.drainBudgets = map[string]time.Duration{}
+	}
+	r.drainBudgets[name] = budget
+	return r
+}
+
 func (r *Workers) Drain(timeout time.Duration) {
 	r.mu.Lock()
 	started := r.started
@@ -118,6 +142,10 @@ func (r *Workers) Drain(timeout time.Duration) {
 	for k, v := range r.states {
 		states[k] = v
 	}
+	budgets := make(map[string]time.Duration, len(r.drainBudgets))
+	for k, v := range r.drainBudgets {
+		budgets[k] = v
+	}
 	r.mu.Unlock()
 	if !started {
 		return
@@ -125,12 +153,19 @@ func (r *Workers) Drain(timeout time.Duration) {
 
 	for _, name := range names {
 		st := states[name]
-		deadline := time.NewTimer(timeout)
+		if st == nil {
+			continue
+		}
+		window := timeout
+		if b, ok := budgets[name]; ok && b > window {
+			window = b
+		}
+		deadline := time.NewTimer(window)
 		select {
 		case <-st.done:
 			deadline.Stop()
 		case <-deadline.C:
-			r.log.Warn("worker drain timed out, giving up", "name", name, "timeout", timeout.String())
+			r.log.Warn("worker drain timed out, giving up", "name", name, "timeout", window.String())
 		}
 	}
 }

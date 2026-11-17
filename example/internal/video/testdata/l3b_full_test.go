@@ -667,7 +667,7 @@ func l3bRunFull(t *testing.T, c l3bCase) {
 			t.Fatalf("create mux out: %v", mErr)
 		}
 		muxStart := time.Now()
-		mErr = rt.MuxAV(ctx, mf, videoOnly, voice, "", 0.3)
+		mErr = rt.MuxAV(ctx, mf, videoOnly, voice, "", 1.0, 0.3)
 		mf.Close()
 		if mErr != nil {
 			res.TotalMS = time.Since(startAll).Milliseconds()

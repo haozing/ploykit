@@ -51,6 +51,10 @@ type Template struct {
 	CanvasW, CanvasH int // 默认 1080×1920
 	FPS              int // 30
 	SafeMargin       int // 安全区边距 px（内容元素不得越出）
+	// Layout is the machine-readable 版式 summary handed to agents by
+	// video_list_templates (plan G-08a): structure and element slots, so a
+	// model can choose a layout instead of composing blind.
+	Layout string
 }
 
 // Card 一张卡片的内容。Role 决定用哪套版式渲染（同 Template.Key）。
@@ -69,31 +73,37 @@ var builtinTemplates = []Template{
 		Key: "cover", Name: "大字报封面",
 		Description: "特大标题 + accent 下划线 + 副标题 + 底部进度点，用于首卡",
 		CanvasW:     1080, CanvasH: 1920, FPS: 30, SafeMargin: 96,
+		Layout:      "首卡。超大标题居中偏上 + accent 下划线 + 副标题 + 底部进度点；适合开场钩子，一屏一句短标题。",
 	},
 	{
 		Key: "listicle", Name: "清单卡",
 		Description: "accent 大序号 + 标题 + 带 accent 短横的条目行",
 		CanvasW:     1080, CanvasH: 1920, FPS: 30, SafeMargin: 96,
+		Layout:      "清单卡。accent 大序号 + 标题 + 3-6 条条目行；正文长度随条目数变化。",
 	},
 	{
 		Key: "feature", Name: "图文卡",
 		Description: "上半区图 + 下半区标题正文；无图时全文字居中",
 		CanvasW:     1080, CanvasH: 1920, FPS: 30, SafeMargin: 96,
+		Layout:      "图文卡。上半区图（可选）+ 下半区标题正文；无图时正文居中占满，适合解释型段落。",
 	},
 	{
 		Key: "chart", Name: "数据卡",
 		Description: "标题 + 3-6 根 accent 竖柱，柱顶数值柱底类目标签，右上角序号",
 		CanvasW:     1080, CanvasH: 1920, FPS: 30, SafeMargin: 96,
+		Layout:      "数据卡。标题 + 3-6 根 accent 竖柱（柱顶数值/柱底标签）+ 右上角序号；条目给 '标签:值'。",
 	},
 	{
 		Key: "quote", Name: "引言卡",
 		Description: "大引号装饰 + 居中引言大字 + muted 署名",
 		CanvasW:     1080, CanvasH: 1920, FPS: 30, SafeMargin: 96,
+		Layout:      "引言卡。大引号装饰 + 居中引言大字 + muted 署名；适合金句与用户评价。",
 	},
 	{
 		Key: "endcard", Name: "关注卡",
 		Description: "标题 + accent 实心圆角框包 CTA 文案，用于末卡",
 		CanvasW:     1080, CanvasH: 1920, FPS: 30, SafeMargin: 96,
+		Layout:      "末卡。标题 + accent 实心圆角框包 CTA；用于收尾引导关注。",
 	},
 }
 

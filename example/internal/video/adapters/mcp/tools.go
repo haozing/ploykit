@@ -132,7 +132,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"Response carries the card list, words_source, and every anchor resolution (reason: exact|same_text|nearest|missing). "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in composeIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -158,7 +158,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"Image src must reference an uploaded asset (video_upload_asset first); a dangling src is rejected at write time with E_VIDEO_IR_INVALID (asset not registered). "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in upsertElementIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -185,7 +185,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	mcpAdd(s, "video_move_element",
 		"Reposition one element. After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in moveElementIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -219,7 +219,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		"Append a start-anchored animation to an element (move/scaleIn/rotate/fadeIn/fadeOut). "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in animateIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -256,7 +256,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"params is a JSON OBJECT whose shape depends on type — highlight: {\"color\":\"#5FB3B3\"}, counter: {\"from\":0,\"to\":100}; omit it for per-type defaults. "+
 			"After editing, call video_snapshot_frame to see the frame and judge visually; video_inspect shows the IR + anchor resolutions.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in addEffectWorkspaceIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -286,7 +286,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	mcpAdd(s, "video_upload_asset",
 		"Upload one small asset (image/audio ≤700KB base64). Stored content-addressed under video/<workspace>/assets/<project>/. Returns the storage key for element src / audio keys (attach audio with video_set_audio).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -314,7 +314,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"voice_duration_sec extends the render timeline when the voice runs past meta duration. Omitting voice_key/bgm_key clears that track; volume fields are 0-1. "+
 			"After setting audio, video_inspect shows the audio block and video_render mixes it into the MP4.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in setAudioIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -379,7 +379,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		"Submit a render of the project's IR snapshot. Fails with E_NOT_CONFIGURED when the render capability is offline (no quota spent), E_QUOTA_EXCEEDED when the monthly quota is out. "+
 			"Once video_get_render reports succeeded, fetch the finished file's output_url with Authorization: Bearer <PAT> PLUS the X-Workspace-Id header (workspace member) — a bare PAT GET returns 400 E_VALIDATION.",
 		ScopeRender, func(ctx context.Context, _ *mcp.CallToolRequest, in renderIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -415,7 +415,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			// /mcp 不挂 wsMW：PAT principal 的 WorkspaceID 可能为空，先解析
 			// （单工作区 scope 解析 / 显式 workspace_id 经 AllowsWorkspace
 			// 校验）——空 workspace 直查会变成 uuid 空串 SQL 错。
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -442,7 +442,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"Offline capture capability = structured E_NOT_CONFIGURED error: fall back to video_inspect (IR + anchor resolutions) instead.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in snapshotIn) (any, error) {
 			// 前置校验 + 能力探针（DB 无关，单测直接打这个函数）。
-			p, snap, err := prepareSnapshot(deps, webx.PrincipalFrom(ctx), in)
+			p, snap, err := prepareSnapshot(ctx, deps, webx.PrincipalFrom(ctx), in)
 			if err != nil {
 				return nil, err
 			}
@@ -467,9 +467,13 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				return nil, err
 			}
 			res, err := snap.Snapshot(ctx, videorender.SnapshotDoc{
-				HTML:         html,
-				TimelineID:   "main",
-				CacheVersion: strconv.Itoa(pr.Version),
+				HTML:       html,
+				TimelineID: "main",
+				// Unforgeable cache identity: workspace + project + version.
+				// The version alone is per-project (every project starts at 1),
+				// which made the process-wide capture cache serve one tenant's
+				// frame to another (delivery audit P0).
+				CacheScope: p.WorkspaceID + "/" + pr.ID + "/" + strconv.Itoa(pr.Version),
 			}, videorender.SnapshotSpec{
 				Width: w, Height: h, FPS: pr.IR.Meta.FPS,
 				Frame:          frame,
@@ -512,7 +516,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"Offline capture capability = structured E_NOT_CONFIGURED error: fall back to video_inspect instead. "+
 			"To verify the ENCODED deliverable (after render) use video_render_frames — this tool sees the pre-encode IR projection.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in previewFramesIn) (any, error) {
-			p, snap, err := prepareSnapshot(deps, webx.PrincipalFrom(ctx), snapshotIn{
+			p, snap, err := prepareSnapshot(ctx, deps, webx.PrincipalFrom(ctx), snapshotIn{
 				ProjectID:   in.ProjectID,
 				Frame:       0,
 				Width:       in.Width,
@@ -562,9 +566,13 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				return nil, err
 			}
 			results, err := multi.SnapshotMulti(ctx, videorender.SnapshotDoc{
-				HTML:         html,
-				TimelineID:   "main",
-				CacheVersion: strconv.Itoa(pr.Version),
+				HTML:       html,
+				TimelineID: "main",
+				// Unforgeable cache identity: workspace + project + version.
+				// The version alone is per-project (every project starts at 1),
+				// which made the process-wide capture cache serve one tenant's
+				// frame to another (delivery audit P0).
+				CacheScope: p.WorkspaceID + "/" + pr.ID + "/" + strconv.Itoa(pr.Version),
 			}, videorender.SnapshotSpec{
 				Width: w, Height: h, FPS: pr.IR.Meta.FPS,
 				DurationFrames: total,
@@ -605,7 +613,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	mcpAdd(s, "video_create_project",
 		"Create a video studio project. Returns the id and initial version (1).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in createIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -630,7 +638,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"the words fall back to the char-proportional estimate (words_source=\"estimated\"). There is NO E_TTS_UNAVAILABLE / E_ALIGNER_UNAVAILABLE error "+
 			"code — a missing or failing voice capability is not an error surface; check words_source in the response instead (§8.5a ruling).",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in setScriptIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -659,7 +667,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		"Human/debug channel for manual word-timing refinement; orchestration agents should rely on set_script's automatic derivation "+
 			"(TTS → aligner → estimated) instead of hand-authoring timestamps. Replaces the word timing table wholesale; anchors are re-resolved against the new table.",
 		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in setWordsIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -686,7 +694,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 	mcpAdd(s, "video_list_projects",
 		"List the workspace's video studio projects (id, title, version, updated_at).",
 		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -706,7 +714,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 		"Fetch one render's status/progress/output (queued|running|succeeded|failed|interrupted + frames counters + output_url when done). "+
 			"output_url must be fetched with Authorization: Bearer <PAT> PLUS the X-Workspace-Id header (workspace member) — a bare PAT GET returns 400 E_VALIDATION.",
 		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in getRenderIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -737,7 +745,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"an audio summary (voice/bgm keys and words_source), and a last-word-truncation warning (words ending past the timeline get silently cut). "+
 			"Creates no render row, spends no quota, bumps no version. The IR itself needs no re-validation — every stored IR already passed the write-time gates.",
 		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in inspectIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -816,7 +824,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			"the cheap element discovery for surgical refinement loops (feed ids into video_move_element / video_animate_element / video_upsert_element). "+
 			"Does NOT return the full IR: animations, effects, anchors, words and full text come from video_inspect.",
 		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in inspectIn) (any, error) {
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -855,6 +863,121 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			return map[string]any{"elements": elements, "count": len(elements)}, nil
 		})
 
+	// ---- video_remove_element (video:write) ----
+	// G-05：手搭路径此前有增/改/移/动画但没有删除——加错一个元素只能整体
+	// 重 compose，丢掉全部手工精修。
+	type removeElementIn struct {
+		ProjectID       string `json:"project_id" jsonschema:"project id"`
+		ElementID       string `json:"element_id" jsonschema:"element id to delete (ids come from video_list_elements)"`
+		ExpectedVersion *int   `json:"expected_version,omitempty" jsonschema:"optimistic-lock version; omit to skip the check"`
+		WorkspaceID     string `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
+	}
+	mcpAdd(s, "video_remove_element",
+		"Delete one canvas element by id (ids come from video_list_elements). Animations and effects bound to that element are removed with it. "+
+			"Unknown id fails with E_VIDEO_ELEMENT_NOT_FOUND (the id is wrong — do not rewrite the script). "+
+			"After deleting, call video_snapshot_frame to confirm the frame still looks right.",
+		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in removeElementIn) (any, error) {
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
+			if err != nil {
+				return nil, err
+			}
+			version, err := deps.Svc.RemoveElement(ctx, p, in.ProjectID, in.ElementID, in.ExpectedVersion)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"version": version, "removed": in.ElementID}, nil
+		})
+
+	// ---- video_set_meta (video:write) ----
+	// G-06：画布尺寸/fps/时长此前没有任何写入口（钉死模板默认）——agent 想
+	// 出方图/横版或把 10s 拉到 20s 时无路可走。
+	type setMetaIn struct {
+		ProjectID       string   `json:"project_id" jsonschema:"project id"`
+		Width           *int     `json:"width,omitempty" jsonschema:"canvas width px (omit to keep); 360-2160"`
+		Height          *int     `json:"height,omitempty" jsonschema:"canvas height px (omit to keep); 360-2160"`
+		FPS             *int     `json:"fps,omitempty" jsonschema:"frame rate (omit to keep); one of 24|25|30|50|60"`
+		DurationSec     *float64 `json:"duration_sec,omitempty" jsonschema:"film length seconds (omit to keep); <= 600"`
+		ExpectedVersion *int     `json:"expected_version,omitempty" jsonschema:"optimistic-lock version; omit to skip the check"`
+		WorkspaceID     string   `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
+	}
+	mcpAdd(s, "video_set_meta",
+		"Update the canvas/timing metadata — width, height, fps and/or duration_sec. Omitted fields are left unchanged, so one call can change just the aspect or just the length. "+
+			"Changing fps or duration re-interprets existing frame windows (they stay numeric), so re-check with video_snapshot_frame afterwards. "+
+			"Bounds: 360-2160 px per side, fps in 24|25|30|50|60, duration <= 600s.",
+		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in setMetaIn) (any, error) {
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
+			if err != nil {
+				return nil, err
+			}
+			version, err := deps.Svc.SetMeta(ctx, p, in.ProjectID, videoapp.MetaPatch{
+				Width: in.Width, Height: in.Height, FPS: in.FPS, DurationSec: in.DurationSec,
+			}, in.ExpectedVersion)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"version": version}, nil
+		})
+
+	// ---- video_list_renders (video:read) ----
+	// G-10：渲染历史此前只有 REST（service.ListRenders），MCP 侧查不到，
+	// agent 无法回答"这个项目出过几版、上一版成功了吗"。
+	type listRendersIn struct {
+		ProjectID   string `json:"project_id" jsonschema:"project id"`
+		WorkspaceID string `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
+	}
+	mcpAdd(s, "video_list_renders",
+		"List this project's render history (newest first, up to 100): id, status, frames_done/frames_total, output_url/thumb_url, error. "+
+			"Use it to find a previous render id for video_get_render / video_render_frames, or to check whether the last attempt failed.",
+		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in listRendersIn) (any, error) {
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
+			if err != nil {
+				return nil, err
+			}
+			renders, err := deps.Svc.ListRenders(ctx, p, in.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"renders": renders, "count": len(renders)}, nil
+		})
+
+	// ---- video_delete_project (video:write) ----
+	// G-11：删除项目只有 REST。agent 清理草稿项目时得让人类代劳。
+	// 有在途渲染时拒绝（E_VIDEO_RENDER_ACTIVE），不会静默丢掉配额。
+	type deleteProjectIn struct {
+		ProjectID   string `json:"project_id" jsonschema:"project id to delete"`
+		WorkspaceID string `json:"workspace_id,omitempty" jsonschema:"target workspace — required only for multi-workspace PATs; single-workspace PATs resolve automatically"`
+	}
+	mcpAdd(s, "video_delete_project",
+		"Delete a project and its assets permanently. Refused with E_VIDEO_RENDER_ACTIVE while a render is queued/running — wait for it to finish or fail first. "+
+			"Irreversible: renders and asset rows cascade with the project.",
+		ScopeWrite, func(ctx context.Context, _ *mcp.CallToolRequest, in deleteProjectIn) (any, error) {
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
+			if err != nil {
+				return nil, err
+			}
+			if err := deps.Svc.Delete(ctx, p, in.ProjectID); err != nil {
+				return nil, err
+			}
+			return map[string]any{"deleted": in.ProjectID}, nil
+		})
+
+	// ---- video_list_assets (video:read) ----
+	// G-09：上一轮上传的 key 没有发现路径，agent 只能靠对话记忆。
+	mcpAdd(s, "video_list_assets",
+		"List this project's registered assets, newest first (key, kind, bytes, content_type, created_at). "+
+			"Use the key for element src (images) or video_set_audio (audio) — this is how you recover a key uploaded in an earlier turn.",
+		ScopeRead, func(ctx context.Context, _ *mcp.CallToolRequest, in inspectIn) (any, error) {
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
+			if err != nil {
+				return nil, err
+			}
+			assets, err := deps.Svc.ListAssets(ctx, p, in.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"assets": assets, "count": len(assets)}, nil
+		})
+
 	// ---- video_render_frames (video:read) ----
 	// G-07 成品抽帧眼：从已完成的 output.mp4 用 ffmpeg 逐帧 seek 抽 PNG
 	// （pipe 到内存，不落盘临时文件）。验证的是编码后真实画面（字幕烧录/
@@ -879,7 +1002,7 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 			if extract == nil {
 				return nil, videoapp.ErrNotConfigured
 			}
-			p, err := resolveWorkspacePrincipal(webx.PrincipalFrom(ctx), in.WorkspaceID)
+			p, err := resolveWorkspacePrincipal(ctx, deps, webx.PrincipalFrom(ctx), in.WorkspaceID)
 			if err != nil {
 				return nil, err
 			}
@@ -1047,6 +1170,15 @@ func RegisterTools(s *mcp.Server, deps Deps) {
 				return nil, generateStageErr("compose", "fix the cause and re-run video_generate_video", err, pr.ID)
 			}
 			params := videoapp.RenderParams{FPS: in.FPS, Width: in.Width, Height: in.Height}
+			// This tool submits a render, so it needs the render permission too
+			// — declaring only ScopeWrite let a member (read+write, no render)
+			// spend quota through this path while video_render itself correctly
+			// required video:render (delivery audit P1).
+			if rerr := deps.Svc.RequirePerm(ctx, p, ScopeRender); rerr != nil {
+				return nil, generateStageErr("render_permit",
+					"rendering requires the video:render permission (owner/admin); ask a workspace admin, or stop after video_compose and let a human render",
+					ErrScopeDenied, pr.ID)
+			}
 			r, err := deps.Svc.SubmitRender(ctx, p, pr.ID, params, &res.Version, pr.ID)
 			if err != nil {
 				return nil, generateStageErr("render_submit",
@@ -1214,14 +1346,14 @@ type setAudioIn struct {
 //   - capability offline (deps.Snapshot nil or the bridge unwired) → the
 //     E_NOT_CONFIGURED error that tells the agent to fall back to
 //     video_inspect
-func prepareSnapshot(deps Deps, p *webx.Principal, in snapshotIn) (*webx.Principal, videorender.Snapshotter, error) {
+func prepareSnapshot(ctx context.Context, deps Deps, p *webx.Principal, in snapshotIn) (*webx.Principal, videorender.Snapshotter, error) {
 	if strings.TrimSpace(in.ProjectID) == "" {
 		return nil, nil, errors.New("project_id is required")
 	}
 	// /mcp 不挂 wsMW：PAT principal 的 WorkspaceID 可能为空，与
 	// video_generate_video 相同的 resolve 模式（单工作区 scope 解析 /
 	// 显式传参经 AllowsWorkspace 校验）。
-	p, err := resolveWorkspacePrincipal(p, in.WorkspaceID)
+	p, err := resolveWorkspacePrincipal(ctx, deps, p, in.WorkspaceID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1254,7 +1386,27 @@ func prepareSnapshot(deps Deps, p *webx.Principal, in snapshotIn) (*webx.Princip
 // A principal that already carries a workspace passes through untouched.
 // This is the video_generate_video resolve pattern, extracted when the
 // snapshot tool needed the same semantics.
-func resolveWorkspacePrincipal(p *webx.Principal, workspaceID string) (*webx.Principal, error) {
+func resolveWorkspacePrincipal(ctx context.Context, deps Deps, p *webx.Principal, workspaceID string) (*webx.Principal, error) {
+	p, err := resolveWorkspaceID(p, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	// Role-matrix enforcement (delivery audit P1): the PAT's declared scope is
+	// necessary but not sufficient — the workspace role decides. mcpAdd puts
+	// the tool's declared permission in ctx so this check is structural
+	// (no tool can forget it).
+	if scope, ok := ctx.Value(toolScopeKey{}).(string); ok && deps.Svc != nil {
+		if perr := deps.Svc.RequirePerm(ctx, p, scope); perr != nil {
+			return nil, fmt.Errorf("%w: role does not grant %s in this workspace", ErrScopeDenied, scope)
+		}
+	}
+	return p, nil
+}
+
+// resolveWorkspaceID is the pure workspace-resolution half (no role check):
+// it fills an empty principal.WorkspaceID for the PAT face. Split out so the
+// resolution rules stay unit-testable without a service.
+func resolveWorkspaceID(p *webx.Principal, workspaceID string) (*webx.Principal, error) {
 	if p == nil {
 		return nil, fmt.Errorf("%w: no principal", ErrScopeDenied)
 	}
@@ -1336,14 +1488,24 @@ func effectParamsRaw(p map[string]any) (json.RawMessage, error) {
 	return json.Marshal(p)
 }
 
-// mcpAdd is the shared tool skeleton (§4.6): scope gate is literally the
-// first line inside the wrapped handler.
+// toolScopeKey carries the tool's declared permission from mcpAdd (which
+// knows it) to resolveWorkspacePrincipal (which knows the target workspace).
+// Splitting the two would let a tool forget its role check; funnelling the
+// permission through ctx makes the check structural.
+type toolScopeKey struct{}
+
+// mcpAdd is the shared tool skeleton (§4.6): the credential gate is literally
+// the first line inside the wrapped handler, and the declared scope travels
+// in ctx so the workspace resolution enforces the ROLE matrix too — a PAT's
+// scope alone is necessary but not sufficient (delivery audit P1: REST
+// enforces authz.CanIn, so MCP must as well).
 func mcpAdd[In any](s *mcp.Server, name, description, scope string, fn func(context.Context, *mcp.CallToolRequest, In) (any, error)) {
 	mcp.AddTool(s, &mcp.Tool{Name: name, Description: description},
 		func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 			if err := requireToolScope(ctx, scope); err != nil {
 				return nil, nil, err
 			}
+			ctx = context.WithValue(ctx, toolScopeKey{}, scope)
 			out, err := fn(ctx, req, in)
 			if err != nil {
 				return nil, nil, err
@@ -1368,6 +1530,13 @@ func requireToolScope(ctx context.Context, scope string) error {
 	}
 	if p.Source != webx.SourcePAT {
 		return fmt.Errorf("%w: video MCP tools require a PAT (session callers use the REST surface)", ErrScopeDenied)
+	}
+	// An unrestricted PAT (Scope == nil) is allow-all everywhere else in the
+	// stack, but the video tool face is an agent-capability boundary: ADR 0017
+	// promises pat-all credentials are rejected, so reject them here rather
+	// than letting a nil scope bypass the declaration (delivery audit P1).
+	if p.Scope == nil {
+		return fmt.Errorf("%w: video MCP tools require a PAT with an explicit credential scope", ErrScopeDenied)
 	}
 	if !p.Scope.Allows(scope) {
 		return fmt.Errorf("%w: PAT scope does not include %s", ErrScopeDenied, scope)

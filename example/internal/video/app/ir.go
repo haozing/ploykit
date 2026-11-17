@@ -128,6 +128,12 @@ type ElementAnimation struct {
 // window the element is visible for the whole composition exactly as before
 // (back-compat: pointers distinguish unset from 0, so an endFrame=0 without
 // startFrame expresses "never visible").
+//
+// VISIBLE FRAMES: [StartFrame+1, EndFrame] — the END IS INCLUSIVE. The builder
+// shows the element at tStart+1/(2·fps) and hides it at tEnd+1/(2·fps), so the
+// boundary frame belongs to the earlier card (case library §7.0, verified by
+// three independent probes). An earlier revision of this comment described a
+// half-open [start, end) window, which cost agents a frame on hard cuts.
 type Element struct {
 	ID       string  `json:"id"`
 	Type     string  `json:"type"` // image|text|shape
@@ -351,6 +357,13 @@ func validateMeta(m *Meta) error {
 	if m.DurationSec <= 0 {
 		return ve("meta.durationSec", "durationSec must be > 0")
 	}
+	// Upper bound: camera work, the snapshot walk and the render all scale
+	// with this number, so an unbounded value let one write occupy the (single)
+	// browser slot for an arbitrarily long time (delivery audit P2).
+	if m.DurationSec > MaxRenderDurationSec {
+		return ve("meta.durationSec",
+			fmt.Sprintf("durationSec must be <= %d (10 minutes)", MaxRenderDurationSec))
+	}
 	return nil
 }
 
@@ -362,27 +375,43 @@ func validateEffectParams(typ string, params json.RawMessage) error {
 	if err := json.Unmarshal(params, &m); err != nil {
 		return ve("effects.params", "params must be a JSON object")
 	}
-	// params are type-validated loosely: known keys only, numeric where the
-	// builder expects numbers. Unknown keys are rejected (typo guard).
-	allowed := map[string]bool{}
+	// params are type-validated: known keys only, numeric where the builder
+	// expects numbers, string where it expects text. The builder falls back on
+	// truthiness (`params.scale || 1.2`), so a wrong type used to pass the
+	// write gate and then be silently ignored at render time — the agent got a
+	// 200 and a film that disagreed with its intent (delivery audit P2).
+	allowed := map[string]string{} // key → "number" | "string"
 	switch typ {
 	case EffectPulse:
-		allowed["scale"] = true
+		allowed["scale"] = "number"
 	case EffectCounter:
-		allowed["from"] = true
-		allowed["to"] = true
-		allowed["suffix"] = true
-		allowed["color"] = true
+		allowed["from"] = "number"
+		allowed["to"] = "number"
+		allowed["suffix"] = "string"
+		allowed["color"] = "string"
 	case EffectHighlight:
-		allowed["color"] = true
+		allowed["color"] = "string"
 	case EffectShake:
-		allowed["intensity"] = true
+		allowed["intensity"] = "number"
 	case EffectFade:
-		allowed["opacity"] = true
+		allowed["opacity"] = "number"
 	}
-	for k := range m {
-		if !allowed[k] {
+	for k, v := range m {
+		want, ok := allowed[k]
+		if !ok {
 			return ve(fmt.Sprintf("effects.params.%s", k), "unknown param for effect type "+typ)
+		}
+		switch want {
+		case "number":
+			f, isNum := v.(float64)
+			if !isNum || !isFinite(f) {
+				return ve(fmt.Sprintf("effects.params.%s", k),
+					"must be a finite number (quote-free; strings like \"1.2\" are rejected)")
+			}
+		case "string":
+			if _, isStr := v.(string); !isStr {
+				return ve(fmt.Sprintf("effects.params.%s", k), "must be a string")
+			}
 		}
 	}
 	return nil

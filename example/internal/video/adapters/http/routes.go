@@ -59,7 +59,7 @@ type FileServer interface {
 // Mount registers the 11 routes (§4.7). CSRF for the write methods is
 // enforced by the product's global csrf middleware covering /api/ (main.go
 // wiring; nothing to do here).
-// Mount registers the 11 contract routes behind the full authorization
+// Mount registers the 13 contract routes behind the full authorization
 // chain: wsMW (fills principal.WorkspaceID from the X-Workspace-Id header —
 // without it every non-admin request is a 403 because the session principal
 // carries no workspace) → authz.Require (role gate on the video:* keys the

@@ -121,7 +121,7 @@ func TestGating_AllMethodsReturnErrNotConfigured(t *testing.T) {
 		t.Errorf("EncodePNGStream on inert runtime: got %v, want ErrNotConfigured", err)
 	}
 
-	if err := r.MuxAV(t.Context(), io.Discard, "v.mp4", "", "", 0.1); !errors.Is(err, capx.ErrNotConfigured) {
+	if err := r.MuxAV(t.Context(), io.Discard, "v.mp4", "", "", 1.0, 0.1); !errors.Is(err, capx.ErrNotConfigured) {
 		t.Errorf("MuxAV on inert runtime: got %v, want ErrNotConfigured", err)
 	}
 

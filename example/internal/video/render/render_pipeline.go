@@ -123,22 +123,34 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 	}
 
 	// audio temp files (voice/bgm), cleaned when the pipeline returns.
+	//
+	// FAIL-CLOSED: an audio track declared in the IR that cannot be loaded is
+	// a hard error, not a silent downgrade. The old code discarded the error
+	// and rendered a successful MP4 with no voice/BGM while charging quota
+	// (delivery audit P1: "无声出片当成功"). Image assets already fail closed
+	// in the projector; audio now matches.
 	voicePath, bgmPath := "", ""
+	voiceVolume := 1.0
 	if ir.Audio != nil {
 		if ir.Audio.Voice != nil && ir.Audio.Voice.Key != "" {
-			if f, ferr := w.tempFile(ctx, ir.Audio.Voice.Key); ferr == nil {
-				voicePath = f
-				defer os.Remove(f)
+			f, ferr := w.tempFile(ctx, ir.Audio.Voice.Key)
+			if ferr != nil {
+				return "", "", fmt.Errorf("stage audio voice %q: %w", ir.Audio.Voice.Key, ferr)
 			}
+			voicePath = f
+			defer os.Remove(f)
+			voiceVolume = ir.Audio.Voice.Volume
 		}
 		if ir.Audio.BGM != nil && ir.Audio.BGM.Key != "" {
-			if f, ferr := w.tempFile(ctx, ir.Audio.BGM.Key); ferr == nil {
-				bgmPath = f
-				defer os.Remove(f)
+			f, ferr := w.tempFile(ctx, ir.Audio.BGM.Key)
+			if ferr != nil {
+				return "", "", fmt.Errorf("stage audio bgm %q: %w", ir.Audio.BGM.Key, ferr)
 			}
+			bgmPath = f
+			defer os.Remove(f)
 		}
 	}
-	bgmVolume := 0.0
+	bgmVolume := 1.0
 	if ir.Audio != nil && ir.Audio.BGM != nil {
 		bgmVolume = ir.Audio.BGM.Volume
 	}
@@ -164,6 +176,17 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 	fw := capx.NewFrameWriter(pw)
 	encodeDone := make(chan error, 1)
 	go func() {
+		// river only recovers panics inside its own executor goroutine, so a
+		// panic here would kill the whole API+worker process (taking every
+		// in-flight render, WS session and lease with it). Convert it to an
+		// error instead.
+		defer func() {
+			if rec := recover(); rec != nil {
+				pr.Close()
+				videoOut.Close()
+				encodeDone <- fmt.Errorf("encoder panic: %v", rec)
+			}
+		}()
 		err := CapxRuntime.EncodePNGStream(ctx, videoOut, spec, pr, capx.EncodeOptions{})
 		pr.Close()
 		videoOut.Close()
@@ -201,7 +224,7 @@ func (w *Worker) encodeAndUpload(ctx context.Context, row renderRow, ir *videoap
 		if err != nil {
 			return "", "", err
 		}
-		if merr := CapxRuntime.MuxAV(ctx, mf, videoPath, voicePath, bgmPath, bgmVolume); merr != nil {
+		if merr := CapxRuntime.MuxAV(ctx, mf, videoPath, voicePath, bgmPath, voiceVolume, bgmVolume); merr != nil {
 			mf.Close()
 			return "", "", fmt.Errorf("mux: %w", merr)
 		}

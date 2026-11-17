@@ -724,7 +724,7 @@ func TestL2Batch6ShortClips(t *testing.T) {
 				if mErr != nil {
 					t.Fatalf("create %s: %v", outputPath, mErr)
 				}
-				mErr = rt.MuxAV(ctx, out, videoOnly, voice, "", 0.3)
+				mErr = rt.MuxAV(ctx, out, videoOnly, voice, "", 1.0, 0.3)
 				out.Close()
 				if mErr != nil {
 					res.DurationMS = time.Since(start).Milliseconds()

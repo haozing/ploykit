@@ -80,3 +80,14 @@ func defaultLauncher(rt *Runtime) (*browserInstance, error) {
 
 	return &browserInstance{ctx: browserCtx, cancel: allocCancel}, nil
 }
+
+// alive reports whether the browser behind this instance is still usable.
+// chromedp cancels the browser-holding context when the process dies, so a
+// cancelled ctx is the signal that this instance must not be handed to
+// another job. Nil-safe (a zero instance reads as dead).
+func (b *browserInstance) alive() bool {
+	if b == nil || b.ctx == nil {
+		return false
+	}
+	return b.ctx.Err() == nil
+}

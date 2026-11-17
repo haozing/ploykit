@@ -191,7 +191,7 @@ func TestPrepareSnapshot_MissingProjectID(t *testing.T) {
 	// 带 WorkspaceID 的 principal：跳过解析段，直达 project_id 校验。
 	p := patPrincipal(nil, "video:write")
 	p.WorkspaceID = "ws1"
-	_, _, err := prepareSnapshot(Deps{}, p, in)
+	_, _, err := prepareSnapshot(context.Background(), Deps{}, p, in)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "project_id")
 }
@@ -200,7 +200,7 @@ func TestPrepareSnapshot_NegativeFrame(t *testing.T) {
 	in := decodeSnapshotIn(t, `{"project_id":"p1","frame":-3}`)
 	p := patPrincipal(nil, "video:write")
 	p.WorkspaceID = "ws1"
-	_, _, err := prepareSnapshot(Deps{}, p, in)
+	_, _, err := prepareSnapshot(context.Background(), Deps{}, p, in)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "frame")
 }
@@ -209,12 +209,12 @@ func TestPrepareSnapshot_DimsMismatch(t *testing.T) {
 	p := patPrincipal(nil, "video:write")
 	p.WorkspaceID = "ws1"
 	in := decodeSnapshotIn(t, `{"project_id":"p1","frame":0,"width":1080}`)
-	_, _, err := prepareSnapshot(Deps{}, p, in)
+	_, _, err := prepareSnapshot(context.Background(), Deps{}, p, in)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "together")
 
 	in2 := decodeSnapshotIn(t, `{"project_id":"p1","frame":0,"width":1081,"height":1920}`)
-	_, _, err = prepareSnapshot(Deps{}, p, in2)
+	_, _, err = prepareSnapshot(context.Background(), Deps{}, p, in2)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "even")
 }
@@ -226,7 +226,7 @@ func TestPrepareSnapshot_StubBuildReportsNotConfigured(t *testing.T) {
 	in := decodeSnapshotIn(t, `{"project_id":"p1","frame":0}`)
 	p := patPrincipal(nil, "video:write")
 	p.WorkspaceID = "ws1"
-	_, _, err := prepareSnapshot(Deps{}, p, in)
+	_, _, err := prepareSnapshot(context.Background(), Deps{}, p, in)
 	require.Error(t, err)
 	var wxErr *webx.Error
 	require.True(t, errors.As(err, &wxErr), "want *webx.Error, got %T: %v", err, err)
@@ -235,7 +235,7 @@ func TestPrepareSnapshot_StubBuildReportsNotConfigured(t *testing.T) {
 		"agent-readable text, got: %s", wxErr.Message)
 	// deps.Snapshot 在场但桥接未接线（stub 构建）：同样的 E_NOT_CONFIGURED。
 	in2 := decodeSnapshotIn(t, `{"project_id":"p1","frame":0}`)
-	_, _, err2 := prepareSnapshot(Deps{Snapshot: func() videorender.Snapshotter { return nil }}, p, in2)
+	_, _, err2 := prepareSnapshot(context.Background(), Deps{Snapshot: func() videorender.Snapshotter { return nil }}, p, in2)
 	require.Error(t, err2)
 	var wxErr2 *webx.Error
 	require.True(t, errors.As(err2, &wxErr2))
@@ -261,25 +261,25 @@ func TestPrepareSnapshot_WorkspaceResolve(t *testing.T) {
 	base := `{"project_id":"p1","frame":0}`
 	deps := Deps{Snapshot: func() videorender.Snapshotter { return snapFake{} }}
 	// 单工作区 PAT：从 scope 自动解析，不需要 workspace_id。
-	p, _, err := prepareSnapshot(deps, patPrincipal([]string{"ws1"}, "video:write"), decodeSnapshotIn(t, base))
+	p, _, err := prepareSnapshot(context.Background(), deps, patPrincipal([]string{"ws1"}, "video:write"), decodeSnapshotIn(t, base))
 	require.NoError(t, err)
 	assert.Equal(t, "ws1", p.WorkspaceID)
 
 	// 多工作区 PAT 且未传 workspace_id：明确报错并列出可选值。
-	_, _, err = prepareSnapshot(deps, patPrincipal([]string{"ws1", "ws2"}, "video:write"), decodeSnapshotIn(t, base))
+	_, _, err = prepareSnapshot(context.Background(), deps, patPrincipal([]string{"ws1", "ws2"}, "video:write"), decodeSnapshotIn(t, base))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workspace_id")
 	assert.Contains(t, err.Error(), "ws1, ws2")
 
 	// 多工作区 PAT 显式传 scope 外 id：拒。
 	in := decodeSnapshotIn(t, `{"project_id":"p1","frame":0,"workspace_id":"ws9"}`)
-	_, _, err = prepareSnapshot(deps, patPrincipal([]string{"ws1", "ws2"}, "video:write"), in)
+	_, _, err = prepareSnapshot(context.Background(), deps, patPrincipal([]string{"ws1", "ws2"}, "video:write"), in)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "credential scope")
 
 	// 多工作区 PAT 显式传合法 id：通过（桥接在场才走到这里之后的路径）。
 	inWS2 := decodeSnapshotIn(t, `{"project_id":"p1","frame":0,"workspace_id":"ws2"}`)
-	p, snap, err := prepareSnapshot(deps, patPrincipal([]string{"ws1", "ws2"}, "video:write"), inWS2)
+	p, snap, err := prepareSnapshot(context.Background(), deps, patPrincipal([]string{"ws1", "ws2"}, "video:write"), inWS2)
 	require.NoError(t, err)
 	assert.Equal(t, "ws2", p.WorkspaceID)
 	require.NotNil(t, snap)
@@ -653,4 +653,78 @@ func resultText(t *testing.T, res *mcp.CallToolResult) string {
 	tc, ok := res.Content[0].(*mcp.TextContent)
 	require.True(t, ok, "want *mcp.TextContent, got %T", res.Content[0])
 	return tc.Text
+}
+
+// --- role-matrix enforcement (delivery audit P1) -------------------------
+
+// fakeAuthz stands in for authz.Authorizer: it grants a fixed permission set
+// to whichever role the service resolved for the caller.
+type fakeAuthz struct{ grants map[string]bool }
+
+func (f fakeAuthz) CanIn(_ context.Context, _ *webx.Principal, perm string) bool {
+	return f.grants[perm]
+}
+
+// roleMembership resolves every caller to a fixed workspace role.
+type roleMembership struct{ role string }
+
+func (m roleMembership) IsMember(_ context.Context, _, _ string) (bool, error) { return true, nil }
+func (m roleMembership) RoleOf(_ context.Context, _, _ string) (string, bool, error) {
+	return m.role, true, nil
+}
+
+// TestRequirePerm_RoleMatrixDecides is the regression for "REST 403 / MCP 200":
+// a PAT whose declared scope includes video:write must still be refused when
+// the caller's workspace role does not grant it.
+func TestRequirePerm_RoleMatrixDecides(t *testing.T) {
+	svc := videoapp.NewProjectService(nil, videoapp.Ports{
+		Membership: roleMembership{role: "viewer"},
+		Authz:      fakeAuthz{grants: map[string]bool{"video:read": true}},
+	}, nil)
+
+	p := patPrincipal(nil, "video:read", "video:write", "video:render")
+	p.WorkspaceID = "ws1"
+
+	require.NoError(t, svc.RequirePerm(context.Background(), p, "video:read"),
+		"a granted permission must pass")
+	err := svc.RequirePerm(context.Background(), p, "video:render")
+	require.Error(t, err, "scope alone must not grant a permission the role lacks")
+	assert.ErrorIs(t, err, videoapp.ErrForbidden)
+}
+
+// TestRequirePerm_ScopeStillNecessary: the role matrix must not widen a
+// credential — a scope that omits the permission is denied even when the role
+// would allow it.
+func TestRequirePerm_ScopeStillNecessary(t *testing.T) {
+	svc := videoapp.NewProjectService(nil, videoapp.Ports{
+		Membership: roleMembership{role: "owner"},
+		Authz:      fakeAuthz{grants: map[string]bool{"video:render": true}},
+	}, nil)
+
+	p := patPrincipal(nil, "video:read") // scope omits render
+	p.WorkspaceID = "ws1"
+	assert.ErrorIs(t, svc.RequirePerm(context.Background(), p, "video:render"), videoapp.ErrForbidden)
+}
+
+// TestRequirePerm_UnwiredRoleDenies: a principal with no resolvable role must
+// be denied, never silently allowed (the old MCP behaviour).
+func TestRequirePerm_UnwiredRoleDenies(t *testing.T) {
+	svc := videoapp.NewProjectService(nil, videoapp.Ports{
+		Membership: roleMembership{role: ""},
+		Authz:      fakeAuthz{grants: map[string]bool{"video:render": true}},
+	}, nil)
+	p := patPrincipal(nil, "video:render")
+	p.WorkspaceID = "ws1"
+	assert.ErrorIs(t, svc.RequirePerm(context.Background(), p, "video:render"), videoapp.ErrForbidden)
+}
+
+// TestRequireToolScope_RejectsUnrestrictedPAT: ADR 0017 promises pat-all
+// credentials are rejected on the video tool face; a nil scope is allow-all in
+// the rest of the stack, so this must be an explicit denial.
+func TestRequireToolScope_RejectsUnrestrictedPAT(t *testing.T) {
+	p := &webx.Principal{UserID: "u1", Source: webx.SourcePAT} // Scope == nil
+	ctx := webx.WithPrincipal(context.Background(), p)
+	err := requireToolScope(ctx, ScopeWrite)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "explicit credential scope")
 }

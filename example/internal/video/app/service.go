@@ -32,6 +32,11 @@ var (
 	ErrRenderNotFound   = webx.NewError(404, "E_VIDEO_RENDER_NOT_FOUND", "video render not found")
 	ErrVersionConflict  = webx.NewError(409, "E_VIDEO_VERSION_CONFLICT", "ir version conflict")
 	ErrAnchorNotFound   = webx.NewError(400, "E_VIDEO_ANCHOR_NOT_FOUND", "anchor text not found in words")
+	// ErrRenderActive blocks project deletion while a render is queued/running:
+	// the render row cascades away with the project, which would strand the
+	// river job, lose the terminal state and silently keep the quota spent
+	// (delivery audit P1). Reserved in the contract since v1.
+	ErrRenderActive = webx.NewError(409, "E_VIDEO_RENDER_ACTIVE", "a render is queued or running for this project; wait for it to finish or fail before deleting")
 	ErrNotConfigured    = webx.NewError(503, "E_NOT_CONFIGURED", "render capability not configured")
 	ErrForbidden        = webx.NewError(403, "E_FORBIDDEN", "not a member of this workspace")
 	ErrInternalPreview  = webx.NewError(500, "E_VIDEO_PREVIEW_INTERNAL", "preview CSP hash unavailable")
@@ -143,8 +148,42 @@ func (p *RenderParams) validate() error {
 		return renderParamInvalid("params.fps",
 			"unsupported (valid: 24, 25, 30, 50, 60, or 0 to inherit the project's fps)")
 	}
+	// Size override bounds. The viewport is driven straight into Chrome and
+	// the frame size into ffmpeg, so an unbounded request (width=100000) is a
+	// cheap way to exhaust host memory/tmp for the whole pool (delivery audit
+	// P2). Bounds match the IR canvas range; odd values stay rejected by
+	// FrameSpec.Validate.
+	for _, d := range []struct {
+		field string
+		v     int
+	}{{"params.width", p.Width}, {"params.height", p.Height}} {
+		if d.v == 0 {
+			continue // 0 = inherit the project's canvas
+		}
+		if d.v < MinCanvasDim || d.v > MaxCanvasDim {
+			return renderParamInvalid(d.field,
+				fmt.Sprintf("must be 0 (inherit) or between %d and %d", MinCanvasDim, MaxCanvasDim))
+		}
+	}
+	if p.Width != 0 && p.Height != 0 && p.Width*p.Height > MaxCanvasPixels {
+		return renderParamInvalid("params.width",
+			fmt.Sprintf("canvas area must not exceed %d pixels", MaxCanvasPixels))
+	}
 	return nil
 }
+
+// Canvas bounds shared by the IR validator and the render-parameter gate.
+const (
+	MinCanvasDim = 64
+	MaxCanvasDim = 4096
+	// MaxCanvasPixels caps the total raster area (4096x4096 = 16.7M px keeps
+	// 4K portrait 2160x3840 comfortable while refusing absurd combinations).
+	MaxCanvasPixels = 4096 * 4096
+	// MaxRenderDurationSec bounds the film length: the snapshot walk and the
+	// render both scale with it, so an unbounded meta.duration_sec let a
+	// single write pin the pool for a very long time (delivery audit P2).
+	MaxRenderDurationSec = 600
+)
 
 // Project is the REST-facing projection of one video_project row.
 type Project struct {
@@ -268,6 +307,67 @@ func (s *ProjectService) canAccess(ctx context.Context, wsID, userID string, isP
 		return false, fmt.Errorf("video: membership port not wired")
 	}
 	return s.ports.Membership.IsMember(ctx, wsID, userID)
+}
+
+// RequirePerm enforces the workspace role matrix for one permission on the
+// principal's current workspace. REST handlers get this from authz.Require at
+// the mount; the MCP face has no such middleware, so its tools call this
+// explicitly (delivery audit P1).
+//
+// Semantics mirror authz.CanIn: a PAT's declared scope is necessary but NOT
+// sufficient (the role matrix still decides), platform admins bypass the role
+// matrix, and an unwired Authorizer port denies fail-closed in production
+// wiring rather than silently allowing.
+func (s *ProjectService) RequirePerm(ctx context.Context, p *webx.Principal, perm string) error {
+	if p == nil {
+		return ErrForbidden
+	}
+	if p.WorkspaceID == "" {
+		return ErrForbidden
+	}
+	// 1. The credential's own scope must allow the workspace AND the perm.
+	if !p.Scope.AllowsWorkspace(p.WorkspaceID) || !p.Scope.AllowsPermission(perm) {
+		return ErrForbidden
+	}
+	if p.IsPlatformAdmin {
+		return nil
+	}
+	// 2. Resolve the role (PAT principals carry none) and consult the shared
+	//    role matrix. Without this a write-scoped PAT would satisfy every
+	//    permission its scope names, regardless of the role.
+	if s.ports.Authz != nil {
+		role := p.Role
+		if role == "" && s.ports.Membership != nil {
+			r, ok, err := s.ports.Membership.RoleOf(ctx, p.WorkspaceID, p.UserID)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return ErrForbidden
+			}
+			role = r
+		}
+		if role == "" {
+			return ErrForbidden
+		}
+		resolved := *p
+		resolved.Role = role
+		if !s.ports.Authz.CanIn(ctx, &resolved, perm) {
+			return ErrForbidden
+		}
+		return nil
+	}
+	// 3. No authorizer wired (pure-port tests): membership is the only gate.
+	if !p.IsPlatformAdmin && s.ports.Membership != nil {
+		ok, err := s.ports.Membership.IsMember(ctx, p.WorkspaceID, p.UserID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrForbidden
+		}
+	}
+	return nil
 }
 
 // Mutate is the transactional change entry (§4.3): row lock (FOR UPDATE),
@@ -488,7 +588,14 @@ func (s *ProjectService) assetRefExists(ctx context.Context, wsID, key, field st
 	// failure reads as absence (fail-closed: the write is rejected with
 	// the same "asset not registered" verdict — a flaky backend must not
 	// silently admit a reference that cannot be served).
-	if s.ports.Store != nil {
+	//
+	// TENANT GATE: the storage probe is only meaningful for objects inside
+	// this workspace's key prefix. Without it, an object that physically
+	// exists under another tenant's prefix (whose key a caller learned from
+	// history, logs or a public asset) would be admitted and then inlined
+	// into this tenant's captures/renders — the registry row is the
+	// ownership credential, storage presence is not (delivery audit P1).
+	if s.ports.Store != nil && strings.HasPrefix(key, "video/"+wsID+"/") {
 		body, _, oerr := s.ports.Store.Open(ctx, key)
 		if oerr == nil {
 			if body != nil {
@@ -659,6 +766,21 @@ func (s *ProjectService) Delete(ctx context.Context, p *webx.Principal, projectI
 	// documented membership-first write gate (same shape as Mutate).
 	if !uuidShape(projectID) {
 		return ErrProjectNotFound
+	}
+	// Refuse while a render is in flight: video_render.project_id is ON DELETE
+	// CASCADE, so deleting now would erase the row the worker is writing to
+	// (ErrTerminalSkip), orphan the river job, and permanently keep the quota
+	// spend with no row left to reconcile (delivery audit P1). The caller can
+	// cancel/wait and retry.
+	var active int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM video_render
+		 WHERE project_id=$1 AND workspace_id=$2 AND status IN ('queued','running','interrupted')`,
+		projectID, p.WorkspaceID).Scan(&active); err != nil {
+		return err
+	}
+	if active > 0 {
+		return ErrRenderActive
 	}
 	// Collect the asset keys BEFORE the delete: once video_asset rows
 	// cascade, the reference list is unrecoverable (render outputs keep
@@ -1021,6 +1143,71 @@ func (s *ProjectService) UpsertElement(ctx context.Context, p *webx.Principal, p
 	return newVersion, resolutions, nil
 }
 
+// ErrElementNotFound is the precise code for "element id does not exist".
+// MoveElement/AnimateElement used to reuse ErrAnchorNotFound ("anchor text not
+// found in words"), which sent agents off to rewrite the script instead of
+// fixing the id (delivery audit P2).
+var ErrElementNotFound = webx.NewError(404, "E_VIDEO_ELEMENT_NOT_FOUND", "element not found in this project")
+
+// RemoveElement deletes one element by id.
+//
+// The hand-editing path had create/update/move/animate but no delete, so an
+// element added by mistake could only be removed by re-composing the whole IR
+// (losing every other hand tweak) — plan G-05, P1.
+func (s *ProjectService) RemoveElement(ctx context.Context, p *webx.Principal, projectID, elementID string, expectedVersion *int) (int, error) {
+	if elementID == "" {
+		return 0, ErrElementNotFound
+	}
+	newVersion, _, err := s.Mutate(ctx, p, projectID, expectedVersion, func(ir *IR) error {
+		for i := range ir.Elements {
+			if ir.Elements[i].ID == elementID {
+				ir.Elements = append(ir.Elements[:i], ir.Elements[i+1:]...)
+				return nil
+			}
+		}
+		return ErrElementNotFound
+	})
+	if err != nil {
+		return 0, err
+	}
+	return newVersion, nil
+}
+
+// SetMeta updates the canvas/timing metadata (width/height/fps/durationSec).
+//
+// Zero fields are left unchanged, so a caller can adjust one value without
+// restating the others. Duration is bounded by Validate like every other write
+// path, and fps must be one of the supported rates.
+func (s *ProjectService) SetMeta(ctx context.Context, p *webx.Principal, projectID string, meta MetaPatch, expectedVersion *int) (int, error) {
+	newVersion, _, err := s.Mutate(ctx, p, projectID, expectedVersion, func(ir *IR) error {
+		if meta.Width != nil {
+			ir.Meta.Width = *meta.Width
+		}
+		if meta.Height != nil {
+			ir.Meta.Height = *meta.Height
+		}
+		if meta.FPS != nil {
+			ir.Meta.FPS = *meta.FPS
+		}
+		if meta.DurationSec != nil {
+			ir.Meta.DurationSec = *meta.DurationSec
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return newVersion, nil
+}
+
+// MetaPatch is the partial update SetMeta accepts (nil = leave unchanged).
+type MetaPatch struct {
+	Width       *int
+	Height      *int
+	FPS         *int
+	DurationSec *float64
+}
+
 // MoveElement repositions one element (coords clamp at projection; §4.2.2).
 func (s *ProjectService) MoveElement(ctx context.Context, p *webx.Principal, projectID, elementID string, x, y float64, expectedVersion *int) (int, error) {
 	newVersion, _, err := s.Mutate(ctx, p, projectID, expectedVersion, func(ir *IR) error {
@@ -1317,6 +1504,60 @@ func (s *ProjectService) ListRenders(ctx context.Context, p *webx.Principal, pro
 // workspace — the project row is not loaded).
 func (s *ProjectService) CanAccess(ctx context.Context, p *webx.Principal, wsID string) (bool, error) {
 	return s.canAccess(ctx, wsID, p.UserID, p.IsPlatformAdmin)
+}
+
+// CanAccessProject answers the WS-subscription question: "may this principal
+// follow live events for this PROJECT".
+//
+// The previous wiring passed the project id straight into CanAccess, which
+// treats its argument as a WORKSPACE id — so the membership query looked for a
+// workspace whose id equalled the project id and rejected every non-platform
+// admin (the video live feed was dead for all real users). It also never
+// checked the video:read permission. This resolves project → workspace first,
+// then applies the same membership + role rules as the REST surface.
+func (s *ProjectService) CanAccessProject(ctx context.Context, p *webx.Principal, projectID string) (bool, error) {
+	if p == nil || !uuidShape(projectID) {
+		return false, nil
+	}
+	var wsID string
+	err := s.pool.QueryRow(ctx,
+		`SELECT workspace_id FROM video_project WHERE id=$1`, projectID).Scan(&wsID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	// The credential must cover the workspace the project actually lives in.
+	if !p.Scope.AllowsWorkspace(wsID) {
+		return false, nil
+	}
+	ok, aerr := s.canAccess(ctx, wsID, p.UserID, p.IsPlatformAdmin)
+	if aerr != nil || !ok {
+		return false, aerr
+	}
+	// Role layer: live IR/render frames are read-equivalent. A principal that
+	// may not read the project must not watch it either.
+	resolved := *p
+	resolved.WorkspaceID = wsID
+	if s.ports.Authz != nil {
+		role := p.Role
+		if role == "" && s.ports.Membership != nil {
+			r, mok, rerr := s.ports.Membership.RoleOf(ctx, wsID, p.UserID)
+			if rerr != nil {
+				return false, rerr
+			}
+			if !mok {
+				return false, nil
+			}
+			role = r
+		}
+		resolved.Role = role
+		if !s.ports.Authz.CanIn(ctx, &resolved, "video:read") {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // Projector lazily constructs the preview projector (PreviewResolver).

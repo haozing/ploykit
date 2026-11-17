@@ -153,7 +153,7 @@ func TestMuxAV_SilentVideo(t *testing.T) {
 	r := newChromeRuntime(t)
 	path := encodeVideo(t, t.TempDir())
 	var out bytes.Buffer
-	if err := r.MuxAV(t.Context(), &out, path, "", "", 0); err != nil {
+	if err := r.MuxAV(t.Context(), &out, path, "", "", 1.0, 0); err != nil {
 		t.Fatalf("MuxAV (no audio): %v", err)
 	}
 	if out.Len() == 0 || !bytes.Contains(out.Bytes()[:16], []byte("ftyp")) {
@@ -363,5 +363,47 @@ func TestSoftSubtitles_RequiresArgs(t *testing.T) {
 	if err := r.SoftSubtitles(t.Context(), "video.mp4", "", &bytes.Buffer{}); err == nil ||
 		!strings.Contains(err.Error(), "requires videoPath and srtPath") {
 		t.Errorf("empty srtPath: got %v, want the requires-args error", err)
+	}
+}
+
+// TestMuxAV_AudioBranchesReal exercises the three audio graphs against a real
+// ffmpeg: voice+bgm (volume applied, amix not normalising), voice-only and
+// bgm-only. The v2 mix dropped voiceVolume entirely and let amix halve both
+// tracks, so these branches had no behavioural coverage at all.
+func TestMuxAV_AudioBranchesReal(t *testing.T) {
+	r := newChromeRuntime(t)
+	dir := t.TempDir()
+	video := encodeVideo(t, dir)
+
+	mkAudio := func(name, spec string, sec string) string {
+		p := dir + "/" + name
+		cmd := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", spec, "-t", sec, p)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build %s: %v\n%s", name, err, out)
+		}
+		return p
+	}
+	voice := mkAudio("voice.mp3", "sine=frequency=440:duration=1", "1")
+	bgm := mkAudio("bgm.mp3", "sine=frequency=220:duration=5", "5")
+
+	cases := []struct {
+		name       string
+		voice, bgm string
+		vv, bv     float64
+	}{
+		{"voice+bgm", voice, bgm, 0.5, 0.2},
+		{"voice only", voice, "", 0.3, 0},
+		{"bgm only", "", bgm, 0, 0.4},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			if err := r.MuxAV(t.Context(), &out, video, tc.voice, tc.bgm, tc.vv, tc.bv); err != nil {
+				t.Fatalf("MuxAV(%s): %v", tc.name, err)
+			}
+			if out.Len() == 0 || !bytes.Contains(out.Bytes()[:16], []byte("ftyp")) {
+				t.Fatalf("%s: output is not an MP4", tc.name)
+			}
+		})
 	}
 }

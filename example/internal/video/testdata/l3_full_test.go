@@ -576,7 +576,7 @@ func l3RunCase(t *testing.T, c l3Case) {
 		if oerr != nil {
 			t.Fatalf("create %s: %v", outputPath, oerr)
 		}
-		merr := rt.MuxAV(ctx, out, videoOnly, voicePath, "", 0.3)
+		merr := rt.MuxAV(ctx, out, videoOnly, voicePath, "", 1.0, 0.3)
 		out.Close()
 		if merr != nil {
 			entry.TotalMS = time.Since(start).Milliseconds()

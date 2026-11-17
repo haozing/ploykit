@@ -205,11 +205,21 @@ func (r *Runtime) acquire(ctx context.Context) (*browserInstance, func(), error)
 // launch (two callers pass the semaphore while the pool is empty) is
 // possible and fine: put() caps the pool, extra instances close on return.
 func (r *Runtime) tryReuseOrLaunch(ctx context.Context) (*browserInstance, error) {
-	// Reuse a warm instance when one is free.
-	select {
-	case inst := <-r.pool:
-		return inst, nil
-	default:
+	// Reuse a warm instance when one is free — but only a LIVE one. A crashed
+	// or OOM-killed Chrome stays in the pool otherwise, and every subsequent
+	// render fails at the first CDP call until the process restarts
+	// (delivery audit P1). Dead instances are closed and skipped.
+	for {
+		select {
+		case inst := <-r.pool:
+			if inst.alive() {
+				return inst, nil
+			}
+			inst.close()
+			continue // try the next pooled instance / fall through to launch
+		default:
+		}
+		break
 	}
 	// Launch under the caller's ctx so shutdown interrupts a pending launch.
 	launchDone := make(chan *browserInstance, 1)
@@ -245,6 +255,12 @@ func (r *Runtime) tryReuseOrLaunch(ctx context.Context) (*browserInstance, error
 // is at capacity the instance is closed instead.
 func (r *Runtime) put(inst *browserInstance) {
 	if inst == nil {
+		return
+	}
+	// Never recirculate a dead browser (crash/OOM/cancel): it would poison the
+	// next render. Close and let the next acquire launch a fresh one.
+	if !inst.alive() {
+		inst.close()
 		return
 	}
 	r.closeMu.Lock()

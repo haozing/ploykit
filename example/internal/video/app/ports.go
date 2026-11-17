@@ -8,6 +8,7 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/haozing/ploykit/platform/storagex"
+	"github.com/haozing/ploykit/platform/webx"
 )
 
 // Synthesizer produces voice audio plus word-level timestamps (§4.10.1).
@@ -88,8 +89,19 @@ type QuotaPort interface {
 // Membership answers "may this user act in this workspace". Platform-admin
 // exemption is wiring policy (MembershipImpl), not domain logic; the domain
 // only calls the interface and checks Principal.IsPlatformAdmin itself.
+//
+// RoleOf exists because the MCP face builds its own principal from a PAT:
+// unlike the REST face (where wsMW resolves the role into p.Role and
+// authz.CanIn enforces the role matrix), a PAT principal carries no role at
+// all. Without a role lookup the MCP surface could only check the PAT's
+// declared scope, so a workspace member holding a write-scoped PAT could
+// drive render-only and role-gated operations (delivery audit P1: REST 403
+// vs MCP 200 on the same operation).
 type Membership interface {
 	IsMember(ctx context.Context, workspaceID, userID string) (bool, error)
+	// RoleOf returns the caller's role in workspaceID. ok=false means "not a
+	// member" (indistinguishable from a denial, matching IsMember).
+	RoleOf(ctx context.Context, workspaceID, userID string) (role string, ok bool, err error)
 }
 
 // CapProbe reports whether the render capability is configured (adapter
@@ -97,6 +109,21 @@ type Membership interface {
 // capx). False = E_NOT_CONFIGURED before any render row or quota spend.
 type CapProbe interface {
 	CapAvailable() bool
+}
+
+// Authorizer answers "does this principal hold this permission in the
+// workspace it is acting in". The adapter wraps authz.Authorizer.CanIn, so
+// the role matrix (built-in + custom per-workspace overrides) stays the one
+// source of truth for what each role may do.
+//
+// This port exists for the MCP face. The REST face mounts authz.Require()
+// behind wsMW, which resolves p.Role; the MCP face builds its own principal
+// from a PAT (no role), so it must resolve the role itself and then ask the
+// same authorizer instead of trusting the PAT's declared scope alone
+// (delivery audit P1: member with a write-scoped PAT could drive render-only
+// operations — REST 403 / MCP 200 on the same call).
+type Authorizer interface {
+	CanIn(ctx context.Context, p *webx.Principal, perm string) bool
 }
 
 // Ports is the full injection surface of the domain (§4.3, plus Store for
@@ -109,7 +136,10 @@ type Ports struct {
 	Publish    Publisher   // wsx broadcast
 	Audit      Auditor     // audit recorder
 	Quota      QuotaPort   // consume/release
-	Membership Membership  // (ws, user) → bool
+	Membership Membership  // (ws, user) → bool, plus the role lookup
 	Store      storagex.Store
 	Cap        CapProbe
+	// Authz enforces the workspace role matrix (authz.CanIn). nil = the MCP
+	// face only checks PAT scope (pure-port tests); production always wires it.
+	Authz Authorizer
 }

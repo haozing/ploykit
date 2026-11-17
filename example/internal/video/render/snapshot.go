@@ -17,6 +17,7 @@ package render
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"sync"
 	"time"
@@ -36,10 +37,10 @@ var errSnapshotCaptured = errors.New("snapshot: target frame captured (intention
 // RenderFrames returns normally on its own.
 var errSnapshotAllCollected = errors.New("snapshot: all target frames captured (intentional abort)")
 
-// snapshotCache is the LRU + TTL cache keyed by (CacheVersion, frame, w, h).
-// 命中即 cached:true——agent 反复看同一帧零成本。容量 32 张、TTL 5 分钟：
-// IR 版本做键的一部分，版本一变旧条目永远命不中（靠 TTL 兜底回收），所以
-// 不需要主动失效。
+// snapshotCache is the LRU + TTL cache keyed by the projected document's
+// content digest plus geometry (see snapshotCacheKey). 命中即 cached:true——
+// agent 反复看同一帧零成本。容量 32 张、TTL 5 分钟：任何输入变化都会改变
+// 摘要，旧条目永远命不中（靠 TTL 兜底回收），所以不需要主动失效。
 type snapshotCache struct {
 	mu      sync.Mutex
 	maxEnt  int
@@ -58,9 +59,32 @@ func newSnapshotCache() *snapshotCache {
 	return &snapshotCache{maxEnt: 32, ttl: 5 * time.Minute, entries: map[string]snapshotCacheEntry{}}
 }
 
+// snapshotCacheKey identifies a capture by the bytes that produced it.
+//
+// The identity component is a digest of the projected HTML — the document IS
+// the frame, so two entries can only collide when their documents are
+// byte-identical. This is deliberate defence in depth: the previous key used
+// the caller-supplied project version (every project starts at 1), so one
+// tenant's frame was served to another under the process-wide cache
+// (delivery audit P0). Scope and FPS are folded in as well: scope catches
+// caller bugs in logs/tests, FPS matters because frame N is at t=N/fps.
 func snapshotCacheKey(doc SnapshotDoc, spec SnapshotSpec) string {
-	return doc.CacheVersion + "|" + doc.TimelineID + "|" +
-		itoaInt(spec.Frame) + "|" + itoaInt(spec.Width) + "x" + itoaInt(spec.Height)
+	sum := sha256.Sum256(doc.HTML)
+	return doc.CacheScope + "|" + doc.TimelineID + "|" +
+		hexDigest(sum[:16]) + "|" +
+		itoaInt(spec.Frame) + "|" + itoaInt(spec.Width) + "x" + itoaInt(spec.Height) +
+		"|fps" + itoaInt(spec.FPS)
+}
+
+// hexDigest renders b as lowercase hex without pulling in encoding/hex (the
+// tag-free surface of this package keeps a deliberately thin import set).
+func hexDigest(b []byte) string {
+	const hexdigits = "0123456789abcdef"
+	out := make([]byte, 0, len(b)*2)
+	for _, c := range b {
+		out = append(out, hexdigits[c>>4], hexdigits[c&0x0f])
+	}
+	return string(out)
 }
 
 // itoaInt is strconv.Itoa minus the import (both builds of this package
@@ -264,14 +288,14 @@ func sortInts(a []int) {
 	}
 }
 
-// cachedSnapshotter wraps any Snapshotter with the version-keyed cache.
+// cachedSnapshotter wraps any Snapshotter with the content-keyed cache.
 type cachedSnapshotter struct {
 	inner Snapshotter
 	cache *snapshotCache
 }
 
 func (c cachedSnapshotter) Snapshot(ctx context.Context, doc SnapshotDoc, spec SnapshotSpec) (*SnapshotResult, error) {
-	if doc.CacheVersion == "" {
+	if doc.CacheScope == "" {
 		return c.inner.Snapshot(ctx, doc, spec)
 	}
 	k := snapshotCacheKey(doc, spec)
@@ -291,7 +315,7 @@ func (c cachedSnapshotter) Snapshot(ctx context.Context, doc SnapshotDoc, spec S
 // SnapshotMulti applies the per-frame cache to the batch path: hits skip the
 // projection walk entirely (all-hit = zero browser work), a miss batch goes
 // through the inner bridge once and every captured frame lands in the cache
-// (a later single-frame call on the same version then hits). The inner
+// (a later single-frame call on the same document then hits). The inner
 // snapshotter is typed as the minimal Snapshotter interface, so a non-multi
 // inner falls back to the per-frame loop (semantics identical, used only by
 // test doubles).
@@ -300,7 +324,7 @@ func (c cachedSnapshotter) SnapshotMulti(ctx context.Context, doc SnapshotDoc, b
 	if !hasMulti {
 		inner = loopMulti{snap: c.inner}
 	}
-	if doc.CacheVersion == "" {
+	if doc.CacheScope == "" {
 		return inner.SnapshotMulti(ctx, doc, base, frames)
 	}
 	out := make([]SnapshotResult, 0, len(frames))

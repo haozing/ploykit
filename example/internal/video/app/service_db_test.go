@@ -143,6 +143,13 @@ func (m memberOf) IsMember(_ context.Context, wsID, _ string) (bool, error) {
 	return wsID == m.wsID, nil
 }
 
+func (m memberOf) RoleOf(_ context.Context, wsID, _ string) (string, bool, error) {
+	if wsID != m.wsID {
+		return "", false, nil
+	}
+	return "member", true, nil
+}
+
 type noopAudit struct{}
 
 func (noopAudit) RecordTx(_ context.Context, _ pgx.Tx, _ *string, _ string, _, _, _ string, _ map[string]any) error {
@@ -717,4 +724,40 @@ func errorAsWebx(err error, target **webx.Error) bool {
 		err = u.Unwrap()
 	}
 	return false
+}
+
+// TestIntegration_DeleteRefusesActiveRender is the regression for the project
+// deletion gap: video_render cascades on project delete, so deleting during an
+// in-flight render erased the row the worker writes to, orphaned the river job
+// and kept the quota spent with nothing left to reconcile.
+func TestIntegration_DeleteRefusesActiveRender(t *testing.T) {
+	e := newVideoEnv(t)
+	ctx := context.Background()
+	p := e.principal(e.wsID)
+
+	pr, err := e.svc.Create(ctx, p, "delete guard")
+	require.NoError(t, err)
+	renderID := ids.NewV7()
+	_, err = e.pool.Exec(ctx, `
+		INSERT INTO video_render (id, project_id, workspace_id, status, ir_snapshot, frames_total, created_by, quota_period)
+		VALUES ($1,$2,$3,'running','{}'::jsonb,300,$4,'2026-10')`,
+		renderID, pr.ID, e.wsID, e.userID)
+	require.NoError(t, err)
+
+	err = e.svc.Delete(ctx, p, pr.ID)
+	require.Error(t, err, "deletion must be refused while a render is in flight")
+	var werr *webx.Error
+	require.ErrorAs(t, err, &werr)
+	assert.Equal(t, "E_VIDEO_RENDER_ACTIVE", werr.Code)
+
+	var n int
+	require.NoError(t, e.pool.QueryRow(ctx, `SELECT count(*) FROM video_project WHERE id=$1`, pr.ID).Scan(&n))
+	assert.Equal(t, 1, n, "project must survive a refused delete")
+
+	// Terminal render -> deletion allowed.
+	_, err = e.pool.Exec(ctx, `UPDATE video_render SET status='succeeded', released_at=now() WHERE id=$1`, renderID)
+	require.NoError(t, err)
+	require.NoError(t, e.svc.Delete(ctx, p, pr.ID))
+	require.NoError(t, e.pool.QueryRow(ctx, `SELECT count(*) FROM video_project WHERE id=$1`, pr.ID).Scan(&n))
+	assert.Equal(t, 0, n)
 }

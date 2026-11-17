@@ -3,10 +3,12 @@ package render
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/haozing/ploykit/platform/ids"
@@ -283,7 +285,7 @@ const findDriftedSQL = `
 	 AND rj.args->>'render_id' = vr.id::text
 	 AND (rj.state IN ('discarded','cancelled')
 	      OR (rj.state = 'running' AND vr.updated_at < now() - make_interval(secs => $1)))
-	WHERE vr.status IN ('queued','running')
+	WHERE vr.status IN ('queued','running','interrupted')
 	ORDER BY vr.created_at
 	LIMIT 500`
 
@@ -309,19 +311,32 @@ func (s pgReconcileStore) findDrifted(ctx context.Context) ([]reconcilableRow, e
 // failWithReleaseClaim closes the row in ONE guarded statement (the same
 // CAS contract as pgStore.update): the WHERE clause rejects already-terminal
 // rows (a stale actor must not resurrect a finished render, audit §4 P5) and
-// released_at is stamped only when still NULL — the winner, and only the
-// winner, may release quota. A unique-ish race resolves to (false, nil).
+// released_at is stamped only when still NULL, and the claim is decided from
+// the PRE-update value in the same statement: a row that already released on
+// an earlier interrupted attempt and is now being closed must NOT release
+// again (the old RowsAffected-only claim double-decremented on exactly that
+// path — delivery audit P0/P1). A concurrent racer resolves to (false, nil).
 func (s pgReconcileStore) failWithReleaseClaim(ctx context.Context, id, errMsg string) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE video_render SET status='failed', error=$2,
-		  finished_at=now(), updated_at=now(),
-		  released_at = CASE WHEN released_at IS NULL THEN now() ELSE released_at END
-		WHERE id=$1 AND status IN ('queued','running','interrupted')`, id, errMsg)
+	var claim bool
+	err := s.pool.QueryRow(ctx, `
+		WITH prev AS (
+			SELECT id, released_at FROM video_render
+			WHERE id=$1 AND status IN ('queued','running','interrupted')
+			FOR UPDATE
+		), upd AS (
+			UPDATE video_render vr SET status='failed', error=$2,
+			  finished_at=now(), updated_at=now(),
+			  released_at = CASE WHEN vr.released_at IS NULL THEN now() ELSE vr.released_at END
+			FROM prev
+			WHERE vr.id = prev.id
+			RETURNING (prev.released_at IS NOT NULL) AS was_released
+		)
+		SELECT NOT was_released FROM upd`, id, errMsg).Scan(&claim)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil // already terminal: someone else closed it
+	}
 	if err != nil {
 		return false, err
 	}
-	if tag.RowsAffected() == 0 {
-		return false, nil // already terminal: someone else closed it
-	}
-	return true, nil
+	return claim, nil
 }

@@ -655,7 +655,7 @@ func muxAV(ctx context.Context, rt *capx.Runtime, videoPath, voicePath, bgmPath 
 		return err
 	}
 	defer f.Close()
-	return rt.MuxAV(ctx, f, videoPath, voicePath, bgmPath, bgmVolume)
+	return rt.MuxAV(ctx, f, videoPath, voicePath, bgmPath, 1.0, bgmVolume)
 }
 
 // ---- assertions ----
