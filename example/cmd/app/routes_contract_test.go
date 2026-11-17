@@ -22,13 +22,13 @@ import (
 
 	adminhttp "github.com/haozing/ploykit/admin/adapters/http"
 	audithttp "github.com/haozing/ploykit/audit/adapters/http"
+	"github.com/haozing/ploykit/authz"
 	billinghttp "github.com/haozing/ploykit/billing/adapters/http"
 	identityhttp "github.com/haozing/ploykit/identity/adapters/http"
 	identityapp "github.com/haozing/ploykit/identity/app"
 	"github.com/haozing/ploykit/legal"
 	legalhttp "github.com/haozing/ploykit/legal/adapters/http"
 	notifyhttp "github.com/haozing/ploykit/notify/adapters/http"
-	"github.com/haozing/ploykit/authz"
 	"github.com/haozing/ploykit/platform/devx"
 	"github.com/haozing/ploykit/platform/webx"
 	quotahttp "github.com/haozing/ploykit/quota/adapters/http"
@@ -45,9 +45,9 @@ import (
 // `python tools/check_api.py` reports at the repo root (spec == code, zero
 // drift). The static twin guard and this runtime test must stay in lockstep:
 // when a route is added or removed, update this constant in the same change.
-// 174 = 172 + 2（剧本→视频生成器 2026-11：GET /api/video/templates、
-// POST /api/video/projects/{id}/compose）。
-const expectedRouteCount = 174
+// 175 = 174 + 1（IndexNow 示范 2026-11：POST /dev/indexnow——dev 面推送
+// 端点，egressx 客户端注入 renderx.IndexNow，见 docs/rendering.md §5.8）。
+const expectedRouteCount = 175
 
 // passthrough mirrors main.go's identity/schedule middleware shape for Mounts
 // that fail fast on nil guards.
@@ -131,6 +131,10 @@ func mountProductionRoutes(mux *webx.Mux) {
 	// (handlers are closures; nothing is dereferenced without a request).
 	// /mcp is a method-less mount, skipped by the count like /metrics.
 	devx.Mount(mux, devx.Deps{})
+	// main.go dev 面：IndexNow 推送示范（renderx.IndexNow 的产品侧落点，
+	// egressx 客户端注入；与 devx 路由同一 env 门控 PLOYKIT_DEV_ENABLED，
+	// 正常入契约——镜像注册走 inline 路由的 noop 惯例）。
+	mux.HandleFunc("POST /dev/indexnow", noopHandler)
 
 	// Video studio (plan-agent-video-studio-architecture §4.7): 11 contract
 	// routes; registration-safe with a nil service (handlers dereference per

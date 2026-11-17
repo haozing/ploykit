@@ -9,6 +9,45 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.30.0] — 2026-11-17
+
+Go-only release (no `packages/` code touched — npm sides stay put). Theme: closing
+the IndexNow loop for Bing-adjacent indexing — the push client existed since the
+SEO-companions batch but had no key-file route, no batching, and no example wiring
+(rendering.md called this out as "pending a product publish hook"; the framework's
+own delivery audit had it as A3 🟡).
+
+### Added
+- **renderx: `IndexNowKeyHandler(key)` — the `/{key}.txt` ownership-verification
+  file (G8)** — IndexNow engines verify key/host pairing by fetching
+  `https://host/{key}.txt` and expecting the key itself as the body. Construction
+  validates the key (8–128 chars of `[a-zA-Z0-9-]`); a malformed one panics at
+  wiring time (same "malformed options explode at construction" contract as
+  RobotsHandler). Responses carry `X-Renderx-Tier: indexnow-key` (new
+  `TierIndexNowKey` constant; metrics/traffic passes the value through generically),
+  so traffic observation sees engines fetch the key. Wiring convention: register a
+  literal `mux.Handle("/"+key+".txt", ...)` — a Go 1.22 wildcard must span a whole
+  segment and the literal is exactly the one URL the protocol fetches. Key is
+  env-driven in the example (`INDEXNOW_KEY`): rotating is config+restart, no rebuild.
+- **example: IndexNow wiring demo** — `renderxHandler` mounts the key file whenever
+  `INDEXNOW_KEY` is set (before the SSR bundle check: static content, valid in every
+  startup state, like robots.txt), and the dev surface gains `POST /dev/indexnow`
+  (same gating/middleware chain as /dev/logs · /dev/jobs): takes
+  `{"urls":[...]}` (relative paths absolutized against PUBLIC_BASE_URL; absolute
+  URLs must match its host), pushes via an egressx-built client injected as
+  `IndexNowDeps.Client` — the canonical demo of the ADR 0007 injection seam (the
+  default push client deliberately bypasses egressx; posture is the product's).
+  openapi.yaml + routes_contract_test.go updated (175==175).
+
+### Changed
+- **renderx: `IndexNow` now batches and reports rejection bodies** — url lists are
+  chunked at 10,000 URLs per POST (the protocol's per-request limit; previously a
+  larger list would be rejected whole), submitted serially with the first failing
+  batch aborting; non-2xx errors carry the first 200 bytes of the response body,
+  one line (IndexNow explains rejections in a JSON body — a bare status code threw
+  the diagnosis away). Signature unchanged; the default client's non-egressx
+  posture is unchanged (ADR 0007).
+
 ## [0.29.0] — 2026-11-13
 
 Mixed release: Go + **two npm packages** (runtime 0.10.x behavior addition — no API

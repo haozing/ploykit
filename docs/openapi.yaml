@@ -4008,6 +4008,56 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /dev/indexnow:
+    post:
+      operationId: devIndexNowPush
+      tags: [system]
+      summary: 推送 URL 列表到 IndexNow（renderx 示范端点；dev:operate）
+      description: |
+        example 的 IndexNow canonical 接线示范（renderx.IndexNow 的产品侧
+        落点之一，与发布钩子等价）：相对路径按 PUBLIC_BASE_URL 绝对化，
+        绝对 URL 的 host 须与其一致（出站卫生——dev 面不是任意站点的推送
+        跳板）；INDEXNOW_KEY 未设置或 PUBLIC_BASE_URL 缺失/非法时明确报
+        503（/{key}.txt 验证文件由 INDEXNOW_KEY 驱动挂载，见
+        docs/rendering.md §5.8）。推送经装配期注入的 egressx 客户端出站
+        （ADR 0007 注入缝）。端点在 robots.txt 的 /dev/ Disallow 下，无
+        SEO 暴露。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [urls]
+              properties:
+                urls:
+                  type: array
+                  items: { type: string }
+                  description: 相对路径（"/blog"）或与 PUBLIC_BASE_URL 同 host 的绝对 URL
+      responses:
+        '200':
+          description: 已推送（N=绝对化后的 URL 条数）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pushed]
+                properties:
+                  pushed: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '502':
+          description: IndexNow 端点拒绝/推送失败（E_INDEXNOW_PUSH；错误信息带响应体摘要）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   # platform/mcpx 的 /mcp（MCP streamable-HTTP 控制面，PLOYKIT_MCP_ENABLED 门控）
   # 按 mount 约定不入本 spec（同 /metrics）：协议非 REST，工具清单由
   # MCP initialize/tools/list 自描述。platform/devx 的 /dev/* 是普通 REST，

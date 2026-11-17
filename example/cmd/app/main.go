@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -832,6 +833,21 @@ func main() {
 	}
 	if devOn {
 		devx.Mount(mux, devDeps)
+		// IndexNow 推送示范（POST /dev/indexnow，与 /dev/logs、/dev/jobs 同一
+		// 门控管线：PLOYKIT_DEV_ENABLED + 全局 Authenticate + dev:operate——
+		// 变更类端点）。这是 renderx.IndexNow 的 canonical 产品侧落点之一：
+		// 发布钩子之外，把"告诉搜索引擎来抓"做成 dev 面可手动/脚本驱动的
+		// 端点。出站走 egressx 客户端（ADR 0007 注入缝：框架默认客户端刻意
+		// 不经 egressx，egress 姿态由产品注入——example 作为示范必须演示注入），
+		// 装配期构建一次、进闭包复用；30s 超时与下方超时分层对齐。
+		indexNowEgress, err := egressx.NewHTTPClient(egressx.Opts{Timeout: 30 * time.Second})
+		if err != nil {
+			log.Error("indexnow egress client", "err", err)
+			os.Exit(1)
+		}
+		indexNowBase, _ := validatedBaseURL(env("PUBLIC_BASE_URL", ""))
+		mux.Handle("POST /dev/indexnow", webx.RequireScope(devx.ScopeOperate)(
+			indexNowPushHandler(indexNowBase, env("INDEXNOW_KEY", ""), indexNowEgress, devDeps.Audit)))
 	}
 
 	// SIM DEV HTTP 面（「模拟三个支付渠道的测试接口」）：POST /dev/billing-sim/
@@ -1648,6 +1664,9 @@ func main() {
 		"/ws":               0,
 		"/mcp":              0,
 		"/api/video/assets": 120 * time.Second,
+		// IndexNow 推送是一次出站 POST（协议按万级 URL 分批），5s 基线会截断
+		// 真实推送——与装配处注入的 egressx 客户端 30s 超时对齐。
+		"/dev/indexnow": 30 * time.Second,
 	})(
 		webx.CORS([]string{frontendOrigin}, true)(
 			csrfMW(
@@ -1706,6 +1725,84 @@ func main() {
 	// the doctor verifies this contract).
 	wk.Drain(45 * time.Second)
 	log.Info("bye")
+}
+
+// indexNowPushReq 是 POST /dev/indexnow 的请求体：相对路径（"/blog"）按
+// PUBLIC_BASE_URL 绝对化；绝对 URL 的 host 必须与其一致——出站卫生，dev 面
+// 不是任意站点的推送跳板。
+type indexNowPushReq struct {
+	URLs []string `json:"urls"`
+}
+
+// indexNowPushHandler 是 dev 面的 IndexNow 推送端点（example 的 canonical
+// 示范：renderx.IndexNow + egressx 注入客户端，ADR 0007）。baseURL/key 在
+// 装配期取自 PUBLIC_BASE_URL / INDEXNOW_KEY 两个 env（进程内不变）；
+// 未配置时按请求返回明确的 503 而非 panic——与 /{key}.txt 的装配期 panic
+// 分工：静态文件挂不上是接线错误（启动期爆），推送端点是运行期操作
+// （调用方拿到说明后去补配置）。
+func indexNowPushHandler(baseURL, key string, client *http.Client, audit devx.AuditHook) http.Handler {
+	// 装配期解析一次：baseURL 已过 validatedBaseURL（"" = 未设置/非法）。
+	baseHost := ""
+	if u, err := url.Parse(baseURL); err == nil {
+		baseHost = u.Host
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if key == "" {
+			webx.ErrUnavailable(w, "INDEXNOW_KEY 未设置：IndexNow 推送不可用（设置后重启生效，/{key}.txt 验证文件随之挂载）")
+			return
+		}
+		if baseURL == "" {
+			webx.ErrUnavailable(w, "PUBLIC_BASE_URL 未设置或非法：推送 URL 无法绝对化")
+			return
+		}
+		var req indexNowPushReq
+		if !webx.DecodeJSON(w, r, &req) {
+			return
+		}
+		if len(req.URLs) == 0 {
+			webx.ErrValidation(w, "urls 不能为空")
+			return
+		}
+		absolute := make([]string, 0, len(req.URLs))
+		for _, raw := range req.URLs {
+			u, err := url.Parse(raw)
+			if err != nil {
+				webx.ErrValidation(w, fmt.Sprintf("URL %q 解析失败: %v", raw, err))
+				return
+			}
+			switch {
+			case u.Scheme == "http" || u.Scheme == "https":
+				// 绝对 URL：host 须与 PUBLIC_BASE_URL 一致（大小写不敏感），
+				// 不一致按 400 拒绝。
+				if !strings.EqualFold(u.Host, baseHost) {
+					webx.ErrValidation(w, fmt.Sprintf("URL %q 的 host 与 PUBLIC_BASE_URL（%s）不一致：拒绝跨站推送", raw, baseHost))
+					return
+				}
+				absolute = append(absolute, raw)
+			case u.Scheme == "" && u.Host == "" && strings.HasPrefix(raw, "/"):
+				// 相对路径：拼上 PUBLIC_BASE_URL（已剥尾斜杠）。u.Host=="" 同时
+				// 拦掉 "//evil.com/x" 这类 scheme-relative 形态。
+				absolute = append(absolute, baseURL+raw)
+			default:
+				webx.ErrValidation(w, fmt.Sprintf("URL %q 须为 / 开头的相对路径或绝对 http(s) URL", raw))
+				return
+			}
+		}
+		// Endpoint 留空 = 框架默认 https://api.indexnow.org/indexnow；Host 取
+		// PUBLIC_BASE_URL 的 host；Client 是装配期注入的 egressx 客户端。
+		if err := renderx.IndexNow(r.Context(), renderx.IndexNowDeps{
+			Key:    key,
+			Host:   baseHost,
+			Client: client,
+		}, absolute); err != nil {
+			webx.WriteError(w, http.StatusBadGateway, "E_INDEXNOW_PUSH", "IndexNow 推送失败", err.Error())
+			return
+		}
+		if audit != nil {
+			audit(r, "devx.indexnow.push", fmt.Sprintf("urls=%d", len(absolute)))
+		}
+		webx.WriteJSON(w, http.StatusOK, map[string]any{"pushed": len(absolute)})
+	})
 }
 
 // stdlibDB exposes the pool over database/sql for checks that want plain SQL

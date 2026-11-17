@@ -41,15 +41,16 @@ const HeaderTier = "X-Renderx-Tier"
 // static asset passthrough, product error page. The SEO companions carry their
 // own values so traffic middleware can count crawler fetches of them.
 const (
-	TierEmbed   = "embed"
-	TierCache   = "cache"
-	TierRender  = "render"
-	TierStale   = "stale"
-	TierSPA     = "spa"
-	TierAsset   = "asset"
-	TierError   = "error"
-	TierRobots  = "robots"
-	TierSitemap = "sitemap"
+	TierEmbed       = "embed"
+	TierCache       = "cache"
+	TierRender      = "render"
+	TierStale       = "stale"
+	TierSPA         = "spa"
+	TierAsset       = "asset"
+	TierError       = "error"
+	TierRobots      = "robots"
+	TierSitemap     = "sitemap"
+	TierIndexNowKey = "indexnow-key"
 )
 
 // UnknownPathPolicy selects what the handler does with a GET/HEAD path that

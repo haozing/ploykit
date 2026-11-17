@@ -15,7 +15,7 @@
 |---|---|---|---|---|
 | A1 | example 挂 `/sitemap.xml`（PUBLIC_BASE_URL 驱动，绝不错 origin） | ✅ | example/cmd/app/renderx.go:100-104；e2e `:8039/sitemap.xml` 200 绝对 loc×3；TestSitemapGolden | Filter 不适用（blog 无草稿态） |
 | A2 | `/robots.txt` 服务（Disallow+Sitemap 指针） | ✅ | platform/renderx/seo.go `RobotsHandler`；TestRobotsHandler×3；e2e tier=robots | — |
-| A3 | 发布 hook 推 IndexNow | 🟡 | 能力在位（seo.go `IndexNow`）；rendering.md:439 声明未接线+触发条件 | 预批准二选一之"标注"选项；触发=产品出现发布端点 |
+| A3 | 发布 hook 推 IndexNow | ✅ | 能力已接线（2026-11-17 IndexNow 补全批翻绿）：example 读 `INDEXNOW_KEY` 挂 `/{key}.txt` key 文件（`IndexNowKeyHandler`）+ dev 面 `POST /dev/indexnow` 推送端点（egressx 客户端注入 `IndexNowDeps.Client` 示范） | —（原 🟡 为预批准"标注"选项，触发条件已达成） |
 | A4 | prerender SEO 体检（缺 title 硬失败；desc/canonical 告警） | ✅ | example/cmd/render/main.go `auditSEOFiles`；audit_test.go；构建日志"SEO 体检通过" | — |
 | B1 | 服务端流量计数（bot×tier×status）进 platform/metrics | ✅ | platform/metrics/traffic.go；traffic_test.go（5 用例）；e2e /metrics 落桶逐条核对 | — |
 | B2 | tier 响应头（缓存命中维度） | ✅ | platform/renderx/handler.go `HeaderTier`/`Tier*`；tier 测试×3；e2e embed/render/cache/spa/sitemap/robots | — |
@@ -32,7 +32,7 @@
 |---|---|---|---|
 | H1 | 依赖单向 / arch 边界 | ✅ | internal/arch 全绿；零新第三方依赖（仅 stdlib） |
 | H2 | wiring discipline（新能力带 example 接线） | ✅ | 四项能力均带接线；无零接线新品合入 |
-| H3 | 边界条款（未消费路径边界声明） | 🟡 | IndexNow 已声明、Traffic UA 已声明 | sitemap 降级行为未声明（Q2）；CDN 漏计（Q5） |
+| H3 | 边界条款（未消费路径边界声明） | 🟡 | IndexNow 已接线（key 挂载 + `/dev/indexnow`，后补）、Traffic UA 已声明 | sitemap 降级行为未声明（Q2）；CDN 漏计（Q5） |
 | H4 | 英文面 | ✅ | check_docs_language OK（26 docs + 64 platform files）；新增英文面人工抽查 |
 | H5 | 契约同步 | ✅ | check_api 150/150；routes_contract_test.go 镜像同步（含新 method-less 挂载） |
 | H6 | 反重复条款 | ✅ | 独立复审全仓检索：example 无手写 robots/sitemap/UA 分类等价物 |
@@ -77,7 +77,7 @@
 - tier 头覆盖：renderx 全部响应路径（embed/cache/render/stale/SPA 壳/资产/错误/404/304/405、非 GET/HEAD、SPA==nil 分支）逐一验证设置；9 个常量与文档一一对应。
 - GetOrLoad 包装保持原语义（与 HEAD 逐行比对）；ClassifyUA 常见正例全对；sanitizeLabel 对恶意值（大写/超长/路径/NUL）收敛到有限标签。
 - canonical 修复正确且必要（旧实现下"水合必双份"隐患已消除）；测试真正锁住修复（独立复现旧实现必挂）；无消费方依赖旧"异 href 追加"行为。
-- 契约/语言/架构门禁全绿；example 无手写等价物；IndexNow 未接线有文档声明（预批准路径）。
+- 契约/语言/架构门禁全绿；example 无手写等价物；IndexNow 审计时未接线、有文档声明（预批准路径）——后由 IndexNow 补全批接线（key 挂载 + `/dev/indexnow` 推送端点），A3 已翻绿。
 
 ## 5. 环境与意外记录
 

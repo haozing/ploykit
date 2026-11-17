@@ -171,6 +171,45 @@ func RobotsHandler(opts RobotsOptions) http.Handler {
 	})
 }
 
+// indexNowKeyRE is the key grammar the IndexNow spec allows for ownership
+// keys: 8–128 characters drawn from [a-zA-Z0-9-] (case-tolerant — the spec's
+// canonical examples are lowercase, but mixed case is accepted).
+var indexNowKeyRE = regexp.MustCompile(`^[a-zA-Z0-9-]{8,128}$`)
+
+// IndexNowKeyHandler serves the IndexNow ownership-verification file: the
+// engines prove key/host pairing by fetching https://host/{key}.txt and
+// expecting the key itself as the file body (plain UTF-8 text, nothing else).
+// The key is validated at construction — a malformed one panics at wiring
+// time (same "malformed options explode at construction, never serving a
+// silently wrong file" contract as RobotsHandler): 8–128 characters, only
+// [a-zA-Z0-9-].
+//
+// Product wiring convention: the key is known at assembly time, so register a
+// literal pattern — mux.Handle("/"+key+".txt", renderx.IndexNowKeyHandler(key)).
+// A Go 1.22 ServeMux wildcard must span a whole path segment ("/{key}.txt" is
+// not a valid pattern), which is no loss here: the literal route is exactly
+// the one URL the protocol fetches. Drive the key from env (INDEXNOW_KEY) so
+// rotating it is a config change + restart, never a rebuild.
+func IndexNowKeyHandler(key string) http.Handler {
+	if !indexNowKeyRE.MatchString(key) {
+		panic(fmt.Sprintf("renderx: IndexNowKeyHandler key %q 不合法：须为 8–128 个字符，且只含 [a-zA-Z0-9-]（IndexNow 规范字符集）", key))
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(HeaderTier, TierIndexNowKey)
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		if r.Method == http.MethodHead {
+			return
+		}
+		_, _ = io.WriteString(w, key)
+	})
+}
+
 // validateAbsoluteOrigin rejects anything that cannot serve as the origin of
 // an absolute SEO URL: an empty string, a missing/non-http(s) scheme, or a
 // missing host. Callers turn the error into a wiring-time panic (same
@@ -307,6 +346,9 @@ type IndexNowDeps struct {
 	Client *http.Client
 }
 
+// indexNowMaxURLs 是 IndexNow 单请求的 URL 条数上限，超出必须分批提交。
+const indexNowMaxURLs = 10000
+
 func IndexNow(ctx context.Context, deps IndexNowDeps, urls []string) error {
 	if deps.Key == "" || deps.Host == "" {
 		return errors.New("renderx: IndexNow 需要 Key 与 Host")
@@ -320,29 +362,62 @@ func IndexNow(ctx context.Context, deps IndexNowDeps, urls []string) error {
 	}
 	client := deps.Client
 	if client == nil {
+		// 红线（ADR 0007）：默认是带 30s 超时的包级普通客户端、不经 egressx
+		// （端点可指向自建内网索引器）；egress 姿态只能由产品经 Client 注入。
 		client = indexNowClient
 	}
-	body, err := json.Marshal(struct {
+	for start := 0; start < len(urls); start += indexNowMaxURLs {
+		end := start + indexNowMaxURLs
+		if end > len(urls) {
+			end = len(urls)
+		}
+		if err := indexNowPost(ctx, client, endpoint, deps.Host, deps.Key, urls[start:end], start/indexNowMaxURLs+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// indexNowPost 提交一批（batchNo 为 1 起批号，仅用于错误上下文）。逐批串行：
+// 调用方能尽早拿到第一个拒绝的批次，而不是等全部批次打完。
+func indexNowPost(ctx context.Context, client *http.Client, endpoint, host, key string, urls []string, batchNo int) error {
+	payload, err := json.Marshal(struct {
 		Host    string   `json:"host"`
 		Key     string   `json:"key"`
 		URLList []string `json:"urlList"`
-	}{Host: deps.Host, Key: deps.Key, URLList: urls})
+	}{Host: host, Key: key, URLList: urls})
 	if err != nil {
-		return err
+		return fmt.Errorf("renderx: IndexNow 第 %d 批序列化失败: %w", batchNo, err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return err
+		return fmt.Errorf("renderx: IndexNow 第 %d 批构造请求失败: %w", batchNo, err)
 	}
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("renderx: IndexNow 推送失败: %w", err)
+		return fmt.Errorf("renderx: IndexNow 第 %d 批推送失败: %w", batchNo, err)
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("renderx: IndexNow 推送被拒: HTTP %d（key 校验未通过或 host 不符？）", resp.StatusCode)
+		// IndexNow 用小 JSON body 说明拒绝原因（bad key / key not valid 等），
+		// 只回状态码等于把诊断信息丢掉——这里把 body 片段带进错误。
+		snippet := indexNowErrorSnippet(resp.Body)
+		msg := fmt.Sprintf("renderx: IndexNow 第 %d 批推送被拒: HTTP %d（key 校验未通过或 host 不符？）", batchNo, resp.StatusCode)
+		if snippet != "" {
+			msg += " 响应体: " + snippet
+		}
+		return errors.New(msg)
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
+}
+
+// indexNowErrorSnippet 读取错误响应体的前 200 字节并压成单行（连续空白折成
+// 单个空格），多行 JSON body 也无法向错误信息注入换行；余量排空以保住连接
+// 复用。
+func indexNowErrorSnippet(r io.Reader) string {
+	b, _ := io.ReadAll(io.LimitReader(r, 200))
+	_, _ = io.Copy(io.Discard, r)
+	return strings.Join(strings.Fields(string(b)), " ")
 }

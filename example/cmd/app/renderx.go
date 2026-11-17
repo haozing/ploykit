@@ -25,6 +25,9 @@ import (
 //
 // SEO companions across the three startup states:
 //   - /robots.txt always serves (static config).
+//   - /{key}.txt (IndexNow 归属验证文件) serves whenever INDEXNOW_KEY is set —
+//     static content, valid in every startup state (mounted next to robots,
+//     before the SSR bundle check).
 //   - /sitemap.xml serves when PUBLIC_BASE_URL holds a valid absolute origin
 //     AND the render pipeline is enabled (the route table comes from the SSR
 //     bundle). Both missing pieces are loudly logged, and robots.txt never
@@ -48,6 +51,17 @@ func renderxHandler(ctx context.Context, mux *webx.Mux, pool *pgxpool.Pool, cach
 			// 应用壳页（CSR 路由）只有空 root，抓了也是空页；API 与上传对象同理。
 			Disallow: []string{"/api/", "/uploads/", "/app", "/account", "/settings", "/admin", "/dev/"},
 		})))
+	}
+
+	// IndexNow 归属验证文件：https://host/{key}.txt 返回 key 原文。INDEXNOW_KEY
+	// 设置即挂载——静态内容，与 robots.txt 同区、在下方 SSR bundle 检查之前
+	// 注册，降级模式（无 bundle）下同样服务。key 由 env 驱动，换 key 只改配置
+	// 重启、免重建；格式非法（8–128 个 [a-zA-Z0-9-]）由 IndexNowKeyHandler 在
+	// 构造期 panic，把配置错误拦在启动期。装配期以字面量注册 "/"+key+".txt"
+	// ——Go 1.22 ServeMux 通配符必须覆盖整段路径（"/{key}.txt" 不是合法
+	// pattern），而字面量路由恰好就是协议抓取的唯一 URL，无损。
+	if key := env("INDEXNOW_KEY", ""); key != "" {
+		mux.Handle("/"+key+".txt", wrap(renderx.IndexNowKeyHandler(key)))
 	}
 
 	renderx.RegisterPaths("/blog/:slug", func(ctx context.Context) ([]renderx.PagePath, error) {

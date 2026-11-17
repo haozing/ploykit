@@ -3,10 +3,12 @@ package renderx
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -224,6 +226,73 @@ func TestRobotsHandlerRejectsMalformedOptions(t *testing.T) {
 	mustPanic("SitemapURL 非 http(s)", func() { RobotsHandler(RobotsOptions{SitemapURL: "ftp://x.com/sitemap.xml"}) })
 }
 
+func TestIndexNowKeyHandler(t *testing.T) {
+	const key = "a1b2c3d4e5f6g7h8"
+	h := IndexNowKeyHandler(key)
+
+	resp := get(t, h, "/"+key+".txt")
+	if ct := resp.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if tier := resp.Header.Get(HeaderTier); tier != TierIndexNowKey {
+		t.Errorf("tier = %q, want %q", tier, TierIndexNowKey)
+	}
+	if got := body(t, resp); got != key {
+		t.Errorf("key 文件 body = %q, want %q", got, key)
+	}
+
+	head := do(t, h, http.MethodHead, "/"+key+".txt")
+	if head.StatusCode != http.StatusOK {
+		t.Errorf("HEAD = %d, want 200", head.StatusCode)
+	}
+	if got := body(t, head); got != "" {
+		t.Errorf("HEAD 不应有 body, got %q", got)
+	}
+
+	if resp := do(t, h, http.MethodPost, "/"+key+".txt"); resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("POST = %d, want 405", resp.StatusCode)
+		resp.Body.Close()
+	} else {
+		if allow := resp.Header.Get("Allow"); allow != "GET, HEAD" {
+			t.Errorf("405 Allow = %q, want %q", allow, "GET, HEAD")
+		}
+		if tier := resp.Header.Get(HeaderTier); tier != TierIndexNowKey {
+			t.Errorf("405 tier = %q, want %q", tier, TierIndexNowKey)
+		}
+		resp.Body.Close()
+	}
+}
+
+func TestIndexNowKeyHandlerRejectsBadKey(t *testing.T) {
+	mustPanicKey := func(name, key string) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s 应 panic（构造期校验）", name)
+			}
+		}()
+		IndexNowKeyHandler(key)
+	}
+	cases := []struct {
+		name string
+		key  string
+	}{
+		{"空串", ""},
+		{"太短（7 字符）", "abc123-"},
+		{"太长（129 字符）", strings.Repeat("a", 129)},
+		{"含下划线", "a1b2c3d4_e5f6g7h"},
+		{"含空格", "a1b2c3d4 e5f6g7h"},
+		{"含点（会被当成路径分隔）", "a1b2c3d4.e5f6g7h"},
+	}
+	for _, tc := range cases {
+		mustPanicKey(tc.name, tc.key)
+	}
+
+	// 边界内合法：8 字符下界、128 字符上界、大小写与连字符混用。
+	IndexNowKeyHandler("a1B2c3D4")
+	IndexNowKeyHandler(strings.Repeat("aA0-", 32))
+}
+
 func TestAuditSEO(t *testing.T) {
 	doc := []byte(`<!doctype html>
 <html lang="zh-CN">
@@ -315,5 +384,90 @@ func TestIndexNow(t *testing.T) {
 	err := IndexNow(context.Background(), IndexNowDeps{Endpoint: reject.URL, Key: "k", Host: "h"}, urls)
 	if err == nil || !strings.Contains(err.Error(), "403") {
 		t.Errorf("非 2xx 应报错且含状态码, got %v", err)
+	}
+}
+
+func TestIndexNowChunksLargeSubmission(t *testing.T) {
+	var mu sync.Mutex
+	var batchLens []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			URLList []string `json:"urlList"`
+		}
+		data, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(data, &payload)
+		mu.Lock()
+		batchLens = append(batchLens, len(payload.URLList))
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	urls := make([]string, indexNowMaxURLs+1)
+	for i := range urls {
+		urls[i] = fmt.Sprintf("https://example.com/page-%d", i)
+	}
+	if err := IndexNow(context.Background(), IndexNowDeps{Endpoint: srv.URL, Key: "k", Host: "example.com"}, urls); err != nil {
+		t.Fatal(err)
+	}
+	if len(batchLens) != 2 {
+		t.Fatalf("POST 批数 = %d, want 2（%d 条 URL）", len(batchLens), len(urls))
+	}
+	for i, n := range batchLens {
+		if n > indexNowMaxURLs {
+			t.Errorf("第 %d 批 %d 条，超过上限 %d", i+1, n, indexNowMaxURLs)
+		}
+	}
+	if batchLens[0] != indexNowMaxURLs || batchLens[1] != 1 {
+		t.Errorf("分批长度 = %v, want [%d 1]", batchLens, indexNowMaxURLs)
+	}
+}
+
+func TestIndexNowBatchErrorCarriesBatchNumber(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 2 {
+			http.Error(w, `{"error":"Rejected"}`, http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	urls := make([]string, indexNowMaxURLs+5)
+	err := IndexNow(context.Background(), IndexNowDeps{Endpoint: srv.URL, Key: "k", Host: "h"}, urls)
+	if err == nil {
+		t.Fatal("第 2 批被拒应报错")
+	}
+	if !strings.Contains(err.Error(), "第 2 批") {
+		t.Errorf("错误应带批次上下文: %v", err)
+	}
+	if hits.Load() != 2 {
+		t.Errorf("失败后不应继续后续批次, POST = %d", hits.Load())
+	}
+}
+
+func TestIndexNowReportsErrorBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		// 多行 JSON：错误信息必须压成单行且保留诊断片段。
+		_, _ = w.Write([]byte("{\n  \"error\": \"Key not valid\"\n}\n"))
+	}))
+	defer srv.Close()
+
+	err := IndexNow(context.Background(), IndexNowDeps{Endpoint: srv.URL, Key: "k", Host: "h"}, []string{"https://example.com/"})
+	if err == nil {
+		t.Fatal("403 应报错")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "403") {
+		t.Errorf("错误信息应含状态码: %v", msg)
+	}
+	if !strings.Contains(msg, "Key not valid") {
+		t.Errorf("错误信息应含响应体片段: %v", msg)
+	}
+	if strings.Contains(msg, "\n") {
+		t.Errorf("错误信息应压成单行: %q", msg)
 	}
 }
