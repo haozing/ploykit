@@ -565,17 +565,25 @@
     // element's own el.transformOrigin (buildClipDOM) drives the pivot.
     // Empty style = CSS default 50% 50% = the old hardcoded value, so legacy
     // IRs render identically.
+    //
+    // immediateRender: !(at > 0)（2026-11-18，v2 冷开场实测）——GSAP 的
+    // fromTo 默认在 build 期立即写 from 值；at>0 时会让"第 0 帧就可见"的
+    // 元素提前塌到 from（贴纸 1→0.1、rotate ±9°）：v1 靠元素窗口从落件帧
+    // 才开始把这个问题藏住了，冷开场一开就暴露。at==0 保持 TRUE（首个
+    // 动画的 from 就是编辑态），at>0 关掉（start 之前保持静态样式）。
     scaleIn: function (tl, node, an, at) {
       var fromV = typeof an.fromValue === 'number' ? an.fromValue : 0;
       var toV = typeof an.toValue === 'number' ? an.toValue : 1;
       tl.fromTo(node, { scale: fromV },
-        { scale: toV, duration: an.durationFrames / fps, ease: an.easing || 'back.out' }, at);
+        { scale: toV, duration: an.durationFrames / fps, ease: an.easing || 'back.out',
+          immediateRender: !(at > 0) }, at);
     },
     rotate: function (tl, node, an, at) {
       var fromV = typeof an.fromValue === 'number' ? an.fromValue : 0;
       var toV = typeof an.toValue === 'number' ? an.toValue : 360;
       tl.fromTo(node, { rotation: fromV },
-        { rotation: toV, duration: an.durationFrames / fps, ease: an.easing || 'linear' }, at);
+        { rotation: toV, duration: an.durationFrames / fps, ease: an.easing || 'linear',
+          immediateRender: !(at > 0) }, at);
     },
     // fadeIn/fadeOut (P0-2, case library §5.16): element-level opacity
     // animation — autoAlpha (opacity + visibility) so the element also drops

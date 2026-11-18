@@ -68,3 +68,25 @@
 ## 结论
 
 32 项能力/门禁条目全绿；两起事件均已定案并修复。**建议发版 v0.34.0。**
+
+---
+
+## 发版后补记：v0.34.1 from-leak 热修（2026-11-18 晚，同日出片时发现）
+
+- **症状**：tool-site v2 展示片采用「成品房冷开场」（第 0 帧就要完整成品房）后，
+  第 0 帧所有贴纸消失/缩成小点；DOM 探针实测 `matrix(0.0988,…)` = 落件 pop 的
+  `fromValue 0.1` 被写进了 build 态。
+- **根因**：`timeline-builder.js` 的 `scaleIn`/`rotate` 用 `tl.fromTo(...)` 未传
+  `immediateRender:false`，GSAP 默认在 build 期立即写 from。v1 的贴纸元素窗口从
+  落件帧才开始（startFrame=pop），所以这条路径从未被「第 0 帧可见」的元素覆盖；
+  v0.34.0 的冷开场第一次踩中。
+- **修复**：`immediateRender: !(at > 0)`——at==0 保持 TRUE（首个动画的 from 就是
+  编辑态），at>0 关闭（start 之前保持静态样式）。move/resize/groupScale 语义不变。
+- **回归**：新增 capx `TestScaleFromLeakAtFrameZero`（100×100 方块 + 窗口从 0 +
+  f10 scaleIn 0.1→1；第 0 帧必须 ~10000 白像素）。对 pre-fix builder 负跑实测
+  恰好 100 像素（10×10），证明守卫有效；positive 跑 PASS。Design2/StyleLayer
+  两套像素岛同时重跑 PASS。
+- **发布**：v0.34.1（Go-only patch），CHANGELOG 已补条目。
+- **教训**：元素「窗口起点」与「动画起点」解耦后，任何 `fromTo` 类的 build 期
+  from 写入都会在窗口外可见；发版门禁应包含一条「frame-0 可见性」像素用例。
+

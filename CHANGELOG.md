@@ -9,6 +9,28 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.34.1] — 2026-11-18
+
+Go-only patch release. Found while authoring the tool-site v2 showcase
+content script (cold-open: the finished room must be complete at frame 0).
+
+### Fixed
+- **scaleIn/rotate `from` leaked at build time**: the builders used
+  `tl.fromTo(...)` without `immediateRender: false`, so GSAP wrote the
+  `from` value at timeline build. An element visible at frame 0 with an
+  `at > 0` pop rendered at the pop's start value (measured: every gallery
+  sticker at `matrix(0.0988,…)` at frame 0 — the room looked empty).
+  v1's element windows started at the pop frame, so the bug was invisible
+  until a frame-0-visible element arrived. `at > 0` now renders
+  `immediateRender: false`; `at == 0` keeps `true` (the first animation's
+  from IS the authored state). Move/resize/groupScale semantics unchanged.
+
+### Tests
+- capx: `TestScaleFromLeakAtFrameZero` — 100×100 shape, window from 0,
+  scaleIn (0.1→1) at f10; frame 0 must carry ~10000 white px. Negative-run
+  against the pre-fix builder measured exactly 100 px (10×10), proving the
+  guard catches the leak.
+
 ## [0.34.0] — 2026-11-18
 
 Go-only release. Theme: **the design batch** — four days of "make it look
