@@ -213,17 +213,19 @@ func c08Post(cx *caseCtx) {
 	f390 := cx.keyRecs[390]
 	require.NotNil(t, f390)
 	if img(390) != nil {
-		// Countdown digits sit at canvas ~(330,730) (element-level counter
-		// target bbox, round4 capability): dark "0" over amber "5s" — the
-		// two-counter overlay the frames.json notes describe. Assert BOTH
-		// inks; either proves the counter rendered (D-01 regression check).
+		// v0.33.1 text-host semantics (2026-11-18 audit): the counter writes
+		// textContent on the el_countdown host directly, so the digits render
+		// in the HOST's color #FFD166 (amber) — the pre-v0.33.1 dark overlay
+		// (self-hosted div, #2B2118) no longer exists. The baseline report's
+		// digits_ink=dark is the OLD behavior; amber is the current one.
+		// Assert EITHER ink at a meaningful share; amber≈0.093 measured.
 		d := dark(img(390), [4]int{300, 700, 260, 130})
-		a := shareNear(img(390), [4]int{300, 700, 260, 130}, 245, 166, 35, 30)
+		a := shareNear(img(390), [4]int{300, 700, 260, 130}, 255, 209, 102, 30)
 		f390.StructureChecks["countdown_digits_ink"] = d
 		f390.StructureChecks["countdown_amber_ink"] = a
-		if d < 0.005 && a < 0.005 {
+		if d < 0.005 && a < 0.02 {
 			f390.Status = "fail"
-			f390.Notes = append(f390.Notes, fmt.Sprintf("countdown ink dark %.4f / amber %.4f both < 0.005 (D-01 regression check)", d, a))
+			f390.Notes = append(f390.Notes, fmt.Sprintf("countdown ink dark %.4f / amber-host %.4f both under floor (D-01 regression check; v0.33.1 text-host digits are amber)", d, a))
 		}
 	}
 

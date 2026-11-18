@@ -267,7 +267,8 @@ func runCase(t *testing.T, cfg *caseCfg) {
 	t.Logf("projected HTML bytes=%d", len(html))
 
 	// -- 3. capx runtime with REAL local chrome --
-	chromePath, err := capx.ProbeChrome("")
+	chromeExplicit := os.Getenv("CAPX_TEST_CHROME")
+	chromePath, err := capx.ProbeChrome(chromeExplicit)
 	if err != nil {
 		t.Fatalf("chrome probe failed: %v", err)
 	}
