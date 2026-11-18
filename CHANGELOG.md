@@ -9,6 +9,23 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.34.2] — 2026-11-18
+
+Go-only patch release. Same leak class as 0.34.1, found by the Woodland format
+series (disaster's undo segment: items were visible before their `at > 0` move,
+so GSAP wrote the move's `from` (the scatter point) at build — stickers stood
+above/outside the card at frame 0).
+
+### Fixed
+- **move `from` leaked at build time**: `move` now passes
+  `immediateRender: !(at > 0)`, matching scaleIn/rotate (0.34.1). `at == 0`
+  keeps immediate render.
+
+### Tests
+- capx: `TestMoveFromLeakAtFrameZero` — 100×100 box at x=130, move at f10 from
+  x=0 to x=130; frame 0 must be at x=130 (pre-fix negative run measured 9928
+  white px in the x=0..100 leak region).
+
 ## [0.34.1] — 2026-11-18
 
 Go-only patch release. Found while authoring the tool-site v2 showcase

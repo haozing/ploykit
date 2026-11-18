@@ -97,3 +97,77 @@ func TestScaleFromLeakAtFrameZero(t *testing.T) {
 	require.Greaterf(t, white, 5000,
 		"frame 0 must show the element at its static scale 1 (got %d white px — a from-leak would be ~100)", white)
 }
+
+// Same leak class for `move`: an element visible before an at>0 move sits at
+// the move's `from` after build (disaster format: undo segment's from=scatter
+// point appeared above/outside the card at frame 0). Frame 0 must show the
+// element at its static (authored) top-left.
+func TestMoveFromLeakAtFrameZero(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real browser render; skipped in -short mode")
+	}
+	chrome := chromePath(t)
+	ffmpeg := ffmpegPath(t)
+	ctx := context.Background()
+
+	ir := &videoapp.IR{
+		SchemaVersion: videoapp.IRSchemaVersion,
+		Meta:          videoapp.Meta{FPS: 30, Width: 360, Height: 360, DurationSec: 0.5},
+		Elements: []videoapp.Element{
+			{ID: "mv_bg", Type: videoapp.ElementShape, Color: "#000000", X: 0, Y: 0, W: 360, H: 360, Z: 0},
+			{
+				ID: "mv_box", Type: videoapp.ElementShape, Color: "#ffffff",
+				X: 130, Y: 130, W: 100, H: 100, Z: 1,
+				StartFrame: tcbIntPtr(0), EndFrame: tcbIntPtr(15),
+				Animations: []videoapp.ElementAnimation{{
+					ID: "mv_go", Type: "move",
+					From: &videoapp.Point{X: 0, Y: 130}, To: &videoapp.Point{X: 130, Y: 130},
+					DurationFrames: 3, Easing: "linear", AtFrame: tcbIntPtr(10),
+				}},
+			},
+		},
+	}
+	require.NoError(t, videoapp.Validate(ir))
+
+	proj := videoapp.NewProjector(nil)
+	html, err := proj.HTML(ctx, ir, "")
+	require.NoError(t, err)
+
+	spec := capx.FrameSpec{Width: 360, Height: 360, FPS: 30, DurationFrames: 15}
+	require.NoError(t, spec.Validate())
+	enabled := true
+	rt, err := capx.New(capx.Config{Enabled: &enabled, ChromePath: chrome, FFMpegPath: ffmpeg, PoolSize: 1})
+	require.NoError(t, err)
+	defer rt.Close()
+	rend, err := rt.Renderer()
+	require.NoError(t, err)
+
+	var f0 []byte
+	require.NoError(t, rend.RenderFrames(ctx,
+		capx.Doc{HTML: string(html), TimelineID: "main"}, spec,
+		func(_ context.Context, f capx.Frame) error {
+			if f.Index == 0 {
+				f0 = f.PNG
+			}
+			return nil
+		}))
+	require.NotNil(t, f0)
+	img, err := png.Decode(bytes.NewReader(f0))
+	require.NoError(t, err)
+
+	whiteIn := func(x0, x1 int) int {
+		n := 0
+		for y := 130; y < 230; y++ {
+			for x := x0; x < x1; x++ {
+				r, g, b, _ := img.At(x, y).RGBA()
+				if r>>8 > 200 && g>>8 > 200 && b>>8 > 200 {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	leak, static := whiteIn(0, 100), whiteIn(130, 230)
+	require.Lessf(t, leak, 50, "frame 0 must not sit at the move's from (got %d white px at x=0..100)", leak)
+	require.Greaterf(t, static, 9000, "frame 0 must show the box at its authored x=130 (got %d white px)", static)
+}

@@ -550,6 +550,10 @@
     // mounts bare; inside a clip wrapper left/top are rebased by (clip.x,
     // clip.y), so clipOrigin() reconstructs the absolute anchor (adds the
     // rebase back). Legacy IRs (no wrapper) keep the exact old arithmetic.
+    //
+    // immediateRender: !(at > 0)（2026-11-18，disaster 格式实测）——与
+    // scaleIn/rotate 同一类泄漏：元素在 move 开始前就可见时（例如 undo 段的
+    // from=爆散点），GSAP 会在 build 期把 from 写进元素，早期帧停在未来状态。
     move: function (tl, node, an, at) {
       var baseX = parseFloat(node.style.left || 0) + clipOrigin(node).x;
       var baseY = parseFloat(node.style.top || 0) + clipOrigin(node).y;
@@ -558,7 +562,8 @@
       tl.fromTo(node,
         { x: from.x - baseX, y: from.y - baseY },
         { x: to.x - baseX, y: to.y - baseY,
-          duration: an.durationFrames / fps, ease: an.easing || 'power2.out' }, at);
+          duration: an.durationFrames / fps, ease: an.easing || 'power2.out',
+          immediateRender: !(at > 0) }, at);
     },
     // scaleIn/rotate: NO transformOrigin in the vars — GSAP inherits the
     // node's style transform-origin (browser-verified 2026-11-17), so the
