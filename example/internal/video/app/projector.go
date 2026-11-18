@@ -184,6 +184,12 @@ if (window.__player && window.__player.seek) { window.__player.seek(0); }
 // script[type="application/json"] data block (not executable; outside
 // script-src; builder reads textContent), so the hash CSP of §4.4.4 holds.
 func (p *Projector) HTML(ctx context.Context, ir *IR, _ string) ([]byte, error) {
+	// Beat anchors resolve to flat frames here (2026-11-18, hypit-inspired
+	// temporal model): the projected document is always a frame timeline, so
+	// the builder and every downstream consumer stay beat-agnostic.
+	if err := ResolveBeats(ir); err != nil {
+		return nil, err
+	}
 	gsap, err := GSAPJS()
 	if err != nil {
 		return nil, fmt.Errorf("embed gsap: %w", err)
@@ -336,6 +342,45 @@ func elementMap(el Element) map[string]any {
 	if el.MixBlendMode != "" {
 		m["mixBlendMode"] = el.MixBlendMode
 	}
+	// Visual styling layer (2026-11-18): passthrough only when set, same
+	// byte-identical-for-legacy rule as the camera fields above.
+	if el.FontFamily != "" {
+		m["fontFamily"] = el.FontFamily
+	}
+	if el.FontWeight != 0 {
+		m["fontWeight"] = el.FontWeight
+	}
+	if el.LetterSpacing != 0 {
+		m["letterSpacing"] = el.LetterSpacing
+	}
+	if el.LineHeight != 0 {
+		m["lineHeight"] = el.LineHeight
+	}
+	if el.TextAlign != "" {
+		m["textAlign"] = el.TextAlign
+	}
+	if el.StrokeColor != "" {
+		m["strokeColor"] = el.StrokeColor
+		m["strokeWidth"] = el.StrokeWidth
+	}
+	if el.TextShadow != nil {
+		m["textShadow"] = el.TextShadow
+	}
+	if el.TextGradient != nil {
+		m["textGradient"] = el.TextGradient
+	}
+	if el.TextReveal != nil {
+		m["textReveal"] = el.TextReveal
+	}
+	if el.Opacity != 0 {
+		m["opacity"] = el.Opacity
+	}
+	if el.Radius != nil {
+		m["radius"] = *el.Radius
+	}
+	if el.Gradient != nil {
+		m["gradient"] = el.Gradient
+	}
 	if len(el.Animations) > 0 {
 		ans := make([]map[string]any, 0, len(el.Animations))
 		for _, an := range el.Animations {
@@ -355,6 +400,9 @@ func elementMap(el Element) map[string]any {
 			}
 			if an.ToValue != nil {
 				am["toValue"] = *an.ToValue
+			}
+			if an.Pivot != nil {
+				am["pivot"] = an.Pivot
 			}
 			if an.StartAnchor != nil {
 				am["startAnchor"] = an.StartAnchor

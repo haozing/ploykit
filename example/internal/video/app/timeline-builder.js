@@ -45,6 +45,19 @@
   var stage = document.getElementById('stage');
   var canvas = document.getElementById('canvas');
 
+  // applyTextGradient：把梯度声明写到给定节点（父元素或逐词/逐字 span）。
+  function applyTextGradient(target, g) {
+    var stops = g.stops.map(function (s) {
+      return s.color + ' ' + (s.offset * 100) + '%';
+    }).join(', ');
+    target.style.background = g.type === 'radial'
+      ? 'radial-gradient(circle at ' + (g.atX || 50) + '% ' + (g.atY || 50) + '%, ' + stops + ')'
+      : 'linear-gradient(' + (g.angle || 0) + 'deg, ' + stops + ')';
+    target.style.webkitBackgroundClip = 'text';
+    target.style.backgroundClip = 'text';
+    target.style.color = 'transparent';
+  }
+
   function buildClipDOM(el) {
     var node;
     if (el.type === 'image') {
@@ -58,11 +71,96 @@
       node.textContent = el.text || '';
       if (el.color) node.style.color = el.color;
       if (el.fontSize) node.style.fontSize = el.fontSize + 'px';
+      // Text styling (2026-11-18, design pass): brand font selection rides
+      // the font rules the projector emits from ir.fontAssets — the
+      // family still gets the vendored Noto subset as its first fallback so
+      // a missing face degrades to the deterministic default, never to a
+      // system-font lottery. The other knobs are plain style writes, only
+      // emitted when present (legacy IRs byte-identical).
+      if (el.fontFamily) {
+        node.style.fontFamily = '"' + el.fontFamily + '", "Noto Sans SC Sub", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif';
+      }
+      if (el.fontWeight) node.style.fontWeight = String(el.fontWeight);
+      if (el.letterSpacing) node.style.letterSpacing = el.letterSpacing + 'px';
+      if (el.lineHeight) node.style.lineHeight = String(el.lineHeight);
+      if (el.textAlign) node.style.textAlign = el.textAlign;
+      // Die-cut outline: -webkit-text-stroke paints a CENTERED stroke that
+      // eats ~half of the fill unless paint-order: stroke fill pushes the
+      // fill back on top — browser-verified in the render Chrome: without
+      // paint-order a 10px stroke hollows 104px Baloo glyphs out completely.
+      if (el.strokeColor && el.strokeWidth) {
+        node.style.webkitTextStroke = el.strokeWidth + 'px ' + el.strokeColor;
+        node.style.paintOrder = 'stroke fill';
+      }
+      if (el.textShadow) {
+        var ts = el.textShadow;
+        node.style.textShadow = (ts.x || 0) + 'px ' + (ts.y || 0) + 'px ' +
+          (ts.blur || 0) + 'px ' + (ts.color || 'rgba(0,0,0,0.35)');
+      }
+      // 渐变文字填充（2026-11-18，设计批 2）：background-clip:text 把渐变当
+      // 字形填充。与逐字动效同用时，渐变改画在**词/字 span 自己身上**
+      // （2026-11-18 实测：span 上的 transform 会打碎父元素的 clip；span 自持
+      // clip 时 transform 正常）。竖向渐变（180deg）逐字重画与整行连续渐变
+      // 视觉等价；横向渐变会逐字重新起坡（文档已注明）。
+      if (el.textGradient && el.textGradient.stops && el.textGradient.stops.length >= 2) {
+        if (!el.textReveal) applyTextGradient(node, el.textGradient);
+        else node.style.color = 'transparent'; // 渐变由 span 承载
+      }
+      // 逐词切分（2026-11-18，设计批 2）：作者只写一句话，词距/换行/对齐
+      // 仍由浏览器排版；每个词一个 inline-block span，入场时间线在 build()
+      // 里按 stagger 排。白空格用文本节点保留（pre-wrap 下渲染为词距）。
+      if (el.textReveal) {
+        var words = String(el.text || '').split(/\s+/).filter(function (w) { return w.length > 0; });
+        var byChar = el.textReveal.split === 'chars';
+        node.textContent = '';
+        node.__revealWords = [];
+        words.forEach(function (w, wi) {
+          // 词壳（inline-block，保住按词换行）；词模式下壳就是动画单元，
+          // 字符模式下动画单元是壳内的逐字 span（字间 kerning 丢失是可接受
+          // 的代价——display 标题本来就是逐字动效的视觉）。
+          var wordSpan = document.createElement('span');
+          wordSpan.style.display = 'inline-block';
+          wordSpan.style.whiteSpace = 'pre';
+          if (byChar) {
+            Array.from(w).forEach(function (ch) {
+              var cs = document.createElement('span');
+              cs.textContent = ch;
+              cs.style.display = 'inline-block';
+              if (el.textGradient && el.textGradient.stops) applyTextGradient(cs, el.textGradient);
+              wordSpan.appendChild(cs);
+              node.__revealWords.push(cs);
+            });
+          } else {
+            wordSpan.textContent = w;
+            if (el.textGradient && el.textGradient.stops) applyTextGradient(wordSpan, el.textGradient);
+            node.__revealWords.push(wordSpan);
+          }
+          node.appendChild(wordSpan);
+          if (wi < words.length - 1) node.appendChild(document.createTextNode(' '));
+        });
+      }
     } else {
       node = document.createElement('div');
       node.className = 'el-shape';
-      if (el.color) node.style.background = el.color;
+      // Gradient supersedes the flat color (same CSS property); stops were
+      // whitelisted at write time, so concatenation is safe.
+      if (el.gradient && el.gradient.stops && el.gradient.stops.length >= 2) {
+        var g = el.gradient;
+        var stops = g.stops.map(function (s) {
+          return s.color + ' ' + (s.offset * 100) + '%';
+        }).join(', ');
+        if (g.type === 'radial') {
+          node.style.background = 'radial-gradient(circle at ' +
+            (g.atX || 50) + '% ' + (g.atY || 50) + '%, ' + stops + ')';
+        } else {
+          node.style.background = 'linear-gradient(' + (g.angle || 0) + 'deg, ' + stops + ')';
+        }
+      } else if (el.color) {
+        node.style.background = el.color;
+      }
+      if (el.radius !== undefined) node.style.borderRadius = el.radius + 'px';
     }
+    if (el.opacity) node.style.opacity = String(el.opacity);
     node.id = el.id;
     node.className = (node.className ? node.className + ' ' : '') + 'el';
     // Clip wrapper (2026-11-17, camera gap — spotdiff hunt-drift / rain-pilot
@@ -86,6 +184,17 @@
       wrap.style.width = el.clip.w + 'px';
       wrap.style.height = el.clip.h + 'px';
       wrap.style.clipPath = 'inset(0px round ' + el.clip.radius + 'px)';
+      // 双保险裁剪（2026-11-18，扫光试点实测）：内层节点带 will-change/
+      // transform 会自成合成层，Chromium 的祖先 clip-path 不保证裁到合成
+      // 层边缘——光带会漏到窗外的暗底上。overflow:hidden + 同半径
+      // border-radius 是合成安全的裁剪（圆角跟随），两条并用零副作用；
+      // 旧 IR 无 clip → 不生成 wrapper，投影字节不变。
+      wrap.style.overflow = 'hidden';
+      if (el.clip.radius) wrap.style.borderRadius = el.clip.radius + 'px';
+      // 内层不做 layer promotion（2026-11-18）：窗内元素每帧都被 seek 重绘，
+      // will-change 的合成层收益为零，反而在 CDP 截图路径下多一个"合成层
+      // 与祖先裁剪谁先生效"的变量。显式降回 auto。
+      node.style.willChange = 'auto';
       wrap.style.zIndex = String(1 + (el.z || 0));
       node.style.left = (el.x - el.clip.x) + 'px';
       node.style.top = (el.y - el.clip.y) + 'px';
@@ -412,6 +521,26 @@
     fade: function (tl, node, fx, at) {
       var opacity = fx.params && typeof fx.params.opacity === 'number' ? fx.params.opacity : 0;
       tl.fromTo(node, { opacity: 1 }, { opacity: opacity, duration: 0.6, ease: 'power2.out' }, at);
+    },
+    // glow（2026-11-18，设计批 2）：文本辉光的呼吸。text-shadow 为 GSAP 的
+    // 复合字符串属性，blur/alpha 在 blurMin..blurMax 间 yoyo 往复。
+    // repeat 由剩余时长算成**有限次**（无限循环在 seek 下没有必要且难证
+    // 确定性）；t=0 的 set 兜底反向 seek。目标元素自身的静态 textShadow
+    // 会被本效果接管（作者二选一）。
+    glow: function (tl, node, fx, at) {
+      var p = fx.params || {};
+      var color = p.color || 'rgba(255,255,255,0.85)';
+      var bmin = typeof p.blurMin === 'number' ? p.blurMin : 16;
+      var bmax = typeof p.blurMax === 'number' ? p.blurMax : 44;
+      if (bmax < bmin) { var bt = bmin; bmin = bmax; bmax = bt; }
+      var period = (typeof p.periodFrames === 'number' && p.periodFrames > 0 ? p.periodFrames : 60) / fps;
+      var fromFx = '0px 0px ' + bmin + 'px ' + color;
+      var toFx = '0px 0px ' + bmax + 'px ' + color;
+      var remain = Math.max(period, durationSec - at);
+      var reps = Math.max(0, Math.floor(remain / period) - 1);
+      tl.set(node, { textShadow: fromFx }, 0);
+      tl.fromTo(node, { textShadow: fromFx },
+        { textShadow: toFx, duration: period, ease: 'sine.inOut', yoyo: true, repeat: reps, immediateRender: false }, at);
     }
   };
 
@@ -521,6 +650,44 @@
         { width: an.to.x, height: an.to.y,
           duration: an.durationFrames / fps, ease: an.easing || 'power2.out',
           immediateRender: !(at > 0) }, at);
+    },
+    // groupScale（2026-11-18，设计批 2）：绕**画布共享枢轴**的缩放。实现 =
+    // tween 起点把本元素的 transform-origin 改写成"枢轴在元素盒内的百分比"，
+    // 再缩放——N 个元素同枢轴同时序 = 一次运镜推进（无场景图也能做组变换，
+    // 这是 11 片复刻里"无相机/组变换"缺口的 v1 平替）。缩放为 1 时改 origin
+    // 不产生任何视觉位移，所以"入场弹入用自身中心、之后运镜换共享枢轴"可以
+    // 安全叠加。immediateRender 恒 false：fromValue 应等于元素当前静止缩放
+    // （作者约定，与 resize 链式分段同理），否则早期帧会泄漏未来状态。
+    // tilt（2026-11-18，design batch 4）：3D 倾斜。From/To 的 Point 复用作
+    // (rotateXdeg, rotateYdeg)；共享枢轴时与 groupScale 同一套 transform-origin
+    // 改写，N 元素同角度同时序 = 刚性整组倾斜（#canvas 的 perspective 让每个
+    // 子元素走同一个投影矩阵）。缩放为 1/角度为 0 时改 origin 无视觉位移。
+    tilt: function (tl, node, an, at) {
+      if (!an.from || !an.to) return; // write-time gate rejects this
+      if (an.pivot) {
+        var tleft = parseFloat(node.style.left || 0) + clipOrigin(node).x;
+        var ttop = parseFloat(node.style.top || 0) + clipOrigin(node).y;
+        var tw = parseFloat(node.style.width || 0) || node.offsetWidth || 1;
+        var th = parseFloat(node.style.height || 0) || node.offsetHeight || 1;
+        tl.set(node, { transformOrigin: (((an.pivot.x - tleft) / tw) * 100) + '% ' + (((an.pivot.y - ttop) / th) * 100) + '%' }, at);
+      }
+      tl.fromTo(node, { rotationX: an.from.x, rotationY: an.from.y },
+        { rotationX: an.to.x, rotationY: an.to.y,
+          duration: an.durationFrames / fps, ease: an.easing || 'power2.inOut',
+          immediateRender: !(at > 0) }, at);
+    },
+    groupScale: function (tl, node, an, at) {
+      if (!an.pivot || an.fromValue == null || an.toValue == null) return;
+      var left = parseFloat(node.style.left || 0) + clipOrigin(node).x;
+      var top = parseFloat(node.style.top || 0) + clipOrigin(node).y;
+      var w = parseFloat(node.style.width || 0) || node.offsetWidth || 1;
+      var h = parseFloat(node.style.height || 0) || node.offsetHeight || 1;
+      var ox = ((an.pivot.x - left) / w) * 100;
+      var oy = ((an.pivot.y - top) / h) * 100;
+      tl.set(node, { transformOrigin: ox + '% ' + oy + '%' }, at);
+      tl.fromTo(node, { scale: an.fromValue },
+        { scale: an.toValue, duration: an.durationFrames / fps,
+          ease: an.easing || 'power2.out', immediateRender: false }, at);
     }
   };
 
@@ -614,6 +781,39 @@
         }
         builder(tl, node, an, at);
       });
+      // TextReveal（2026-11-18，设计批 2）：逐词成句。每个词一条 fromTo，
+      // 前导一个 t=0 的 set 兜底（反向 seek 回词入场前 → 回到起点态；与元素
+      // 可见窗口同一机制）。span 同时写内联起点态：t=0 的 seek 不应用零时长
+      // set（既有文档记载的 GSAP 边界），内联初值兜住封面帧。
+      if (el.textReveal && node.__revealWords && node.__revealWords.length) {
+        var trv = el.textReveal;
+        var trStyle = trv.style === 'pop' ? 'pop' : 'rise';
+        var trDur = (typeof trv.durationFrames === 'number' && trv.durationFrames > 0 ? trv.durationFrames : 12) / fps;
+        var trStagger = (typeof trv.staggerFrames === 'number' && trv.staggerFrames >= 0 ? trv.staggerFrames : 3) / fps;
+        var trEase = trv.easing || 'power3.out';
+        var trDist = typeof trv.distance === 'number' && trv.distance > 0 ? trv.distance : 44;
+        var trAt = (typeof trv.atFrame === 'number' ? trv.atFrame : 0) / fps;
+        node.__revealWords.forEach(function (span, wi) {
+          // rise 动画走 top（相对定位），**不走 transform**：浏览器实测
+          // （2026-11-18）子 span 上任何 transform（含 identity translate）
+          // 都会打碎父元素 background-clip:text 的渐变裁剪——文字会被画到
+          // 元素左缘且错位。top 是纯绘制属性，不建立 stacking context，
+          // 渐变文字与逐词上浮因此可以共存。pop 需要 scale（必须 transform），
+          // 所以写时禁止 pop + textGradient 组合（ir.go 校验）。
+          var fromVars, toVars;
+          if (trStyle === 'pop') {
+            fromVars = { opacity: 0, scale: 0.62 };
+            toVars = { opacity: 1, scale: 1, duration: trDur, ease: trEase, immediateRender: false };
+          } else {
+            span.style.position = 'relative';
+            fromVars = { opacity: 0, top: trDist };
+            toVars = { opacity: 1, top: 0, duration: trDur, ease: trEase, immediateRender: false };
+          }
+          tl.set(span, fromVars, 0);
+          span.style.opacity = '0';
+          tl.fromTo(span, fromVars, toVars, trAt + wi * trStagger);
+        });
+      }
     });
 
     (IR.effects || []).forEach(function (fx) {

@@ -24,6 +24,11 @@ const (
 	EffectHighlight = "highlight"
 	EffectShake     = "shake"
 	EffectFade      = "fade"
+	// EffectGlow（2026-11-18，设计批 2）：文本辉光的呼吸循环。text-shadow
+	// 的 blur+alpha 在 blurMin..blurMax 之间 yoyo 往复——静态 textShadow 已有，
+	// 但"活着"的辉光需要时间维度；GSAP 的 yoyo/repeat 在 seek 下确定性成立
+	// （无回调），配一个 t=0 的 set 兜底回弱光态。
+	EffectGlow = "glow"
 )
 
 // ElementType enumerates the composable element kinds (read-time tolerance in
@@ -105,6 +110,7 @@ type Effect struct {
 	Params          json.RawMessage `json:"params,omitempty"`
 	TargetElementID string          `json:"targetElementId,omitempty"`
 	AtFrame         *int            `json:"atFrame,omitempty"`
+	AtBeat          *BeatRef        `json:"atBeat,omitempty"` // 音乐网格锚，见 BeatRef
 	ResolvedFrom    *ResolvedFrom   `json:"resolvedFrom,omitempty"`
 }
 
@@ -142,6 +148,15 @@ type ElementAnimation struct {
 	To        *Point   `json:"to,omitempty"`
 	FromValue *float64 `json:"fromValue,omitempty"` // scale/rotate scalar
 	ToValue   *float64 `json:"toValue,omitempty"`
+	// Pivot is the CANVAS-space scale pivot for groupScale (2026-11-18, design
+	// batch 2). One element per animation, but a GROUP of elements sharing the
+	// same pivot + timing reads as one camera push: each element's local
+	// transform-origin is recomputed at the tween start so the whole
+	// composition scales about the same canvas point (the flat v1 form of the
+	// "no group transform" gap the 11-clip replication reported). Origin is
+	// rewritten from AtFrame onward; put a camera push last, or make sure any
+	// later animation supplies its own origin expectation.
+	Pivot *Point `json:"pivot,omitempty"`
 	// StartAnchor is the word-text anchor (v1 primary anchoring).
 	StartAnchor *Anchor `json:"startAnchor,omitempty"`
 	// AtFrame is an explicit frame anchor on the GLOBAL timeline — the same
@@ -153,7 +168,11 @@ type ElementAnimation struct {
 	// 400). BOTH absent = the v1 fallbacks stay (unanchored animations
 	// resolve to t=0; fadeIn/fadeOut fall back to the owning element's
 	// window); v2 tightens this to "at is required, exactly one flavor".
-	AtFrame        *int            `json:"atFrame,omitempty"`
+	AtFrame *int `json:"atFrame,omitempty"`
+	// AtBeat 是不久前新增的音乐网格锚（与 AtFrame 同语义：解析成 AtFrame 后
+	// 走既有路径）。与 StartAnchor 互斥；同时给 AtFrame 时两者必须一致
+	// （ResolveBeats 幂等写回，重复 Validate 不会误报）。
+	AtBeat         *BeatRef        `json:"atBeat,omitempty"`
 	DurationFrames int             `json:"durationFrames"`
 	Easing         string          `json:"easing,omitempty"`
 	ResolvedFrom   *ResolvedFrom   `json:"resolvedFrom,omitempty"`
@@ -249,7 +268,316 @@ type Element struct {
 	// are orthogonal axes).
 	MixBlendMode string `json:"mixBlendMode,omitempty"`
 
+	// ---- Visual styling layer (2026-11-18, design-pass batch) ----
+	// The fields below carry the styling knobs the 11-clip replication and
+	// the gallery showcase batch kept baking into PNGs because the IR could
+	// not express them (typography treatments, gradient backdrops, rounded
+	// pills). All are omitempty and the builder only writes a style when a
+	// value is present, so legacy IRs project byte-identically.
+	//
+	// Text styling (text elements; ignored elsewhere):
+	//   FontFamily    — must match a registered fontAssets Family (or the
+	//                   builtin "Noto Sans SC Sub"). Validated at write time:
+	//                   an unregistered family would silently fall back.
+	//   FontWeight    — CSS weight 100–900. Meaningful only when the
+	//                   registered face covers the axis (variable woff2 or a
+	//                   weight-scoped fontAssets entry).
+	//   LetterSpacing — px (negative tightens).
+	//   LineHeight    — unitless multiplier (e.g. 1.05 for display lines).
+	//   TextAlign     — left|center|right (default left).
+	//   StrokeColor/StrokeWidth — outline painted OUTSIDE the glyphs
+	//                   (paint-order: stroke fill), the die-cut sticker
+	//                   look; both must be set together.
+	//   TextShadow    — one drop/glow shadow; the author stacks several
+	//                   elements for richer treatments.
+	//   Opacity       — 0..1 static opacity for ANY element. 0/absent means
+	//                   the default 1.0 (the omitempty zero cannot express
+	//                   "invisible"; use the time window or fade effects for
+	//                   that — same caveat as the audio volume field).
+	// Shape styling (shape elements; ignored elsewhere):
+	//   Radius        — corner radius px; pointer-typed so radius:0 works
+	//                   (nil = the v1 stylesheet default of 8px).
+	//   Gradient      — a CSS gradient fill that supersedes Color (see the
+	//                   Gradient struct and the color whitelist).
+	FontFamily    string      `json:"fontFamily,omitempty"`
+	FontWeight    float64     `json:"fontWeight,omitempty"`
+	LetterSpacing float64     `json:"letterSpacing,omitempty"`
+	LineHeight    float64     `json:"lineHeight,omitempty"`
+	TextAlign     string      `json:"textAlign,omitempty"`
+	StrokeColor   string      `json:"strokeColor,omitempty"`
+	StrokeWidth   float64     `json:"strokeWidth,omitempty"`
+	TextShadow    *TextShadow `json:"textShadow,omitempty"`
+	// TextGradient（2026-11-18，设计批 2）：渐变文字填充——background-clip:
+	// text 把渐变当字形填充，比纯色高级得多。**与 strokeColor 互斥**（浏览器
+	// 实测：background-clip:text 的填充层在描边之下，描边会把字形内部吃掉，
+	// 得到空心轮廓——写时直接拒绝，不留"渲染成功但难看"的缝）。
+	TextGradient *Gradient `json:"textGradient,omitempty"`
+	// TextReveal（2026-11-18，设计批 2）：逐词成句动效。builder 把 text 按
+	// 空白切成 inline-block 词 span，每个词依次 rise（上浮+淡入）或 pop
+	// （缩放+淡入）。为什么不是"多个 text 元素"：词距/换行/对齐由浏览器排，
+	// 作者只写一句话；为什么不是逐字：中文标题逐字会碎，逐词是排版单元。
+	TextReveal *TextReveal `json:"textReveal,omitempty"`
+	Opacity    float64     `json:"opacity,omitempty"`
+	Radius     *float64    `json:"radius,omitempty"`
+	Gradient   *Gradient   `json:"gradient,omitempty"`
+
 	Animations []ElementAnimation `json:"animations,omitempty"`
+}
+
+// TextShadow is one text-shadow declaration. Colors go through
+// validCSSColorRe at write time (the builder concatenates the values into a
+// style declaration).
+//
+//	text-shadow: Xpx Ypx BlurPx Color
+//
+// With X=Y=0 and a wide blur the same shape expresses a neon glow; the
+// author adds a second, offset element for a hard drop shadow.
+type TextShadow struct {
+	Color string  `json:"color,omitempty"`
+	X     float64 `json:"x,omitempty"`
+	Y     float64 `json:"y,omitempty"`
+	Blur  float64 `json:"blur,omitempty"`
+}
+
+// TextReveal is the word-level entrance choreography for a text element
+// (2026-11-18, design batch 2). The builder splits the element's Text on
+// whitespace into inline-block spans and plays one tween per word with a
+// fixed stagger — the "sentence builds itself" look that used to require one
+// text element per word (which loses natural wrapping and alignment).
+//
+// Styles:
+//
+//	rise — top: Distance → 0 (relative offset, NO transform) + opacity 0 → 1
+//	       — the premium default and the only style that composes with
+//	       textGradient (span transforms break background-clip:text)
+//	pop  — scale: 0.62 → 1 (about the word's center) + opacity 0 → 1
+//
+// Determinism: every word gets a zero-duration set at t=0 carrying the start
+// state, so a backwards seek before a word's tween re-applies exactly the
+// hidden state (the same mechanism the element visibility windows use).
+type TextReveal struct {
+	Style string `json:"style"` // rise|pop
+	// Split selects the reveal unit (2026-11-18, design batch 3):
+	//   ""/words — one unit per whitespace-separated word (default)
+	//   chars    — one unit per character, grouped inside word wrappers so
+	//              natural wrapping still works. Latin display type only:
+	//              CJK titles read as confetti per character.
+	Split          string  `json:"split,omitempty"`
+	AtFrame        *int    `json:"atFrame,omitempty"`        // default 0
+	DurationFrames int     `json:"durationFrames,omitempty"` // per word, default 12
+	StaggerFrames  int     `json:"staggerFrames,omitempty"`  // delay between words, default 3
+	Easing         string  `json:"easing,omitempty"`         // default power3.out
+	Distance       float64 `json:"distance,omitempty"`       // rise offset px, default 44
+}
+
+// Gradient is a CSS gradient fill for shape elements. Type selects the
+// primitive:
+//
+//	linear — Angle in CSS degrees (0 = to top, 90 = to right, 180 = to bottom)
+//	radial — centered at (AtX%, AtY%) of the element box, default 50/50
+//
+// Stops are offset (0..1) + color, at most MaxGradientStops entries, with
+// non-decreasing offsets. Every color passes validCSSColorRe because the
+// builder splices them into a style declaration.
+type Gradient struct {
+	Type  string         `json:"type"`            // linear|radial
+	Angle float64        `json:"angle,omitempty"` // linear only
+	AtX   float64        `json:"atX,omitempty"`   // radial only, percent (default 50)
+	AtY   float64        `json:"atY,omitempty"`   // radial only, percent (default 50)
+	Stops []GradientStop `json:"stops"`
+}
+
+// GradientStop is one color stop of a Gradient.
+type GradientStop struct {
+	Offset float64 `json:"offset"` // 0..1
+	Color  string  `json:"color"`
+}
+
+// BeatGrid is the composition's musical grid (2026-11-18, hypit-inspired
+// temporal model). BPM + a downbeat phase define the beat map; Bars bounds the
+// legal bar range; Moments name semantic points (the hypit `@claim!` idea):
+// layers attach by name so "the title lands on the title-hit" survives a BPM or
+// tempo change without touching any frame number.
+//
+// Frame math (single source): beatFrame = PhaseFrame + round((bar*4 + beat) *
+// 60/BPM * fps). The projector resolves every BeatRef through this formula;
+// audio tooling reads the same block from the IR.
+type BeatGrid struct {
+	BPM        float64      `json:"bpm"`
+	PhaseFrame int          `json:"phaseFrame,omitempty"` // downbeat offset (frames)
+	Bars       int          `json:"bars,omitempty"`       // composition length in bars
+	Moments    []BeatMoment `json:"moments,omitempty"`
+}
+
+// BeatMoment is one named semantic point on the grid. Two addressing modes
+// (exactly one):
+//
+//	bar+beat — musical position (fractional beats allowed: 3.5 = the "and" of 3)
+//	word     — a narration word anchor (text + occurrence). This is hypit's
+//	           "anchored to words instead of seconds": the moment follows the
+//	           spoken word, so re-voicing the script moves every layer attached
+//	           to it. Resolution reads ir.Words' start times.
+type BeatMoment struct {
+	ID   string  `json:"id"`
+	Bar  int     `json:"bar,omitempty"`
+	Beat float64 `json:"beat,omitempty"`
+	Word *Anchor `json:"word,omitempty"`
+}
+
+// BeatRef anchors an animation/effect on the musical grid instead of a frame
+// number. Exactly one addressing mode: a named Moment, or an explicit
+// (bar, beat). OffsetFrames nudges off the grid (e.g. an 8th-note tail that
+// rounds to +7 frames). Resolution writes AtFrame so the projected document
+// stays a flat frame timeline (the builder needs no beat awareness).
+type BeatRef struct {
+	Moment       string   `json:"moment,omitempty"`
+	Bar          *int     `json:"bar,omitempty"`
+	Beat         *float64 `json:"beat,omitempty"`
+	OffsetFrames int      `json:"offsetFrames,omitempty"`
+}
+
+// BeatFrame resolves one BeatRef to an absolute frame. The formula is the
+// SINGLE source of beat math (projector resolution, validation agreement
+// checks and external audio tooling all read beats the same way):
+//
+//	bar/beat moment or ref: frame = PhaseFrame + round((bar*4 + beat) * 60/BPM * fps) + OffsetFrames
+//	word moment:            frame = round(word.start * fps) + OffsetFrames
+func BeatFrame(ir *IR, ref *BeatRef) (int, error) {
+	if ir == nil || ir.Beats == nil {
+		return 0, fmt.Errorf("beat anchor used without a beats grid")
+	}
+	if ref == nil {
+		return 0, fmt.Errorf("nil beat ref")
+	}
+	g := ir.Beats
+	var frame int
+	switch {
+	case ref.Moment != "":
+		if ref.Bar != nil || ref.Beat != nil {
+			return 0, fmt.Errorf("beat ref must name a moment OR a (bar,beat), not both")
+		}
+		m := g.Moment(ref.Moment)
+		if m == nil {
+			return 0, fmt.Errorf("unknown beat moment %q", ref.Moment)
+		}
+		f, err := momentFrame(ir, m)
+		if err != nil {
+			return 0, err
+		}
+		frame = f
+	case ref.Bar != nil && ref.Beat != nil:
+		f, err := beatFrameAt(g, &ir.Meta, *ref.Bar, *ref.Beat)
+		if err != nil {
+			return 0, err
+		}
+		frame = f
+	default:
+		return 0, fmt.Errorf("beat ref needs a moment or both bar and beat")
+	}
+	frame += ref.OffsetFrames
+	if frame < 0 {
+		frame = 0
+	}
+	return frame, nil
+}
+
+// momentFrame resolves one moment (bar/beat or word anchor).
+func momentFrame(ir *IR, m *BeatMoment) (int, error) {
+	if m.Word != nil {
+		w := findWord(ir.Words, m.Word)
+		if w == nil {
+			return 0, fmt.Errorf("moment %q: word %q not found in the script words", m.ID, m.Word.Text)
+		}
+		return int(math.Round(w.Start * float64(ir.Meta.FPS))), nil
+	}
+	return beatFrameAt(ir.Beats, &ir.Meta, m.Bar, m.Beat)
+}
+
+// beatFrameAt is the bar/beat leg of the formula.
+func beatFrameAt(g *BeatGrid, meta *Meta, bar int, beat float64) (int, error) {
+	if g == nil || g.BPM <= 0 {
+		return 0, fmt.Errorf("beats.bpm must be > 0")
+	}
+	return g.PhaseFrame +
+		int(math.Round((float64(bar)*4+beat)*(60.0/g.BPM)*float64(meta.FPS))), nil
+}
+
+// findWord locates the nth occurrence of an anchor's text (same matching rules
+// as the word-anchor resolution: exact token, else contained).
+func findWord(words []Word, a *Anchor) *Word {
+	if a == nil || a.Text == "" {
+		return nil
+	}
+	occ := 0
+	for i := range words {
+		if words[i].Text == a.Text {
+			if occ == a.Occurrence {
+				return &words[i]
+			}
+			occ++
+		}
+	}
+	for i := range words {
+		if strings.Contains(words[i].Text, a.Text) {
+			if occ == a.Occurrence {
+				return &words[i]
+			}
+			occ++
+		}
+	}
+	return nil
+}
+
+// Moment returns the named moment or nil.
+func (g *BeatGrid) Moment(id string) *BeatMoment {
+	if g == nil {
+		return nil
+	}
+	for i := range g.Moments {
+		if g.Moments[i].ID == id {
+			return &g.Moments[i]
+		}
+	}
+	return nil
+}
+
+// ResolveBeats writes AtFrame for every AtBeat anchor (element animations and
+// effects). Projection calls this before mapping elements, so the builder and
+// every downstream consumer stay on flat frame numbers — beat awareness lives
+// entirely on the authoring side. Idempotent; Validate enforces that a
+// pre-existing AtFrame agrees with the grid (double-validate stays clean).
+func ResolveBeats(ir *IR) error {
+	if ir == nil || ir.Beats == nil {
+		return nil
+	}
+	for i := range ir.Elements {
+		animations := ir.Elements[i].Animations
+		for j := range animations {
+			an := &animations[j]
+			if an.AtBeat == nil {
+				continue
+			}
+			f, err := BeatFrame(ir, an.AtBeat)
+			if err != nil {
+				return fmt.Errorf("elements[%d].animations[%d].atBeat: %w", i, j, err)
+			}
+			frame := f
+			an.AtFrame = &frame
+		}
+	}
+	for i := range ir.Effects {
+		fx := &ir.Effects[i]
+		if fx.AtBeat == nil {
+			continue
+		}
+		f, err := BeatFrame(ir, fx.AtBeat)
+		if err != nil {
+			return fmt.Errorf("effects[%d].atBeat: %w", i, err)
+		}
+		frame := f
+		fx.AtFrame = &frame
+	}
+	return nil
 }
 
 // AudioTrack references one audio object in storagex by key.
@@ -319,9 +647,14 @@ type IR struct {
 	// FontAssets（2026-11-17，品牌字体进 IR）：omitempty 让存量文档零变化——
 	// 无字体的 IR 序列化字节不变（回归硬规则）。Family 需在投影时唯一（校验
 	// 拒绝重复），Key 走 validateAssetRefs 的登记检查（同 image src）。
-	FontAssets []FontAsset         `json:"fontAssets,omitempty"`
-	Audio      *Audio              `json:"audio,omitempty"`
-	unknown    map[string]struct{} // reserved: read-time tolerance marker
+	FontAssets []FontAsset `json:"fontAssets,omitempty"`
+	// Beats（2026-11-18，hypit 时序模型借鉴）：音乐网格是**一等语义**——动画/
+	// 特效用 atBeat 引用"第几小节第几拍"或命名 moment，投影时统一解析成帧。
+	// IR 里存语义、不存绝对帧：换 BPM / 改段落长度只改这一处，画面与音轨
+	// （读同一份 IR）天然不漂移。与 hypit 的 TemporalInstant 同构：ref + offset。
+	Beats   *BeatGrid           `json:"beats,omitempty"`
+	Audio   *Audio              `json:"audio,omitempty"`
+	unknown map[string]struct{} // reserved: read-time tolerance marker
 }
 
 // normalizeSchema stamps the current schema version and removes the legacy
@@ -338,10 +671,11 @@ const (
 	MaxScriptChars = 5000
 	MaxWords       = 2000
 	MaxEffects     = 128
-	// 128（2026-11-17 上调，原 64）：图像拼贴类合成（产品展示片=底图+30 张成片位姿贴纸
-	// + 托盘页+勾格+字效层）单项目就需要 ~66 元素；真正的资源闸门是 IR 总量与
-	// 单图尺寸上限，元素数只是粗代理。tool-site v4-assembly 试点实测超限。
-	MaxElements = 128
+	// 200（2026-11-18 第二次上调，原 128←64）：gallery 展示片批（19 件作品）
+	// 用满"贴纸+落点星芒+4 颗粒子"的全套落件反馈后需要 171 元素；真正的资源
+	// 闸门仍是 IR 总量（256KiB，该片 132KiB）与单图尺寸，元素数只是粗代理。
+	// 前两次上调的依据同此：v4-assembly 66 元素撞 64、本批 171 撞 128。
+	MaxElements = 200
 	// 32（2026-11-17 上调，原 16）：进度条类编排单元素 15 段 resize + 淡出即满 16
 	// （versus 试点只能拆 30 个手算 shape 绕过）；与 MaxElements 同理，计数只是
 	// 粗代理，真正的资源闸门是 IR 总量。
@@ -351,6 +685,9 @@ const (
 	// key/family 字符串（字体字节本体在 storagex，不进 IR），上限防的是
 	// 注册表膨胀，不是资源——与 MaxElements 同理的粗代理。
 	MaxFontAssets = 16
+	// MaxGradientStops（2026-11-18，设计批）：单渐变最多 8 个色标。CSS 本身
+	// 不设限，8 是"够用且有界"的粗代理（典型 backdrop = 2-3 个）。
+	MaxGradientStops = 8
 )
 
 // 18/20（2026-11-17 新增，11 片复刻摩擦）：原片素材大量来自 20fps 录制
@@ -360,7 +697,7 @@ var validFPS = map[int]bool{18: true, 20: true, 24: true, 25: true, 30: true, 50
 
 var validEffects = map[string]bool{
 	EffectPulse: true, EffectCounter: true, EffectHighlight: true,
-	EffectShake: true, EffectFade: true,
+	EffectShake: true, EffectFade: true, EffectGlow: true,
 }
 
 var validElementTypes = map[string]bool{ElementImage: true, ElementText: true, ElementShape: true}
@@ -373,6 +710,19 @@ var validAnimationTypes = map[string]bool{
 	// progress bars had to be hand-split into 30 static shapes without it.
 	// From/To Points carry (w,h) px pairs; both required at write time.
 	"resize": true,
+	// groupScale (2026-11-18, design batch 2): scale about a shared CANVAS
+	// pivot. Same (FromValue,ToValue) scale scalars as scaleIn; the pivot
+	// field carries the canvas point. N elements with identical pivot+timing
+	// = a group camera move without a scene graph.
+	"groupScale": true,
+	// tilt (2026-11-18, design batch 4): 3D rotationX/rotationY about a shared
+	// canvas pivot. From/To Points carry (rotateXdeg, rotateYdeg) — the same
+	// "two scalars in one Point" reuse groupScale's pivot semantics needs.
+	// #canvas carries a CSS perspective, so N elements sharing pivot+angles
+	// compose into ONE rigid 3D group rotation (every child is projected
+	// through the same perspective matrix). ±1–2° reads as a breathing
+	// diorama; anything past ~6° starts to shear visibly.
+	"tilt": true,
 }
 
 var validEasings = map[string]bool{
@@ -387,6 +737,21 @@ var validEasings = map[string]bool{
 var validWordSources = map[string]bool{
 	WordSourceTTS: true, WordSourceAligner: true, WordSourceManual: true, WordSourceEstimated: true,
 }
+
+// validTextAligns（2026-11-18，设计批）：textAlign 白名单——builder 直接写
+// node.style.textAlign，未知值是静默 no-op。
+var validTextAligns = map[string]bool{"left": true, "center": true, "right": true}
+
+// validGradientTypes（2026-11-18，设计批）：shape 渐变的两条 CSS 原语。
+var validGradientTypes = map[string]bool{"linear": true, "radial": true}
+
+// validCSSColorRe accepts exactly the color forms the styling layer documents:
+// #rgb / #rrggbb / #rrggbbaa and rgb()/rgba() with numeric channels. Gradient
+// stops, stroke colors and text-shadow colors are concatenated into a style
+// declaration (unlike the legacy Color field, which is assigned through a
+// single style property), so free text would be a CSS injection surface.
+var validCSSColorRe = regexp.MustCompile(
+	`^(#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\(\s*[0-9]{1,3}\s*,\s*[0-9]{1,3}\s*,\s*[0-9]{1,3}\s*(?:,\s*(?:0|1|0?\.[0-9]+)\s*)?\))$`)
 
 // ValidationError carries the offending field path so HTTP maps it to
 // E_VIDEO_IR_INVALID + details.field and MCP surfaces the same detail.
@@ -438,7 +803,7 @@ func Validate(ir *IR) error {
 			return ve(fmt.Sprintf("effects[%d].id", i), "id is required")
 		}
 		if !validEffects[fx.Type] {
-			return ve(fmt.Sprintf("effects[%d].type", i), "type must be one of the registered effects (pulse|counter|highlight|shake|fade)")
+			return ve(fmt.Sprintf("effects[%d].type", i), "type must be one of the registered effects (pulse|counter|highlight|shake|fade|glow)")
 		}
 		// atFrame (effect-side twin of ElementAnimation.AtFrame, same rules):
 		// mutually exclusive with the word anchor; the anchor-text requirement
@@ -461,6 +826,10 @@ func Validate(ir *IR) error {
 			return ve(fmt.Sprintf("effects[%d].anchor.text", i), "anchor text is required (or set atFrame for a wordless frame anchor)")
 		} else if fx.Anchor.Occurrence < 0 {
 			return ve(fmt.Sprintf("effects[%d].anchor.occurrence", i), "occurrence must be >= 0")
+		}
+		if fx.Type == EffectGlow && fx.TargetElementID == "" {
+			return ve(fmt.Sprintf("effects[%d].targetElementId", i),
+				"glow requires a targetElementId (it animates that element's text-shadow)")
 		}
 		if err := validateEffectParams(fx.Type, fx.Params); err != nil {
 			return err
@@ -486,6 +855,9 @@ func Validate(ir *IR) error {
 		if err := validateElement(i, &ir.Elements[i], &ir.Meta, ir); err != nil {
 			return err
 		}
+	}
+	if err := validateBeats(ir); err != nil {
+		return err
 	}
 	if err := validateAudio(ir.Audio); err != nil {
 		return err
@@ -579,6 +951,13 @@ func validateEffectParams(typ string, params json.RawMessage) error {
 		allowed["intensity"] = "number"
 	case EffectFade:
 		allowed["opacity"] = "number"
+	case EffectGlow:
+		// 呼吸辉光：blur 在 blurMin..blurMax 之间往复；color 单色（多影层
+		// 用重叠元素表达）；periodFrames 一个完整呼吸周期（帧）。
+		allowed["color"] = "string"
+		allowed["blurMin"] = "number"
+		allowed["blurMax"] = "number"
+		allowed["periodFrames"] = "number"
 	}
 	for k, v := range m {
 		want, ok := allowed[k]
@@ -681,6 +1060,32 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 		if an.Type == "resize" && (an.From == nil || an.To == nil) {
 			return ve(af, "resize requires both from and to (width/height px pairs)")
 		}
+		// groupScale: scale endpoints are mandatory and the pivot must be a
+		// real canvas point — a missing pivot would silently fall back to the
+		// element's own center and turn a camera push into N independent
+		// zooms (each element drifting its own way).
+		if an.Type == "groupScale" {
+			if an.FromValue == nil || an.ToValue == nil {
+				return ve(af, "groupScale requires fromValue and toValue (scale scalars)")
+			}
+			if an.Pivot == nil {
+				return ve(af+".pivot", "groupScale requires a canvas pivot {x,y}")
+			}
+			if !isFinite(an.Pivot.X) || !isFinite(an.Pivot.Y) {
+				return ve(af+".pivot", "pivot must be finite canvas coordinates")
+			}
+		}
+		// tilt: From/To carry (rotateX°, rotateY°) in the Point fields. The
+		// pivot is optional (default 50% 50%); supplying the shared canvas
+		// pivot is what turns N elements into one rigid group rotation.
+		if an.Type == "tilt" {
+			if an.From == nil || an.To == nil {
+				return ve(af, "tilt requires from and to points carrying (rotateXdeg, rotateYdeg)")
+			}
+			if an.Pivot != nil && (!isFinite(an.Pivot.X) || !isFinite(an.Pivot.Y)) {
+				return ve(af+".pivot", "pivot must be finite canvas coordinates")
+			}
+		}
 		// NO coordinate clamping exists anywhere (an earlier revision of this
 		// comment claimed a projection-time clamp — it never did): out-of-
 		// canvas coordinates render as-is and the out-of-canvas part is
@@ -763,7 +1168,302 @@ func validateElement(i int, el *Element, meta *Meta, ir *IR) error {
 		return ve(field+".mixBlendMode",
 			"must be one of multiply|screen|overlay|soft-light|hard-light|color-dodge|color-burn|darken|lighten|difference|exclusion|hue|saturation|color|luminosity")
 	}
+	// ---- Visual styling layer (2026-11-18) ----
+	// Text styling: numeric ranges are advisory-CSS, but a silent CSS no-op
+	// (negative font size, unregistered family) costs a whole render to find
+	// — reject at write time instead.
+	if el.FontWeight != 0 && (el.FontWeight < 100 || el.FontWeight > 900) {
+		return ve(field+".fontWeight", "must be within 100-900")
+	}
+	if el.FontSize < 0 {
+		return ve(field+".fontSize", "must be >= 0")
+	}
+	if el.LineHeight != 0 && el.LineHeight <= 0 {
+		return ve(field+".lineHeight", "must be > 0 (unitless multiplier, e.g. 1.05)")
+	}
+	if el.TextAlign != "" && !validTextAligns[el.TextAlign] {
+		return ve(field+".textAlign", "must be one of left|center|right")
+	}
+	// FontFamily must be resolvable: the builtin vendored subset or a family
+	// registered in ir.fontAssets. An unregistered family silently falls back
+	// to Noto — the exact "looks wrong but renders fine" class of bug the
+	// write gate exists to kill (ir may be nil only in direct unit calls).
+	if el.FontFamily != "" && ir != nil {
+		ok := el.FontFamily == "Noto Sans SC Sub" || el.FontFamily == "Noto Sans SC"
+		if !ok {
+			for _, fa := range ir.FontAssets {
+				if fa.Family == el.FontFamily {
+					ok = true
+					break
+				}
+			}
+		}
+		if !ok {
+			return ve(field+".fontFamily",
+				"must be a family registered in fontAssets (or \"Noto Sans SC Sub\" for the vendored subset)")
+		}
+	}
+	// Stroke: the two halves are meaningless alone (a color without width
+	// paints nothing; a width without color is invalid CSS) — require both
+	// or neither.
+	if (el.StrokeColor == "") != (el.StrokeWidth == 0) {
+		return ve(field+".strokeColor", "strokeColor and strokeWidth must be set together")
+	}
+	if el.StrokeWidth < 0 {
+		return ve(field+".strokeWidth", "must be >= 0")
+	}
+	if el.StrokeColor != "" && !validCSSColorRe.MatchString(el.StrokeColor) {
+		return ve(field+".strokeColor", `must be #rgb/#rrggbb/#rrggbbaa or rgb()/rgba() with numeric channels`)
+	}
+	if el.TextShadow != nil {
+		ts := el.TextShadow
+		if !isFinite(ts.X) || !isFinite(ts.Y) || !isFinite(ts.Blur) {
+			return ve(field+".textShadow", "x/y/blur must be finite numbers")
+		}
+		if ts.Blur < 0 {
+			return ve(field+".textShadow.blur", "must be >= 0")
+		}
+		if ts.Color != "" && !validCSSColorRe.MatchString(ts.Color) {
+			return ve(field+".textShadow.color", `must be #rgb/#rrggbb/#rrggbbaa or rgb()/rgba() with numeric channels`)
+		}
+	}
+	// Opacity: 0 and absent are both "default 1.0" (omitempty), so only the
+	// (0,1] band is meaningful; >1 is a silent CSS clamp, reject it.
+	if el.Opacity < 0 || el.Opacity > 1 {
+		return ve(field+".opacity", "must be within 0..1 (0/absent = default 1.0)")
+	}
+	// Shape styling: radius is pointer-typed (radius:0 is legal and distinct
+	// from the stylesheet's 8px default); negative/past-half is not a
+	// round-rect (same reasoning as clip.radius).
+	if el.Radius != nil {
+		if !isFinite(*el.Radius) || *el.Radius < 0 {
+			return ve(field+".radius", "must be a finite number >= 0")
+		}
+		if el.W > 0 && el.H > 0 && *el.Radius > math.Min(el.W, el.H)/2 {
+			return ve(field+".radius",
+				fmt.Sprintf("must be within 0-%.2f (min(w,h)/2)", math.Min(el.W, el.H)/2))
+		}
+	}
+	// TextGradient: same color whitelist as shape gradients, plus the
+	// browser-verified incompatibility with stroke (background-clip:text
+	// paints the fill UNDER the centered stroke — the outline hollows the
+	// glyphs out; see the probe in the design-batch notes).
+	if el.TextGradient != nil {
+		if el.Type != ElementText {
+			return ve(field+".textGradient", "textGradient is only valid on text elements")
+		}
+		if el.StrokeColor != "" {
+			return ve(field+".textGradient",
+				"textGradient and strokeColor are mutually exclusive (the stroke paints over the clipped fill and hollows the glyphs)")
+		}
+		if err := validateGradientShape(el.TextGradient, field+".textGradient"); err != nil {
+			return err
+		}
+	}
+	// TextReveal: word/char-level entrance. Only on text, only the two styles,
+	// bounded numbers (a negative stagger would run words backwards — legal
+	// in GSAP but never intended; reject it).
+	if el.TextReveal != nil {
+		tr := el.TextReveal
+		tf := field + ".textReveal"
+		if el.Type != ElementText {
+			return ve(tf, "textReveal is only valid on text elements")
+		}
+		if tr.Style != "rise" && tr.Style != "pop" {
+			return ve(tf+".style", "must be rise|pop")
+		}
+		if tr.Split != "" && tr.Split != "words" && tr.Split != "chars" {
+			return ve(tf+".split", "must be words|chars")
+		}
+		if tr.DurationFrames < 0 || tr.DurationFrames > 120 {
+			return ve(tf+".durationFrames", "must be within 0-120")
+		}
+		if tr.StaggerFrames < 0 || tr.StaggerFrames > 60 {
+			return ve(tf+".staggerFrames", "must be within 0-60")
+		}
+		if tr.Easing != "" && !validEasings[tr.Easing] {
+			return ve(tf+".easing", "easing must be one of linear|power1.out|power2.out|power3.out|back.out|expo.out|power2.inOut")
+		}
+		if !isFinite(tr.Distance) || tr.Distance < 0 || tr.Distance > 400 {
+			return ve(tf+".distance", "must be within 0-400 px")
+		}
+		if tr.AtFrame != nil {
+			if *tr.AtFrame < 0 {
+				return ve(tf+".atFrame", "atFrame must be >= 0")
+			}
+			if ir != nil {
+				maxFrames := DurationFrames(ir, meta.FPS)
+				if *tr.AtFrame > maxFrames {
+					return ve(tf+".atFrame", fmt.Sprintf("atFrame must be <= durationFrames (%d)", maxFrames))
+				}
+			}
+		}
+	}
+	// Gradient: CSS injection surface (stops are concatenated into a style
+	// declaration), so every color is whitelist-checked; offsets must be
+	// in-range and non-decreasing (CSS would silently reorder them).
+	if el.Gradient != nil {
+		if err := validateGradientShape(el.Gradient, field+".gradient"); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// validateGradientShape is the shared write gate for shape gradients and
+// text-gradient fills (the only difference is which CSS property the builder
+// paints them into).
+func validateGradientShape(g *Gradient, gf string) error {
+	if !validGradientTypes[g.Type] {
+		return ve(gf+".type", "must be linear|radial")
+	}
+	if len(g.Stops) < 2 {
+		return ve(gf+".stops", "a gradient needs at least 2 stops")
+	}
+	if len(g.Stops) > MaxGradientStops {
+		return ve(gf+".stops", fmt.Sprintf("exceeds %d stops", MaxGradientStops))
+	}
+	prev := -1.0
+	for i, st := range g.Stops {
+		sf := fmt.Sprintf("%s.stops[%d]", gf, i)
+		if !isFinite(st.Offset) || st.Offset < 0 || st.Offset > 1 {
+			return ve(sf+".offset", "must be within 0..1")
+		}
+		if st.Offset < prev {
+			return ve(sf+".offset", "stop offsets must be non-decreasing")
+		}
+		prev = st.Offset
+		if !validCSSColorRe.MatchString(st.Color) {
+			return ve(sf+".color", `must be #rgb/#rrggbb/#rrggbbaa or rgb()/rgba() with numeric channels`)
+		}
+	}
+	if g.Type == "radial" {
+		if !isFinite(g.AtX) || !isFinite(g.AtY) || g.AtX < 0 || g.AtX > 100 || g.AtY < 0 || g.AtY > 100 {
+			return ve(gf, "radial atX/atY must be percentages within 0-100")
+		}
+	}
+	if !isFinite(g.Angle) {
+		return ve(gf+".angle", "must be a finite number")
+	}
+	return nil
+}
+
+// validateBeats enforces the musical grid shape and every beat anchor's
+// agreement with it (2026-11-18, hypit-inspired temporal model).
+func validateBeats(ir *IR) error {
+	g := ir.Beats
+	if g != nil {
+		if !isFinite(g.BPM) || g.BPM < 20 || g.BPM > 400 {
+			return ve("beats.bpm", "must be within 20-400")
+		}
+		if g.PhaseFrame < 0 {
+			return ve("beats.phaseFrame", "must be >= 0")
+		}
+		if g.Bars < 0 {
+			return ve("beats.bars", "must be >= 0")
+		}
+		seen := make(map[string]bool, len(g.Moments))
+		for i := range g.Moments {
+			m := &g.Moments[i]
+			bf := fmt.Sprintf("beats.moments[%d]", i)
+			if m.ID == "" {
+				return ve(bf+".id", "id is required")
+			}
+			if seen[m.ID] {
+				return ve(bf+".id", "duplicate moment id "+m.ID)
+			}
+			seen[m.ID] = true
+			if m.Word != nil {
+				if m.Word.Text == "" {
+					return ve(bf+".word.text", "word anchor text is required")
+				}
+				if m.Word.Occurrence < 0 {
+					return ve(bf+".word.occurrence", "must be >= 0")
+				}
+				if findWord(ir.Words, m.Word) == nil {
+					return ve(bf+".word", fmt.Sprintf("word %q (occurrence %d) not found in words[]", m.Word.Text, m.Word.Occurrence))
+				}
+			} else {
+				if m.Bar < 0 || (g.Bars > 0 && m.Bar >= g.Bars) {
+					return ve(bf+".bar", fmt.Sprintf("bar must be within 0-%d", maxInt(g.Bars-1, 0)))
+				}
+				if !isFinite(m.Beat) || m.Beat < 0 || m.Beat >= 4 {
+					return ve(bf+".beat", "beat must be within 0-4 (fractional allowed)")
+				}
+			}
+		}
+	}
+	checkRef := func(field string, ref *BeatRef, atFrame *int, anchorSet bool) error {
+		if ref == nil {
+			return nil
+		}
+		if g == nil {
+			return ve(field, "atBeat requires a beats grid on the IR")
+		}
+		if anchorSet {
+			return ve(field, "atBeat and startAnchor/anchor are mutually exclusive")
+		}
+		if ref.OffsetFrames < -300 || ref.OffsetFrames > 300 {
+			return ve(field+".offsetFrames", "must be within -300..300")
+		}
+		if ref.Moment == "" && (ref.Bar == nil || ref.Beat == nil) {
+			return ve(field, "needs a moment or both bar and beat")
+		}
+		if ref.Moment != "" && (ref.Bar != nil || ref.Beat != nil) {
+			return ve(field, "moment and bar/beat are mutually exclusive")
+		}
+		if ref.Bar != nil {
+			if g.Bars > 0 && (*ref.Bar < 0 || *ref.Bar >= g.Bars) {
+				return ve(field+".bar", fmt.Sprintf("bar must be within 0-%d", maxInt(g.Bars-1, 0)))
+			}
+			if *ref.Bar < 0 {
+				return ve(field+".bar", "must be >= 0")
+			}
+		}
+		if ref.Beat != nil && (!isFinite(*ref.Beat) || *ref.Beat < 0 || *ref.Beat >= 4) {
+			return ve(field+".beat", "beat must be within 0-4 (fractional allowed)")
+		}
+		// Always resolve: this is also what proves a named moment exists.
+		resolved, err := BeatFrame(ir, ref)
+		if err != nil {
+			return ve(field, err.Error())
+		}
+		if atFrame != nil && *atFrame != resolved {
+			return ve(field, fmt.Sprintf("atFrame %d disagrees with the beat grid frame %d", *atFrame, resolved))
+		}
+		return nil
+	}
+	for i := range ir.Elements {
+		els := ir.Elements[i]
+		for j := range els.Animations {
+			an := &els.Animations[j]
+			if an.AtBeat == nil {
+				continue
+			}
+			if err := checkRef(fmt.Sprintf("elements[%d].animations[%d].atBeat", i, j),
+				an.AtBeat, an.AtFrame, an.StartAnchor != nil); err != nil {
+				return err
+			}
+		}
+	}
+	for i := range ir.Effects {
+		fx := &ir.Effects[i]
+		if fx.AtBeat == nil {
+			continue
+		}
+		anchorSet := fx.Anchor.Text != "" || fx.Anchor.Occurrence != 0
+		if err := checkRef(fmt.Sprintf("effects[%d].atBeat", i), fx.AtBeat, fx.AtFrame, anchorSet); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func validateAudio(a *Audio) error {
