@@ -567,6 +567,12 @@ func validateEffectParams(typ string, params json.RawMessage) error {
 		// 字面文本允许）；decimals 是 toFixed 小数位（0 = 整数，兼容旧行为）。
 		allowed["format"] = "string"
 		allowed["decimals"] = "number"
+		// durationFrames（2026-11-18，studio 活计数摩擦）：连续段（from≠to）的
+		// 显式时长（帧）。默认启发式 min(1.2, max(0.3, durationSec−at)) 在密集
+		// 链上造成段重叠（speedrun 超前显示）且段末 set 落点漂移（studio 滞后
+		// 36 帧）——显式时长把控制权交还作者；离散段（from==to）不走 tween，
+		// 该参数无意义但容忍传入。
+		allowed["durationFrames"] = "number"
 	case EffectHighlight:
 		allowed["color"] = "string"
 	case EffectShake:

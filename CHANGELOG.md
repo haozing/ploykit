@@ -9,6 +9,39 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.33.2] — 2026-11-18
+
+Go-only hotfix. The studio pilot's live-count chain (the second real
+consumer) exposed the v0.33.1 duration heuristic as the actual defect
+behind BOTH observed failure modes on dense counter chains: the
+`min(1.2, max(0.3, …))` clamp makes consecutive segments OVERLAP, so
+on-update writes race (speedrun's count ran ahead) while the segment-end
+`tl.set` lands at at+1.2s (studio's flip lagged 36 frames — compensated
+in-consumer with atFrame−36 until now).
+
+### Fixed
+- **video: discrete counter segments flip exactly on the anchor frame** —
+  `from === to` segments no longer run a pointless tween: a single
+  zero-duration `tl.set` at the anchor itself (the visibility-window set
+  mechanism — no overlap, deterministic under arbitrary seeks). This is
+  precisely the PNG-chain semantics the native counter replaced; the
+  studio chain drops its −36-frame compensation and probes 441/441 true.
+- **video: `durationFrames` counter param** — continuous segments
+  (`from !== to`) can pin their tween duration explicitly instead of the
+  heuristic clamp; overlap becomes an author decision. The heuristic
+  remains the default (back-compat). The end-stamp at at+dur stays for
+  jump-past recovery on continuous segments.
+- **video: `__player.seek` now uses the capx seek semantics**
+  (`tl.pause(t, false)`) — GSAP's default `suppressEvents: true` skipped
+  onUpdate during probe seeks, so DOM-writing effects showed stale state
+  in probes while rendering showed fresh state. Probes and renders must
+  not lie differently (found because two pilot probes disagreed with each
+  other about the same chain).
+- Tests: `TestCounterDiscreteFlipExact` pins flip-on-anchor-frame and
+  hold-between-anchors in rendered bytes (f9≠f10==f19≠f20==f29);
+  `durationFrames` param validation (string/bool rejected); the counter
+  regression trio and the capx regression set all green.
+
 ## [0.33.1] — 2026-11-17
 
 Go-only hotfix, found by the first native-consumer migration within the

@@ -66,11 +66,15 @@ func TestValidate_CounterFormatDecimalsParams(t *testing.T) {
 	ok(`{"format":"{v}s"}`)                            // format alone is fine
 	ok(`{"decimals":1}`)                               // decimals alone is fine
 	ok(`{"decimals":0}`)                               // zero = integer (legacy behavior)
+	ok(`{"from":0,"to":5,"durationFrames":9}`)         // explicit continuous-segment duration (v0.33.2)
+	ok(`{"from":3,"to":3,"durationFrames":1}`)         // tolerated on discrete segments (no tween anyway)
 	bad(`{"format":123}`, "format")                    // format must be a string
 	bad(`{"format":true}`, "format")                   // not a string either
 	bad(`{"decimals":"2"}`, "decimals")                // quoted number rejected
 	bad(`{"decimal":2}`, "decimal")                    // typo → unknown param
 	bad(`{"format":"{v}","decimals":"1"}`, "decimals") // mixed ok/fail → fail on decimals
+	bad(`{"durationFrames":"9"}`, "durationFrames")    // quoted number rejected
+	bad(`{"durationFrames":true}`, "durationFrames")   // bool rejected
 }
 
 // ---- Effect.AtFrame ----

@@ -317,21 +317,36 @@
       // toFixed(0) 兼容旧的 Math.round 行为。
       var fmt = (fx.params && fx.params.format) || '';
       var dec = fx.params && typeof fx.params.decimals === 'number' ? fx.params.decimals : 0;
-      // SEEK-SAFETY (v0.33.1, the polished 31-segment chain): GSAP does NOT
-      // replay onUpdate callbacks for tweens the playhead JUMPS past
-      // (tl.pause(t) renders property values but suppresses events), so a
-      // seek-mode render (every capx frame) never sees the DOM write. The
-      // fix is the same zero-duration `tl.set` mechanism the element
-      // visibility windows use — deterministic under arbitrary seeks: the
-      // segment's END value is stamped at `at + dur`. For discrete counters
-      // (the n/30 chain, the PNG-chain semantics it replaces) this is
-      // exactly the original behavior (value flips at the event frame); the
-      // tween leg stays for play-mode smoothness (interpolated mid-values
-      // scrub visually) while seeks land on segment end values.
-      var dur = Math.min(1.2, Math.max(0.3, durationSec - at));
       var finalText = fmt
         ? fmt.replace('{v}', to.toFixed(dec)) + suffix
         : to.toFixed(dec) + suffix;
+      // SEEK-SAFETY, generation 2 (v0.33.2, the studio live-count chain):
+      // v0.33.1's end-stamp fixed "onUpdate never fires under seek" but
+      // exposed the DURATION HEURISTIC as the real defect — min(1.2, …)
+      // makes dense chains OVERLAP (speedrun: later segments' tweens span
+      // the playhead and onUpdate races run the count AHEAD) while the
+      // stamp lands at at+1.2s (studio: the flip LAGS 36 frames). Two paths:
+      //
+      // DISCRETE (from === to): no tween at all — a single zero-duration
+      //   tl.set at `at` itself. The value flips exactly on the anchor
+      //   frame, no overlap, deterministic under arbitrary seeks (the same
+      //   set mechanism the visibility windows use). This is the PNG-chain
+      //   semantics precisely. t=0 caveat (same as windows): a set at
+      //   exactly 0 is not applied by seek(0) — set the host element's
+      //   static text to the initial value.
+      //
+      // CONTINUOUS (from !== to): the tween keeps onUpdate for play-mode
+      //   interpolation and for tweens ACTIVE at the seek landing point;
+      //   the end-stamp at at+dur recovers jumps past the whole segment.
+      //   durationFrames (explicit, author-owned) replaces the heuristic
+      //   when present — overlap becomes an author decision.
+      if (from === to) {
+        tl.set(node, { textContent: finalText }, at);
+        return;
+      }
+      var explicit = fx.params && typeof fx.params.durationFrames === 'number' && fx.params.durationFrames > 0
+        ? fx.params.durationFrames / fps : 0;
+      var dur = explicit || Math.min(1.2, Math.max(0.3, durationSec - at));
       var obj = { v: from };
       tl.to(obj, {
         v: to, duration: dur, ease: 'power1.out', onUpdate: function () {
@@ -657,7 +672,13 @@
     function seek(f) {
       f = Math.max(0, Math.min(durationFrames, Math.round(f)));
       frame = f;
-      tl.pause(f / fps);
+      // suppressEvents=false — the SAME semantics capx's seekTimeline uses
+      // (tl.pause(t, false), D-01). With GSAP's default true, onUpdate
+      // callbacks are skipped during the seek render, so DOM-writing
+      // effects (counter digits) show stale state in the probe while the
+      // real render shows fresh state — probes and renders must not lie
+      // differently (v0.33.2; found by the speedrun/studio chain probes).
+      tl.pause(f / fps, false);
       postState();
     }
     function play() { tl.play(frame / fps); postState(); }
