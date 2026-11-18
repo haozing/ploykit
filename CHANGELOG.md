@@ -9,6 +9,65 @@ vX.Y.Z tags but NOT locked together — a tag whose diff touches no `packages/` 
 npm entirely (the npm packages stay at the last release that changed them; each version's
 entry below says whether it is Go-only). Consumers pin each side independently.
 
+## [0.34.0] — 2026-11-18
+
+Go-only release. Theme: **the design batch** — four days of "make it look
+stunning" work on the tool-site gallery showcase films, with every visual
+capability the films needed landing as a first-class IR feature (docs
+plan-agent-video-studio-architecture §5.4c–h). All fields are omitempty and
+legacy IRs project byte-identically (pinned by TestElementMap tests).
+
+### Added
+- **Text styling layer**: fontFamily (must match a registered fontAssets
+  family), fontWeight, letterSpacing, lineHeight, textAlign, stroke
+  (strokeColor+strokeWidth with paint-order: stroke fill — without it a 10px
+  stroke hollows 104px glyphs), textShadow, per-element static opacity.
+- **Gradient fills**: shape `gradient` (linear/radial, ≤8 whitelisted stops)
+  and text `textGradient` (background-clip:text; per-span application when
+  combined with textReveal, browser-verified: span transforms break a
+  parent-level clip). Radius (pointer-typed, 0 expressible).
+- **Word/char reveal (`textReveal`)**: words|chars × rise|pop. `rise`
+  animates `top` (NOT transform) because any span transform breaks the
+  clipped gradient; `pop` needs scale, so per-span gradients carry the fill.
+- **Motion**: `groupScale` (shared canvas pivot = a group camera push without
+  a scene graph), `tilt` (rotationX/Y with #canvas perspective:1600px; N
+  elements sharing pivot+angles read as one rigid 3D group), `glow` effect
+  (text-shadow blur yoyo breathing, finite repeat, seek-safe).
+- **Musical grid in the IR** (`ir.beats`: bpm/phaseFrame/bars/moments): the
+  hypit-inspired temporal model — animations/effects anchor via `atBeat`
+  ({moment} | {bar,beat,offsetFrames}), resolved to flat frames at projection
+  (BeatFrame is the single formula source; a JS mirror is pinned by
+  TestBeatGrid_ShowcaseParity). **Moments can carry word anchors**
+  ({text,occurrence}) — "anchored to words instead of seconds": re-voicing
+  moves every layer attached to the moment.
+- MaxElements 128→200 (the 19-sticker gallery film needs 171 with full
+  landing feedback; the real gate remains the 256KiB IR budget).
+
+### Fixed
+- **C08 assertion was stale, not the code** (audit event): v0.33.1's
+  text-host counter renders digits in the host color (amber #FFD166), the
+  pre-v0.33.1 dark overlay no longer exists. The L1 C08 check now measures
+  the host-color digits (0.093 measured) with the dark ink kept as a
+  tolerated legacy reading. Found because this batch's release gate re-ran
+  the full L1 suite — the first re-run since v0.33.1 shipped.
+- CAPX_TEST_CHROME now reaches the c04_c06/c07_c08_c09 harnesses (they
+  hardcalled ProbeChrome("") and ignored the env override).
+- clip wrapper hardening: clip-path + overflow:hidden + matching
+  border-radius + will-change:auto on windowed elements (the sweep pilot
+  showed a composited child can slip past an ancestor clip-path).
+
+### Tests
+- app: ir_style_test (17 validation cases), ir_design2_test (reveal/
+  gradient/glow/groupScale/tilt gates), ir_beats_test (grid math, showcase
+  frame parity 45/53/…/113, word moments, idempotent resolve, projection
+  payload keeps flat atFrame).
+- capx: TestStyleLayerRender (gradient/radius/stroke/opacity islands),
+  TestDesign2Render (reveal counts, gradient polarity, shared-pivot spread,
+  tilt shrink 519→441, glow halo ×14.6), TestGalleryShowcaseIRsValidate
+  (15 tool-site IRs, seconds, no browser).
+- Audit report: docs/delivery-audit-video-studio-design-batch-2026-11-18.md
+  (includes two audit-phase incidents, recorded as-is).
+
 ## [0.33.2] — 2026-11-18
 
 Go-only hotfix. The studio pilot's live-count chain (the second real

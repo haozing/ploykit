@@ -290,7 +290,7 @@ example/web/
 4. **标识**：element / animation / effect / track / word ID 在各自命名空间唯一；word.index 必须等于数组下标。
 5. **版本**：`schemaVersion` 描述 IR 结构；项目行 `version` 描述乐观锁；两者不得混用。IR 内不再保存行级 version。
 6. **兼容**：读取未知字段可保留；preview 对未知类型显示警告并跳过；render 遇到未知类型或不支持的 schemaVersion 必须返回 `E_VIDEO_UNSUPPORTED_SCHEMA`。
-7. **上限**：IR ≤256KiB、elements ≤128（2026-11-17 自 64 上调，见 ir.go）、animations/element ≤32（2026-11-17 自 16 上调，见 ir.go；进度条编排 15 段+淡出恰好卡满旧限，与 MaxElements 同理——计数是粗代理，非资源闸门）、animations/effects ≤128、script ≤2000 Unicode code points、durationSec ∈ [0.04,300]、fps ∈ {24,25,30,50,60}。v2 计划以资源预算（IR 字节 / 解码资产字节 / 像素）替代元素计数闸门，见 v2 spec（`plan-video-studio-ir-v2-spec-2026-11-17.md`）。
+7. **上限**：IR ≤256KiB、elements ≤200（2026-11-18 自 128←64 二次上调，见 ir.go——gallery 展示片批 19 件作品的完整落件反馈需 171 元素）、animations/element ≤32（2026-11-17 自 16 上调，见 ir.go；进度条编排 15 段+淡出恰好卡满旧限，与 MaxElements 同理——计数是粗代理，非资源闸门）、animations/effects ≤128、script ≤2000 Unicode code points、durationSec ∈ [0.04,300]、fps ∈ {24,25,30,50,60}。v2 计划以资源预算（IR 字节 / 解码资产字节 / 像素）替代元素计数闸门，见 v2 spec（`plan-video-studio-ir-v2-spec-2026-11-17.md`）。
 8. **资源上限**：单项目图片 ≤64，每个 data URI 解码后 ≤1MiB；总内联解码资产、上传文件、音频大小均有服务端上限，不能仅限制 JSON 字符串长度。
 9. **缩放**：渲染参数覆盖分辨率时必须保持原宽高比，或显式提供 `fit=contain|cover`；v1 默认拒绝宽高比变化。
 10. **规范化**：写库前使用统一 canonical JSON 生成 `ir_sha256`；不能只依赖 PostgreSQL JSONB 的键序行为。
@@ -340,6 +340,95 @@ example/web/
 5. **counter 增强**：params 增 `format`（字面模板 `"0:{v}"`→"0:23.92"）与 `decimals`；**Effect 增 `atFrame`**（与动画同语义：与词锚互斥、ResolveAll 跳过词解析）——speedrun 计时器不再 PNG 步进、counter 不再绑词表。
 6. **`render.ProbeFrames` 转正**（探针一等化）：`ProbeFrames(ctx, ir, assets, frames, opts)` = 投影+SnapshotMulti 单入口（帧界校验、非 capx stub 返回 ErrNotConfigured）。DOM 断言暂留 inspectable-tab 模式（probe_types 注释指路）——11 片作者各自手搓 dump+seek 探针的时代结束。
 7. **杂项**：easing 白名单 + `power2.inOut`（顺手修了 pulse 第二腿用白名单外缓动的 v1 隐性 bug）；fps 白名单 + 18/20（原片帧号对齐，省 50% 升帧成本）。
+
+### 5.4c 2026-11-18 样式层（gallery 展示片设计批）
+
+> 来源不是复刻摩擦而是**设计需求**：tool-site 的 15 条 gallery 用户作品片要按「一眼惊艳」的标准重做视觉，而此前的「好听好看」全部依赖"把字效/背景烘成 PNG"（Baloo 2 标题、渐变底、胶囊按钮都是死像素）。本批把这三类视觉原语收进 IR——**原生表达、可参数化、可批量**。全部字段 omitempty，旧 IR 投影逐字节不变（`TestElementMap_StylingPassthroughOnlyWhenSet` 钉住）。
+
+1. **text 样式**（text 元素）：`fontFamily`（必须命中 fontAssets 注册族或内建 `Noto Sans SC Sub`，写时校验——未注册族会静默回落，属于"渲染成功但长得不对"的典型坑）、`fontWeight`（100–900）、`letterSpacing`（px）、`lineHeight`（无单位倍数）、`textAlign`、`strokeColor`+`strokeWidth`（成对出现；`-webkit-text-stroke` + `paint-order: stroke fill`——浏览器实测：没有 paint-order 时居中标描边会把 104px 字形掏空，见 `testdata/style-layer/frame-F000.png`）、`textShadow`（单层，`{color,x,y,blur}`）。
+2. **元素 `opacity`**（静态 0..1，全元素类型）：气泡/光罩的常驻半透明不再需要 rgba 颜色技巧。0 与缺省同为 1.0（omitempty 的零值不可表达"不可见"——与音量字段同款注记；真不可见用时间窗）。
+3. **shape `gradient` + `radius`**：`{type:linear|radial, angle, atX, atY, stops[{offset,color}]}`（≤8 色标、offset 非递减、色值走 `validCSSColorRe` 白名单——渐变串是拼进 style 声明的 CSS 注入面，与既有 `color` 单属性赋值不同）；`radius` 指针类型（0 可表达，nil=v1 的 8px 默认）。
+4. **像素证明**：`TestStyleLayerRender`（capx）三岛断言——渐变顶红底蓝、圆角角落露背景、24px 描边外扩且白填充存活（paint-order）、0.5 透明度混出中灰。
+5. **配套资产**：品牌字体走既有 `fontAssets`（gallery 用 Baloo 2 variable woff2 → `video/showcase/baloo2.woff2`）；气泡环/暗角/颗粒都能用原生 shape 叠加表达（渐变+screen/overlay blend），背景不再需要整幅烘焙。
+
+已知边界：文本仍是单节点（无逐词 span），`highlight` 的 text-color 语义按整元素生效；渐变/描边色仅支持 hex 与 rgb()/rgba() 数值通道（不允许 CSS 变量或颜色名）。
+
+### 5.4d 2026-11-18 动效层（展示片"极致"批）
+
+> 用户对展示片的裁决是「视觉体验一定要极致」——5.4c 解决了"能画出来"，本批解决
+> "动起来的高级感"。四项能力全部原生、全部有像素证明。
+
+1. **逐词成句 `textReveal`**（text 元素）：`{style: rise|pop, atFrame, durationFrames, staggerFrames, easing, distance}`。builder 把 text 按空白切成 inline-block 词 span，每词一条 fromTo + 一个 t=0 的起点 set（反向 seek 确定性），作者只写一句话，词距/换行/对齐仍归浏览器排版。
+   **关键坑（浏览器实测）**：`rise` 走 `top`（相对定位）而**不走 transform**——子 span 上任何 transform（含 identity translate）都会打碎父元素 `background-clip:text` 的渐变裁剪（渐变被画到元素左缘、文字错位）；`pop` 需要 scale（必须 transform），所以写时禁止 `pop`+`textGradient` 组合。
+2. **渐变文字 `textGradient`**（text 元素）：复用 Gradient 结构，`background-clip:text` 填充字形。与 `strokeColor` 互斥（描边盖在裁剪填充之上 → 空心字，写时拒绝）。
+3. **呼吸辉光 `glow` 特效**：`{color, blurMin, blurMax, periodFrames}`，text-shadow 在 blur 区间 yoyo 往复；repeat 由剩余时长算成有限次（确定性），t=0 set 兜底反向 seek。必须有 targetElementId。
+4. **相机推进 `groupScale` 动画**：`{pivot:{x,y}, fromValue, toValue}`——tween 起点把元素 transform-origin 改写成"枢轴在元素盒内的百分比"，N 个元素共享枢轴同时序 = 一次运镜推进（"无相机/组变换"缺口的 v1 平替）。缩放为 1 时改 origin 无视觉位移，"入场弹入用自身中心、随后运镜换共享枢轴"可安全叠加；fromValue 应等于静止缩放（同 resize 链式约定）。
+5. **像素证明**：`TestDesign2Render`（capx）四岛——逐词 f0=0/f10=6121/f29=12386、渐变红上蓝下、共享枢轴 1.5× 双块外扩（原位置归零）、辉光最强帧 halo 14.6×。
+6. **样板**：Ocean World 展示片（8s/1080×1920）——钩子两行（首帧常驻 + 逐词 pop）、纸卡托起、10 件落件星芒、活计数 HUD、4s 起共享枢轴运镜、渐变作品名 + 逐词 rise + 呼吸辉光、CTA 脉冲、程序化音轨。
+
+### 5.4e 2026-11-18 逐字与卡内装饰（设计批 3）
+
+1. **`textReveal.split`**：`words`（默认）/`chars` 逐字。chars 模式把每个词包进 inline-block 词壳（保住按词换行）、字 span 在壳内逐字动画——英文 display 标题的"字字升起"由此原生表达；中文标题不用（逐字会碎）。
+2. **卡内装饰的裁剪几何**：`clip` 窗口必须对齐**视觉实心区**，不是图片元素盒。card.png 这类"纸卡+烘焙投影"的素材，投影占了四周 ~50px；按元素盒裁剪会让窗内装饰（扫光）画到投影区，在暗底上读起来像漏到卡外。样板里用 `PAPER` 矩形（PNG 内 50..843/50..755 映射到画布）做窗口。
+3. **clip wrapper 加固**：wrapper 同时写 `clip-path` + `overflow:hidden` + 同半径 `border-radius`，窗外元素 `will-change: auto`（窗内每帧 seek 重绘，合成层无收益，反而多一个"合成层 vs 祖先裁剪"的变量）。
+4. **配套设计件**：扫光（卡内斜向白光带 sweep）、手绘下划线（resize 左锚点扩宽 + 圆角渐变）、背景星尘（小 radial 光点 + 长时程 move）——全部原生，无新烘焙。
+
+### 5.4f 2026-11-18 3D 微倾（设计批 4）
+
+1. **`tilt` 动画**：`From/To` 的 Point 复用作 `(rotateXdeg, rotateYdeg)`；共享 `pivot` 时与 groupScale 同一套 transform-origin 改写。`#canvas` 补 `perspective: 1600px`——**每个子元素的 3D 变换走同一个投影矩阵**，因此 N 元素同枢轴同角度 = 刚性整组倾斜（纸卡+贴纸一起"呼吸"）。2D 变换不受 perspective 影响（z=0），旧 IR 逐像素不变。
+2. **幅度纪律**：±1–2° 是"悬浮感"，超过 ~6° 开始可见剪切（近大远小在平面贴纸上会穿帮）。样板用 Y 轴 ±1.2°、X 轴 ±0.8° 的两段回摆，从最后一个落件弹入结束（F124）之后才开始——避免改写 transform-origin 干扰落件自身的弹入缩放。
+3. **像素证明**：`TestDesign2Render` 的 tilt 岛——520px 条形绕共享枢轴 rotateY 35°，投影宽度 519→441（0.85），面积 -33%。
+4. **配套设计件**：钩子第二行逐字母 pop（chars）；每件贴纸落地 4 颗粒子沿对角迸出（0.2s 消散，纯原生 shape+radial 渐变）。
+
+### 5.4g 2026-11-18 音乐网格进 IR（hypit 时序模型借鉴）
+
+**动机**：展示片要做到"画面与音乐同一张拍点表"。第一版把网格放在 tool-site 的
+JS 常量模块里由两个脚本 import——这解决了漂移，但 IR 里仍是绝对帧号，换 BPM 要
+改 N 处。hypit（`D:/code/aihypit/hypit`）的 `packages/temporal` 给了更干净的
+模型：**时刻是引用**（`program/selection/segment/moment` + offset），不是秒；它的
+`@claim!` Moment 是"一个命名语义点，graphics/sound/effects 可同时响应"。
+
+本批把这个模型搬进 IR（SQL 里叫加法，v1 向后兼容）：
+
+1. **`ir.beats`**：`{bpm, phaseFrame, bars, moments[]}`。moment = 命名拍点
+   （`{id, bar, beat}`，`beat` 可为 3.5 这类半拍）。
+2. **`atBeat` 锚**：元素动画与特效可写 `{"moment":"pop-03"}` 或
+   `{"bar":1,"beat":2,"offsetFrames":2}`——与 `atFrame`、`startAnchor` 三选一；
+   同时给 `atFrame` 时必须与网格解析结果一致（幂等复核，重复 Validate 不误报）。
+3. **解析在投影期**：`Projector.HTML` 先调 `ResolveBeats`，把 `atBeat` 算成
+   `atFrame`——投影文档永远是平帧时间轴，builder 与既有消费者零改动。
+   公式单一真源：`beatFrame = phaseFrame + round((bar*4+beat) * 60/bpm * fps) + offsetFrames`。
+4. **音轨读 IR**：`bake-showcase-audio.mjs` 不再 import 网格模块——BPM 取自
+   `ir.beats.bpm`，落件时刻取贴纸元素的 `startFrame`，作品名/CTA 取各自元素窗口。
+   JS 生成器写窗口用的 `beatFrame()` 是 Go 公式的镜像，由
+   `TestBeatGrid_ShowcaseParity` 用同一组帧号（45/53/60/68/75/83/90/98/105/113）钉死。
+5. **语义修正**：旧版落件间距是 7/8 帧交替（为凑整帧手工补的八分网格补丁），
+   新版按**纯半拍**（`beat+0.5`）表达——语义正确，取整误差 ≤0.5 帧由 round 吸收。
+6. **测试**：`BeatFrame` 数学、showcase 帧号对账、atBeat 校验（无网格/未知 moment/
+   bar 越界/与 atFrame 不一致/与词锚互斥）、幂等解析、投影载荷只含 atFrame。
+
+**边界**：hypit 的 Moment 还承载叙事语义（claim/verdict 这类），我们只用了它的
+时间层；没有做 BPM 检测——网格仍是作者声明，但已是一等数据，将来接 onset 分析
+只需生成 beats 块，消费者不变。
+
+### 5.4h 2026-11-18 词级 moment 与渐变逐字 pop（设计批 7）
+
+1. **`BeatMoment.Word`**：moment 除 bar/beat 外可挂 `{text, occurrence}` 词锚——
+   解析时读 `ir.Words` 的 start 时间（`round(start*fps)`），即 hypit 的
+   "anchored to words instead of seconds"。写时校验词必须存在（`findWord` 与
+   词锚解析同一套匹配：精确 token 优先、再按包含）。样板把 `hook-hit` /
+   `title-hit` 两个 moment 改为词锚：将来接旁白或改台词，挂在它们上面的卡入场、
+   运镜、标题、辉光、彩带全部自动跟随。
+2. **渐变 + 逐字 pop 共存**：此前 `pop`（scale）与 `textGradient` 互斥，因为
+   span 上的 transform 会打碎父元素的 `background-clip:text`（文字被画到元素
+   左缘）。实测解法：**渐变改由每个词/字 span 自持**（span 自己有 clip 时
+   transform 正常）。竖向渐变（180deg）逐字重画与整行连续渐变视觉等价；
+   横向渐变会逐字重新起坡——文档注明，校验不再拒绝该组合。
+3. **收尾彩带**（纯设计件）：16 片圆角小纸片从顶部撒下，旋转 + 横向漂移 +
+   尾部淡出，`z=105` 压在 CTA 之上；全部原生 shape + move/rotate/fadeOut。
+4. **测试**：`TestBeatMoment_WordAnchor`（词锚解析 + 缺词拒绝）；
+   `TestDesign2Render` 的渐变岛改为"渐变 + chars pop"，像素断言仍按红上蓝下
+   （证明 per-span 渐变在 transform 下渲染正确）。
 
 ---
 
