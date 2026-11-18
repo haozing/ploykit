@@ -20,8 +20,12 @@ func TestGalleryShowcaseIRsValidate(t *testing.T) {
 	}
 	dirs, err := filepath.Glob(filepath.Join(root, "gallery-*", "ir.json"))
 	require.NoError(t, err)
+	// Woodland Friends 的 11 种格式片（2026-11-18）：同一套写时校验
+	formats, err := filepath.Glob(filepath.Join(root, "format-woodland-*", "ir.json"))
+	require.NoError(t, err)
+	dirs = append(dirs, formats...)
 	if len(dirs) == 0 {
-		t.Skipf("no gallery IRs under %s", root)
+		t.Skipf("no gallery/format IRs under %s", root)
 	}
 	for _, p := range dirs {
 		slug := filepath.Base(filepath.Dir(p))
